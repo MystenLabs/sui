@@ -113,6 +113,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
+    pub(crate) core_skipped_proposals: IntCounterVec,
     pub(crate) highest_accepted_authority_round: IntGaugeVec,
     pub(crate) highest_accepted_round: IntGauge,
     pub(crate) accepted_blocks: IntCounterVec,
@@ -272,6 +273,12 @@ impl NodeMetrics {
             core_lock_enqueued: register_int_counter_with_registry!(
                 "core_lock_enqueued",
                 "Number of enqueued core requests",
+                registry,
+            ).unwrap(),
+            core_skipped_proposals: register_int_counter_vec_with_registry!(
+                "core_skipped_proposals",
+                "Number of proposals skipped in the Core, per reason",
+                &["reason"],
                 registry,
             ).unwrap(),
             highest_accepted_authority_round: register_int_gauge_vec_with_registry!(

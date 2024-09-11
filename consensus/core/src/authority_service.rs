@@ -640,6 +640,10 @@ mod tests {
             todo!()
         }
 
+        fn set_propagation_delay(&self, _delay: Round) -> Result<(), CoreError> {
+            todo!()
+        }
+
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
             todo!()
         }

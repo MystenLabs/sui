@@ -18,8 +18,9 @@ use std::{sync::Arc, time::Duration};
 
 use consensus_config::AuthorityIndex;
 use futures::stream::{FuturesUnordered, StreamExt as _};
+use mysten_common::sync::notify_once::NotifyOnce;
 use parking_lot::RwLock;
-use tokio::{sync::oneshot, task::JoinHandle};
+use tokio::{task::JoinHandle, time::MissedTickBehavior};
 
 use crate::{
     context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
@@ -29,12 +30,12 @@ use crate::{
 // Handle to control the RoundProber loop and read latest round gaps.
 pub(crate) struct RoundProberHandle {
     prober_task: JoinHandle<()>,
-    tx_shutdown: oneshot::Sender<()>,
+    shutdown_notif: Arc<NotifyOnce>,
 }
 
 impl RoundProberHandle {
     pub(crate) async fn stop(self) {
-        let _ = self.tx_shutdown.send(());
+        let _ = self.shutdown_notif.notify();
         // Do not abort prober task, which waits for requests to be cancelled.
         if let Err(e) = self.prober_task.await {
             if e.is_panic() {
@@ -49,6 +50,7 @@ pub(crate) struct RoundProber<C: NetworkClient> {
     core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
     dag_state: Arc<RwLock<DagState>>,
     network_client: Arc<C>,
+    shutdown_notif: Arc<NotifyOnce>,
 }
 
 impl<C: NetworkClient> RoundProber<C> {
@@ -63,33 +65,35 @@ impl<C: NetworkClient> RoundProber<C> {
             core_thread_dispatcher,
             dag_state,
             network_client,
+            shutdown_notif: Arc::new(NotifyOnce::new()),
         }
     }
 
     pub(crate) fn start(self) -> RoundProberHandle {
-        let (tx_shutdown, mut rx_shutdown) = oneshot::channel();
+        let shutdown_notif = self.shutdown_notif.clone();
+        let loop_shutdown_notif = shutdown_notif.clone();
         let prober_task = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(1));
+            interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
                         self.probe().await;
                     }
-                    _ = &mut rx_shutdown => {
+                    _ = loop_shutdown_notif.wait() => {
                         break;
                     }
                 }
             }
         });
-
         RoundProberHandle {
             prober_task,
-            tx_shutdown,
+            shutdown_notif,
         }
     }
 
     pub(crate) async fn probe(&self) {
-        const PROBE_TIMEOUT: Duration = Duration::from_millis(500);
+        const PROBE_TIMEOUT: Duration = Duration::from_secs(1);
 
         let own_index = self.context.own_index;
         let last_proposed_round = self
@@ -118,16 +122,26 @@ impl<C: NetworkClient> RoundProber<C> {
             vec![vec![0; self.context.committee.size()]; self.context.committee.size()];
         highest_received_rounds[own_index] = self.core_thread_dispatcher.highest_received_rounds();
         highest_received_rounds[own_index][own_index] = last_proposed_round;
-        while let Some((peer, result)) = requests.next().await {
-            match result {
-                Ok(Ok(rounds)) => {
-                    highest_received_rounds[peer] = rounds;
+        loop {
+            tokio::select! {
+                result = requests.next() => {
+                    let Some((peer, result)) = result else {
+                        break;
+                    };
+                    match result {
+                        Ok(Ok(rounds)) => {
+                            highest_received_rounds[peer] = rounds;
+                        }
+                        Ok(Err(err)) => {
+                            tracing::warn!("Failed to get latest rounds from peer {}: {:?}", peer, err);
+                        }
+                        Err(_) => {
+                            tracing::warn!("Timeout while getting latest rounds from peer {}", peer);
+                        }
+                    }
                 }
-                Ok(Err(err)) => {
-                    tracing::warn!("Failed to get latest rounds from peer {}: {:?}", peer, err);
-                }
-                Err(_) => {
-                    tracing::warn!("Timeout while getting latest rounds from peer {}", peer);
+                _ = self.shutdown_notif.wait() => {
+                    break;
                 }
             }
         }
@@ -160,6 +174,12 @@ impl<C: NetworkClient> RoundProber<C> {
             .node_metrics
             .round_prober_propagation_delay
             .set(propagation_delay as i64);
+        if let Err(e) = self
+            .core_thread_dispatcher
+            .set_propagation_delay(propagation_delay)
+        {
+            tracing::warn!("Failed to set propagation round delay: {:?}", e);
+        }
     }
 
     fn compute_quorum_rounds(
@@ -178,10 +198,13 @@ impl<C: NetworkClient> RoundProber<C> {
         let mut low = 0;
         let mut high = 0;
         for (round, stake) in rounds_with_stake {
-            let reached_validator_before = total_stake >= self.context.committee.validity_threshold();
+            let reached_validator_before =
+                total_stake >= self.context.committee.validity_threshold();
             let reached_quorum_before = total_stake >= self.context.committee.quorum_threshold();
             total_stake += stake;
-            if !reached_validator_before && total_stake >= self.context.committee.validity_threshold() {
+            if !reached_validator_before
+                && total_stake >= self.context.committee.validity_threshold()
+            {
                 low = round;
             }
             if !reached_quorum_before && total_stake >= self.context.committee.quorum_threshold() {

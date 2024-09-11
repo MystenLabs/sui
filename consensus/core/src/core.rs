@@ -58,6 +58,8 @@ pub(crate) struct Core {
     block_manager: BlockManager,
     /// Whether there are consumers waiting to consume blocks produced by the core.
     subscriber_exists: bool,
+    /// Estimated delay by round for propagating blocks to a quorum.
+    propagation_delay: Round,
 
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
@@ -152,6 +154,7 @@ impl Core {
             transaction_consumer,
             block_manager,
             subscriber_exists,
+            propagation_delay: 0,
             committer,
             commit_observer,
             signals,
@@ -301,17 +304,6 @@ impl Core {
             return self.try_propose(force);
         }
         Ok(None)
-    }
-
-    /// Sets the min propose round for the proposer allowing to propose blocks only for round numbers
-    /// `> last_known_proposed_round`. At the moment is allowed to call the method only once leading to a panic
-    /// if attempt to do multiple times.
-    pub(crate) fn set_last_known_proposed_round(&mut self, round: Round) {
-        if self.last_known_proposed_round.is_some() {
-            panic!("Should not attempt to set the last known proposed round if that has been already set");
-        }
-        self.last_known_proposed_round = Some(round);
-        info!("Set last known proposed round to {round}");
     }
 
     // Attempts to create a new block, persist and propose it to all peers.
@@ -645,23 +637,63 @@ impl Core {
         self.subscriber_exists = allow;
     }
 
-    /// Whether the core should propose new blocks.
-    fn should_propose(&self) -> bool {
-        let clock_round = self.threshold_clock.get_round();
-        let skip_proposing = if let Some(last_known_proposed_round) = self.last_known_proposed_round
-        {
-            if clock_round <= last_known_proposed_round {
-                debug!("Skip proposing for round {clock_round} as last known proposed round is {last_known_proposed_round}");
-                true
-            } else {
-                false
-            }
-        } else {
-            debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
-            true
-        };
+    /// Sets the delay by round for propagating blocks to a quorum.
+    pub(crate) fn set_propagation_delay(&mut self, delay: Round) {
+        info!("Propagation round delay set to: {delay}");
+        self.propagation_delay = delay;
+    }
 
-        self.subscriber_exists && !skip_proposing
+    /// Sets the min propose round for the proposer allowing to propose blocks only for round numbers
+    /// `> last_known_proposed_round`. At the moment is allowed to call the method only once leading to a panic
+    /// if attempt to do multiple times.
+    pub(crate) fn set_last_known_proposed_round(&mut self, round: Round) {
+        if self.last_known_proposed_round.is_some() {
+            panic!("Should not attempt to set the last known proposed round if that has been already set");
+        }
+        self.last_known_proposed_round = Some(round);
+        info!("Set last known proposed round to {round}");
+    }
+
+    /// Whether the core should propose new blocks.
+    pub(crate) fn should_propose(&self) -> bool {
+        let core_skipped_proposals = &self.context.metrics.node_metrics.core_skipped_proposals;
+
+        if !self.subscriber_exists {
+            core_skipped_proposals
+                .with_label_values(&["no_subscriber"])
+                .inc();
+            return false;
+        }
+
+        if self.propagation_delay
+            > self
+                .context
+                .parameters
+                .propagation_delay_stop_proposal_threshold
+        {
+            core_skipped_proposals
+                .with_label_values(&["high_propagation_delay"])
+                .inc();
+            return false;
+        }
+
+        let clock_round = self.threshold_clock.get_round();
+        let Some(last_known_proposed_round) = self.last_known_proposed_round else {
+            debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
+            core_skipped_proposals
+                .with_label_values(&["no_last_known_proposed_round"])
+                .inc();
+            return false;
+        };
+        if clock_round <= last_known_proposed_round {
+            debug!("Skip proposing for round {clock_round} as last known proposed round is {last_known_proposed_round}");
+            core_skipped_proposals
+                .with_label_values(&["higher_last_known_proposed_round"])
+                .inc();
+            return false;
+        }
+
+        true
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
