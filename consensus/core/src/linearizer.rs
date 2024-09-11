@@ -47,6 +47,10 @@ impl Linearizer {
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
         let last_committed_rounds = dag_state.last_committed_rounds();
         let gc_enabled = dag_state.gc_enabled();
+        // The GC round here is calculated based on the last committed round of the leader block. The algorithm will attempt to
+        // commit blocks up to this GC round. Once this commit has been processed and written to DagState, then gc round will update
+        // and on the processing of the next commit we'll have it already updated, so no need to do any gc_round recalculations here.
+        // We just use whatever is currently in DagState.
         let gc_round: Round = dag_state.gc_round();
 
         let mut to_commit = Vec::new();
