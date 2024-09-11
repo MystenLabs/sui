@@ -111,12 +111,106 @@ export class DeepBookMarketMaker extends DeepBookClient {
 	placeLimitOrderExample = (tx: Transaction) => {
 		tx.add(
 			this.deepBook.placeLimitOrder({
+				poolKey: 'DEEP_DBUSDC',
+				balanceManagerKey: 'MANAGER_1',
+				clientOrderId: '123456789',
+				price: 0.5,
+				quantity: 10,
+				isBid: true,
+				// orderType default: no restriction
+				// selfMatchingOption default: allow self matching
+				// payWithDeep default: true
+			}),
+		);
+		tx.add(
+			this.deepBook.placeLimitOrder({
+				poolKey: 'DEEP_DBUSDC',
+				balanceManagerKey: 'MANAGER_1',
+				clientOrderId: '123456789',
+				price: 1.5,
+				quantity: 10,
+				isBid: false,
+				// orderType default: no restriction
+				// selfMatchingOption default: allow self matching
+				// payWithDeep default: true
+			}),
+		);
+		tx.add(
+			this.deepBook.placeLimitOrder({
+				poolKey: 'DEEP_SUI',
+				balanceManagerKey: 'MANAGER_1',
+				clientOrderId: '123456789',
+				price: 0.5,
+				quantity: 10,
+				isBid: true,
+				// orderType default: no restriction
+				// selfMatchingOption default: allow self matching
+				// payWithDeep default: true
+			}),
+		);
+		tx.add(
+			this.deepBook.placeLimitOrder({
+				poolKey: 'DEEP_SUI',
+				balanceManagerKey: 'MANAGER_1',
+				clientOrderId: '123456789',
+				price: 1.5,
+				quantity: 10,
+				isBid: false,
+				// orderType default: no restriction
+				// selfMatchingOption default: allow self matching
+				// payWithDeep default: true
+			}),
+		);
+	};
+
+	placeLimitOrderExample2 = (tx: Transaction) => {
+		tx.add(
+			this.deepBook.placeLimitOrder({
 				poolKey: 'SUI_DBUSDC',
 				balanceManagerKey: 'MANAGER_1',
 				clientOrderId: '123456789',
-				price: 1,
+				price: 0.1,
 				quantity: 10,
 				isBid: true,
+				// orderType default: no restriction
+				// selfMatchingOption default: allow self matching
+				// payWithDeep default: true
+			}),
+		);
+		tx.add(
+			this.deepBook.placeLimitOrder({
+				poolKey: 'SUI_DBUSDC',
+				balanceManagerKey: 'MANAGER_1',
+				clientOrderId: '123456789',
+				price: 0.3,
+				quantity: 10,
+				isBid: false,
+				// orderType default: no restriction
+				// selfMatchingOption default: allow self matching
+				// payWithDeep default: true
+			}),
+		);
+		tx.add(
+			this.deepBook.placeLimitOrder({
+				poolKey: 'DBUSDT_DBUSDC',
+				balanceManagerKey: 'MANAGER_1',
+				clientOrderId: '123456789',
+				price: 0.1,
+				quantity: 10,
+				isBid: true,
+				// orderType default: no restriction
+				// selfMatchingOption default: allow self matching
+				// payWithDeep default: true
+			}),
+		);
+		tx.add(
+			this.deepBook.placeLimitOrder({
+				poolKey: 'DBUSDT_DBUSDC',
+				balanceManagerKey: 'MANAGER_1',
+				clientOrderId: '123456789',
+				price: 0.3,
+				quantity: 10,
+				isBid: false,
 				// orderType default: no restriction
 				// selfMatchingOption default: allow self matching
 				// payWithDeep default: true
