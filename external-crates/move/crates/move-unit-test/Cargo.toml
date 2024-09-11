@@ -34,6 +34,7 @@ move-vm-test-utils.workspace = true
 move-binary-format.workspace = true
 move-model.workspace = true
 move-bytecode-utils.workspace = true
+move-trace-format.workspace = true
 bcs.workspace = true
 rand.workspace = true
 
