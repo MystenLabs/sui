@@ -163,7 +163,7 @@ jobs:
           swap-size-gb: 256
       - name: Run tests
         run: |
-          ~/.cargo/bin/cargo-nextest nextest run
+          ~/.cargo/bin/cargo-nextest nextest run \
             --profile ci \
             -E '!package(sui-bridge)' \
             --partition count:${{ matrix.partition }}/2
