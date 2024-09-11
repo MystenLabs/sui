@@ -124,6 +124,7 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
         - Twitch
@@ -276,6 +277,7 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
         - Twitch
@@ -428,6 +430,7 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
         - Twitch
@@ -580,6 +583,7 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
         - Twitch
@@ -732,6 +736,7 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
         - Twitch
@@ -884,6 +889,7 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
         - Twitch
@@ -1036,6 +1042,7 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
         - Twitch
