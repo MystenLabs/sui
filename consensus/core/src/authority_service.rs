@@ -416,6 +416,20 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         Ok(result)
     }
+
+    async fn handle_get_latest_rounds(&self, _peer: AuthorityIndex) -> ConsensusResult<Vec<Round>> {
+        fail_point_async!("consensus-rpc-response");
+
+        let mut highest_received_rounds = self.core_dispatcher.highest_received_rounds();
+        // Own blocks do not go through the core dispatcher, so they need to be set separately.
+        highest_received_rounds[self.context.own_index] = self
+            .dag_state
+            .read()
+            .get_last_block_for_authority(self.context.own_index)
+            .round();
+
+        Ok(highest_received_rounds)
+    }
 }
 
 /// Atomically counts the number of active subscriptions to the block broadcast stream,
@@ -629,6 +643,10 @@ mod tests {
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
             todo!()
         }
+
+        fn highest_received_rounds(&self) -> Vec<Round> {
+            todo!()
+        }
     }
 
     #[derive(Default)]
@@ -681,6 +699,14 @@ mod tests {
             _authorities: Vec<AuthorityIndex>,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn get_latest_rounds(
+            &self,
+            _peer: AuthorityIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Round>> {
             unimplemented!("Unimplemented")
         }
     }

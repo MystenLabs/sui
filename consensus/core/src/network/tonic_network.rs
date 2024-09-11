@@ -320,6 +320,20 @@ impl NetworkClient for TonicClient {
         }
         Ok(blocks)
     }
+
+    async fn get_latest_rounds(
+        &self,
+        peer: AuthorityIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Round>> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let mut request = Request::new(GetLatestRoundsRequest {});
+        request.set_timeout(timeout);
+        let response = client.get_latest_rounds(request).await.map_err(|e| {
+            ConsensusError::NetworkRequest(format!("get_latest_rounds failed: {e:?}"))
+        })?;
+        Ok(response.into_inner().highest_received)
+    }
 }
 
 // Tonic channel wrapped with layers.
@@ -615,6 +629,25 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
                 .into_iter();
         let stream = iter(responses);
         Ok(Response::new(stream))
+    }
+
+    async fn get_latest_rounds(
+        &self,
+        request: Request<GetLatestRoundsRequest>,
+    ) -> Result<Response<GetLatestRoundsResponse>, tonic::Status> {
+        let Some(peer_index) = request
+            .extensions()
+            .get::<PeerInfo>()
+            .map(|p| p.authority_index)
+        else {
+            return Err(tonic::Status::internal("PeerInfo not found"));
+        };
+        let highest_received = self
+            .service
+            .handle_get_latest_rounds(peer_index)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+        Ok(Response::new(GetLatestRoundsResponse { highest_received }))
     }
 }
 
@@ -1144,13 +1177,11 @@ pub(crate) struct FetchLatestBlocksResponse {
 }
 
 #[derive(Clone, prost::Message)]
-pub(crate) struct GetLatestRoundsRequest {
-    #[prost(uint32, repeated, tag = "1")]
-    authorities: Vec<u32>,
-}
+pub(crate) struct GetLatestRoundsRequest {}
 
 #[derive(Clone, prost::Message)]
 pub(crate) struct GetLatestRoundsResponse {
+    // Highest received round per authority.
     #[prost(uint32, repeated, tag = "1")]
     highest_received: Vec<u32>,
 }

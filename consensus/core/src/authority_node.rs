@@ -259,7 +259,7 @@ where
         );
 
         let (core_dispatcher, core_thread_handle) =
-            ChannelCoreThreadDispatcher::start(core, context.clone());
+            ChannelCoreThreadDispatcher::start(context.clone(), &dag_state, core);
         let core_dispatcher = Arc::new(core_dispatcher);
         let leader_timeout_handle =
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());

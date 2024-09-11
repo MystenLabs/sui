@@ -1,14 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    fmt::Debug,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
 
 use async_trait::async_trait;
 use mysten_metrics::{
     monitored_mpsc::{channel, Receiver, Sender, WeakSender},
     monitored_scope, spawn_logged_monitored_task,
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
 use tokio::sync::{oneshot, watch};
 use tracing::warn;
@@ -18,7 +25,9 @@ use crate::{
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
+    dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
+    BlockAPI as _,
 };
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
@@ -57,6 +66,9 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     fn set_subscriber_exists(&self, available: bool) -> Result<(), CoreError>;
 
     fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError>;
+
+    /// Returns the highest round received for each authority by Core.
+    fn highest_received_rounds(&self) -> Vec<Round>;
 }
 
 pub(crate) struct CoreThreadHandle {
@@ -137,10 +149,27 @@ pub(crate) struct ChannelCoreThreadDispatcher {
     sender: WeakSender<CoreThreadCommand>,
     tx_subscriber_exists: Arc<watch::Sender<bool>>,
     tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
+    highest_received_rounds: Arc<Vec<AtomicU32>>,
 }
 
 impl ChannelCoreThreadDispatcher {
-    pub(crate) fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadHandle) {
+    pub(crate) fn start(
+        context: Arc<Context>,
+        dag_state: &RwLock<DagState>,
+        core: Core,
+    ) -> (Self, CoreThreadHandle) {
+        // Initialize highest received rounds to last accepted rounds.
+        let highest_received_rounds = {
+            let dag_state = dag_state.read();
+            context
+                .committee
+                .authorities()
+                .map(|(index, _)| {
+                    AtomicU32::new(dag_state.get_last_block_for_authority(index).round())
+                })
+                .collect()
+        };
+
         let (sender, receiver) =
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
         let (tx_subscriber_exists, mut rx_subscriber_exists) = watch::channel(false);
@@ -173,6 +202,7 @@ impl ChannelCoreThreadDispatcher {
             sender: sender.downgrade(),
             tx_subscriber_exists: Arc::new(tx_subscriber_exists),
             tx_last_known_proposed_round: Arc::new(tx_last_known_proposed_round),
+            highest_received_rounds: Arc::new(highest_received_rounds),
         };
         let handle = CoreThreadHandle {
             join_handle,
@@ -200,6 +230,9 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         &self,
         blocks: Vec<VerifiedBlock>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
+        for block in &blocks {
+            self.highest_received_rounds[block.author()].fetch_max(block.round(), Ordering::AcqRel);
+        }
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::AddBlocks(blocks, sender))
             .await;
@@ -229,6 +262,13 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         self.tx_last_known_proposed_round
             .send(round)
             .map_err(|e| Shutdown(e.to_string()))
+    }
+
+    fn highest_received_rounds(&self) -> Vec<Round> {
+        self.highest_received_rounds
+            .iter()
+            .map(|round| round.load(Ordering::Relaxed))
+            .collect()
     }
 }
 
@@ -290,6 +330,10 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
         let mut last_known_proposed_round = self.last_known_proposed_round.lock();
         last_known_proposed_round.push(round);
         Ok(())
+    }
+
+    fn highest_received_rounds(&self) -> Vec<Round> {
+        todo!()
     }
 }
 
@@ -353,11 +397,12 @@ mod test {
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
-            dag_state,
+            dag_state.clone(),
             false,
         );
 
-        let (core_dispatcher, handle) = ChannelCoreThreadDispatcher::start(core, context);
+        let (core_dispatcher, handle) =
+            ChannelCoreThreadDispatcher::start(context, &dag_state, core);
 
         // Now create some clones of the dispatcher
         let dispatcher_1 = core_dispatcher.clone();

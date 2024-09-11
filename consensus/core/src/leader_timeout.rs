@@ -174,6 +174,10 @@ mod tests {
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
             todo!()
         }
+
+        fn highest_received_rounds(&self) -> Vec<Round> {
+            todo!()
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
