@@ -76,22 +76,22 @@ export const mainnetCoins: CoinMap = {
 
 export const testnetPools: PoolMap = {
 	DEEP_SUI: {
-		address: `0xe51ce851c37e4efc3e7d9ef394b9f9c103bdf4113fe03c9b719e800f338b4430`,
+		address: `0x877c81b2d760a91a405dc12974742ba2401dc1da727681d2de32c861f807ec28`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'SUI',
 	},
 	SUI_DBUSDC: {
-		address: `0x8909c39fed7219426e333b474d5dfb7fd162bd897b37520f957102980cbf335c`,
+		address: `0x966c99a5ce0ce3e09dacac0a42cc2b888d9e1a0c5f39b69f556c38f38ef0b81d`,
 		baseCoin: 'SUI',
 		quoteCoin: 'DBUSDC',
 	},
 	DEEP_DBUSDC: {
-		address: `0xed1106fa2de599aac8b3c69067a73fb3bcb768a50c5a5eec2856a6de09b60718`,
+		address: `0x6546ae819e61770c6070962157a2868c012c121ef4e6dd93e81e98900c61b799`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'DBUSDC',
 	},
 	DBUSDT_DBUSDC: {
-		address: `0xcdc7600a2edcbea1068cd4e0c4e28ba9fd290212e612c771af67e9be3953c6d4`,
+		address: `0x9c0a6ef057b5f81d9f2d95a38ad753b8b5b8f535f9c10bb3e7d7256296eb4e18`,
 		baseCoin: 'DBUSDT',
 		quoteCoin: 'DBUSDC',
 	},
