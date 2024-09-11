@@ -2186,17 +2186,14 @@ impl Loader {
             Type::Vector(ty) => R::MoveTypeLayout::Vector(Box::new(
                 self.type_to_type_layout_impl(ty, count, depth + 1)?,
             )),
-            Type::Datatype(gidx) => R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(
-                *gidx,
-                &[],
-                count,
-                depth,
-            )?),
+            Type::Datatype(gidx) => R::MoveTypeLayout::Struct(Box::new(
+                self.struct_gidx_to_type_layout(*gidx, &[], count, depth)?,
+            )),
             Type::DatatypeInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                R::MoveTypeLayout::Struct(
+                R::MoveTypeLayout::Struct(Box::new(
                     self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
-                )
+                ))
             }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
@@ -2289,14 +2286,14 @@ impl Loader {
             Type::Vector(ty) => A::MoveTypeLayout::Vector(Box::new(
                 self.type_to_fully_annotated_layout_impl(ty, count, depth + 1)?,
             )),
-            Type::Datatype(gidx) => A::MoveTypeLayout::Struct(
+            Type::Datatype(gidx) => A::MoveTypeLayout::Struct(Box::new(
                 self.struct_gidx_to_fully_annotated_layout(*gidx, &[], count, depth)?,
-            ),
+            )),
             Type::DatatypeInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                A::MoveTypeLayout::Struct(
+                A::MoveTypeLayout::Struct(Box::new(
                     self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?,
-                )
+                ))
             }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
