@@ -19,6 +19,7 @@ public struct FixedPoint32 has copy, drop, store { value: u64 }
 
 ///> TODO: This is a basic constant and should be provided somewhere centrally in the framework.
 const MAX_U64: u128 = 18446744073709551615;
+const MAX_INTEGER: u64 = 4294967295;
 
 /// The denominator provided was zero
 const EDENOMINATOR: u64 = 0x10001;
@@ -26,10 +27,18 @@ const EDENOMINATOR: u64 = 0x10001;
 const EDIVISION: u64 = 0x20002;
 /// The multiplied value would be too large to be held in a `u64`
 const EMULTIPLICATION: u64 = 0x20003;
+/// The sum would be too large to be held in a `u64`
+const EADDITION: u64 = 0x20004;
+/// The difference will be negative.
+const ESUBTRACTION: u64 = 0x20006;
 /// A division by zero was encountered
 const EDIVISION_BY_ZERO: u64 = 0x10004;
 /// The computed ratio when converting to a `FixedPoint32` would be unrepresentable
 const ERATIO_OUT_OF_RANGE: u64 = 0x20005;
+/// The number of bits reserved to the fractional part of a number.
+const FRACTIONAL_BITS: u8 = 32;
+/// The integer is unrepresentable.
+const EINTEGER_OUT_OF_RANGE: u64 = 0x20007;
 
 /// Multiply a u64 integer by a fixed-point number, truncating any
 /// fractional part of the product. This will abort if the product
@@ -47,6 +56,15 @@ public fun multiply_u64(val: u64, multiplier: FixedPoint32): u64 {
     product as u64
 }
 
+/// Multiply two fixed-point number s, truncating any fractional part of
+/// the product. This will abort if the product overflows.
+public fun mul(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
+    let unscaled_product = (a.value as u128) * (b.value as u128);
+    let product = unscaled_product >> FRACTIONAL_BITS;
+    assert!(product <= MAX_U64, EMULTIPLICATION);
+    create_from_raw_value(product as u64)
+}
+
 /// Divide a u64 integer by a fixed-point number, truncating any
 /// fractional part of the quotient. This will abort if the divisor
 /// is zero or if the quotient overflows.
@@ -62,6 +80,33 @@ public fun divide_u64(val: u64, divisor: FixedPoint32): u64 {
     // the value may be too large, which will cause the cast to fail
     // with an arithmetic error.
     quotient as u64
+}
+/// Divide a u64 integer by a fixed-point number, truncating any
+/// fractional part of the quotient. This will abort if the divisor
+/// is zero or if the quotient overflows.
+public fun divide_u64(val: u64, divisor: FixedPoint32): u64 {
+    // Check for division by zero.
+    assert!(divisor.value != 0, EDIVISION_BY_ZERO);
+    // First convert to 128 bits and then shift left to
+    // add 32 fractional zero bits to the dividend.
+    let scaled_value = val as u128 << 32;
+    let quotient = scaled_value / (divisor.value as u128);
+    // Check whether the value is too large.
+    assert!(quotient <= MAX_U64, EDIVISION);
+    // the value may be too large, which will cause the cast to fail
+    // with an arithmetic error.
+    quotient as u64
+}
+
+/// Divide two fixed-point numbers, truncating any fractional part of
+/// the quotient. This will abort if the divisor is zero or if the
+/// quotient overflows.
+public fun div(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
+    assert!(b.value != 0, EDIVISION_BY_ZERO);
+    let scaled_value = a.value as u128 << FRACTIONAL_BITS;
+    let quotient = scaled_value / (b.value as u128);
+    assert!(quotient <= MAX_U64, EDIVISION);
+    create_from_raw_value(quotient as u64)
 }
 
 /// Create a fixed-point value from a rational number specified by its
@@ -89,6 +134,37 @@ public fun create_from_rational(numerator: u64, denominator: u64): FixedPoint32 
     assert!(quotient <= MAX_U64, ERATIO_OUT_OF_RANGE);
     FixedPoint32 { value: quotient as u64 }
 }
+/// Create a fixed-point value from a rational number specified by its
+/// numerator and denominator. Calling this function should be preferred
+/// for using `Self::create_from_raw_value` which is also available.
+/// This will abort if the denominator is zero. It will also
+/// abort if the numerator is nonzero and the ratio is not in the range
+/// 2^-32 .. 2^32-1. When specifying decimal fractions, be careful about
+/// rounding errors: if you round to display N digits after the decimal
+/// point, you can use a denominator of 10^N to avoid numbers where the
+/// very small imprecision in the binary representation could change the
+/// rounding, e.g., 0.0125 will round down to 0.012 instead of up to 0.013.
+public fun create_from_rational(numerator: u64, denominator: u64): FixedPoint32 {
+    // If the denominator is zero, this will abort.
+    // Scale the numerator to have 64 fractional bits and the denominator
+    // to have 32 fractional bits, so that the quotient will have 32
+    // fractional bits.
+    let scaled_numerator = numerator as u128 << 64;
+    let scaled_denominator = denominator as u128 << 32;
+    assert!(scaled_denominator != 0, EDENOMINATOR);
+    let quotient = scaled_numerator / scaled_denominator;
+    assert!(quotient != 0 || numerator == 0, ERATIO_OUT_OF_RANGE);
+    // Return the quotient as a fixed-point number. We first need to check whether the cast
+    // can succeed.
+    assert!(quotient <= MAX_U64, ERATIO_OUT_OF_RANGE);
+    FixedPoint32 { value: quotient as u64 }
+}
+
+/// Create a fixed-point value from an integer.
+public fun create_from_integer(integer: u64): FixedPoint32 {
+    assert!(integer <= MAX_INTEGER, EINTEGER_OUT_OF_RANGE);
+    create_from_raw_value(integer << FRACTIONAL_BITS)
+}
 
 /// Create a fixedpoint value from a raw value.
 public fun create_from_raw_value(value: u64): FixedPoint32 {
@@ -105,4 +181,64 @@ public fun get_raw_value(num: FixedPoint32): u64 {
 /// Returns true if the ratio is zero.
 public fun is_zero(num: FixedPoint32): bool {
     num.value == 0
+}
+
+/// Returns true if the ratio is zero.
+public fun is_zero(num: FixedPoint32): bool {
+    num.value == 0
+}
+
+/// Add two fixed-point numbers.
+public fun add(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
+    let sum = (a.value as u128) + (b.value as u128);
+    assert!(sum <= MAX_U64, EADDITION);
+    create_from_raw_value(sum as u64)
+}
+
+/// Subtract two fixed-point numbers, `a - b`.
+public fun sub(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
+    assert!(a.value >= b.value, ESUBTRACTION);
+    create_from_raw_value(a.value - b.value)
+}
+
+/// Return `true` is and only if `x <= y`.
+public fun leq(x: &FixedPoint32, y: &FixedPoint32): bool {
+    x.value <= y.value
+}
+
+/// Return `true` is and only if `x < y`.
+public fun lt(x: &FixedPoint32, y: &FixedPoint32): bool {
+    x.value < y.value
+}
+
+    /// Return `true` is and only if `x < y`.
+public fun eq(x: &FixedPoint32, y: &FixedPoint32): bool {
+    x.value < y.value
+}
+
+public fun one(): FixedPoint32 {
+    create_from_integer(1)
+}
+
+public fun zero(): FixedPoint32 {
+    create_from_raw_value(0)
+}
+
+/// Compute `a^x` where `x` is an integer.
+public fun int_pow(a: &FixedPoint32, x: u64): FixedPoint32 {
+    if (x == 0) {
+        return one()
+    };
+
+    let mut result = create_from_raw_value(a.value);
+    let mut exponent = x;
+    exponent = exponent >> 1;
+    while (exponent > 0) {
+        result = result.mul(&result);
+        if (exponent % 2 == 1) {
+            result = result.mul(a);
+        };
+        exponent = exponent >> 1;
+    };
+    result
 }

@@ -112,3 +112,14 @@ fun create_from_rational_max_numerator_denominator() {
     let one = f.get_raw_value();
     assert!(one == 4294967296); // 0x1.00000000
 }
+
+#[test]
+fun test_arithemtic() {
+    let a = fixed_point32::create_from_rational(3, 4);
+    let b = fixed_point32::create_from_rational(3, 7);
+    let c = a.mul(&b);
+    std::debug::print(&c);
+    let expected = fixed_point32::create_from_rational(9, 28);
+    std::debug::print(&expected);
+    assert!(c.eq(&expected));
+}
