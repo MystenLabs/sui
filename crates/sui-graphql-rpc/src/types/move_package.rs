@@ -32,7 +32,7 @@ use diesel::prelude::QueryableByName;
 use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, Selectable};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use serde::{Deserialize, Serialize};
-use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::models::objects::StoredObjectHistory;
 use sui_indexer::schema::packages;
 use sui_package_resolver::{error::Error as PackageCacheError, Package as ParsedMovePackage};
 use sui_types::is_system_package;
@@ -125,7 +125,7 @@ struct TypeOrigin {
 struct StoredHistoryPackage {
     original_id: Vec<u8>,
     #[diesel(embed)]
-    object: StoredHistoryObject,
+    object: StoredObjectHistory,
 }
 
 pub(crate) struct MovePackageDowncastError;
@@ -810,7 +810,7 @@ impl MovePackage {
     /// This is stored in the `MovePackage` so that related fields from the package are read from
     /// the same checkpoint (consistently).
     pub(crate) fn try_from_stored_history_object(
-        history_object: StoredHistoryObject,
+        history_object: StoredObjectHistory,
         checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
         let object = Object::try_from_stored_history_object(

@@ -29,7 +29,7 @@ use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
 use diesel_async::scoped_futures::ScopedFutureExt;
-use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::models::objects::StoredObjectHistory;
 use sui_indexer::types::OwnerType;
 use sui_types::coin::Coin as NativeCoin;
 use sui_types::TypeTag;
@@ -343,7 +343,7 @@ impl Coin {
                     };
 
                     Ok(Some(
-                        page.paginate_raw_query::<StoredHistoryObject>(
+                        page.paginate_raw_query::<StoredObjectHistory>(
                             conn,
                             checkpoint_viewed_at,
                             coins_query(coin_type, owner, range, &page),
