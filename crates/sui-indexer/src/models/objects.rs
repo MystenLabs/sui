@@ -314,7 +314,7 @@ impl StoredObject {
             )),
         }?;
 
-        Ok(ObjectRead::Exists(oref, object, Some(move_struct_layout)))
+        Ok(ObjectRead::Exists(oref, object, Some(*move_struct_layout)))
     }
 
     pub fn get_object_ref(&self) -> Result<ObjectRef, IndexerError> {
