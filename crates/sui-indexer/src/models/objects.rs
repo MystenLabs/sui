@@ -208,7 +208,7 @@ impl From<IndexedDeletedObject> for StoredDeletedObject {
 
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects_history, primary_key(object_id, object_version, checkpoint_sequence_number))]
-pub struct StoredDeletedHistoryObject {
+pub(crate) struct StoredDeletedHistoryObject {
     pub object_id: Vec<u8>,
     pub object_version: i64,
     pub object_status: i16,
