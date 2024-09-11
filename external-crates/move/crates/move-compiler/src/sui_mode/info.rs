@@ -25,6 +25,7 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_ir_types::location::Loc;
+use move_proc_macros::growing_stack;
 
 #[derive(Debug, Clone, Copy)]
 pub enum UIDHolder {
@@ -111,6 +112,7 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
         }
     }
 
+    #[growing_stack]
     fn visit_ty(
         info: &TypingProgramInfo,
         visited: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
@@ -152,6 +154,7 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
         }
     }
 
+    #[growing_stack]
     fn visit_fields(
         info: &TypingProgramInfo,
         visited: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
@@ -174,6 +177,7 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
             .fold(None, merge_uid_holder_opt)
     }
 
+    #[growing_stack]
     fn visit_decl(
         info: &TypingProgramInfo,
         visited: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
