@@ -167,9 +167,10 @@ mod tests {
             todo!()
         }
 
-        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
             todo!()
         }
+
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
             todo!()
         }

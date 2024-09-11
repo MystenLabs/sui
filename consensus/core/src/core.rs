@@ -57,7 +57,8 @@ pub(crate) struct Core {
     /// and accept them or suspend if we are missing their causal history
     block_manager: BlockManager,
     /// Whether there are consumers waiting to consume blocks produced by the core.
-    consumer_availability: bool,
+    subscriber_exists: bool,
+
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
     /// The last produced block
@@ -95,7 +96,7 @@ impl Core {
         leader_schedule: Arc<LeaderSchedule>,
         transaction_consumer: TransactionConsumer,
         block_manager: BlockManager,
-        consumer_availability: bool,
+        subscriber_exists: bool,
         commit_observer: CommitObserver,
         signals: CoreSignals,
         block_signer: ProtocolKeyPair,
@@ -150,7 +151,7 @@ impl Core {
             leader_schedule,
             transaction_consumer,
             block_manager,
-            consumer_availability,
+            subscriber_exists,
             committer,
             commit_observer,
             signals,
@@ -639,9 +640,9 @@ impl Core {
     }
 
     /// Sets if there is consumer available to consume blocks produced by the core.
-    pub(crate) fn set_consumer_availability(&mut self, allow: bool) {
+    pub(crate) fn set_subscriber_exists(&mut self, allow: bool) {
         info!("Block consumer availability set to: {allow}");
-        self.consumer_availability = allow;
+        self.subscriber_exists = allow;
     }
 
     /// Whether the core should propose new blocks.
@@ -660,7 +661,7 @@ impl Core {
             true
         };
 
-        self.consumer_availability && !skip_proposing
+        self.subscriber_exists && !skip_proposing
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
@@ -1559,7 +1560,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_core_set_consumer_availability() {
+    async fn test_core_set_subscriber_exists() {
         telemetry_subscribers::init_for_testing();
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -1615,7 +1616,7 @@ mod test {
         assert!(core.try_propose(true).unwrap().is_none());
 
         // Update core when consumer is available.
-        core.set_consumer_availability(true);
+        core.set_subscriber_exists(true);
 
         // Proposing now would succeed.
         assert!(core.try_propose(true).unwrap().is_some());

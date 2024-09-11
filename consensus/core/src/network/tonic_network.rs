@@ -1143,6 +1143,18 @@ pub(crate) struct FetchLatestBlocksResponse {
     blocks: Vec<Bytes>,
 }
 
+#[derive(Clone, prost::Message)]
+pub(crate) struct GetLatestRoundsRequest {
+    #[prost(uint32, repeated, tag = "1")]
+    authorities: Vec<u32>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct GetLatestRoundsResponse {
+    #[prost(uint32, repeated, tag = "1")]
+    highest_received: Vec<u32>,
+}
+
 fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {
     let mut chunks = vec![];
     let mut chunk = vec![];

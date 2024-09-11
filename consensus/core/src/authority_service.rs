@@ -438,7 +438,7 @@ impl SubscriptionCounter {
         *counter += 1;
         if *counter == 1 {
             self.dispatcher
-                .set_consumer_availability(true)
+                .set_subscriber_exists(true)
                 .map_err(|_| ConsensusError::Shutdown)?;
         }
         Ok(())
@@ -449,7 +449,7 @@ impl SubscriptionCounter {
         *counter -= 1;
         if *counter == 0 {
             self.dispatcher
-                .set_consumer_availability(false)
+                .set_subscriber_exists(false)
                 .map_err(|_| ConsensusError::Shutdown)?;
         }
         Ok(())
@@ -622,9 +622,10 @@ mod tests {
             Ok(Default::default())
         }
 
-        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
             todo!()
         }
+
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
             todo!()
         }
