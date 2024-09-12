@@ -183,11 +183,6 @@ public fun is_zero(num: FixedPoint32): bool {
     num.value == 0
 }
 
-/// Returns true if the ratio is zero.
-public fun is_zero(num: FixedPoint32): bool {
-    num.value == 0
-}
-
 /// Add two fixed-point numbers.
 public fun add(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
     let sum = (a.value as u128) + (b.value as u128);

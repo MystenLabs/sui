@@ -118,8 +118,7 @@ fun test_arithemtic() {
     let a = fixed_point32::create_from_rational(3, 4);
     let b = fixed_point32::create_from_rational(3, 7);
     let c = a.mul(&b);
-    std::debug::print(&c);
     let expected = fixed_point32::create_from_rational(9, 28);
-    std::debug::print(&expected);
     assert!(c.eq(&expected));
+    assert!(false);
 }
