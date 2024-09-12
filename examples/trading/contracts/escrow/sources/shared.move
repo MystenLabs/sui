@@ -215,6 +215,7 @@ module escrow::shared {
 
         // Bob responds by offering their object, and gets Alice's object in
         // return.
+        // docs::#bob
         {
             ts.next_tx(BOB);
             let escrow: Escrow<Coin<SUI>> = ts.take_shared();
@@ -224,7 +225,9 @@ module escrow::shared {
 
             transfer::public_transfer(c, BOB);
         };
+        // docs::/#bob
 
+        // docs::#finish
         // Commit effects from the swap
         ts.next_tx(@0x0);
 
@@ -239,6 +242,7 @@ module escrow::shared {
             let c: Coin<SUI> = ts.take_from_address_by_id(BOB, i1);
             ts::return_to_address(BOB, c);
         };
+        // docs::/#finish
         //docs::#test-resume
 
         ts::end(ts);

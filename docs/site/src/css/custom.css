@@ -354,7 +354,20 @@ h4 {
   color: var(--sui-white);
   text-decoration: none;
 }
+details {
+  @apply !bg-sui-gray-45 !border-sui-gray-65;
+}
+[data-theme='dark'] details {
+  @apply !bg-sui-gray-90 !border-sui-gray-65;
+}
 
+summary::before {
+  @apply !border-l-sui-gray-65;
+}
+
+details > div > div {
+  @apply !border-t-sui-gray-65;
+}
 @media (max-width: 1050px) {
   .navbar .button-cta {
     display: none;
