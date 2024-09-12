@@ -1814,6 +1814,7 @@
                 "max_type_nodes": {
                   "u64": "256"
                 },
+                "max_type_to_layout_nodes": null,
                 "max_value_stack_size": {
                   "u64": "1024"
                 },

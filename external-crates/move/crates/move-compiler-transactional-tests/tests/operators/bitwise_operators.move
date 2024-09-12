@@ -1,5 +1,5 @@
 //# run
-module 1::m {
+module 6::m {
 fun main() {
     assert!(0u8 & 0u8 == 0u8, 1000);
     assert!(0u64 & 0u64 == 0u64, 1001);
@@ -100,7 +100,7 @@ fun main() {
 
 
 //# run
-module 2::m {
+module 7::m {
 fun main() {
     assert!(0u8 ^ 0u8 == 0u8, 3000);
     assert!(0u64 ^ 0u64 == 0u64, 3001);

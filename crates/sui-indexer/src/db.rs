@@ -205,7 +205,6 @@ pub mod setup_postgres {
     }
 }
 
-#[cfg(feature = "pg_integration")]
 #[cfg(test)]
 mod tests {
     use crate::database::{Connection, ConnectionPool};

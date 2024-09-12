@@ -27,7 +27,6 @@ tower.workspace = true
 reqwest.workspace = true
 tap.workspace = true
 serde.workspace = true
-snap.workspace = true
 bin-version.workspace = true
 url.workspace = true
 humantime.workspace = true

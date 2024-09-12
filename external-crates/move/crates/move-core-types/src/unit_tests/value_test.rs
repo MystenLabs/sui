@@ -12,6 +12,12 @@ use crate::{
 use serde_json::json;
 
 #[test]
+fn check_layout_size() {
+    assert_eq!(std::mem::size_of::<R::MoveTypeLayout>(), 16);
+    assert_eq!(std::mem::size_of::<A::MoveTypeLayout>(), 16);
+}
+
+#[test]
 fn struct_deserialization() {
     let struct_type = StructTag {
         address: AccountAddress::ZERO,
@@ -37,17 +43,21 @@ fn struct_deserialization() {
 
     let struct_type_layout = A::MoveStructLayout {
         type_: struct_type.clone(),
-        fields: vec![
-            A::MoveFieldLayout::new(ident_str!("f").to_owned(), A::MoveTypeLayout::U64),
-            A::MoveFieldLayout::new(ident_str!("g").to_owned(), A::MoveTypeLayout::Bool),
-        ]
-        .into_iter()
-        .collect(),
+        fields: Box::new(
+            vec![
+                A::MoveFieldLayout::new(ident_str!("f").to_owned(), A::MoveTypeLayout::U64),
+                A::MoveFieldLayout::new(ident_str!("g").to_owned(), A::MoveTypeLayout::Bool),
+            ]
+            .into_iter()
+            .collect(),
+        ),
     };
 
-    let deser_typed_value =
-        A::MoveValue::simple_deserialize(&ser, &A::MoveTypeLayout::Struct(struct_type_layout))
-            .unwrap();
+    let deser_typed_value = A::MoveValue::simple_deserialize(
+        &ser,
+        &A::MoveTypeLayout::Struct(Box::new(struct_type_layout)),
+    )
+    .unwrap();
     let typed_value = A::MoveStruct::new(struct_type, field_values);
 
     assert_eq!(
@@ -96,8 +106,8 @@ fn enum_deserialization() {
             R::MoveTypeLayout::Bool,
             R::MoveTypeLayout::U8,
         ];
-        let enum_layout = R::MoveEnumLayout(vec![variant_layout1, variant_layout2]);
-        R::MoveTypeLayout::Enum(enum_layout)
+        let enum_layout = R::MoveEnumLayout(Box::new(vec![variant_layout1, variant_layout2]));
+        R::MoveTypeLayout::Enum(Box::new(enum_layout))
     };
 
     // test each deserialization scheme
@@ -156,9 +166,11 @@ fn enum_deserialization() {
         json!([1, [8, false, 0]])
     );
 
-    let deser_typed_value =
-        A::MoveValue::simple_deserialize(&ser, &A::MoveTypeLayout::Enum(enum_type_layout.clone()))
-            .unwrap();
+    let deser_typed_value = A::MoveValue::simple_deserialize(
+        &ser,
+        &A::MoveTypeLayout::Enum(Box::new(enum_type_layout.clone())),
+    )
+    .unwrap();
     let typed_value = A::MoveVariant {
         type_: enum_type.clone(),
         variant_name: ident_str!("Variant1").to_owned(),
@@ -182,9 +194,11 @@ fn enum_deserialization() {
     let ser1 = R::MoveValue::Variant(runtime_value.clone())
         .simple_serialize()
         .unwrap();
-    let deser1_typed_value =
-        A::MoveValue::simple_deserialize(&ser1, &A::MoveTypeLayout::Enum(enum_type_layout))
-            .unwrap();
+    let deser1_typed_value = A::MoveValue::simple_deserialize(
+        &ser1,
+        &A::MoveTypeLayout::Enum(Box::new(enum_type_layout)),
+    )
+    .unwrap();
     let typed_value = A::MoveVariant {
         type_: enum_type,
         variant_name: ident_str!("Variant2").to_owned(),
@@ -220,10 +234,10 @@ fn enum_deserialization_vec_option_runtime_layout_equiv() {
     let vec_ser = vec_option.simple_serialize().unwrap();
     let enum_ser = enum_option.simple_serialize().unwrap();
 
-    let enum_layout = R::MoveTypeLayout::Enum(R::MoveEnumLayout(vec![
+    let enum_layout = R::MoveTypeLayout::Enum(Box::new(R::MoveEnumLayout(Box::new(vec![
         vec![],
         vec![R::MoveTypeLayout::U64],
-    ]));
+    ]))));
 
     let vec_layout = R::MoveTypeLayout::Vector(Box::new(R::MoveTypeLayout::U64));
 

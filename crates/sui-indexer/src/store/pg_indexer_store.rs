@@ -517,21 +517,17 @@ impl PgIndexerStore {
             .checkpoint_db_commit_latency_objects_history_chunks
             .start_timer();
         let mut mutated_objects: Vec<StoredHistoryObject> = vec![];
-        let mut object_versions: Vec<StoredObjectVersion> = vec![];
         let mut deleted_object_ids: Vec<StoredDeletedHistoryObject> = vec![];
         for object in objects {
             match object {
                 ObjectChangeToCommit::MutatedObject(stored_object) => {
-                    object_versions.push(StoredObjectVersion::from(&stored_object));
                     mutated_objects.push(stored_object.into());
                 }
                 ObjectChangeToCommit::DeletedObject(stored_deleted_object) => {
-                    object_versions.push(StoredObjectVersion::from(&stored_deleted_object));
                     deleted_object_ids.push(stored_deleted_object.into());
                 }
             }
         }
-
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 for mutated_object_change_chunk in
@@ -544,22 +540,6 @@ impl PgIndexerStore {
                     );
                     diesel::insert_into(objects_history::table)
                         .values(mutated_object_change_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context(error_message)?;
-                }
-
-                for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    let error_message = concat!(
-                        "Failed to write to ",
-                        stringify!((objects_version::table)),
-                        " DB"
-                    );
-                    diesel::insert_into(objects_version::table)
-                        .values(object_version_chunk)
                         .on_conflict_do_nothing()
                         .execute(conn)
                         .await
@@ -641,6 +621,31 @@ impl PgIndexerStore {
         .tap_err(|e| {
             tracing::error!("Failed to persist full object history with error: {}", e);
         })
+    }
+
+    async fn persist_object_version_chunk(
+        &self,
+        object_versions: Vec<StoredObjectVersion>,
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(objects_version::table)
+                        .values(object_version_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context("Failed to write to objects_version table")?;
+                }
+                Ok::<(), IndexerError>(())
+            }
+            .scope_boxed()
+        })
+        .await
     }
 
     async fn persist_checkpoints(
@@ -1710,6 +1715,34 @@ impl IndexerStore for PgIndexerStore {
             })?;
         let elapsed = guard.stop_and_record();
         info!(elapsed, "Persisted {} full objects history", len);
+        Ok(())
+    }
+
+    async fn persist_object_versions(
+        &self,
+        object_versions: Vec<StoredObjectVersion>,
+    ) -> Result<(), IndexerError> {
+        if object_versions.is_empty() {
+            return Ok(());
+        }
+        let object_versions_count = object_versions.len();
+        let chunks = chunk!(object_versions, self.config.parallel_objects_chunk_size);
+        let futures = chunks
+            .into_iter()
+            .map(|c| self.persist_object_version_chunk(c))
+            .collect::<Vec<_>>();
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all object version chunks: {:?}",
+                    e
+                ))
+            })?;
+        info!("Persisted {} object versions", object_versions_count);
         Ok(())
     }
 

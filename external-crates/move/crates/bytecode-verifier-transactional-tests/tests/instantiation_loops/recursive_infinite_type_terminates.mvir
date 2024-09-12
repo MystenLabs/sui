@@ -1,6 +1,6 @@
 //# publish
 
-module 0x1.M {
+module 0x6.M {
     struct Box<T> { x: T }
 
     unbox<T>(b: Self.Box<T>): T {

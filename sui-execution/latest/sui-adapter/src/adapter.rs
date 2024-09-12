@@ -72,6 +72,7 @@ mod checked {
                 binary_config: to_binary_config(protocol_config),
                 rethrow_serialization_type_layout_errors: protocol_config
                     .rethrow_serialization_type_layout_errors(),
+                max_type_to_layout_nodes: protocol_config.max_type_to_layout_nodes_as_option(),
             },
         )
         .map_err(|_| SuiError::ExecutionInvariantViolation)

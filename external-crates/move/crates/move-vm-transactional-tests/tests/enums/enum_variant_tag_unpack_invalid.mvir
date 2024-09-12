@@ -1,5 +1,5 @@
 //# publish
-module 0x1.Enums {
+module 0x6.Enums {
     enum PolyEnum<T> {
         One { },
         Two { x: T },
@@ -217,28 +217,28 @@ module 0x1.Enums {
     }
 }
 
-//# run 0x1::Enums::all_valid
+//# run 0x6::Enums::all_valid
 
-//# run 0x1::Enums::poly_invalid1_mut_ref
+//# run 0x6::Enums::poly_invalid1_mut_ref
 
-//# run 0x1::Enums::poly_invalid1_imm_ref
+//# run 0x6::Enums::poly_invalid1_imm_ref
 
-//# run 0x1::Enums::poly_invalid1
+//# run 0x6::Enums::poly_invalid1
 
-//# run 0x1::Enums::poly_invalid2_mut_ref
+//# run 0x6::Enums::poly_invalid2_mut_ref
 
-//# run 0x1::Enums::poly_invalid2_imm_ref
+//# run 0x6::Enums::poly_invalid2_imm_ref
 
-//# run 0x1::Enums::poly_invalid2
+//# run 0x6::Enums::poly_invalid2
 
-//# run 0x1::Enums::mono_invalid1_mut_ref
+//# run 0x6::Enums::mono_invalid1_mut_ref
 
-//# run 0x1::Enums::mono_invalid1_imm_ref
+//# run 0x6::Enums::mono_invalid1_imm_ref
 
-//# run 0x1::Enums::mono_invalid1
+//# run 0x6::Enums::mono_invalid1
 
-//# run 0x1::Enums::mono_invalid2_mut_ref
+//# run 0x6::Enums::mono_invalid2_mut_ref
 
-//# run 0x1::Enums::mono_invalid2_imm_ref
+//# run 0x6::Enums::mono_invalid2_imm_ref
 
-//# run 0x1::Enums::mono_invalid2
+//# run 0x6::Enums::mono_invalid2

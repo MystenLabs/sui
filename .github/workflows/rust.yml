@@ -227,6 +227,8 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
@@ -401,23 +403,3 @@ jobs:
         run: ./scripts/execution_layer.py cut for_ci_test
       - name: Check execution builds
         run: cargo build -p sui-execution
-
-  graphql-rpc:
-    name: graphql-rpc
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 45
-    runs-on: [ ubuntu-ghcloud ]
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-        with:
-          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: taiki-e/install-action@nextest
-      - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
-      - name: tests-requiring-postgres
-        run: |
-
-          # The tests in these packages have been converted to use a temporary, ephemoral postgres database and so can be run in parallel
-          cargo nextest run --profile ci --package sui-indexer --package sui-graphql-e2e-tests --package sui-cluster-test --package sui-graphql-rpc --features pg_integration
-

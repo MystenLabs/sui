@@ -26,7 +26,7 @@ module 0x42.M {
 }
 
 //# run --args 0 1 b"xyz"
-module 0x1.m {
+module 0x5.m {
 import 0x42.M;
 entry foo(
     u: &mut u64,
