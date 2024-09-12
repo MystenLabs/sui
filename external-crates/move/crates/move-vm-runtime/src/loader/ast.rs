@@ -24,7 +24,7 @@ use move_core_types::{
 use crate::{
     loader::{
         arena::{self, ArenaPointer},
-        Loader, Resolver,
+        Loader, ModuleDefinitionResolver,
     },
     native_functions::{NativeFunction, UnboxedNativeFunction},
 };
@@ -811,9 +811,9 @@ impl Function {
         &self,
         link_context: AccountAddress,
         loader: &'a Loader,
-    ) -> Resolver<'a> {
+    ) -> ModuleDefinitionResolver<'a> {
         let (compiled, loaded) = loader.get_module(link_context, &self.module);
-        Resolver::for_module(loader, compiled, loaded)
+        ModuleDefinitionResolver::for_module(loader, compiled, loaded)
     }
 
     pub(crate) fn local_count(&self) -> usize {

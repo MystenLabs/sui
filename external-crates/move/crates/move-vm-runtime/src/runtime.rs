@@ -4,7 +4,7 @@
 
 use crate::{
     data_cache::TransactionDataCache,
-    interpreter::Interpreter,
+    interpreter,
     loader::{arena::ArenaPointer, ast::Function, Loader},
     native_extensions::NativeContextExtensions,
     native_functions::{NativeFunction, NativeFunctions},
@@ -343,7 +343,7 @@ impl VMRuntime {
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
-        let return_values = Interpreter::entrypoint(
+        let return_values = interpreter::run(
             func,
             ty_args,
             deserialized_args,

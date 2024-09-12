@@ -41,15 +41,18 @@ impl Arena {
 }
 
 impl<T> ArenaPointer<T> {
+    #[inline]
     pub fn new(value: *const T) -> Self {
         ArenaPointer(value)
     }
 
     #[allow(dead_code)]
+    #[inline]
     pub fn to_const(self) -> *const T {
         self.0
     }
 
+    #[inline]
     pub fn to_ref<'a>(self) -> &'a T {
         to_ref(self.0)
     }
@@ -60,22 +63,27 @@ impl<T> ArenaPointer<T> {
 // -----------------------------------------------
 
 ///// Returns a pointer to a slice, but nulled. This must be set before use.
+#[inline]
 pub fn null_ptr<T>() -> *const [T] {
     unsafe { MaybeUninit::<*const [T]>::zeroed().assume_init() }
 }
 
+#[inline]
 pub fn ref_slice<'a, T>(value: *const [T]) -> &'a [T] {
     unsafe { &*value }
 }
 
+#[inline]
 pub fn mut_to_ref_slice<'a, T>(value: *mut [T]) -> &'a [T] {
     unsafe { &*value }
 }
 
+#[inline]
 pub fn to_mut_ref_slice<'a, T>(value: *mut [T]) -> &'a mut [T] {
     unsafe { &mut *value }
 }
 
+#[inline]
 pub fn to_ref<'a, T>(value: *const T) -> &'a T {
     unsafe { &*value as &T }
 }

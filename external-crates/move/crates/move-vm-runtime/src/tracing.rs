@@ -21,7 +21,7 @@ use ::{
 
 #[cfg(any(debug_assertions, feature = "debugging"))]
 use crate::{
-    interpreter::Interpreter,
+    interpreter::state::MachineState,
     loader::{
         ast::{Bytecode, Function},
         Loader,
@@ -68,7 +68,7 @@ pub(crate) fn trace(
     pc: u16,
     instr: &Bytecode,
     loader: &Loader,
-    interp: &Interpreter,
+    interp: &MachineState,
 ) {
     if *TRACING_ENABLED {
         let f = &mut *LOGGING_FILE.lock().unwrap();
