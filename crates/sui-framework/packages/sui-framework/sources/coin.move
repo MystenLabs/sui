@@ -522,6 +522,7 @@ module sui::coin {
 
     // deprecated as we have CoinMetadata now
     #[allow(unused_field)]
+    #[deprecated(note = b"This event is deprecated in favor of `CoinMetadata`")]
     public struct CurrencyCreated<phantom T> has copy, drop {
         decimals: u8
     }
