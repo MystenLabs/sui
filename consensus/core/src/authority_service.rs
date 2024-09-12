@@ -601,6 +601,7 @@ async fn make_recv_future<T: Clone>(
 #[cfg(test)]
 mod tests {
     use crate::commit::CommitRange;
+    use crate::round_prober::QuorumRound;
     use crate::test_dag_builder::DagBuilder;
     use crate::{
         authority_service::AuthorityService,
@@ -665,7 +666,10 @@ mod tests {
             todo!()
         }
 
-        fn set_propagation_delay(&self, _delay: Round) -> Result<(), CoreError> {
+        fn set_propagation_delay_and_quorum_rounds(
+            &self,
+            _quorum_rounds: Vec<QuorumRound>,
+        ) -> Result<(), CoreError> {
             todo!()
         }
 

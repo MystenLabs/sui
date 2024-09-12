@@ -136,15 +136,32 @@ impl LeaderSchedule {
             .with_label_values(&["LeaderSchedule::update_leader_schedule"])
             .start_timer();
 
+        let s1 = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["LeaderSchedule::update_leader_schedule::calculate_scoring_subdag_distributed_vote_scores"])
+            .start_timer();
         let (reputation_scores, last_commit_index) = {
             let dag_state = dag_state.read();
-            let reputation_scores = dag_state.calculate_scoring_subdag_scores();
+            let reputation_scores = dag_state.calculate_scoring_subdag_distributed_vote_scores();
 
             let last_commit_index = dag_state.scoring_subdag_commit_range();
 
             (reputation_scores, last_commit_index)
         };
+        drop(s1);
 
+        let s2 = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&[
+                "LeaderSchedule::update_leader_schedule::clear_scoring_subdag_&_add_commit_info",
+            ])
+            .start_timer();
         {
             let mut dag_state = dag_state.write();
             // Clear scoring subdag as we have updated the leader schedule
@@ -152,13 +169,31 @@ impl LeaderSchedule {
             // Buffer score and last commit rounds in dag state to be persisted later
             dag_state.add_commit_info(reputation_scores.clone());
         }
+        drop(s2);
 
+        let s3 = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&[
+                "LeaderSchedule::update_leader_schedule::update_leader_swap_table",
+            ])
+            .start_timer();
         self.update_leader_swap_table(LeaderSwapTable::new(
             self.context.clone(),
             last_commit_index,
             reputation_scores.clone(),
         ));
+        drop(s3);
 
+        let s4 = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["LeaderSchedule::update_leader_schedule::update_metrics"])
+            .start_timer();
         reputation_scores.update_metrics(self.context.clone());
 
         self.context
@@ -166,6 +201,7 @@ impl LeaderSchedule {
             .node_metrics
             .num_of_bad_nodes
             .set(self.leader_swap_table.read().bad_nodes.len() as i64);
+        drop(s4);
     }
 
     // TODO: Remove when DistributedVoteScoring is enabled.
@@ -747,7 +783,9 @@ mod tests {
             dag_state.read().last_committed_rounds()
         );
         assert_eq!(1, dag_state.read().scoring_subdags_count());
-        let recovered_scores = dag_state.read().calculate_scoring_subdag_scores();
+        let recovered_scores = dag_state
+            .read()
+            .calculate_scoring_subdag_distributed_vote_scores();
         let expected_scores = ReputationScores::new((11..=11).into(), vec![0, 0, 0, 0]);
         assert_eq!(recovered_scores, expected_scores);
 
@@ -863,7 +901,9 @@ mod tests {
             expected_scored_subdags.len(),
             dag_state.read().scoring_subdags_count()
         );
-        let recovered_scores = dag_state.read().calculate_scoring_subdag_scores();
+        let recovered_scores = dag_state
+            .read()
+            .calculate_scoring_subdag_distributed_vote_scores();
         let expected_scores = ReputationScores::new((1..=2).into(), vec![0, 0, 0, 0]);
         assert_eq!(recovered_scores, expected_scores);
 

@@ -896,8 +896,13 @@ impl DagState {
         self.scoring_subdag.is_empty()
     }
 
-    pub(crate) fn calculate_scoring_subdag_scores(&self) -> ReputationScores {
-        self.scoring_subdag.calculate_scores()
+    pub(crate) fn calculate_scoring_subdag_distributed_vote_scores(&self) -> ReputationScores {
+        self.scoring_subdag.calculate_distributed_vote_scores()
+    }
+
+    #[allow(unused)]
+    pub(crate) fn calculate_scoring_subdag_certified_vote_scores(&self) -> ReputationScores {
+        self.scoring_subdag.calculate_certified_vote_scores()
     }
 
     pub(crate) fn scoring_subdag_commit_range(&self) -> CommitIndex {
