@@ -547,6 +547,17 @@ module sui_system::validator_set {
         &self.staking_pool_mappings
     }
 
+    public fun validator_address_by_pool_id(self: &mut ValidatorSet, pool_id: &ID): address {
+        // If the pool id is recorded in the mapping, then it must be either candidate or active.
+        if (self.staking_pool_mappings.contains(*pool_id)) {
+            self.staking_pool_mappings[*pool_id]
+        } else { // otherwise it's inactive
+            let wrapper = &mut self.inactive_validators[*pool_id];
+            let validator = wrapper.load_validator_maybe_upgrade();
+            validator.sui_address()
+        }
+    }
+
     public(package) fun pool_exchange_rates(
         self: &mut ValidatorSet, pool_id: &ID
     ) : &Table<u64, PoolTokenExchangeRate> {
