@@ -56,9 +56,16 @@ pub(crate) struct Core {
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
     /// and accept them or suspend if we are missing their causal history
     block_manager: BlockManager,
-    /// Whether there are consumers waiting to consume blocks produced by the core.
+    /// Whether there are subscribers waiting for new blocks proposed by this authority.
+    /// Core stops proposing new blocks when there is no subscriber, because new proposed blocks
+    /// will likely contain only stale info when they propagate to peers.
     subscriber_exists: bool,
     /// Estimated delay by round for propagating blocks to a quorum.
+    /// Because of the nature of TCP and block streaming, propagation delay is expected to be
+    /// 0 in most cases, even when the actual latency of broadcasting blocks is high.
+    /// When this value is higher than the `propagation_delay_stop_proposal_threshold`,
+    /// most likely this validator cannot broadcast  blocks to the network at all.
+    /// Core stops proposing new blocks in this case.
     propagation_delay: Round,
 
     /// Used to make commit decisions for leader blocks in the dag.
@@ -632,9 +639,9 @@ impl Core {
     }
 
     /// Sets if there is consumer available to consume blocks produced by the core.
-    pub(crate) fn set_subscriber_exists(&mut self, allow: bool) {
-        info!("Block consumer availability set to: {allow}");
-        self.subscriber_exists = allow;
+    pub(crate) fn set_subscriber_exists(&mut self, exists: bool) {
+        info!("Block subscriber exists: {exists}");
+        self.subscriber_exists = exists;
     }
 
     /// Sets the delay by round for propagating blocks to a quorum.
@@ -651,7 +658,7 @@ impl Core {
             panic!("Should not attempt to set the last known proposed round if that has been already set");
         }
         self.last_known_proposed_round = Some(round);
-        info!("Set last known proposed round to {round}");
+        info!("Last known proposed round set to {round}");
     }
 
     /// Whether the core should propose new blocks.
@@ -1629,6 +1636,7 @@ mod test {
             leader_schedule,
             transaction_consumer,
             block_manager,
+            // Set to no subscriber exists initially.
             false,
             commit_observer,
             signals,
@@ -1637,18 +1645,89 @@ mod test {
             false,
         );
 
-        // No proposal during recovery.
+        // There is no proposal during recovery because there is no subscriber.
         assert_eq!(
             core.last_proposed_round(),
             GENESIS_ROUND,
             "No block should have been created other than genesis"
         );
 
-        // No proposal even with forced proposing.
+        // There is no proposal even with forced proposing.
         assert!(core.try_propose(true).unwrap().is_none());
 
-        // Update core when consumer is available.
+        // Let Core know subscriber exists.
         core.set_subscriber_exists(true);
+
+        // Proposing now would succeed.
+        assert!(core.try_propose(true).unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_core_set_propagation_delay() {
+        // TODO: create helper to avoid the duplicated code here.
+        telemetry_subscribers::init_for_testing();
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
+            context.clone(),
+            dag_state.clone(),
+        ));
+
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        // Need at least one subscriber to the block broadcast channel.
+        let _block_receiver = signal_receivers.block_broadcast_receiver();
+
+        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            CommitConsumer::new(sender.clone(), 0),
+            dag_state.clone(),
+            store.clone(),
+            leader_schedule.clone(),
+        );
+
+        let mut core = Core::new(
+            context.clone(),
+            leader_schedule,
+            transaction_consumer,
+            block_manager,
+            // Set to no subscriber exists initially.
+            false,
+            commit_observer,
+            signals,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
+            false,
+        );
+
+        // There is no proposal during recovery because there is no subscriber.
+        assert_eq!(
+            core.last_proposed_round(),
+            GENESIS_ROUND,
+            "No block should have been created other than genesis"
+        );
+
+        // Use a large propagation delay to disable proposing.
+        core.set_propagation_delay(1000);
+
+        // Make propagation delay the only reason for not proposing.
+        core.set_subscriber_exists(true);
+
+        // There is no proposal even with forced proposing.
+        assert!(core.try_propose(true).unwrap().is_none());
+
+        // Let Core know there is no propagation delay.
+        core.set_propagation_delay(0);
 
         // Proposing now would succeed.
         assert!(core.try_propose(true).unwrap().is_some());

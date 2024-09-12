@@ -172,9 +172,10 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetch_loop_latency: Histogram,
     pub(crate) commit_sync_fetch_once_latency: Histogram,
     pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
-    pub(crate) round_prober_quorum_gaps: IntGaugeVec,
-    pub(crate) round_prober_propagation_delay: IntGauge,
-    pub(crate) round_prober_request_timeouts: IntCounter,
+    pub(crate) round_prober_quorum_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_propagation_delays: Histogram,
+    pub(crate) round_prober_last_propagation_delay: IntGauge,
+    pub(crate) round_prober_request_errors: IntCounter,
     pub(crate) uptime: Histogram,
 }
 
@@ -603,19 +604,25 @@ impl NodeMetrics {
                 &["error"],
                 registry
             ).unwrap(),
-            round_prober_quorum_gaps: register_int_gauge_vec_with_registry!(
-                "round_prober_quorum_gaps",
+            round_prober_quorum_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_quorum_round_gaps",
                 "Round gaps among peers for blocks proposed from each authority",
                 &["authority"],
                 registry
             ).unwrap(),
-            round_prober_propagation_delay: register_int_gauge_with_registry!(
-                "round_prober_propagation_delay",
-                "Round gap between own last proposed block and the low watermark of quorum round",
+            round_prober_propagation_delays: register_histogram_with_registry!(
+                "round_prober_propagation_delays",
+                "Round gaps between the last proposed block round and the lower bound of own quorum round",
+                NUM_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
-            round_prober_request_timeouts: register_int_counter_with_registry!(
-                "round_prober_request_timeouts",
+            round_prober_last_propagation_delay: register_int_gauge_with_registry!(
+                "round_prober_last_propagation_delay",
+                "Most recent propagation delay observed by RoundProber",
+                registry
+            ).unwrap(),
+            round_prober_request_errors: register_int_counter_with_registry!(
+                "round_prober_request_errors",
                 "Number of timeouts when probing against peers",
                 registry
             ).unwrap(),
