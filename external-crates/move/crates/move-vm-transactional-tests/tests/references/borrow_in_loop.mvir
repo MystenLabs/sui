@@ -25,7 +25,7 @@ public foo() {
 //# run 0x42::m::foo --gas-budget 100000
 
 //# run --gas-budget 100000
-module 0x42.m {
+module 0x43.m {
 
 entry foo() {
     let x: u64;

@@ -1,7 +1,7 @@
 // Tests that if taking a mutable enum that the variant inside cane be mutated.
 
 //# print-bytecode
-module 0x1.PolymorphicEnums {
+module 0x6.PolymorphicEnums {
     enum EnumWithTwoVariants<T> has drop {
         One { x: T },
         Two { x: T, y: T }
@@ -34,7 +34,7 @@ module 0x1.PolymorphicEnums {
 }
 
 //# publish
-module 0x1.PolymorphicEnums {
+module 0x6.PolymorphicEnums {
     enum EnumWithTwoVariants<T> has drop {
         One { x: T },
         Two { x: T, y: T }
@@ -67,8 +67,8 @@ module 0x1.PolymorphicEnums {
 }
 
 //# run
-module 0x2.m {
-import 0x1.PolymorphicEnums;
+module 0x7.m {
+import 0x6.PolymorphicEnums;
 entry foo() {
     let x: PolymorphicEnums.EnumWithTwoVariants<u64>;
     let y: bool;

@@ -3,7 +3,7 @@ processed 3 tasks
 task 0, lines 1-33:
 //# print-bytecode
 // Move bytecode v7
-module 1.MonomorphicEnums {
+module 6.MonomorphicEnums {
 
 
 enum EnumWithOneVariant {

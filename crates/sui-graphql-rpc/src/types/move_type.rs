@@ -259,8 +259,8 @@ impl TryFrom<A::MoveTypeLayout> for MoveTypeLayout {
             TL::Address => Self::Address,
 
             TL::Vector(v) => Self::Vector(Box::new(Self::try_from(*v)?)),
-            TL::Struct(s) => Self::Struct(s.try_into()?),
-            TL::Enum(e) => Self::Enum(e.try_into()?),
+            TL::Struct(s) => Self::Struct((*s).try_into()?),
+            TL::Enum(e) => Self::Enum((*e).try_into()?),
         })
     }
 }

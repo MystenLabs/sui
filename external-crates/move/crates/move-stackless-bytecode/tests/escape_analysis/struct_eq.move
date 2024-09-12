@@ -1,4 +1,4 @@
-module 0x1::StructEq {
+module 0x6::StructEq {
 
     public struct S { f: u64 }
 

@@ -1,5 +1,12 @@
 # @mysten/sui.js
 
+## 1.9.0
+
+### Minor Changes
+
+- 2c96b06: Adds experimental named packages plugin
+- 1fd22cc: Require name to register global transaction plugins
+
 ## 1.8.0
 
 ### Minor Changes
