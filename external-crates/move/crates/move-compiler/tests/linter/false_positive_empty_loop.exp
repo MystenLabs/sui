@@ -1,0 +1,10 @@
+warning[Lint W01006]: empty loop
+  ┌─ tests/linter/false_positive_empty_loop.move:5:9
+  │  
+5 │ ╭         loop {
+6 │ │             emit_event(); // Assuming this function exists and has side effects
+7 │ │         }
+  │ ╰─────────^ Detected an empty loop expression potentially leading to an infinite loop.
+  │  
+  = This warning can be suppressed with '#[allow(lint(empty_loop))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

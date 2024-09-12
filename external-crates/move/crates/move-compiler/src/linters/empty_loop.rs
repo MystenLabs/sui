@@ -3,10 +3,7 @@
 //! Encourages adding meaningful logic within loops or ensuring proper exit conditions to improve code reliability and maintainability.
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::WarningFilters,
     expansion::ast::Value_,
     shared::CompilationEnv,
     typing::{
@@ -15,8 +12,7 @@ use crate::{
     },
 };
 use move_ir_types::location::Loc;
-
-use super::{LinterDiagnosticCategory, StyleCodes, LINT_WARNING_PREFIX};
+use super::StyleCodes;
 
 pub struct EmptyLoop;
 
@@ -40,7 +36,7 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         match &exp.exp.value {
             UnannotatedExp_::Loop {
                 name: _,
@@ -88,6 +84,12 @@ fn is_condition_always_true(condition: &UnannotatedExp_) -> bool {
 }
 
 fn report_empty_loop(env: &mut CompilationEnv, loc: Loc) {
-    let  diag = diag!(StyleCodes::EmptyLoop.diag_info(), (loc, "Detected an empty loop expression potentially leading to an infinite loop."));
+    let diag = diag!(
+        StyleCodes::EmptyLoop.diag_info(),
+        (
+            loc,
+            "Detected an empty loop expression potentially leading to an infinite loop."
+        )
+    );
     env.add_diag(diag);
 }
