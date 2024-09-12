@@ -1,0 +1,8 @@
+warning[Lint W01006]: redundant conditional
+   ┌─ tests/linter/false_negative_redundant_conditional.move:18:13
+   │
+18 │             if (condition2) { true } else { false }
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Detected a redundant conditional expression `if (...) true else false`. Consider using the condition directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
