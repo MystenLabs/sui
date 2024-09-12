@@ -477,12 +477,9 @@ module sui_system::staking_pool {
         split_amount: u64, 
         ctx: &mut TxContext
     ): FungibleStakedSui {
-        assert!(split_amount < fungible_staked_sui.value, EInsufficientPoolTokenBalance);
+        assert!(split_amount <= fungible_staked_sui.value, EInsufficientPoolTokenBalance);
 
         fungible_staked_sui.value = fungible_staked_sui.value - split_amount;
-
-        assert!(fungible_staked_sui.value >= MIN_STAKING_THRESHOLD, EStakedSuiBelowThreshold);
-        assert!(split_amount >= MIN_STAKING_THRESHOLD, EStakedSuiBelowThreshold);
 
         FungibleStakedSui {
             id: object::new(ctx),

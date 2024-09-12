@@ -64,40 +64,6 @@ module sui_system::staking_pool_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 18, location = sui_system::staking_pool)]
-    fun test_split_fungible_staked_sui_fail_too_little_1() {
-        let mut scenario = test_scenario::begin(@0x0);
-        let staking_pool = staking_pool::new(scenario.ctx());
-
-        let mut fungible_staked_sui_1 = staking_pool.create_fungible_staked_sui_for_testing(100_000_000_000, scenario.ctx());
-
-        let fungible_staked_sui_2 = fungible_staked_sui_1.split(100_000_000_000 - 1, scenario.ctx());
-
-        sui::test_utils::destroy(staking_pool);
-        sui::test_utils::destroy(fungible_staked_sui_1);
-        sui::test_utils::destroy(fungible_staked_sui_2);
-
-        scenario.end();
-    }
-
-    #[test]
-    #[expected_failure(abort_code = 18, location = sui_system::staking_pool)]
-    fun test_split_fungible_staked_sui_fail_too_little_2() {
-        let mut scenario = test_scenario::begin(@0x0);
-        let staking_pool = staking_pool::new(scenario.ctx());
-
-        let mut fungible_staked_sui_1 = staking_pool.create_fungible_staked_sui_for_testing(100_000_000_000, scenario.ctx());
-
-        let fungible_staked_sui_2 = fungible_staked_sui_1.split(1, scenario.ctx());
-
-        sui::test_utils::destroy(staking_pool);
-        sui::test_utils::destroy(fungible_staked_sui_1);
-        sui::test_utils::destroy(fungible_staked_sui_2);
-
-        scenario.end();
-    }
-
-    #[test]
     #[expected_failure(abort_code = 0, location = sui_system::staking_pool)]
     fun test_split_fungible_staked_sui_fail_too_much() {
         let mut scenario = test_scenario::begin(@0x0);
