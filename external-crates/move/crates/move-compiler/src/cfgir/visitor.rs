@@ -51,7 +51,7 @@ pub trait AbstractInterpreterVisitor {
 }
 
 //**************************************************************************************************
-// simple ast visitor
+// CFGIR visitor
 //**************************************************************************************************
 
 pub trait CFGIRVisitorConstructor {
@@ -766,5 +766,78 @@ impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
         cfg: &ImmForwardCFG,
     ) -> Diagnostics {
         SimpleAbsIntConstructor::verify(self, env, context, cfg)
+    }
+}
+
+//**************************************************************************************************
+// utils
+//**************************************************************************************************
+
+pub fn calls_special_function(special: &[(&str, &str, &str)], cfg: &ImmForwardCFG) -> bool {
+    cfg.blocks().values().any(|block| {
+        block
+            .iter()
+            .any(|cmd| calls_special_function_command(special, cmd))
+    })
+}
+
+pub fn calls_special_function_command(
+    special: &[(&str, &str, &str)],
+    sp!(_, cmd_): &Command,
+) -> bool {
+    use H::Command_ as C;
+    match cmd_ {
+        C::Assign(_, _, e)
+        | C::Abort(_, e)
+        | C::Return { exp: e, .. }
+        | C::IgnoreAndPop { exp: e, .. }
+        | C::JumpIf { cond: e, .. }
+        | C::VariantSwitch { subject: e, .. } => calls_special_function_exp(special, e),
+        C::Mutate(el, er) => {
+            calls_special_function_exp(special, el) || calls_special_function_exp(special, er)
+        }
+        C::Jump { .. } => false,
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
+    }
+}
+
+#[growing_stack]
+pub fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+    use H::UnannotatedExp_ as E;
+    match &e.exp.value {
+        E::Unit { .. }
+        | E::Move { .. }
+        | E::Copy { .. }
+        | E::Constant(_)
+        | E::ErrorConstant { .. }
+        | E::BorrowLocal(_, _)
+        | E::Unreachable
+        | E::UnresolvedError
+        | E::Value(_) => false,
+
+        E::Freeze(e)
+        | E::Dereference(e)
+        | E::UnaryExp(_, e)
+        | E::Borrow(_, e, _, _)
+        | E::Cast(e, _) => calls_special_function_exp(special, e),
+
+        E::BinopExp(el, _, er) => {
+            calls_special_function_exp(special, el) || calls_special_function_exp(special, er)
+        }
+
+        E::ModuleCall(call) => {
+            special.iter().any(|(a, m, f)| call.is(*a, *m, *f))
+                || call
+                    .arguments
+                    .iter()
+                    .any(|arg| calls_special_function_exp(special, arg))
+        }
+        E::Vector(_, _, _, es) | E::Multiple(es) => {
+            es.iter().any(|e| calls_special_function_exp(special, e))
+        }
+
+        E::Pack(_, _, es) | E::PackVariant(_, _, _, es) => es
+            .iter()
+            .any(|(_, _, e)| calls_special_function_exp(special, e)),
     }
 }
