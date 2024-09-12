@@ -205,7 +205,6 @@ module sui_system::validator {
         metadata
     }
 
-    #[allow(deprecated_usage)]
     public(package) fun new(
         sui_address: address,
         protocol_pubkey_bytes: vector<u8>,
@@ -645,7 +644,6 @@ module sui_system::validator {
         self.metadata.description = description.to_ascii_string().to_string();
     }
 
-    #[allow(deprecated_usage)]
     /// Update image url of the validator.
     public(package) fun update_image_url(self: &mut Validator, image_url: vector<u8>) {
         assert!(
@@ -655,7 +653,6 @@ module sui_system::validator {
         self.metadata.image_url = url::new_unsafe_from_bytes(image_url);
     }
 
-    #[allow(deprecated_usage)]
     /// Update project url of the validator.
     public(package) fun update_project_url(self: &mut Validator, project_url: vector<u8>) {
         assert!(
