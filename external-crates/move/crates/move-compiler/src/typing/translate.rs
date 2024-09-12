@@ -10,7 +10,7 @@ use crate::{
         AbilitySet, Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend,
         ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, TargetKind, Value_, Visibility,
     },
-    ice,
+    ice, ice_assert,
     naming::ast::{
         self as N, BlockLabel, DatatypeTypeParameter, IndexSyntaxMethods, TParam, TParamID, Type,
         TypeName, TypeName_, Type_,
@@ -2917,14 +2917,12 @@ fn add_variant_field_types<T>(
         N::VariantFields::Defined(_, m) => m,
         N::VariantFields::Empty => {
             if !fields.is_empty() {
-                let msg = format!(
-                    "Invalid usage for empty variant '{}::{}::{}'. Empty variants do not take \
-                     any arguments.",
-                    m, n, v
+                ice_assert!(
+                    context.env,
+                    context.env.has_errors(),
+                    loc,
+                    "Empty variant with fields but no error from naming"
                 );
-                context
-                    .env
-                    .add_diag(diag!(TypeSafety::TooManyArguments, (loc, msg),));
                 return fields.map(|f, (idx, x)| (idx, (context.error_type(f.loc()), x)));
             } else {
                 return Fields::new();
