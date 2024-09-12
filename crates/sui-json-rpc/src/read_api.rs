@@ -715,6 +715,7 @@ impl ReadApiServer for ReadApi {
         digest: TransactionDigest,
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
+        info!("get_transaction_block started for {:?}", digest);
         with_tracing!(async move {
             let opts = opts.unwrap_or_default();
             let mut temp_response = IntermediateTransactionResponse::new(digest);
@@ -731,6 +732,8 @@ impl ReadApiServer for ReadApi {
             })
             .await
             .map_err(Error::from)??;
+            info!("get_transaction_block fetched transaction for {:?}", digest);
+
             let input_objects = transaction
                 .data()
                 .inner()
@@ -761,6 +764,7 @@ impl ReadApiServer for ReadApi {
                     .map_err(Error::from)??,
                 );
             }
+            info!("get_transaction_block fetched effects for {:?}", digest);
 
             temp_response.checkpoint_seq = self
                 .transaction_kv_store
@@ -770,6 +774,11 @@ impl ReadApiServer for ReadApi {
                     error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
                     Error::from(e)
                 })?;
+
+            info!(
+                "get_transaction_block fetched checkpoint number for {:?}",
+                digest
+            );
 
             if let Some(checkpoint_seq) = &temp_response.checkpoint_seq {
                 let kv_store = self.transaction_kv_store.clone();
@@ -787,6 +796,10 @@ impl ReadApiServer for ReadApi {
                 // TODO(chris): we don't need to fetch the whole checkpoint summary
                 temp_response.timestamp = Some(checkpoint.timestamp_ms);
             }
+            info!(
+                "get_transaction_block fetched checkpoint summary for {:?}",
+                digest
+            );
 
             if opts.show_events && temp_response.effects.is_some() {
                 // safe to unwrap because we have checked is_some
@@ -815,6 +828,7 @@ impl ReadApiServer for ReadApi {
                     temp_response.events = Some(SuiTransactionBlockEvents::default());
                 }
             }
+            info!("get_transaction_block fetched events for {:?}", digest);
 
             let object_cache =
                 ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
@@ -864,6 +878,7 @@ impl ReadApiServer for ReadApi {
                 }
             }
             let epoch_store = self.state.load_epoch_store_one_call_per_task();
+            info!("finished request for {:?}", digest);
             convert_to_response(temp_response, &opts, epoch_store.module_cache())
         })
     }
