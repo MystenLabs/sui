@@ -13,10 +13,10 @@ use crate::{
 
 pub mod abort_constant;
 pub mod constant_naming;
+pub mod loop_without_exit;
 pub mod meaningless_math_operation;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
-pub mod empty_loop;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -104,7 +104,7 @@ lints!(
     ),
     (
         WhileTrueToLoop,
-        LinterDiagnosticCategory::Complexity,
+        LinterDiagnosticCategory::Style,
         "while_true",
         "unnecessary 'while (true)', replace with 'loop'"
     ),
@@ -127,10 +127,10 @@ lints!(
         "'abort' or 'assert' without named constant"
     ),
     (
-        EmptyLoop,
-        LinterDiagnosticCategory::Complexity,
-        "empty_loop",
-        "empty loop"
+        LoopWithoutExit,
+        LinterDiagnosticCategory::Suspicious,
+        "loop_without_exit",
+        "'loop' without 'break' or 'return'"
     )
 );
 
@@ -164,7 +164,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 meaningless_math_operation::MeaninglessMathOperation.visitor(),
                 unneeded_return::UnneededReturnVisitor.visitor(),
                 abort_constant::AssertAbortNamedConstants.visitor(),
-                empty_loop::EmptyLoop.visitor(),
+                loop_without_exit::LoopWithoutExit.visitor(),
             ]
         }
     }

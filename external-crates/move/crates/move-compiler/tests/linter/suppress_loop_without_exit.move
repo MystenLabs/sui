@@ -1,6 +1,6 @@
-module 0x42::empty_loop_lint_test {
+module a::m {
     // Suppress Case
-    #[allow(lint(empty_loop))]
+    #[allow(lint(loop_without_exit))]
     public fun suppressed_empty_loop() {
         loop {}
     }
