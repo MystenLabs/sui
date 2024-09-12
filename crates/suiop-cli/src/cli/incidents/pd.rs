@@ -281,7 +281,7 @@ fn request_pocs(slack: &Slack) -> Result<Vec<User>> {
         "Please select the users who are POCs for this incident",
         slack.users.clone(),
     )
-    .with_default(&vec![])
+    .with_default(&[])
     .prompt()
     .map_err(|e| anyhow::anyhow!(e))
 }

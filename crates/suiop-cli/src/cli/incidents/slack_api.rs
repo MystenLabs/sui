@@ -103,7 +103,7 @@ pub async fn get_users(client: &Client) -> Result<Vec<User>> {
     if !response.ok {
         panic!("Failed to get users");
     }
-    Ok(response.members.ok_or(anyhow::anyhow!("missing members"))?)
+    response.members.ok_or(anyhow::anyhow!("missing members"))
 }
 
 pub async fn send_message(client: &Client, channel: &str, message: &str) -> Result<()> {
