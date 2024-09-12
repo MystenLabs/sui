@@ -114,11 +114,102 @@ fun create_from_rational_max_numerator_denominator() {
 }
 
 #[test]
-fun test_arithemtic() {
+#[expected_failure(abort_code = fixed_point32::ESUBTRACTION)]
+fun test_subtraction_underflow() {
+    let a = fixed_point32::create_from_integer(3);
+    let b = fixed_point32::create_from_integer(5);
+    let _ = a.sub(&b);
+}
+
+#[test]
+fun test_subtraction() {
+    let a = fixed_point32::create_from_integer(5);
+    assert!(a.sub(&zero()) == a);
+
+    let b = fixed_point32::create_from_integer(4);
+    let c = a.sub(&b);
+    assert!(fixed_point32::one() == c);
+}
+
+#[test]
+#[expected_failure(abort_code = fixed_point32::EADDITION)]
+fun test_addition_overflow() {
+    let a = fixed_point32::create_from_integer(1 << 31);
+    let b = fixed_point32::create_from_integer(1 << 31);
+    let _ = a.add(&b);
+}
+
+#[test]
+fun test_addition() {
     let a = fixed_point32::create_from_rational(3, 4);
-    let b = fixed_point32::create_from_rational(3, 7);
+    assert!(a.add(&zero()) == a);
+
+    let c = a.add(&one());
+    assert!(fixed_point32::create_from_rational(7, 4) == c);
+
+    let b = fixed_point32::create_from_rational(1, 4);
+    let c = a.add(&b);
+    assert!(fixed_point32::one() == c);
+}
+
+#[test]
+#[expected_failure(abort_code = fixed_point32::EMULTIPLICATION)]
+fun test_multiplication_overflow() {
+    let a = fixed_point32::create_from_integer(1 << 16);
+    let b = fixed_point32::create_from_integer(1 << 16);
+    let _ = a.mul(&b);
+}
+
+#[test]
+fun test_multiplication() {
+    let a = fixed_point32::create_from_rational(3, 4);
+    assert!(a.mul(&zero()) == zero());
+    assert!(a.mul(&one()) == a);
+
+    let b = fixed_point32::create_from_rational(3, 2);
     let c = a.mul(&b);
-    let expected = fixed_point32::create_from_rational(9, 28);
+    let expected = fixed_point32::create_from_rational(9, 8);
+    std::debug::print(&expected);
+    std::debug::print(&c);
     assert!(c.eq(&expected));
-    assert!(false);
+}
+
+#[test]
+#[expected_failure(abort_code = fixed_point32::EDIVISION_BY_ZERO)]
+fun test_division_by_zero() {
+    let a = fixed_point32::create_from_integer(7);
+    let b = fixed_point32::zero();
+    let _ = a.div(&b);
+}
+
+#[test]
+fun test_division() {
+    let a = fixed_point32::create_from_rational(3, 4);
+    assert!(a.div(&one()) == a);
+
+    let b = fixed_point32::create_from_integer(8);
+    let c = a.div(&b);
+    let expected = fixed_point32::create_from_rational(3, 32);
+    assert!(c.eq(&expected));
+}
+
+#[test]
+#[expected_failure(abort_code = fixed_point32::EDIVISION)]
+fun test_division_overflow() {
+    let a = fixed_point32::create_from_integer(1 << 31);
+    let b = fixed_point32::create_from_rational(1, 2);
+    let _ = a.div(&b);
+}
+
+#[test]
+fun test_comparison() {
+    let a = fixed_point32::create_from_rational(5, 2);
+    let b = fixed_point32::create_from_rational(5, 3);
+    let c = fixed_point32::create_from_rational(5, 2);
+
+    assert!(b.le(&a));
+    assert!(b.lt(&a));
+    assert!(c.le(&a));
+    assert!(c.eq(&a));
+    assert!(zero().le(&a));
 }
