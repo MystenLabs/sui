@@ -14,7 +14,7 @@ import { getPureBcsSchema, isTxContext, normalizedTypeToMoveTypeSignature } from
 import type { TransactionDataBuilder } from './TransactionData.js';
 
 // The maximum objects that can be fetched at once using multiGetObjects.
-const MAX_OBJECTS_PER_FETCH = 50;
+const MAX_OBJECTS_PER_FETCH = 10;
 
 // An amount of gas (in gas units) that is added to transactions as an overhead to ensure transactions do not fail.
 const GAS_SAFE_OVERHEAD = 1000n;
