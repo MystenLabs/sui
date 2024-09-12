@@ -21,6 +21,7 @@ RUN cargo build --profile ${PROFILE} \
     --bin stress \
     --bin sui-bridge \
     --bin bridge-indexer \
+    --bin deepbook-indexer \
     --bin sui-bridge-cli \
     --bin sui-analytics-indexer \
     --bin sui-proxy \
@@ -40,6 +41,7 @@ COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/stress /usr/local/bin
 COPY --from=builder /sui/target/release/sui-bridge /usr/local/bin
 COPY --from=builder /sui/target/release/bridge-indexer /usr/local/bin
+COPY --from=builder /sui/target/release/deepbook-indexer /usr/local/bin
 COPY --from=builder /sui/target/release/sui-bridge-cli /usr/local/bin
 COPY --from=builder /sui/target/release/sui-analytics-indexer /usr/local/bin
 COPY --from=builder /sui/target/release/sui-proxy /usr/local/bin
