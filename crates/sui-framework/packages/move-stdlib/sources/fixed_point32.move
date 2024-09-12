@@ -34,8 +34,6 @@ const ESUBTRACTION: u64 = 0x20006;
 const EDIVISION_BY_ZERO: u64 = 0x10004;
 /// The computed ratio when converting to a `FixedPoint32` would be unrepresentable
 const ERATIO_OUT_OF_RANGE: u64 = 0x20005;
-/// The number of bits reserved to the fractional part of a number.
-const FRACTIONAL_BITS: u8 = 32;
 
 /// Multiply a u64 integer by a fixed-point number, truncating any
 /// fractional part of the product. This will abort if the product
@@ -56,10 +54,7 @@ public fun multiply_u64(val: u64, multiplier: FixedPoint32): u64 {
 /// Multiply two fixed-point number s, truncating any fractional part of
 /// the product. This will abort if the product overflows.
 public fun mul(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
-    let unscaled_product = (a.value as u128) * (b.value as u128);
-    let product = unscaled_product >> FRACTIONAL_BITS;
-    assert!(product <= MAX_U64, EMULTIPLICATION);
-    create_from_raw_value(product as u64)
+    create_from_raw_value(multiply_u64(a.value, *b))
 }
 
 /// Divide a u64 integer by a fixed-point number, truncating any
@@ -99,11 +94,7 @@ public fun divide_u64(val: u64, divisor: FixedPoint32): u64 {
 /// the quotient. This will abort if the divisor is zero or if the
 /// quotient overflows.
 public fun div(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
-    assert!(b.value != 0, EDIVISION_BY_ZERO);
-    let scaled_value = a.value as u128 << FRACTIONAL_BITS;
-    let quotient = scaled_value / (b.value as u128);
-    assert!(quotient <= MAX_U64, EDIVISION);
-    create_from_raw_value(quotient as u64)
+    create_from_raw_value(divide_u64(a.value, *b))
 }
 
 /// Create a fixed-point value from a rational number specified by its
@@ -158,9 +149,8 @@ public fun create_from_rational(numerator: u64, denominator: u64): FixedPoint32 
 }
 
 /// Create a fixed-point value from an integer.
-public fun create_from_integer(integer: u64): FixedPoint32 {
-    assert!(integer <= MAX_INTEGER, EINTEGER_OUT_OF_RANGE);
-    create_from_raw_value(integer << FRACTIONAL_BITS)
+public fun from_integer(integer: u32): FixedPoint32 {
+    create_from_raw_value((integer as u64) << 32)
 }
 
 /// Create a fixedpoint value from a raw value.
