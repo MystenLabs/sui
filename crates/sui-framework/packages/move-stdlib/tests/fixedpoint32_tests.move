@@ -116,17 +116,17 @@ fun create_from_rational_max_numerator_denominator() {
 #[test]
 #[expected_failure(abort_code = fixed_point32::ESUBTRACTION)]
 fun test_subtraction_underflow() {
-    let a = fixed_point32::create_from_integer(3);
-    let b = fixed_point32::create_from_integer(5);
+    let a = from_integer(3);
+    let b = from_integer(5);
     let _ = a.sub(&b);
 }
 
 #[test]
 fun test_subtraction() {
-    let a = fixed_point32::create_from_integer(5);
+    let a = from_integer(5);
     assert!(a.sub(&zero()) == a);
 
-    let b = fixed_point32::create_from_integer(4);
+    let b = from_integer(4);
     let c = a.sub(&b);
     assert!(fixed_point32::one() == c);
 }
@@ -134,8 +134,8 @@ fun test_subtraction() {
 #[test]
 #[expected_failure(abort_code = fixed_point32::EADDITION)]
 fun test_addition_overflow() {
-    let a = fixed_point32::create_from_integer(1 << 31);
-    let b = fixed_point32::create_from_integer(1 << 31);
+    let a = from_integer(1 << 31);
+    let b = from_integer(1 << 31);
     let _ = a.add(&b);
 }
 
@@ -155,8 +155,8 @@ fun test_addition() {
 #[test]
 #[expected_failure(abort_code = fixed_point32::EMULTIPLICATION)]
 fun test_multiplication_overflow() {
-    let a = fixed_point32::create_from_integer(1 << 16);
-    let b = fixed_point32::create_from_integer(1 << 16);
+    let a = from_integer(1 << 16);
+    let b = from_integer(1 << 16);
     let _ = a.mul(&b);
 }
 
@@ -177,7 +177,7 @@ fun test_multiplication() {
 #[test]
 #[expected_failure(abort_code = fixed_point32::EDIVISION_BY_ZERO)]
 fun test_division_by_zero() {
-    let a = fixed_point32::create_from_integer(7);
+    let a = from_integer(7);
     let b = fixed_point32::zero();
     let _ = a.div(&b);
 }
@@ -187,7 +187,7 @@ fun test_division() {
     let a = fixed_point32::create_from_rational(3, 4);
     assert!(a.div(&one()) == a);
 
-    let b = fixed_point32::create_from_integer(8);
+    let b = from_integer(8);
     let c = a.div(&b);
     let expected = fixed_point32::create_from_rational(3, 32);
     assert!(c.eq(&expected));
@@ -196,7 +196,7 @@ fun test_division() {
 #[test]
 #[expected_failure(abort_code = fixed_point32::EDIVISION)]
 fun test_division_overflow() {
-    let a = fixed_point32::create_from_integer(1 << 31);
+    let a = from_integer(1 << 31);
     let b = fixed_point32::create_from_rational(1, 2);
     let _ = a.div(&b);
 }

@@ -17,25 +17,25 @@ module std::fixed_point32;
 /// decimal.
 public struct FixedPoint32 has copy, drop, store { value: u64 }
 
-    ///> TODO: This is a basic constant and should be provided somewhere centrally in the framework.
-    const MAX_U64: u128 = 18446744073709551615;
+///> TODO: This is a basic constant and should be provided somewhere centrally in the framework.
+const MAX_U64: u128 = 18446744073709551615;
 
-    /// The denominator provided was zero
-    const EDENOMINATOR: u64 = 0x10001;
-    /// The quotient value would be too large to be held in a `u64`
-    const EDIVISION: u64 = 0x20002;
-    /// The multiplied value would be too large to be held in a `u64`
-    const EMULTIPLICATION: u64 = 0x20003;
-    /// The sum would be too large to be held in a `u64`
-    const EADDITION: u64 = 0x20004;
-    /// The difference will be negative.
-    const ESUBTRACTION: u64 = 0x20006;
-    /// A division by zero was encountered
-    const EDIVISION_BY_ZERO: u64 = 0x10004;
-    /// The computed ratio when converting to a `FixedPoint32` would be unrepresentable
-    const ERATIO_OUT_OF_RANGE: u64 = 0x20005;
-    /// The number of bits reserved to the fractional part of a number.
-    const FRACTIONAL_BITS: u8 = 32;
+/// The denominator provided was zero
+const EDENOMINATOR: u64 = 0x10001;
+/// The quotient value would be too large to be held in a `u64`
+const EDIVISION: u64 = 0x20002;
+/// The multiplied value would be too large to be held in a `u64`
+const EMULTIPLICATION: u64 = 0x20003;
+/// The sum would be too large to be held in a `u64`
+const EADDITION: u64 = 0x20004;
+/// The difference will be negative.
+const ESUBTRACTION: u64 = 0x20006;
+/// A division by zero was encountered
+const EDIVISION_BY_ZERO: u64 = 0x10004;
+/// The computed ratio when converting to a `FixedPoint32` would be unrepresentable
+const ERATIO_OUT_OF_RANGE: u64 = 0x20005;
+/// The number of bits reserved to the fractional part of a number.
+const FRACTIONAL_BITS: u8 = 32;
 
 /// Multiply a u64 integer by a fixed-point number, truncating any
 /// fractional part of the product. This will abort if the product
@@ -208,8 +208,9 @@ public fun eq(a: &FixedPoint32, b: &FixedPoint32): bool {
     a.value == b.value
 }
 
+/// Return a fixed-point representation of 1.
 public fun one(): FixedPoint32 {
-    create_from_integer(1)
+    from_integer(1)
 }
 
 public fun zero(): FixedPoint32 {
