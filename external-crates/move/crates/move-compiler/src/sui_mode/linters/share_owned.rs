@@ -166,7 +166,7 @@ impl<'a> SimpleAbsInt for ShareOwnedVerifierAI<'a> {
         if SHARE_FUNCTIONS
             .iter()
             .any(|(addr, module, fun)| f.is(addr, module, fun))
-            && args[0] != Value::FreshObj
+            && args.first().is_some_and(|v| v != &Value::FreshObj)
         {
             self.maybe_warn_share_owned(context, loc, f, args)
         }
@@ -289,7 +289,7 @@ impl<'a> ShareOwnedVerifierAI<'a> {
         else {
             return;
         };
-        let Some(transferred_kind) = self.sui_info().transferred.get(&tn).copied() else {
+        let Some(transferred_kind) = self.sui_info().transferred.get(&tn) else {
             return;
         };
 
@@ -310,7 +310,7 @@ impl<'a> ShareOwnedVerifierAI<'a> {
             (*loc, msg),
             (f.arguments[0].exp.loc, uid_msg),
             (*not_fresh_loc, not_fresh_msg),
-            (tloc, tmsg),
+            (*tloc, tmsg),
         );
 
         context.add_diag(d)
