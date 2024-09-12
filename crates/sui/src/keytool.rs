@@ -1118,8 +1118,8 @@ impl KeyToolCommand {
                     OIDCProvider::FanTV,
                     &eph_pk_bytes,
                     max_epoch,
-                    "",
-                    "",
+                    "r24bskxyafwwua68et2wmuqeyoa.apps.fantv.world",
+                    "https://sui.io/",
                     &jwt_randomness,
                 )?;
                 println!("Visit URL (Google): {url}");
