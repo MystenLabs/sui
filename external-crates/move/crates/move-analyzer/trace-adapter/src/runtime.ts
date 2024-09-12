@@ -115,7 +115,7 @@ export class Runtime extends EventEmitter {
         this.frameStack = {
             frames: [newFrame]
         };
-        this.step(/* next */ false, /* stopAtCloseFrame */ false);
+        this.step(/* next */ false, /* stopAtCloseFrame */ false, /* nextLineSkip */ true);
     }
 
     /**
@@ -136,7 +136,11 @@ export class Runtime extends EventEmitter {
      * @returns `true` if the trace viewing session is finished, `false` otherwise.
      * @throws Error with a descriptive error message if the step event cannot be handled.
      */
-    public step(next: boolean, stopAtCloseFrame: boolean): boolean {
+    public step(
+        next: boolean,
+        stopAtCloseFrame: boolean,
+        nextLineSkip: boolean
+    ): boolean {
         this.eventIndex++;
         if (this.eventIndex >= this.trace.events.length) {
             this.sendEvent(RuntimeEvents.stopOnStep);
@@ -145,8 +149,8 @@ export class Runtime extends EventEmitter {
         let currentEvent = this.trace.events[this.eventIndex];
         if (currentEvent.type === 'Instruction') {
             let sameLine = this.instruction(currentEvent);
-            if (sameLine) {
-                return this.step(next, stopAtCloseFrame);
+            if (sameLine && nextLineSkip) {
+                return this.step(next, stopAtCloseFrame, nextLineSkip);
             }
             this.sendEvent(RuntimeEvents.stopOnStep);
             return false;
@@ -159,7 +163,7 @@ export class Runtime extends EventEmitter {
                 // step out of the frame right away
                 return this.stepOut();
             } else {
-                return this.step(next, stopAtCloseFrame);
+                return this.step(next, stopAtCloseFrame, nextLineSkip);
             }
         } else if (currentEvent.type === 'CloseFrame') {
             if (stopAtCloseFrame) {
@@ -169,11 +173,11 @@ export class Runtime extends EventEmitter {
             } else {
                 // pop the top frame from the stack
                 this.frameStack.frames.pop();
-                return this.step(next, stopAtCloseFrame);
+                return this.step(next, stopAtCloseFrame, nextLineSkip);
             }
         } else {
             // ignore other events
-            return this.step(next, stopAtCloseFrame);
+            return this.step(next, stopAtCloseFrame, nextLineSkip);
         }
     }
 
@@ -197,7 +201,7 @@ export class Runtime extends EventEmitter {
         // skip all events until the corresponding CloseFrame event,
         // pop the top frame from the stack, and proceed to the next event
         while (true) {
-            if (this.step(/* next */ false, /* stopAtCloseFrame */ true)) {
+            if (this.step(/* next */ false, /* stopAtCloseFrame */ true, /* nextLineSkip */ true)) {
                 // trace viewing session finished
                 throw new Error("Cannot find corresponding CloseFrame event for function: " +
                     currentFrame.name);
@@ -213,7 +217,17 @@ export class Runtime extends EventEmitter {
                 }
             }
         }
-        return this.step(/* next */ false, /* stopAtCloseFrame */ false);
+
+        // Do not skip to same line when stepping out as this may lead
+        // to unusual behavior if multiple bytcode instructions are on the same line.
+        // For example, consider the following code:
+        // ```
+        // assert(foo() == bar());
+        // ```
+        // In the code above if we enter `foo` and then step out of it,
+        // we want to end up on the same line (where the next instruction is)
+        // but we don't want to call `bar` in the same debugging step.
+        return this.step(/* next */ false, /* stopAtCloseFrame */ false, /* nextLineSkip */ false);
     }
     /**
      * Handles "step back" adapter action.
@@ -316,7 +330,11 @@ export class Runtime extends EventEmitter {
             }
         } else {
             while (true) {
-                if (this.step(/* next */ false, /* stopAtCloseFrame */ false)) {
+                if (this.step(
+                    /* next */ false,
+                    /* stopAtCloseFrame */ false,
+                    /* nextLineSkip */ true)
+                ) {
                     return true;
                 }
             }
@@ -463,7 +481,7 @@ function getPkgNameFromManifest(pkgRoot: string): string | undefined {
  * @param directory path to the directory containing Move source files.
  * @param filesMap map to update with file information.
  */
-function hashToFileMap(directory: string, filesMap: Map<string, IFileInfo>) {
+function hashToFileMap(directory: string, filesMap: Map<string, IFileInfo>): void {
     const processDirectory = (dir: string) => {
         const files = fs.readdirSync(dir);
         for (const f of files) {
@@ -475,14 +493,13 @@ function hashToFileMap(directory: string, filesMap: Map<string, IFileInfo>) {
                 const content = fs.readFileSync(filePath, 'utf8');
                 const hash = fileHash(content);
                 const lines = content.split('\n');
-                filesMap.set(Buffer.from(hash).toString('base64'), { path: filePath, content, lines });
+                const fileInfo = { path: filePath, content, lines };
+                filesMap.set(Buffer.from(hash).toString('base64'), fileInfo);
             }
         }
     };
 
     processDirectory(directory);
-
-    return filesMap;
 }
 
 /**
