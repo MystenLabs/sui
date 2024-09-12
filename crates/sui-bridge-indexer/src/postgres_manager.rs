@@ -2,12 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::models::SuiProgressStore;
-use crate::models::TokenTransfer as DBTokenTransfer;
 use crate::schema::sui_progress_store::txn_digest;
 use crate::schema::{sui_error_transactions, token_transfer_data};
 use crate::{schema, schema::token_transfer, ProcessedTxnData};
-use diesel::result::Error;
-use diesel::BoolExpressionMethods;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::pooled_connection::bb8::Pool;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
@@ -109,30 +106,5 @@ pub async fn read_sui_progress_store(pool: &PgPool) -> anyhow::Result<Option<Tra
             val.txn_digest.as_slice(),
         )?)),
         None => Ok(None),
-    }
-}
-
-pub async fn get_latest_eth_token_transfer(
-    pool: &PgPool,
-    finalized: bool,
-) -> Result<Option<DBTokenTransfer>, Error> {
-    use crate::schema::token_transfer::dsl::*;
-
-    let connection = &mut pool.get().await.unwrap();
-
-    if finalized {
-        token_transfer
-            .filter(data_source.eq("ETH").and(status.eq("Deposited")))
-            .order(block_height.desc())
-            .first::<DBTokenTransfer>(connection)
-            .await
-            .optional()
-    } else {
-        token_transfer
-            .filter(status.eq("DepositedUnfinalized"))
-            .order(block_height.desc())
-            .first::<DBTokenTransfer>(connection)
-            .await
-            .optional()
     }
 }

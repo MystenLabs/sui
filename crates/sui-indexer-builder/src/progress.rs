@@ -4,6 +4,8 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
+use crate::Task;
+
 #[derive(Debug, Clone)]
 pub enum ProgressSavingPolicy {
     SaveAfterDuration(SaveAfterDurationPolicy),
@@ -46,13 +48,10 @@ impl OutOfOrderSaveAfterDurationPolicy {
 
 impl ProgressSavingPolicy {
     /// If returns Some(progress), it means we should save the progress to DB.
-    pub fn cache_progress(
-        &mut self,
-        task_name: String,
-        heights: &[u64],
-        start_height: u64,
-        target_height: u64,
-    ) -> Option<u64> {
+    pub fn cache_progress(&mut self, task: &Task, heights: &[u64]) -> Option<u64> {
+        let task_name = task.task_name.clone();
+        let start_height = task.start_checkpoint;
+        let target_height = task.target_checkpoint;
         match self {
             ProgressSavingPolicy::SaveAfterDuration(policy) => {
                 let height = *heights.iter().max().unwrap();
@@ -142,32 +141,32 @@ mod tests {
         let mut policy =
             ProgressSavingPolicy::SaveAfterDuration(SaveAfterDurationPolicy::new(duration));
         assert_eq!(
-            policy.cache_progress("task1".to_string(), &[1], 0, 100),
+            policy.cache_progress(&new_test_task("task1", 0, 100), &[1]),
             None
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task1".to_string(), &[2], 0, 100),
+            policy.cache_progress(&new_test_task("task1", 0, 100), &[2]),
             Some(2)
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task1".to_string(), &[3], 0, 100),
+            policy.cache_progress(&new_test_task("task1", 0, 100), &[3]),
             Some(3)
         );
 
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[4], 0, 100),
+            policy.cache_progress(&new_test_task("task2", 0, 100), &[4]),
             None
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[5, 6], 0, 100),
+            policy.cache_progress(&new_test_task("task2", 0, 100), &[5, 6]),
             Some(6)
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[8, 7], 0, 100),
+            policy.cache_progress(&new_test_task("task2", 0, 100), &[8, 7]),
             Some(8)
         );
     }
@@ -180,61 +179,71 @@ mod tests {
         );
 
         assert_eq!(
-            policy.cache_progress("task1".to_string(), &[0], 0, 100),
+            policy.cache_progress(&new_test_task("task1", 0, 100), &[0]),
             None
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task1".to_string(), &[1], 0, 100),
+            policy.cache_progress(&new_test_task("task1", 0, 100), &[1]),
             Some(1)
         );
         assert_eq!(
-            policy.cache_progress("task1".to_string(), &[3], 0, 100),
+            policy.cache_progress(&new_test_task("task1", 0, 100), &[3]),
             None
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task1".to_string(), &[4], 0, 100),
+            policy.cache_progress(&new_test_task("task1", 0, 100), &[4]),
             Some(1)
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task1".to_string(), &[2], 0, 100),
+            policy.cache_progress(&new_test_task("task1", 0, 100), &[2]),
             Some(4)
         );
 
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[0], 0, 100),
+            policy.cache_progress(&new_test_task("task2", 0, 100), &[0]),
             None
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[1], 0, 100),
+            policy.cache_progress(&new_test_task("task2", 0, 100), &[1]),
             Some(1)
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[2], 0, 100),
+            policy.cache_progress(&new_test_task("task2", 0, 100), &[2]),
             Some(2)
         );
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[3], 0, 100),
+            policy.cache_progress(&new_test_task("task2", 0, 100), &[3]),
             None
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[4], 0, 100),
+            policy.cache_progress(&new_test_task("task2", 0, 100), &[4]),
             Some(4)
         );
 
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[6, 7, 8], 0, 100),
+            policy.cache_progress(&new_test_task("task2", 0, 100), &[6, 7, 8]),
             None
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[5, 9], 0, 100),
+            policy.cache_progress(&new_test_task("task2", 0, 100), &[5, 9]),
             Some(9)
         );
+    }
+
+    fn new_test_task(name: &str, start: u64, target: u64) -> Task {
+        Task {
+            task_name: name.to_string(),
+            start_checkpoint: start,
+            target_checkpoint: target,
+            timestamp: 0,
+            is_live_task: false,
+        }
     }
 }
