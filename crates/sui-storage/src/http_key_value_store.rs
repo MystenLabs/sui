@@ -10,6 +10,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 use sui_types::base_types::{ObjectID, SequenceNumber, VersionNumber};
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
@@ -25,7 +26,7 @@ use sui_types::{
     transaction::Transaction,
 };
 use tap::TapFallible;
-use tracing::{error, info, instrument, trace, warn};
+use tracing::{error, info, instrument, warn};
 
 use crate::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use crate::key_value_store_metrics::KeyValueStoreMetrics;
@@ -124,7 +125,7 @@ impl HttpKVStore {
     pub fn new(base_url: &str) -> SuiResult<Self> {
         info!("creating HttpKVStore with base_url: {}", base_url);
 
-        let client = Client::builder().http2_prior_knowledge().build().unwrap();
+        let client = Client::builder().build().unwrap();
 
         let base_url = if base_url.ends_with('/') {
             base_url.to_string()
@@ -153,21 +154,23 @@ impl HttpKVStore {
     }
 
     async fn fetch(&self, key: Key) -> SuiResult<Option<Bytes>> {
+        let client = Client::builder().build().unwrap();
         let url = self.get_url(&key)?;
-        trace!("fetching url: {}", url);
-        let resp = self
-            .client
+        info!("fetching url: {}", url);
+        let start = Instant::now();
+        let resp = client
             .get(url.clone())
             .send()
             .await
             .into_sui_result()?;
-        trace!(
-            "got response {} for url: {}, len: {:?}",
+        info!(
+            "got response {} for url: {}, len: {:?} in {:?}",
             url,
             resp.status(),
             resp.headers()
                 .get(CONTENT_LENGTH)
-                .unwrap_or(&HeaderValue::from_static("0"))
+                .unwrap_or(&HeaderValue::from_static("0")),
+            start.elapsed().as_millis(),
         );
         // return None if 400
         if resp.status().is_success() {
