@@ -7,6 +7,8 @@ use anyhow::Result;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const CHANNELS_URL: &str = "https://slack.com/api/conversations.list";
@@ -14,13 +16,19 @@ const CHANNELS_URL: &str = "https://slack.com/api/conversations.list";
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UsersResponse {
     ok: bool,
-    members: Vec<User>,
+    members: Option<Vec<User>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct User {
-    id: String,
-    name: String,
+    pub id: String,
+    pub name: String,
+}
+
+impl Display for User {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -92,8 +100,12 @@ pub async fn get_users(client: &Client) -> Result<Vec<User>> {
         .json::<UsersResponse>()
         .await?;
 
-    Ok(response.members)
+    if !response.ok {
+        panic!("Failed to get users");
+    }
+    Ok(response.members.ok_or(anyhow::anyhow!("missing members"))?)
 }
+
 pub async fn send_message(client: &Client, channel: &str, message: &str) -> Result<()> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
