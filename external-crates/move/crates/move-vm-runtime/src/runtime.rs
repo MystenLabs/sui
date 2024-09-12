@@ -5,7 +5,7 @@
 use crate::{
     data_cache::TransactionDataCache,
     interpreter::Interpreter,
-    loader::{ast::Function, Loader},
+    loader::{arena::ArenaPointer, ast::Function, Loader},
     native_extensions::NativeContextExtensions,
     native_functions::{NativeFunction, NativeFunctions},
     session::{LoadedFunctionInstantiation, SerializedReturnValues, Session},
@@ -312,7 +312,7 @@ impl VMRuntime {
 
     fn execute_function_impl(
         &self,
-        func: *const Function,
+        func: ArenaPointer<Function>,
         ty_args: Vec<Type>,
         param_types: Vec<Type>,
         return_types: Vec<Type>,
