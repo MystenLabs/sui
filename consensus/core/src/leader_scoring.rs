@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
     ops::Bound::{Excluded, Included},
     sync::Arc,
@@ -127,6 +127,33 @@ impl ReputationScores {
             scores_per_authority,
             commit_range,
         }
+    }
+
+    // This will return scores into groups based on the percentage provided.
+    // This is useful for finding the bottom % of scores.
+    // Scores in each group will be returned in descending order by score.
+    pub(crate) fn split_top_and_bottom_scores(
+        &self,
+        context: Arc<Context>,
+        bottom_percentage: u64,
+    ) -> (HashMap<AuthorityIndex, u64>, HashMap<AuthorityIndex, u64>) {
+        assert!((1..=99).contains(&bottom_percentage), "The percentage ({bottom_percentage}) provided should be in range [1 - 99], out of bounds parameter detected");
+        let high_score = self.high_score();
+        let low_score_threshold = (bottom_percentage * high_score) / 100;
+        let mut top_scores = HashMap::new();
+        let mut bottom_scores = HashMap::new();
+        for (index, score) in self.authorities_by_score(context) {
+            if score > low_score_threshold {
+                top_scores.insert(index, score);
+            } else {
+                bottom_scores.insert(index, score);
+            }
+        }
+        (top_scores, bottom_scores)
+    }
+
+    pub fn high_score(&self) -> u64 {
+        *self.scores_per_authority.iter().max().unwrap_or(&0)
     }
 
     // Returns the authorities index with score tuples.
@@ -258,17 +285,9 @@ impl ScoringSubdag {
     }
 
     // Iterate through votes and calculate scores for each authority based on
-    // scoring strategy that is used. (Vote or CertifiedVote)
-    pub(crate) fn calculate_scores(&self) -> ReputationScores {
-        let _s = self
-            .context
-            .metrics
-            .node_metrics
-            .scope_processing_time
-            .with_label_values(&["ScoringSubdag::calculate_scores"])
-            .start_timer();
-
-        let scores_per_authority = self.score_distributed_votes();
+    // distributed vote scoring strategy.
+    pub(crate) fn calculate_distributed_vote_scores(&self) -> ReputationScores {
+        let scores_per_authority = self.distributed_votes_scores();
 
         // TODO: Normalize scores
         ReputationScores::new(
@@ -283,7 +302,15 @@ impl ScoringSubdag {
     /// Instead of only giving one point for each vote that is included in 2f+1
     /// blocks. We give a score equal to the amount of stake of all blocks that
     /// included the vote.
-    fn score_distributed_votes(&self) -> Vec<u64> {
+    fn distributed_votes_scores(&self) -> Vec<u64> {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["ScoringSubdag::score_distributed_votes"])
+            .start_timer();
+
         let num_authorities = self.context.committee.size();
         let mut scores_per_authority = vec![0_u64; num_authorities];
 
@@ -299,12 +326,31 @@ impl ScoringSubdag {
         scores_per_authority
     }
 
+    // Iterate through votes and calculate scores for each authority based on
+    // certified vote scoring strategy.
+    pub(crate) fn calculate_certified_vote_scores(&self) -> ReputationScores {
+        let scores_per_authority = self.certified_votes_scores();
+
+        ReputationScores::new(
+            self.commit_range
+                .clone()
+                .expect("CommitRange should be set if calculate scores is called."),
+            scores_per_authority,
+        )
+    }
+
     /// This scoring strategy gives points equal to the amount of stake in blocks
     /// that include the authority's vote, if that amount of total_stake > 2f+1.
     /// We consider this a certified vote.
-    // TODO: This will be used for ancestor selection
-    #[allow(unused)]
-    fn score_certified_votes(&self) -> Vec<u64> {
+    pub fn certified_votes_scores(&self) -> Vec<u64> {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["ScoringSubdag::score_certified_votes"])
+            .start_timer();
+
         let num_authorities = self.context.committee.size();
         let mut scores_per_authority = vec![0_u64; num_authorities];
 
@@ -573,7 +619,7 @@ mod tests {
             scoring_subdag.add_subdags(vec![subdag]);
         }
 
-        let scores = scoring_subdag.calculate_scores();
+        let scores = scoring_subdag.calculate_distributed_vote_scores();
         assert_eq!(scores.scores_per_authority, vec![5, 5, 5, 5]);
         assert_eq!(scores.commit_range, (1..=4).into());
     }
@@ -619,9 +665,9 @@ mod tests {
             scoring_subdag.add_subdags(vec![subdag]);
         }
 
-        let scores_per_authority = scoring_subdag.score_certified_votes();
-        assert_eq!(scores_per_authority, vec![4, 4, 4, 4]);
-        assert_eq!(scoring_subdag.commit_range.unwrap(), (1..=4).into());
+        let scores = scoring_subdag.calculate_certified_vote_scores();
+        assert_eq!(scores.scores_per_authority, vec![4, 4, 4, 4]);
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     // TODO: Remove all tests below this when DistributedVoteScoring is enabled.
