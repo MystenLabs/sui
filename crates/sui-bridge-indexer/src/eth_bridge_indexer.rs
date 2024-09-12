@@ -148,7 +148,7 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
     }
 
     fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.tasks_remaining_checkpoints
+        &self.indexer_metrics.backfill_tasks_remaining_checkpoints
     }
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
@@ -277,7 +277,7 @@ impl Datasource<RawEthData> for EthSyncDatasource {
     }
 
     fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.tasks_remaining_checkpoints
+        &self.indexer_metrics.backfill_tasks_remaining_checkpoints
     }
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {

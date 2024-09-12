@@ -21,7 +21,7 @@ pub struct BridgeIndexerMetrics {
     pub(crate) last_committed_sui_checkpoint: IntGauge,
     pub(crate) latest_committed_eth_block: IntGauge,
     pub(crate) last_synced_eth_block: IntGauge,
-    pub(crate) tasks_remaining_checkpoints: IntGaugeVec,
+    pub(crate) backfill_tasks_remaining_checkpoints: IntGaugeVec,
     pub(crate) tasks_processed_checkpoints: IntCounterVec,
     pub(crate) tasks_current_checkpoints: IntGaugeVec,
 }
@@ -101,9 +101,9 @@ impl BridgeIndexerMetrics {
                 registry,
             )
             .unwrap(),
-            tasks_remaining_checkpoints: register_int_gauge_vec_with_registry!(
-                "bridge_indexer_tasks_remaining_checkpoints",
-                "The remaining checkpoints for each task",
+            backfill_tasks_remaining_checkpoints: register_int_gauge_vec_with_registry!(
+                "bridge_indexer_backfill_tasks_remaining_checkpoints",
+                "The remaining checkpoints for the currently running backfill task",
                 &["task_name"],
                 registry,
             )
@@ -111,14 +111,14 @@ impl BridgeIndexerMetrics {
             tasks_processed_checkpoints: register_int_counter_vec_with_registry!(
                 "bridge_indexer_tasks_processed_checkpoints",
                 "Total processed checkpoints for each task",
-                &["task_name"],
+                &["task_name", "task_type"],
                 registry,
             )
             .unwrap(),
             tasks_current_checkpoints: register_int_gauge_vec_with_registry!(
                 "bridge_indexer_tasks_current_checkpoints",
                 "Current checkpoint for each task",
-                &["task_name"],
+                &["task_name", "task_type"],
                 registry,
             )
             .unwrap(),

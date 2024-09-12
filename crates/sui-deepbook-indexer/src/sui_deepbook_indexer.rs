@@ -172,21 +172,17 @@ impl IndexerProgressStore for PgDeepbookPersistent {
 
     async fn save_progress(
         &mut self,
-        task_name: String,
+        task: &Task,
         checkpoint_numbers: &[u64],
-        start_checkpoint_number: u64,
-        target_checkpoint_number: u64,
     ) -> anyhow::Result<Option<u64>> {
         if checkpoint_numbers.is_empty() {
             return Ok(None);
         }
-
-        if let Some(checkpoint_to_save) = self.save_progress_policy.cache_progress(
-            task_name.clone(),
-            checkpoint_numbers,
-            start_checkpoint_number,
-            target_checkpoint_number,
-        ) {
+        let task_name = task.task_name.clone();
+        if let Some(checkpoint_to_save) = self
+            .save_progress_policy
+            .cache_progress(task, checkpoint_numbers)
+        {
             let mut conn = self.pool.get().await?;
             diesel::insert_into(schema::progress_store::table)
                 .values(&models::ProgressStore {
@@ -205,6 +201,8 @@ impl IndexerProgressStore for PgDeepbookPersistent {
                 ))
                 .execute(&mut conn)
                 .await?;
+            // TODO: add metrics here
+            return Ok(Some(checkpoint_to_save));
         }
         Ok(None)
     }

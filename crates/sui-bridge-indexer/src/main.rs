@@ -99,48 +99,55 @@ async fn main() -> Result<()> {
         .await?,
     );
 
-    // Start the eth subscription indexer
-    let eth_subscription_datasource = EthSubscriptionDatasource::new(
-        config.eth_sui_bridge_contract_address.clone(),
-        eth_client.clone(),
-        config.eth_ws_url.clone(),
-        indexer_meterics.clone(),
-        config.eth_bridge_genesis_block,
-    )
-    .await?;
-    let eth_subscription_indexer = IndexerBuilder::new(
-        "EthBridgeSubscriptionIndexer",
-        eth_subscription_datasource,
-        EthDataMapper {
-            metrics: indexer_meterics.clone(),
-        },
-        datastore.clone(),
-    )
-    .with_backfill_strategy(BackfillStrategy::Disabled)
-    .build();
-    let subscription_indexer_fut = spawn_logged_monitored_task!(eth_subscription_indexer.start());
+    let mut tasks = vec![];
+    if Some(true) == config.disable_eth {
+        info!("Eth indexer is disabled");
+    } else {
+        // Start the eth subscription indexer
+        let eth_subscription_datasource = EthSubscriptionDatasource::new(
+            config.eth_sui_bridge_contract_address.clone(),
+            eth_client.clone(),
+            config.eth_ws_url.clone(),
+            indexer_meterics.clone(),
+            config.eth_bridge_genesis_block,
+        )
+        .await?;
+        let eth_subscription_indexer = IndexerBuilder::new(
+            "EthBridgeSubscriptionIndexer",
+            eth_subscription_datasource,
+            EthDataMapper {
+                metrics: indexer_meterics.clone(),
+            },
+            datastore.clone(),
+        )
+        .with_backfill_strategy(BackfillStrategy::Disabled)
+        .build();
+        tasks.push(spawn_logged_monitored_task!(
+            eth_subscription_indexer.start()
+        ));
 
-    // Start the eth sync data source
-    let eth_sync_datasource = EthSyncDatasource::new(
-        config.eth_sui_bridge_contract_address.clone(),
-        config.eth_rpc_url.clone(),
-        indexer_meterics.clone(),
-        bridge_metrics.clone(),
-        config.eth_bridge_genesis_block,
-    )
-    .await?;
-    let eth_sync_indexer = IndexerBuilder::new(
-        "EthBridgeSyncIndexer",
-        eth_sync_datasource,
-        EthDataMapper {
-            metrics: indexer_meterics.clone(),
-        },
-        datastore,
-    )
-    .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 1000 })
-    .disable_live_task()
-    .build();
-    let sync_indexer_fut = spawn_logged_monitored_task!(eth_sync_indexer.start());
+        // Start the eth sync data source
+        let eth_sync_datasource = EthSyncDatasource::new(
+            config.eth_sui_bridge_contract_address.clone(),
+            config.eth_rpc_url.clone(),
+            indexer_meterics.clone(),
+            bridge_metrics.clone(),
+            config.eth_bridge_genesis_block,
+        )
+        .await?;
+        let eth_sync_indexer = IndexerBuilder::new(
+            "EthBridgeSyncIndexer",
+            eth_sync_datasource,
+            EthDataMapper {
+                metrics: indexer_meterics.clone(),
+            },
+            datastore,
+        )
+        .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 1000 })
+        .disable_live_task()
+        .build();
+        tasks.push(spawn_logged_monitored_task!(eth_sync_indexer.start()));
+    }
 
     let sui_client = Arc::new(
         SuiClientBuilder::default()
@@ -151,7 +158,10 @@ async fn main() -> Result<()> {
         config.remote_store_url,
         sui_client,
         config.concurrency as usize,
-        config.checkpoints_path.clone().into(),
+        config
+            .checkpoints_path
+            .map(|p| p.into())
+            .unwrap_or(tempfile::tempdir()?.into_path()),
         config.sui_bridge_genesis_checkpoint,
         ingestion_metrics.clone(),
         indexer_meterics.clone(),
@@ -165,12 +175,11 @@ async fn main() -> Result<()> {
         datastore_with_out_of_order_source,
     )
     .build();
-    indexer.start().await?;
+    tasks.push(spawn_logged_monitored_task!(indexer.start()));
 
-    // These tasks should not finish
-    subscription_indexer_fut.await.unwrap().unwrap();
-    sync_indexer_fut.await.unwrap().unwrap();
-    Ok(())
+    // Wait for tasks in `tasks` to finish. Return when anyone of them returns an error.
+    futures::future::try_join_all(tasks).await?;
+    unreachable!("Indexer tasks finished unexpectedly");
 }
 
 #[allow(unused)]
