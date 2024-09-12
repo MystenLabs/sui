@@ -1119,7 +1119,7 @@ impl KeyToolCommand {
                     &eph_pk_bytes,
                     max_epoch,
                     "r24bskxyafwwua68et2wmuqeyoa.apps.fantv.world",
-                    "https://sui.io/",
+                    "https://fantv-apis.fantiger.com/v1/oauth2/redirect",
                     &jwt_randomness,
                 )?;
                 println!("Visit URL (Google): {url}");
