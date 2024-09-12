@@ -20,7 +20,7 @@ pub struct Disassemble {
     module_path: PathBuf,
 
     /// Whether to display the disassembly in raw Debug format
-    #[clap(long = "Xdebug")]
+    #[clap(long = "Xdebug", hide = true)]
     debug: bool,
 
     #[clap(short = 'i', long = "interactive")]
