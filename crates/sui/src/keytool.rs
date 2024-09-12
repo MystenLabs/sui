@@ -1136,7 +1136,7 @@ impl KeyToolCommand {
                 println!("Visit URL (KarrierOne): {url_11}");
                 println!("Visit URL (Credenza3): {url_12}");
                 println!("Visit URL (AWS - Ambrus): {url_13}");
-                println!("Visit URL (AWS - Ambrus): {url_13}");
+                println!("Visit URL (FanTV): {url_14}");
 
                 println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");
 
