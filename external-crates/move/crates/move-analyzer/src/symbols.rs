@@ -121,6 +121,8 @@ const MANIFEST_FILE_NAME: &str = "Move.toml";
 
 type SourceFiles = BTreeMap<FileHash, (FileName, String, bool)>;
 
+/// Information about the compiled package and data structures
+/// computed during compilation
 #[derive(Clone)]
 pub struct CompiledPkgInfo {
     parsed_program: P::Program,
@@ -132,6 +134,7 @@ pub struct CompiledPkgInfo {
     compiler_info: Option<CompilerInfo>,
 }
 
+/// Information about precompiled package dependencies
 #[derive(Clone)]
 pub struct PrecompiledPkgDeps {
     /// Hash of the manifest file for a given package
