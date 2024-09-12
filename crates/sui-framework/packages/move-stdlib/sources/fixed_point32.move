@@ -203,6 +203,7 @@ public fun one(): FixedPoint32 {
     from_integer(1)
 }
 
+/// Return a fixed-point representation of 0.
 public fun zero(): FixedPoint32 {
     create_from_raw_value(0)
 }
