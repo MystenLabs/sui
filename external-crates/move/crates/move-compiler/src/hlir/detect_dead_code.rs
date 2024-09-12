@@ -75,26 +75,26 @@ type ControlFlowSet = BTreeSet<ControlFlowEntry>;
 #[derive(Debug)]
 enum ControlFlow {
     None,
+    Possible,
     Divergent {
         loc: Loc,
         set: ControlFlowSet,
         reported: bool,
     },
-    Possible(Loc, ControlFlowSet),
 }
 
 impl ControlFlow {
     fn is_none(&self) -> bool {
         match self {
             ControlFlow::None => true,
-            ControlFlow::Divergent { .. } | ControlFlow::Possible(_, _) => false,
+            ControlFlow::Divergent { .. } | ControlFlow::Possible => false,
         }
     }
 
     fn is_some(&self) -> bool {
         match self {
             ControlFlow::None => false,
-            ControlFlow::Divergent { .. } | ControlFlow::Possible(_, _) => true,
+            ControlFlow::Divergent { .. } | ControlFlow::Possible => true,
         }
     }
 
@@ -104,62 +104,33 @@ impl ControlFlow {
     // - If either is Possible, divergence is Possible
     fn combine_arms(self, loc: Loc, other: Self) -> Self {
         use ControlFlow as CF;
-        match (self, other) {
-            (
+        match self {
+            CF::None => match other {
+                CF::None => CF::None,
+                CF::Possible => CF::Possible,
+                CF::Divergent { .. } => CF::Possible,
+            },
+            CF::Possible => CF::Possible,
+            CF::Divergent {
+                loc: _,
+                set: mut left,
+                reported: reported_left,
+            } => match other {
+                CF::None => CF::Possible,
+                CF::Possible => CF::Possible,
                 CF::Divergent {
-                    set: mut left,
-                    reported: reported_left,
                     loc: _,
-                },
-                CF::Divergent {
                     set: mut right,
                     reported: reported_right,
-                    loc: _,
-                },
-            ) => {
-                left.append(&mut right);
-                CF::Divergent {
-                    loc,
-                    set: left,
-                    reported: reported_left || reported_right,
+                } => {
+                    left.append(&mut right);
+                    CF::Divergent {
+                        loc,
+                        set: left,
+                        reported: reported_left || reported_right,
+                    }
                 }
-            }
-            (CF::None, CF::None) => CF::None,
-            (
-                CF::None,
-                CF::Possible(_, set)
-                | CF::Divergent {
-                    set,
-                    reported: _,
-                    loc: _,
-                },
-            )
-            | (
-                CF::Possible(_, set)
-                | CF::Divergent {
-                    set,
-                    reported: _,
-                    loc: _,
-                },
-                CF::None,
-            ) => CF::Possible(loc, set),
-            (
-                CF::Possible(_, mut left)
-                | CF::Divergent {
-                    set: mut left,
-                    reported: _,
-                    loc: _,
-                },
-                CF::Possible(_, mut right)
-                | CF::Divergent {
-                    set: mut right,
-                    reported: _,
-                    loc: _,
-                },
-            ) => {
-                left.append(&mut right);
-                CF::Possible(loc, left)
-            }
+            },
         }
     }
 
@@ -181,17 +152,10 @@ impl ControlFlow {
         match self {
             CF::Divergent { loc, set, reported } => CF::Divergent { loc, set, reported },
             CF::None => next,
-            CF::Possible(loc, mut left) => match next {
-                CF::None => CF::Possible(loc, left),
-                CF::Divergent {
-                    loc,
-                    mut set,
-                    reported: _,
-                } => {
-                    set.append(&mut left);
-                    CF::Possible(loc, set)
-                }
-                CF::Possible(_, _) => CF::Possible(loc, left),
+            CF::Possible => match next {
+                CF::None => CF::Possible,
+                CF::Divergent { .. } => CF::Possible,
+                CF::Possible => CF::Possible,
             },
         }
     }
@@ -199,13 +163,12 @@ impl ControlFlow {
     fn remove_label(mut self, label: &BlockLabel) -> Self {
         use ControlFlow as CF;
         match &mut self {
-            CF::None => (),
+            CF::None | CF::Possible => (),
             CF::Divergent {
                 set,
                 reported: _,
                 loc: _,
-            }
-            | CF::Possible(_, set) => {
+            } => {
                 set.remove(&ControlFlowEntry::GiveCalled(*label));
                 set.remove(&ControlFlowEntry::ContinueCalled(*label));
                 if set.is_empty() {
@@ -219,7 +182,7 @@ impl ControlFlow {
     fn is_divergent(&self) -> bool {
         match self {
             ControlFlow::Divergent { .. } => true,
-            ControlFlow::None | ControlFlow::Possible(_, _) => false,
+            ControlFlow::None | ControlFlow::Possible => false,
         }
     }
 }
@@ -249,7 +212,7 @@ impl<'env> Context<'env> {
                     .add_diag(diag!(UnusedItem::DeadCode, (*loc, VALUE_UNREACHABLE_MSG)));
                 true
             }
-            CF::Divergent { .. } | CF::None | CF::Possible(_, _) => false,
+            CF::Divergent { .. } | CF::None | CF::Possible => false,
         }
     }
 
@@ -266,7 +229,7 @@ impl<'env> Context<'env> {
                     .add_diag(diag!(UnusedItem::DeadCode, (*loc, DIVERGENT_MSG)));
                 true
             }
-            CF::Divergent { .. } | CF::None | CF::Possible(_, _) => false,
+            CF::Divergent { .. } | CF::None | CF::Possible => false,
         }
     }
 
@@ -290,7 +253,7 @@ impl<'env> Context<'env> {
                 self.env.add_diag(diag);
                 true
             }
-            CF::Divergent { .. } | CF::None | CF::Possible(_, _) => false,
+            CF::Divergent { .. } | CF::None | CF::Possible => false,
         }
     }
 
@@ -316,7 +279,7 @@ impl<'env> Context<'env> {
                     ));
                     true
                 }
-                CF::Divergent { .. } | CF::None | CF::Possible(_, _) => false,
+                CF::Divergent { .. } | CF::None | CF::Possible => false,
             }
         } else {
             self.maybe_report_statement_error(error, Some(&tail_exp.exp.loc))
