@@ -14,11 +14,3 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
-   ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:12:9
-   │
-12 │         1 + loop foo();
-   │         ^^^^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
-   │
-   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

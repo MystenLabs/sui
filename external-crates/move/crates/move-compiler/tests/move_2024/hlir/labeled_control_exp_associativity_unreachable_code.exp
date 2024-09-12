@@ -1,5 +1,5 @@
 warning[W09005]: dead or unreachable code
-   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_unreachable_code.move:11:13
+   ┌─ tests/move_2024/hlir/labeled_control_exp_associativity_unreachable_code.move:11:13
    │
 11 │         1 + 'a: loop { foo() } + 2;
    │             ^^^^^^^^^^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
