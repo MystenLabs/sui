@@ -1,56 +1,65 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use anyhow::Context;
 use anyhow::Result;
-use once_cell::sync::Lazy;
+use futures::future::Either;
 use reqwest::{header, Client};
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fs::File;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::debug;
 
-const CHANNELS_URL: &str = "https://slack.com/api/conversations.list";
-static CHANNELS_FILEPATH: Lazy<PathBuf> = Lazy::new(|| {
-    dirs::home_dir()
-        .expect("HOME env var not set")
-        .join(".suiop")
-        .join("channels")
-});
+use super::slack_api::get_channels;
+use super::slack_api::get_users;
+use super::slack_api::Channel;
+use super::slack_api::User;
 
+#[derive(Debug, Default)]
 pub struct Slack {
     client: Client,
     pub channels: Vec<Channel>,
+    pub users: Vec<User>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Channel {
-    pub id: String,
-    pub name: String,
+fn get_serialize_filepath(subname: &str) -> PathBuf {
+    dirs::home_dir()
+        .expect("HOME env var not set")
+        .join(".suiop")
+        .join(subname)
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-struct ResponseMetadata {
-    next_cursor: Option<String>,
+/// Serialize the obj into ~/.suiop/{subname} so we can cache it across
+/// executions
+pub fn serialize_to_file<T: Serialize>(subname: &str, obj: &Vec<T>) -> Result<()> {
+    let file = File::create(get_serialize_filepath(subname).as_path())?;
+    serde_json::to_writer(file, obj)?;
+    Ok(())
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-struct ConversationsResponse {
-    ok: bool,
-    error: Option<String>,
-    channels: Option<Vec<Channel>>,
-    response_metadata: ResponseMetadata,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-struct SendMessageBody {
-    channel: String,
-    text: String,
-    ts: String,
-    mrkdwn: bool,
+/// Check if the file in ~/.suiop/{subname} is less than 1 day old
+/// and if so, deserialize the value from it.
+///
+/// Otherwise return None
+pub fn deserialize_from_file<T: DeserializeOwned>(subname: &str) -> Option<Vec<T>> {
+    let mut result = None;
+    let file_path = get_serialize_filepath(subname);
+    if let Ok(metadata) = file_path.metadata() {
+        if let Ok(modified) = metadata.modified() {
+            if let Ok(elapsed) = modified.elapsed() {
+                // 1 day
+                if elapsed.as_secs() < 24 * 60 * 60 {
+                    if let Ok(file) = File::open(file_path) {
+                        if let Ok(obj) = serde_json::from_reader::<_, Vec<T>>(file) {
+                            debug!("Using cached {}", subname);
+                            result = Some(obj);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    result
 }
 
 impl Slack {
@@ -68,92 +77,40 @@ impl Slack {
             .default_headers(headers)
             .build()
             .expect("failed to build reqwest client");
-        let mut s = Self {
+        let channels = deserialize_from_file("channels")
+            .map_or_else(
+                || {
+                    Either::Left(async {
+                        let channels = get_channels(&client).await.expect("Failed to get channels");
+                        serialize_to_file("channels", &channels)
+                            .expect("Failed to serialize channels");
+                        channels
+                    })
+                },
+                |v| Either::Right(async { v }),
+            )
+            .await;
+        let users = deserialize_from_file("users")
+            .map_or_else(
+                || {
+                    Either::Left(async {
+                        let users = get_users(&client).await.expect("Failed to get users");
+                        serialize_to_file("users", &users).expect("Failed to serialize users");
+                        users
+                    })
+                },
+                |u| Either::Right(async { u }),
+            )
+            .await;
+        Self {
             client,
-            channels: vec![],
-        };
-        s.get_channels().await.expect("Failed to get channels");
-        s
+            channels,
+            users,
+        }
     }
 
-    pub async fn serialize_channels(&self) -> Result<()> {
-        let file = File::create(CHANNELS_FILEPATH.as_path())?;
-        serde_json::to_writer(file, &self.channels)?;
-        Ok(())
-    }
-
-    pub async fn get_channels(&mut self) -> Result<Vec<String>> {
-        let mut channels: Vec<Channel> = vec![];
-        let file_path = CHANNELS_FILEPATH.as_path();
-        if let Ok(metadata) = file_path.metadata() {
-            if let Ok(modified) = metadata.modified() {
-                if let Ok(elapsed) = modified.elapsed() {
-                    // 1 day
-                    if elapsed.as_secs() < 24 * 60 * 60 {
-                        if let Ok(file) = File::open(file_path) {
-                            if let Ok(channels) = serde_json::from_reader::<_, Vec<Channel>>(file) {
-                                debug!("Using cached channels");
-                                self.channels = channels;
-                                return Ok(self.channels.iter().map(|c| c.name.clone()).collect());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut result: ConversationsResponse = self
-            .client
-            .get(CHANNELS_URL)
-            .send()
-            .await
-            .map_err(|e| anyhow!(e))?
-            .json()
-            .await?;
-        let new_channels = result.channels.expect("Expected channels to exist").clone();
-        channels.extend(new_channels.into_iter());
-        while let Some(cursor) = result.response_metadata.next_cursor {
-            if cursor.is_empty() {
-                break;
-            }
-            result = self
-                .client
-                .get(CHANNELS_URL)
-                .query(&[("cursor", cursor)])
-                .send()
-                .await
-                .map_err(|e| anyhow!(e))?
-                .json()
-                .await
-                .context("parsing json from channels api")?;
-            let extra_channels = result.channels.expect("Expected channels to exist").clone();
-            channels.extend(extra_channels.into_iter());
-        }
-        self.channels = channels.iter().map(|c| (*c).clone()).collect();
-        self.serialize_channels().await?;
-        let names = self.channels.iter().map(|c| c.name.clone()).collect();
-        Ok(names)
-    }
-
-    pub async fn send_message(&self, channel: &str, message: &str) -> Result<()> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_millis();
-        let message_body = SendMessageBody {
-            channel: channel.to_owned(),
-            text: message.to_owned(),
-            ts: timestamp.to_string(),
-            mrkdwn: true,
-        };
-        let url = "https://slack.com/api/chat.postMessage";
-        let response = self.client.post(url).json(&message_body).send().await?;
-        let response = response.json::<serde_json::Value>().await?;
-        if response["ok"].as_bool().expect("ok was not a bool") {
-            Ok(())
-        } else {
-            Err(anyhow!("Failed to send message: {}", response))
-        }
+    pub async fn send_message(self, channel: &str, message: &str) -> Result<()> {
+        super::slack_api::send_message(&self.client, channel, message).await
     }
 }
 
