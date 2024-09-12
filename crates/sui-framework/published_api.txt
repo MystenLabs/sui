@@ -490,6 +490,9 @@ validator_staking_pool_id
 staking_pool_mappings
 	public fun
 	0x3::validator_set
+validator_address_by_pool_id
+	public fun
+	0x3::validator_set
 pool_exchange_rates
 	public(package) fun
 	0x3::validator_set
@@ -805,6 +808,9 @@ get_storage_fund_total_balance
 get_storage_fund_object_rebates
 	public(package) fun
 	0x3::sui_system_state_inner
+validator_address_by_pool_id
+	public(package) fun
+	0x3::sui_system_state_inner
 pool_exchange_rates
 	public(package) fun
 	0x3::sui_system_state_inner
@@ -921,6 +927,9 @@ update_validator_next_epoch_network_pubkey
 	0x3::sui_system
 update_candidate_validator_network_pubkey
 	public entry fun
+	0x3::sui_system
+validator_address_by_pool_id
+	public fun
 	0x3::sui_system
 pool_exchange_rates
 	public fun
