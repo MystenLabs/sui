@@ -27,7 +27,7 @@ diesel::table! {
         validator_signature -> Bytea,
         end_of_epoch_data -> Nullable<Bytea>,
         min_tx_sequence_number -> Nullable<Int8>,
-        max_tx_sequence_number -> Nullable<Int8>
+        max_tx_sequence_number -> Nullable<Int8>,
     }
 }
 
@@ -147,20 +147,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    events_partition_0 (tx_sequence_number, event_sequence_number) {
-        tx_sequence_number -> Int8,
-        event_sequence_number -> Int8,
-        transaction_digest -> Bytea,
-        senders -> Array<Nullable<Bytea>>,
-        package -> Bytea,
-        module -> Text,
-        event_type -> Text,
-        timestamp_ms -> Int8,
-        bcs -> Bytea,
-    }
-}
-
-diesel::table! {
     feature_flags (protocol_version, flag_name) {
         protocol_version -> Int8,
         flag_name -> Text,
@@ -222,29 +208,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    objects_history_partition_0 (checkpoint_sequence_number, object_id, object_version) {
-        object_id -> Bytea,
-        object_version -> Int8,
-        object_status -> Int2,
-        object_digest -> Nullable<Bytea>,
-        checkpoint_sequence_number -> Int8,
-        owner_type -> Nullable<Int2>,
-        owner_id -> Nullable<Bytea>,
-        object_type -> Nullable<Text>,
-        object_type_package -> Nullable<Bytea>,
-        object_type_module -> Nullable<Text>,
-        object_type_name -> Nullable<Text>,
-        serialized_object -> Nullable<Bytea>,
-        coin_type -> Nullable<Text>,
-        coin_balance -> Nullable<Int8>,
-        df_kind -> Nullable<Int2>,
-        df_name -> Nullable<Bytea>,
-        df_object_type -> Nullable<Text>,
-        df_object_id -> Nullable<Bytea>,
-    }
-}
-
-diesel::table! {
     objects_snapshot (object_id) {
         object_id -> Bytea,
         object_version -> Int8,
@@ -276,20 +239,20 @@ diesel::table! {
 }
 
 diesel::table! {
-    protocol_configs (protocol_version, config_name) {
-        protocol_version -> Int8,
-        config_name -> Text,
-        config_value -> Nullable<Text>,
-    }
-}
-
-diesel::table! {
     packages (package_id, original_id, package_version) {
         package_id -> Bytea,
         original_id -> Bytea,
         package_version -> Int8,
         move_package -> Bytea,
         checkpoint_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    protocol_configs (protocol_version, config_name) {
+        protocol_version -> Int8,
+        config_name -> Text,
+        config_value -> Nullable<Text>,
     }
 }
 
@@ -303,22 +266,6 @@ diesel::table! {
 
 diesel::table! {
     transactions (tx_sequence_number) {
-        tx_sequence_number -> Int8,
-        transaction_digest -> Bytea,
-        raw_transaction -> Bytea,
-        raw_effects -> Bytea,
-        checkpoint_sequence_number -> Int8,
-        timestamp_ms -> Int8,
-        object_changes -> Array<Nullable<Bytea>>,
-        balance_changes -> Array<Nullable<Bytea>>,
-        events -> Array<Nullable<Bytea>>,
-        transaction_kind -> Int2,
-        success_command_count -> Int2,
-    }
-}
-
-diesel::table! {
-    transactions_partition_0 (tx_sequence_number) {
         tx_sequence_number -> Int8,
         transaction_digest -> Bytea,
         raw_transaction -> Bytea,
@@ -418,18 +365,16 @@ diesel::allow_tables_to_appear_in_same_query!(
     event_struct_name,
     event_struct_package,
     events,
-    events_partition_0,
     feature_flags,
+    full_objects_history,
     objects,
     objects_history,
-    objects_history_partition_0,
     objects_snapshot,
     objects_version,
     packages,
     protocol_configs,
     pruner_cp_watermark,
     transactions,
-    transactions_partition_0,
     tx_calls_fun,
     tx_calls_mod,
     tx_calls_pkg,
