@@ -1778,7 +1778,7 @@ pub fn get_compiled_pkg(
         edition,
         compiler_info,
     };
-    return Ok((Some(compiled_pkg_info), ide_diagnostics));
+    Ok((Some(compiled_pkg_info), ide_diagnostics))
 }
 
 pub fn compute_symbols(

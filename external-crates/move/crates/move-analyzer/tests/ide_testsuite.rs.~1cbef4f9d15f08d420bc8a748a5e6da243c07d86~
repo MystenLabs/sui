@@ -12,11 +12,11 @@ use std::{
 use json_comments::StripComments;
 use lsp_types::{InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
 use move_analyzer::{
-    completions::{compute_completions, compute_completions_with_symbols},
+    completions::compute_completions,
     inlay_hints::inlay_hints_internal,
     symbols::{
-        compute_symbols, def_info_doc_string, get_compiled_pkg, get_symbols,
-        maybe_convert_for_guard, CompiledPkgInfo, PrecompiledPkgDeps, Symbols, UseDefMap,
+        def_info_doc_string, get_symbols, maybe_convert_for_guard, PrecompiledPkgDeps, Symbols,
+        UseDefMap,
     },
 };
 use move_command_line_common::testing::{
@@ -179,7 +179,6 @@ impl CompletionTest {
         test_idx: usize,
         ide_files_root: VfsPath,
         pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
-        compiled_pkg_info: CompiledPkgInfo,
         symbols: &Symbols,
         output: &mut dyn std::io::Write,
         use_file_path: &Path,
@@ -190,12 +189,13 @@ impl CompletionTest {
             line: lsp_use_line,
             character: lsp_use_col,
         };
-
-        let cursor_path = use_file_path.to_path_buf();
-        let cursor_info = Some((&cursor_path, use_pos));
-        let symbols = compute_symbols(compiled_pkg_info, cursor_info);
-
-        let items = compute_completions_with_symbols(&symbols, &cursor_path, use_pos);
+        let items = compute_completions(
+            symbols,
+            ide_files_root,
+            pkg_dependencies,
+            use_file_path,
+            use_pos,
+        );
         writeln!(output, "-- test {test_idx} -------------------")?;
         writeln!(
             output,
@@ -345,7 +345,6 @@ fn initial_symbols(
     PathBuf,
     VfsPath,
     Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
-    CompiledPkgInfo,
     Symbols,
 )> {
     let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -354,31 +353,22 @@ fn initial_symbols(
 
     let ide_files_root: VfsPath = MemoryFS::new().into();
     let pkg_deps = Arc::new(Mutex::new(BTreeMap::new()));
-
-    let (compiled_pkg_info_opt, _) = get_compiled_pkg(
+    let (symbols_opt, _) = get_symbols(
         pkg_deps.clone(),
         ide_files_root.clone(),
         project_path.as_path(),
         LintLevel::None,
+        None,
     )?;
-
-    let compiled_pkg_info = compiled_pkg_info_opt.ok_or("PACKAGE COMPILATION FAILED")?;
-    let symbols = compute_symbols(compiled_pkg_info.clone(), None);
-
-    Ok((
-        project_path,
-        ide_files_root,
-        pkg_deps,
-        compiled_pkg_info,
-        symbols,
-    ))
+    let symbols = symbols_opt.ok_or("DID NOT FIND SYMBOLS")?;
+    Ok((project_path, ide_files_root, pkg_deps, symbols))
 }
 
 fn use_def_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<UseDefTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, _, _, _, symbols) = initial_symbols(project)?;
+    let (project_path, _, _, symbols) = initial_symbols(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -412,8 +402,7 @@ fn completion_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<CompletionTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, ide_files_root, pkg_deps, compiled_pkg_info, symbols) =
-        initial_symbols(project)?;
+    let (project_path, ide_files_root, pkg_deps, symbols) = initial_symbols(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -434,7 +423,6 @@ fn completion_test_suite(
                 idx,
                 ide_files_root.clone(),
                 pkg_deps.clone(),
-                compiled_pkg_info.clone(),
                 &symbols,
                 writer,
                 &cpath,
@@ -450,7 +438,7 @@ fn cursor_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<CursorTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, ide_files_root, pkg_deps, _, _) = initial_symbols(project)?;
+    let (project_path, ide_files_root, pkg_deps, _) = initial_symbols(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -484,7 +472,7 @@ fn hint_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<HintTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, _, _, _, symbols) = initial_symbols(project)?;
+    let (project_path, _, _, symbols) = initial_symbols(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
