@@ -2,7 +2,7 @@ error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/pack_no_fields_block_expr.move:4:22
   │
 4 │         let _s = S { let x = 0; x };
-  │                      ^ Expected a field expression
+  │                      ^ Unexpected 'let'. Expected a field expression
 
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/pack_no_fields_block_expr.move:4:31

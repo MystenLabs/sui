@@ -26,7 +26,7 @@ error[E01002]: unexpected token
   ┌─ tests/move_2024/typing/invalid_deprecation_attributes.move:8:18
   │
 8 │     #[deprecated(b"This is a deprecated function")]
-  │                  ^ Expected attribute
+  │                  ^ Unexpected '<ByteString>'. Expected attribute
 
 error[E10004]: invalid usage of known attribute
    ┌─ tests/move_2024/typing/invalid_deprecation_attributes.move:11:7

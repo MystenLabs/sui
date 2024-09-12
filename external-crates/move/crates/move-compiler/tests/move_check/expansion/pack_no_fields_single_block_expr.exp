@@ -8,7 +8,7 @@ error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:4:22
   │
 4 │         let _s = S { false };
-  │                      ^ Expected a field expression
+  │                      ^ Unexpected 'false'. Expected a field expression
 
 error[E04016]: too few arguments
   ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:5:18
@@ -20,5 +20,5 @@ error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:5:22
   │
 5 │         let _s = S { 0 };
-  │                      ^ Expected a field expression
+  │                      ^ Unexpected '<Number>'. Expected a field expression
 
