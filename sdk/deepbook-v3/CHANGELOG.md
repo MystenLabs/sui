@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.6.0
+
+### Minor Changes
+
+- ebe2ae8: Admin function updates, package constant updates
+
 ## 0.5.1
 
 ### Patch Changes
