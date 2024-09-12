@@ -1114,6 +1114,14 @@ impl KeyToolCommand {
                     "https://api.ambrus.studio/callback",
                     &jwt_randomness,
                 )?;
+                let url_14 = get_oidc_url(
+                    OIDCProvider::FanTV,
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "",
+                    "",
+                    &jwt_randomness,
+                )?;
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
                 println!("Visit URL (Facebook): {url_3}");
@@ -1127,6 +1135,7 @@ impl KeyToolCommand {
                 println!("Visit URL (Microsoft): {url_10}");
                 println!("Visit URL (KarrierOne): {url_11}");
                 println!("Visit URL (Credenza3): {url_12}");
+                println!("Visit URL (AWS - Ambrus): {url_13}");
                 println!("Visit URL (AWS - Ambrus): {url_13}");
 
                 println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");

@@ -4622,7 +4622,11 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.8"
+<<<<<<< HEAD
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=b1ff61a2fcf20f689849ae270c93dc849c486d80#b1ff61a2fcf20f689849ae270c93dc849c486d80"
+=======
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=be8995f726c517df409751ee4a268e2e8d33f34c#be8995f726c517df409751ee4a268e2e8d33f34c"
+>>>>>>> 9069914a90 (Add FanTV as Zklogin OIDC provider onboarding)
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4676,7 +4680,11 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
+<<<<<<< HEAD
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=b1ff61a2fcf20f689849ae270c93dc849c486d80#b1ff61a2fcf20f689849ae270c93dc849c486d80"
+=======
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=be8995f726c517df409751ee4a268e2e8d33f34c#be8995f726c517df409751ee4a268e2e8d33f34c"
+>>>>>>> 9069914a90 (Add FanTV as Zklogin OIDC provider onboarding)
 dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
@@ -4685,7 +4693,11 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
+<<<<<<< HEAD
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=b1ff61a2fcf20f689849ae270c93dc849c486d80#b1ff61a2fcf20f689849ae270c93dc849c486d80"
+=======
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=be8995f726c517df409751ee4a268e2e8d33f34c#be8995f726c517df409751ee4a268e2e8d33f34c"
+>>>>>>> 9069914a90 (Add FanTV as Zklogin OIDC provider onboarding)
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -4704,7 +4716,11 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
+<<<<<<< HEAD
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=b1ff61a2fcf20f689849ae270c93dc849c486d80#b1ff61a2fcf20f689849ae270c93dc849c486d80"
+=======
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=be8995f726c517df409751ee4a268e2e8d33f34c#be8995f726c517df409751ee4a268e2e8d33f34c"
+>>>>>>> 9069914a90 (Add FanTV as Zklogin OIDC provider onboarding)
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -4721,7 +4737,11 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
+<<<<<<< HEAD
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=b1ff61a2fcf20f689849ae270c93dc849c486d80#b1ff61a2fcf20f689849ae270c93dc849c486d80"
+=======
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=be8995f726c517df409751ee4a268e2e8d33f34c#be8995f726c517df409751ee4a268e2e8d33f34c"
+>>>>>>> 9069914a90 (Add FanTV as Zklogin OIDC provider onboarding)
 dependencies = [
  "ark-bn254",
  "ark-ec",
