@@ -30,6 +30,15 @@ pub struct Priority {
     color: String,
 }
 
+impl Priority {
+    pub fn u8(&self) -> u8 {
+        self.name
+            .trim_start_matches("P")
+            .parse()
+            .expect("Parsing priority")
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Incident {
     #[serde(rename = "incident_number")]
@@ -260,16 +269,24 @@ pub async fn print_recent_incidents(
     Ok(())
 }
 
-/// Filter incidents based on whether they have > min_priority priority or any slack
+/// Filter incidents based on whether they have <= min_priority priority or any slack
 /// channel associated.
 fn filter_incidents_for_review(incidents: Vec<Incident>, min_priority: &str) -> Vec<Incident> {
+    let min_priority_u = min_priority
+        .trim_start_matches("P")
+        .parse::<u8>()
+        .expect("Parsing priority");
+    println!("min_priority_u: {}", min_priority_u);
     incidents
         .into_iter()
-        // filter on priority > P3 and any slack channel association
+        // filter on priority <= min_priority and any slack channel association
         .filter(|i| {
             i.priority
                 .clone()
-                .filter(|p| !p.name.is_empty() && p.name != min_priority)
+                .filter(|p| {
+                    println!("{} <= {}?", p.u8(), min_priority_u);
+                    !p.name.is_empty() && p.u8() <= min_priority_u
+                })
                 .is_some()
                 || i.slack_channel.is_some()
         })
@@ -288,7 +305,7 @@ fn request_pocs(slack: &Slack) -> Result<Vec<User>> {
 
 pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
     let slack = Slack::new().await;
-    let filtered_incidents = filter_incidents_for_review(incidents, "P3");
+    let filtered_incidents = filter_incidents_for_review(incidents, "P2");
     let mut group_map = group_by_similar_title(filtered_incidents, 0.9);
     let mut to_review = vec![];
     let mut excluded = vec![];
