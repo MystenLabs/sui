@@ -4,11 +4,7 @@
 #
 # Update sui-indexer's generated src/schema.rs based on the schema after
 # running all its migrations on a clean database. Expects the first argument to
-# be a Postgres Database URL, defaulting to
-#
-#   postgres://postgres:postgrespw@localhost:5432
-#
-# if none is provided.
+# be a port to run the temporary database on (defaults to 5433).
 
 set -x
 set -e
@@ -18,10 +14,12 @@ if ! command -v git &> /dev/null; then
     exit 1
 fi
 
-if ! command -v psql &> /dev/null; then
-    echo "Please install psql: e.g. brew install postgresql@15" >&2
-    exit 1
-fi
+for PG in psql initdb postgres pg_isready pg_ctl; do
+    if ! command -v $PG &> /dev/null; then
+        echo "Could not find $PG. Please install postgres: e.g. brew install postgresql@15" >&2
+        exit 1
+    fi
+done
 
 if ! command -v diesel &> /dev/null; then
     echo "Please install diesel: e.g. cargo install diesel_cli --features postgres" >&2
@@ -29,26 +27,52 @@ if ! command -v diesel &> /dev/null; then
 fi
 
 REPO=$(git rev-parse --show-toplevel)
-DATABASE_URL=${1:-"postgres://postgres:postgrespw@localhost:5432"}
 
-# Generate a unique DB name so that we don't risk stomping an existing DB. The
-# name will include the PID of the script process and the current timestamp in
-# seconds (calculated by `date` in a cross-platform compatible way):
-DB_NAME="sui_indexer_$$_$(date +'%s')"
+# Create a temporary directory to store the ephemeral DB.
+TMP=$(mktemp -d)
 
-# Create a new database, and drop it on EXIT
-psql -c "CREATE DATABASE $DB_NAME" "$DATABASE_URL"
-trap "psql -c 'DROP DATABASE $DB_NAME' '$DATABASE_URL'" EXIT
+# Set-up a trap to clean everything up on EXIT (stop DB, delete temp directory)
+function cleanup {
+  pg_ctl stop -D "$TMP" -mfast
+  set +x
+  echo "Postgres STDOUT:"
+  cat "$TMP/db.stdout"
+  echo "Postgres STDERR:"
+  cat "$TMP/db.stderr"
+  set -x
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
+
+# Create a new database in the temporary directory
+initdb -D "$TMP" --user postgres
+
+# Run the DB in the background, on the port provided and capture its output
+PORT=${1:-5433}
+postgres -D "$TMP" -p "$PORT" -c unix_socket_directories=                      \
+   > "$TMP/db.stdout"                                                          \
+  2> "$TMP/db.stderr"                                                          &
+
+# Wait for postgres to report as ready
+RETRIES=0
+while ! pg_isready -p "$PORT" --host "localhost" --username "postgres"; do
+  if [ $RETRIES -gt 5 ]; then
+    echo "Postgres failed to start" >&2
+    exit 1
+  fi
+  sleep 1
+  RETRIES=$((RETRIES + 1))
+done
 
 # Run all migrations on the new database
 diesel migration run                                                          \
-  --database-url "postgres://postgres:postgrespw@localhost:5432/$DB_NAME"     \
+  --database-url "postgres://postgres:postgrespw@localhost:$PORT"             \
   --migration-dir "$REPO/crates/sui-indexer/migrations/pg"
 
 # Generate the schema.rs file, excluding partition tables and including the
 # copyright notice.
 diesel print-schema                                                           \
-  --database-url "postgres://postgres:postgrespw@localhost:5432/$DB_NAME"     \
+  --database-url "postgres://postgres:postgrespw@localhost:$PORT"             \
   --patch-file "$REPO/crates/sui-indexer/src/schema.patch"                    \
   --except-tables "^objects_version_|_partition_"                             \
   > "$REPO/crates/sui-indexer/src/schema.rs"
