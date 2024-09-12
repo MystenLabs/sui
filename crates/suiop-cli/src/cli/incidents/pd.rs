@@ -129,9 +129,9 @@ impl Incident {
 
     fn short_fmt(&self) -> String {
         format!(
-            "• {} {} {} {} {}",
+            "• {} {} {} {}",
             if let Some(channel) = self.slack_channel.clone() {
-                format!("{} ({})", self.number, channel.url())
+                format!("{} (<#{}>)", self.number, channel.id)
             } else {
                 self.number.to_string()
             },
@@ -143,10 +143,6 @@ impl Incident {
                     .to_string())
                 .unwrap_or("".to_owned()),
             self.title,
-            self.slack_channel
-                .clone()
-                .map(|c| c.name)
-                .unwrap_or("".to_string()),
             self.poc_users.as_ref().map_or_else(
                 || "".to_string(),
                 |u| u
