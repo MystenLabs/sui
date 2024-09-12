@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    interpreter::state::{CallFrame,  MachineState, TypeWithLoader},
+    interpreter::state::{CallFrame, MachineState, TypeWithLoader},
     loader::{
         arena::ArenaPointer,
         ast::{Bytecode, Function},
         Loader, ModuleDefinitionResolver,
     },
-    native_functions::NativeContext,
     native_extensions::NativeContextExtensions,
+    native_functions::NativeContext,
     trace,
 };
 use fail::fail_point;
@@ -73,7 +73,7 @@ macro_rules! set_err_info {
 /// This runs a newly-made Machine until it is complete. It expects the Machine to have a current
 /// call frame set up, with no operands on the stack and no existing call stack. It runs in a loop,
 /// calling `step`, until the call stack is empty.
-pub fn run(
+pub(super) fn run(
     start_state: MachineState,
     data_store: &impl DataStore,
     gas_meter: &mut impl GasMeter,
@@ -97,7 +97,6 @@ pub fn run(
         let _ = state.debug_print_stack_trace(&mut buf, loader);
         println!("Call Frame:\n{:?}", state.current_frame);
         println!("{buf}");
-        buf.clear();
     }
 
     // Run until we're done or we produce an error and bail.
@@ -108,14 +107,12 @@ pub fn run(
             println!("Call Frame:\n{:?}", state.current_frame);
             let _ = state.debug_print_stack_trace(&mut buf, loader);
             println!("{buf}");
-            buf.clear();
         }
         continue;
     }
 
     // When we are done, grab the operand stack as the return type.
     let MachineState { operand_stack, .. } = state;
-    let RunContext { .. } = run_context;
     Ok(operand_stack.value)
 }
 
@@ -127,7 +124,11 @@ fn step(
     let fun_ref = state.current_frame.function();
     let instructions = fun_ref.code();
     let pc = state.current_frame.pc as usize;
-    assert!(pc <= instructions.len());
+    assert!(
+        pc <= instructions.len(),
+        "PC beyond instruction count for {}",
+        fun_ref.name
+    );
     let instruction = &instructions[pc];
 
     trace!(
