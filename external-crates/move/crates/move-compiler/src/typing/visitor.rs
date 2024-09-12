@@ -1096,3 +1096,107 @@ impl<V: TypingMutVisitorConstructor> TypingMutVisitor for V {
         self.visit(env, program)
     }
 }
+
+//**************************************************************************************************
+// util
+//**************************************************************************************************
+
+pub fn has_special_exp<F>(e: &T::Exp, mut p: F) -> bool
+where
+    F: FnMut(&T::Exp) -> bool,
+{
+    has_special_exp_(e, &mut p)
+}
+
+pub fn has_special_seq<F>(seq: &T::Sequence, mut p: F) -> bool
+where
+    F: FnMut(&T::Exp) -> bool,
+{
+    has_special_seq_(seq, &mut p)
+}
+
+pub fn has_special_exp_list<F>(list: &[T::ExpListItem], mut p: F) -> bool
+where
+    F: FnMut(&T::Exp) -> bool,
+{
+    has_special_exp_list_(list, &mut p)
+}
+
+#[growing_stack]
+fn has_special_exp_<F>(e: &T::Exp, p: &mut F) -> bool
+where
+    F: FnMut(&T::Exp) -> bool,
+{
+    use T::UnannotatedExp_ as E;
+    if p(e) {
+        return true;
+    }
+    match &e.exp.value {
+        E::Unit { .. }
+        | E::Value(_)
+        | E::Move { .. }
+        | E::Copy { .. }
+        | E::Use(_)
+        | E::Constant(..)
+        | E::Continue(_)
+        | E::BorrowLocal(..)
+        | E::ErrorConstant { .. }
+        | E::UnresolvedError => false,
+        E::Builtin(_, e)
+        | E::Vector(_, _, _, e)
+        | E::Loop { body: e, .. }
+        | E::Assign(_, _, e)
+        | E::Return(e)
+        | E::Abort(e)
+        | E::Give(_, e)
+        | E::Dereference(e)
+        | E::UnaryExp(_, e)
+        | E::Borrow(_, e, _)
+        | E::TempBorrow(_, e)
+        | E::Cast(e, _)
+        | E::Annotate(e, _) => has_special_exp_(e, p),
+        E::While(_, e1, e2) | E::Mutate(e1, e2) | E::BinopExp(e1, _, _, e2) => {
+            has_special_exp_(e1, p) || has_special_exp_(e2, p)
+        }
+        E::IfElse(e1, e2, e3) => {
+            has_special_exp_(e1, p) || has_special_exp_(e2, p) || has_special_exp_(e3, p)
+        }
+        E::ModuleCall(c) => has_special_exp_(&c.arguments, p),
+        E::Match(esubject, arms) => {
+            has_special_exp_(esubject, p)
+                || arms
+                    .value
+                    .iter()
+                    .any(|sp!(_, arm)| has_special_exp_(&arm.rhs, p))
+        }
+        E::VariantMatch(esubject, _, arms) => {
+            has_special_exp_(esubject, p) || arms.iter().any(|(_, arm)| has_special_exp_(arm, p))
+        }
+
+        E::NamedBlock(_, seq) | E::Block(seq) => has_special_seq_(seq, p),
+
+        E::Pack(_, _, _, fields) | E::PackVariant(_, _, _, _, fields) => fields
+            .iter()
+            .any(|(_, _, (_, (_, e)))| has_special_exp_(e, p)),
+        E::ExpList(list) => has_special_exp_list_(list, p),
+    }
+}
+
+fn has_special_seq_<F>(seq: &T::Sequence, p: &mut F) -> bool
+where
+    F: FnMut(&T::Exp) -> bool,
+{
+    seq.1.iter().any(|item| match &item.value {
+        T::SequenceItem_::Declare(_) => false,
+        T::SequenceItem_::Seq(e) | T::SequenceItem_::Bind(_, _, e) => has_special_exp_(e, p),
+    })
+}
+
+fn has_special_exp_list_<F>(list: &[T::ExpListItem], p: &mut F) -> bool
+where
+    F: FnMut(&T::Exp) -> bool,
+{
+    list.iter().any(|item| match item {
+        T::ExpListItem::Single(e, _) | T::ExpListItem::Splat(_, e, _) => has_special_exp_(e, p),
+    })
+}
