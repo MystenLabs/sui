@@ -588,7 +588,7 @@ mod checked {
             .try_for_each(|module_bytes| {
                 verifier.meter_module_bytes(protocol_config, module_bytes, meter.as_mut())
             })
-            .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() });
+            .map_err(|e| UserInputError::PackageVerificationTimeout { err: e.to_string() });
 
         match verifier_status {
             Ok(_) => {
