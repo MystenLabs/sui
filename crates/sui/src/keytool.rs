@@ -1114,6 +1114,7 @@ impl KeyToolCommand {
                     "https://api.ambrus.studio/callback",
                     &jwt_randomness,
                 )?;
+                // This is only for CLI testing. If frontend apps will be built, no need to add anything here.
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
                 println!("Visit URL (Facebook): {url_3}");
