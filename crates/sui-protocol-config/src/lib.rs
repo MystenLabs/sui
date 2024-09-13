@@ -525,6 +525,10 @@ struct FeatureFlags {
     // Use distributed vote leader scoring strategy in consensus.
     #[serde(skip_serializing_if = "is_false")]
     consensus_distributed_vote_scoring_strategy: bool,
+
+    // Probe rounds received by peers from every authority.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_round_prober: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1578,6 +1582,10 @@ impl ProtocolConfig {
     pub fn consensus_distributed_vote_scoring_strategy(&self) -> bool {
         self.feature_flags
             .consensus_distributed_vote_scoring_strategy
+    }
+
+    pub fn consensus_round_prober(&self) -> bool {
+        self.feature_flags.consensus_round_prober
     }
 }
 
@@ -2750,6 +2758,9 @@ impl ProtocolConfig {
                 }
                 59 => {
                     cfg.max_type_to_layout_nodes = Some(512);
+
+                    // Enable round prober in consensus.
+                    cfg.feature_flags.consensus_round_prober = true;
                 }
                 // Use this template when making changes:
                 //
@@ -2910,6 +2921,10 @@ impl ProtocolConfig {
     pub fn set_consensus_distributed_vote_scoring_strategy_for_testing(&mut self, val: bool) {
         self.feature_flags
             .consensus_distributed_vote_scoring_strategy = val;
+    }
+
+    pub fn set_consensus_round_prober_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_round_prober = val;
     }
 }
 
