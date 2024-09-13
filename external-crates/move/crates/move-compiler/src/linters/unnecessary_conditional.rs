@@ -55,7 +55,8 @@ impl TypingVisitorContext for Context<'_> {
             | (Value_::Bool(v1 @ false), Value_::Bool(true)) => {
                 let negation = if *v1 { "" } else { "!" };
                 let msg = format!(
-                    "Detected an unnecessary conditional expression 'if (cond)'. Consider using the condition directly, i.e. '{negation}cond'",
+                    "Detected an unnecessary conditional expression 'if (cond)'. Consider using \
+                    the condition directly, i.e. '{negation}cond'",
                 );
                 self.env.add_diag(diag!(
                     StyleCodes::UnnecessaryConditional.diag_info(),
@@ -63,9 +64,9 @@ impl TypingVisitorContext for Context<'_> {
                 ));
             }
             (v1, v2) if v1 == v2 => {
-                let msg = format!(
-                    "Detected a redundant conditional expression 'if (..) v else v', where each branch results in the same value 'v'. Consider using the value directly",
-                );
+                let msg =
+                    "Detected a redundant conditional expression 'if (..) v else v', where each \
+                    branch results in the same value 'v'. Consider using the value directly";
                 self.env.add_diag(diag!(
                     StyleCodes::UnnecessaryConditional.diag_info(),
                     (exp.exp.loc, msg),
