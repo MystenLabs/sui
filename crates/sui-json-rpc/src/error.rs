@@ -158,34 +158,42 @@ impl From<Error> for RpcError {
                         conflicting_txes,
                         retried_tx_status,
                     } => {
-                        let mut error_message = format!(
-                            "Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions: [{}].",
+                        let weights: Vec<u64> =
+                            conflicting_txes.values().map(|(_, stake)| *stake).collect();
+                        let remaining: u64 = TOTAL_VOTING_POWER - weights.iter().sum::<u64>();
+
+                        // better version of above
+                        let reason = if weights.iter().all(|w| remaining + w < QUORUM_THRESHOLD) {
+                            "equivocated until the next epoch"
+                        } else {
+                            "reserved for another transaction"
+                        };
+
+                        let retried_info = match retried_tx_status {
+                            Some((digest, success)) => {
+                                format!(
+                                    "Retried transaction {} ({}) because it was able to gather the necessary votes.",
+                                    digest, if success { "succeeded" } else { "failed" }
+                                )
+                            }
+                            None => "".to_string(),
+                        };
+
+                        let error_message = format!(
+                            "Failed to sign transaction by a quorum of validators because one or more of its objects is {}. {} Other transactions locking these objects:\n{}",
+                            reason,
+                            retried_info,
                             conflicting_txes
                                 .iter()
                                 .sorted_by(|(_, (_, a)), (_, (_, b))| b.cmp(a))
                                 .map(|(digest, (_, stake))| format!(
-                                    "{{digest: {}, stake: {}}}",
+                                    "- {} (stake {}.{})",
                                     digest,
-                                    stake
+                                    stake / 100,
+                                    stake % 100,
                                 ))
-                                .join(", "),
+                                .join("\n"),
                         );
-
-                        if let Some(retried_tx_status) = retried_tx_status {
-                            error_message.push_str(&format!(
-                                " Retried conflicting transaction: {}, success: {}.",
-                                retried_tx_status.0, retried_tx_status.1
-                            ));
-                        }
-
-                        let weights = conflicting_txes
-                            .values()
-                            .map(|(_, stake)| *stake)
-                            .collect::<Vec<_>>();
-                        let remaining = TOTAL_VOTING_POWER - weights.iter().sum::<u64>();
-                        if weights.iter().all(|w| remaining + w < QUORUM_THRESHOLD) {
-                            error_message.push_str(" Transaction is not processed because of equivocation, objects are locked until the next epoch.");
-                        }
 
                         let new_map = conflicting_txes
                             .into_iter()
@@ -425,7 +433,7 @@ mod tests {
             let error_object: ErrorObjectOwned = rpc_error.into();
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
-            let expected_message = expect!["Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions: [{digest: 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi, stake: 8000}, {digest: 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR, stake: 500}]. Retried conflicting transaction: 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi, success: true."];
+            let expected_message = expect!["Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction. Retried transaction 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi (succeeded) because it was able to gather the necessary votes. Other transactions locking these objects:\n- 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi (stake 80.0)\n- 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR (stake 5.0)"];
             expected_message.assert_eq(error_object.message());
             let expected_data = expect![[
                 r#"{"4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi":[["0x0000000000000000000000000000000000000000000000000000000000000000",0,"11111111111111111111111111111111"]],"8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR":[["0x0000000000000000000000000000000000000000000000000000000000000000",0,"11111111111111111111111111111111"]]}"#
@@ -466,7 +474,7 @@ mod tests {
             let error_object: ErrorObjectOwned = rpc_error.into();
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
-            let expected_message = expect!["Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions: [{digest: 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR, stake: 5000}, {digest: 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi, stake: 4000}]. Transaction is not processed because of equivocation, objects are locked until the next epoch."];
+            let expected_message = expect!["Failed to sign transaction by a quorum of validators because one or more of its objects is equivocated until the next epoch.  Other transactions locking these objects:\n- 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR (stake 50.0)\n- 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi (stake 40.0)"];
             expected_message.assert_eq(error_object.message());
             let expected_data = expect![[
                 r#"{"4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi":[["0x0000000000000000000000000000000000000000000000000000000000000000",0,"11111111111111111111111111111111"]],"8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR":[["0x0000000000000000000000000000000000000000000000000000000000000000",0,"11111111111111111111111111111111"]]}"#
