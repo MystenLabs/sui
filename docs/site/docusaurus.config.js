@@ -6,6 +6,8 @@ import path from "path";
 import math from "remark-math";
 import katex from "rehype-katex";
 
+const betatag = require("./src/plugins/betatag");
+
 require("dotenv").config();
 
 /** @type {import('@docusaurus/types').Config} */
@@ -120,6 +122,7 @@ const config = {
               require("@docusaurus/remark-plugin-npm2yarn"),
               { sync: true, converters: ["yarn", "pnpm"] },
             ],
+            betatag,
           ],
           rehypePlugins: [katex],
         },
