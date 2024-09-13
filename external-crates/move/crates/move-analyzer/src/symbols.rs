@@ -134,6 +134,28 @@ pub struct CompiledPkgInfo {
     compiler_info: Option<CompilerInfo>,
 }
 
+/// Data used during symbols computation
+#[derive(Clone)]
+pub struct SymbolsComputationData {
+    mod_outer_defs: BTreeMap<String, ModuleDefs>,
+    mod_use_defs: BTreeMap<String, UseDefMap>,
+    references: BTreeMap<Loc, BTreeSet<UseLoc>>,
+    def_info: BTreeMap<Loc, DefInfo>,
+    mod_to_alias_lengths: BTreeMap<String, BTreeMap<Position, usize>>,
+}
+
+impl SymbolsComputationData {
+    pub fn new() -> Self {
+        Self {
+            mod_outer_defs: BTreeMap::new(),
+            mod_use_defs: BTreeMap::new(),
+            references: BTreeMap::new(),
+            def_info: BTreeMap::new(),
+            mod_to_alias_lengths: BTreeMap::new(),
+        }
+    }
+}
+
 /// Information about precompiled package dependencies
 #[derive(Clone)]
 pub struct PrecompiledPkgDeps {
@@ -1781,15 +1803,12 @@ pub fn get_compiled_pkg(
     Ok((Some(compiled_pkg_info), ide_diagnostics))
 }
 
-pub fn compute_symbols(
-    mut compiled_pkg_info: CompiledPkgInfo,
+/// Preprocess parsed and typed programs prior to actual symbols computation.
+pub fn compute_symbols_pre_process(
+    computation_data: &mut SymbolsComputationData,
+    compiled_pkg_info: &CompiledPkgInfo,
     cursor_info: Option<(&PathBuf, Position)>,
-) -> Symbols {
-    let mut mod_outer_defs = BTreeMap::new();
-    let mut mod_use_defs = BTreeMap::new();
-    let mut references = BTreeMap::new();
-    let mut def_info = BTreeMap::new();
-
+) -> Option<CursorContext> {
     let mut file_id_to_lines = HashMap::new();
     for file_id in compiled_pkg_info.mapped_files.file_mapping().values() {
         let Ok(file) = compiled_pkg_info.mapped_files.files().get(*file_id) else {
@@ -1812,10 +1831,10 @@ pub fn compute_symbols(
         &fields_order_info,
         &compiled_pkg_info.mapped_files,
         &file_id_to_lines,
-        &mut mod_outer_defs,
-        &mut mod_use_defs,
-        &mut references,
-        &mut def_info,
+        &mut computation_data.mod_outer_defs,
+        &mut computation_data.mod_use_defs,
+        &mut computation_data.references,
+        &mut computation_data.def_info,
         &compiled_pkg_info.edition,
         cursor_context.as_mut(),
     );
@@ -1826,25 +1845,28 @@ pub fn compute_symbols(
             &fields_order_info,
             &compiled_pkg_info.mapped_files,
             &file_id_to_lines,
-            &mut mod_outer_defs,
-            &mut mod_use_defs,
-            &mut references,
-            &mut def_info,
+            &mut computation_data.mod_outer_defs,
+            &mut computation_data.mod_use_defs,
+            &mut computation_data.references,
+            &mut computation_data.def_info,
             &compiled_pkg_info.edition,
             None, // Cursor can never be in a compiled library(?)
         );
     }
+    cursor_context
+}
 
-    eprintln!("get_symbols loaded");
-
-    let mut file_use_defs = BTreeMap::new();
-    let mut mod_to_alias_lengths = BTreeMap::new();
-
+/// Process parsed program for symbols computation.
+pub fn compute_symbols_parsed_program(
+    computation_data: &mut SymbolsComputationData,
+    compiled_pkg_info: &CompiledPkgInfo,
+    mut cursor_context: Option<CursorContext>,
+) -> Option<CursorContext> {
     let mut parsing_symbolicator = parsing_analysis::ParsingAnalysisContext {
-        mod_outer_defs: &mut mod_outer_defs,
+        mod_outer_defs: &mut computation_data.mod_outer_defs,
         files: &compiled_pkg_info.mapped_files,
-        references: &mut references,
-        def_info: &mut def_info,
+        references: &mut computation_data.references,
+        def_info: &mut computation_data.def_info,
         use_defs: UseDefMap::new(),
         current_mod_ident_str: None,
         alias_lengths: BTreeMap::new(),
@@ -1854,24 +1876,33 @@ pub fn compute_symbols(
 
     parsing_symbolicator.prog_symbols(
         &compiled_pkg_info.parsed_program,
-        &mut mod_use_defs,
-        &mut mod_to_alias_lengths,
+        &mut computation_data.mod_use_defs,
+        &mut computation_data.mod_to_alias_lengths,
     );
     if let Some(libs) = compiled_pkg_info.libs.clone() {
         parsing_symbolicator.cursor = None;
         parsing_symbolicator.prog_symbols(
             &libs.parser,
-            &mut mod_use_defs,
-            &mut mod_to_alias_lengths,
+            &mut computation_data.mod_use_defs,
+            &mut computation_data.mod_to_alias_lengths,
         );
     }
+    cursor_context
+}
 
+/// Process typed program for symbols computation.
+pub fn compute_symbols_typed_program(
+    mut computation_data: SymbolsComputationData,
+    mut compiled_pkg_info: CompiledPkgInfo,
+    cursor_context: Option<CursorContext>,
+) -> Symbols {
+    let mut file_use_defs = BTreeMap::new();
     let mut compiler_info = compiled_pkg_info.compiler_info.unwrap();
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
-        mod_outer_defs: &mut mod_outer_defs,
+        mod_outer_defs: &mut computation_data.mod_outer_defs,
         files: &compiled_pkg_info.mapped_files,
-        references: &mut references,
-        def_info: &mut def_info,
+        references: &mut computation_data.references,
+        def_info: &mut computation_data.def_info,
         use_defs: UseDefMap::new(),
         current_mod_ident_str: None,
         alias_lengths: &BTreeMap::new(),
@@ -1884,38 +1915,59 @@ pub fn compute_symbols(
     process_typed_modules(
         &mut compiled_pkg_info.typed_program.modules,
         &compiled_pkg_info.source_files,
-        &mod_to_alias_lengths,
+        &computation_data.mod_to_alias_lengths,
         &mut typing_symbolicator,
         &mut file_use_defs,
-        &mut mod_use_defs,
+        &mut computation_data.mod_use_defs,
     );
 
     if let Some(libs) = compiled_pkg_info.libs {
         process_typed_modules(
             &mut libs.typing.modules.clone(),
             &compiled_pkg_info.source_files,
-            &mod_to_alias_lengths,
+            &computation_data.mod_to_alias_lengths,
             &mut typing_symbolicator,
             &mut file_use_defs,
-            &mut mod_use_defs,
+            &mut computation_data.mod_use_defs,
         );
     }
 
     let mut file_mods: FileModules = BTreeMap::new();
-    for d in mod_outer_defs.into_values() {
+    for d in computation_data.mod_outer_defs.into_values() {
         let path = compiled_pkg_info.mapped_files.file_path(&d.fhash.clone());
         file_mods.entry(path.to_path_buf()).or_default().insert(d);
     }
 
     Symbols {
-        references,
+        references: computation_data.references,
         file_use_defs,
         file_mods,
-        def_info,
+        def_info: computation_data.def_info,
         files: compiled_pkg_info.mapped_files,
         compiler_info,
         cursor_context,
     }
+}
+
+/// Compute symbols for a given package from the parsed and typed ASTs,
+/// as well as other auxiliary data provided in `compiled_pkg_info`.
+pub fn compute_symbols(
+    compiled_pkg_info: CompiledPkgInfo,
+    cursor_info: Option<(&PathBuf, Position)>,
+) -> Symbols {
+    let mut symbols_computation_data = SymbolsComputationData::new();
+    let cursor_context = compute_symbols_pre_process(
+        &mut symbols_computation_data,
+        &compiled_pkg_info,
+        cursor_info,
+    );
+    let cursor_context = compute_symbols_parsed_program(
+        &mut symbols_computation_data,
+        &compiled_pkg_info,
+        cursor_context,
+    );
+
+    compute_symbols_typed_program(symbols_computation_data, compiled_pkg_info, cursor_context)
 }
 
 /// Main driver to get symbols for the whole package. Returned symbols is an option as only the
