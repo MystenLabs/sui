@@ -516,8 +516,12 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
         rx: broadcast::Receiver<T>,
         subscription_counter: Arc<SubscriptionCounter>,
     ) -> Self {
-        // Failure can only be due to core shutdown.
-        let _ = subscription_counter.increment(peer);
+        if let Err(err) = subscription_counter.increment(peer) {
+            match err {
+                ConsensusError::Shutdown => {}
+                _ => panic!("Unexpected error: {err}"),
+            }
+        }
         Self {
             peer,
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
@@ -559,8 +563,12 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
 
 impl<T> Drop for BroadcastStream<T> {
     fn drop(&mut self) {
-        // Failure can only be due to core shutdown.
-        let _ = self.subscription_counter.decrement(self.peer);
+        if let Err(err) = self.subscription_counter.decrement(self.peer) {
+            match err {
+                ConsensusError::Shutdown => {}
+                _ => panic!("Unexpected error: {err}"),
+            }
+        }
     }
 }
 
