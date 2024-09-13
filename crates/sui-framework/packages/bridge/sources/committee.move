@@ -58,6 +58,11 @@ module bridge::committee {
         new_url: vector<u8>,
     }
 
+    public struct CommitteeMemberNetworkPubkeyUpdateEvent has copy, drop {
+        member: vector<u8>,
+        new_network_pubkey: Option<vector<u8>>,
+    }
+
     public struct CommitteeMember has copy, drop, store {
         /// The Sui Address of the validator
         sui_address: address,
@@ -70,6 +75,9 @@ module bridge::committee {
         http_rest_url: vector<u8>,
         /// If this member is blocklisted
         blocklisted: bool,
+        /// The public key bytes of the bridge network key
+        // TODO(william): naming?
+        bridge_network_pubkey_bytes: Option<vector<u8>>,
     }
 
     public struct CommitteeMemberRegistration has copy, drop, store {
@@ -80,6 +88,8 @@ module bridge::committee {
         /// The HTTP REST URL the member's node listens to
         /// it looks like b'https://127.0.0.1:9191'
         http_rest_url: vector<u8>,
+        /// The public key bytes of the bridge network key
+        bridge_network_pubkey_bytes: Option<vector<u8>>,
     }
 
     //////////////////////////////////////////////////////
@@ -136,6 +146,7 @@ module bridge::committee {
         self: &mut BridgeCommittee,
         system_state: &mut SuiSystemState,
         bridge_pubkey_bytes: vector<u8>,
+        bridge_network_pubkey_bytes: Option<vector<u8>>,
         http_rest_url: vector<u8>,
         ctx: &TxContext
     ) {
@@ -143,6 +154,11 @@ module bridge::committee {
         assert!(self.members.is_empty(), ECommitteeAlreadyInitiated);
         // Ensure pubkey is valid
         assert!(bridge_pubkey_bytes.length() == ECDSA_COMPRESSED_PUBKEY_LENGTH, EInvalidPubkeyLength);
+        // Ensure network pubkey is valid
+        assert!(
+            bridge_network_pubkey_bytes.is_none() || 
+            bridge_network_pubkey_bytes.borrow().length() == ECDSA_COMPRESSED_PUBKEY_LENGTH, EInvalidPubkeyLength
+        );
         // sender must be the same sender that created the validator object, this is to prevent DDoS from non-validator actor.
         let sender = ctx.sender();
         let validators = system_state.active_validator_addresses();
@@ -160,17 +176,18 @@ module bridge::committee {
             let registration = CommitteeMemberRegistration {
                 sui_address: sender,
                 bridge_pubkey_bytes,
+                bridge_network_pubkey_bytes,
                 http_rest_url,
             };
             self.member_registrations.insert(sender, registration);
             registration
         };
 
-        // check uniqueness of the bridge pubkey.
+        // check uniqueness of the bridge pubkey and bridge network pubkey.
         // `try_create_next_committee` will abort if bridge_pubkey_bytes are not unique and
         // that will fail the end of epoch transaction (possibly "forever", well, we
         // need to deploy proper validator changes to stop end of epoch from failing).
-        check_uniqueness_bridge_keys(self, bridge_pubkey_bytes);
+        check_uniqueness_bridge_keys(self, bridge_pubkey_bytes, bridge_network_pubkey_bytes);
 
         emit(registration)
     }
@@ -205,6 +222,7 @@ module bridge::committee {
                     voting_power: (voting_power as u64),
                     http_rest_url: registration.http_rest_url,
                     blocklisted: false,
+                    bridge_network_pubkey_bytes: registration.bridge_network_pubkey_bytes,
                 };
 
                 new_members.insert(registration.bridge_pubkey_bytes, member)
@@ -290,20 +308,50 @@ module bridge::committee {
         abort ESenderIsNotInBridgeCommittee
     }
 
+    public(package) fun update_bridge_network_pubkey(
+        self: &mut BridgeCommittee, 
+        new_network_pubkey: Option<vector<u8>>, 
+        ctx: &TxContext,
+    ) {
+        let mut idx = 0;
+        while (idx < self.members.size()) {
+            let (_, member) = self.members.get_entry_by_idx_mut(idx);
+            if (member.sui_address == ctx.sender()) {
+                member.bridge_network_pubkey_bytes = new_network_pubkey;
+                emit (CommitteeMemberNetworkPubkeyUpdateEvent {
+                    member: member.bridge_pubkey_bytes,
+                    new_network_pubkey
+                });
+                return
+            };
+            idx = idx + 1;
+        };
+        abort ESenderIsNotInBridgeCommittee
+    }
+
     // Assert if `bridge_pubkey_bytes` is duplicated in `member_registrations`.
     // Dupicate keys would cause `try_create_next_committee` to fail and,
     // in consequence, an end of epoch transaction to fail (safe mode run).
     // This check will ensure the creation of the committee is correct.
-    fun check_uniqueness_bridge_keys(self: &BridgeCommittee, bridge_pubkey_bytes: vector<u8>) {
+    fun check_uniqueness_bridge_keys(
+        self: &BridgeCommittee, 
+        bridge_pubkey_bytes: vector<u8>, 
+        bridge_network_pubkey_bytes: Option<vector<u8>>,
+    ) {
         let mut count = self.member_registrations.size();
         // bridge_pubkey_bytes must be found once and once only
         let mut bridge_key_found = false;
+        let mut bridge_network_key_found = false;
         while (count > 0) {
             count = count - 1;
             let (_, registration) = self.member_registrations.get_entry_by_idx(count);
             if (registration.bridge_pubkey_bytes == bridge_pubkey_bytes) {
                 assert!(!bridge_key_found, EDuplicatePubkey);
                 bridge_key_found = true; // bridge_pubkey_bytes found, we must not have another one
+            };
+            if (registration.bridge_network_pubkey_bytes == bridge_network_pubkey_bytes) {
+                assert!(!bridge_network_key_found, EDuplicatePubkey);
+                bridge_network_key_found = true; // bridge_network_pubkey_bytes found, we must not have another one
             }
         };
     }
@@ -345,6 +393,11 @@ module bridge::committee {
     }
 
     #[test_only]
+    public(package) fun bridge_network_pubkey_bytes(member: &CommitteeMember): &Option<vector<u8>> {
+        &member.bridge_network_pubkey_bytes
+    }
+
+    #[test_only]
     public(package) fun make_bridge_committee(
         members: VecMap<vector<u8>, CommitteeMember>,
         member_registrations: VecMap<address, CommitteeMemberRegistration>,
@@ -361,6 +414,7 @@ module bridge::committee {
     public(package) fun make_committee_member(
         sui_address: address,
         bridge_pubkey_bytes: vector<u8>,
+        bridge_network_pubkey_bytes: Option<vector<u8>>,
         voting_power: u64,
         http_rest_url: vector<u8>,
         blocklisted: bool,
@@ -371,6 +425,7 @@ module bridge::committee {
             voting_power,
             http_rest_url,
             blocklisted,
+            bridge_network_pubkey_bytes,
         }
     }
 }
