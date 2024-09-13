@@ -552,6 +552,7 @@ pub fn build_committee_register_transaction(
     gas_object_ref: &ObjectRef,
     bridge_object_arg: ObjectArg,
     bridge_authority_pub_key_bytes: Vec<u8>,
+    bridge_authority_network_pub_key_bytes: Option<Vec<u8>>,
     bridge_url: &str,
     ref_gas_price: u64,
     gas_budget: u64,
@@ -564,6 +565,11 @@ pub fn build_committee_register_transaction(
             bcs::to_bytes(&bridge_authority_pub_key_bytes).unwrap(),
         ))
         .unwrap();
+    let bridge_network_pubkey = builder
+        .input(CallArg::Pure(
+            bcs::to_bytes(&bridge_authority_network_pub_key_bytes).unwrap(),
+        ))
+        .unwrap();
     let url = builder
         .input(CallArg::Pure(bcs::to_bytes(bridge_url.as_bytes()).unwrap()))
         .unwrap();
@@ -572,7 +578,13 @@ pub fn build_committee_register_transaction(
         BRIDGE_MODULE_NAME.into(),
         Identifier::from_str("committee_registration").unwrap(),
         vec![],
-        vec![bridge, system_state, bridge_pubkey, url],
+        vec![
+            bridge,
+            system_state,
+            bridge_pubkey,
+            bridge_network_pubkey,
+            url,
+        ],
     );
     let data = TransactionData::new_programmable(
         validator_address,

@@ -35,6 +35,10 @@ module bridge::committee_test {
     const VALIDATOR2_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62";
     const VALIDATOR3_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a63";
 
+    const VALIDATOR1_NETWORK_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a64";
+    const VALIDATOR2_NETWORK_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a65";
+    const VALIDATOR3_NETWORK_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a66";
+
     #[test]
     fun test_verify_signatures_good_path() {
         let committee = setup_test();
@@ -120,12 +124,14 @@ module bridge::committee_test {
         committee.register(
             &mut system_state,
             hex::decode(VALIDATOR1_PUBKEY),
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)),
             b"",
             &tx(@0xA, 0),
         );
         committee.register(
             &mut system_state,
             hex::decode(VALIDATOR2_PUBKEY),
+            option::some(hex::decode(VALIDATOR2_NETWORK_PUBKEY)),
             b"",
             &tx(@0xC, 0),
         );
@@ -170,6 +176,7 @@ module bridge::committee_test {
         committee.register(
             &mut system_state,
             hex::decode(VALIDATOR1_PUBKEY),
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)),
             b"test url 1",
             &tx(@0xA, 0),
         );
@@ -218,6 +225,7 @@ module bridge::committee_test {
         committee.register(
             &mut system_state,
             hex::decode(VALIDATOR1_PUBKEY),
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)),
             b"test url 1",
             &tx(@0xA, 0),
         );
@@ -229,6 +237,93 @@ module bridge::committee_test {
         // Update URL should fail for validator @0xB
         committee.update_node_url(
             b"test url",
+            &tx(@0xB, 0),
+        );
+
+        // test should have failed, abort
+        abort 0
+    }
+
+    #[test]
+    fun test_update_network_pubkey() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        committee.register(
+            &mut system_state,
+            hex::decode(VALIDATOR1_PUBKEY),
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)),
+            b"test url 1",
+            &tx(@0xA, 0),
+        );
+
+        let ctx = test_scenario::ctx(&mut scenario);
+        let voting_powers = system_state.validator_voting_powers_for_testing();
+        committee.try_create_next_committee(voting_powers, 6000, ctx);
+
+        let members = committee.members();
+        assert!(members.size() == 1);
+        let (_, member) = members.get_entry_by_idx(0);
+        assert_eq(member.http_rest_url(), b"test url 1");
+
+        // Update network pubkey
+        committee.update_bridge_network_pubkey(
+            option::some(hex::decode(VALIDATOR2_NETWORK_PUBKEY)),
+            &tx(@0xA, 0),
+        );
+
+        let members = committee.members();
+        let (_, member) = members.get_entry_by_idx(0);
+        assert_eq(*member.bridge_network_pubkey_bytes(), option::some(hex::decode(VALIDATOR2_NETWORK_PUBKEY)));
+
+        test_utils::destroy(committee);
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = bridge::committee::ESenderIsNotInBridgeCommittee)]
+    fun test_update_network_pubkey_not_validator() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        committee.register(
+            &mut system_state,
+            hex::decode(VALIDATOR1_PUBKEY),
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)),
+            b"test url 1",
+            &tx(@0xA, 0),
+        );
+
+        let ctx = test_scenario::ctx(&mut scenario);
+        let voting_powers = system_state.validator_voting_powers_for_testing();
+        committee.try_create_next_committee(voting_powers, 6000, ctx);
+
+        // Update network pubkey should fail for validator @0xB
+        committee.update_bridge_network_pubkey(
+            option::some(hex::decode(VALIDATOR2_NETWORK_PUBKEY)),
             &tx(@0xB, 0),
         );
 
@@ -264,7 +359,13 @@ module bridge::committee_test {
         let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
-        committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xD, 0));
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR1_PUBKEY),
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)),
+            b"", 
+            &tx(@0xD, 0),
+        );
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
@@ -289,8 +390,58 @@ module bridge::committee_test {
         let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
-        committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
-        committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xC, 0));
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR1_PUBKEY), 
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)), 
+            b"", 
+            &tx(@0xA, 0),
+        );
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR1_PUBKEY), 
+            option::some(hex::decode(VALIDATOR2_NETWORK_PUBKEY)), 
+            b"", 
+            &tx(@0xC, 0),
+        );
+
+        test_utils::destroy(committee);
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = bridge::committee::EDuplicatePubkey)]
+    fun test_init_committee_dup_network_pubkey() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+            create_validator_for_testing(@0xC, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR1_PUBKEY), 
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)), 
+            b"", 
+            &tx(@0xA, 0),
+        );
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR2_PUBKEY), 
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)), 
+            b"", 
+            &tx(@0xC, 0),
+        );
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
@@ -317,9 +468,27 @@ module bridge::committee_test {
         let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration, 3 validators registered, should have 60% voting power in total
-        committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
-        committee.register(&mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xC, 0));
-        committee.register(&mut system_state, hex::decode(VALIDATOR3_PUBKEY), b"", &tx(@0xD, 0));
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR1_PUBKEY), 
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)), 
+            b"", 
+            &tx(@0xA, 0),
+        );
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR2_PUBKEY), 
+            option::some(hex::decode(VALIDATOR2_NETWORK_PUBKEY)), 
+            b"", 
+            &tx(@0xC, 0),
+        );
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR3_PUBKEY), 
+            option::some(hex::decode(VALIDATOR3_NETWORK_PUBKEY)), 
+            b"", 
+            &tx(@0xD, 0),
+        );
 
         // Verify validator registration
         assert_eq(3, committee.member_registrations().size());
@@ -360,7 +529,13 @@ module bridge::committee_test {
         let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
-        committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR1_PUBKEY),
+            option::none<vector<u8>>(), 
+            b"", 
+            &tx(@0xA, 0),
+        );
 
         // Verify registration info
         assert_eq(1, committee.member_registrations().size());
@@ -372,7 +547,13 @@ module bridge::committee_test {
         );
 
         // Register again with different pub key.
-        committee.register(&mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xA, 0));
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR2_PUBKEY),
+            option::none<vector<u8>>(),
+            b"", 
+            &tx(@0xA, 0),
+        );
 
         // Verify registration info, registration count should still be 1
         assert_eq(1, committee.member_registrations().size());
@@ -381,6 +562,22 @@ module bridge::committee_test {
         assert!(
             &hex::decode(VALIDATOR2_PUBKEY) == registration.bridge_pubkey_bytes(),
             0,
+        );
+
+        // Register again with different (non-None) network pub key.
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR2_PUBKEY),
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)),
+            b"", 
+            &tx(@0xA, 0),
+        );
+
+        // Verify registration info, registration count should still be 1
+        assert_eq(1, committee.member_registrations().size());
+        let (_, member) = committee.members().get_entry_by_idx(0);
+        assert_eq(
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)), *member.bridge_network_pubkey_bytes(),
         );
 
         // teardown
@@ -406,7 +603,13 @@ module bridge::committee_test {
         let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
-        committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR1_PUBKEY),
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)),
+            b"", 
+            &tx(@0xA, 0),
+        );
 
         // Check committee before creation
         assert!(committee.members().is_empty());
@@ -439,8 +642,20 @@ module bridge::committee_test {
 
         test_scenario::next_tx(&mut scenario, @0x0);
         let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
-        committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
-        committee.register(&mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xC, 0));
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR1_PUBKEY),
+            option::none<vector<u8>>(),
+            b"", 
+            &tx(@0xA, 0),
+        );
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR2_PUBKEY),
+            option::none<vector<u8>>(),
+            b"", 
+            &tx(@0xC, 0),
+        );
         assert!(committee.members().is_empty());
         let ctx = test_scenario::ctx(&mut scenario);
         let voting_powers = sui_system::validator_voting_powers_for_testing(&mut system_state);
@@ -449,7 +664,13 @@ module bridge::committee_test {
         test_scenario::next_tx(&mut scenario, @0x0);
         assert!(committee.members().size() == 2); // must succeed
         // this fails because committee is already initiated
-        committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR1_PUBKEY),
+            option::none<vector<u8>>(),
+            b"", 
+            &tx(@0xA, 0),
+        );
 
         abort 0
     }
@@ -470,9 +691,56 @@ module bridge::committee_test {
 
         test_scenario::next_tx(&mut scenario, @0x0);
         let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
-        committee.register(&mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xC, 0));
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR2_PUBKEY),
+            option::none<vector<u8>>(),
+            b"", 
+            &tx(@0xC, 0),
+        );
         // this fails with invalid public key
-        committee.register(&mut system_state, b"029bef8", b"", &tx(@0xA, 0));
+        committee.register(
+            &mut system_state, 
+            b"029bef8", 
+            option::none<vector<u8>>(),
+            b"", 
+            &tx(@0xA, 0),
+        );
+
+        abort 0
+    }
+
+    #[test]
+    #[expected_failure(abort_code = bridge::committee::EInvalidPubkeyLength)]
+    fun test_register_bad_network_pubkey() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+            create_validator_for_testing(@0xC, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+
+        test_scenario::next_tx(&mut scenario, @0x0);
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR2_PUBKEY),
+            option::some(hex::decode(VALIDATOR1_NETWORK_PUBKEY)),
+            b"", 
+            &tx(@0xC, 0),
+        );
+        // this fails with invalid public key
+        committee.register(
+            &mut system_state, 
+            hex::decode(VALIDATOR2_PUBKEY),
+            option::some(b"029bef8"),
+            b"", 
+            &tx(@0xA, 0),
+        );
 
         abort 0
     }
@@ -625,6 +893,7 @@ module bridge::committee_test {
             make_committee_member(
                 @0xA,
                 bridge_pubkey_bytes,
+                option::none<vector<u8>>(),
                 3333,
                 b"https://127.0.0.1:9191",
                 false,
@@ -637,6 +906,7 @@ module bridge::committee_test {
             make_committee_member(
                 @0xC,
                 bridge_pubkey_bytes,
+                option::none<vector<u8>>(),
                 3333,
                 b"https://127.0.0.1:9192",
                 false,

@@ -131,6 +131,7 @@ module bridge::bridge_env {
     public struct ValidatorInfo has drop {
         validator: address,
         key_pair: KeyPair,
+        network_key_pair: KeyPair,
         stake_amount: u64,
     }
 
@@ -150,6 +151,7 @@ module bridge::bridge_env {
         ValidatorInfo {
             validator,
             key_pair: secp256k1_keypair_from_seed(seed),
+            network_key_pair: secp256k1_keypair_from_seed(seed),
             stake_amount,
         }
     }
@@ -331,6 +333,7 @@ module bridge::bridge_env {
                     bridge.committee_registration(
                         &mut system_state,
                         *validator.key_pair.public_key(),
+                        option::some(*validator.network_key_pair.public_key()),
                         b"",
                         scenario.ctx(),
                     );
