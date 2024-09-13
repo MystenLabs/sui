@@ -22,6 +22,7 @@ use sui_types::bridge::Bridge;
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, PackageObject};
@@ -302,8 +303,8 @@ impl ExecutionCacheCommit for ProxyCache {
         delegate_method!(self.commit_transaction_outputs(epoch, digests))
     }
 
-    fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()> {
-        delegate_method!(self.persist_transactions(digests))
+    fn persist_transaction(&self, transaction: &VerifiedExecutableTransaction) {
+        delegate_method!(self.persist_transaction(transaction))
     }
 }
 

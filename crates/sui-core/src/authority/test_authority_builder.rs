@@ -232,6 +232,8 @@ impl<'a> TestAuthorityBuilder<'a> {
         let cache_traits =
             build_execution_cache(&epoch_start_configuration, &registry, &authority_store);
 
+        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -245,6 +247,10 @@ impl<'a> TestAuthorityBuilder<'a> {
             signature_verifier_metrics,
             &expensive_safety_checks,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
+            checkpoint_store
+                .get_highest_executed_checkpoint_seq_number()
+                .unwrap()
+                .unwrap_or(0),
         );
         let committee_store = Arc::new(CommitteeStore::new(
             path.join("epochs"),
@@ -252,7 +258,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
         ));
 
-        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
         if self.insert_genesis_checkpoint {
             checkpoint_store.insert_genesis_checkpoint(
                 genesis.checkpoint(),
