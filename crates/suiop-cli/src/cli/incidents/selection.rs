@@ -37,10 +37,7 @@ fn filter_incidents_for_review(incidents: Vec<Incident>, min_priority: &str) -> 
         .filter(|i| {
             i.priority
                 .clone()
-                .filter(|p| {
-                    println!("{} <= {}?", p.u8(), min_priority_u);
-                    !p.name.is_empty() && p.u8() <= min_priority_u
-                })
+                .filter(|p| !p.name.is_empty() && p.u8() <= min_priority_u)
                 .is_some()
                 || i.slack_channel.is_some()
         })
