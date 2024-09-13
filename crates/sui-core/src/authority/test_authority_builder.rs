@@ -242,6 +242,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             backpressure_manager.clone(),
         );
 
+        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -255,6 +257,10 @@ impl<'a> TestAuthorityBuilder<'a> {
             signature_verifier_metrics,
             &expensive_safety_checks,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
+            checkpoint_store
+                .get_highest_executed_checkpoint_seq_number()
+                .unwrap()
+                .unwrap_or(0),
         );
         let committee_store = Arc::new(CommitteeStore::new(
             path.join("epochs"),
