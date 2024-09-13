@@ -1114,14 +1114,7 @@ impl KeyToolCommand {
                     "https://api.ambrus.studio/callback",
                     &jwt_randomness,
                 )?;
-                let url_14 = get_oidc_url(
-                    OIDCProvider::FanTV,
-                    &eph_pk_bytes,
-                    max_epoch,
-                    "r24bskxyafwwua68et2wmuqeyoa.apps.fantv.world",
-                    "https://fantv-apis.fantiger.com/v1/oauth2/redirect",
-                    &jwt_randomness,
-                )?;
+                // This is only for CLI testing. If frontend apps will be built, no need to add anything here.
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
                 println!("Visit URL (Facebook): {url_3}");
@@ -1136,7 +1129,6 @@ impl KeyToolCommand {
                 println!("Visit URL (KarrierOne): {url_11}");
                 println!("Visit URL (Credenza3): {url_12}");
                 println!("Visit URL (AWS - Ambrus): {url_13}");
-                println!("Visit URL (FanTV): {url_14}");
 
                 println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");
 
