@@ -838,9 +838,9 @@ impl TempDir {
 
 impl Drop for TempDir {
     fn drop(&mut self) {
-        // Use println! here in case logging is not initialized
+        // Use eprintln! here in case logging is not initialized
         if let Err(e) = fs::remove_dir_all(&self.path) {
-            println!("Failed to remove temp dir: {:?}", e);
+            eprintln!("Failed to remove temp dir: {:?}", e);
         }
     }
 }
