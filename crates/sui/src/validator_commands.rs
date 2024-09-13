@@ -174,6 +174,9 @@ pub enum SuiValidatorCommand {
         /// Path to Bridge Authority Key file.
         #[clap(long)]
         bridge_authority_key_path: PathBuf,
+        /// Path to Bridge Authority Network Key file.
+        #[clap(long)]
+        bridge_authority_network_key_path: Option<PathBuf>,
         /// Bridge authority URL which clients collects action signatures from.
         #[clap(long)]
         bridge_authority_url: String,
@@ -505,6 +508,7 @@ impl SuiValidatorCommand {
             }
             SuiValidatorCommand::RegisterBridgeCommittee {
                 bridge_authority_key_path,
+                bridge_authority_network_key_path,
                 bridge_authority_url,
                 print_unsigned_transaction_only,
                 validator_address,
@@ -523,6 +527,13 @@ impl SuiValidatorCommand {
                     SuiKeyPair::Secp256k1(key) => key,
                     _ => unreachable!("we required secp256k1 key in `read_key`"),
                 };
+                // Read bridge network keypair
+                let ecdsa_network_keypair = bridge_authority_network_key_path.map(|path| {
+                    match read_key(&bridge_authority_network_key_path, true)? {
+                        SuiKeyPair::Secp256k1(key) => key,
+                        _ => unreachable!("we required secp256k1 key in `read_key`"),
+                    }
+                });
                 let address = check_address(
                     context.active_address()?,
                     validator_address,
@@ -559,6 +570,7 @@ impl SuiValidatorCommand {
                     &gas.object_ref(),
                     bridge,
                     ecdsa_keypair.public().as_bytes().to_vec(),
+                    ecdsa_network_keypair.map(|keypair| public().as_bytes().to_vec()),
                     &bridge_authority_url,
                     gas_price,
                     gas_budget,

@@ -173,12 +173,19 @@ module bridge::bridge {
         bridge: &mut Bridge,
         system_state: &mut SuiSystemState,
         bridge_pubkey_bytes: vector<u8>,
+        bridge_network_pubkey_bytes: Option<vector<u8>>,
         http_rest_url: vector<u8>,
         ctx: &TxContext
     ) {
         load_inner_mut(bridge)
             .committee
-            .register(system_state, bridge_pubkey_bytes, http_rest_url, ctx);
+            .register(
+                system_state, 
+                bridge_pubkey_bytes,
+                bridge_network_pubkey_bytes,
+                http_rest_url, 
+                ctx,
+            );
     }
 
     public fun update_node_url(bridge: &mut Bridge, new_url: vector<u8>, ctx: &TxContext) {
