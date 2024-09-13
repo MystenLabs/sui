@@ -572,17 +572,11 @@ move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 
-<<<<<<< HEAD
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b1ff61a2fcf20f689849ae270c93dc849c486d80" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b1ff61a2fcf20f689849ae270c93dc849c486d80" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b1ff61a2fcf20f689849ae270c93dc849c486d80", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b1ff61a2fcf20f689849ae270c93dc849c486d80", features = [
-=======
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "be8995f726c517df409751ee4a268e2e8d33f34c" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "be8995f726c517df409751ee4a268e2e8d33f34c" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "be8995f726c517df409751ee4a268e2e8d33f34c", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "be8995f726c517df409751ee4a268e2e8d33f34c", features = [
->>>>>>> 9069914a90 (Add FanTV as Zklogin OIDC provider onboarding)
+
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "54c060e60bf23da76f9653286412a7e068b898a5" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "54c060e60bf23da76f9653286412a7e068b898a5" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "54c060e60bf23da76f9653286412a7e068b898a5", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "54c060e60bf23da76f9653286412a7e068b898a5", features = [
     "experimental",
 ] }
 passkey-types = { version = "0.2.0" }
