@@ -118,7 +118,7 @@ impl BlockManager {
             };
 
             // If the block is accepted, try to unsuspend its children blocks if any.
-            let unsuspended_blocks = self.try_unsuspend_children_blocks(&block);
+            let unsuspended_blocks = self.try_unsuspend_children_blocks(block.reference());
 
             // Try to verify the block and its children for timestamp, with ancestor blocks.
             let mut blocks_to_accept: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
@@ -213,17 +213,25 @@ impl BlockManager {
         let mut missing_ancestors = BTreeSet::new();
         let mut ancestors_to_fetch = BTreeSet::new();
         let dag_state = self.dag_state.read();
+        let gc_round = dag_state.gc_round();
 
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
         if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref) {
             return TryAcceptResult::Processed;
         }
 
-        let ancestors = block.ancestors();
+        // Keep only the ancestors that are greater than the GC round to check for their existence. Keep in mind that if GC is disabled
+        // then gc_round will be 0 and all ancestors will be considered.
+        let ancestors = block
+            .ancestors()
+            .iter()
+            .filter(|ancestor| ancestor.round > gc_round)
+            .cloned()
+            .collect::<Vec<_>>();
 
         // make sure that we have all the required ancestors in store
         for (found, ancestor) in dag_state
-            .contains_blocks(ancestors.to_vec())
+            .contains_blocks(ancestors.clone())
             .into_iter()
             .zip(ancestors.iter())
         {
@@ -289,21 +297,21 @@ impl BlockManager {
     /// All the unsuspended / accepted blocks are returned as a vector in causal order.
     fn try_unsuspend_children_blocks(
         &mut self,
-        accepted_block: &VerifiedBlock,
+        accepted_block: BlockRef,
     ) -> Vec<VerifiedBlock> {
         let mut unsuspended_blocks = vec![];
         let mut to_process_blocks = vec![accepted_block.clone()];
 
-        while let Some(block) = to_process_blocks.pop() {
+        while let Some(block_ref) = to_process_blocks.pop() {
             // And try to check if its direct children can be unsuspended
             if let Some(block_refs_with_missing_deps) =
-                self.missing_ancestors.remove(&block.reference())
+                self.missing_ancestors.remove(&block_ref)
             {
                 for r in block_refs_with_missing_deps {
                     // For each dependency try to unsuspend it. If that's successful then we add it to the queue so
                     // we can recursively try to unsuspend its children.
-                    if let Some(block) = self.try_unsuspend_block(&r, &block.reference()) {
-                        to_process_blocks.push(block.block.clone());
+                    if let Some(block) = self.try_unsuspend_block(&r, &block_ref) {
+                        to_process_blocks.push(block.block.reference());
                         unsuspended_blocks.push(block);
                     }
                 }
@@ -364,6 +372,32 @@ impl BlockManager {
             return self.suspended_blocks.remove(block_ref);
         }
         None
+    }
+
+    /// Tries to unsuspend any blocks for the latest gc round. If gc round hasn't changed then no blocks will be unsuspended due to
+    /// this action.
+    pub(crate) fn try_unsuspend_blocks_for_latest_gc_round(&mut self) {
+        let gc_round = self.dag_state.read().gc_round();
+        let mut unsuspended_blocks = Vec::new();
+
+        while let Some((block_ref, children_refs)) = self.missing_ancestors.pop_first() {
+            // If the first block in the missing ancestors is higher than the gc_round, then we can't unsuspend it yet. So we just put it back
+            // and we terminate the iteration as any next entry will be of equal or higher round anyways.
+            if block_ref.round > gc_round {
+                self.missing_ancestors.insert(block_ref, children_refs);
+                return;
+            }
+
+            // If the block was in the suspended list, then remove it from there.
+            // Also there is no point trying to accept this block anyways as it doesn't matter for history.
+            let _ = self.suspended_blocks.remove(&block_ref);
+
+            // Find all the children blocks that have a dependency on this one and try to unsuspend them
+            unsuspended_blocks.extend(self.try_unsuspend_children_blocks(block_ref));
+        }
+
+        // Process the unsuspended blocks
+        
     }
 
     /// Returns all the blocks that are currently missing and needed in order to accept suspended
