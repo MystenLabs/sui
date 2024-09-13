@@ -11,9 +11,9 @@ use sui_indexer::indexer::Indexer;
 use sui_indexer::metrics::{
     spawn_connection_pool_metric_collector, start_prometheus_server, IndexerMetrics,
 };
+use sui_indexer::restorer::formal_snapshot::IndexerFormalSnapshotRestorer;
 use sui_indexer::sql_backfill::run_sql_backfill;
 use sui_indexer::store::PgIndexerStore;
-use sui_indexer::restorer::formal_snapshot::IndexerFormalSnapshotRestorer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
