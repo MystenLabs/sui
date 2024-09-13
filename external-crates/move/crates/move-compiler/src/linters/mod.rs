@@ -15,6 +15,7 @@ pub mod abort_constant;
 pub mod constant_naming;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
+pub mod unnecessary_conditional;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
 
@@ -131,6 +132,12 @@ lints!(
         LinterDiagnosticCategory::Suspicious,
         "loop_without_exit",
         "'loop' without 'break' or 'return'"
+    ),
+    (
+        UnnecessaryConditional,
+        LinterDiagnosticCategory::Complexity,
+        "unnecessary_conditional",
+        "'if' expression can be removed"
     )
 );
 
@@ -165,6 +172,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unneeded_return::UnneededReturnVisitor.visitor(),
                 abort_constant::AssertAbortNamedConstants.visitor(),
                 loop_without_exit::LoopWithoutExit.visitor(),
+                unnecessary_conditional::UnnecessaryConditional.visitor(),
             ]
         }
     }
