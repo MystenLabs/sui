@@ -98,7 +98,10 @@ pub enum UserInputError {
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     },
-    #[error("Object {provided_obj_ref:?} is not available for consumption, its current version: {current_version:?}")]
+    #[error(
+        "Object ID {} Version {} Digest {} is not available for consumption, current version: {current_version}",
+        .provided_obj_ref.0, .provided_obj_ref.1, .provided_obj_ref.2
+    )]
     ObjectVersionUnavailableForConsumption {
         provided_obj_ref: ObjectRef,
         current_version: SequenceNumber,

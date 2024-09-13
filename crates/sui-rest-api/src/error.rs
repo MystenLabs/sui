@@ -70,8 +70,7 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RestError {
             }
             ObjectsDoubleUsed {
                 conflicting_txes,
-                retried_tx,
-                retried_tx_success,
+                retried_tx_status,
             } => {
                 let new_map = conflicting_txes
                     .into_iter()
@@ -85,8 +84,8 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RestError {
 
                 let message = format!(
                         "Failed to sign transaction by a quorum of validators because of locked objects. Retried a conflicting transaction {:?}, success: {:?}. Conflicting Transactions:\n{:#?}",
-                        retried_tx,
-                        retried_tx_success,
+                        retried_tx_status.map(|(tx, _)| tx),
+                        retried_tx_status.map(|(_, success)| success),
                         new_map,
                     );
 
