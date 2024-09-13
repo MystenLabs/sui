@@ -3,12 +3,13 @@
 
 use crate::{
     schema::{
-        tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects,
-        tx_kinds, tx_recipients, tx_senders,
+        tx_affected_addresses, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects,
+        tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
     },
     types::TxIndex,
 };
 use diesel::prelude::*;
+use itertools::Itertools;
 
 #[derive(QueryableByName)]
 pub struct TxSequenceNumber {
@@ -20,6 +21,14 @@ pub struct TxSequenceNumber {
 pub struct TxDigest {
     #[diesel(sql_type = diesel::sql_types::Binary)]
     pub transaction_digest: Vec<u8>,
+}
+
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
+#[diesel(table_name = tx_affected_addresses)]
+pub struct StoredTxAffected {
+    pub tx_sequence_number: i64,
+    pub affected: Vec<u8>,
+    pub sender: Vec<u8>,
 }
 
 #[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
@@ -99,6 +108,7 @@ impl TxIndex {
     pub fn split(
         self: TxIndex,
     ) -> (
+        Vec<StoredTxAffected>,
         Vec<StoredTxSenders>,
         Vec<StoredTxRecipients>,
         Vec<StoredTxInputObject>,
@@ -110,10 +120,24 @@ impl TxIndex {
         Vec<StoredTxKind>,
     ) {
         let tx_sequence_number = self.tx_sequence_number as i64;
+        let tx_affected_addresses = self
+            .recipients
+            .iter()
+            .chain(self.payers.iter())
+            .chain(std::iter::once(&self.sender))
+            .unique()
+            .map(|a| StoredTxAffected {
+                tx_sequence_number,
+                affected: a.to_vec(),
+                sender: self.sender.to_vec(),
+            })
+            .collect();
+
         let tx_sender = StoredTxSenders {
             tx_sequence_number,
             sender: self.sender.to_vec(),
         };
+
         let tx_recipients = self
             .recipients
             .iter()
@@ -123,6 +147,7 @@ impl TxIndex {
                 sender: self.sender.to_vec(),
             })
             .collect();
+
         let tx_input_objects = self
             .input_objects
             .iter()
@@ -132,6 +157,7 @@ impl TxIndex {
                 sender: self.sender.to_vec(),
             })
             .collect();
+
         let tx_changed_objects = self
             .changed_objects
             .iter()
@@ -197,6 +223,7 @@ impl TxIndex {
         };
 
         (
+            tx_affected_addresses,
             vec![tx_sender],
             tx_recipients,
             tx_input_objects,
