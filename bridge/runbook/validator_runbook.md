@@ -57,10 +57,10 @@ Suggested hardware requirements:
 * Storage: 200GB
 * Network: 100Mbps
 
-### Optional: WAF Protection for Sui Bridge Server
+### WAF Protection for Sui Bridge Server
 
-It is a good idea to add some sort of rate limit protection to the bridge server which will be exposed to the public internet. 
-This will give node operators fine-grained control over the rate of requests the receive, and observability into those requests.
+In order to protect against DDOS and attacks intended to expend validator resources, rate limit protection of the bridge server is required. 
+In addition to protection, this will give node operators fine-grained control over the rate of requests the receive, and observability into those requests.
 
 The currently recommended rate-limit is `50 requests/second per unique IP`.
 
@@ -89,3 +89,5 @@ frontend http-in
 backend bridgevalidator
     server bridgevalidator 0.0.0.0:9191
 ```
+
+If choosing to use an open source load-balancing option, make sure to set up metrics collection and alerting on the service.
