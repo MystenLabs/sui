@@ -10,20 +10,35 @@ use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct TransactionBlockFilter {
+    /// Filter transactions by move function called. Calls can be filtered by the `package`,
+    /// `package::module`, or the `package::module::name` of their function.
     pub function: Option<FqNameFilter>,
 
     /// An input filter selecting for either system or programmable transactions.
     pub kind: Option<TransactionBlockKindInput>,
+
+    /// Limit to transactions that occured strictly after the given checkpoint.
     pub after_checkpoint: Option<UInt53>,
+
+    /// Limit to transactions in the given checkpoint.
     pub at_checkpoint: Option<UInt53>,
+
+    /// Limit to transaction that occured strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
 
+    /// Limit to transactions that were signed by the given address.
     pub sign_address: Option<SuiAddress>,
+
+    /// Limit to transactions that sent an object to the given address.
     pub recv_address: Option<SuiAddress>,
 
+    /// Limit to transactions that accepted the given object as an input.
     pub input_object: Option<SuiAddress>,
+
+    /// Limit to transactions that output a versioon of this object.
     pub changed_object: Option<SuiAddress>,
 
+    /// Select transactions by their digest.
     pub transaction_ids: Option<Vec<Digest>>,
 }
 
