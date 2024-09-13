@@ -1,0 +1,145 @@
+processed 17 tasks
+
+init:
+C: object(0,0)
+
+task 1, line 7:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, lines 9-11:
+//# advance-epoch
+Epoch advanced: 0
+
+task 3, line 12:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 4, lines 14-17:
+//# advance-epoch
+Epoch advanced: 1
+
+task 5, line 18:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 6, line 20:
+//# advance-epoch
+Epoch advanced: 2
+
+task 7, line 22:
+//# create-checkpoint
+Checkpoint created: 7
+
+task 8, line 24:
+//# advance-epoch
+Epoch advanced: 3
+
+task 9, line 26:
+//# create-checkpoint
+Checkpoint created: 9
+
+task 10, line 28:
+//# advance-epoch
+Epoch advanced: 4
+
+task 11, line 30:
+//# create-checkpoint
+Checkpoint created: 11
+
+task 12, line 32:
+//# advance-epoch
+Epoch advanced: 5
+
+task 13, lines 34-45:
+//# run-graphql 
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "epochId": 4
+        },
+        {
+          "epochId": 5
+        }
+      ]
+    }
+  }
+}
+
+task 14, lines 47-58:
+//# run-graphql 
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "epochId": 0
+        },
+        {
+          "epochId": 1
+        },
+        {
+          "epochId": 2
+        }
+      ]
+    }
+  }
+}
+
+task 15, lines 60-71:
+//# run-graphql --cursors {"c":5,"e":2} 
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "epochId": 0
+        },
+        {
+          "epochId": 1
+        }
+      ]
+    }
+  }
+}
+
+task 16, lines 73-84:
+//# run-graphql --cursors {"c":11,"e":1}
+Response: {
+  "data": {
+    "epochs": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "epochId": 2
+        },
+        {
+          "epochId": 3
+        },
+        {
+          "epochId": 4
+        },
+        {
+          "epochId": 5
+        }
+      ]
+    }
+  }
+}
