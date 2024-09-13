@@ -28,21 +28,31 @@ use crate::{
     network::NetworkClient, BlockAPI as _, Round,
 };
 
-/// A quorum round is a range [low, high] that is between the lowest and highest rounds
-/// of honest validators.
-/// They can be used to measure the propagation delay of own blocks to the network,
-/// and the propagation variance of other authorities' blocks.
+/// A [`QuorumRound`] is a round range [low, high]. It is computed from
+/// highest received rounds of an authority reported by all authorities.
+/// The bounds represent:
+/// - the highest round lower or equal to rounds from a quorum (low)
+/// - the lowest round higher or equal to rounds from a quorum (high)
+///
+/// [`QuorumRound`] is useful because:
+/// - [low, high] range is BFT, always between the lowest and highest rounds
+///   of honest validators, with < validity threshold of malicious stake.
+/// - It provides signals about how well blocks from an authority propagates
+///   in the network. If low bound for an authority is lower than its last
+///   proposed round, the last proposed block has not propagated to a quorum.
+///   If a new block is proposed from the authority, it will not get accepted
+///   immediately by a quorum.
 pub(crate) type QuorumRound = (Round, Round);
 
 // Handle to control the RoundProber loop and read latest round gaps.
 pub(crate) struct RoundProberHandle {
     prober_task: JoinHandle<()>,
-    shutdown_notif: Arc<NotifyOnce>,
+    shutdown_notify: Arc<NotifyOnce>,
 }
 
 impl RoundProberHandle {
     pub(crate) async fn stop(self) {
-        let _ = self.shutdown_notif.notify();
+        let _ = self.shutdown_notify.notify();
         // Do not abort prober task, which waits for requests to be cancelled.
         if let Err(e) = self.prober_task.await {
             if e.is_panic() {
@@ -57,7 +67,7 @@ pub(crate) struct RoundProber<C: NetworkClient> {
     core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
     dag_state: Arc<RwLock<DagState>>,
     network_client: Arc<C>,
-    shutdown_notif: Arc<NotifyOnce>,
+    shutdown_notify: Arc<NotifyOnce>,
 }
 
 impl<C: NetworkClient> RoundProber<C> {
@@ -72,25 +82,27 @@ impl<C: NetworkClient> RoundProber<C> {
             core_thread_dispatcher,
             dag_state,
             network_client,
-            shutdown_notif: Arc::new(NotifyOnce::new()),
+            shutdown_notify: Arc::new(NotifyOnce::new()),
         }
     }
 
     pub(crate) fn start(self) -> RoundProberHandle {
-        let shutdown_notif = self.shutdown_notif.clone();
-        let loop_shutdown_notif = shutdown_notif.clone();
+        let shutdown_notify = self.shutdown_notify.clone();
+        let loop_shutdown_notify = shutdown_notify.clone();
         let prober_task = tokio::spawn(async move {
             // With 200 validators, this would result in 200 * 4 * 200 / 2 = 80KB of additional
             // bandwidth usage per sec. We can consider using adaptive intervals, for example
             // 10s by default but reduced to 2s when the propagation delay is higher.
-            let mut interval = tokio::time::interval(Duration::from_secs(2));
+            let mut interval = tokio::time::interval(Duration::from_millis(
+                self.context.parameters.round_prober_interval_ms,
+            ));
             interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
                         self.probe().await;
                     }
-                    _ = loop_shutdown_notif.wait() => {
+                    _ = loop_shutdown_notify.wait() => {
                         break;
                     }
                 }
@@ -98,7 +110,7 @@ impl<C: NetworkClient> RoundProber<C> {
         });
         RoundProberHandle {
             prober_task,
-            shutdown_notif,
+            shutdown_notify,
         }
     }
 
@@ -106,10 +118,10 @@ impl<C: NetworkClient> RoundProber<C> {
     // Returns the quorum round for each authority, and the propagation delay
     // of own blocks.
     pub(crate) async fn probe(&self) -> (Vec<QuorumRound>, Round) {
-        const PROBE_TIMEOUT: Duration = Duration::from_secs(1);
-
         let _scope = monitored_scope("RoundProber");
 
+        let request_timeout =
+            Duration::from_millis(self.context.parameters.round_prober_request_timeout_ms);
         let own_index = self.context.own_index;
         let last_proposed_round = self
             .dag_state
@@ -125,8 +137,8 @@ impl<C: NetworkClient> RoundProber<C> {
             let network_client = self.network_client.clone();
             requests.push(async move {
                 let result = tokio::time::timeout(
-                    PROBE_TIMEOUT,
-                    network_client.get_latest_rounds(peer, PROBE_TIMEOUT),
+                    request_timeout,
+                    network_client.get_latest_rounds(peer, request_timeout),
                 )
                 .await;
                 (peer, result)
@@ -172,7 +184,7 @@ impl<C: NetworkClient> RoundProber<C> {
                         },
                     }
                 }
-                _ = self.shutdown_notif.wait() => {
+                _ = self.shutdown_notify.wait() => {
                     break;
                 }
             }
@@ -231,10 +243,7 @@ impl<C: NetworkClient> RoundProber<C> {
     }
 }
 
-// For the peer specified with target_index, compute and return:
-// - the highest round lower or equal to rounds from a quorum (low)
-// - the lowest round higher or equal to rounds from a quorum (high)
-// They correspond to validity and quorum thresholds respectively.
+/// For the peer specified with target_index, compute and return its [`QuorumRound`].
 fn compute_quorum_round(
     committee: &Committee,
     target_index: AuthorityIndex,
@@ -247,18 +256,28 @@ fn compute_quorum_round(
         .collect::<Vec<_>>();
     rounds_with_stake.sort();
 
+    // Forward iteration and stopping at validity threshold would produce the same result currently,
+    // with fault tolerance of f/3f+1 votes. But it is not semantically correct, and will provide an
+    // incorrect value when fault tolerance and validity threshold are different.
     let mut total_stake = 0;
     let mut low = 0;
-    let mut high = 0;
-    for (round, stake) in rounds_with_stake {
-        let reached_validator_before = total_stake >= committee.validity_threshold();
+    for (round, stake) in rounds_with_stake.iter().rev() {
         let reached_quorum_before = total_stake >= committee.quorum_threshold();
         total_stake += stake;
-        if !reached_validator_before && total_stake >= committee.validity_threshold() {
-            low = round;
-        }
         if !reached_quorum_before && total_stake >= committee.quorum_threshold() {
-            high = round;
+            low = *round;
+            break;
+        }
+    }
+
+    let mut total_stake = 0;
+    let mut high = 0;
+    for (round, stake) in rounds_with_stake.iter() {
+        let reached_quorum_before = total_stake >= committee.quorum_threshold();
+        total_stake += stake;
+        if !reached_quorum_before && total_stake >= committee.quorum_threshold() {
+            high = *round;
+            break;
         }
     }
 

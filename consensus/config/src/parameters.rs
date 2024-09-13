@@ -44,6 +44,14 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_sync_last_known_own_block_timeout")]
     pub sync_last_known_own_block_timeout: Duration,
 
+    /// Interval in milliseconds to probe highest received rounds of peers.
+    #[serde(default = "Parameters::default_round_prober_interval_ms")]
+    pub round_prober_interval_ms: u64,
+
+    /// Timeout in milliseconds for a round prober request.
+    #[serde(default = "Parameters::default_round_prober_request_timeout_ms")]
+    pub round_prober_request_timeout_ms: u64,
+
     /// Proposing new block is stopped when the propagation delay is greater than this threshold.
     /// Propagation delay is the difference between the round of the last proposed block and the
     /// the highest round from this authority that is received by all validators in a quorum.
@@ -122,9 +130,17 @@ impl Parameters {
         }
     }
 
+    pub(crate) fn default_round_prober_interval_ms() -> u64 {
+        5000
+    }
+
+    pub(crate) fn default_round_prober_request_timeout_ms() -> u64 {
+        2000
+    }
+
     pub(crate) fn default_propagation_delay_stop_proposal_threshold() -> u32 {
-        // In experiments, propagation delay is usually 0 round.
-        10
+        // Propagation delay is usually 0 round in production.
+        20
     }
 
     pub(crate) fn default_dag_state_cached_rounds() -> u32 {
@@ -166,6 +182,8 @@ impl Default for Parameters {
             max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
             sync_last_known_own_block_timeout:
                 Parameters::default_sync_last_known_own_block_timeout(),
+            round_prober_interval_ms: Parameters::default_round_prober_interval_ms(),
+            round_prober_request_timeout_ms: Parameters::default_round_prober_request_timeout_ms(),
             propagation_delay_stop_proposal_threshold:
                 Parameters::default_propagation_delay_stop_proposal_threshold(),
             dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),

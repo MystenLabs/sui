@@ -663,9 +663,11 @@ impl Core {
 
     /// Whether the core should propose new blocks.
     pub(crate) fn should_propose(&self) -> bool {
+        let clock_round = self.threshold_clock.get_round();
         let core_skipped_proposals = &self.context.metrics.node_metrics.core_skipped_proposals;
 
         if !self.subscriber_exists {
+            debug!("Skip proposing for round {clock_round}, no subscriber exists.");
             core_skipped_proposals
                 .with_label_values(&["no_subscriber"])
                 .inc();
@@ -678,13 +680,19 @@ impl Core {
                 .parameters
                 .propagation_delay_stop_proposal_threshold
         {
+            debug!(
+                "Skip proposing for round {clock_round}, high propagation delay {} > {}.",
+                self.propagation_delay,
+                self.context
+                    .parameters
+                    .propagation_delay_stop_proposal_threshold
+            );
             core_skipped_proposals
                 .with_label_values(&["high_propagation_delay"])
                 .inc();
             return false;
         }
 
-        let clock_round = self.threshold_clock.get_round();
         let Some(last_known_proposed_round) = self.last_known_proposed_round else {
             debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
             core_skipped_proposals
