@@ -12,7 +12,6 @@ import {
 import { DebugProtocol } from '@vscode/debugprotocol';
 import * as path from 'path';
 import { Runtime, RuntimeEvents, IRuntimeStack } from './runtime';
-import { log } from 'console';
 
 const enum LogLevel {
     Log = 'log',
