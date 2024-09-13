@@ -27,10 +27,9 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tracing::{debug, error, info};
 
-/// Implements a checkpoint reader that monitors a local directory.
-/// Designed for setups where the indexer daemon is colocated with FN.
-/// This implementation is push-based and utilizes the inotify API.
 pub struct CheckpointReader {
+    /// Used to read from a local directory when running with a colocated FN.
+    /// When fetching from a remote store, a temp dir can be passed in and it will be an no-op
     path: PathBuf,
     remote_store_url: Option<String>,
     remote_store_options: Vec<(String, String)>,

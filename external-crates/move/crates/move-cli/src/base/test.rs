@@ -69,8 +69,7 @@ pub struct Test {
     #[clap(name = "rand-num-iters", long = "rand-num-iters")]
     pub rand_num_iters: Option<u64>,
 
-    /// Enable tracing for tests. A separate trace file will be created for each test. If `PATH` is
-    /// provided, the trace will be written to the `PATH` directory.
+    // Enable tracing for tests
     #[clap(long = "trace-execution", value_name = "PATH")]
     pub trace_execution: Option<Option<String>>,
 }

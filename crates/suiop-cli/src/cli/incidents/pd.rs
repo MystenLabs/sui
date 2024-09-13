@@ -5,7 +5,7 @@ use anyhow::Result;
 use chrono::Utc;
 use chrono::{DateTime, Local, NaiveDateTime};
 use colored::{ColoredString, Colorize};
-use inquire::Confirm;
+use inquire::{Confirm, MultiSelect};
 use reqwest;
 use reqwest::header::HeaderMap;
 use reqwest::header::ACCEPT;
@@ -17,15 +17,26 @@ use std::env;
 use strsim::normalized_damerau_levenshtein;
 use tracing::debug;
 
-use crate::cli::incidents::slack::Channel;
+use crate::cli::incidents::slack::Slack;
 use crate::cli::lib::utils::day_of_week;
 use crate::DEBUG_MODE;
+
+use super::slack_api::{Channel, User};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Priority {
     pub name: String,
     id: String,
     color: String,
+}
+
+impl Priority {
+    pub fn u8(&self) -> u8 {
+        self.name
+            .trim_start_matches("P")
+            .parse()
+            .expect("Parsing priority")
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -36,6 +47,9 @@ pub struct Incident {
     created_at: Option<String>,
     resolved_at: Option<String>,
     html_url: String,
+    /// The slack users responsible for reporting
+    #[serde(skip_deserializing)]
+    poc_users: Option<Vec<User>>,
     pub priority: Option<Priority>,
     pub slack_channel: Option<Channel>,
 }
@@ -126,7 +140,7 @@ impl Incident {
         format!(
             "• {} {} {} {}",
             if let Some(channel) = self.slack_channel.clone() {
-                format!("{} ({})", self.number, channel.url())
+                format!("{} (<#{}>)", self.number, channel.id)
             } else {
                 self.number.to_string()
             },
@@ -138,10 +152,14 @@ impl Incident {
                     .to_string())
                 .unwrap_or("".to_owned()),
             self.title,
-            self.slack_channel
-                .clone()
-                .map(|c| c.name)
-                .unwrap_or("".to_string()),
+            self.poc_users.as_ref().map_or_else(
+                || "".to_string(),
+                |u| u
+                    .iter()
+                    .map(|u| { format!("<@{}>", u.id) })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         )
     }
 }
@@ -251,29 +269,47 @@ pub async fn print_recent_incidents(
     Ok(())
 }
 
-pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
-    let incidents_grouped = incidents
+/// Filter incidents based on whether they have <= min_priority priority or any slack
+/// channel associated.
+fn filter_incidents_for_review(incidents: Vec<Incident>, min_priority: &str) -> Vec<Incident> {
+    let min_priority_u = min_priority
+        .trim_start_matches("P")
+        .parse::<u8>()
+        .expect("Parsing priority");
+    println!("min_priority_u: {}", min_priority_u);
+    incidents
         .into_iter()
-        // filter on priority > P3 and any slack channel association
+        // filter on priority <= min_priority and any slack channel association
         .filter(|i| {
             i.priority
                 .clone()
-                .filter(|p| !p.name.is_empty() && p.name != "P3")
+                .filter(|p| {
+                    println!("{} <= {}?", p.u8(), min_priority_u);
+                    !p.name.is_empty() && p.u8() <= min_priority_u
+                })
                 .is_some()
                 || i.slack_channel.is_some()
         })
-        .collect();
-    let group_map = group_by_similar_title(incidents_grouped, 0.9);
+        .collect()
+}
+
+fn request_pocs(slack: &Slack) -> Result<Vec<User>> {
+    MultiSelect::new(
+        "Please select the users who are POCs for this incident",
+        slack.users.clone(),
+    )
+    .with_default(&[])
+    .prompt()
+    .map_err(|e| anyhow::anyhow!(e))
+}
+
+pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
+    let slack = Slack::new().await;
+    let filtered_incidents = filter_incidents_for_review(incidents, "P2");
+    let mut group_map = group_by_similar_title(filtered_incidents, 0.9);
     let mut to_review = vec![];
     let mut excluded = vec![];
-    debug!(
-        "map: {:#?}",
-        group_map
-            .iter()
-            .map(|(k, v)| (k, v.len()))
-            .collect::<Vec<_>>()
-    );
-    for (title, incident_group) in group_map.iter() {
+    for (title, incident_group) in group_map.iter_mut() {
         let treat_as_one = if incident_group.len() > 1 {
             println!(
                 "There are {} incidents with a title similar to this: {}",
@@ -281,7 +317,7 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
                 title
             );
             println!("All incidents with a similar title:");
-            for i in incident_group {
+            for i in incident_group.iter() {
                 i.print(false)?;
             }
             Confirm::new("Treat them as one?")
@@ -297,20 +333,24 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
                 .prompt()
                 .expect("Unexpected response");
             if ans {
-                println!("{:?} added to review", to_review);
+                let poc_users = request_pocs(&slack)?;
+                incident_group
+                    .iter_mut()
+                    .for_each(|i| i.poc_users = Some(poc_users.clone()));
                 to_review.extend(incident_group.clone());
-                println!("{:?} added to review", to_review);
             } else {
                 excluded.extend(incident_group.clone());
             }
         } else {
-            for incident in incident_group.iter() {
+            for incident in incident_group.iter_mut() {
                 incident.print(false)?;
                 let ans = Confirm::new("Keep this incident for review?")
                     .with_default(false)
                     .prompt()
                     .expect("Unexpected response");
                 if ans {
+                    let poc_users = request_pocs(&slack)?;
+                    incident.poc_users = Some(poc_users.clone());
                     to_review.push(incident.clone());
                 } else {
                     excluded.push(incident.clone());
@@ -369,7 +409,6 @@ Please comment in the thread to request an adjustment to the list.",
     .prompt()
     .expect("Unexpected response");
     if ans {
-        let slack = super::slack::Slack::new().await;
         slack.send_message(slack_channel, &message).await?;
     }
     // post to https://slack.com/api/chat.postMessage with message
@@ -411,6 +450,10 @@ fn group_by_similar_title(
         }
     }
 
+    debug!(
+        "map: {:#?}",
+        groups.iter().map(|(k, v)| (k, v.len())).collect::<Vec<_>>()
+    );
     groups
 }
 
