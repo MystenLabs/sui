@@ -773,23 +773,34 @@ impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
 // utils
 //**************************************************************************************************
 
-pub fn has_special(
+pub fn has_special<FCommand, FExp>(
     cfg: &ImmForwardCFG,
-    mut p_command: impl FnMut(&Command) -> bool,
-    mut p_exp: impl FnMut(&Exp) -> bool,
-) -> bool {
+    mut p_command: FCommand,
+    mut p_exp: FExp,
+) -> bool
+where
+    FCommand: FnMut(&Command) -> bool,
+    FExp: FnMut(&Exp) -> bool,
+{
     has_special_(cfg, &mut p_command, &mut p_exp)
 }
 
-pub fn has_special_command(
+pub fn has_special_command<FCommand, FExp>(
     cmd: &Command,
-    mut p_command: impl FnMut(&Command) -> bool,
-    mut p_exp: impl FnMut(&Exp) -> bool,
-) -> bool {
+    mut p_command: FCommand,
+    mut p_exp: FExp,
+) -> bool
+where
+    FCommand: FnMut(&Command) -> bool,
+    FExp: FnMut(&Exp) -> bool,
+{
     has_special_command_(cmd, &mut p_command, &mut p_exp)
 }
 
-pub fn has_special_exp(e: &Exp, mut p: impl FnMut(&Exp) -> bool) -> bool {
+pub fn has_special_exp<F>(e: &Exp, mut p: F) -> bool
+where
+    F: FnMut(&Exp) -> bool,
+{
     has_special_exp_(e, &mut p)
 }
 
