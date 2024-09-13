@@ -56,3 +56,38 @@ Suggested hardware requirements:
 * Memory: 16GB
 * Storage: 200GB
 * Network: 100Mbps
+
+### WAF Protection for Sui Bridge Server
+
+In order to protect against DDOS and attacks intended to expend validator resources, rate limit protection of the bridge server is required. 
+In addition to protection, this will give node operators fine-grained control over the rate of requests the receive, and observability into those requests.
+
+The currently recommended rate-limit is `50 requests/second per unique IP`.
+
+#### WAF Options
+
+You can use a managed cloud service, for example:
+* [Cloudflare WAF](https://www.cloudflare.com/en-ca/application-services/products/waf/)
+* [AWS WAF](https://aws.amazon.com/waf/)
+* [GCP Cloud Armor](https://cloud.google.com/security/products/armor)
+
+It's also possible to use an open source load balancer such as haproxy for a simple, ip-based rate limit.
+An example, shortened HAProxy config for this looks like:
+```
+frontend http-in
+    bind *:80
+    # Define an ACL to count requests per IP and block if over limit
+    acl too_many_requests src_http_req_rate() gt 50
+    # Track the request rate per IP
+    stick-table type ip size 1m expire 1m store http_req_rate(1s)
+    # Check request rate and deny if the limit is exceeded
+    http-request track-sc0 src
+    http-request deny if too_many_requests
+
+    default_backend bridgevalidator
+
+backend bridgevalidator
+    server bridgevalidator 0.0.0.0:9191
+```
+
+If choosing to use an open source load-balancing option, make sure to set up metrics collection and alerting on the service.
