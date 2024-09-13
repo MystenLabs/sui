@@ -8,9 +8,16 @@ use sui_transactional_test_runner::{
     run_test_impl,
     test_adapter::{SuiTestAdapter, PRE_COMPILED},
 };
-pub const TEST_DIR: &str = "tests";
 
-datatest_stable::harness!(run_test, TEST_DIR, r".*\.(mvir|move)$");
+datatest_stable::harness!(
+    run_test,
+    "tests",
+    if cfg!(feature = "staging") {
+        r"\.move$"
+    } else {
+        r"stable/.*\.move$"
+    }
+);
 
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
