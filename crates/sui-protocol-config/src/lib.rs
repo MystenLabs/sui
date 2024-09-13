@@ -516,6 +516,10 @@ struct FeatureFlags {
     // Rethrow type layout errors during serialization instead of trying to convert them.
     #[serde(skip_serializing_if = "is_false")]
     rethrow_serialization_type_layout_errors: bool,
+
+    // Probe rounds received by peers from every authority.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_round_prober: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1561,6 +1565,10 @@ impl ProtocolConfig {
 
     pub fn rethrow_serialization_type_layout_errors(&self) -> bool {
         self.feature_flags.rethrow_serialization_type_layout_errors
+    }
+
+    pub fn consensus_round_prober(&self) -> bool {
+        self.feature_flags.consensus_round_prober
     }
 }
 
@@ -2714,6 +2722,10 @@ impl ProtocolConfig {
                         cfg.bridge_should_try_to_finalize_committee = Some(true);
                     }
                 }
+                59 => {
+                    // Enable round prober in consensus.
+                    cfg.feature_flags.consensus_round_prober = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2868,6 +2880,10 @@ impl ProtocolConfig {
 
     pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.passkey_auth = val
+    }
+
+    pub fn set_consensus_round_prober_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_round_prober = val;
     }
 }
 
