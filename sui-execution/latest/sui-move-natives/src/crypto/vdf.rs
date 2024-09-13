@@ -151,7 +151,10 @@ pub fn hash_to_input_internal(
 
     let message = pop_arg!(args, VectorRef);
 
-    let output = match QuadraticForm::hash_to_group(&message.as_bytes_ref(), &DISCRIMINANT_3072) {
+    let output = match QuadraticForm::hash_to_group_with_default_parameters(
+        &message.as_bytes_ref(),
+        &DISCRIMINANT_3072,
+    ) {
         Ok(output) => output,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     };
