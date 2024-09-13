@@ -184,7 +184,7 @@ fn compute_completions_new_symbols(
 
 /// Computes a list of auto-completions for a given position in a file
 /// using the symbols provided as argument.
-fn compute_completions_with_symbols(
+pub fn compute_completions_with_symbols(
     symbols: &Symbols,
     path: &Path,
     pos: Position,
