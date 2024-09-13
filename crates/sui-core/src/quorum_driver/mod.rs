@@ -354,8 +354,7 @@ where
                 );
                 Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,
-                    retried_tx: None,
-                    retried_tx_success: None,
+                    retried_tx_status: None,
                 }))
             }
 
@@ -450,8 +449,7 @@ where
                 );
                 Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,
-                    retried_tx: None,
-                    retried_tx_success: None,
+                    retried_tx_status: None,
                 }))
             }
             Ok(success) => {
@@ -468,8 +466,7 @@ where
                 }
                 Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,
-                    retried_tx: Some(conflicting_tx_digest),
-                    retried_tx_success: Some(success),
+                    retried_tx_status: Some((conflicting_tx_digest, success)),
                 }))
             }
         }
