@@ -146,6 +146,7 @@ async fn start_client_components(
         bridge_auth_agg.clone(),
         bridge_pause_tx,
         sui_token_type_tags,
+        metrics.clone(),
     );
     all_handles.push(spawn_logged_monitored_task!(monitor.run()));
 

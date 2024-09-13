@@ -7,6 +7,7 @@ use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::{BlocklistValidatorEvent, CommitteeMemberUrlUpdateEvent};
 use crate::events::{EmergencyOpEvent, SuiBridgeEvent};
+use crate::metrics::BridgeMetrics;
 use crate::retry_with_max_elapsed_time;
 use crate::sui_client::{SuiClient, SuiClientInner};
 use crate::types::{BridgeCommittee, IsBridgePaused};
@@ -25,6 +26,7 @@ pub struct BridgeMonitor<C> {
     bridge_auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
     bridge_paused_watch_tx: tokio::sync::watch::Sender<IsBridgePaused>,
     sui_token_type_tags: Arc<ArcSwap<HashMap<u8, TypeTag>>>,
+    bridge_metrics: Arc<BridgeMetrics>,
 }
 
 impl<C> BridgeMonitor<C>
@@ -37,6 +39,7 @@ where
         bridge_auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
         bridge_paused_watch_tx: tokio::sync::watch::Sender<IsBridgePaused>,
         sui_token_type_tags: Arc<ArcSwap<HashMap<u8, TypeTag>>>,
+        bridge_metrics: Arc<BridgeMetrics>,
     ) -> Self {
         Self {
             sui_client,
@@ -44,6 +47,7 @@ where
             bridge_auth_agg,
             bridge_paused_watch_tx,
             sui_token_type_tags,
+            bridge_metrics,
         }
     }
 
@@ -55,6 +59,7 @@ where
             bridge_auth_agg,
             bridge_paused_watch_tx,
             sui_token_type_tags,
+            bridge_metrics,
         } = self;
         let mut latest_token_config = (*sui_token_type_tags.load().clone()).clone();
 
@@ -66,11 +71,15 @@ where
                 SuiBridgeEvent::TokenTransferAlreadyApproved(_) => (),
                 SuiBridgeEvent::TokenTransferAlreadyClaimed(_) => (),
                 SuiBridgeEvent::TokenTransferLimitExceed(_) => {
-                    // TODO
+                    // TODO do we want to do anything here?
                 }
 
                 SuiBridgeEvent::EmergencyOpEvent(event) => {
                     info!("Received EmergencyOpEvent: {:?}", event);
+                    bridge_metrics
+                        .observed_governance_actions
+                        .with_label_values(&["emergency_op", "sui"])
+                        .inc();
                     let is_paused = get_latest_bridge_pause_status_with_emergency_event(
                         sui_client.clone(),
                         event,
@@ -101,6 +110,10 @@ where
 
                 SuiBridgeEvent::BlocklistValidatorEvent(event) => {
                     info!("Received BlocklistValidatorEvent: {:?}", event);
+                    bridge_metrics
+                        .observed_governance_actions
+                        .with_label_values(&["blocklist_validator", "sui"])
+                        .inc();
                     let new_committee = get_latest_bridge_committee_with_blocklist_event(
                         sui_client.clone(),
                         event,
@@ -116,6 +129,11 @@ where
                 SuiBridgeEvent::TokenRegistrationEvent(_) => (),
 
                 SuiBridgeEvent::NewTokenEvent(event) => {
+                    info!("Received NewTokenEvent: {:?}", event);
+                    bridge_metrics
+                        .observed_governance_actions
+                        .with_label_values(&["new_token", "sui"])
+                        .inc();
                     if let std::collections::hash_map::Entry::Vacant(entry) =
                         // We only add new tokens but not remove so it's ok to just insert
                         latest_token_config.entry(event.token_id)
@@ -128,7 +146,13 @@ where
                     }
                 }
 
-                SuiBridgeEvent::UpdateTokenPriceEvent(_) => (),
+                SuiBridgeEvent::UpdateTokenPriceEvent(event) => {
+                    info!("Received UpdateTokenPriceEvent: {:?}", event);
+                    bridge_metrics
+                        .observed_governance_actions
+                        .with_label_values(&["update_token_price", "sui"])
+                        .inc();
+                }
             }
         }
 
@@ -725,6 +749,7 @@ mod tests {
             bridge_pause_tx,
             _bridge_pause_rx,
             mut authorities,
+            bridge_metrics,
         ) = setup();
         let old_committee = BridgeCommittee::new(authorities.clone()).unwrap();
         let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
@@ -738,6 +763,7 @@ mod tests {
                 agg.clone(),
                 bridge_pause_tx,
                 sui_token_type_tags,
+                bridge_metrics,
             )
             .run(),
         );
@@ -779,6 +805,7 @@ mod tests {
             bridge_pause_tx,
             _bridge_pause_rx,
             mut authorities,
+            bridge_metrics,
         ) = setup();
         let old_committee = BridgeCommittee::new(authorities.clone()).unwrap();
         let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
@@ -792,6 +819,7 @@ mod tests {
                 agg.clone(),
                 bridge_pause_tx,
                 sui_token_type_tags,
+                bridge_metrics,
             )
             .run(),
         );
@@ -831,6 +859,7 @@ mod tests {
             bridge_pause_tx,
             bridge_pause_rx,
             authorities,
+            bridge_metrics,
         ) = setup();
         let event = EmergencyOpEvent {
             frozen: !*bridge_pause_tx.borrow(), // toggle the bridge pause status
@@ -847,6 +876,7 @@ mod tests {
                 agg.clone(),
                 bridge_pause_tx,
                 sui_token_type_tags,
+                bridge_metrics,
             )
             .run(),
         );
@@ -872,6 +902,7 @@ mod tests {
             bridge_pause_tx,
             _bridge_pause_rx,
             authorities,
+            bridge_metrics,
         ) = setup();
         let event = NewTokenEvent {
             token_id: 255,
@@ -893,6 +924,7 @@ mod tests {
                 agg.clone(),
                 bridge_pause_tx,
                 sui_token_type_tags_clone,
+                bridge_metrics,
             )
             .run(),
         );
@@ -920,11 +952,13 @@ mod tests {
         tokio::sync::watch::Sender<IsBridgePaused>,
         tokio::sync::watch::Receiver<IsBridgePaused>,
         Vec<BridgeAuthority>,
+        Arc<BridgeMetrics>,
     ) {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
         mysten_metrics::init_metrics(&registry);
         init_all_struct_tags();
+        let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
 
         let sui_client_mock = SuiMockClient::default();
         let sui_client = Arc::new(SuiClient::new_for_testing(sui_client_mock.clone()));
@@ -950,6 +984,7 @@ mod tests {
             bridge_pause_tx,
             bridge_pause_rx,
             authorities,
+            bridge_metrics,
         )
     }
 }
