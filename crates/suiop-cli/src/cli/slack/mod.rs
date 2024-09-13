@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod slack_api;
+
 use anyhow::Result;
 use futures::future::Either;
 use reqwest::{header, Client};
@@ -10,10 +12,8 @@ use std::fs::File;
 use std::path::PathBuf;
 use tracing::debug;
 
-use super::slack_api::get_channels;
-use super::slack_api::get_users;
-use super::slack_api::Channel;
-use super::slack_api::User;
+/// Reexport for convenience
+pub use slack_api::*;
 
 #[derive(Debug, Default)]
 pub struct Slack {
@@ -110,7 +110,7 @@ impl Slack {
     }
 
     pub async fn send_message(self, channel: &str, message: &str) -> Result<()> {
-        super::slack_api::send_message(&self.client, channel, message).await
+        slack_api::send_message(&self.client, channel, message).await
     }
 }
 
