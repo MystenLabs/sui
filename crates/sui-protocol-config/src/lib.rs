@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 59;
+const MAX_PROTOCOL_VERSION: u64 = 60;
 
 // Record history of protocol version allocations here:
 //
@@ -2757,6 +2757,9 @@ impl ProtocolConfig {
                     }
                 }
                 59 => {
+                    // Leave empty, used by 1.33 path.
+                }
+                60 => {
                     cfg.max_type_to_layout_nodes = Some(512);
 
                     // Enable round prober in consensus.
