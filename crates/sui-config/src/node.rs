@@ -272,6 +272,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Credenza3".to_string(),
         "Playtron".to_string(),
         "Threedos".to_string(),
+        "Onefc".to_string(),
         "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(), // test tenant in mysten aws
         "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(), // ambrus, external partner
     ]);

@@ -4622,7 +4622,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.8"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d75fa1706f06ecb5471b1c9bd200f7c84e277bfd#d75fa1706f06ecb5471b1c9bd200f7c84e277bfd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=b1ff61a2fcf20f689849ae270c93dc849c486d80#b1ff61a2fcf20f689849ae270c93dc849c486d80"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4676,7 +4676,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d75fa1706f06ecb5471b1c9bd200f7c84e277bfd#d75fa1706f06ecb5471b1c9bd200f7c84e277bfd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=b1ff61a2fcf20f689849ae270c93dc849c486d80#b1ff61a2fcf20f689849ae270c93dc849c486d80"
 dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
@@ -4685,7 +4685,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d75fa1706f06ecb5471b1c9bd200f7c84e277bfd#d75fa1706f06ecb5471b1c9bd200f7c84e277bfd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=b1ff61a2fcf20f689849ae270c93dc849c486d80#b1ff61a2fcf20f689849ae270c93dc849c486d80"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -4704,7 +4704,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d75fa1706f06ecb5471b1c9bd200f7c84e277bfd#d75fa1706f06ecb5471b1c9bd200f7c84e277bfd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=b1ff61a2fcf20f689849ae270c93dc849c486d80#b1ff61a2fcf20f689849ae270c93dc849c486d80"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -4721,7 +4721,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d75fa1706f06ecb5471b1c9bd200f7c84e277bfd#d75fa1706f06ecb5471b1c9bd200f7c84e277bfd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=b1ff61a2fcf20f689849ae270c93dc849c486d80#b1ff61a2fcf20f689849ae270c93dc849c486d80"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -8651,6 +8651,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rand 0.8.5",
+ "serde",
 ]
 
 [[package]]
