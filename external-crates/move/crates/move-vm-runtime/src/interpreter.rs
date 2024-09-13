@@ -6,7 +6,6 @@ use crate::{
     loader::{Function, Loader, Resolver},
     native_functions::NativeContext,
     trace,
-    tracing2::tracer::VMTracer,
 };
 use fail::fail_point;
 use move_binary_format::{
@@ -78,9 +77,9 @@ enum InstrRet {
 /// It mimics execution on a single thread, with an call stack and an operand stack.
 pub(crate) struct Interpreter {
     /// Operand stack, where Move `Value`s are stored for stack operations.
-    pub(crate) operand_stack: Stack,
+    operand_stack: Stack,
     /// The stack of active functions.
-    pub(crate) call_stack: CallStack,
+    call_stack: CallStack,
     /// Limits imposed at runtime
     runtime_limits_config: VMRuntimeLimitsConfig,
 }
@@ -111,24 +110,12 @@ impl Interpreter {
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         loader: &Loader,
-        tracer: &mut Option<VMTracer<'_>>,
     ) -> VMResult<Vec<Value>> {
         let mut interpreter = Interpreter {
             operand_stack: Stack::new(),
             call_stack: CallStack::new(),
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
-        #[cfg(feature = "gas-profiler")]
-        tracer.as_mut().map(|tracer| {
-            tracer.open_initial_frame(
-                &args,
-                &ty_args,
-                &function,
-                &loader,
-                gas_meter.remaining_gas().into(),
-                data_store.link_context(),
-            )
-        });
         profile_open_frame!(gas_meter, function.pretty_string());
 
         if function.is_native() {
@@ -154,16 +141,12 @@ impl Interpreter {
                         .finish(Location::Module(function.module_id().clone()))
                 })?;
 
-            #[cfg(feature = "gas-profiler")]
-            tracer.as_mut().map(|tracer| {
-                tracer.close_initial_frame(&return_values, gas_meter.remaining_gas().into())
-            });
             profile_close_frame!(gas_meter, function.pretty_string());
 
             Ok(return_values.into_iter().collect())
         } else {
             interpreter.execute_main(
-                loader, data_store, gas_meter, extensions, function, ty_args, args, tracer,
+                loader, data_store, gas_meter, extensions, function, ty_args, args,
             )
         }
     }
@@ -183,7 +166,6 @@ impl Interpreter {
         function: Arc<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
-        tracer: &mut Option<VMTracer<'_>>,
     ) -> VMResult<Vec<Value>> {
         let mut locals = Locals::new(function.local_count());
         for (i, value) in args.into_iter().enumerate() {
@@ -205,7 +187,7 @@ impl Interpreter {
         loop {
             let resolver = current_frame.resolver(link_context, loader);
             let exit_code = current_frame //self
-                .execute_code(&resolver, &mut self, gas_meter, tracer)
+                .execute_code(&resolver, &mut self, gas_meter)
                 .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
             match exit_code {
                 ExitCode::Return => {
@@ -219,17 +201,6 @@ impl Interpreter {
                         .charge_drop_frame(non_ref_vals.into_iter())
                         .map_err(|e| self.set_location(e))?;
 
-                    #[cfg(feature = "gas-profiler")]
-                    tracer.as_mut().map(|tracer| {
-                        tracer.close_frame(
-                            &current_frame,
-                            &current_frame.function,
-                            &self,
-                            &loader,
-                            gas_meter.remaining_gas().into(),
-                            link_context,
-                        )
-                    });
                     profile_close_frame!(gas_meter, current_frame.function.pretty_string());
 
                     if let Some(frame) = self.call_stack.pop() {
@@ -244,20 +215,8 @@ impl Interpreter {
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
                     #[cfg(feature = "gas-profiler")]
-                    tracer.as_mut().map(|tracer| {
-                        tracer.open_frame(
-                            &[],
-                            &func,
-                            &current_frame,
-                            &self,
-                            &loader,
-                            gas_meter.remaining_gas().into(),
-                            link_context,
-                        )
-                    });
-                    #[cfg(feature = "gas-profiler")]
-                    let func_clone = func.clone();
-                    profile_open_frame!(gas_meter, func_clone.pretty_string());
+                    let func_name = func.pretty_string();
+                    profile_open_frame!(gas_meter, func_name.clone());
 
                     // Charge gas
                     let module_id = func.module_id();
@@ -277,18 +236,7 @@ impl Interpreter {
 
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        #[cfg(feature = "gas-profiler")]
-                        tracer.as_mut().map(|tracer| {
-                            tracer.close_frame(
-                                &current_frame,
-                                &func_clone,
-                                &self,
-                                &loader,
-                                gas_meter.remaining_gas().into(),
-                                link_context,
-                            )
-                        });
-                        profile_close_frame!(gas_meter, func_clone.pretty_string());
+                        profile_close_frame!(gas_meter, func_name.clone());
                         continue;
                     }
                     let frame = self
@@ -310,20 +258,8 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
                     #[cfg(feature = "gas-profiler")]
-                    tracer.as_mut().map(|tracer| {
-                        tracer.open_frame(
-                            &ty_args,
-                            &func,
-                            &current_frame,
-                            &self,
-                            &loader,
-                            gas_meter.remaining_gas().into(),
-                            link_context,
-                        )
-                    });
-                    #[cfg(feature = "gas-profiler")]
-                    let func_clone = func.clone();
-                    profile_open_frame!(gas_meter, func_clone.pretty_string());
+                    let func_name = func.pretty_string();
+                    profile_open_frame!(gas_meter, func_name.clone());
 
                     // Charge gas
                     let module_id = func.module_id();
@@ -342,18 +278,7 @@ impl Interpreter {
                     if func.is_native() {
                         self.call_native(&resolver, gas_meter, extensions, func, ty_args)?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
-                        #[cfg(feature = "gas-profiler")]
-                        tracer.as_mut().map(|tracer| {
-                            tracer.close_frame(
-                                &current_frame,
-                                &func_clone,
-                                &self,
-                                &loader,
-                                gas_meter.remaining_gas().into(),
-                                link_context,
-                            )
-                        });
-                        profile_close_frame!(gas_meter, func_clone.pretty_string());
+                        profile_close_frame!(gas_meter, func_name.clone());
 
                         continue;
                     }
@@ -759,8 +684,8 @@ const OPERAND_STACK_SIZE_LIMIT: usize = 1024;
 const CALL_STACK_SIZE_LIMIT: usize = 1024;
 
 /// The operand stack.
-pub(crate) struct Stack {
-    pub(crate) value: Vec<Value>,
+struct Stack {
+    value: Vec<Value>,
 }
 
 impl Stack {
@@ -818,7 +743,7 @@ impl Stack {
 
 /// A call stack.
 // #[derive(Debug)]
-pub(crate) struct CallStack(pub(crate) Vec<Frame>);
+struct CallStack(Vec<Frame>);
 
 impl CallStack {
     /// Create a new empty call stack.
@@ -850,11 +775,11 @@ impl CallStack {
 /// A `Frame` is the execution context for a function. It holds the locals of the function and
 /// the function itself.
 // #[derive(Debug)]
-pub(crate) struct Frame {
-    pub(crate) pc: u16,
-    pub(crate) locals: Locals,
-    pub(crate) function: Arc<Function>,
-    pub(crate) ty_args: Vec<Type>,
+struct Frame {
+    pc: u16,
+    locals: Locals,
+    function: Arc<Function>,
+    ty_args: Vec<Type>,
 }
 
 /// An `ExitCode` from `execute_code_unit`.
@@ -872,9 +797,8 @@ impl Frame {
         resolver: &Resolver,
         interpreter: &mut Interpreter,
         gas_meter: &mut impl GasMeter,
-        tracer: &mut Option<VMTracer<'_>>,
     ) -> VMResult<ExitCode> {
-        self.execute_code_impl(resolver, interpreter, gas_meter, tracer)
+        self.execute_code_impl(resolver, interpreter, gas_meter)
             .map_err(|e| {
                 let e = if resolver.loader().vm_config().error_execution_state {
                     e.with_exec_state(interpreter.get_internal_state())
@@ -1430,13 +1354,11 @@ impl Frame {
         Ok(InstrRet::Ok)
     }
 
-    #[allow(unused_variables)]
     fn execute_code_impl(
         &mut self,
         resolver: &Resolver,
         interpreter: &mut Interpreter,
         gas_meter: &mut impl GasMeter,
-        tracer: &mut Option<VMTracer<'_>>,
     ) -> PartialVMResult<ExitCode> {
         let code = self.function.code();
         loop {
@@ -1458,16 +1380,6 @@ impl Frame {
                     )
                 });
 
-                #[cfg(feature = "gas-profiler")]
-                tracer.as_mut().map(|tracer| {
-                    tracer.open_instruction(
-                        self,
-                        interpreter,
-                        resolver.loader(),
-                        gas_meter.remaining_gas().into(),
-                    )
-                });
-
                 profile_open_instr!(gas_meter, format!("{:?}", instruction));
 
                 let r = Self::execute_instruction(
@@ -1479,21 +1391,11 @@ impl Frame {
                     interpreter,
                     gas_meter,
                     instruction,
-                );
+                )?;
 
                 profile_close_instr!(gas_meter, format!("{:?}", instruction));
-                #[cfg(feature = "gas-profiler")]
-                tracer.as_mut().map(|tracer| {
-                    tracer.close_instruction(
-                        self,
-                        interpreter,
-                        resolver.loader(),
-                        gas_meter.remaining_gas().into(),
-                        r.as_ref().err(),
-                    )
-                });
 
-                match r? {
+                match r {
                     InstrRet::Ok => (),
                     InstrRet::ExitCode(exit_code) => {
                         return Ok(exit_code);

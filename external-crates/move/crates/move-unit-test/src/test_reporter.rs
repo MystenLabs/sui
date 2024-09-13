@@ -15,11 +15,9 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_ir_types::location::Loc;
-use move_trace_format::format::MoveTrace;
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::{Result, Write},
-    path::Path,
     sync::Mutex,
     time::Duration,
 };
@@ -42,7 +40,7 @@ pub enum FailureReason {
     Property(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct TestFailure {
     pub test_run_info: TestRunInfo,
     pub vm_error: Option<VMError>,
@@ -50,11 +48,10 @@ pub struct TestFailure {
     pub prng_seed: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct TestRunInfo {
     pub elapsed_time: Duration,
     pub instructions_executed: u64,
-    pub trace: Option<MoveTrace>,
 }
 
 type TestRuns<T> = BTreeMap<String, Vec<T>>;
@@ -71,34 +68,11 @@ pub struct TestResults {
     test_plan: TestPlan,
 }
 
-fn write_string_to_file(filepath: &str, content: &str) -> std::io::Result<()> {
-    let path = Path::new(filepath);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let mut file = std::fs::File::create(path)?;
-    file.write_all(content.as_bytes())?;
-    Ok(())
-}
-
 impl TestRunInfo {
-    pub fn new(
-        elapsed_time: Duration,
-        instructions_executed: u64,
-        trace: Option<MoveTrace>,
-    ) -> Self {
+    pub fn new(elapsed_time: Duration, instructions_executed: u64) -> Self {
         Self {
             elapsed_time,
             instructions_executed,
-            trace,
-        }
-    }
-
-    pub fn save_trace(&self, path: &str) -> Result<()> {
-        if let Some(trace) = &self.trace {
-            write_string_to_file(path, &format!("{}", trace.to_json()))
-        } else {
-            Ok(())
         }
     }
 }
