@@ -1181,6 +1181,14 @@ mod tests {
 
             Ok(serialised)
         }
+
+        async fn get_latest_rounds(
+            &self,
+            _peer: AuthorityIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Round>> {
+            unimplemented!("Unimplemented")
+        }
     }
 
     #[test]

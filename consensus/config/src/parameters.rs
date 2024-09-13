@@ -38,6 +38,26 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_max_blocks_per_fetch")]
     pub max_blocks_per_fetch: usize,
 
+    /// Time to wait during node start up until the node has synced the last proposed block via the
+    /// network peers. When set to `0` the sync mechanism is disabled. This property is meant to be
+    /// used for amnesia recovery.
+    #[serde(default = "Parameters::default_sync_last_known_own_block_timeout")]
+    pub sync_last_known_own_block_timeout: Duration,
+
+    /// Interval in milliseconds to probe highest received rounds of peers.
+    #[serde(default = "Parameters::default_round_prober_interval_ms")]
+    pub round_prober_interval_ms: u64,
+
+    /// Timeout in milliseconds for a round prober request.
+    #[serde(default = "Parameters::default_round_prober_request_timeout_ms")]
+    pub round_prober_request_timeout_ms: u64,
+
+    /// Proposing new block is stopped when the propagation delay is greater than this threshold.
+    /// Propagation delay is the difference between the round of the last proposed block and the
+    /// the highest round from this authority that is received by all validators in a quorum.
+    #[serde(default = "Parameters::default_propagation_delay_stop_proposal_threshold")]
+    pub propagation_delay_stop_proposal_threshold: u32,
+
     /// The number of rounds of blocks to be kept in the Dag state cache per authority. The larger
     /// the number the more the blocks that will be kept in memory allowing minimising any potential
     /// disk access.
@@ -69,12 +89,6 @@ pub struct Parameters {
     /// Tonic network settings.
     #[serde(default = "TonicParameters::default")]
     pub tonic: TonicParameters,
-
-    /// Time to wait during node start up until the node has synced the last proposed block via the
-    /// network peers. When set to `0` the sync mechanism is disabled. This property is meant to be
-    /// used for amnesia recovery.
-    #[serde(default = "Parameters::default_sync_last_known_own_block_timeout")]
-    pub sync_last_known_own_block_timeout: Duration,
 }
 
 impl Parameters {
@@ -95,6 +109,38 @@ impl Parameters {
 
     pub(crate) fn default_max_forward_time_drift() -> Duration {
         Duration::from_millis(500)
+    }
+
+    pub(crate) fn default_max_blocks_per_fetch() -> usize {
+        if cfg!(msim) {
+            // Exercise hitting blocks per fetch limit.
+            10
+        } else {
+            1000
+        }
+    }
+
+    pub(crate) fn default_sync_last_known_own_block_timeout() -> Duration {
+        if cfg!(msim) {
+            Duration::from_millis(500)
+        } else {
+            // Here we prioritise liveness over the complete de-risking of block equivocation. 5 seconds
+            // in the majority of cases should be good enough for this given a healthy network.
+            Duration::from_secs(5)
+        }
+    }
+
+    pub(crate) fn default_round_prober_interval_ms() -> u64 {
+        5000
+    }
+
+    pub(crate) fn default_round_prober_request_timeout_ms() -> u64 {
+        2000
+    }
+
+    pub(crate) fn default_propagation_delay_stop_proposal_threshold() -> u32 {
+        // Propagation delay is usually 0 round in production.
+        20
     }
 
     pub(crate) fn default_dag_state_cached_rounds() -> u32 {
@@ -119,29 +165,10 @@ impl Parameters {
         }
     }
 
-    pub(crate) fn default_max_blocks_per_fetch() -> usize {
-        if cfg!(msim) {
-            // Exercise hitting blocks per fetch limit.
-            10
-        } else {
-            1000
-        }
-    }
-
     pub(crate) fn default_commit_sync_batches_ahead() -> usize {
         // This is set to be a multiple of default commit_sync_parallel_fetches to allow fetching ahead,
         // while keeping the total number of inflight fetches and unprocessed fetched commits limited.
         80
-    }
-
-    pub(crate) fn default_sync_last_known_own_block_timeout() -> Duration {
-        if cfg!(msim) {
-            Duration::from_millis(500)
-        } else {
-            // Here we prioritise liveness over the complete de-risking of block equivocation. 5 seconds
-            // in the majority of cases should be good enough for this given a healthy network.
-            Duration::from_secs(5)
-        }
     }
 }
 
@@ -152,10 +179,14 @@ impl Default for Parameters {
             leader_timeout: Parameters::default_leader_timeout(),
             min_round_delay: Parameters::default_min_round_delay(),
             max_forward_time_drift: Parameters::default_max_forward_time_drift(),
-            dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
             max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
             sync_last_known_own_block_timeout:
                 Parameters::default_sync_last_known_own_block_timeout(),
+            round_prober_interval_ms: Parameters::default_round_prober_interval_ms(),
+            round_prober_request_timeout_ms: Parameters::default_round_prober_request_timeout_ms(),
+            propagation_delay_stop_proposal_threshold:
+                Parameters::default_propagation_delay_stop_proposal_threshold(),
+            dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
             commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
