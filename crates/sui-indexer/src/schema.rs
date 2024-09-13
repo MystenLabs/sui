@@ -367,6 +367,19 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    watermarks (entity) {
+        entity -> Text,
+        epoch_hi -> Int8,
+        epoch_lo -> Int8,
+        checkpoint_hi -> Int8,
+        hi -> Int8,
+        lo -> Int8,
+        timestamp_ms -> Int8,
+        pruned_lo -> Nullable<Int8>,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     chain_identifier,
     checkpoints,
@@ -402,4 +415,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     tx_kinds,
     tx_recipients,
     tx_senders,
+    watermarks,
 );

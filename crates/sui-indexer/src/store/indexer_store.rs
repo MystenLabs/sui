@@ -11,6 +11,7 @@ use crate::models::display::StoredDisplay;
 use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
 use crate::models::raw_checkpoints::StoredRawCheckpoint;
+use crate::models::watermarks::{Watermark, WatermarkEntity, WatermarkRead};
 use crate::types::{
     EventIndex, IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
 };
@@ -25,7 +26,11 @@ pub enum ObjectsToCommit {
 pub trait IndexerStore: Clone + Sync + Send + 'static {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError>;
 
-    async fn get_available_epoch_range(&self) -> Result<(u64, u64), IndexerError>;
+    async fn get_available_epoch_range(&self) -> Result<WatermarkRead, IndexerError>;
+
+    async fn get_watermarks(
+        &self,
+    ) -> Result<BTreeMap<WatermarkEntity, WatermarkRead>, IndexerError>;
 
     async fn get_available_checkpoint_range(&self) -> Result<(u64, u64), IndexerError>;
 
@@ -114,4 +119,9 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
         &self,
         checkpoints: Vec<StoredRawCheckpoint>,
     ) -> Result<(), IndexerError>;
+
+    /// Accepts a vector of various watermark updates and persists them to the store.
+    async fn update_watermarks(&self, watermarks: Vec<Watermark>) -> Result<(), IndexerError>;
+
+    async fn get_min_cp_and_tx_for_epoch(&self, epoch: u64) -> Result<(u64, u64), IndexerError>;
 }

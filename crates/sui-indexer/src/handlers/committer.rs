@@ -12,6 +12,7 @@ use tracing::{error, info};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::metrics::IndexerMetrics;
+use crate::models::watermarks::Watermark;
 use crate::store::IndexerStore;
 use crate::types::IndexerResult;
 
@@ -59,6 +60,8 @@ where
             batch.push(checkpoint);
             next_checkpoint_sequence_number += 1;
             let epoch_number_option = epoch.as_ref().map(|epoch| epoch.new_epoch.epoch);
+            // The batch will consist of contiguous checkpoints and at most one epoch boundary at
+            // the end.
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
                 commit_checkpoints(&state, batch, epoch, &metrics, &commit_notifier).await;
                 batch = vec![];
@@ -81,6 +84,10 @@ where
     Ok(())
 }
 
+/// Writes indexed checkpoint data to the database, and then update watermark upper bounds and
+/// metrics. Expects `indexed_checkpoint_batch` to be non-empty, and contain contiguous checkpoints.
+/// There can be at most one epoch boundary at the end. If an epoch boundary is detected,
+/// epoch-partitioned tables must be advanced.
 // Unwrap: Caller needs to make sure indexed_checkpoint_batch is not empty
 #[instrument(skip_all, fields(
     first = indexed_checkpoint_batch.first().as_ref().unwrap().checkpoint.sequence_number,
@@ -133,7 +140,14 @@ async fn commit_checkpoints<S>(
     }
 
     let first_checkpoint_seq = checkpoint_batch.first().as_ref().unwrap().sequence_number;
-    let last_checkpoint_seq = checkpoint_batch.last().as_ref().unwrap().sequence_number;
+    let (last_epoch, last_checkpoint_seq, last_tx_seq) = {
+        let checkpoint = checkpoint_batch.last().unwrap();
+        (
+            checkpoint.epoch,
+            checkpoint.sequence_number,
+            checkpoint.max_tx_sequence_number,
+        )
+    };
 
     let guard = metrics.checkpoint_db_commit_latency.start_timer();
     let tx_batch = tx_batch.into_iter().flatten().collect::<Vec<_>>();
@@ -168,11 +182,12 @@ async fn commit_checkpoints<S>(
             // 1. persist_objects and persist_object_history both call another function to make the final
             //    committed object list. We could call it early and share the result.
             // 2. We could avoid clone by using Arc.
-            state.persist_objects(object_changes_batch.clone()),
+            state.persist_objects(object_changes_batch),
             state.persist_object_history(object_history_changes_batch.clone()),
-            state.persist_full_objects_history(object_history_changes_batch.clone()),
-            state.persist_object_versions(object_versions_batch.clone()),
+            state.persist_full_objects_history(object_history_changes_batch),
+            state.persist_object_versions(object_versions_batch),
             state.persist_raw_checkpoints(raw_checkpoints_batch),
+            state.persist_checkpoints(checkpoint_batch),
         ];
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));
@@ -192,7 +207,8 @@ async fn commit_checkpoints<S>(
 
     let is_epoch_end = epoch.is_some();
 
-    // handle partitioning on epoch boundary
+    // On epoch boundary, we need to modify the existing partitions' upper bound, and introduce a
+    // new partition for incoming data for the upcoming epoch.
     if let Some(epoch_data) = epoch {
         state
             .advance_epoch(epoch_data)
@@ -203,17 +219,6 @@ async fn commit_checkpoints<S>(
             .expect("Advancing epochs in DB should not fail.");
         metrics.total_epoch_committed.inc();
     }
-
-    state
-        .persist_checkpoints(checkpoint_batch)
-        .await
-        .tap_err(|e| {
-            error!(
-                "Failed to persist checkpoint data with error: {}",
-                e.to_string()
-            );
-        })
-        .expect("Persisting data into DB should not fail.");
 
     if is_epoch_end {
         // The epoch has advanced so we update the configs for the new protocol version, if it has changed.
@@ -226,6 +231,18 @@ async fn commit_checkpoints<S>(
             .persist_protocol_configs_and_feature_flags(chain_id)
             .await;
     }
+
+    state
+        .update_watermarks(Watermark::new_upper_bounds(
+            last_epoch,
+            last_checkpoint_seq,
+            last_tx_seq,
+        ))
+        .await
+        .tap_err(|e| {
+            error!("Failed to update watermarks with error: {}", e.to_string());
+        })
+        .expect("Updating watermarks in DB should not fail.");
 
     let elapsed = guard.stop_and_record();
 
