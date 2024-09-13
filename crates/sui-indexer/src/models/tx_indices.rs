@@ -9,6 +9,7 @@ use crate::{
     types::TxIndex,
 };
 use diesel::prelude::*;
+use itertools::Itertools;
 
 #[derive(QueryableByName)]
 pub struct TxSequenceNumber {
@@ -122,21 +123,21 @@ impl TxIndex {
         let tx_affected_addresses = self
             .recipients
             .iter()
-            .map(|r| StoredTxAffected {
+            .chain(self.payers.iter())
+            .chain(std::iter::once(&self.sender))
+            .unique()
+            .map(|a| StoredTxAffected {
                 tx_sequence_number,
-                affected: r.to_vec(),
+                affected: a.to_vec(),
                 sender: self.sender.to_vec(),
             })
-            .chain(std::iter::once(StoredTxAffected {
-                tx_sequence_number,
-                affected: self.sender.to_vec(),
-                sender: self.sender.to_vec(),
-            }))
             .collect();
+
         let tx_sender = StoredTxSenders {
             tx_sequence_number,
             sender: self.sender.to_vec(),
         };
+
         let tx_recipients = self
             .recipients
             .iter()
@@ -146,6 +147,7 @@ impl TxIndex {
                 sender: self.sender.to_vec(),
             })
             .collect();
+
         let tx_input_objects = self
             .input_objects
             .iter()
@@ -155,6 +157,7 @@ impl TxIndex {
                 sender: self.sender.to_vec(),
             })
             .collect();
+
         let tx_changed_objects = self
             .changed_objects
             .iter()
