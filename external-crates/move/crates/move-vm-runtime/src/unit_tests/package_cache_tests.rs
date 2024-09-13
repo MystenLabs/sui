@@ -1,14 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::loader::ast::{PackageStorageId, RuntimePackageId};
-use crate::unit_tests::relinking_store::RelinkingStore;
 use crate::{
-    data_cache::TransactionDataCache, loader::vm_cache::VMCache, native_functions::NativeFunctions,
+    data_cache::TransactionDataCache,
+    loader::ast::{PackageStorageId, RuntimePackageId},
+    loader::vm_cache::VMCache,
+    native_functions::NativeFunctions,
 };
 use anyhow::Result;
-use move_binary_format::errors::VMResult;
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::{errors::VMResult, file_format::CompiledModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::WarningFilters,
@@ -16,13 +16,15 @@ use move_compiler::{
     shared::PackageConfig,
     Compiler as MoveCompiler,
 };
-use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::ModuleId;
+use move_core_types::{
+    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
+};
 use move_vm_config::runtime::VMConfig;
-use move_vm_test_utils::InMemoryStorage;
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use move_vm_test_utils::{relinking_store::RelinkingStore, InMemoryStorage};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::{Path, PathBuf},
+};
 
 pub fn expect_modules(
     units: impl IntoIterator<Item = AnnotatedCompiledUnit>,

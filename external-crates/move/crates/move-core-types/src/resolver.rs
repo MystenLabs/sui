@@ -7,8 +7,7 @@ use crate::{
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
 };
-use std::sync::Arc;
-use std::{collections::BTreeSet, fmt::Debug};
+use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
 
 /// Traits for resolving Move modules and resources from persistent storage
 

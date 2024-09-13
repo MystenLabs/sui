@@ -262,7 +262,7 @@ pub fn module(
             cache,
         )?;
         function_instantiations.push(FunctionInstantiation {
-            handle: CallType::Known(handle),
+            handle: CallType::Static(handle),
             instantiation_idx,
         });
     }
@@ -365,7 +365,7 @@ fn code(context: &mut Context, code: &[FF::Bytecode]) -> PartialVMResult<*const 
 fn bytecode(context: &mut Context, bytecode: &FF::Bytecode) -> PartialVMResult<Bytecode> {
     let bytecode = match bytecode {
         // Calls -- these get compiled to something more-direct here
-        FF::Bytecode::Call(ndx) => Bytecode::KnownCall(call(context, *ndx)?),
+        FF::Bytecode::Call(ndx) => Bytecode::StaticCall(call(context, *ndx)?),
 
         // For now, generic calls retain an index so we can look up their signature as well.
         FF::Bytecode::CallGeneric(ndx) => Bytecode::CallGeneric(*ndx),

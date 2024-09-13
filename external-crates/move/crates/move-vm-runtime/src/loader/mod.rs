@@ -1510,7 +1510,7 @@ impl<'a> ModuleDefinitionResolver<'a> {
         idx: FunctionInstantiationIndex,
     ) -> ArenaPointer<Function> {
         let func_inst = self.binary.loaded.function_instantiation_at(idx.0);
-        let CallType::Known(f_ptr) = func_inst.handle else {
+        let CallType::Static(f_ptr) = func_inst.handle else {
             unimplemented!("TODO: Need to replace this to handle virtual generic calls as part of plumbing in the new tables for the interpreter");
         };
         f_ptr

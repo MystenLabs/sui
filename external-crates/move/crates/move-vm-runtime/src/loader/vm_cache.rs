@@ -7,8 +7,10 @@
 
 use super::{
     ast::{LoadedPackage, PackageStorageId, RuntimePackageId},
-    chain_ast::DeserializedPackage,
-    linkage_checker, translate2,
+    chain_ast::BinaryFormatPackage,
+    linkage_checker,
+    runtime_vtable::RuntimeVTables,
+    translate2,
     type_cache::TypeCache,
 };
 use crate::{logging::expect_no_verification_errors, native_functions::NativeFunctions};
@@ -117,6 +119,35 @@ impl VMCache {
         Ok(())
     }
 
+    /// Given a data store this function creates a new map of loaded packages that consist of the
+    /// root package and all of its dependencies as specified by the root package based on the link
+    /// context within the data store.
+    ///
+    /// The resuling map of vtables _must_ be closed under the static dependency graph of the root
+    /// package w.r.t, to the current linkage context in `data_store`.
+    pub fn generate_vtables<'a>(
+        &'a self,
+        data_store: &impl DataStore,
+    ) -> VMResult<RuntimeVTables<'a>> {
+        let mut loaded_packages = HashMap::new();
+
+        // Make sure the root package and all of its dependencies (under the current linkage
+        // context) are loaded.
+        let cached_packages = self.load_and_cache_link_context(data_store)?;
+
+        // Verify that the linkage and cyclic checks pass for all packages under the current
+        // linkage context.
+        linkage_checker::verify_linkage_and_cyclic_checks(&cached_packages)?;
+        cached_packages.into_iter().for_each(|(_, p)| {
+            loaded_packages.insert(p.runtime_id, p);
+        });
+
+        Ok(RuntimeVTables {
+            loaded_packages,
+            cached_types: &self.type_cache,
+        })
+    }
+
     // Loads the set of packages into the package cache.
     fn load_and_cache_packages(
         &self,
@@ -187,7 +218,7 @@ impl VMCache {
     fn cache_package(
         &self,
         package_key: PackageStorageId,
-        loading_package: DeserializedPackage,
+        loading_package: BinaryFormatPackage,
         natives: &NativeFunctions,
         data_store: &impl DataStore,
         type_cache: &RwLock<TypeCache>,
@@ -271,7 +302,7 @@ impl VMCache {
         package_id: &PackageStorageId,
         data_store: &impl DataStore,
         allow_loading_failure: bool,
-    ) -> VMResult<DeserializedPackage> {
+    ) -> VMResult<BinaryFormatPackage> {
         // Load the package bytes
         let bytes = match data_store.load_package(package_id) {
             Ok(bytes) => bytes,
@@ -286,7 +317,7 @@ impl VMCache {
 
     // Deserialize and verify the package.
     // NB: Does not perform cyclic dependency verification or linkage checking.
-    fn deserialize_and_verify_package(&self, bytes: Vec<Vec<u8>>) -> VMResult<DeserializedPackage> {
+    fn deserialize_and_verify_package(&self, bytes: Vec<Vec<u8>>) -> VMResult<BinaryFormatPackage> {
         // Deserialize each module in the package
         let mut modules = vec![];
         for module_bytes in bytes.iter() {
@@ -324,12 +355,12 @@ impl VMCache {
         // further packages.
 
         let runtime_id = *modules
-            .get(0)
+            .first()
             .expect("non-empty package")
             .self_id()
             .address();
 
-        Ok(DeserializedPackage::new(runtime_id, modules))
+        Ok(BinaryFormatPackage::new(runtime_id, modules))
     }
 
     // Compute the immediate dependencies of a package in terms of their storage IDs.
@@ -357,9 +388,9 @@ impl VMCache {
     fn compute_dependency_order(
         mut pkgs_to_cache: BTreeMap<
             PackageStorageId,
-            (DeserializedPackage, BTreeSet<PackageStorageId>),
+            (BinaryFormatPackage, BTreeSet<PackageStorageId>),
         >,
-    ) -> PartialVMResult<Vec<(PackageStorageId, DeserializedPackage)>> {
+    ) -> PartialVMResult<Vec<(PackageStorageId, BinaryFormatPackage)>> {
         // Compute edges for the dependency graph
         let package_edges = pkgs_to_cache.iter().flat_map(|(package_id, (_, deps))| {
             deps.iter()

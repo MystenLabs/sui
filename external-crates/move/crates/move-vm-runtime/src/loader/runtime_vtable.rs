@@ -10,19 +10,16 @@
 use crate::loader::{
     arena::ArenaPointer,
     ast::{Function, LoadedPackage, RuntimePackageId, VTableKey},
-    linkage_checker,
     type_cache::TypeCache,
-    vm_cache::VMCache,
 };
-use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
-use move_vm_types::data_store::DataStore;
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 
 /// The data structure that the VM uses to resolve all packages. Packages are loaded into this at
-/// before the beginning of execution, and based on the static call graph of the package that
-/// contains the root package id.
+/// before the beginning of execution, based on the static call graph of the root package (that
+/// is, contains the root package id).
 ///
 /// This is a transient (transaction-scoped) data structure that is created at the beginning of the
 /// transaction, is immutable for the execution of the transaction, and is dropped at the end of
@@ -31,38 +28,13 @@ use std::{collections::HashMap, sync::Arc};
 /// TODO(tzakian): The representation can be optimized to use a more efficient data structure for
 /// vtable/cross-package function resolution but we will keep it simple for now.
 pub struct RuntimeVTables<'a> {
-    loaded_packages: HashMap<RuntimePackageId, Arc<LoadedPackage>>,
-    cached_types: &'a RwLock<TypeCache>,
+    pub(crate) loaded_packages: HashMap<RuntimePackageId, Arc<LoadedPackage>>,
+    pub(crate) cached_types: &'a RwLock<TypeCache>,
 }
 
 /// The VM API that it will use to resolve packages and functions during execution of the
 /// transaction.
 impl<'a> RuntimeVTables<'a> {
-    /// Given a root package id, a type cache, and a data store, this function creates a new map of
-    /// loaded packages that consist of the root package and all of its dependencies as specified
-    /// by the root package.
-    ///
-    /// The resuling map of vtables _must_ be closed under the static dependency graph of the root
-    /// package w.r.t, to the current linkage context in `data_store`.
-    pub fn new(data_store: &impl DataStore, package_runtime: &'a VMCache) -> VMResult<Self> {
-        let mut loaded_packages = HashMap::new();
-
-        // Make sure the root package and all of its dependencies (under the current linkage
-        // context) are loaded.
-        let cached_packages = package_runtime.load_and_cache_link_context(data_store)?;
-
-        // Verify that the linkage and cyclic checks pass for all packages under the current
-        // linkage context.
-        linkage_checker::verify_linkage_and_cyclic_checks(&cached_packages)?;
-        cached_packages.into_iter().for_each(|(_, p)| {
-            loaded_packages.insert(p.runtime_id, p);
-        });
-
-        Ok(Self {
-            loaded_packages,
-            cached_types: &package_runtime.type_cache,
-        })
-    }
     pub fn get_package(&self, id: &RuntimePackageId) -> PartialVMResult<Arc<LoadedPackage>> {
         self.loaded_packages.get(id).cloned().ok_or_else(|| {
             PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
@@ -93,6 +65,6 @@ impl<'a> RuntimeVTables<'a> {
     }
 
     pub fn type_cache(&self) -> &'a RwLock<TypeCache> {
-        &self.cached_types
+        self.cached_types
     }
 }

@@ -52,10 +52,7 @@ impl TypeCache {
         type_args: Vec<Type>,
         datatype: DatatypeInfo,
     ) -> PartialVMResult<&DatatypeInfo> {
-        let instantiation_cache = self
-            .cached_instantiations
-            .entry(type_index)
-            .or_insert_with(HashMap::new);
+        let instantiation_cache = self.cached_instantiations.entry(type_index).or_default();
         instantiation_cache.insert(type_args.clone(), datatype);
         Ok(instantiation_cache.get(&type_args).unwrap())
     }
@@ -118,7 +115,7 @@ impl TypeCache {
                 let module_name = module.identifier_at(module_handle.name).to_owned();
                 let defining_type_id = data_store.defining_module(
                     &ModuleId::new(*runtime_address, module_name.clone()),
-                    &datatype_name,
+                    datatype_name,
                 )?;
                 let cache_idx = self
                     .resolve_type_by_name(&(
@@ -142,7 +139,7 @@ impl TypeCache {
                 let module_name = module.identifier_at(module_handle.name).to_owned();
                 let defining_type_id = data_store.defining_module(
                     &ModuleId::new(*runtime_address, module_name.clone()),
-                    &datatype_name,
+                    datatype_name,
                 )?;
                 let cache_idx = self
                     .resolve_type_by_name(&(

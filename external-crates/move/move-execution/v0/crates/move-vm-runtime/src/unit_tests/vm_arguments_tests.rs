@@ -157,26 +157,8 @@ impl ModuleResolver for RemoteStore {
         Ok(self.modules.get(module_id).cloned())
     }
 
-    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
-        if self.modules.is_empty() {
-            return Ok(None);
-        }
-        let package_modules: Vec<_> = self
-            .modules
-            .iter()
-            .filter_map(|(k, v)| {
-                if k.address() == id {
-                    Some(v.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-        if package_modules.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(package_modules))
-        }
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        unreachable!("Should never be called in v0")
     }
 }
 

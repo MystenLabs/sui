@@ -360,10 +360,10 @@ impl LinkageResolver for RelinkingStore {
         let modules = self.store.get_package(&self.context)?.unwrap();
         let mut all_deps = BTreeSet::new();
         for module in &modules {
-            let module = CompiledModule::deserialize_with_defaults(&module).unwrap();
+            let module = CompiledModule::deserialize_with_defaults(module).unwrap();
             let deps = module.immediate_dependencies();
             for dep in deps {
-                all_deps.insert(self.relocate(&dep).unwrap().address().clone());
+                all_deps.insert(*self.relocate(&dep).unwrap().address());
             }
         }
 

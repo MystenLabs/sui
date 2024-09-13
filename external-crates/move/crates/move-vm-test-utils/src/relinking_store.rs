@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::InMemoryStorage;
 use move_binary_format::CompiledModule;
 use move_core_types::{
     account_address::AccountAddress,
@@ -8,17 +9,15 @@ use move_core_types::{
     language_storage::ModuleId,
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
-use move_vm_test_utils::InMemoryStorage;
 use std::collections::{BTreeMap, BTreeSet};
-
-use crate::loader::ast::PackageStorageId;
 
 #[derive(Clone)]
 pub struct RelinkingStore {
     pub store: InMemoryStorage,
     pub context: AccountAddress,
     pub linkage: BTreeMap<ModuleId, ModuleId>,
-    pub dependent_packages: Option<BTreeSet<PackageStorageId>>,
+    // package storage IDs
+    pub dependent_packages: Option<BTreeSet<AccountAddress>>,
     type_origin: BTreeMap<(ModuleId, Identifier), ModuleId>,
 }
 
@@ -44,7 +43,7 @@ impl RelinkingStore {
         self.type_origin = type_origin;
     }
 
-    pub fn set_dependent_packages(&mut self, dependent_packages: BTreeSet<PackageStorageId>) {
+    pub fn set_dependent_packages(&mut self, dependent_packages: BTreeSet<AccountAddress>) {
         self.dependent_packages = Some(dependent_packages);
     }
 }
@@ -82,10 +81,10 @@ impl LinkageResolver for RelinkingStore {
         let modules = self.store.get_package(&self.context)?.unwrap();
         let mut all_deps = BTreeSet::new();
         for module in &modules {
-            let module = CompiledModule::deserialize_with_defaults(&module).unwrap();
+            let module = CompiledModule::deserialize_with_defaults(module).unwrap();
             let deps = module.immediate_dependencies();
             for dep in deps {
-                all_deps.insert(self.relocate(&dep).unwrap().address().clone());
+                all_deps.insert(*self.relocate(&dep).unwrap().address());
             }
         }
 

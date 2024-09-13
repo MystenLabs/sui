@@ -36,7 +36,6 @@ use std::{
 use tracing::error;
 
 struct ModuleContext<'a, 'b> {
-    link_context: AccountAddress,
     cache: &'a PackageContext<'b>,
     module: &'a CompiledModule,
     single_signature_token_map: BTreeMap<SignatureIndex, Type>,
@@ -146,7 +145,7 @@ fn bytecode(
         FF::Bytecode::Call(ndx) => {
             let call_type = call(context, *ndx)?;
             match call_type {
-                CallType::Known(func) => Bytecode::KnownCall(func),
+                CallType::Static(func) => Bytecode::StaticCall(func),
                 CallType::Virtual(vtable) => Bytecode::VirtualCall(vtable),
             }
         }
@@ -298,7 +297,7 @@ fn call(
         println!("Resolving function: {:?}", vtable_key);
     }
     Ok(match context.cache.try_resolve_function(&vtable_key) {
-        Some(func) => CallType::Known(func),
+        Some(func) => CallType::Static(func),
         None => CallType::Virtual(vtable_key),
     })
 }
@@ -494,7 +493,6 @@ fn module(
 
     let single_signature_token_map = BTreeMap::new();
     let mut context = ModuleContext {
-        link_context: package_id,
         cache: package_context,
         module,
         single_signature_token_map,
@@ -544,7 +542,6 @@ fn module(
     }
 
     let ModuleContext {
-        link_context: _,
         cache: _,
         module,
         single_signature_token_map,
@@ -681,7 +678,7 @@ fn load_module_types(
     for signature in field_signatures {
         let tys: Vec<_> = signature
             .iter()
-            .map(|tok| type_cache.read().make_type(&module, tok, data_store))
+            .map(|tok| type_cache.read().make_type(module, tok, data_store))
             .collect::<PartialVMResult<_>>()?;
         field_types.push(FieldTypeInfo::Struct(tys));
     }
@@ -692,11 +689,11 @@ fn load_module_types(
             let mut fields = vec![];
             let mut field_names = vec![];
             for field in field_defs.iter() {
-                fields.push(type_cache.read().make_type(
-                    &module,
-                    &field.signature.0,
-                    data_store,
-                )?);
+                fields.push(
+                    type_cache
+                        .read()
+                        .make_type(module, &field.signature.0, data_store)?,
+                );
                 field_names.push(module.identifier_at(field.name).to_owned());
             }
             variant_fields.push(VariantType {

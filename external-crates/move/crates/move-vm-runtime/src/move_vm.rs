@@ -2,8 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use crate::{
     data_cache::TransactionDataCache, native_extensions::NativeContextExtensions,
     native_functions::NativeFunction, runtime::VMRuntime, session::Session,
@@ -17,6 +15,7 @@ use move_core_types::{
     resolver::MoveResolver,
 };
 use move_vm_config::runtime::VMConfig;
+use std::sync::Arc;
 
 pub struct MoveVM {
     runtime: VMRuntime,

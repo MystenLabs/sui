@@ -226,7 +226,7 @@ fn step(
         Bytecode::VirtualCall(_vtable_key) => {
             unimplemented!("TODO: implement virtual calls when adding vtables to interpreter")
         }
-        Bytecode::KnownCall(function) => {
+        Bytecode::StaticCall(function) => {
             profile_close_instr!(gas_meter, format!("{:?}", instruction));
 
             let fun_ref = function.to_ref();
@@ -280,7 +280,7 @@ fn control_flow_instruction(instruction: &Bytecode) -> bool {
         | Bytecode::CopyLoc(_)
         | Bytecode::MoveLoc(_)
         | Bytecode::StLoc(_)
-        | Bytecode::KnownCall(_)
+        | Bytecode::StaticCall(_)
         | Bytecode::VirtualCall(_)
         | Bytecode::CallGeneric(_)
         | Bytecode::Pack(_)
@@ -364,7 +364,7 @@ fn op_step_impl(
         // These should have been handled in `step` above.
         Bytecode::Ret
         | Bytecode::CallGeneric(_)
-        | Bytecode::KnownCall(_)
+        | Bytecode::StaticCall(_)
         | Bytecode::VirtualCall(_) => unreachable!(),
         // -- INTERNAL CONTROL FLOW --------------
         // These all update the current frame's program counter.

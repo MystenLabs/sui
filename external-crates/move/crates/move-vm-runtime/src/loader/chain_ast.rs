@@ -7,12 +7,12 @@ use move_core_types::language_storage::ModuleId;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
-pub(crate) struct DeserializedPackage {
+pub(crate) struct BinaryFormatPackage {
     pub(crate) runtime_id: RuntimePackageId,
     pub(crate) modules: BTreeMap<ModuleId, CompiledModule>,
 }
 
-impl DeserializedPackage {
+impl BinaryFormatPackage {
     pub fn new(runtime_id: RuntimePackageId, modules: Vec<CompiledModule>) -> Self {
         Self {
             runtime_id,

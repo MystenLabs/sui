@@ -153,12 +153,12 @@ pub(crate) struct Function {
 //
 
 // The type of call -- there are two types:
-// - Known: the function is known and the index is the index in the global table of functions
+// - Static: the function is known and the index is the index in the global table of functions
 //   (e.g., intra-package calls, or possibly calls to framework/well-known external packages).
 // - Virtual: the function is unknown and the index is the index in the global table of vtables
 //   that will be filled in at a later time before execution.
 pub enum CallType {
-    Known(ArenaPointer<Function>),
+    Static(ArenaPointer<Function>),
     Virtual(VTableKey),
 }
 
@@ -378,7 +378,7 @@ pub enum Bytecode {
     ///
     /// ```..., arg(1), arg(2), ...,  arg(n) -> ..., return_value(1), return_value(2), ...,
     /// return_value(k)```
-    KnownCall(ArenaPointer<Function>),
+    StaticCall(ArenaPointer<Function>),
     /// Call an unknown (inter-package) function. The stack has the arguments pushed first to
     /// last. The arguments are consumed and pushed to the locals of the function.
     /// Return values are pushed on the stack and available to the caller.
@@ -989,7 +989,7 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),
             Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
             Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
-            Bytecode::KnownCall(a) => write!(f, "Call({})", a.to_ref().name),
+            Bytecode::StaticCall(a) => write!(f, "Call({})", a.to_ref().name),
             Bytecode::VirtualCall(a) => write!(
                 f,
                 "Call(~{}::{}::{})",
@@ -1066,7 +1066,7 @@ impl ::std::fmt::Debug for Bytecode {
 impl std::fmt::Debug for CallType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CallType::Known(fun) => write!(f, "Known({})", fun.to_ref().name),
+            CallType::Static(fun) => write!(f, "Static({})", fun.to_ref().name),
             CallType::Virtual(vtable) => write!(
                 f,
                 "Virtual({}::{}::{})",

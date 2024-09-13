@@ -13,7 +13,7 @@
 
 use super::{
     ast::{LoadedPackage, PackageStorageId, RuntimePackageId},
-    chain_ast::DeserializedPackage,
+    chain_ast::BinaryFormatPackage,
 };
 use move_binary_format::{
     errors::{Location, PartialVMError, VMResult},
@@ -45,12 +45,8 @@ pub fn verify_linkage_and_cyclic_checks(
             .iter()
             .map(|m| m.as_ref())
             .collect::<Vec<_>>();
-        verify_package_valid_linkage(&package_modules, &cached_packages, &relocation_map)?;
-        verify_package_no_cyclic_relationships(
-            &package_modules,
-            &cached_packages,
-            &relocation_map,
-        )?;
+        verify_package_valid_linkage(&package_modules, cached_packages, &relocation_map)?;
+        verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
     }
 
     Ok(())
@@ -61,7 +57,7 @@ pub fn verify_linkage_and_cyclic_checks(
 /// the cache (i.e., that at least in the current linking context the package is valid w.r.t. its
 /// dependencies).
 pub fn verify_linkage_and_cyclic_checks_for_publication(
-    package_to_publish: &DeserializedPackage,
+    package_to_publish: &BinaryFormatPackage,
     cached_packages: &BTreeMap<PackageStorageId, Arc<LoadedPackage>>,
 ) -> VMResult<()> {
     let relocation_map: HashMap<RuntimePackageId, PackageStorageId> = cached_packages
@@ -84,12 +80,8 @@ pub fn verify_linkage_and_cyclic_checks_for_publication(
             .iter()
             .map(|m| m.as_ref())
             .collect::<Vec<_>>();
-        verify_package_valid_linkage(&package_modules, &cached_packages, &relocation_map)?;
-        verify_package_no_cyclic_relationships(
-            &package_modules,
-            &cached_packages,
-            &relocation_map,
-        )?;
+        verify_package_valid_linkage(&package_modules, cached_packages, &relocation_map)?;
+        verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
     }
 
     // Now verify the package to publish
@@ -97,8 +89,8 @@ pub fn verify_linkage_and_cyclic_checks_for_publication(
         .as_modules()
         .into_iter()
         .collect::<Vec<_>>();
-    verify_package_valid_linkage(&package_modules, &cached_packages, &relocation_map)?;
-    verify_package_no_cyclic_relationships(&package_modules, &cached_packages, &relocation_map)?;
+    verify_package_valid_linkage(&package_modules, cached_packages, &relocation_map)?;
+    verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
 
     Ok(())
 }
@@ -157,7 +149,7 @@ fn verify_package_valid_linkage(
         let module_deps = imm_deps
             .iter()
             .map(|module_id| {
-                if let Some(m) = package_module_map.get(&module_id) {
+                if let Some(m) = package_module_map.get(module_id) {
                     Ok(**m)
                 } else {
                     let package = relocation_map
@@ -178,7 +170,7 @@ fn verify_package_valid_linkage(
                 }
             })
             .collect::<VMResult<Vec<&CompiledModule>>>()?;
-        dependencies::verify_module(&m, module_deps)?;
+        dependencies::verify_module(m, module_deps)?;
     }
     Ok(())
 }
