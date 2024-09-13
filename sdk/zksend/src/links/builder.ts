@@ -136,7 +136,14 @@ export class ZkSendLinkBuilder {
 		const result = await this.#client.signAndExecuteTransaction({
 			transaction: await tx.build({ client: this.#client }),
 			signer,
+			options: {
+				showEffects: true,
+			},
 		});
+
+		if (result.effects?.status.status !== 'success') {
+			throw new Error(`Transaction failed: ${result.effects?.status.error ?? 'Unknown error'}`);
+		}
 
 		if (options.waitForTransaction) {
 			await this.#client.waitForTransaction({ digest: result.digest });
