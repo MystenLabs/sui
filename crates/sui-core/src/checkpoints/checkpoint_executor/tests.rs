@@ -203,13 +203,11 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     .unwrap();
 
     // We should have synced up to epoch boundary
-    assert_eq!(
-        checkpoint_store
-            .get_highest_executed_checkpoint_seq_number()
-            .unwrap()
-            .unwrap(),
-        num_to_sync_per_epoch as u64,
-    );
+    let highest_executed_ckpt = checkpoint_store
+        .get_highest_executed_checkpoint_seq_number()
+        .unwrap()
+        .unwrap();
+    assert_eq!(highest_executed_ckpt, num_to_sync_per_epoch as u64,);
 
     let first_epoch = 0;
 
@@ -236,6 +234,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
             .unwrap(),
             accumulator,
             &ExpensiveSafetyCheckConfig::default(),
+            highest_executed_ckpt,
         )
         .await
         .unwrap();

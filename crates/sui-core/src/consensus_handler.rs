@@ -48,7 +48,7 @@ use crate::{
     consensus_types::consensus_output_api::{
         parse_block_transactions, ConsensusCommitAPI, ParsedTransaction,
     },
-    execution_cache::ObjectCacheRead,
+    execution_cache::{ObjectCacheRead, TransactionCacheRead},
     scoring_decision::update_low_scoring_authorities,
     transaction_manager::TransactionManager,
 };
@@ -104,6 +104,7 @@ impl ConsensusHandlerInitializer {
             self.checkpoint_service.clone(),
             self.state.transaction_manager().clone(),
             self.state.get_object_cache_reader().clone(),
+            self.state.get_transaction_cache_reader().clone(),
             self.low_scoring_authorities.clone(),
             consensus_committee,
             self.state.metrics.clone(),
@@ -127,6 +128,8 @@ pub struct ConsensusHandler<C> {
     checkpoint_service: Arc<C>,
     /// cache reader is needed when determining the next version to assign for shared objects.
     cache_reader: Arc<dyn ObjectCacheRead>,
+    /// used to read randomness transactions during crash recovery
+    tx_reader: Arc<dyn TransactionCacheRead>,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The consensus committee used to do stake computations for deciding set of low scoring authorities
@@ -140,6 +143,8 @@ pub struct ConsensusHandler<C> {
     transaction_manager_sender: TransactionManagerSender,
     /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
+
+    last_round: Option<u64>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -150,6 +155,7 @@ impl<C> ConsensusHandler<C> {
         checkpoint_service: Arc<C>,
         transaction_manager: Arc<TransactionManager>,
         cache_reader: Arc<dyn ObjectCacheRead>,
+        tx_reader: Arc<dyn TransactionCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -170,12 +176,14 @@ impl<C> ConsensusHandler<C> {
             last_consensus_stats,
             checkpoint_service,
             cache_reader,
+            tx_reader,
             low_scoring_authorities,
             committee,
             metrics,
             processed_cache: LruCache::new(NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap()),
             transaction_manager_sender,
             throughput_calculator,
+            last_round: None,
         }
     }
 
@@ -197,6 +205,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
         let round = consensus_commit.leader_round();
+
+        if let Some(last_round) = self.last_round {
+            assert!(round > last_round);
+        } else {
+            debug!("xxx initing round");
+        }
+        debug!("xxx round {}", round);
+        self.last_round = Some(round);
 
         // TODO: Remove this once narwhal is deprecated. For now mysticeti will not return
         // more than one leader per round so we are not in danger of ignoring any commits.
@@ -411,6 +427,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &self.last_consensus_stats,
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
+                self.tx_reader.as_ref(),
                 &ConsensusCommitInfo::new(self.epoch_store.protocol_config(), &consensus_commit),
                 &self.metrics,
             )
@@ -1019,6 +1036,7 @@ mod tests {
             Arc::new(CheckpointServiceNoop {}),
             state.transaction_manager().clone(),
             state.get_object_cache_reader().clone(),
+            state.get_transaction_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,

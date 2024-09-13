@@ -5970,9 +5970,7 @@ async fn test_consensus_handler_per_object_congestion_control(
     } else {
         epoch_store.get_highest_pending_checkpoint_height()
     };
-    let deferred_txns = epoch_store
-        .get_all_deferred_transactions_for_test()
-        .unwrap();
+    let deferred_txns = epoch_store.get_all_deferred_transactions_for_test();
     assert_eq!(deferred_txns.len(), 1);
     assert_eq!(deferred_txns[0].1.len(), 3);
     let deferral_key = deferred_txns[0].0;
@@ -6033,8 +6031,7 @@ async fn test_consensus_handler_per_object_congestion_control(
 
     let deferred_txns = authority
         .epoch_store_for_testing()
-        .get_all_deferred_transactions_for_test()
-        .unwrap();
+        .get_all_deferred_transactions_for_test();
     assert_eq!(deferred_txns.len(), 1);
     assert_eq!(deferred_txns[0].1.len(), 1);
     let deferral_key = deferred_txns[0].0;
@@ -6062,7 +6059,6 @@ async fn test_consensus_handler_per_object_congestion_control(
     assert!(authority
         .epoch_store_for_testing()
         .get_all_deferred_transactions_for_test()
-        .unwrap()
         .is_empty());
 }
 
@@ -6190,7 +6186,6 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     assert!(authority
         .epoch_store_for_testing()
         .get_all_deferred_transactions_for_test()
-        .unwrap()
         .is_empty());
 
     // Check cancelled transaction shared locks.
