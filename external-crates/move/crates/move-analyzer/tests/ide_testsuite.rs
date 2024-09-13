@@ -195,6 +195,8 @@ impl CompletionTest {
         let cursor_path = use_file_path.to_path_buf();
         let cursor_info = Some((&cursor_path, use_pos));
         let mut symbols_computation_data = SymbolsComputationData::new();
+        // we only compute cursor context and tag it on the existing symbols to avoid spending time
+        // recomputing all symbols (saves quite a bit of time when running the test suite)
         let mut cursor_context = compute_symbols_pre_process(
             &mut symbols_computation_data,
             &compiled_pkg_info,
