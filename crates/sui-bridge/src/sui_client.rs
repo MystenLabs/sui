@@ -8,6 +8,7 @@ use fastcrypto::traits::ToFromBytes;
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::str::from_utf8;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_api::BridgeReadApiClient;
 use sui_json_rpc_types::DevInspectResults;
@@ -49,6 +50,7 @@ use tracing::{error, warn};
 use crate::crypto::BridgeAuthorityPublicKey;
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::SuiBridgeEvent;
+use crate::metrics::BridgeMetrics;
 use crate::retry_with_max_elapsed_time;
 use crate::types::BridgeActionStatus;
 use crate::types::ParsedTokenTransferMessage;
@@ -56,19 +58,23 @@ use crate::types::{BridgeAction, BridgeAuthority, BridgeCommittee};
 
 pub struct SuiClient<P> {
     inner: P,
+    bridge_metrics: Arc<BridgeMetrics>,
 }
 
 pub type SuiBridgeClient = SuiClient<SuiSdkClient>;
 
 impl SuiBridgeClient {
-    pub async fn new(rpc_url: &str) -> anyhow::Result<Self> {
+    pub async fn new(rpc_url: &str, bridge_metrics: Arc<BridgeMetrics>) -> anyhow::Result<Self> {
         let inner = SuiClientBuilder::default()
             .build(rpc_url)
             .await
             .map_err(|e| {
                 anyhow!("Can't establish connection with Sui Rpc {rpc_url}. Error: {e}")
             })?;
-        let self_ = Self { inner };
+        let self_ = Self {
+            inner,
+            bridge_metrics,
+        };
         self_.describe().await?;
         Ok(self_)
     }
@@ -83,7 +89,10 @@ where
     P: SuiClientInner,
 {
     pub fn new_for_testing(inner: P) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            bridge_metrics: Arc::new(BridgeMetrics::new_for_testing()),
+        }
     }
 
     // TODO assert chain identifier
@@ -265,7 +274,10 @@ where
                 self.inner.get_reference_gas_price(),
                 Duration::from_secs(30)
             ) else {
-                // TODO: add metrics and fire alert
+                self.bridge_metrics
+                    .sui_rpc_errors
+                    .with_label_values(&["get_reference_gas_price"])
+                    .inc();
                 error!("Failed to get reference gas price");
                 continue;
             };
@@ -296,7 +308,10 @@ where
                 ),
                 Duration::from_secs(30)
             ) else {
-                // TODO: add metrics and fire alert
+                self.bridge_metrics
+                    .sui_rpc_errors
+                    .with_label_values(&["get_token_transfer_action_onchain_status"])
+                    .inc();
                 error!(
                     source_chain_id,
                     seq_number, "Failed to get token transfer action onchain status"
@@ -322,7 +337,10 @@ where
                 ),
                 Duration::from_secs(30)
             ) else {
-                // TODO: add metrics and fire alert
+                self.bridge_metrics
+                    .sui_rpc_errors
+                    .with_label_values(&["get_token_transfer_action_onchain_signatures"])
+                    .inc();
                 error!(
                     source_chain_id,
                     seq_number, "Failed to get token transfer action onchain signatures"
@@ -773,7 +791,8 @@ mod tests {
             .build_with_bridge(bridge_keys, true)
             .await;
 
-        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+        let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
+        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url, bridge_metrics)
             .await
             .unwrap();
         let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();

@@ -101,6 +101,9 @@ pub struct BridgeMetrics {
     pub(crate) eth_rpc_queries_latency: HistogramVec,
 
     pub(crate) gas_coin_balance: IntGauge,
+
+    pub(crate) sui_rpc_errors: IntCounterVec,
+    pub(crate) observed_governance_actions: IntCounterVec,
 }
 
 impl BridgeMetrics {
@@ -280,6 +283,20 @@ impl BridgeMetrics {
                 "bridge_signer_with_cache_miss",
                 "Total number of miss in signer's cache, by verifier type",
                 &["type"],
+                registry,
+            )
+            .unwrap(),
+            sui_rpc_errors: register_int_counter_vec_with_registry!(
+                "bridge_sui_rpc_errors",
+                "Total number of errors from sui RPC, by RPC method",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+            observed_governance_actions: register_int_counter_vec_with_registry!(
+                "bridge_observed_governance_actions",
+                "Total number of observed governance actions",
+                &["action_type", "chain_id"],
                 registry,
             )
             .unwrap(),

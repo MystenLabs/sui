@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{fs, io};
 use sui_bridge::config::BridgeCommitteeConfig;
+use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::Genesis;
@@ -504,7 +505,8 @@ impl SuiCommand {
                 let rgp = context.get_reference_gas_price().await?;
                 let rpc_url = &context.config.get_active_env()?.rpc;
                 println!("rpc_url: {}", rpc_url);
-                let sui_bridge_client = SuiBridgeClient::new(rpc_url).await?;
+                let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
+                let sui_bridge_client = SuiBridgeClient::new(rpc_url, bridge_metrics).await?;
                 let bridge_arg = sui_bridge_client
                     .get_mutable_bridge_object_arg_must_succeed()
                     .await;
