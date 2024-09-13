@@ -14344,6 +14344,7 @@ dependencies = [
  "clap",
  "const-str",
  "fastcrypto",
+ "futures",
  "hex",
  "hyper 1.4.1",
  "ipnetwork",
@@ -14372,6 +14373,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
+ "url",
 ]
 
 [[package]]
