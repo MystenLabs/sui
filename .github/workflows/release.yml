@@ -138,6 +138,12 @@ jobs:
         run: |
           brew install postgresql
 
+      - name: Install postgres (Ubuntu arm64)
+        if: ${{ matrix.os == 'ubuntu-arm64' && env.s3_archive_exist == '' }}
+        shell: bash
+        run: |
+          sudo apt install libpq-dev
+
       - name: Remove unused apps (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_archive_exist == '' }}
         continue-on-error: true
