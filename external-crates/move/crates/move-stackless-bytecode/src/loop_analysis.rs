@@ -4,8 +4,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use itertools::Itertools;
 use move_binary_format::file_format::CodeOffset;
-use move_model::{ast::TempIndex, model::FunctionEnv};
+use move_model::{ast::TempIndex, model::FunId, model::FunctionEnv, ty::BOOL_TYPE};
 
 use crate::{
     function_data_builder::{FunctionDataBuilder, FunctionDataBuilderOptions},
@@ -31,6 +32,12 @@ pub struct FatLoop {
     pub val_targets: BTreeSet<TempIndex>,
     pub mut_targets: BTreeMap<TempIndex, bool>,
     pub back_edges: BTreeSet<CodeOffset>,
+    pub loop_invariant: LoopInvariant,
+}
+
+#[derive(Debug, Clone)]
+pub struct LoopInvariant {
+    pub code: Vec<Bytecode>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +54,12 @@ impl LoopAnnotation {
             .collect()
     }
 }
+
+pub const PROVER_MODULE_NAME: &str = "prover";
+pub const REQUIRES_NAME: &str = "requires";
+pub const ENSURES_NAME: &str = "ensures";
+pub const INVARIANT_BEGIN_NAME: &str = "invariant_begin";
+pub const INVARIANT_END_NAME: &str = "invariant_end";
 
 pub struct LoopAnalysisProcessor {}
 
@@ -99,6 +112,25 @@ impl LoopAnalysisProcessor {
         loop_annotation: &LoopAnnotation,
     ) -> FunctionData {
         let options = ProverOptions::get(func_env.module_env.env);
+
+        let prover_module_id = func_env
+            .module_env
+            .env
+            .find_module_by_name(func_env.symbol_pool().make(PROVER_MODULE_NAME))
+            .unwrap()
+            .get_id();
+        let requires_function = Operation::Function(
+            prover_module_id,
+            FunId::new(func_env.symbol_pool().make(REQUIRES_NAME)),
+            vec![],
+        );
+        let ensures_function = Operation::Function(
+            prover_module_id,
+            FunId::new(func_env.symbol_pool().make(ENSURES_NAME)),
+            vec![],
+        );
+        let ensures_requires_subst =
+            BTreeMap::from_iter(vec![(ensures_function, requires_function)]);
 
         let back_edge_locs = loop_annotation.back_edges_locations();
         let mut builder = FunctionDataBuilder::new_with_options(
@@ -185,6 +217,13 @@ impl LoopAnalysisProcessor {
                             });
                         }
 
+                        let dup_code = builder
+                            .dup_code(&loop_info.loop_invariant.code)
+                            .iter()
+                            .map(|bc| bc.substitute_operations(&ensures_requires_subst))
+                            .collect();
+                        builder.emit_vec(dup_code);
+
                         // after showing the havocked locals and their new values, show the following message
                         if !affected_non_temporary_variables.is_empty() {
                             builder.set_next_debug_comment(
@@ -212,13 +251,17 @@ impl LoopAnalysisProcessor {
             .map(|label| (*label, builder.new_label()))
             .collect();
 
-        for label in loop_annotation.fat_loops.keys() {
+        for (label, fat_loop) in &loop_annotation.fat_loops {
             let checker_label = invariant_checker_labels.get(label).unwrap();
             builder.set_next_debug_comment(format!(
                 "Loop invariant checking block for the loop started with header: L{}",
                 label.as_usize()
             ));
             builder.emit_with(|attr_id| Bytecode::Label(attr_id, *checker_label));
+
+            let dup_code = builder.dup_code(&fat_loop.loop_invariant.code);
+            builder.emit_vec(dup_code);
+
             builder.clear_next_debug_comment();
 
             // stop the checking in proving mode (branch back to loop header for interpretation mode)
@@ -356,6 +399,39 @@ impl LoopAnalysisProcessor {
                 .push(single_loop);
         }
 
+        let prover_module_id = func_target
+            .global_env()
+            .find_module_by_name(func_target.symbol_pool().make(PROVER_MODULE_NAME))
+            .unwrap()
+            .get_id();
+        let invariant_begin_function = Operation::Function(
+            prover_module_id,
+            FunId::new(func_target.symbol_pool().make(INVARIANT_BEGIN_NAME)),
+            vec![],
+        );
+        let invariant_end_function = Operation::Function(
+            prover_module_id,
+            FunId::new(func_target.symbol_pool().make(INVARIANT_END_NAME)),
+            vec![],
+        );
+        let begin_offsets = code.iter().enumerate().filter_map(|(i, bc)| match bc {
+            Bytecode::Call(_, _, op, _, _) if *op == invariant_begin_function => Some(i),
+            _ => None,
+        });
+        let end_offsets = code.iter().enumerate().filter_map(|(i, bc)| match bc {
+            Bytecode::Call(_, _, op, _, _) if *op == invariant_end_function => Some(i),
+            _ => None,
+        });
+        let invariants_map: BTreeMap<_, _> = begin_offsets
+            // TODO: check if the begin_offsets and end_offsets are well paired
+            .zip_eq(end_offsets)
+            .map(|(begin, end)| match &code[end + 1] {
+                // TODO: check if the label is the header of a loop
+                Bytecode::Label(_, label) => (label, (begin, end)),
+                _ => panic!("A loop invariant should end with a label"),
+            })
+            .collect();
+
         // build fat loops by label
         let mut fat_loops = BTreeMap::new();
         for (fat_root, sub_loops) in fat_headers {
@@ -372,15 +448,20 @@ impl LoopAnalysisProcessor {
                 Self::collect_loop_targets(&cfg, &func_target, &sub_loops);
             let back_edges = Self::collect_loop_back_edges(code, &cfg, label, &sub_loops);
 
-            // done with all information collection.
-            fat_loops.insert(
-                label,
-                FatLoop {
-                    val_targets,
-                    mut_targets,
-                    back_edges,
-                },
-            );
+            if let Some((begin, end)) = invariants_map.get(&label) {
+                // done with all information collection.
+                fat_loops.insert(
+                    label,
+                    FatLoop {
+                        val_targets,
+                        mut_targets,
+                        back_edges,
+                        loop_invariant: LoopInvariant {
+                            code: code[(*begin)..=*end].to_vec(),
+                        },
+                    },
+                );
+            }
         }
 
         LoopAnnotation { fat_loops }

@@ -955,7 +955,7 @@ pub struct LocalVarDecl {
     pub binding: Option<Exp>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum TraceKind {
     /// A user level TRACE(..) in the source.
     User,

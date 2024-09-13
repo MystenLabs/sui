@@ -157,6 +157,9 @@ procedure {:inline 1} $0_prover_ensures_begin() {}
 procedure {:inline 1} $0_prover_ensures_end() {}
 procedure {:inline 1} $0_prover_aborts_begin() {}
 procedure {:inline 1} $0_prover_aborts_end() {}
+procedure {:inline 1} $0_prover_invariant_begin() {}
+procedure {:inline 1} $0_prover_invariant_end() {}
+
 procedure {:inline 1} $0_prover_val'address'(x: int) returns (y: int) {
     y := x;
 }

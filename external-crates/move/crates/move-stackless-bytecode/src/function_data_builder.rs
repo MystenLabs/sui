@@ -239,4 +239,22 @@ impl<'env> FunctionDataBuilder<'env> {
         });
         (temp, temp_exp)
     }
+
+    pub fn dup_code(&mut self, code: &[Bytecode]) -> Vec<Bytecode> {
+        let label_subst: std::collections::BTreeMap<_, _> = code
+            .iter()
+            .filter_map(|bc| {
+                if let Bytecode::Label(_, label) = bc {
+                    Some((*label, self.new_label()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+
+        code.iter()
+            .map(|bc| bc.substitute_labels(&label_subst))
+            .collect()
+    }
 }

@@ -111,7 +111,7 @@ impl From<&u256::U256> for Constant {
 
 /// An operation -- target of a call. This contains user functions, builtin functions, and
 /// operators.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Operation {
     // User function
     Function(ModuleId, FunId, Vec<Type>),
@@ -750,6 +750,35 @@ impl Bytecode {
                 (add_abort(val_targets, aa), mut_targets)
             }
             _ => (vec![], vec![]),
+        }
+    }
+
+    pub fn substitute_labels(&self, subst: &BTreeMap<Label, Label>) -> Self {
+        use Bytecode::*;
+        match self {
+            Label(attr_id, label) => Label(*attr_id, *subst.get(label).unwrap_or(label)),
+            Jump(attr_id, label) => Jump(*attr_id, *subst.get(label).unwrap_or(label)),
+            Branch(attr_id, if_label, else_label, idx) => Branch(
+                *attr_id,
+                *subst.get(if_label).unwrap_or(if_label),
+                *subst.get(else_label).unwrap_or(else_label),
+                *idx,
+            ),
+            _ => self.clone(),
+        }
+    }
+
+    pub fn substitute_operations(&self, subst: &BTreeMap<Operation, Operation>) -> Self {
+        use Bytecode::*;
+        match self {
+            Call(attr_id, dests, op, srcs, aa) => Call(
+                *attr_id,
+                dests.clone(),
+                subst.get(op).unwrap_or(op).clone(),
+                srcs.clone(),
+                aa.clone(),
+            ),
+            _ => self.clone(),
         }
     }
 }
