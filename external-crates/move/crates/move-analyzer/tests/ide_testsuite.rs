@@ -207,7 +207,7 @@ impl CompletionTest {
         );
         symbols.cursor_context = cursor_context;
 
-        let items = compute_completions_with_symbols(&symbols, &cursor_path, use_pos);
+        let items = compute_completions_with_symbols(symbols, &cursor_path, use_pos);
         writeln!(output, "-- test {test_idx} -------------------")?;
         writeln!(
             output,
