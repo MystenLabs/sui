@@ -99,7 +99,7 @@ impl SimpleAbsIntConstructor for CustomStateChangeVerifier {
         if !init_state
             .locals
             .values()
-            .any(|state| !matches!(state, LocalState::Available(_, Value::LocalObjWithStore(_))))
+            .any(|state| matches!(state, LocalState::Available(_, Value::LocalObjWithStore(_))))
         {
             // if there is no object parameter with store, we can skip the function
             // since this is the only case which will trigger the warning
@@ -150,26 +150,23 @@ impl SimpleAbsInt for CustomStateChangeVerifierAI {
             .find(|(addr, module, fun)| f.is(addr, module, fun))
         {
             if let Value::LocalObjWithStore(obj_addr_loc) = args[0] {
-                let msg = format!(
-                    "Potential unintended implementation of a custom {} function.",
-                    fname
-                );
-                let (op, action) = if *fname == TRANSFER_FUN {
-                    ("transfer", "transferred")
-                } else if *fname == SHARE_FUN {
-                    ("share", "shared")
-                } else if *fname == FREEZE_FUN {
-                    ("freeze", "frozen")
-                } else {
-                    ("receive", "received")
+                let (op, action) = match *fname {
+                    TRANSFER_FUN => ("transfer", "transferred"),
+                    SHARE_FUN => ("share", "shared"),
+                    FREEZE_FUN => ("freeze", "frozen"),
+                    RECEIVE_FUN => ("receive", "received"),
+                    s => unimplemented!("Unexpected private obj function {s}"),
                 };
+                let msg = format!("Potential unintended implementation of a custom {op} function.");
                 let uid_msg = format!(
-                    "Instances of a type with a store ability can be {action} using \
-                                       the public_{fname} function which often negates the intent \
-                                       of enforcing a custom {op} policy"
+                    "Instances of a type with a 'store' ability can be {action} using \
+                    the 'public_{fname}' function which often negates the intent \
+                    of enforcing a custom {op} policy"
                 );
-                let note_msg = format!("A custom {op} policy for a given type is implemented through calling \
-                                       the private {fname} function variant in the module defining this type");
+                let note_msg = format!(
+                    "A custom {op} policy for a given type is implemented through \
+                    calling the private '{fname}' function variant in the module defining this type"
+                );
                 let mut d = diag!(
                     CUSTOM_STATE_CHANGE_DIAG,
                     (self.fn_name_loc, msg),
@@ -177,7 +174,10 @@ impl SimpleAbsInt for CustomStateChangeVerifierAI {
                 );
                 d.add_note(note_msg);
                 if obj_addr_loc != INVALID_LOC {
-                    let loc_msg = format!("An instance of a module-private type with a store ability to be {} coming from here", action);
+                    let loc_msg = format!(
+                        "An instance of a module-private type with a \
+                        'store' ability to be {action} coming from here"
+                    );
                     d.add_secondary_label((obj_addr_loc, loc_msg));
                 }
                 context.add_diag(d)
