@@ -3,8 +3,8 @@
 
 use crate::{
     schema::{
-        tx_affected, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests,
-        tx_input_objects, tx_kinds, tx_recipients, tx_senders,
+        tx_affected_addresses, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects,
+        tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
     },
     types::TxIndex,
 };
@@ -23,7 +23,7 @@ pub struct TxDigest {
 }
 
 #[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
-#[diesel(table_name = tx_affected)]
+#[diesel(table_name = tx_affected_addresses)]
 pub struct StoredTxAffected {
     pub tx_sequence_number: i64,
     pub affected: Vec<u8>,
@@ -119,7 +119,7 @@ impl TxIndex {
         Vec<StoredTxKind>,
     ) {
         let tx_sequence_number = self.tx_sequence_number as i64;
-        let tx_affected = self
+        let tx_affected_addresses = self
             .recipients
             .iter()
             .map(|r| StoredTxAffected {
@@ -220,7 +220,7 @@ impl TxIndex {
         };
 
         (
-            tx_affected,
+            tx_affected_addresses,
             vec![tx_sender],
             tx_recipients,
             tx_input_objects,

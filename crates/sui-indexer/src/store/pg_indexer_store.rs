@@ -50,8 +50,8 @@ use crate::schema::{
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
     event_struct_package, events, feature_flags, full_objects_history, objects, objects_history,
     objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
-    transactions, tx_affected, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects,
-    tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
+    transactions, tx_affected_addresses, tx_calls_fun, tx_calls_mod, tx_calls_pkg,
+    tx_changed_objects, tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
 };
 use crate::store::transaction_with_retry;
 use crate::types::EventIndex;
@@ -1026,7 +1026,7 @@ impl PgIndexerStore {
             .start_timer();
         let len = indices.len();
         let (
-            affected,
+            affected_addresses,
             senders,
             recipients,
             input_objects,
@@ -1050,7 +1050,7 @@ impl PgIndexerStore {
                 Vec::new(),
             ),
             |(
-                mut tx_affected,
+                mut tx_affected_addresses,
                 mut tx_senders,
                 mut tx_recipients,
                 mut tx_input_objects,
@@ -1062,7 +1062,7 @@ impl PgIndexerStore {
                 mut tx_kinds,
             ),
              index| {
-                tx_affected.extend(index.0);
+                tx_affected_addresses.extend(index.0);
                 tx_senders.extend(index.1);
                 tx_recipients.extend(index.2);
                 tx_input_objects.extend(index.3);
@@ -1073,7 +1073,7 @@ impl PgIndexerStore {
                 tx_digests.extend(index.8);
                 tx_kinds.extend(index.9);
                 (
-                    tx_affected,
+                    tx_affected_addresses,
                     tx_senders,
                     tx_recipients,
                     tx_input_objects,
@@ -1089,8 +1089,8 @@ impl PgIndexerStore {
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
-                diesel::insert_into(tx_affected::table)
-                    .values(&affected)
+                diesel::insert_into(tx_affected_addresses::table)
+                    .values(&affected_addresses)
                     .on_conflict_do_nothing()
                     .execute(conn)
                     .await?;
@@ -1404,8 +1404,8 @@ impl PgIndexerStore {
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::delete(
-                    tx_affected::table
-                        .filter(tx_affected::tx_sequence_number.between(min_tx, max_tx)),
+                    tx_affected_addresses::table
+                        .filter(tx_affected_addresses::tx_sequence_number.between(min_tx, max_tx)),
                 )
                 .execute(conn)
                 .await?;

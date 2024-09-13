@@ -281,7 +281,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    tx_affected (affected, tx_sequence_number) {
+    tx_affected_addresses (affected, tx_sequence_number) {
         tx_sequence_number -> Int8,
         affected -> Bytea,
         sender -> Bytea,
@@ -383,7 +383,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     protocol_configs,
     pruner_cp_watermark,
     transactions,
-    tx_affected,
+    tx_affected_addresses,
     tx_calls_fun,
     tx_calls_mod,
     tx_calls_pkg,
