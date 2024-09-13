@@ -21,6 +21,7 @@ use sui_types::base_types::VerifiedExecutionData;
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{
@@ -179,20 +180,10 @@ pub trait ExecutionCacheCommit: Send + Sync {
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult>;
 
-    /// Durably commit transactions (but not their outputs) to the database.
-    /// Called before writing a locally built checkpoint to the CheckpointStore, so that
-    /// the inputs of the checkpoint cannot be lost.
-    /// These transactions are guaranteed to be final unless this validator
-    /// forks (i.e. constructs a checkpoint which will never be certified). In this case
-    /// some non-final transactions could be left in the database.
-    ///
-    /// This is an intermediate solution until we delay commits to the epoch db. After
-    /// we have done that, crash recovery will be done by re-processing consensus commits
-    /// and pending_consensus_transactions, and this method can be removed.
-    fn persist_transactions<'a>(
-        &'a self,
-        digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, SuiResult>;
+    /// Durably commit a transaction to the database. Used to store any transactions
+    /// that cannot be reconstructed at start-up by consensus replay. Currently the only
+    /// case of this is RandomnessTransaction.
+    fn persist_transaction(&self, transaction: &VerifiedExecutableTransaction) -> SuiResult;
 }
 
 pub trait ObjectCacheRead: Send + Sync {
