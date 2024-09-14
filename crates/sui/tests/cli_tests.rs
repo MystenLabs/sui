@@ -3418,6 +3418,8 @@ async fn test_pay() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
+    // execute does not wait for local execution to finish, so artificially wait
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Pay command takes the input coins and transfers the given amounts from each input coin (in order)
     // to the recipients
@@ -3499,6 +3501,8 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
+    // execute does not wait for local execution to finish, so artificially wait
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // pay sui takes the input coins and transfers from each of them (in order) the amounts to the
     // respective receipients.
@@ -3576,6 +3580,8 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
+    // execute does not wait for local execution to finish, so artificially wait
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // pay all sui will take the input coins and smash them into one coin and transfer that coin to
     // the recipient, so we check that the recipient has one object, if the tx status is success,
@@ -3841,6 +3847,8 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
+    // execute does not wait for local execution to finish, so artificially wait
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Print it out to CLI/logs
     resp.print(true);
