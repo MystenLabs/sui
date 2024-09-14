@@ -115,7 +115,7 @@ export class Runtime extends EventEmitter {
         this.frameStack = {
             frames: [newFrame]
         };
-        this.step(false);
+        this.step(/* next */ false, /* stopAtCloseFrame */ false, /* nextLineSkip */ true);
     }
 
     /**
@@ -131,10 +131,16 @@ export class Runtime extends EventEmitter {
      * Handles step/next adapter action.
      *
      * @param next determines if it's `next` (or otherwise `step`) action.
+     * @param stopAtCloseFrame determines if the action should stop at `CloseFrame` event
+     * (rather then proceedint to the following instruction).
      * @returns `true` if the trace viewing session is finished, `false` otherwise.
      * @throws Error with a descriptive error message if the step event cannot be handled.
      */
-    public step(next: boolean): boolean {
+    public step(
+        next: boolean,
+        stopAtCloseFrame: boolean,
+        nextLineSkip: boolean
+    ): boolean {
         this.eventIndex++;
         if (this.eventIndex >= this.trace.events.length) {
             this.sendEvent(RuntimeEvents.stopOnStep);
@@ -143,40 +149,35 @@ export class Runtime extends EventEmitter {
         let currentEvent = this.trace.events[this.eventIndex];
         if (currentEvent.type === 'Instruction') {
             let sameLine = this.instruction(currentEvent);
-            if (sameLine) {
-                return this.step(next);
+            if (sameLine && nextLineSkip) {
+                return this.step(next, stopAtCloseFrame, nextLineSkip);
             }
             this.sendEvent(RuntimeEvents.stopOnStep);
             return false;
         } else if (currentEvent.type === 'OpenFrame') {
-            if (next) {
-                // skip all events until the corresponding CloseFrame event
-                // rather than creating a new frame
-                const openFrameID = currentEvent.id;
-                while (true) {
-                    this.eventIndex++;
-                    if (this.eventIndex >= this.trace.events.length) {
-                        return true;
-                    }
-                    currentEvent = this.trace.events[this.eventIndex];
-                    if (currentEvent.type === 'CloseFrame' && currentEvent.id === openFrameID) {
-                        break;
-                    }
-                }
-                return this.step(next);
-            }
             // create a new frame and push it onto the stack
             const newFrame =
                 this.newStackFrame(currentEvent.id, currentEvent.name, currentEvent.modInfo);
             this.frameStack.frames.push(newFrame);
-            return this.step(next);
+            if (next) {
+                // step out of the frame right away
+                return this.stepOut();
+            } else {
+                return this.step(next, stopAtCloseFrame, nextLineSkip);
+            }
         } else if (currentEvent.type === 'CloseFrame') {
-            // pop the top frame from the stack
-            this.frameStack.frames.pop();
-            return this.step(next);
+            if (stopAtCloseFrame) {
+                // don't do anything as the caller needs to inspect
+                // the event before proceeing
+                return false;
+            } else {
+                // pop the top frame from the stack
+                this.frameStack.frames.pop();
+                return this.step(next, stopAtCloseFrame, nextLineSkip);
+            }
         } else {
             // ignore other events
-            return this.step(next);
+            return this.step(next, stopAtCloseFrame, nextLineSkip);
         }
     }
 
@@ -190,6 +191,8 @@ export class Runtime extends EventEmitter {
         const stackHeight = this.frameStack.frames.length;
         if (stackHeight <= 1) {
             // do nothing as there is no frame to step out to
+            logger.log("At the outermost function, cannot step out");
+            this.sendEvent(RuntimeEvents.stopOnStep);
             return false;
         }
         // newest frame is at the top of the stack
@@ -198,45 +201,63 @@ export class Runtime extends EventEmitter {
         // skip all events until the corresponding CloseFrame event,
         // pop the top frame from the stack, and proceed to the next event
         while (true) {
-            this.eventIndex++;
-            if (this.eventIndex >= this.trace.events.length) {
+            if (this.step(/* next */ false, /* stopAtCloseFrame */ true, /* nextLineSkip */ true)) {
+                // trace viewing session finished
                 throw new Error("Cannot find corresponding CloseFrame event for function: " +
                     currentFrame.name);
             }
             currentEvent = this.trace.events[this.eventIndex];
-            if (currentEvent.type === 'CloseFrame' && currentEvent.id === currentFrame.id) {
-                break;
+            if (currentEvent.type === 'CloseFrame') {
+                const currentFrameID = currentFrame.id;
+                // `step` call finished at the CloseFrame event
+                // but did not process it so we need pop the frame here
+                this.frameStack.frames.pop();
+                if (currentEvent.id === currentFrameID) {
+                    break;
+                }
             }
         }
-        this.frameStack.frames.pop();
-        return this.step(false);
+
+        // Do not skip to same line when stepping out as this may lead
+        // to unusual behavior if multiple bytcode instructions are on the same line.
+        // For example, consider the following code:
+        // ```
+        // assert(foo() == bar());
+        // ```
+        // In the code above if we enter `foo` and then step out of it,
+        // we want to end up on the same line (where the next instruction is)
+        // but we don't want to call `bar` in the same debugging step.
+        return this.step(/* next */ false, /* stopAtCloseFrame */ false, /* nextLineSkip */ false);
     }
     /**
      * Handles "step back" adapter action.
+     * @returns `true` if was able to step back, `false` otherwise.
      * @throws Error with a descriptive error message if the step back event cannot be handled.
      */
-    public stepBack() {
-        if (this.eventIndex === 1) {
+    public stepBack(): boolean {
+        if (this.eventIndex <= 1) {
             // no where to step back to (event 0 is the `OpenFrame` event for the first frame)
             // and is processed in runtime.start() which is executed only once
+            logger.log("At the beginning of the trace, cannot step back");
             this.sendEvent(RuntimeEvents.stopOnStep);
-            return;
+            return false;
         }
         let currentEvent = this.trace.events[this.eventIndex - 1];
         if (currentEvent.type === 'CloseFrame') {
             // cannot step back into or over function calls
+            logger.log("After a function call, cannot step back");
             this.sendEvent(RuntimeEvents.stopOnStep);
-            return;
+            return false;
         } else {
             this.eventIndex--;
             if (currentEvent.type === 'Instruction') {
                 let sameLine = this.instruction(currentEvent);
                 if (sameLine) {
                     this.stepBack();
-                    return;
+                    return true;
                 }
                 this.sendEvent(RuntimeEvents.stopOnStep);
-                return;
+                return true;
             } else if (currentEvent.type === 'OpenFrame') {
                 const stackHeight = this.frameStack.frames.length;
                 if (stackHeight <= 0) {
@@ -261,10 +282,11 @@ export class Runtime extends EventEmitter {
                 // cannot simply call stepBack as we are stepping back to the same line
                 // that is now in the current frame, which would result in unintentionally
                 // recursing to previous events
-                if (this.eventIndex === 0) {
+                if (this.eventIndex <= 1) {
                     // no where to step back to
+                    logger.log("At the beginning of the trace, cannot step back");
                     this.sendEvent(RuntimeEvents.stopOnStep);
-                    return;
+                    return true; // we actually stepped back just can't step back further
                 }
                 this.eventIndex--;
                 let prevCurrentEvent = this.trace.events[this.eventIndex];
@@ -283,17 +305,41 @@ export class Runtime extends EventEmitter {
                         + this.frameStack.frames[stackHeight - 1].name
                         + " as there would be no frame on the stack afterwards"
                     );
-
-                    throw new Error("Wrong line to step back to from a function call");
                 }
                 this.sendEvent(RuntimeEvents.stopOnStep);
-                return;
+                return true;
             } else {
                 // ignore other events
                 this.stepBack();
-                return;
+                return true;
             }
         }
+    }
+
+    /**
+     * Handles "continue" adapter action.
+     * @returns `true` if the trace viewing session is finished, `false` otherwise.
+     * @throws Error with a descriptive error message if the continue event cannot be handled.
+     */
+    public continue(reverse: boolean): boolean {
+        if (reverse) {
+            while (true) {
+                if (!this.stepBack()) {
+                    return false;
+                }
+            }
+        } else {
+            while (true) {
+                if (this.step(
+                    /* next */ false,
+                    /* stopAtCloseFrame */ false,
+                    /* nextLineSkip */ true)
+                ) {
+                    return true;
+                }
+            }
+        }
+
     }
 
     /**
@@ -435,7 +481,7 @@ function getPkgNameFromManifest(pkgRoot: string): string | undefined {
  * @param directory path to the directory containing Move source files.
  * @param filesMap map to update with file information.
  */
-function hashToFileMap(directory: string, filesMap: Map<string, IFileInfo>) {
+function hashToFileMap(directory: string, filesMap: Map<string, IFileInfo>): void {
     const processDirectory = (dir: string) => {
         const files = fs.readdirSync(dir);
         for (const f of files) {
@@ -447,14 +493,13 @@ function hashToFileMap(directory: string, filesMap: Map<string, IFileInfo>) {
                 const content = fs.readFileSync(filePath, 'utf8');
                 const hash = fileHash(content);
                 const lines = content.split('\n');
-                filesMap.set(Buffer.from(hash).toString('base64'), { path: filePath, content, lines });
+                const fileInfo = { path: filePath, content, lines };
+                filesMap.set(Buffer.from(hash).toString('base64'), fileInfo);
             }
         }
     };
 
     processDirectory(directory);
-
-    return filesMap;
 }
 
 /**
