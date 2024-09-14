@@ -107,6 +107,7 @@ public fun div(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
 /// point, you can use a denominator of 10^N to avoid numbers where the
 /// very small imprecision in the binary representation could change the
 /// rounding, e.g., 0.0125 will round down to 0.012 instead of up to 0.013.
+#[deprecated]
 public fun create_from_rational(numerator: u64, denominator: u64): FixedPoint32 {
     // If the denominator is zero, this will abort.
     // Scale the numerator to have 64 fractional bits and the denominator
@@ -122,6 +123,7 @@ public fun create_from_rational(numerator: u64, denominator: u64): FixedPoint32 
     assert!(quotient <= MAX_U64, ERATIO_OUT_OF_RANGE);
     FixedPoint32 { value: quotient as u64 }
 }
+
 /// Create a fixed-point value from a rational number specified by its
 /// numerator and denominator. Calling this function should be preferred
 /// for using `Self::create_from_raw_value` which is also available.
@@ -132,7 +134,7 @@ public fun create_from_rational(numerator: u64, denominator: u64): FixedPoint32 
 /// point, you can use a denominator of 10^N to avoid numbers where the
 /// very small imprecision in the binary representation could change the
 /// rounding, e.g., 0.0125 will round down to 0.012 instead of up to 0.013.
-public fun create_from_rational(numerator: u64, denominator: u64): FixedPoint32 {
+public fun from_rational(numerator: u64, denominator: u64): FixedPoint32 {
     // If the denominator is zero, this will abort.
     // Scale the numerator to have 64 fractional bits and the denominator
     // to have 32 fractional bits, so that the quotient will have 32
@@ -158,9 +160,21 @@ public fun create_from_raw_value(value: u64): FixedPoint32 {
     FixedPoint32 { value }
 }
 
+/// Create a fixedpoint value from a raw value.
+#[deprecated]
+public fun create_from_raw_value(value: u64): FixedPoint32 {
+    FixedPoint32 { value }
+}
+
+/// Accessor for the raw u64 value.
+public fun to_raw(num: FixedPoint32): u64 {
+    num.value
+}
+
 /// Accessor for the raw u64 value. Other less common operations, such as
 /// adding or subtracting FixedPoint32 values, can be done using the raw
 /// values directly.
+#[deprecated]
 public fun get_raw_value(num: FixedPoint32): u64 {
     num.value
 }
