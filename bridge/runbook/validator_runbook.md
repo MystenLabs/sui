@@ -114,6 +114,7 @@ In the generated config:
 * `eth:eth-bridge-proxy-address`: The proxy address for Bridge Solidity contracts on Ethereum.
 * `eth:eth-bridge-chain-id`: 10 for Ethereum Mainnet, 11 for Sepolia Testnet
 * `eth:eth-contracts-start-block-fallback`: The starting block BridgeNodes queries for from Ethereum FullNode. This number should be the block where Solidity contracts are deployed or slightly before.
+* `metrics:push-url`: The url of the remote Sui metrics pipeline: `https://metrics-proxy.[testnet|mainnet].sui.io:8443/publish/metrics`
 
 With `run-client: true`, these additional fields can be found in the generated config:
 * `db-path`: path of BridgeClient DB, for BridgeClient
