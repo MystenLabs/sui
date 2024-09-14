@@ -1,6 +1,9 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Our names have a fixed style, which is created in the format `@org/app`.
 /// Versioning can be used only on the RPC layer to determine a fixed package
-/// version (e.g @org/app?v1)).
+/// version (e.g @org/app:v1)).
 ///
 /// The only restrictions that apply to a label are:
 /// - It must be up to 64 characters per label

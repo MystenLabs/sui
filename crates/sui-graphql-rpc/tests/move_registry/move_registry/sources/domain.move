@@ -3,7 +3,7 @@
 
 module move_registry::domain;
 
-use std::string::{Self, String, utf8};
+use std::string::{String, utf8};
 
 /// Representation of a valid SuiNS `Domain`.
 public struct Domain has copy, drop, store {
@@ -28,26 +28,6 @@ public fun new(domain: String): Domain {
     }
 }
 
-/// Converts a domain into a fully-qualified string representation.
-public fun to_string(self: &Domain): String {
-    let dot = utf8(b".");
-    let len = self.labels.length();
-    let mut i = 0;
-    let mut out = string::utf8(vector::empty());
-
-    while (i < len) {
-        let part = &self.labels[(len - i) - 1];
-        out.append(*part);
-
-        i = i + 1;
-        if (i != len) {
-            out.append(dot);
-        }
-    };
-
-    out
-}
-
 fun validate_labels(labels: &vector<String>) {
     assert!(!labels.is_empty(), 0);
 
@@ -63,7 +43,7 @@ fun validate_labels(labels: &vector<String>) {
 
 fun is_valid_label(label: &String): bool {
     let len = label.length();
-    let label_bytes = label.bytes();
+    let label_bytes = label.as_bytes();
     let mut index = 0;
 
     if (!(len >= 1 && len <= 63)) {
