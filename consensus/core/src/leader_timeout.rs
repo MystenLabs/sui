@@ -171,7 +171,10 @@ mod tests {
             todo!()
         }
 
-        fn set_propagation_delay(&self, _delay: Round) -> Result<(), CoreError> {
+        fn set_propagation_delay_per_authority(
+            &self,
+            _delay_per_authority: Vec<Round>,
+        ) -> Result<(), CoreError> {
             todo!()
         }
 

@@ -61,13 +61,13 @@ pub(crate) struct Core {
     /// Core stops proposing new blocks when there is no subscriber, because new proposed blocks
     /// will likely contain only stale info when they propagate to peers.
     subscriber_exists: bool,
-    /// Estimated delay by round for propagating blocks to a quorum.
+    /// Estimated delay by round per authority for propagating blocks to a quorum.
     /// Because of the nature of TCP and block streaming, propagation delay is expected to be
     /// 0 in most cases, even when the actual latency of broadcasting blocks is high.
-    /// When this value is higher than the `propagation_delay_stop_proposal_threshold`,
-    /// most likely this validator cannot broadcast  blocks to the network at all.
+    /// When this value for our own index is higher than the `propagation_delay_stop_proposal_threshold`,
+    /// most likely this validator cannot broadcast blocks to the network at all.
     /// Core stops proposing new blocks in this case.
-    propagation_delay: Round,
+    propagation_delay_per_authority: Vec<Round>,
 
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
@@ -164,7 +164,7 @@ impl Core {
             transaction_consumer,
             block_manager,
             subscriber_exists,
-            propagation_delay: 0,
+            propagation_delay_per_authority: vec![0; context.committee.size()],
             committer,
             commit_observer,
             signals,
@@ -664,10 +664,10 @@ impl Core {
         self.subscriber_exists = exists;
     }
 
-    /// Sets the delay by round for propagating blocks to a quorum.
-    pub(crate) fn set_propagation_delay(&mut self, delay: Round) {
-        info!("Propagation round delay set to: {delay}");
-        self.propagation_delay = delay;
+    /// Sets the delay by round per authority for propagating blocks to a quorum.
+    pub(crate) fn set_propagation_delay_per_authority(&mut self, delay_per_authority: Vec<Round>) {
+        info!("Propagation round delay per authority set to: {delay_per_authority:?}");
+        self.propagation_delay_per_authority = delay_per_authority;
     }
 
     /// Sets the min propose round for the proposer allowing to propose blocks only for round numbers
@@ -694,7 +694,7 @@ impl Core {
             return false;
         }
 
-        if self.propagation_delay
+        if self.propagation_delay_per_authority[self.context.own_index]
             > self
                 .context
                 .parameters
@@ -702,7 +702,7 @@ impl Core {
         {
             debug!(
                 "Skip proposing for round {clock_round}, high propagation delay {} > {}.",
-                self.propagation_delay,
+                self.propagation_delay_per_authority[self.context.own_index],
                 self.context
                     .parameters
                     .propagation_delay_stop_proposal_threshold
@@ -831,14 +831,20 @@ impl Core {
         for (score, ancestor) in low_score_ancestors.into_iter() {
             let block_hostname = &self.context.committee.authority(ancestor.author()).hostname;
             if parent_round_quorum.reached_threshold(&self.context.committee) {
-                debug!("Parent quorum threshold reached with good ancestors. Excluding low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
-                self.context
-                    .metrics
-                    .node_metrics
-                    .excluded_proposal_ancestors_count_by_authority
-                    .with_label_values(&[block_hostname])
-                    .inc();
-                excluded_ancestors.push((score, ancestor));
+                if self.propagation_delay_per_authority[ancestor.author()] <= 1 {
+                    self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
+                    debug!("Included low score weak link ancestor {ancestor} with score {score} & propogation delay {} to propose for round {clock_round}", self.propagation_delay_per_authority[ancestor.author()]);
+                    ancestors_to_propose.push(ancestor);
+                } else {
+                    debug!("Parent quorum threshold reached with good ancestors. Excluding low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .excluded_proposal_ancestors_count_by_authority
+                        .with_label_values(&[block_hostname])
+                        .inc();
+                    excluded_ancestors.push((score, ancestor));
+                }
                 continue;
             }
 
@@ -848,16 +854,20 @@ impl Core {
                 debug!("Included low score strong link ancestor {ancestor} with score {score} to propose for round {clock_round}");
                 ancestors_to_propose.push(ancestor);
             } else {
-                // We won't include weak link ancestors with low scores, reinclusion
-                // code later may include it.
-                debug!("Excluded low score weak link ancestor {ancestor} with score {score} to propose for round {clock_round}");
-                self.context
-                    .metrics
-                    .node_metrics
-                    .excluded_proposal_ancestors_count_by_authority
-                    .with_label_values(&[block_hostname])
-                    .inc();
-                excluded_ancestors.push((score, ancestor));
+                if self.propagation_delay_per_authority[ancestor.author()] <= 1 {
+                    self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
+                    debug!("Included low score weak link ancestor {ancestor} with score {score} & propogation delay {} to propose for round {clock_round}", self.propagation_delay_per_authority[ancestor.author()]);
+                    ancestors_to_propose.push(ancestor);
+                } else {
+                    debug!("Excluded low score weak link ancestor {ancestor} with score {score} to propose for round {clock_round}");
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .excluded_proposal_ancestors_count_by_authority
+                        .with_label_values(&[block_hostname])
+                        .inc();
+                    excluded_ancestors.push((score, ancestor));
+                }
             }
         }
 
@@ -1819,7 +1829,8 @@ mod test {
                     if block.author() != AuthorityIndex::new_for_test(3) {
                         // Assert blocks created include only 3 ancestors per block as one
                         // should be excluded
-                        assert_eq!(block.ancestors().len(), 3);
+                        // TODO(arun): Is test necessary now that block is included with prop delay
+                        assert_eq!(block.ancestors().len(), 4);
                     } else {
                         // Authority 3 is the low scoring authority so it will still include
                         // its own blocks.
@@ -1897,7 +1908,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_core_set_propagation_delay() {
+    async fn test_core_set_propagation_delay_per_authority() {
         // TODO: create helper to avoid the duplicated code here.
         telemetry_subscribers::init_for_testing();
         let (context, mut key_pairs) = Context::new_for_test(4);
@@ -1951,8 +1962,8 @@ mod test {
             "No block should have been created other than genesis"
         );
 
-        // Use a large propagation delay to disable proposing.
-        core.set_propagation_delay(1000);
+        // Use a large propagation for own authority delay to disable proposing.
+        core.set_propagation_delay_per_authority(vec![1000, 0, 0, 0]);
 
         // Make propagation delay the only reason for not proposing.
         core.set_subscriber_exists(true);
@@ -1960,8 +1971,8 @@ mod test {
         // There is no proposal even with forced proposing.
         assert!(core.try_propose(true).unwrap().is_none());
 
-        // Let Core know there is no propagation delay.
-        core.set_propagation_delay(0);
+        // Let Core know there is no propagation delay for own authority.
+        core.set_propagation_delay_per_authority(vec![0, 0, 0, 0]);
 
         // Proposing now would succeed.
         assert!(core.try_propose(true).unwrap().is_some());

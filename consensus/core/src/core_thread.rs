@@ -65,8 +65,12 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     /// It is not a guarantee that produced blocks will be accepted by peers.
     fn set_subscriber_exists(&self, exists: bool) -> Result<(), CoreError>;
 
-    /// Sets the estimated delay to propagate a block to a quorum of peers, in number of rounds.
-    fn set_propagation_delay(&self, delay: Round) -> Result<(), CoreError>;
+    /// Sets the estimated delay per authority to propagate a block to a quorum of peers,
+    /// in number of rounds.
+    fn set_propagation_delay_per_authority(
+        &self,
+        delay_per_authority: Vec<Round>,
+    ) -> Result<(), CoreError>;
 
     fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError>;
 
@@ -91,7 +95,7 @@ struct CoreThread {
     core: Core,
     receiver: Receiver<CoreThreadCommand>,
     rx_subscriber_exists: watch::Receiver<bool>,
-    rx_propagation_delay: watch::Receiver<Round>,
+    rx_propagation_delay_per_authority: watch::Receiver<Vec<Round>>,
     rx_last_known_proposed_round: watch::Receiver<Round>,
     context: Arc<Context>,
 }
@@ -141,11 +145,11 @@ impl CoreThread {
                         self.core.new_block(Round::MAX, true)?;
                     }
                 }
-                _ = self.rx_propagation_delay.changed() => {
-                    let _scope = monitored_scope("CoreThread::loop::set_propagation_delay");
+                _ = self.rx_propagation_delay_per_authority.changed() => {
+                    let _scope = monitored_scope("CoreThread::loop::set_propagation_delay_per_authority");
                     let should_propose_before = self.core.should_propose();
-                    let delay = *self.rx_propagation_delay.borrow();
-                    self.core.set_propagation_delay(delay);
+                    let delay_per_authority = self.rx_propagation_delay_per_authority.borrow().clone();
+                    self.core.set_propagation_delay_per_authority(delay_per_authority);
                     if !should_propose_before && self.core.should_propose() {
                         // If core cannnot propose before but can propose now, try to produce a new block to ensure liveness,
                         // because block proposal could have been skipped.
@@ -164,7 +168,7 @@ pub(crate) struct ChannelCoreThreadDispatcher {
     context: Arc<Context>,
     sender: WeakSender<CoreThreadCommand>,
     tx_subscriber_exists: Arc<watch::Sender<bool>>,
-    tx_propagation_delay: Arc<watch::Sender<Round>>,
+    tx_propagation_delay_per_authority: Arc<watch::Sender<Vec<Round>>>,
     tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
     highest_received_rounds: Arc<Vec<AtomicU32>>,
 }
@@ -190,16 +194,17 @@ impl ChannelCoreThreadDispatcher {
         let (sender, receiver) =
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
         let (tx_subscriber_exists, mut rx_subscriber_exists) = watch::channel(false);
-        let (tx_propagation_delay, mut rx_propagation_delay) = watch::channel(0);
+        let (tx_propagation_delay_per_authority, mut rx_propagation_delay_per_authority) =
+            watch::channel(vec![0; context.committee.size()]);
         let (tx_last_known_proposed_round, mut rx_last_known_proposed_round) = watch::channel(0);
         rx_subscriber_exists.mark_unchanged();
-        rx_propagation_delay.mark_unchanged();
+        rx_propagation_delay_per_authority.mark_unchanged();
         rx_last_known_proposed_round.mark_unchanged();
         let core_thread = CoreThread {
             core,
             receiver,
             rx_subscriber_exists,
-            rx_propagation_delay,
+            rx_propagation_delay_per_authority,
             rx_last_known_proposed_round,
             context: context.clone(),
         };
@@ -221,7 +226,7 @@ impl ChannelCoreThreadDispatcher {
             context,
             sender: sender.downgrade(),
             tx_subscriber_exists: Arc::new(tx_subscriber_exists),
-            tx_propagation_delay: Arc::new(tx_propagation_delay),
+            tx_propagation_delay_per_authority: Arc::new(tx_propagation_delay_per_authority),
             tx_last_known_proposed_round: Arc::new(tx_last_known_proposed_round),
             highest_received_rounds: Arc::new(highest_received_rounds),
         };
@@ -279,9 +284,12 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
             .map_err(|e| Shutdown(e.to_string()))
     }
 
-    fn set_propagation_delay(&self, delay: Round) -> Result<(), CoreError> {
-        self.tx_propagation_delay
-            .send(delay)
+    fn set_propagation_delay_per_authority(
+        &self,
+        delay_per_authority: Vec<Round>,
+    ) -> Result<(), CoreError> {
+        self.tx_propagation_delay_per_authority
+            .send(delay_per_authority)
             .map_err(|e| Shutdown(e.to_string()))
     }
 
@@ -353,7 +361,10 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
         todo!()
     }
 
-    fn set_propagation_delay(&self, _delay: Round) -> Result<(), CoreError> {
+    fn set_propagation_delay_per_authority(
+        &self,
+        _delay_per_authority: Vec<Round>,
+    ) -> Result<(), CoreError> {
         todo!()
     }
 

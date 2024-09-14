@@ -117,7 +117,7 @@ impl<C: NetworkClient> RoundProber<C> {
     // Probes each peer for the latest rounds they received from others.
     // Returns the quorum round for each authority, and the propagation delay
     // of own blocks.
-    pub(crate) async fn probe(&self) -> (Vec<QuorumRound>, Round) {
+    pub(crate) async fn probe(&self) -> (Vec<QuorumRound>, Vec<Round>) {
         let _scope = monitored_scope("RoundProber");
 
         let request_timeout =
@@ -190,6 +190,8 @@ impl<C: NetworkClient> RoundProber<C> {
             }
         }
 
+        let mut propagation_delay_per_authority = vec![0; self.context.committee.size()];
+
         let quorum_rounds: Vec<_> = self
             .context
             .committee
@@ -198,7 +200,7 @@ impl<C: NetworkClient> RoundProber<C> {
                 compute_quorum_round(&self.context.committee, peer, &highest_received_rounds)
             })
             .collect();
-        for ((low, high), (_, authority)) in quorum_rounds
+        for ((low, high), (authority_index, authority)) in quorum_rounds
             .iter()
             .zip(self.context.committee.authorities())
         {
@@ -208,6 +210,8 @@ impl<C: NetworkClient> RoundProber<C> {
                 .round_prober_quorum_round_gaps
                 .with_label_values(&[&authority.hostname])
                 .set((high - low) as i64);
+
+            propagation_delay_per_authority[authority_index] = high - low;
         }
         // TODO: consider using own quorum round gap to control proposing in addition to
         // propagation delay. For now they seem to be about the same.
@@ -218,28 +222,30 @@ impl<C: NetworkClient> RoundProber<C> {
         // that can reduce round rate.
         // Because of the nature of TCP and block streaming, propagation delay is expected to be
         // 0 in most cases, even when the actual latency of broadcasting blocks is high.
-        let propagation_delay = last_proposed_round.saturating_sub(quorum_rounds[own_index].0);
+        let own_propagation_delay = last_proposed_round.saturating_sub(quorum_rounds[own_index].0);
+        // The
+        propagation_delay_per_authority[own_index] = own_propagation_delay;
         self.context
             .metrics
             .node_metrics
             .round_prober_propagation_delays
-            .observe(propagation_delay as f64);
+            .observe(own_propagation_delay as f64);
         self.context
             .metrics
             .node_metrics
             .round_prober_last_propagation_delay
-            .set(propagation_delay as i64);
+            .set(own_propagation_delay as i64);
         if let Err(e) = self
             .core_thread_dispatcher
-            .set_propagation_delay(propagation_delay)
+            .set_propagation_delay_per_authority(propagation_delay_per_authority.clone())
         {
             tracing::warn!(
-                "Failed to set propagation delay {propagation_delay} on Core: {:?}",
+                "Failed to set propagation delay {propagation_delay_per_authority:?} on Core: {:?}",
                 e
             );
         }
 
-        (quorum_rounds, propagation_delay)
+        (quorum_rounds, propagation_delay_per_authority)
     }
 }
 
@@ -308,19 +314,19 @@ mod test {
 
     struct FakeThreadDispatcher {
         highest_received_rounds: Vec<Round>,
-        propagation_delay: Mutex<Round>,
+        propagation_delay_per_authority: Mutex<Vec<Round>>,
     }
 
     impl FakeThreadDispatcher {
         fn new(highest_received_rounds: Vec<Round>) -> Self {
             Self {
                 highest_received_rounds,
-                propagation_delay: Mutex::new(0),
+                propagation_delay_per_authority: Mutex::new(vec![]),
             }
         }
 
-        fn propagation_delay(&self) -> Round {
-            *self.propagation_delay.lock()
+        fn propagation_delay_per_authority(&self) -> Vec<Round> {
+            self.propagation_delay_per_authority.lock().clone()
         }
     }
 
@@ -345,9 +351,12 @@ mod test {
             unimplemented!()
         }
 
-        fn set_propagation_delay(&self, delay: Round) -> Result<(), CoreError> {
-            let mut propagation_delay = self.propagation_delay.lock();
-            *propagation_delay = delay;
+        fn set_propagation_delay_per_authority(
+            &self,
+            delay_per_authority: Vec<Round>,
+        ) -> Result<(), CoreError> {
+            let mut propagation_delay_per_authority = self.propagation_delay_per_authority.lock();
+            *propagation_delay_per_authority = delay_per_authority;
             Ok(())
         }
 
@@ -477,7 +486,7 @@ mod test {
         // 105, 115, 103, 0,   125, 126, 127,
         // 0,   0,   0,   0,   0,   0,   0,
 
-        let (quorum_rounds, propagation_delay) = prober.probe().await;
+        let (quorum_rounds, propagation_delay_per_authority) = prober.probe().await;
 
         assert_eq!(
             quorum_rounds,
@@ -493,8 +502,14 @@ mod test {
         );
 
         // 110 - 100 = 10
-        assert_eq!(propagation_delay, 10);
-        assert_eq!(core_thread_dispatcher.propagation_delay(), 10);
+        assert_eq!(
+            propagation_delay_per_authority,
+            vec![10, 115, 27, 0, 45, 54, 63]
+        );
+        assert_eq!(
+            core_thread_dispatcher.propagation_delay_per_authority(),
+            vec![10, 115, 27, 0, 45, 54, 63]
+        );
     }
 
     #[tokio::test]
