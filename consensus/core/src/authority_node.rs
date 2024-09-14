@@ -33,7 +33,7 @@ use crate::{
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
-    CommitConsumer,
+    CommitConsumer, CommitConsumerMonitor,
 };
 
 /// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
@@ -112,6 +112,13 @@ impl ConsensusAuthority {
         }
     }
 
+    pub async fn replay_complete(&self) {
+        match self {
+            Self::WithAnemo(authority) => authority.replay_complete().await,
+            Self::WithTonic(authority) => authority.replay_complete().await,
+        }
+    }
+
     #[cfg(test)]
     fn context(&self) -> &Arc<Context> {
         match self {
@@ -137,6 +144,8 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
+    commit_consumer_monitor: Arc<CommitConsumerMonitor>,
+
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
@@ -205,6 +214,9 @@ where
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let highest_known_commit_at_startup = dag_state.read().last_commit_index();
+
         let sync_last_known_own_block = boot_counter == 0
             && dag_state.read().highest_accepted_round() == 0
             && !context
@@ -237,6 +249,8 @@ where
         };
 
         let commit_consumer_monitor = commit_consumer.monitor();
+        commit_consumer_monitor
+            .set_highest_observed_commit_at_startup(highest_known_commit_at_startup);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -282,7 +296,7 @@ where
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
-            commit_consumer_monitor,
+            commit_consumer_monitor.clone(),
             network_client.clone(),
             block_verifier.clone(),
             dag_state.clone(),
@@ -345,6 +359,7 @@ where
             synchronizer,
             commit_syncer_handle,
             round_prober_handle,
+            commit_consumer_monitor,
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
@@ -396,6 +411,10 @@ where
 
     pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
         self.transaction_client.clone()
+    }
+
+    pub(crate) async fn replay_complete(&self) {
+        self.commit_consumer_monitor.replay_complete().await;
     }
 }
 
