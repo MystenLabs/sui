@@ -67,7 +67,7 @@ impl DependencyCache {
                     return Ok(());
                 }
 
-                if let Err(_) = Command::new("git").arg("--version").output() {
+                if Command::new("git").arg("--version").output().is_err() {
                     writeln!(progress_output, "Git is not installed or not in the PATH.")?;
                     return Err(anyhow::anyhow!("Git is not installed or not in the PATH."));
                 }
