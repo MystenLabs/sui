@@ -49,6 +49,8 @@ To double check your registered the correct metadata onchain, run
 sui-bridge-cli view-bridge-registration --sui-rpc-url {SUI_FULLNODE_URL}
 ```
 
+## Bridge Node
+
 ### Bridge Node Hardware Requirements
 
 Suggested hardware requirements:
@@ -57,7 +59,7 @@ Suggested hardware requirements:
 * Storage: 200GB
 * Network: 100Mbps
 
-### WAF Protection for Sui Bridge Server
+### WAF Protection for Bridge Node
 
 In order to protect against DDOS and attacks intended to expend validator resources, rate limit protection of the bridge server is required. 
 In addition to protection, this will give node operators fine-grained control over the rate of requests the receive, and observability into those requests.
@@ -91,3 +93,49 @@ backend bridgevalidator
 ```
 
 If choosing to use an open source load-balancing option, make sure to set up metrics collection and alerting on the service.
+
+### Bridge Node Config
+Use `sui-bridge-cli` command to create a template. If you want to run `BridgeClient` (see the following section), pass `--run-client` as a parameter.
+
+```
+sui-bridge-cli create-bridge-node-config-template {PATH}
+sui-bridge-cli create-bridge-node-config-template --run-client {PATH}
+```
+
+In the generated config:
+* `server-listen-port` : the port that Bridge Node listens to handle requests
+* `metrics-port`: port to export prometheus metrics
+* `bridge-authority-key-path` is the path to the Bridge Validator key, generated from `sui-bridge-cli create-bridge-validator-key` from above command.
+* `run-client`: if Bridge Client should be enabled in Bridge Node (more instructions for this below)
+* `approved-governance-actions` : a list of governance actions that you want to support.
+* `sui:sui-rpc-url`: Sui RPC URL
+* `sui:sui-bridge-chain-id`: 0 for Sui Mainnet, 1 for Sui Testnet
+* `eth:eth-rpc-url`: Ethereum RPC URL
+* `eth:eth-bridge-proxy-address`: The proxy address for Bridge Solidity contracts on Ethereum.
+* `eth:eth-bridge-chain-id`: 10 for Ethereum Mainnet, 11 for Sepolia Testnet
+* `eth:eth-contracts-start-block-fallback`: The starting block BridgeNodes queries for from Ethereum FullNode. This number should be the block where Solidity contracts are deployed or slightly before.
+* `metrics:push-url`: The url of the remote Sui metrics pipeline: `https://metrics-proxy.[testnet|mainnet].sui.io:8443/publish/metrics`
+
+With `run-client: true`, these additional fields can be found in the generated config:
+* `db-path`: path of BridgeClient DB, for BridgeClient
+* `sui:bridge-client-key-path`: the file path of Bridge Client key. This key can be generated with `sui-bridge-cli create-bridge-client-key` as shown above. When `run-client` is true but `sui:bridge-client-key-path` not provided, it defaults to use Bridge Validator key to submit transactions on Sui. However this is not recommended for the sake of key separation.
+
+### Bridge Client
+`BridgeClient` orchestrates bridge transfer requests.
+* It is **optional** to run for a `BridgeNode`.
+* `BridgeClient` submits transaction on Sui Network. Thus when it's enabled, a Sui Account Key with enough SUI balance is needed.
+
+To enable `bridge_client` feature on a `BridgeNode`, set the following parameters in `BridgeNodeConfig`:
+```yaml
+run-client: true
+db-path: <PATH_TO_DB>
+sui:
+    bridge-client-key-path: <PATH_TO_BRIDGE_CLIENT_KEY>  # optional, when absent, use bridge-authority-key-path as the keypair for BridgeClient
+```
+
+
+To create a `BridgeClient` keypair, run
+```
+sui-bridge-cli create-bridge-client-key <PATH_TO_BRIDGE_CLIENT_KEY>
+```
+This prints the newly created Sui Address. Then we need to fund this address with some SUI for operations.
