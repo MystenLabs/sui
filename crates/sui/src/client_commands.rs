@@ -1554,7 +1554,8 @@ impl SuiClientCommands {
                 }
                 let transaction = Transaction::from_generic_sig_data(data, sigs);
 
-                let response = context.execute_transaction_may_fail(transaction).await?;
+                let client = context.get_client().await?;
+                let response = execute_tx(&client, transaction).await?;
                 SuiClientCommandResult::TransactionBlock(response)
             }
             SuiClientCommands::ExecuteCombinedSignedTx { signed_tx_bytes } => {
@@ -1565,7 +1566,8 @@ impl SuiClientCommands {
                         .map_err(|_| anyhow!("Invalid Base64 encoding"))?
                 ).map_err(|_| anyhow!("Failed to parse SenderSignedData bytes, check if it matches the output of sui client commands with --serialize-signed-transaction"))?;
                 let transaction = Envelope::<SenderSignedData, EmptySignInfo>::new(data);
-                let response = context.execute_transaction_may_fail(transaction).await?;
+                let client = context.get_client().await?;
+                let response = execute_tx(&client, transaction).await?;
                 SuiClientCommandResult::TransactionBlock(response)
             }
             SuiClientCommands::NewEnv {
@@ -2900,4 +2902,30 @@ pub(crate) async fn prerender_clever_errors(
             *error = rendered;
         }
     }
+}
+
+/// Execute a transaction and wait for the effects cert.
+/// The transaction execution is not guaranteed to succeed and may fail. This is usually only
+/// needed in non-test environment or the caller is explicitly testing some failure behavior.
+///
+/// Used only in the CLI as it needs to wait for the effects cert instead of local execution.
+/// Use the `execute_transaction_may_fail` from WalletContext
+/// for most cases where read-after write consistency is needed.
+pub async fn execute_tx(
+    client: &SuiClient,
+    tx: Transaction,
+) -> anyhow::Result<SuiTransactionBlockResponse> {
+    Ok(client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            tx,
+            SuiTransactionBlockResponseOptions::new()
+                .with_effects()
+                .with_input()
+                .with_events()
+                .with_object_changes()
+                .with_balance_changes(),
+            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
+        )
+        .await?)
 }
