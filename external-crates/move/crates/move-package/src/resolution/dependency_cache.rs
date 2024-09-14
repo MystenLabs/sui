@@ -66,6 +66,12 @@ impl DependencyCache {
                 if !self.fetched_deps.insert(repository_path.clone()) {
                     return Ok(());
                 }
+
+                if Command::new("git").arg("--version").output().is_err() {
+                    writeln!(progress_output, "Git is not installed or not in the PATH.")?;
+                    return Err(anyhow::anyhow!("Git is not installed or not in the PATH."));
+                }
+
                 let git_path = repository_path;
                 let os_git_url = OsStr::new(git_url.as_str());
                 let os_git_rev = OsStr::new(git_rev.as_str());
@@ -78,15 +84,25 @@ impl DependencyCache {
                         git_url,
                     )?;
                     // If the cached folder does not exist, download and clone accordingly
-                    Command::new("git")
+                    if let Ok(mut output) = Command::new("git")
                         .args([OsStr::new("clone"), os_git_url, git_path.as_os_str()])
-                        .output()
-                        .map_err(|_| {
+                        .spawn()
+                    {
+                        output.wait().map_err(|_| {
                             anyhow::anyhow!(
                                 "Failed to clone Git repository for package '{}'",
                                 dep_name
                             )
                         })?;
+                        if output.stdout.is_some() {
+                            writeln!(progress_output, "{:?}", output)?;
+                        }
+                    } else {
+                        return Err(anyhow::anyhow!(
+                            "Failed to clone Git repository for package '{}'",
+                            dep_name
+                        ));
+                    }
 
                     Command::new("git")
                         .args([
@@ -158,31 +174,31 @@ impl DependencyCache {
                     //
                     // NOTE: this means that you must run the package system with a working network
                     // connection.
-                    let status = Command::new("git")
+
+                    if let Ok(mut output) = Command::new("git")
                         .args([
                             OsStr::new("-C"),
                             git_path.as_os_str(),
                             OsStr::new("fetch"),
                             OsStr::new("origin"),
                         ])
-                        .stdin(Stdio::null())
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .status()
-                        .map_err(|_| {
+                        .spawn()
+                    {
+                        output.wait().map_err(|_| {
                             anyhow::anyhow!(
                                 "Failed to fetch latest Git state for package '{}', to skip set \
                              --skip-fetch-latest-git-deps",
                                 dep_name
                             )
                         })?;
-
-                    if !status.success() {
+                        if output.stdout.is_some() {
+                            writeln!(progress_output, "{:?}", output)?;
+                        }
+                    } else {
                         return Err(anyhow::anyhow!(
-                            "Failed to fetch to latest Git state for package '{}', to skip set \
-                         --skip-fetch-latest-git-deps | Exit status: {}",
-                            dep_name,
-                            status
+                            "Failed to fetch latest Git state for package '{}', to skip set \
+                             --skip-fetch-latest-git-deps",
+                            dep_name
                         ));
                     }
 
