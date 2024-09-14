@@ -917,7 +917,8 @@ fn get_name_token(edition: Edition, name: &str) -> Tok {
         "fun" => Tok::Fun,
         "friend" => Tok::Friend,
         "if" => Tok::If,
-        "invariant" => Tok::Invariant,
+        // remove comment along with the token
+        // "invariant" => Tok::Invariant,
         "let" => Tok::Let,
         "loop" => Tok::Loop,
         "module" => Tok::Module,
