@@ -119,13 +119,21 @@ async fn start_client_components(
 
     let (bridge_pause_tx, bridge_pause_rx) = tokio::sync::watch::channel(is_bridge_paused);
 
-    let (monitor_tx, monitor_rx) = mysten_metrics::metered_channel::channel(
+    let (sui_monitor_tx, sui_monitor_rx) = mysten_metrics::metered_channel::channel(
         10000,
         &mysten_metrics::get_metrics()
             .unwrap()
             .channel_inflight
-            .with_label_values(&["monitor_queue"]),
+            .with_label_values(&["sui_monitor_queue"]),
     );
+    let (eth_monitor_tx, eth_monitor_rx) = mysten_metrics::metered_channel::channel(
+        10000,
+        &mysten_metrics::get_metrics()
+            .unwrap()
+            .channel_inflight
+            .with_label_values(&["eth_monitor_queue"]),
+    );
+
     let sui_token_type_tags = Arc::new(ArcSwap::from(Arc::new(sui_token_type_tags)));
     let bridge_action_executor = BridgeActionExecutor::new(
         sui_client.clone(),
@@ -142,7 +150,8 @@ async fn start_client_components(
 
     let monitor = BridgeMonitor::new(
         sui_client.clone(),
-        monitor_rx,
+        sui_monitor_rx,
+        eth_monitor_rx,
         bridge_auth_agg.clone(),
         bridge_pause_tx,
         sui_token_type_tags,
@@ -155,7 +164,8 @@ async fn start_client_components(
         sui_events_rx,
         eth_events_rx,
         store.clone(),
-        monitor_tx,
+        sui_monitor_tx,
+        eth_monitor_tx,
         metrics,
     );
 
