@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses Test=0x0 A=0x42 --simulator --epochs-to-keep 1
+//# init --addresses Test=0x0 --simulator --epochs-to-keep 1
 
 //# publish
 module Test::M1 {
@@ -10,21 +10,27 @@ module Test::M1 {
         value: u64,
     }
 
-    public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
+    public entry fun create(value: u64, ctx: &mut TxContext) {
         transfer::public_transfer(
             Object { id: object::new(ctx), value },
-            recipient
+            ctx.sender(),
         )
+    }
+
+    public entry fun mutate(obj: &mut Object, value: u64) {
+        obj.value = value;
     }
 }
 
-//# run Test::M1::create --args 0 @A
+//# run Test::M1::create --args 0
 
 //# create-checkpoint
 
 //# advance-epoch
 
-//# run Test::M1::create --args 1 @A
+//# run Test::M1::mutate --args object(2,0) 1
+
+//# create-checkpoint
 
 //# run-graphql
 {
@@ -35,37 +41,19 @@ module Test::M1 {
 
 //# run-graphql
 {
-  address(address: "@{A}") {
-    objects {
-      nodes {
-        digest
-      }
-    }
+  object(address: "@{obj_2_0}", version: 4) {
+    digest
   }
 }
 
-//# create-checkpoint
-
 //# advance-epoch
 
-# We must create a checkpoint so that available checkpoint range is still valid after pruning.
 //# create-checkpoint
 
-# After pruning, we can still read the object, but won't be able to read indexed data such as address owned objects.
+# After pruning, we can still read all historical objects.
 //# run-graphql --wait-for-checkpoint-pruned 0
 {
   object(address: "@{obj_2_0}", version: 3) {
     digest
-  }
-}
-
-//# run-graphql
-{
-  address(address: "@{A}") {
-    objects {
-      nodes {
-        digest
-      }
-    }
   }
 }

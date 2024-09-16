@@ -1,87 +1,68 @@
-processed 13 tasks
+processed 12 tasks
 
-task 1, lines 6-19:
+task 1, lines 6-23:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5608800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 21:
-//# run Test::M1::create --args 0 @A
+task 2, line 25:
+//# run Test::M1::create --args 0
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3, line 23:
+task 3, line 27:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, line 25:
+task 4, line 29:
 //# advance-epoch
 Epoch advanced: 0
 
-task 5, line 27:
-//# run Test::M1::create --args 1 @A
-created: object(5,0)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+task 5, line 31:
+//# run Test::M1::mutate --args object(2,0) 1
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 6, lines 29-34:
+task 6, line 33:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, lines 35-40:
 //# run-graphql
 Response: {
   "data": {
     "object": {
-      "digest": "Nj3zEXbNMaKqUFUTpaTk3sMinxpRvMwq1WBDRt2L27Q"
+      "digest": "BMwy6uHLQwfAxLGdMQFWFR5faQkHUnhxDuaLdd3vngpt"
     }
   }
 }
 
-task 7, lines 36-45:
+task 8, lines 42-47:
 //# run-graphql
 Response: {
   "data": {
-    "address": {
-      "objects": {
-        "nodes": [
-          {
-            "digest": "Nj3zEXbNMaKqUFUTpaTk3sMinxpRvMwq1WBDRt2L27Q"
-          }
-        ]
-      }
+    "object": {
+      "digest": "D7Sc2kjsUCZBRvwM2ByFZPKAz3EG1m1qyjxpesN1j97f"
     }
   }
 }
 
-task 8, line 47:
-//# create-checkpoint
-Checkpoint created: 3
-
-task 9, lines 49-51:
+task 9, line 49:
 //# advance-epoch
 Epoch advanced: 1
 
-task 10, lines 52-54:
+task 10, lines 51-53:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 11, lines 55-60:
+task 11, lines 54-59:
 //# run-graphql --wait-for-checkpoint-pruned 0
 Response: {
   "data": {
     "object": {
-      "digest": "Nj3zEXbNMaKqUFUTpaTk3sMinxpRvMwq1WBDRt2L27Q"
-    }
-  }
-}
-
-task 12, lines 62-71:
-//# run-graphql
-Response: {
-  "data": {
-    "address": {
-      "objects": {
-        "nodes": []
-      }
+      "digest": "BMwy6uHLQwfAxLGdMQFWFR5faQkHUnhxDuaLdd3vngpt"
     }
   }
 }
