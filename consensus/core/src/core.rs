@@ -719,10 +719,15 @@ impl Core {
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
     fn ancestors_to_propose(&mut self, clock_round: Round) -> Vec<VerifiedBlock> {
         // Now take the ancestors before the clock_round (excluded) for each authority.
-        let ancestors = self
-            .dag_state
-            .read()
-            .get_last_cached_block_per_authority(clock_round);
+        let (ancestors, gc_enabled, gc_round) = {
+            let dag_state = self.dag_state.read();
+            (
+                dag_state.get_last_cached_block_per_authority(clock_round),
+                dag_state.gc_enabled(),
+                dag_state.gc_round(),
+            )
+        };
+
         assert_eq!(
             ancestors.len(),
             self.context.committee.size(),
@@ -736,6 +741,18 @@ impl Core {
                 ancestors
                     .into_iter()
                     .filter(|block| block.author() != self.context.own_index)
+                    .filter(|block| {
+                        if gc_enabled {
+                            // When GC is enabled we want to include only ancestors that are:
+                            // 1) blocks of the genesis round
+                            // 2) blocks that are parents of the previous round (clock_round - 1)
+                            // 3) blocks that are parents earlier than the previous round, but higher than the gc_round
+                            return block.round() == GENESIS_ROUND
+                                || block.round() == clock_round - 1
+                                || block.round() > gc_round;
+                        }
+                        true
+                    })
                     .flat_map(|block| {
                         if let Some(last_block_ref) = self.last_included_ancestors[block.author()] {
                             return (last_block_ref.round < block.round()).then_some(block);
