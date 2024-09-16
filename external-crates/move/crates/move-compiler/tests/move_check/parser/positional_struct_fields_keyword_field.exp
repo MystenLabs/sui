@@ -26,7 +26,7 @@ error[E01002]: unexpected token
   ┌─ tests/move_check/parser/positional_struct_fields_keyword_field.move:4:23
   │
 4 │     public struct Foo(fun)
-  │                       ^ Expected a type
+  │                       ^ Unexpected 'fun'. Expected a type
 
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/positional_struct_fields_keyword_field.move:4:26

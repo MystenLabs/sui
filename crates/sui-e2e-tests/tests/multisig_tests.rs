@@ -181,12 +181,16 @@ async fn test_multisig_e2e() {
 #[sim_test]
 async fn test_multisig_with_zklogin_scenerios() {
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(15000)
+        // Use a long epoch duration such that it won't change epoch on its own.
+        .with_epoch_duration_ms(10000000)
         .with_default_jwks()
         .build()
         .await;
 
-    test_cluster.wait_for_epoch(Some(1)).await;
+    // Wait a bit for JWKs to be propagated.
+    test_cluster.wait_for_authenticator_state_update().await;
+    // Manually trigger epoch change to be able to test zklogin with multiple epochs.
+    test_cluster.trigger_reconfiguration().await;
 
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &test_cluster.wallet;

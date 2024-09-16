@@ -5,7 +5,6 @@ pub mod config;
 pub mod consumer;
 pub mod handlers;
 pub mod histogram_relay;
-mod ip;
 pub mod metrics;
 pub mod middleware;
 pub mod peers;
@@ -43,7 +42,6 @@ mod tests {
     use axum::http::StatusCode;
     use axum::routing::post;
     use axum::Router;
-    use multiaddr::Multiaddr;
     use prometheus::Encoder;
     use prometheus::PROTOBUF_FORMAT;
     use protobuf::RepeatedField;
@@ -143,11 +141,10 @@ mod tests {
         client.get(&server_url).send().await.unwrap_err();
 
         // Insert the client's public key into the allowlist and verify the request is successful
-        allower.get_mut().write().unwrap().insert(
+        allower.get_sui_mut().write().unwrap().insert(
             client_pub_key.to_owned(),
-            peers::SuiPeer {
+            peers::AllowedPeer {
                 name: "some-node".into(),
-                p2p_address: Multiaddr::empty(),
                 public_key: client_pub_key.to_owned(),
             },
         );

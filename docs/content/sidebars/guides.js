@@ -138,10 +138,10 @@ const guides = [
 						},
 						items: ['guides/developer/advanced/min-gas-fees'],
 					},*/
-					'guides/developer/advanced/graphql-migration',
 					'guides/developer/advanced/move-2024-migration',
 					'guides/developer/advanced/custom-indexer',
 					'guides/developer/advanced/randomness-onchain',
+					'guides/developer/advanced/graphql-migration',
 				],
 			},
 			{

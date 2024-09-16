@@ -15,7 +15,7 @@ module a::m {
     }
 
     fun t2() {
-        baz!<None>(); // TODO do not complain about dead code?
+        baz!<None>()
     }
 
 }

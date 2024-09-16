@@ -10,10 +10,15 @@ use async_graphql::*;
 
 #[derive(InputObject, Clone, Default)]
 pub(crate) struct EventFilter {
+    /// Filter down to events from transactions sent by this address.
     pub sender: Option<SuiAddress>,
+
+    /// Filter down to the events from this transaction (given by its transaction digest).
     pub transaction_digest: Option<Digest>,
+
     // Enhancement (post-MVP)
     // after_checkpoint
+    // at_checkpoint
     // before_checkpoint
     /// Events emitted by a particular module. An event is emitted by a
     /// particular module if some function in the module is called by a
@@ -36,9 +41,4 @@ pub(crate) struct EventFilter {
     // Enhancement (post-MVP)
     // pub start_time
     // pub end_time
-
-    // Enhancement (post-MVP)
-    // pub any
-    // pub all
-    // pub not
 }

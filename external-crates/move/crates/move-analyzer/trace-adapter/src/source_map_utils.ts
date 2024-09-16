@@ -85,7 +85,10 @@ export interface ISourceMap {
     optimized_lines: number[]
 }
 
-export function readAllSourceMaps(directory: string, filesMap: Map<string, IFileInfo>): Map<string, ISourceMap> {
+export function readAllSourceMaps(
+    directory: string,
+    filesMap: Map<string, IFileInfo>
+): Map<string, ISourceMap> {
     const sourceMapsMap = new Map<string, ISourceMap>();
 
     const processDirectory = (dir: string) => {
@@ -184,7 +187,7 @@ function prePopulateSourceMapLines(
     sourceMapJSON: ISrcRootObject,
     fileInfo: IFileInfo,
     sourceMapLines: Set<number>
-) {
+): void {
     addLinesForLocation(sourceMapJSON.definition_location, fileInfo, sourceMapLines);
     const structMap = sourceMapJSON.struct_map;
     for (const structEntry of Object.values(structMap)) {
@@ -237,7 +240,7 @@ function addLinesForLocation(
     loc: ISrcDefinitionLocation,
     fileInfo: IFileInfo,
     sourceMapLines: Set<number>
-) {
+): void {
     const startLine = byteOffsetToLineColumn(fileInfo, loc.start).line;
     sourceMapLines.add(startLine);
     const endLine = byteOffsetToLineColumn(fileInfo, loc.end).line;

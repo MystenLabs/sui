@@ -113,6 +113,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
+    pub(crate) core_skipped_proposals: IntCounterVec,
     pub(crate) highest_accepted_authority_round: IntGaugeVec,
     pub(crate) highest_accepted_round: IntGauge,
     pub(crate) accepted_blocks: IntCounterVec,
@@ -156,8 +157,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_manager_missing_ancestors_by_authority: IntCounterVec,
     pub(crate) threshold_clock_round: IntGauge,
     pub(crate) subscriber_connection_attempts: IntCounterVec,
-    pub(crate) subscriber_connections: IntGaugeVec,
-    pub(crate) subscribed_peers: IntGaugeVec,
+    pub(crate) subscribed_to: IntGaugeVec,
+    pub(crate) subscribed_by: IntGaugeVec,
     pub(crate) commit_sync_inflight_fetches: IntGauge,
     pub(crate) commit_sync_pending_fetches: IntGauge,
     pub(crate) commit_sync_fetched_commits: IntCounter,
@@ -171,6 +172,11 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetch_loop_latency: Histogram,
     pub(crate) commit_sync_fetch_once_latency: Histogram,
     pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
+    pub(crate) round_prober_quorum_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_current_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_propagation_delays: Histogram,
+    pub(crate) round_prober_last_propagation_delay: IntGauge,
+    pub(crate) round_prober_request_errors: IntCounter,
     pub(crate) uptime: Histogram,
 }
 
@@ -270,6 +276,12 @@ impl NodeMetrics {
             core_lock_enqueued: register_int_counter_with_registry!(
                 "core_lock_enqueued",
                 "Number of enqueued core requests",
+                registry,
+            ).unwrap(),
+            core_skipped_proposals: register_int_counter_vec_with_registry!(
+                "core_skipped_proposals",
+                "Number of proposals skipped in the Core, per reason",
+                &["reason"],
                 registry,
             ).unwrap(),
             highest_accepted_authority_round: register_int_gauge_vec_with_registry!(
@@ -513,14 +525,14 @@ impl NodeMetrics {
                 &["authority", "status"],
                 registry,
             ).unwrap(),
-            subscriber_connections: register_int_gauge_vec_with_registry!(
-                "subscriber_connections",
+            subscribed_to: register_int_gauge_vec_with_registry!(
+                "subscribed_to",
                 "Peers that this authority subscribed to for block streams.",
                 &["authority"],
                 registry,
             ).unwrap(),
-            subscribed_peers: register_int_gauge_vec_with_registry!(
-                "subscribed_peers",
+            subscribed_by: register_int_gauge_vec_with_registry!(
+                "subscribed_by",
                 "Peers subscribing for block streams from this authority.",
                 &["authority"],
                 registry,
@@ -591,6 +603,34 @@ impl NodeMetrics {
                 "commit_sync_fetch_once_errors",
                 "Number of errors when attempting to fetch commits and blocks from single authority during commit sync.",
                 &["error"],
+                registry
+            ).unwrap(),
+            round_prober_quorum_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_quorum_round_gaps",
+                "Round gaps among peers for blocks proposed from each authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_current_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_current_round_gaps",
+                "Round gaps from local last proposed round to the low quorum round of each peer. Can be negative.",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_propagation_delays: register_histogram_with_registry!(
+                "round_prober_propagation_delays",
+                "Round gaps between the last proposed block round and the lower bound of own quorum round",
+                NUM_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            round_prober_last_propagation_delay: register_int_gauge_with_registry!(
+                "round_prober_last_propagation_delay",
+                "Most recent propagation delay observed by RoundProber",
+                registry
+            ).unwrap(),
+            round_prober_request_errors: register_int_counter_with_registry!(
+                "round_prober_request_errors",
+                "Number of timeouts when probing against peers",
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

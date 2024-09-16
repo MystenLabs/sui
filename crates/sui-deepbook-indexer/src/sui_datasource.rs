@@ -157,7 +157,7 @@ pub type CheckpointTxnData = (CheckpointTransaction, u64, u64);
 
 #[async_trait]
 impl Worker for IndexerWorker<CheckpointTxnData> {
-    async fn process_checkpoint(&self, checkpoint: SuiCheckpointData) -> anyhow::Result<()> {
+    async fn process_checkpoint(&self, checkpoint: &SuiCheckpointData) -> anyhow::Result<()> {
         tracing::trace!(
             "Received checkpoint [{}] {}: {}",
             checkpoint.checkpoint_summary.epoch,
@@ -169,6 +169,7 @@ impl Worker for IndexerWorker<CheckpointTxnData> {
 
         let transactions = checkpoint
             .transactions
+            .clone()
             .into_iter()
             .map(|tx| (tx, checkpoint_num, timestamp_ms))
             .collect();

@@ -409,7 +409,14 @@ where
             let loc = make_loc(context.tokens.file_hash(), current_loc, current_loc);
             let diag = diag!(
                 Syntax::UnexpectedToken,
-                (loc, format!("Expected {}", item_description))
+                (
+                    loc,
+                    format!(
+                        "Unexpected '{}'. Expected {}",
+                        context.tokens.peek(),
+                        item_description
+                    )
+                )
             );
             advance_separated_items_error(
                 context,

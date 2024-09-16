@@ -9,18 +9,13 @@ warning[W09012]: unused 'mut' modifiers
   = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09005]: dead or unreachable code
-  ┌─ tests/move_2024/typing/let_mut_macro_return.move:7:13
-  │
-7 │             i = i + 1;
-  │             ^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
-  │
-  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09005]: dead or unreachable code
    ┌─ tests/move_2024/typing/let_mut_macro_return.move:16:35
    │
+ 7 │             i = i + 1;
+   │             --------- Unreachable code. This statement (and any following statements) will not be executed.
+   ·
 16 │         'a: { for_each!(0, 1, |_| return 'a) }
-   │                                   ^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+   │                                   ^^^^^^^^^ Any code after this expression will not be reached
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
