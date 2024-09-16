@@ -4,12 +4,10 @@
 use crate::database::ConnectionPool;
 use diesel_async::RunQueryDsl;
 use futures::{stream, StreamExt};
-use std::time::Duration;
 use std::time::Instant;
 
 const CHUNK_SIZE: u64 = 10000;
 const MAX_CONCURRENCY: usize = 100;
-const SLEEP_BETWEEN_BATCHES_MS: u64 = 100;
 
 pub async fn run_sql_backfill(
     sql: &str,
@@ -35,7 +33,6 @@ pub async fn run_sql_backfill(
                 backfill_data_batch(sql, checkpoint_column_name, start_id, end_id, pool_clone)
                     .await;
                 println!("Finished checkpoint range: {} - {}", start_id, end_id);
-                tokio::time::sleep(Duration::from_millis(SLEEP_BETWEEN_BATCHES_MS)).await;
             }
         })
         .await;
@@ -57,5 +54,6 @@ async fn backfill_data_batch(
     );
 
     // Execute the SQL query using Diesel's async connection
+    // TODO: Add retry support.
     diesel::sql_query(query).execute(&mut conn).await.unwrap();
 }
