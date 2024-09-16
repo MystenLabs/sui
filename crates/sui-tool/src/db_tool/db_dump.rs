@@ -290,11 +290,12 @@ pub fn dump_table(
                     page_number,
                 )
             } else {
-                AuthorityPerpetualTables::open_readonly(&db_path).dump(
-                    table_name,
-                    page_size,
-                    page_number,
-                )
+                unimplemented!("dump_table")
+                // AuthorityPerpetualTables::open_readonly(&db_path).dump(
+                //     table_name,
+                //     page_size,
+                //     page_number,
+                // )
             }
         }
         StoreName::Index => {
