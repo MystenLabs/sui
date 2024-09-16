@@ -444,7 +444,7 @@ impl SubscriptionCounter {
             context
                 .metrics
                 .node_metrics
-                .subscribed_peers
+                .subscribed_by
                 .with_label_values(&[authority.hostname.as_str()])
                 .set(0);
         }
@@ -468,7 +468,7 @@ impl SubscriptionCounter {
         self.context
             .metrics
             .node_metrics
-            .subscribed_peers
+            .subscribed_by
             .with_label_values(&[peer_hostname])
             .set(1);
 
@@ -490,7 +490,7 @@ impl SubscriptionCounter {
             self.context
                 .metrics
                 .node_metrics
-                .subscribed_peers
+                .subscribed_by
                 .with_label_values(&[peer_hostname])
                 .set(0);
         }
