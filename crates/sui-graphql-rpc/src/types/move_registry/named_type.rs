@@ -12,8 +12,9 @@ use sui_types::{base_types::ObjectID, TypeTag};
 use crate::error::Error;
 
 use super::{
-    error::MoveRegistryError, named_move_package::NamedMovePackage,
-    on_chain::VERSIONED_NAME_UNBOUND_REG,
+    error::MoveRegistryError,
+    named_move_package::NamedMovePackage,
+    on_chain::{VersionedName, VERSIONED_NAME_UNBOUND_REG},
 };
 
 pub(crate) struct NamedType;
@@ -66,8 +67,14 @@ impl NamedType {
         let mut names = vec![];
         let struct_tag = VERSIONED_NAME_UNBOUND_REG.replace_all(name, |m: &regex::Captures| {
             // SAFETY: we know that the regex will always have a match on position 0.
-            names.push(m.get(0).unwrap().as_str().to_string());
-            "0x0".to_string()
+            let name = m.get(0).unwrap().as_str();
+
+            if VersionedName::from_str(name).is_ok() {
+                names.push(name.to_string());
+                "0x0".to_string()
+            } else {
+                name.to_string()
+            }
         });
 
         // We attempt to parse the type_tag with these replacements, to make sure there are no other
@@ -145,40 +152,47 @@ mod tests {
         let mut demo_data = vec![];
 
         demo_data.push(DemoData {
-            input_type: "app@org::type::Type".to_string(),
+            input_type: "@org/app::type::Type".to_string(),
             expected_output: format_type("0x0", "::type::Type"),
-            expected_names: vec!["app@org".to_string()],
+            expected_names: vec!["@org/app".to_string()],
         });
 
         demo_data.push(DemoData {
-            input_type: "0xapp@org::type::Type".to_string(),
+            input_type: "inner@org/app::type::Type".to_string(),
             expected_output: format_type("0x0", "::type::Type"),
-            expected_names: vec!["0xapp@org".to_string()],
+            expected_names: vec!["inner@org/app".to_string()],
         });
 
         demo_data.push(DemoData {
-            input_type: "app@org::type::Type<u64>".to_string(),
-            expected_output: format!("{}<u64>", format_type("0x0", "::type::Type")),
-            expected_names: vec!["app@org".to_string()],
+            input_type: "@org/0xapp::type::Type".to_string(),
+            expected_output: format_type("0x0", "::type::Type"),
+            expected_names: vec!["@org/0xapp".to_string()],
         });
 
         demo_data.push(DemoData {
-            input_type: "app@org::type::Type<another-app@org::type::AnotherType, u64>".to_string(),
+            input_type: "@org/app::type::Type<u64>".to_string(),
+            expected_output: format_type("0x0", "::type::Type<u64>"),
+            expected_names: vec!["@org/app".to_string()],
+        });
+
+        demo_data.push(DemoData {
+            input_type: "@org/app::type::Type<@org/another-app::type::AnotherType, u64>"
+                .to_string(),
             expected_output: format!(
                 "{}<{}, u64>",
                 format_type("0x0", "::type::Type"),
                 format_type("0x1", "::type::AnotherType")
             ),
-            expected_names: vec!["app@org".to_string(), "another-app@org".to_string()],
+            expected_names: vec!["@org/app".to_string(), "@org/another-app".to_string()],
         });
 
         demo_data.push(DemoData {
-            input_type: "app@org::type::Type<another-app@org::type::AnotherType<even-more-nested@org::inner::Type>, 0x1::string::String>".to_string(),
+            input_type: "@org/app::type::Type<@org/another-app::type::AnotherType<@org/even-more-nested::inner::Type>, 0x1::string::String>".to_string(),
             expected_output: format!("{}<{}<{}>, 0x1::string::String>", format_type("0x0", "::type::Type"), format_type("0x1", "::type::AnotherType"), format_type("0x2", "::inner::Type")),
             expected_names: vec![
-                "app@org".to_string(),
-                "another-app@org".to_string(),
-                "even-more-nested@org".to_string(),
+                "@org/app".to_string(),
+                "@org/another-app".to_string(),
+                "@org/even-more-nested".to_string(),
             ],
         });
 
@@ -203,13 +217,13 @@ mod tests {
     #[test]
     fn parse_and_replace_type_errors() {
         let types = vec![
-            "--app@org::type::Type",
-            "app@org::type::Type<",
-            "app@org::type::Type<another-app@org::type::AnotherType, u64",
-            "app@org/v11241--type::Type",
-            "app--org::type::Type",
+            "@org/--app::type::Type",
+            "@org/app::type::Type<",
+            "@org/app::type::Type<@org/another-app::type::AnotherType, u64",
+            "app@org/v11241--type--::Type",
+            "app-org::type::Type",
             "app",
-            "app@org::type::Type<another-app@org::type@::AnotherType, u64>",
+            "@org/app::type::Type<@org/another-app::type@::AnotherType, u64>",
             "",
         ];
 
