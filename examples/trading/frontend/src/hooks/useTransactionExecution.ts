@@ -20,7 +20,7 @@ export function useTransactionExecution() {
   ): Promise<SuiTransactionBlockResponse | void> => {
     try {
       const signature = await signTransactionBlock({
-        transaction: txb,
+        transactionBlock: txb,
       });
 
       const res = await client.executeTransactionBlock({
