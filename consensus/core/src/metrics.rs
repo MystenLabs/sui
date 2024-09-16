@@ -157,8 +157,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_manager_missing_ancestors_by_authority: IntCounterVec,
     pub(crate) threshold_clock_round: IntGauge,
     pub(crate) subscriber_connection_attempts: IntCounterVec,
-    pub(crate) subscriber_connections: IntGaugeVec,
-    pub(crate) subscribed_peers: IntGaugeVec,
+    pub(crate) subscribed_to: IntGaugeVec,
+    pub(crate) subscribed_by: IntGaugeVec,
     pub(crate) commit_sync_inflight_fetches: IntGauge,
     pub(crate) commit_sync_pending_fetches: IntGauge,
     pub(crate) commit_sync_fetched_commits: IntCounter,
@@ -173,6 +173,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetch_once_latency: Histogram,
     pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
     pub(crate) round_prober_quorum_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_current_round_gaps: IntGaugeVec,
     pub(crate) round_prober_propagation_delays: Histogram,
     pub(crate) round_prober_last_propagation_delay: IntGauge,
     pub(crate) round_prober_request_errors: IntCounter,
@@ -524,14 +525,14 @@ impl NodeMetrics {
                 &["authority", "status"],
                 registry,
             ).unwrap(),
-            subscriber_connections: register_int_gauge_vec_with_registry!(
-                "subscriber_connections",
+            subscribed_to: register_int_gauge_vec_with_registry!(
+                "subscribed_to",
                 "Peers that this authority subscribed to for block streams.",
                 &["authority"],
                 registry,
             ).unwrap(),
-            subscribed_peers: register_int_gauge_vec_with_registry!(
-                "subscribed_peers",
+            subscribed_by: register_int_gauge_vec_with_registry!(
+                "subscribed_by",
                 "Peers subscribing for block streams from this authority.",
                 &["authority"],
                 registry,
@@ -607,6 +608,12 @@ impl NodeMetrics {
             round_prober_quorum_round_gaps: register_int_gauge_vec_with_registry!(
                 "round_prober_quorum_round_gaps",
                 "Round gaps among peers for blocks proposed from each authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_current_round_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_current_round_gaps",
+                "Round gaps from local last proposed round to the low quorum round of each peer. Can be negative.",
                 &["authority"],
                 registry
             ).unwrap(),
