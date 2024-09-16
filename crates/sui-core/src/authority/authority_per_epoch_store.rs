@@ -2045,7 +2045,7 @@ impl AuthorityPerEpochStore {
     }
 
     /// Notifies that a synced checkpoint of sequence number `checkpoint_seq` is available. The source of the notification
-    /// is the CheckpointExecutor.
+    /// is the CheckpointExecutor. The consumer here is guaranteed to be notified in sequence order.
     pub fn notify_synced_checkpoint(&self, checkpoint_seq: CheckpointSequenceNumber) {
         let mut highest_synced_checkpoint = self.highest_synced_checkpoint.write();
         *highest_synced_checkpoint = checkpoint_seq;

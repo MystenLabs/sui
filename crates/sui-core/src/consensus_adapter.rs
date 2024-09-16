@@ -4,7 +4,7 @@
 use arc_swap::{ArcSwap, ArcSwapOption};
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
-use futures::future::{select, Either};
+use futures::future::{self, select, Either};
 use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
@@ -859,13 +859,15 @@ impl ConsensusAdapter {
                 vec![]
             };
 
-            let checkpoint_sequence_number = if let SequencedConsensusTransactionKey::External(
+            let checkpoint_synced_future = if let SequencedConsensusTransactionKey::External(
                 ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number),
             ) = transaction_key
             {
-                Some(checkpoint_sequence_number)
+                // If the transaction is a checkpoint signature, we can also wait to get notified when a checkpoint with equal or higher sequence
+                // number has been already synced. This way we don't try to unnecessarily sequence the signature for an already verified checkpoint.
+                Either::Left(epoch_store.synced_checkpoint_notify(checkpoint_sequence_number))
             } else {
-                None
+                Either::Right(future::pending())
             };
 
             // We wait for each transaction individually to be processed by consensus or executed in a checkpoint. We could equally just
@@ -881,15 +883,7 @@ impl ConsensusAdapter {
                         processed.expect("Storage error when waiting for transaction executed in checkpoint");
                         self.metrics.sequencing_certificate_processed.with_label_values(&["checkpoint"]).inc();
                     }
-                    processed = async {
-                        // If the transaction is a checkpoint signature, we can also wait to get notified when a checkpoint with equal or higher sequence
-                        // number has been already synced. This way we don't try to unnecessarily sequence the signature for an already verified checkpoint.
-                        if let Some(checkpoint_sequence_number) = checkpoint_sequence_number {
-                            epoch_store.synced_checkpoint_notify(checkpoint_sequence_number).await
-                        } else {
-                            Ok(())
-                        }
-                    }, if checkpoint_sequence_number.is_some() => {
+                    processed = checkpoint_synced_future => {
                         processed.expect("Error when waiting for checkpoint sequence number");
                         self.metrics.sequencing_certificate_processed.with_label_values(&["synced_checkpoint"]).inc();
                     }
