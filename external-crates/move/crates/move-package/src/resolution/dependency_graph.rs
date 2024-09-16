@@ -1072,7 +1072,6 @@ impl DependencyGraph {
             digest,
         } in packages.root_dependencies.into_iter().flatten()
         {
-            let name = dep_id.clone();
             package_graph.add_edge(
                 root_package_id,
                 PackageIdentifier::from(dep_id.as_str()),
@@ -1081,7 +1080,7 @@ impl DependencyGraph {
                     subst: subst.map(parse_substitution).transpose()?,
                     digest: digest.map(Symbol::from),
                     dep_override: false,
-                    dep_name: PM::PackageName::from(name),
+                    dep_name: PM::PackageName::from(dep_name),
                 },
             );
         }
@@ -1093,7 +1092,6 @@ impl DependencyGraph {
             digest,
         } in packages.root_dev_dependencies.into_iter().flatten()
         {
-            let name = dep_id.clone();
             package_graph.add_edge(
                 root_package_id,
                 PackageIdentifier::from(dep_id.as_str()),
@@ -1102,7 +1100,7 @@ impl DependencyGraph {
                     subst: subst.map(parse_substitution).transpose()?,
                     digest: digest.map(Symbol::from),
                     dep_override: false,
-                    dep_name: PM::PackageName::from(name.as_str()),
+                    dep_name: PM::PackageName::from(dep_name),
                 },
             );
         }
@@ -1166,7 +1164,6 @@ impl DependencyGraph {
                 digest,
             } in dependencies.into_iter().flatten()
             {
-                let dep_name = dep_id.clone();
                 package_graph.add_edge(
                     pkg_id,
                     PackageIdentifier::from(dep_id.as_str()),
@@ -1187,7 +1184,6 @@ impl DependencyGraph {
                 digest,
             } in dev_dependencies.into_iter().flatten()
             {
-                let dep_name = dep_id.clone();
                 package_graph.add_edge(
                     pkg_id,
                     PackageIdentifier::from(dep_id.as_str()),
