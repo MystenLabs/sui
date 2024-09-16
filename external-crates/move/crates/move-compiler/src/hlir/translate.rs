@@ -441,7 +441,7 @@ fn function_body(
         TB::Defined((_, seq)) => {
             debug_print!(context.debug.function_translation,
                          (msg format!("-- {} ----------------", _name)),
-                         (lines "body" => &seq));
+                         (lines "body" => &seq; verbose));
             let (locals, body) = function_body_defined(context, sig, loc, seq);
             debug_print!(context.debug.function_translation,
                          (msg "--------"),
@@ -946,19 +946,18 @@ fn tail(
             context.enter_named_block(name, binders.clone(), out_type.clone());
             let mut body_block = make_block!();
             let final_exp = tail_block(context, &mut body_block, Some(&out_type), seq);
-            let result = final_exp.map(|exp| {
+            if let Some(exp) = final_exp {
                 bind_value_in_block(context, binders, Some(out_type), &mut body_block, exp);
-                block.push_back(sp(
-                    eloc,
-                    S::NamedBlock {
-                        name,
-                        block: body_block,
-                    },
-                ));
-                result
-            });
+            }
+            block.push_back(sp(
+                eloc,
+                S::NamedBlock {
+                    name,
+                    block: body_block,
+                },
+            ));
             context.exit_named_block(name);
-            result
+            Some(result)
         }
         E::Block((_, seq)) => tail_block(context, block, expected_type, seq),
 
