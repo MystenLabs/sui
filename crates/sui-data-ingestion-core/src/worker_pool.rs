@@ -30,7 +30,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
     pub async fn run(
         self,
         mut current_checkpoint_number: CheckpointSequenceNumber,
-        mut checkpoint_receiver: mpsc::Receiver<CheckpointData>,
+        mut checkpoint_receiver: mpsc::Receiver<Arc<CheckpointData>>,
         executor_progress_sender: mpsc::Sender<(String, CheckpointSequenceNumber)>,
     ) {
         info!(
@@ -49,7 +49,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
         // spawn child workers
         for worker_id in 0..self.concurrency {
             let (worker_sender, mut worker_recv) =
-                mpsc::channel::<CheckpointData>(MAX_CHECKPOINTS_IN_PROGRESS);
+                mpsc::channel::<Arc<CheckpointData>>(MAX_CHECKPOINTS_IN_PROGRESS);
             let (term_sender, mut term_receiver) = oneshot::channel::<()>();
             let cloned_progress_sender = progress_sender.clone();
             let task_name = self.task_name.clone();
