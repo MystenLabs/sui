@@ -771,6 +771,53 @@ mod tests {
         }
     }
 
+    /// Blocks that are attempted to be accepted but are <= gc_round they will be skipped for processing. Nothing
+    /// should be stored or trigger any unsuspension etc.
+    #[tokio::test]
+    async fn skip_accepting_blocks_below_gc_round() {
+        // GIVEN
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        // We set the gc depth to 4
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        // We "fake" the commit for round 10, so we can test the GC round 6 (commit_round - gc_depth = 10 - 4 = 6)
+        let last_commit = TrustedCommit::new_for_test(
+            10,
+            CommitDigest::MIN,
+            context.clock.timestamp_utc_ms(),
+            BlockRef::new(10, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+            vec![],
+        );
+        dag_state.write().set_last_commit(last_commit);
+        assert_eq!(
+            dag_state.read().gc_round(),
+            6,
+            "GC round should have moved to round 6"
+        );
+
+        let mut block_manager =
+            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+
+        // create a DAG of 6 rounds
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=6).build();
+
+        let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
+
+        // WHEN
+        let (accepted_blocks, missing) = block_manager.try_accept_blocks(all_blocks.clone());
+
+        // THEN
+        assert!(accepted_blocks.is_empty());
+        assert!(missing.is_empty());
+        assert!(block_manager.is_empty());
+    }
+
     /// The test generate blocks for a well connected DAG and feed them to block manager in random order. In the end all the
     /// blocks should be uniquely suspended and no missing blocks should exist. The test will run for both gc_enabled/disabled.
     /// When gc is enabeld we set a high gc_depth value so in practice gc_round will be 0, but we'll be able to test in the common case
