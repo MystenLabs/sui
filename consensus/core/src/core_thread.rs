@@ -80,6 +80,9 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
 
     /// Returns the highest round received for each authority by Core.
     fn highest_received_rounds(&self) -> Vec<Round>;
+
+    // This is meant to be used only for testing purposes.
+    fn ignore_proposal_checks_for_testing(&self, ignore: bool) -> Result<(), CoreError>;
 }
 
 pub(crate) struct CoreThreadHandle {
@@ -101,6 +104,7 @@ struct CoreThread {
     rx_subscriber_exists: watch::Receiver<bool>,
     rx_propagation_delay_and_quorum_rounds: watch::Receiver<PropagationDelayAndQuorumRounds>,
     rx_last_known_proposed_round: watch::Receiver<Round>,
+    rx_ignore_proposal_checks: watch::Receiver<bool>,
     context: Arc<Context>,
 }
 
@@ -164,6 +168,11 @@ impl CoreThread {
                         self.core.new_block(Round::MAX, true)?;
                     }
                 }
+                _ = self.rx_ignore_proposal_checks.changed() => {
+                    let _scope = monitored_scope("CoreThread::loop::ignore_proposal_checks");
+                    let ignore = *self.rx_ignore_proposal_checks.borrow();
+                    self.core.ignore_proposal_checks_for_testing(ignore);
+                }
             }
         }
 
@@ -177,6 +186,7 @@ pub(crate) struct ChannelCoreThreadDispatcher {
     sender: WeakSender<CoreThreadCommand>,
     tx_subscriber_exists: Arc<watch::Sender<bool>>,
     tx_propagation_delay_and_quorum_rounds: Arc<watch::Sender<PropagationDelayAndQuorumRounds>>,
+    tx_ignore_proposal_checks: Arc<watch::Sender<bool>>,
     tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
     highest_received_rounds: Arc<Vec<AtomicU32>>,
 }
@@ -211,6 +221,8 @@ impl ChannelCoreThreadDispatcher {
                 accepted_quorum_rounds: vec![(0, 0); context.committee.size()],
             });
         let (tx_last_known_proposed_round, mut rx_last_known_proposed_round) = watch::channel(0);
+        let (tx_ignore_proposal_checks, mut rx_ignore_proposal_checks) = watch::channel(false);
+        rx_ignore_proposal_checks.mark_unchanged();
         rx_subscriber_exists.mark_unchanged();
         rx_propagation_delay_and_quorum_rounds.mark_unchanged();
         rx_last_known_proposed_round.mark_unchanged();
@@ -220,6 +232,7 @@ impl ChannelCoreThreadDispatcher {
             rx_subscriber_exists,
             rx_propagation_delay_and_quorum_rounds,
             rx_last_known_proposed_round,
+            rx_ignore_proposal_checks,
             context: context.clone(),
         };
 
@@ -245,6 +258,7 @@ impl ChannelCoreThreadDispatcher {
             ),
             tx_last_known_proposed_round: Arc::new(tx_last_known_proposed_round),
             highest_received_rounds: Arc::new(highest_received_rounds),
+            tx_ignore_proposal_checks: Arc::new(tx_ignore_proposal_checks),
         };
         let handle = CoreThreadHandle {
             join_handle,
@@ -329,6 +343,12 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
             .map(|round| round.load(Ordering::Relaxed))
             .collect()
     }
+
+    fn ignore_proposal_checks_for_testing(&self, ignore: bool) -> Result<(), CoreError> {
+        self.tx_ignore_proposal_checks
+            .send(ignore)
+            .map_err(|e| Shutdown(e.to_string()))
+    }
 }
 
 #[derive(Clone)]
@@ -412,6 +432,11 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
 
     fn highest_received_rounds(&self) -> Vec<Round> {
         todo!()
+    }
+
+    fn ignore_proposal_checks_for_testing(&self, _ignore: bool) -> Result<(), CoreError> {
+        // Implement the method logic here
+        Ok(())
     }
 }
 

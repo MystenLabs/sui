@@ -102,6 +102,7 @@ pub(crate) struct Core {
     // information to decide whether to include that authority block in the next
     // proposal or not.
     ancestor_state_manager: AncestorStateManager,
+    ignore_proposal_checks_for_testing: bool,
 }
 
 impl Core {
@@ -178,6 +179,7 @@ impl Core {
             dag_state,
             last_known_proposed_round: min_propose_round,
             ancestor_state_manager,
+            ignore_proposal_checks_for_testing: false,
         }
         .recover()
     }
@@ -726,12 +728,17 @@ impl Core {
         info!("Last known proposed round set to {round}");
     }
 
+    pub(crate) fn ignore_proposal_checks_for_testing(&mut self, ignore: bool) {
+        self.ignore_proposal_checks_for_testing = ignore;
+        info!("Ignore proposal checks set to {ignore}");
+    }
+
     /// Whether the core should propose new blocks.
     pub(crate) fn should_propose(&self) -> bool {
         let clock_round = self.threshold_clock.get_round();
         let core_skipped_proposals = &self.context.metrics.node_metrics.core_skipped_proposals;
 
-        if !self.subscriber_exists {
+        if !self.ignore_proposal_checks_for_testing && !self.subscriber_exists {
             debug!("Skip proposing for round {clock_round}, no subscriber exists.");
             core_skipped_proposals
                 .with_label_values(&["no_subscriber"])
@@ -739,11 +746,12 @@ impl Core {
             return false;
         }
 
-        if self.propagation_delay
-            > self
-                .context
-                .parameters
-                .propagation_delay_stop_proposal_threshold
+        if !self.ignore_proposal_checks_for_testing
+            && self.propagation_delay
+                > self
+                    .context
+                    .parameters
+                    .propagation_delay_stop_proposal_threshold
         {
             debug!(
                 "Skip proposing for round {clock_round}, high propagation delay {} > {}.",
