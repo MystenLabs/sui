@@ -1145,7 +1145,9 @@ impl QuorumDriverApi {
                 tx_bytes.clone(),
                 signatures.clone(),
                 Some(options.clone()),
-                Some(request_type.clone()),
+                // Ignore the request type as we emulate WaitForLocalExecution below.
+                // It will default to WaitForEffectsCert on the RPC nodes.
+                None,
             )
             .await?;
 
