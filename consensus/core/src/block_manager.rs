@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-    time::Instant,
+    collections::{BTreeMap, BTreeSet}, iter, sync::Arc, time::Instant
 };
 
 use itertools::Itertools as _;
@@ -13,7 +11,7 @@ use parking_lot::RwLock;
 use tracing::{debug, trace, warn};
 
 use crate::{
-    block::{BlockAPI, BlockRef, VerifiedBlock},
+    block::{BlockAPI, BlockRef, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     context::Context,
     dag_state::DagState,
@@ -120,7 +118,7 @@ impl BlockManager {
             let unsuspended_blocks = self.try_unsuspend_children_blocks(block.reference());
 
             // Verify block timestamps
-            let blocks_to_accept = self.verify_block_timestamps_and_accept(unsuspended_blocks);
+            let blocks_to_accept = self.verify_block_timestamps_and_accept(iter::once(block).chain(unsuspended_blocks));
             accepted_blocks.extend(blocks_to_accept);
         }
 
@@ -182,7 +180,7 @@ impl BlockManager {
 
                     // When gc is enabled it's possible that we indeed won't find any ancestors that are passed gc_round. That's ok. We don't need to panic here.
                     // We do want to panic if gc_enabled we and have an ancestor that is > gc_round, or gc is disabled.
-                    if gc_enabled && ancestor_ref.round <= gc_round {
+                    if gc_enabled && ancestor_ref.round > GENESIS_ROUND && ancestor_ref.round <= gc_round {
                         debug!(
                             "Block {:?} has a missing ancestor: {:?} passed GC round {}",
                             b.reference(),
@@ -237,6 +235,7 @@ impl BlockManager {
         let mut ancestors_to_fetch = BTreeSet::new();
         let dag_state = self.dag_state.read();
         let gc_round = dag_state.gc_round();
+        let gc_enabled = dag_state.gc_enabled();
 
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
         if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref) {
@@ -245,12 +244,20 @@ impl BlockManager {
 
         // Keep only the ancestors that are greater than the GC round to check for their existence. Keep in mind that if GC is disabled
         // then gc_round will be 0 and all ancestors will be considered.
-        let ancestors = block
+        let ancestors = if gc_enabled {
+            block
             .ancestors()
             .iter()
-            .filter(|ancestor| ancestor.round > gc_round)
+            .filter(|ancestor| gc_round == GENESIS_ROUND || ancestor.round > gc_round)
             .cloned()
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+        } else {
+            block
+            .ancestors()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+        };
 
         // make sure that we have all the required ancestors in store
         for (found, ancestor) in dag_state
@@ -643,7 +650,7 @@ mod tests {
         let (accepted_blocks, missing) = block_manager.try_accept_blocks(all_blocks.clone());
 
         // THEN
-        assert!(accepted_blocks.len() == 8);
+        assert_eq!(accepted_blocks.len(), 8);
         assert_eq!(
             accepted_blocks,
             all_blocks
