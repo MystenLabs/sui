@@ -124,7 +124,11 @@ fn lock_file_missing_dependency() {
     .expect("Creating new lock file");
 
     // Write a reference to a dependency that there isn't package information for.
-    writeln!(&*lock, r#"dependencies = [{{ id = "OtherDep" }}]"#).unwrap();
+    writeln!(
+        &*lock,
+        r#"dependencies = [{{ id = "OtherDep", name = "OtherDep" }}]"#
+    )
+    .unwrap();
     lock.commit(&commit).expect("Writing partial lock file");
 
     let Err(err) = DependencyGraph::read_from_lock(
@@ -630,7 +634,7 @@ version = 3
 manifest_digest = "42"
 deps_digest = "7"
 dependencies = [
-    { id = "A" },
+    { id = "A", name = "A" },
 ]
 
 [[move.package]]
@@ -644,8 +648,8 @@ version = 3
 manifest_digest = "42"
 deps_digest = "7"
 dependencies = [
-    { id = "A" },
-    { id = "B" },
+    { id = "A", name = "A" },
+    { id = "B", name = "A" },
 ]
 
 [[move.package]]
@@ -663,14 +667,14 @@ version = 3
 manifest_digest = "42"
 deps_digest = "7"
 dependencies = [
-    { id = "A" },
+    { id = "A", name = "A" },
 ]
 
 [[move.package]]
 id = "A"
 source = { local = "./A" }
 dependencies = [
-    { id = "B" },
+    { id = "B", name = "A" },
 ]
 
 [[move.package]]

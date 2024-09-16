@@ -1067,6 +1067,7 @@ impl DependencyGraph {
 
         for schema::Dependency {
             id: dep_id,
+            name: dep_name,
             subst,
             digest,
         } in packages.root_dependencies.into_iter().flatten()
@@ -1087,6 +1088,7 @@ impl DependencyGraph {
 
         for schema::Dependency {
             id: dep_id,
+            name: dep_name,
             subst,
             digest,
         } in packages.root_dev_dependencies.into_iter().flatten()
@@ -1159,6 +1161,7 @@ impl DependencyGraph {
 
             for schema::Dependency {
                 id: dep_id,
+                name: dep_name,
                 subst,
                 digest,
             } in dependencies.into_iter().flatten()
@@ -1179,6 +1182,7 @@ impl DependencyGraph {
 
             for schema::Dependency {
                 id: dep_id,
+                name: dep_name,
                 subst,
                 digest,
             } in dev_dependencies.into_iter().flatten()
@@ -1576,7 +1580,7 @@ impl<'a> fmt::Display for DependencyTOML<'a> {
                 subst,
                 digest,
                 dep_override: _,
-                dep_name: _,
+                dep_name,
             },
         ) = self;
 
@@ -1584,6 +1588,9 @@ impl<'a> fmt::Display for DependencyTOML<'a> {
 
         write!(f, "id = ")?;
         f.write_str(&str_escape(id.as_str())?)?;
+
+        write!(f, ", name = ")?;
+        f.write_str(&str_escape(dep_name.as_str())?)?;
 
         if let Some(digest) = digest {
             write!(f, ", digest = ")?;

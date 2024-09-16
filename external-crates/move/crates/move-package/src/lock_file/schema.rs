@@ -77,6 +77,10 @@ pub struct Dependency {
     /// Package identifier (as resolved by the package hook).
     pub id: String,
 
+    /// The name of the dependency (corresponds to the key for the dependency in the depending
+    /// package's source manifest).
+    pub name: String,
+
     /// Mappings for named addresses to apply to the package being depended on, when referred to by
     /// the depending package.
     #[serde(rename = "addr_subst")]

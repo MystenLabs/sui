@@ -222,8 +222,8 @@ async fn test_generate_lock_file() {
         manifest_digest = "4C5606BF71339416027A58BDB5BA2EF2F5E0929FCE98BAB8AFFCBC447AFE3A23"
         deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
         dependencies = [
-          { id = "Examples" },
-          { id = "Sui" },
+          { id = "Examples", name = "Examples" },
+          { id = "Sui", name = "Sui" },
         ]
 
         [[move.package]]
@@ -231,7 +231,7 @@ async fn test_generate_lock_file() {
         source = { local = "../object_basics" }
 
         dependencies = [
-          { id = "Sui" },
+          { id = "Sui", name = "Sui" },
         ]
 
         [[move.package]]
@@ -243,7 +243,7 @@ async fn test_generate_lock_file() {
         source = { local = "../../../../../sui-framework/packages/sui-framework" }
 
         dependencies = [
-          { id = "MoveStdlib" },
+          { id = "MoveStdlib", name = "MoveStdLib" },
         ]
 
         [move.toolchain-version]

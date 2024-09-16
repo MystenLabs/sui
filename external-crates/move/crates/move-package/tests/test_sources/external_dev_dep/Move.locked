@@ -5,10 +5,10 @@ version = 3
 manifest_digest = "84A0B503BE9F9B341AC66860713D12704876E5C2425891E3B94626B12E4313E5"
 deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
 dependencies = [
-  { id = "A" },
+  { id = "A", name = "A" },
 ]
 dev-dependencies = [
-  { id = "B" },
+  { id = "B", name = "B" },
 ]
 
 [[move.package]]
@@ -16,7 +16,7 @@ id = "A"
 source = { local = "deps_only/A" }
 
 dependencies = [
-  { id = "ADep" },
+  { id = "ADep", name = "ADep" },
 ]
 
 [[move.package]]
@@ -28,7 +28,7 @@ id = "B"
 source = { local = "deps_only/B" }
 
 dependencies = [
-  { id = "BDep" },
+  { id = "BDep", name = "BDep" },
 ]
 
 [[move.package]]

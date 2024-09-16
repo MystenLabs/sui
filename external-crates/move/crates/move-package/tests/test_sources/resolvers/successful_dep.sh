@@ -21,21 +21,21 @@ version = 3
 manifest_digest = "42"
 deps_digest = "7"
 $TYPE = [
-    { id = "$PACKAGE" },
+    { id = "$PACKAGE", name = "$PACKAGE" },
 ]
 
 [[move.package]]
 id = "$PACKAGE"
 source = { local = "./deps_only/$PACKAGE" }
 dependencies = [
-    { id = "${PACKAGE}Dep" },
+    { id = "${PACKAGE}Dep", name = "${PACKAGE}Dep" },
 ]
 
 [[move.package]]
 id = "${PACKAGE}Dep"
 source = { local = "./deps_only/${PACKAGE}Dep" }
 dependencies = [
-    { id = "${PACKAGE}DepOther" },
+    { id = "${PACKAGE}DepOther", name = "${PACKAGE}DepOther" },
 ]
 
 [[move.package]]

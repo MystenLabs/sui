@@ -5,8 +5,8 @@ version = 3
 manifest_digest = "6F18190939664D7ECC8F2DC327E079037A743E0CFF3FA5F72DABD2B6B5C3D200"
 deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
 dependencies = [
-  { id = "A-resolved", addr_subst = { "AA" = "0000000000000000000000000000000000000000000000000000000000000001" } },
-  { id = "B-resolved", addr_subst = { "BA" = "0000000000000000000000000000000000000000000000000000000000000001" } },
+  { id = "A-resolved", name = "A-rename", addr_subst = { "AA" = "0000000000000000000000000000000000000000000000000000000000000001" } },
+  { id = "B-resolved", name = "B-rename", addr_subst = { "BA" = "0000000000000000000000000000000000000000000000000000000000000001" } },
 ]
 
 [[move.package]]
@@ -14,7 +14,7 @@ id = "A-resolved"
 source = { local = "deps_only/A-rename" }
 
 dependencies = [
-  { id = "C-resolved", addr_subst = { "AA" = "A" } },
+  { id = "C-resolved", name = "C-rename", addr_subst = { "AA" = "A" } },
 ]
 
 [[move.package]]
@@ -22,7 +22,7 @@ id = "B-resolved"
 source = { local = "deps_only/B-rename" }
 
 dependencies = [
-  { id = "C-resolved", addr_subst = { "BA" = "A" } },
+  { id = "C-resolved", name = "C-rename", addr_subst = { "BA" = "A" } },
 ]
 
 [[move.package]]
