@@ -27,6 +27,7 @@ move-vm-config.workspace = true
 move-vm-types.workspace = true
 move-binary-format.workspace = true
 move-vm-profiler.workspace = true
+petgraph.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
@@ -34,6 +35,7 @@ hex.workspace = true
 proptest.workspace = true
 move-ir-compiler.workspace = true
 move-compiler.workspace = true
+move-vm-test-utils.workspace = true
 
 [features]
 default = []

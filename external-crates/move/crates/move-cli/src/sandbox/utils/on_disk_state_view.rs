@@ -112,6 +112,23 @@ impl OnDiskStateView {
         Self::get_bytes(&self.get_module_path(module_id))
     }
 
+    /// Read the package bytes stored on-disk at `addr`
+    fn get_package_bytes(&self, address: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>> {
+        let addr_path = self.get_addr_path(address);
+        if !addr_path.exists() {
+            return Ok(None);
+        }
+        let mut modules = vec![];
+        for entry in fs::read_dir(addr_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() {
+                modules.push(Self::get_bytes(&path)?.unwrap());
+            }
+        }
+        Ok(Some(modules))
+    }
+
     /// Check if a module at `addr`/`module_id` exists
     pub fn has_module(&self, module_id: &ModuleId) -> bool {
         self.get_module_path(module_id).exists()
@@ -240,6 +257,10 @@ impl ModuleResolver for OnDiskStateView {
     type Error = anyhow::Error;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.get_module_bytes(module_id)
+    }
+
+    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        self.get_package_bytes(id)
     }
 }
 

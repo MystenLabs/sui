@@ -11,7 +11,7 @@ use move_core_types::{
     resolver::{LinkageResolver, ModuleResolver, MoveResolver, ResourceResolver},
 };
 use std::{
-    collections::{btree_map, BTreeMap},
+    collections::{btree_map, BTreeMap, BTreeSet},
     fmt::Debug,
 };
 
@@ -33,6 +33,10 @@ impl ModuleResolver for BlankStorage {
     type Error = ();
 
     fn get_module(&self, _module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(None)
+    }
+
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
         Ok(None)
     }
 }
@@ -80,6 +84,17 @@ impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
         }
 
         self.base.get_module(module_id)
+    }
+
+    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        if let Some(package) = self.delta.accounts().get(id) {
+            return Ok(package
+                .modules()
+                .values()
+                .map(|op| op.clone().ok())
+                .collect::<Option<_>>());
+        }
+        self.base.get_package(id)
     }
 }
 
@@ -215,6 +230,10 @@ impl InMemoryStorage {
 /// Use all default implementations for InMemoryStorage implementation of LinkageResolver
 impl LinkageResolver for InMemoryStorage {
     type Error = ();
+
+    fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error> {
+        Ok(self.accounts.keys().cloned().collect())
+    }
 }
 
 impl ModuleResolver for InMemoryStorage {
@@ -223,6 +242,19 @@ impl ModuleResolver for InMemoryStorage {
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         if let Some(account_storage) = self.accounts.get(module_id.address()) {
             return Ok(account_storage.modules.get(module_id.name()).cloned());
+        }
+        Ok(None)
+    }
+
+    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        if let Some(account_storage) = self.accounts.get(id) {
+            return Ok(Some(
+                account_storage
+                    .modules
+                    .values()
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            ));
         }
         Ok(None)
     }

@@ -10,8 +10,8 @@ use move_binary_format::{
     },
 };
 use move_core_types::{
-    gas_algebra::AbstractMemorySize, identifier::Identifier, language_storage::ModuleId,
-    vm_status::StatusCode,
+    account_address::AccountAddress, gas_algebra::AbstractMemorySize, identifier::Identifier,
+    language_storage::ModuleId, vm_status::StatusCode,
 };
 use std::fmt::Debug;
 use std::{cmp::max, collections::BTreeMap};
@@ -185,6 +185,14 @@ impl CachedDatatype {
             )
             .with_message(format!("Expected enum type but got {:?}", x))),
         }
+    }
+
+    pub fn datatype_key(&self) -> (AccountAddress, Identifier, Identifier) {
+        (
+            *self.defining_id.address(),
+            self.defining_id.name().to_owned(),
+            self.name.to_owned(),
+        )
     }
 }
 

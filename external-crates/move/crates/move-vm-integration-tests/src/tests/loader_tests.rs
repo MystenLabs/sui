@@ -30,7 +30,13 @@ use move_vm_types::{
     loaded_data::runtime_types::{CachedDatatype, DepthFormula, Type},
 };
 
-use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc, thread};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+    thread,
+};
 
 const DEFAULT_ACCOUNT: AccountAddress = {
     let mut address = [0u8; AccountAddress::LENGTH];
@@ -349,6 +355,20 @@ impl LinkageResolver for RelinkingStore {
             .unwrap_or(module_id)
             .clone())
     }
+
+    fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error> {
+        let modules = self.store.get_package(&self.context)?.unwrap();
+        let mut all_deps = BTreeSet::new();
+        for module in &modules {
+            let module = CompiledModule::deserialize_with_defaults(module).unwrap();
+            let deps = module.immediate_dependencies();
+            for dep in deps {
+                all_deps.insert(*self.relocate(&dep).unwrap().address());
+            }
+        }
+
+        Ok(all_deps)
+    }
 }
 
 /// Implement by forwarding to the underlying in memory storage
@@ -357,6 +377,10 @@ impl ModuleResolver for RelinkingStore {
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.store.get_module(id)
+    }
+
+    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        self.store.get_package(id)
     }
 }
 

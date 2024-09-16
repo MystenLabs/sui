@@ -156,6 +156,10 @@ impl ModuleResolver for RemoteStore {
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.modules.get(module_id).cloned())
     }
+
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        unreachable!("Should never be called in v1")
+    }
 }
 
 impl ResourceResolver for RemoteStore {

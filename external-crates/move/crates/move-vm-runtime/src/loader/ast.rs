@@ -1,5 +1,10 @@
-use std::collections::{BTreeMap, HashMap};
-
+use crate::{
+    loader::{
+        arena::{self, Arena, ArenaPointer},
+        BinaryCache, Loader, ModuleDefinitionResolver,
+    },
+    native_functions::{NativeFunction, UnboxedNativeFunction},
+};
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
@@ -9,9 +14,8 @@ use move_binary_format::{
         StructDefinitionIndex, VariantHandle, VariantHandleIndex, VariantInstantiationHandle,
         VariantInstantiationHandleIndex, VariantJumpTable, VariantJumpTableIndex, VariantTag,
     },
+    CompiledModule,
 };
-use move_vm_types::loaded_data::runtime_types::{CachedTypeIndex, Type};
-
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
@@ -20,18 +24,46 @@ use move_core_types::{
     runtime_value as R,
     vm_status::StatusCode,
 };
-
-use crate::{
-    loader::{
-        arena::{self, ArenaPointer},
-        Loader, ModuleDefinitionResolver,
-    },
-    native_functions::{NativeFunction, UnboxedNativeFunction},
-};
+use move_vm_types::loaded_data::runtime_types::{CachedTypeIndex, Type};
+use std::collections::{BTreeMap, HashMap};
 
 //**************************************************************************************************
 // Types
 //**************************************************************************************************
+
+pub type DefiningTypeId = AccountAddress;
+pub type PackageStorageId = AccountAddress;
+pub type RuntimePackageId = AccountAddress;
+
+/// runtime_address::module_name::function_name
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct VTableKey {
+    pub package_key: RuntimePackageId,
+    pub module_name: Identifier,
+    pub function_name: Identifier,
+}
+
+/// A `PackageVTable` is a collection of function pointers indexed by the module and function name
+/// within the package.
+pub type PackageVTable = BinaryCache<(Identifier, Identifier), ArenaPointer<Function>>;
+
+/// Representation of a loaded package.
+pub struct LoadedPackage {
+    pub storage_id: PackageStorageId,
+    pub runtime_id: RuntimePackageId,
+
+    // NB: this is under the package's context so we don't need to further resolve by
+    // address in this table.
+    pub loaded_modules: BinaryCache<Identifier, LoadedModule>,
+
+    // NB: this is needed for the bytecode verifier. If we update the bytecode verifier we should
+    // be able to remove this.
+    pub compiled_modules: BinaryCache<Identifier, CompiledModule>,
+
+    // NB: All things except for types are allocated into this arena.
+    pub package_arena: Arena,
+    pub vtable: PackageVTable,
+}
 
 // A LoadedModule is very similar to a CompiledModule but data is "transformed" to a representation
 // more appropriate to execution.
@@ -120,11 +152,21 @@ pub(crate) struct Function {
 // The `Resolver` uses those structs to return information to the `Interpreter`.
 //
 
+// The type of call -- there are two types:
+// - Static: the function is known and the index is the index in the global table of functions
+//   (e.g., intra-package calls, or possibly calls to framework/well-known external packages).
+// - Virtual: the function is unknown and the index is the index in the global table of vtables
+//   that will be filled in at a later time before execution.
+pub enum CallType {
+    Static(ArenaPointer<Function>),
+    Virtual(VTableKey),
+}
+
 // A function instantiation.
 #[derive(Debug)]
 pub(crate) struct FunctionInstantiation {
-    // index to `ModuleCache::functions` global table
-    pub(crate) handle: ArenaPointer<Function>,
+    // index to `ModuleCache::functions` global table if a in-package call otherwise a virtual call
+    pub(crate) handle: CallType,
     pub(crate) instantiation_idx: SignatureIndex,
 }
 
@@ -336,7 +378,18 @@ pub enum Bytecode {
     ///
     /// ```..., arg(1), arg(2), ...,  arg(n) -> ..., return_value(1), return_value(2), ...,
     /// return_value(k)```
-    Call(ArenaPointer<Function>),
+    StaticCall(ArenaPointer<Function>),
+    /// Call an unknown (inter-package) function. The stack has the arguments pushed first to
+    /// last. The arguments are consumed and pushed to the locals of the function.
+    /// Return values are pushed on the stack and available to the caller.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., arg(1), arg(2), ...,  arg(n) -> ..., return_value(1), return_value(2), ..., return_value(k)```
+    ///
+    /// The VTableKey must be resolved in the current package context to resolve it to a function
+    /// that can be executed.
+    VirtualCall(VTableKey),
     CallGeneric(FunctionInstantiationIndex),
     /// Create an instance of the type specified via `DatatypeHandleIndex` and push it on the stack.
     /// The values of the fields of the struct, in the order they appear in the struct declaration,
@@ -936,7 +989,12 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),
             Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
             Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
-            Bytecode::Call(a) => write!(f, "Call({})", a.to_ref().name),
+            Bytecode::StaticCall(a) => write!(f, "Call({})", a.to_ref().name),
+            Bytecode::VirtualCall(a) => write!(
+                f,
+                "Call(~{}::{}::{})",
+                a.package_key, a.module_name, a.function_name
+            ),
             Bytecode::CallGeneric(ndx) => write!(f, "CallGeneric({})", ndx),
             Bytecode::Pack(a) => write!(f, "Pack({})", a),
             Bytecode::PackGeneric(a) => write!(f, "PackGeneric({})", a),
@@ -1001,6 +1059,19 @@ impl ::std::fmt::Debug for Bytecode {
                 write!(f, "UnpackVariantGenericMutRef({:?})", handle)
             }
             Bytecode::VariantSwitch(jt) => write!(f, "VariantSwitch({:?})", jt),
+        }
+    }
+}
+
+impl std::fmt::Debug for CallType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CallType::Static(fun) => write!(f, "Static({})", fun.to_ref().name),
+            CallType::Virtual(vtable) => write!(
+                f,
+                "Virtual({}::{}::{})",
+                vtable.package_key, vtable.module_name, vtable.function_name
+            ),
         }
     }
 }

@@ -7722,6 +7722,7 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
+ "petgraph 0.5.1",
  "smallvec",
  "tracing",
 ]

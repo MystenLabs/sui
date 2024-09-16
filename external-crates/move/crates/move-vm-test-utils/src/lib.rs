@@ -16,3 +16,5 @@ pub mod tiered_gas_schedule;
 pub use tiered_gas_schedule as gas_schedule;
 
 pub use storage::{BlankStorage, DeltaStorage, InMemoryStorage};
+
+pub mod relinking_store;

@@ -314,6 +314,9 @@ pub enum StatusCode {
     ZERO_SIZED_ENUM = 1134,
     MAX_VARIANTS_REACHED = 1135,
 
+    MISMATCHED_MODULE_IDS_IN_PACKAGE = 1136,
+    CYCLIC_PACKAGE_DEPENDENCY = 1137,
+
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.
     // Invariant Violation Errors: 2000-2999
@@ -364,6 +367,8 @@ pub enum StatusCode {
     TRAILING_BYTES = 3026,
     UNKNOWN_ENUM_FLAG = 3027,
     UNKNOWN_JUMP_TABLE_FLAG = 3028,
+    EMPTY_PACKAGE = 3029,
+
 
     // Errors that can arise at runtime
     // Runtime Errors: 4000-4999

@@ -2,14 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod arena;
-pub mod ast;
-pub mod translate;
+// TODO: remove once the loader is fully incorporated in the VM and we don't get dead code
+// warnings.
+#![allow(dead_code)]
 
 use crate::{
     loader::{
         arena::{Arena, ArenaPointer},
-        ast::{DatatypeInfo, DatatypeTagType, Function, LoadedModule},
+        ast::{CallType, DatatypeInfo, DatatypeTagType, Function, LoadedModule},
     },
     logging::expect_no_verification_errors,
     native_functions::NativeFunctions,
@@ -32,7 +32,6 @@ use move_core_types::{
     annotated_value as A,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
-    metadata::Metadata,
     runtime_value as R,
     vm_status::StatusCode,
 };
@@ -52,6 +51,16 @@ use std::{
     sync::Arc,
 };
 use tracing::error;
+
+pub mod arena;
+pub mod ast;
+pub mod chain_ast;
+pub mod linkage_checker;
+pub mod runtime_vtable;
+pub mod translate;
+pub mod translate2;
+pub mod type_cache;
+pub mod vm_cache;
 
 // A simple cache that offers both a HashMap and a Vector lookup.
 // Values are forced into a `Arc` so they can be used from multiple thread.
@@ -232,6 +241,23 @@ impl ModuleCache {
         let link_context = data_store.link_context();
         let runtime_id = module.self_id();
 
+        let loaded_module =
+            self.load_module_no_insert(cursor, natives, data_store, storage_id, module)?;
+        self.loaded_modules
+            .insert((link_context, runtime_id), loaded_module)
+    }
+
+    fn load_module_no_insert(
+        &mut self,
+        cursor: &CacheCursor,
+        natives: &NativeFunctions,
+        data_store: &impl DataStore,
+        storage_id: ModuleId,
+        module: &CompiledModule,
+    ) -> PartialVMResult<LoadedModule> {
+        let link_context = data_store.link_context();
+        let runtime_id = module.self_id();
+
         // Add new structs and collect their field signatures
         let mut field_signatures = vec![];
         for (idx, struct_def) in module.struct_defs().iter().enumerate() {
@@ -407,10 +433,7 @@ impl ModuleCache {
             }
         }
 
-        let loaded_module =
-            translate::module(cursor, natives, link_context, storage_id, module, self)?;
-        self.loaded_modules
-            .insert((link_context, runtime_id), loaded_module)
+        translate::module(cursor, natives, link_context, storage_id, module, self)
     }
 
     // `make_type` is the entry point to "translate" a `SignatureToken` to a `Type`
@@ -821,16 +844,6 @@ impl Loader {
 
     pub(crate) fn vm_config(&self) -> &VMConfig {
         &self.vm_config
-    }
-
-    /// Copies metadata out of a modules bytecode if available.
-    pub(crate) fn get_metadata(&self, module: ModuleId, key: &[u8]) -> Option<Metadata> {
-        let cache = self.module_cache.read();
-        cache
-            .compiled_modules
-            .get(&module)
-            .and_then(|module| module.metadata.iter().find(|md| md.key == key))
-            .cloned()
     }
 
     //
@@ -1496,7 +1509,11 @@ impl<'a> ModuleDefinitionResolver<'a> {
         &self,
         idx: FunctionInstantiationIndex,
     ) -> ArenaPointer<Function> {
-        self.binary.loaded.function_instantiation_at(idx.0).handle
+        let func_inst = self.binary.loaded.function_instantiation_at(idx.0);
+        let CallType::Static(f_ptr) = func_inst.handle else {
+            unimplemented!("TODO: Need to replace this to handle virtual generic calls as part of plumbing in the new tables for the interpreter");
+        };
+        f_ptr
     }
 
     pub(crate) fn instantiate_generic_function(
