@@ -68,7 +68,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
                             backoff::future::retry(backoff, || async {
                                 worker
                                     .clone()
-                                    .process_checkpoint(checkpoint.clone())
+                                    .process_checkpoint(&checkpoint)
                                     .await
                                     .map_err(|err| {
                                         info!("transient worker execution error {:?} for checkpoint {}", err, sequence_number);
@@ -132,7 +132,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
                     if sequence_number < current_checkpoint_number {
                         continue;
                     }
-                    self.worker.preprocess_hook(checkpoint.clone()).expect("failed to preprocess task");
+                    self.worker.preprocess_hook(&checkpoint).expect("failed to preprocess task");
                     if idle.is_empty() {
                         checkpoints.push_back(checkpoint);
                     } else {
