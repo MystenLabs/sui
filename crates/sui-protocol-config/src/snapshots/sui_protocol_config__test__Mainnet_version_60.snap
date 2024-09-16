@@ -1,9 +1,8 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
-assertion_line: 3045
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 59
+version: 60
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -61,6 +60,7 @@ feature_flags:
   soft_bundle: true
   enable_coin_deny_list_v2: true
   rethrow_serialization_type_layout_errors: true
+  consensus_round_prober: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -138,6 +138,7 @@ obj_access_cost_read_per_byte: 15
 obj_access_cost_mutate_per_byte: 40
 obj_access_cost_delete_per_byte: 40
 obj_access_cost_verify_per_byte: 200
+max_type_to_layout_nodes: 512
 gas_model_version: 8
 obj_data_cost_refundable: 100
 obj_metadata_cost_non_refundable: 50
@@ -322,4 +323,3 @@ checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: true
 max_accumulated_txn_cost_per_object_in_mysticeti_commit: 10
-
