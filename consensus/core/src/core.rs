@@ -626,6 +626,11 @@ impl Core {
                         .write()
                         .add_unscored_committed_subdags(subdags.clone());
                 }
+
+                // Try to unsuspend blocks if gc_round has advanced.
+                self.block_manager
+                    .try_unsuspend_blocks_for_latest_gc_round();
+
                 committed_subdags.extend(subdags);
             }
 
