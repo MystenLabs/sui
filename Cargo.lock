@@ -1762,7 +1762,7 @@ checksum = "b10cf871f3ff2ce56432fddc2615ac7acc3aa22ca321f8fea800846fbb32f188"
 dependencies = [
  "async-trait",
  "futures-util",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "tokio",
 ]
 
@@ -2219,9 +2219,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.5.0"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
+checksum = "8318a53db07bb3f8dca91a600466bdb3f2eaadeedfdbcf02e1accbad9271ba50"
 dependencies = [
  "serde",
 ]
@@ -2731,7 +2731,7 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "nom",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "prost 0.13.1",
  "quinn-proto",
@@ -3110,7 +3110,7 @@ dependencies = [
  "crossterm_winapi",
  "libc",
  "mio",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -5305,7 +5305,7 @@ dependencies = [
  "futures-timer",
  "no-std-compat",
  "nonzero_ext",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "quanta",
  "rand 0.8.5",
  "smallvec",
@@ -6360,7 +6360,7 @@ dependencies = [
  "globset",
  "hyper 0.14.26",
  "jsonrpsee-types",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "rand 0.8.5",
  "rustc-hash 1.1.0",
  "serde",
@@ -6932,6 +6932,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "memmap2"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f49388d20533534cd19360ad3d6a7dadc885944aa802ba3995040c5ec11288c6"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "memoffset"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7008,6 +7017,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "minibytes"
+version = "0.1.0"
+source = "git+https://github.com/andll/tidehunter.git?rev=069d035#069d0358dac46c0cd0ef53b932c680654a9df84e"
+dependencies = [
+ "bytes",
+ "memmap2 0.7.1",
+ "serde",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7071,7 +7090,7 @@ dependencies = [
  "crossbeam-epoch",
  "crossbeam-utils",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "rustc_version",
  "skeptic",
  "smallvec",
@@ -7974,7 +7993,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "mysten-metrics",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "reqwest 0.12.5",
  "snap",
@@ -7993,7 +8012,7 @@ dependencies = [
  "dashmap",
  "futures",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "prometheus-closure-metric",
  "scopeguard",
@@ -8059,7 +8078,7 @@ dependencies = [
  "indexmap 2.2.6",
  "mysten-util-mem-derive",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "roaring",
  "smallvec",
 ]
@@ -8087,7 +8106,7 @@ checksum = "40a3eb6b7c682b65d1f631ec3176829d72ab450b3aacdd3f719bf220822e59ac"
 dependencies = [
  "libc",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "thiserror",
  "widestring",
  "winapi",
@@ -8181,7 +8200,7 @@ dependencies = [
  "narwhal-crypto",
  "narwhal-test-utils",
  "narwhal-types",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "quinn-proto",
  "rand 0.8.5",
@@ -8269,7 +8288,7 @@ dependencies = [
  "narwhal-types",
  "narwhal-worker",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "proptest",
  "rand 0.8.5",
@@ -8300,7 +8319,7 @@ dependencies = [
  "narwhal-config",
  "narwhal-test-utils",
  "narwhal-types",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "sui-macros",
  "tap",
@@ -8886,7 +8905,7 @@ dependencies = [
  "hyper 1.4.1",
  "itertools 0.13.0",
  "md-5 0.10.6",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "percent-encoding",
  "quick-xml",
  "rand 0.8.5",
@@ -9292,9 +9311,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.12.1"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
+checksum = "f1bf18183cf54e8d6059647fc3063646a1801cf30896933ec2311622cc4b9a27"
 dependencies = [
  "lock_api",
  "parking_lot_core 0.9.9",
@@ -9843,7 +9862,7 @@ dependencies = [
  "log",
  "nix 0.26.4",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "smallvec",
  "symbolic-demangle",
  "tempfile",
@@ -10044,7 +10063,7 @@ dependencies = [
  "fnv",
  "lazy_static",
  "memchr",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "protobuf",
  "thiserror",
 ]
@@ -10512,7 +10531,7 @@ dependencies = [
  "libc",
  "mio",
  "num_cpus",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.5.6",
@@ -12343,7 +12362,7 @@ checksum = "f91138e76242f575eb1d3b38b4f1362f10d3a43f47d182a5b359af488a02293b"
 dependencies = [
  "new_debug_unreachable",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "phf_shared 0.10.0",
  "precomputed-hash",
 ]
@@ -12582,7 +12601,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-types",
  "mysten-metrics",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serde",
  "sui-macros",
  "sui-move-natives-latest",
@@ -12618,7 +12637,7 @@ dependencies = [
  "move-vm-runtime-v0",
  "move-vm-types",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serde",
  "sui-macros",
  "sui-move-natives-v0",
@@ -12645,7 +12664,7 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime-v1",
  "move-vm-types",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serde",
  "sui-macros",
  "sui-move-natives-v1",
@@ -12672,7 +12691,7 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime-v2",
  "move-vm-types",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serde",
  "sui-macros",
  "sui-move-natives-v2",
@@ -13118,7 +13137,7 @@ dependencies = [
  "num_cpus",
  "object_store",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "pprof",
  "pretty_assertions",
  "prometheus",
@@ -13417,7 +13436,7 @@ dependencies = [
  "futures",
  "http 1.1.0",
  "mysten-metrics",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "scopeguard",
  "serde",
@@ -14197,7 +14216,7 @@ dependencies = [
  "mysten-network",
  "mysten-service",
  "narwhal-network",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "reqwest 0.12.5",
  "serde",
@@ -14444,7 +14463,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-vm-config",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "prometheus",
  "rand 0.8.5",
  "regex",
@@ -14849,7 +14868,7 @@ dependencies = [
  "num_enum 0.6.1",
  "object_store",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "percent-encoding",
  "pretty_assertions",
  "prometheus",
@@ -15170,7 +15189,7 @@ dependencies = [
  "num_enum 0.6.1",
  "once_cell",
  "p256",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "passkey-authenticator",
  "passkey-client",
  "passkey-types",
@@ -15413,7 +15432,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26212dc7aeb75abb4cc84320a50dd482977089402f7b4043b454d6d79d8536e7"
 dependencies = [
  "debugid",
- "memmap2",
+ "memmap2 0.5.8",
  "stable_deref_trait",
  "uuid 1.2.2",
 ]
@@ -15806,6 +15825,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "tidehunter"
+version = "0.1.0"
+source = "git+https://github.com/andll/tidehunter.git?rev=069d035#069d0358dac46c0cd0ef53b932c680654a9df84e"
+dependencies = [
+ "bincode",
+ "bytes",
+ "crc32fast",
+ "memmap2 0.7.1",
+ "minibytes",
+ "parking_lot 0.12.3",
+ "serde",
+ "smallvec",
+]
+
+[[package]]
 name = "time"
 version = "0.3.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15902,7 +15936,7 @@ dependencies = [
  "libc",
  "mio",
  "num_cpus",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.5.6",
@@ -15970,7 +16004,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "log",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "percent-encoding",
  "phf",
  "pin-project-lite",
@@ -16655,6 +16689,7 @@ dependencies = [
  "tap",
  "tempfile",
  "thiserror",
+ "tidehunter",
  "tokio",
  "tracing",
  "typed-store-derive",

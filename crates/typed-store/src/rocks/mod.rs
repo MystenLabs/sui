@@ -733,7 +733,7 @@ pub struct DBMap<K, V> {
     _metrics_task_cancel_handle: Arc<oneshot::Sender<()>>,
 }
 
-unsafe impl<K: Send, V: Send> Send for DBMap<K, V> {}
+// unsafe impl<K: Send, V: Send> Send for DBMap<K, V> {}
 
 impl<K, V> DBMap<K, V> {
     pub(crate) fn new(
