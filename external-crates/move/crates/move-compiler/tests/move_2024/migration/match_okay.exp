@@ -10,7 +10,7 @@ error[E01002]: unexpected token
   ┌─ tests/move_2024/migration/match_okay.move:3:20
   │
 3 │     fun t1(t: u64, match: u64): bool {
-  │                    ^ Expected a function parameter
+  │                    ^ Unexpected 'match'. Expected a function parameter
 
 error[E01002]: unexpected token
   ┌─ tests/move_2024/migration/match_okay.move:5:5
@@ -33,7 +33,7 @@ error[E01002]: unexpected token
   ┌─ tests/move_2024/migration/match_okay.move:7:20
   │
 7 │     fun t2(t: u64, match: u64): bool {
-  │                    ^ Expected a function parameter
+  │                    ^ Unexpected 'match'. Expected a function parameter
 
 error[E01002]: unexpected token
   ┌─ tests/move_2024/migration/match_okay.move:8:23

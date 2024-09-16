@@ -37,5 +37,5 @@ error[E01002]: unexpected token
    ┌─ tests/move_check/parser/invalid_unpack_assign_rhs_not_fields.move:13:16
    │
 13 │         X::S { 0 } = 0;
-   │                ^ Expected a field expression
+   │                ^ Unexpected '<Number>'. Expected a field expression
 
