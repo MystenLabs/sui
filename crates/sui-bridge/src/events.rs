@@ -119,8 +119,8 @@ pub struct MoveBlocklistValidatorEvent {
 }
 
 // `UpdateRouteLimitEvent` emitted in limiter.move
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct MoveUpdateRouteLimitEvent {
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct UpdateRouteLimitEvent {
     pub sending_chain: u8,
     pub receiving_chain: u8,
     pub new_limit: u64,
@@ -360,6 +360,7 @@ crate::declare_events!(
     TokenRegistrationEvent(TokenRegistrationEvent) => ("treasury::TokenRegistrationEvent", MoveTokenRegistrationEvent),
     NewTokenEvent(NewTokenEvent) => ("treasury::NewTokenEvent", MoveNewTokenEvent),
     UpdateTokenPriceEvent(UpdateTokenPriceEvent) => ("treasury::UpdateTokenPriceEvent", UpdateTokenPriceEvent),
+    UpdateRouteLimitEvent(UpdateRouteLimitEvent) => ("limiter::UpdateRouteLimitEvent", UpdateRouteLimitEvent),
 
     // Add new event types here. Format:
     // EnumVariantName(Struct) => ("{module}::{event_struct}", CorrespondingMoveStruct)
@@ -427,6 +428,7 @@ impl SuiBridgeEvent {
             SuiBridgeEvent::TokenRegistrationEvent(_event) => None,
             SuiBridgeEvent::NewTokenEvent(_event) => None,
             SuiBridgeEvent::UpdateTokenPriceEvent(_event) => None,
+            SuiBridgeEvent::UpdateRouteLimitEvent(_event) => None,
         }
     }
 }

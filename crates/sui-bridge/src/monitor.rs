@@ -207,6 +207,10 @@ where
             SuiBridgeEvent::UpdateTokenPriceEvent(_event) => {
                 bump_sui_counter!("token_price_updated");
             }
+
+            SuiBridgeEvent::UpdateRouteLimitEvent(_event) => {
+                bump_sui_counter!("limit_updated");
+            }
         }
     }
 
@@ -278,10 +282,8 @@ where
                 }
             },
             EthBridgeEvent::EthSuiBridgeEvents(event) => match event {
-                EthSuiBridgeEvents::TokensClaimedFilter(_) => bump_eth_counter!("tokens_claimed"),
-                EthSuiBridgeEvents::TokensDepositedFilter(_) => {
-                    bump_eth_counter!("tokens_sent")
-                }
+                EthSuiBridgeEvents::TokensClaimedFilter(_) => (),
+                EthSuiBridgeEvents::TokensDepositedFilter(_) => (),
                 EthSuiBridgeEvents::PausedFilter(_) => bump_eth_counter!("bridge_paused"),
                 EthSuiBridgeEvents::UnpausedFilter(_) => bump_eth_counter!("bridge_unpaused"),
                 EthSuiBridgeEvents::UpgradedFilter(_) => {
