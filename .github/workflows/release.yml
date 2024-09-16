@@ -3,7 +3,7 @@ run-name: Attach Sui binaries to a ${{ inputs.sui_tag }} release
 
 on:
   release:
-    types: [ created, prereleased, released, published  ]
+    types: [ published, prereleased ]
   workflow_dispatch:
     inputs:
       sui_tag:
