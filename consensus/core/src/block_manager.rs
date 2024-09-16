@@ -251,6 +251,18 @@ impl BlockManager {
 
         // If the block is <= gc_round, then we simply skip its processing as there is no meaning do any action on it or even store it.
         if gc_enabled && block.round() <= gc_round {
+            let hostname = self
+                .context
+                .committee
+                .authority(block.author())
+                .hostname
+                .as_str();
+            self.context
+                .metrics
+                .node_metrics
+                .block_manager_skipped_blocks
+                .with_label_values(&[hostname])
+                .inc();
             return TryAcceptResult::Skipped;
         }
 
