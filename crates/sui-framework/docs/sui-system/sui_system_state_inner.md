@@ -60,6 +60,7 @@ title: Module `0x3::sui_system_state_inner`
 -  [Function `get_reporters_of`](#0x3_sui_system_state_inner_get_reporters_of)
 -  [Function `get_storage_fund_total_balance`](#0x3_sui_system_state_inner_get_storage_fund_total_balance)
 -  [Function `get_storage_fund_object_rebates`](#0x3_sui_system_state_inner_get_storage_fund_object_rebates)
+-  [Function `validator_address_by_pool_id`](#0x3_sui_system_state_inner_validator_address_by_pool_id)
 -  [Function `pool_exchange_rates`](#0x3_sui_system_state_inner_pool_exchange_rates)
 -  [Function `active_validator_addresses`](#0x3_sui_system_state_inner_active_validator_addresses)
 -  [Function `extract_coin_balance`](#0x3_sui_system_state_inner_extract_coin_balance)
@@ -2516,6 +2517,30 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_object_rebates">get_storage_fund_object_rebates</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     self.<a href="storage_fund.md#0x3_storage_fund">storage_fund</a>.total_object_storage_rebates()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_state_inner_validator_address_by_pool_id"></a>
+
+## Function `validator_address_by_pool_id`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_validator_address_by_pool_id">validator_address_by_pool_id</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>, pool_id: &<a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_validator_address_by_pool_id">validator_address_by_pool_id</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, pool_id: &ID): <b>address</b> {
+    self.validators.<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_validator_address_by_pool_id">validator_address_by_pool_id</a>(pool_id)
 }
 </code></pre>
 

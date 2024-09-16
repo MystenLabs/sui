@@ -29,6 +29,7 @@ title: Module `0x3::validator_set`
 -  [Function `validator_voting_power`](#0x3_validator_set_validator_voting_power)
 -  [Function `validator_staking_pool_id`](#0x3_validator_set_validator_staking_pool_id)
 -  [Function `staking_pool_mappings`](#0x3_validator_set_staking_pool_mappings)
+-  [Function `validator_address_by_pool_id`](#0x3_validator_set_validator_address_by_pool_id)
 -  [Function `pool_exchange_rates`](#0x3_validator_set_pool_exchange_rates)
 -  [Function `next_epoch_validator_count`](#0x3_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator_by_sui_address`](#0x3_validator_set_is_active_validator_by_sui_address)
@@ -1394,6 +1395,37 @@ gas price, weighted by stake.
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_staking_pool_mappings">staking_pool_mappings</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): &Table&lt;ID, <b>address</b>&gt; {
     &self.staking_pool_mappings
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_set_validator_address_by_pool_id"></a>
+
+## Function `validator_address_by_pool_id`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_address_by_pool_id">validator_address_by_pool_id</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, pool_id: &<a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_address_by_pool_id">validator_address_by_pool_id</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, pool_id: &ID): <b>address</b> {
+    // If the pool id is recorded in the mapping, then it must be either candidate or active.
+    <b>if</b> (self.staking_pool_mappings.contains(*pool_id)) {
+        self.staking_pool_mappings[*pool_id]
+    } <b>else</b> { // otherwise it's inactive
+        <b>let</b> wrapper = &<b>mut</b> self.inactive_validators[*pool_id];
+        <b>let</b> <a href="validator.md#0x3_validator">validator</a> = wrapper.load_validator_maybe_upgrade();
+        <a href="validator.md#0x3_validator">validator</a>.sui_address()
+    }
 }
 </code></pre>
 

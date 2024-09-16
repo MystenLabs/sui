@@ -240,6 +240,24 @@ module sui_system::sui_system_tests {
     }
 
     #[test]
+    fun test_validator_address_by_pool_id() {
+        let mut scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3, @0x4]);
+        scenario.next_tx(@0x1);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let pool_id_1 = system_state.validator_staking_pool_id(@0x1);
+        let validator_address = system_state.validator_address_by_pool_id(&pool_id_1);
+
+        assert_eq(validator_address, @0x1);
+        test_scenario::return_shared(system_state);
+
+        scenario_val.end();
+    }
+
+    #[test]
     fun test_staking_pool_mappings() {
         let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;

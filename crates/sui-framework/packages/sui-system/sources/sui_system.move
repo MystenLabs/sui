@@ -505,6 +505,11 @@ module sui_system::sui_system {
         self.update_candidate_validator_network_pubkey(network_pubkey, ctx)
     }
 
+    public fun validator_address_by_pool_id(wrapper: &mut SuiSystemState, pool_id: &ID): address {
+        let self = load_system_state_mut(wrapper);
+        self.validator_address_by_pool_id(pool_id)
+    }
+
     /// Getter of the pool token exchange rate of a staking pool. Works for both active and inactive pools.
     public fun pool_exchange_rates(
         wrapper: &mut SuiSystemState,
