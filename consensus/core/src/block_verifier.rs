@@ -218,7 +218,7 @@ impl BlockVerifier for SignedBlockVerifier {
                     .as_ref()
                     .expect("There should never be an empty slot");
                 assert_eq!(ancestor_ref, &ancestor_block.reference());
-                max_timestamp_ms = max_timestamp_ms.max(block.timestamp_ms());
+                max_timestamp_ms = max_timestamp_ms.max(ancestor_block.timestamp_ms());
             }
             if max_timestamp_ms > block.timestamp_ms() {
                 return Err(ConsensusError::InvalidBlockTimestamp {
