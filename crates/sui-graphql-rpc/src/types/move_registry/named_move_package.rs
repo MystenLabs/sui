@@ -24,7 +24,7 @@ pub(crate) struct NamedMovePackage;
 
 impl NamedMovePackage {
     /// Queries a package by name (and version, encoded in the name but optional).
-    /// Name's format should be `{organization}/{application}:v{versiion}`.
+    /// Name's format should be `{organization}/{application}:v{version}`.
     pub(crate) async fn query(
         ctx: &Context<'_>,
         name: &str,

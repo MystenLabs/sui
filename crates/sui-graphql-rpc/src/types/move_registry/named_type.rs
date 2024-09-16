@@ -68,12 +68,12 @@ impl NamedType {
         let struct_tag = VERSIONED_NAME_UNBOUND_REG.replace_all(name, |m: &regex::Captures| {
             // SAFETY: we know that the regex will always have a match on position 0.
             let name = m.get(0).unwrap().as_str();
-            match VersionedName::from_str(name) {
-                Ok(_) => {
-                    names.push(name.to_string());
-                    "0x0".to_string()
-                }
-                Err(_) => name.to_string(),
+
+            if VersionedName::from_str(name).is_ok() {
+                names.push(name.to_string());
+                "0x0".to_string()
+            } else {
+                name.to_string()
             }
         });
 
@@ -171,7 +171,7 @@ mod tests {
 
         demo_data.push(DemoData {
             input_type: "@org/app::type::Type<u64>".to_string(),
-            expected_output: format!("{}<u64>", format_type("0x0", "::type::Type")),
+            expected_output: format_type("0x0", "::type::Type<u64>"),
             expected_names: vec!["@org/app".to_string()],
         });
 
@@ -220,8 +220,8 @@ mod tests {
             "@org/--app::type::Type",
             "@org/app::type::Type<",
             "@org/app::type::Type<@org/another-app::type::AnotherType, u64",
-            "app@org/v11241--type::Type",
-            "app--org::type::Type",
+            "app@org/v11241--type--::Type",
+            "app-org::type::Type",
             "app",
             "@org/app::type::Type<@org/another-app::type@::AnotherType, u64>",
             "",

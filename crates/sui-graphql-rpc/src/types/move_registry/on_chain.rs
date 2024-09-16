@@ -25,8 +25,8 @@ use crate::{
 use super::error::MoveRegistryError;
 
 /// Regex to parse a dot move name. Version is optional (defaults to latest).
-/// For versioned format, the expected format is `app@org/v1`.
-/// For an unversioned format, the expected format is `app@org`.
+/// For versioned format, the expected format is `@org/app:v1`.
+/// For an unversioned format, the expected format is `@org/app`.
 ///
 /// The unbound regex can be used to search matches in a type tag.
 /// Use `VERSIONED_NAME_REGEX` for parsing a single name from a str.
@@ -82,7 +82,7 @@ pub(crate) struct AppInfo {
 pub(crate) struct VersionedName {
     /// A version name defaults at None, which means we need the latest version.
     pub(crate) version: Option<u64>,
-    /// The on-chain `App` object that represents the move registry name.
+    /// The on-chain `Name` object that represents the move registry name.
     pub(crate) name: Name,
 }
 
@@ -95,7 +95,7 @@ pub(crate) struct Name {
 }
 
 impl Name {
-    pub(crate) fn new(app: &str, org: Domain) -> Self {
+    pub(crate) fn new(org: Domain, app: &str) -> Self {
         Self {
             org,
             app: vec![app.to_string()],
@@ -165,7 +165,7 @@ impl FromStr for VersionedName {
 
         Ok(Self {
             version,
-            name: Name::new(app_name, domain),
+            name: Name::new(domain, app_name),
         })
     }
 }
@@ -234,7 +234,6 @@ mod tests {
         let not_ok_names = vec![
             "@org/-app",
             "@org/1.app",
-            "@org/1--app",
             "@org/app-",
             "@org/app--",
             "@org/app?",
@@ -254,7 +253,7 @@ mod tests {
         ];
         let composite_err_names = vec![
             format!(
-                "@{}--{}/{}",
+                "@{}{}--/{}",
                 generate_fixed_string(10),
                 generate_fixed_string(10),
                 generate_fixed_string(63)
@@ -266,7 +265,7 @@ mod tests {
                 generate_fixed_string(63)
             ),
             format!(
-                "@{}/{}--{}",
+                "@{}/--{}{}",
                 generate_fixed_string(63),
                 generate_fixed_string(30),
                 generate_fixed_string(30)

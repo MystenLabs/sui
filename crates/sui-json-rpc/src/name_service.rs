@@ -278,11 +278,6 @@ pub fn validate_label(label: &str) -> Result<&str, NameServiceError> {
             _ => false,
         };
 
-        // Do not allow consecutive dashes (--)
-        if i > 0 && character == &b'-' && bytes[i - 1] == b'-' {
-            return Err(NameServiceError::InvalidHyphens);
-        }
-
         if !is_valid_character {
             match character {
                 b'-' => return Err(NameServiceError::InvalidHyphens),
