@@ -2859,6 +2859,7 @@ impl ProtocolConfig {
                         // Enable distributed vote scoring for devnet
                         cfg.feature_flags
                             .consensus_distributed_vote_scoring_strategy = true;
+                        cfg.consensus_gc_depth = Some(200);
                     }
                 }
                 59 => {
