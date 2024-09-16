@@ -25,17 +25,17 @@ use crate::{
 use super::error::MoveRegistryError;
 
 /// Regex to parse a dot move name. Version is optional (defaults to latest).
-/// For versioned format, the expected format is `@org/app:v1`.
+/// For versioned format, the expected format is `@org/app/1` (1 == version).
 /// For an unversioned format, the expected format is `@org/app`.
 ///
 /// The unbound regex can be used to search matches in a type tag.
 /// Use `VERSIONED_NAME_REGEX` for parsing a single name from a str.
 const VERSIONED_NAME_UNBOUND_REGEX: &str =
-    concat!(r"([a-z0-9.\-@]*)", r"\/", "([a-z0-9.-]*)", r"(?:\:v(\d+))?",);
+    concat!(r"([a-z0-9.\-@]*)", r"\/", "([a-z0-9.-]*)", r"(?:\/(\d+))?",);
 
 /// Regex to parse a dot move name. Version is optional (defaults to latest).
-/// For versioned format, the expected format is `app@org/v1`.
-/// For an unversioned format, the expected format is `app@org`.
+/// For versioned format, the expected format is `@org/app/1`.
+/// For an unversioned format, the expected format is `@org/app`.
 ///
 /// This regex is used to parse a single name (does not do type_tag matching).
 /// Use `VERSIONED_NAME_UNBOUND_REGEX` for type tag matching.
@@ -44,7 +44,7 @@ const VERSIONED_NAME_REGEX: &str = concat!(
     r"([a-z0-9.\-@]*)",
     r"\/",
     "([a-z0-9.-]*)",
-    r"(?:\:v(\d+))?",
+    r"(?:\/(\d+))?",
     "$"
 );
 
@@ -52,7 +52,7 @@ const VERSIONED_NAME_REGEX: &str = concat!(
 pub(crate) static VERSIONED_NAME_UNBOUND_REG: Lazy<Regex> =
     Lazy::new(|| Regex::new(VERSIONED_NAME_UNBOUND_REGEX).unwrap());
 
-/// A regular expression that detects a single name in the format `app@org/v1`.
+/// A regular expression that detects a single name in the format `@org/app/1`.
 pub(crate) static VERSIONED_NAME_REG: Lazy<Regex> =
     Lazy::new(|| Regex::new(VERSIONED_NAME_REGEX).unwrap());
 
@@ -188,10 +188,10 @@ mod tests {
 
     #[test]
     fn parse_some_names() {
-        let versioned = VersionedName::from_str("@org/app:v1").unwrap();
+        let versioned = VersionedName::from_str("@org/app/1").unwrap();
         assert!(versioned.version.is_some_and(|x| x == 1));
 
-        assert!(VersionedName::from_str("@org/app:v34")
+        assert!(VersionedName::from_str("@org/app/34")
             .unwrap()
             .version
             .is_some_and(|x| x == 34));
@@ -201,16 +201,16 @@ mod tests {
             .is_none());
 
         let ok_names = vec![
-            "@org/1-app:v1",
-            "@org/1-app:v34",
+            "@org/1-app/1",
+            "@org/1-app/34",
             "@org/1-app",
             "nested@org/app",
             "even.more.nested@org/app",
         ];
 
         let composite_ok_names = vec![
-            format!("@org/{}:v1", generate_fixed_string(63)),
-            format!("@org/{}-app:v34", generate_fixed_string(59)),
+            format!("@org/{}/1", generate_fixed_string(63)),
+            format!("@org/{}-app/34", generate_fixed_string(59)),
             format!(
                 "@{}/{}",
                 generate_fixed_string(63),
@@ -237,8 +237,9 @@ mod tests {
             "@org/app-",
             "@org/app--",
             "@org/app?",
-            "@org/app:v",
-            "app@org:veh",
+            "@org/app/",
+            "@org/app/v",
+            "@org/app/veh",
             "@org",
             "@/veh/app",
             "app",
