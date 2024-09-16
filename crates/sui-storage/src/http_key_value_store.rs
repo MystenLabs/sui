@@ -235,12 +235,10 @@ impl HttpKVStore {
             .with_label_values(&["http_cache", "url"])
             .inc();
 
-        let resp = self
-            .client
-            .get(url.clone())
-            .send()
-            .await
-            .into_sui_result()?;
+        let client = Client::builder()
+            .build()
+            .map_err(|e| SuiError::Storage(e.to_string()))?;
+        let resp = client.get(url.clone()).send().await.into_sui_result()?;
         trace!(
             "got response {} for url: {}, len: {:?}",
             url,
