@@ -58,8 +58,15 @@ interface ILoc {
  * Describes a function in the source map.
  */
 interface ISourceMapFunction {
-    // Locations indexed with PC values.
+    /**
+     * Locations indexed with PC values.
+     */
     pcLocs: ILoc[],
+    /**
+     * Names of local variables by their index in the frame
+     * (parameters first, then actual locals).
+     */
+    localsNames: string[]
 }
 
 /**
@@ -82,7 +89,7 @@ export interface ISourceMap {
     modInfo: ModuleInfo,
     functions: Map<string, ISourceMapFunction>,
     // Lines that are not present in the source map.
-    optimized_lines: number[]
+    optimizedLines: number[]
 }
 
 export function readAllSourceMaps(
@@ -161,7 +168,27 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
             prevPC = currentPC;
             prevLoc = currentLoc;
         }
-        functions.set(funName, { pcLocs });
+
+        const localsNames: string[] = [];
+        for (const param of funEntry.parameters) {
+            const paramName = param[0].split("#")[0];
+            if (!paramName) {
+                localsNames.push(param[0]);
+            } else {
+                localsNames.push(paramName);
+            }
+        }
+
+        for (const local of funEntry.locals) {
+            const localsName = local[0].split("#")[0];
+            if (!localsName) {
+                localsNames.push(local[0]);
+            } else {
+                localsNames.push(localsName);
+            }
+        }
+
+        functions.set(funName, { pcLocs, localsNames });
     }
     let optimized_lines: number[] = [];
     for (let i = 0; i < fileInfo.lines.length; i++) {
@@ -170,7 +197,7 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
         }
     }
 
-    return { fileHash, modInfo, functions, optimized_lines };
+    return { fileHash, modInfo, functions, optimizedLines: optimized_lines };
 }
 
 /**
