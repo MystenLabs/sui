@@ -396,7 +396,7 @@ impl ServiceConfig {
         }
     }
 
-    pub fn dot_move_test_defaults(
+    pub fn move_registry_test_defaults(
         external: bool,
         endpoint: Option<String>,
         pkg_address: Option<SuiAddress>,

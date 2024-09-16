@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
 use std::{path::PathBuf, time::Duration};
 
 use sui_graphql_rpc::{
@@ -12,6 +13,7 @@ use sui_graphql_rpc::{
 };
 use sui_graphql_rpc_client::simple_client::SimpleClient;
 use sui_indexer::tempdb::get_available_port;
+use sui_json_rpc::name_service::{Domain, DomainFormat};
 use sui_json_rpc_types::ObjectChange;
 use sui_move_build::BuildConfig;
 use sui_types::{
@@ -23,10 +25,10 @@ use sui_types::{
     transaction::{CallArg, ObjectArg},
     Identifier, SUI_FRAMEWORK_PACKAGE_ID,
 };
-const DOT_MOVE_PKG: &str = "tests/dot_move/dot_move/";
-const DEMO_PKG: &str = "tests/dot_move/demo/";
-const DEMO_PKG_V2: &str = "tests/dot_move/demo_v2/";
-const DEMO_PKG_V3: &str = "tests/dot_move/demo_v3/";
+const DOT_MOVE_PKG: &str = "tests/move_registry/move_registry/";
+const DEMO_PKG: &str = "tests/move_registry/demo/";
+const DEMO_PKG_V2: &str = "tests/move_registry/demo_v2/";
+const DEMO_PKG_V3: &str = "tests/move_registry/demo_v3/";
 
 const DEMO_TYPE: &str = "::demo::V1Type";
 const DEMO_TYPE_V2: &str = "::demo::V2Type";
@@ -36,7 +38,7 @@ const DEMO_TYPE_V3: &str = "::demo::V3Type";
 struct UpgradeCap(ObjectID, SequenceNumber, ObjectDigest);
 
 #[tokio::test]
-async fn test_dot_move_e2e() {
+async fn test_move_registry_e2e() {
     let network_cluster = start_network_cluster().await;
 
     let external_network_chain_id = network_cluster
@@ -51,11 +53,12 @@ async fn test_dot_move_e2e() {
     eprintln!("External chain id: {:?}", external_network_chain_id);
 
     // publish the dot move package in the internal resolution cluster.
-    let (pkg_id, registry_id) = publish_dot_move_package(&network_cluster).await;
+    let (pkg_id, registry_id) = publish_move_registry_package(&network_cluster).await;
 
     let (v1, v2, v3) = publish_demo_pkg(&network_cluster).await;
 
-    let name = "app@org".to_string();
+    let name = "app".to_string();
+    let org = "org.sui".to_string();
 
     // Register the package: First, for the "base" chain state.
     register_pkg(
@@ -64,6 +67,7 @@ async fn test_dot_move_e2e() {
         registry_id,
         v1,
         name.clone(),
+        org.clone(),
         None,
     )
     .await;
@@ -75,6 +79,7 @@ async fn test_dot_move_e2e() {
         registry_id,
         v1,
         name.clone(),
+        org.clone(),
         Some(external_network_chain_id.clone()),
     )
     .await;
@@ -82,9 +87,9 @@ async fn test_dot_move_e2e() {
     // Initialize the internal and external clients of GraphQL.
 
     // The first cluster uses internal resolution (mimics our base network, does not rely on external chain).
-    let internal_client = init_dot_move_gql(
+    let internal_client = init_move_registry_gql(
         network_cluster.graphql_connection_config.clone(),
-        ServiceConfig::dot_move_test_defaults(
+        ServiceConfig::move_registry_test_defaults(
             false,
             None,
             Some(pkg_id.into()),
@@ -94,13 +99,13 @@ async fn test_dot_move_e2e() {
     )
     .await;
 
-    let external_client = init_dot_move_gql(
+    let external_client = init_move_registry_gql(
         ConnectionConfig {
             port: get_available_port(),
             prom_port: get_available_port(),
             ..network_cluster.graphql_connection_config.clone()
         },
-        ServiceConfig::dot_move_test_defaults(
+        ServiceConfig::move_registry_test_defaults(
             true, // external resolution
             Some(internal_client.url()),
             Some(pkg_id.into()),
@@ -130,19 +135,27 @@ async fn test_dot_move_e2e() {
     )
     .await;
 
+    let mvr_name = format!(
+        "{}/{}",
+        Domain::from_str(&org).unwrap().format(DomainFormat::At),
+        name
+    );
+
+    eprintln!("MVR Name: {}", mvr_name);
+
     // We craft a big query, which we'll use to test both the internal and the external resolution.
     // Same query is used across both nodes, since we're testing on top of the same data, just with a different
     // lookup approach.
     let query = format!(
         r#"{{ valid_latest: {}, v1: {}, v2: {}, v3: {}, v4: {}, v1_type: {}, v2_type: {}, v3_type: {} }}"#,
-        name_query(&name),
-        name_query(&format!("{}{}", &name, "/v1")),
-        name_query(&format!("{}{}", &name, "/v2")),
-        name_query(&format!("{}{}", &name, "/v3")),
-        name_query(&format!("{}{}", &name, "/v4")),
-        type_query(&format!("{}{}", &name, DEMO_TYPE)),
-        type_query(&format!("{}{}", &name, DEMO_TYPE_V2)),
-        type_query(&format!("{}{}", &name, DEMO_TYPE_V3)),
+        name_query(&mvr_name),
+        name_query(&format!("{}{}", &mvr_name, "/1")),
+        name_query(&format!("{}{}", &mvr_name, "/2")),
+        name_query(&format!("{}{}", &mvr_name, "/3")),
+        name_query(&format!("{}{}", &mvr_name, "/4")),
+        type_query(&format!("{}{}", &mvr_name, DEMO_TYPE)),
+        type_query(&format!("{}{}", &mvr_name, DEMO_TYPE_V2)),
+        type_query(&format!("{}{}", &mvr_name, DEMO_TYPE_V3)),
     );
 
     let internal_resolution = internal_client
@@ -223,7 +236,7 @@ fn test_results(
     );
 }
 
-async fn init_dot_move_gql(
+async fn init_move_registry_gql(
     connection_config: ConnectionConfig,
     config: ServiceConfig,
 ) -> SimpleClient {
@@ -245,10 +258,11 @@ async fn init_dot_move_gql(
 
 async fn register_pkg(
     cluster: &NetworkCluster,
-    dot_move_package_id: ObjectID,
+    move_registry_package_id: ObjectID,
     registry_id: (ObjectID, SequenceNumber),
     package_id: ObjectID,
-    name: String,
+    app: String,
+    org: String,
     chain_id: Option<String>,
 ) {
     let is_network_call = chain_id.is_some();
@@ -264,7 +278,8 @@ async fn register_pkg(
             initial_shared_version: registry_id.1,
             mutable: true,
         }),
-        CallArg::from(&name.as_bytes().to_vec()),
+        CallArg::from(&app.as_bytes().to_vec()),
+        CallArg::from(&org.as_bytes().to_vec()),
         CallArg::Pure(bcs::to_bytes(&package_id).unwrap()),
     ];
 
@@ -276,7 +291,7 @@ async fn register_pkg(
         .validator_fullnode_handle
         .test_transaction_builder()
         .await
-        .move_call(dot_move_package_id, "dotmove", function, args)
+        .move_call(move_registry_package_id, "move_registry", function, args)
         .build();
 
     cluster
@@ -284,7 +299,7 @@ async fn register_pkg(
         .sign_and_execute_transaction(&tx)
         .await;
 
-    eprintln!("Added record successfully: {:?}", (name, chain_id));
+    eprintln!("Added record successfully: {:?}", (app, org, chain_id));
 }
 
 // Publishes the Demo PKG, upgrades it twice and returns v1, v2 and v3 package ids.
@@ -441,7 +456,7 @@ async fn upgrade_pkg(
     (pkg_id, upgrade_cap)
 }
 
-async fn publish_dot_move_package(
+async fn publish_move_registry_package(
     cluster: &NetworkCluster,
 ) -> (ObjectID, (ObjectID, SequenceNumber)) {
     let package_path = PathBuf::from(DOT_MOVE_PKG);
@@ -475,18 +490,18 @@ async fn publish_dot_move_package(
                 owner,
                 ..
             } => {
-                if object_type.module.as_str() == "dotmove"
-                    && object_type.name.as_str() == "AppRegistry"
+                if object_type.module.as_str() == "move_registry"
+                    && object_type.name.as_str() == "MoveRegistry"
                 {
                     let initial_shared_version = match owner {
                         Owner::Shared {
                             initial_shared_version,
                         } => initial_shared_version,
-                        _ => panic!("AppRegistry should be shared"),
+                        _ => panic!("MoveRegistry should be shared"),
                     };
 
                     if !owner.is_shared() {
-                        panic!("AppRegistry should be shared");
+                        panic!("MoveRegistry should be shared");
                     };
 
                     obj_id = Some((object_id, initial_shared_version));
