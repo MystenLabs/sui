@@ -202,7 +202,7 @@ impl<'a> TransferFunctions for ReachingDefAnalysis<'a> {
                 for dest in dests {
                     state.kill(*dest);
                 }
-                if let Some(AbortAction(_, dest)) = on_abort {
+                if let Some(AbortAction::Jump(_, dest)) = on_abort {
                     state.kill(*dest);
                 }
                 // op-specific actions

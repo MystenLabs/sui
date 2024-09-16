@@ -354,8 +354,11 @@ pub enum PropKind {
 /// Information about the action to take on abort. The label represents the
 /// destination to jump to, and the temporary where to store the abort code before
 /// jump.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AbortAction(pub Label, pub TempIndex);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AbortAction {
+    Jump(Label, TempIndex),
+    Check,
+}
 
 /// The stackless bytecode.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -442,7 +445,8 @@ impl Bytecode {
     pub fn branch_dests(&self) -> Vec<Label> {
         match self {
             Bytecode::Branch(_, then_label, else_label, _) => vec![*then_label, *else_label],
-            Bytecode::Jump(_, label) | Bytecode::Call(_, _, _, _, Some(AbortAction(label, _))) => {
+            Bytecode::Jump(_, label)
+            | Bytecode::Call(_, _, _, _, Some(AbortAction::Jump(label, _))) => {
                 vec![*label]
             }
             Bytecode::VariantSwitch(_, _, dests) => dests.clone(),
@@ -530,8 +534,10 @@ impl Bytecode {
         let map = |is_src: bool, f: &mut F, v: Vec<TempIndex>| -> Vec<TempIndex> {
             v.into_iter().map(|i| f(is_src, i)).collect()
         };
-        let map_abort = |f: &mut F, aa: Option<AbortAction>| {
-            aa.map(|AbortAction(l, code)| AbortAction(l, f(false, code)))
+        let map_abort = |f: &mut F, aa: Option<AbortAction>| match aa {
+            Some(AbortAction::Jump(l, code)) => Some(AbortAction::Jump(l, f(false, code))),
+            Some(AbortAction::Check) => Some(AbortAction::Check),
+            None => None,
         };
         let map_node = |f: &mut F, node: BorrowNode| match node {
             LocalRoot(tmp) => LocalRoot(f(true, tmp)),
@@ -682,7 +688,7 @@ impl Bytecode {
         use Bytecode::*;
         use Operation::*;
         let add_abort = |mut res: Vec<TempIndex>, aa: &Option<AbortAction>| {
-            if let Some(AbortAction(_, dest)) = aa {
+            if let Some(AbortAction::Jump(_, dest)) = aa {
                 res.push(*dest)
             }
             res
@@ -781,6 +787,12 @@ impl Bytecode {
             _ => self.clone(),
         }
     }
+
+    pub fn set_abort_action(&mut self, aa: Option<AbortAction>) {
+        if let Bytecode::Call(_, _, _, _, aa_ref) = self {
+            *aa_ref = aa;
+        }
+    }
 }
 
 // =================================================================================================
@@ -828,13 +840,19 @@ impl<'env> fmt::Display for BytecodeDisplay<'env> {
                 }
                 write!(f, "{}", oper.display(self.func_target))?;
                 self.fmt_locals(f, args, true)?;
-                if let Some(AbortAction(label, code)) = aa {
-                    write!(
-                        f,
-                        " on_abort goto {} with {}",
-                        self.label_str(*label),
-                        self.lstr(*code)
-                    )?;
+                match aa {
+                    Some(AbortAction::Jump(label, code)) => {
+                        write!(
+                            f,
+                            " on_abort goto {} with {}",
+                            self.label_str(*label),
+                            self.lstr(*code)
+                        )?;
+                    }
+                    Some(AbortAction::Check) => {
+                        write!(f, "no_abort check")?;
+                    }
+                    None => {}
                 }
             }
             Ret(_, srcs) => {

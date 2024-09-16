@@ -14,7 +14,7 @@ use crate::{
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},
     graph::{Graph, NaturalLoop},
     options::ProverOptions,
-    stackless_bytecode::{Bytecode, HavocKind, Label, Operation},
+    stackless_bytecode::{AbortAction, Bytecode, HavocKind, Label, Operation},
     stackless_control_flow_graph::{BlockContent, BlockId, StacklessControlFlowGraph},
 };
 
@@ -450,6 +450,10 @@ impl LoopAnalysisProcessor {
 
             if let Some((begin, end)) = invariants_map.get(&label) {
                 // done with all information collection.
+                let mut code = code[(*begin)..=*end].to_vec();
+                for bc in code.iter_mut() {
+                    bc.set_abort_action(Some(AbortAction::Check));
+                }
                 fat_loops.insert(
                     label,
                     FatLoop {
@@ -457,7 +461,7 @@ impl LoopAnalysisProcessor {
                         mut_targets,
                         back_edges,
                         loop_invariant: LoopInvariant {
-                            code: code[(*begin)..=*end].to_vec(),
+                            code,
                         },
                     },
                 );

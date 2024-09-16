@@ -457,7 +457,7 @@ impl<'a> Instrumenter<'a> {
                     dests,
                     oper,
                     srcs,
-                    Some(AbortAction(self.abort_label, self.abort_local)),
+                    Some(AbortAction::Jump(self.abort_label, self.abort_local)),
                 ));
                 self.can_abort = true;
             }
@@ -561,7 +561,7 @@ impl<'a> Instrumenter<'a> {
                 dests,
                 Operation::Function(mid, fid, targs.clone()),
                 srcs,
-                Some(AbortAction(self.abort_label, self.abort_local)),
+                Some(AbortAction::Jump(self.abort_label, self.abort_local)),
             ));
             self.can_abort = true;
         } else {

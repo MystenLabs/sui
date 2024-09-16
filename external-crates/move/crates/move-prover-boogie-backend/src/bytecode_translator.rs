@@ -361,7 +361,9 @@ impl<'env> StructTranslator<'env> {
     fn translate(&self) {
         let writer = self.parent.writer;
         let struct_env = self.struct_env;
-        if struct_env.is_native() { return; }
+        if struct_env.is_native() {
+            return;
+        }
         let env = struct_env.module_env.env;
 
         let qid = struct_env
@@ -601,6 +603,26 @@ impl<'env> FunctionTranslator<'env> {
         emitln!(self.parent.writer);
     }
 
+    fn function_variant_name(&self) -> String {
+        let suffix = match &self.fun_target.data.variant {
+            FunctionVariant::Baseline => "".to_string(),
+            FunctionVariant::Verification(flavor) => match flavor {
+                VerificationFlavor::Regular => "$verify".to_string(),
+                VerificationFlavor::Instantiated(_) => {
+                    format!("$verify_{}", flavor)
+                }
+                VerificationFlavor::Inconsistency(_) => {
+                    format!("$verify_{}", flavor)
+                }
+            },
+        };
+        format!(
+            "{}{}",
+            boogie_function_name(self.fun_target.func_env, self.type_inst),
+            suffix,
+        )
+    }
+
     /// Return a string for a boogie procedure header. Use inline attribute and name
     /// suffix as indicated by `entry_point`.
     fn generate_function_sig(&self) {
@@ -609,8 +631,8 @@ impl<'env> FunctionTranslator<'env> {
         let fun_target = self.fun_target;
         let (args, rets) = self.generate_function_args_and_returns();
 
-        let (suffix, attribs) = match &fun_target.data.variant {
-            FunctionVariant::Baseline => ("".to_string(), "{:inline 1} ".to_string()),
+        let attribs = match &fun_target.data.variant {
+            FunctionVariant::Baseline => "{:inline 1} ".to_string(),
             FunctionVariant::Verification(flavor) => {
                 let timeout = fun_target
                     .func_env
@@ -625,29 +647,25 @@ impl<'env> FunctionTranslator<'env> {
                     attribs.push(format!("{{:random_seed {}}} ", seed));
                 };
 
-                let suffix = match flavor {
-                    VerificationFlavor::Regular => "$verify".to_string(),
-                    VerificationFlavor::Instantiated(_) => {
-                        format!("$verify_{}", flavor)
-                    }
+                match flavor {
+                    VerificationFlavor::Regular => {}
+                    VerificationFlavor::Instantiated(_) => {}
                     VerificationFlavor::Inconsistency(_) => {
                         attribs.push(format!(
                             "{{:msg_if_verifies \"inconsistency_detected{}\"}} ",
                             self.loc_str(&fun_target.get_loc())
                         ));
-                        format!("$verify_{}", flavor)
                     }
                 };
-                (suffix, attribs.join(""))
+                attribs.join("")
             }
         };
         writer.set_location(&fun_target.get_loc());
         emitln!(
             writer,
-            "procedure {}{}{}({}) returns ({})",
+            "procedure {}{}({}) returns ({})",
             attribs,
-            boogie_function_name(fun_target.func_env, self.type_inst),
-            suffix,
+            self.function_variant_name(),
             args,
             rets,
         )
@@ -670,7 +688,7 @@ impl<'env> FunctionTranslator<'env> {
         emitln!(
             writer,
             "procedure {{:inline 1}} {}{}({}){} {{",
-            boogie_function_name(fun_target.func_env, self.type_inst),
+            self.function_variant_name(),
             suffix,
             args,
             ret,
@@ -1138,11 +1156,9 @@ impl<'env> FunctionTranslator<'env> {
                 emitln!(
                     self.writer(),
                     "call $abort_if_cond := {}$aborts({});",
-                    boogie_function_name(fun_target.func_env, self.type_inst),
+                    self.function_variant_name(),
                     (0..fun_target.get_parameter_count())
-                        .map(|i| {
-                            format!("$t{}", i)
-                        })
+                        .map(|i| { format!("$t{}", i) })
                         .join(", "),
                 );
                 emitln!(self.writer(), "assert {:msg \"assert_failed(0,0,0): abort_if assertion holds when it should not\"} !$abort_if_cond;");
@@ -2378,17 +2394,23 @@ impl<'env> FunctionTranslator<'env> {
                     }
                 }
                 if !(self.in_requires || self.in_ensures || self.in_aborts) {
-                    if let Some(AbortAction(target, code)) = aa {
-                        emitln!(self.writer(), "if ($abort_flag) {");
-                        self.writer().indent();
-                        *last_tracked_loc = None;
-                        self.track_loc(last_tracked_loc, &loc);
-                        let code_str = str_local(*code);
-                        emitln!(self.writer(), "{} := $abort_code;", code_str);
-                        self.track_abort(&code_str);
-                        emitln!(self.writer(), "goto L{};", target.as_usize());
-                        self.writer().unindent();
-                        emitln!(self.writer(), "}");
+                    match aa {
+                        Some(AbortAction::Jump(target, code)) => {
+                            emitln!(self.writer(), "if ($abort_flag) {");
+                            self.writer().indent();
+                            *last_tracked_loc = None;
+                            self.track_loc(last_tracked_loc, &loc);
+                            let code_str = str_local(*code);
+                            emitln!(self.writer(), "{} := $abort_code;", code_str);
+                            self.track_abort(&code_str);
+                            emitln!(self.writer(), "goto L{};", target.as_usize());
+                            self.writer().unindent();
+                            emitln!(self.writer(), "}");
+                        }
+                        Some(AbortAction::Check) => {
+                            emitln!(self.writer(), "assert {:msg \"assert_failed(0,0,0): code should not abort\"} !$abort_flag;");
+                        }
+                        None => {}
                     }
                 }
             }
@@ -2396,11 +2418,9 @@ impl<'env> FunctionTranslator<'env> {
                 emitln!(
                     self.writer(),
                     "call $abort_if_cond := {}$aborts({});",
-                    boogie_function_name(fun_target.func_env, self.type_inst),
+                    self.function_variant_name(),
                     (0..fun_target.get_parameter_count())
-                        .map(|i| {
-                            format!("$t{}", i)
-                        })
+                        .map(|i| { format!("$t{}", i) })
                         .join(", "),
                 );
                 emitln!(self.writer(), "assert {:msg \"assert_failed(0,0,0): abort_if assertion does not hold\"} $abort_if_cond;");

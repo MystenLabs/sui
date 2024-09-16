@@ -399,7 +399,7 @@ impl<'a> TransferFunctions for LiveVarAnalysis<'a> {
             Call(_, dsts, _, srcs, on_abort) => {
                 state.remove(dsts);
                 state.insert(srcs);
-                if let Some(AbortAction(_, dst)) = on_abort {
+                if let Some(AbortAction::Jump(_, dst)) = on_abort {
                     state.remove(&[*dst]);
                 }
             }
