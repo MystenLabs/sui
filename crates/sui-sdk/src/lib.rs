@@ -91,14 +91,16 @@ use sui_json_rpc_api::{
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
     ObjectsPage, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery,
+    SuiObjectResponseQuery, SuiTransactionBlockResponse,
 };
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress};
+use types::transaction::Transaction;
 
 use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriverApi, ReadApi};
 use crate::error::{Error, SuiRpcResult};
+use crate::rpc_types::SuiTransactionBlockResponseOptions;
 
 pub mod apis;
 pub mod error;
@@ -531,6 +533,32 @@ impl SuiClient {
     /// Returns a reference to the underlying WebSocket client, if any.
     pub fn ws(&self) -> Option<&WsClient> {
         self.api.ws.as_ref()
+    }
+
+    /// Execute a transaction and wait for the effects cert.
+    /// The transaction execution is not guaranteed to succeed and may fail. This is usually only
+    /// needed in non-test environment or the caller is explicitly testing some failure behavior.
+    ///
+    // Used mostly in the CLI as it needs to wait for the effects cert instead of local execution.
+    // Use the `execute_transaction_may_fail` from WalletContext
+    // for most cases where read-after write consistency is needed.
+    pub async fn execute_tx(
+        &self,
+        tx: Transaction,
+    ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
+        Ok(self
+        .quorum_driver_api()
+        .execute_transaction_block(
+            tx,
+            SuiTransactionBlockResponseOptions::new()
+                .with_effects()
+                .with_input()
+                .with_events()
+                .with_object_changes()
+                .with_balance_changes(),
+            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
+        )
+        .await?)
     }
 }
 

@@ -1555,7 +1555,7 @@ impl SuiClientCommands {
                 let transaction = Transaction::from_generic_sig_data(data, sigs);
 
                 let client = context.get_client().await?;
-                let response = execute_tx(&client, transaction).await?;
+                let response = client.execute_tx(transaction).await?;
                 SuiClientCommandResult::TransactionBlock(response)
             }
             SuiClientCommands::ExecuteCombinedSignedTx { signed_tx_bytes } => {
@@ -1567,7 +1567,7 @@ impl SuiClientCommands {
                 ).map_err(|_| anyhow!("Failed to parse SenderSignedData bytes, check if it matches the output of sui client commands with --serialize-signed-transaction"))?;
                 let transaction = Envelope::<SenderSignedData, EmptySignInfo>::new(data);
                 let client = context.get_client().await?;
-                let response = execute_tx(&client, transaction).await?;
+                let response = client.execute_tx(transaction).await?;
                 SuiClientCommandResult::TransactionBlock(response)
             }
             SuiClientCommands::NewEnv {
@@ -2870,11 +2870,9 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             ))
         } else {
             let transaction = Transaction::new(sender_signed_data);
-            debug!("Executing transaction: {:?}", transaction);
-            let mut response = context
-                .execute_transaction_may_fail(transaction.clone())
-                .await?;
-            debug!("Transaction executed: {:?}", transaction);
+            debug!("Executing transaction: {:?}", &transaction);
+            let mut response = client.execute_tx(transaction.clone()).await?;
+            debug!("Transaction executed: {:?}", &transaction);
             if let Some(effects) = response.effects.as_mut() {
                 prerender_clever_errors(effects, client.read_api()).await;
             }
@@ -2902,30 +2900,4 @@ pub(crate) async fn prerender_clever_errors(
             *error = rendered;
         }
     }
-}
-
-/// Execute a transaction and wait for the effects cert.
-/// The transaction execution is not guaranteed to succeed and may fail. This is usually only
-/// needed in non-test environment or the caller is explicitly testing some failure behavior.
-///
-/// Used only in the CLI as it needs to wait for the effects cert instead of local execution.
-/// Use the `execute_transaction_may_fail` from WalletContext
-/// for most cases where read-after write consistency is needed.
-pub async fn execute_tx(
-    client: &SuiClient,
-    tx: Transaction,
-) -> anyhow::Result<SuiTransactionBlockResponse> {
-    Ok(client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            tx,
-            SuiTransactionBlockResponseOptions::new()
-                .with_effects()
-                .with_input()
-                .with_events()
-                .with_object_changes()
-                .with_balance_changes(),
-            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
-        )
-        .await?)
 }
