@@ -23,16 +23,8 @@ error[E05001]: ability constraint not satisfied
  9 │     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
    │                          ^^^^^^^^^^^^^ 'copy' constraint not satisifed
    ·
-18 │         baz!<None>(); // TODO do not complain about dead code?
+18 │         baz!<None>()
    │              ---- The type 'a::m::None' does not have the ability 'copy'
-
-warning[W09005]: dead or unreachable code
-  ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:9:42
-  │
-9 │     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
-  │                                          ^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
-  │
-  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:13:9
@@ -48,4 +40,15 @@ error[E05001]: ability constraint not satisfied
    │         │    │
    │         │    The type 'a::m::None' does not have the ability 'copy'
    │         'copy' constraint not satisifed
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:18:9
+   │
+ 9 │     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
+   │                          ------------- Given: 'a::m::NeedsCopy<a::m::None>'
+   ·
+17 │     fun t2() {
+   │         -- Expected: '()'
+18 │         baz!<None>()
+   │         ^^^^^^^^^^^^ Invalid return expression
 
