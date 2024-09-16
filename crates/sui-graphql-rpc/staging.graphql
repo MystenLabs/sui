@@ -4313,6 +4313,11 @@ input TransactionBlockFilter {
 	"""
 	beforeCheckpoint: UInt53
 	"""
+	Limit to transactions that interacted with the given address. The address could be a
+	sender, sponsor, or recipient of the transaction.
+	"""
+	affectedAddress: SuiAddress
+	"""
 	Limit to transactions that were signed by the given address.
 	"""
 	signAddress: SuiAddress
