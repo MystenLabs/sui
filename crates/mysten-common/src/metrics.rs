@@ -3,8 +3,10 @@
 
 use mysten_metrics::RegistryService;
 use prometheus::Encoder;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info};
+
+const DEFAULT_METRICS_PUSH_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct MetricsPushClient {
     certificate: std::sync::Arc<sui_tls::SelfSignedCertificate>,
@@ -75,6 +77,7 @@ pub async fn push_metrics(
         .header(reqwest::header::CONTENT_ENCODING, "snappy")
         .header(reqwest::header::CONTENT_TYPE, prometheus::PROTOBUF_FORMAT)
         .body(compressed)
+        .timeout(DEFAULT_METRICS_PUSH_TIMEOUT)
         .send()
         .await?;
 
