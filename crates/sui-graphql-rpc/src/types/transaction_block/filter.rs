@@ -103,7 +103,8 @@ impl TransactionBlockFilter {
     }
 
     /// If we don't query a lookup table that has a denormalized sender column, we need to
-    /// explicitly specify the sender.
+    /// explicitly specify the sender with a query on `tx_sender`. This function returns the sender
+    /// we need to add an explicit query for if one is required, or `None` otherwise.
     pub(crate) fn explicit_sender(&self) -> Option<SuiAddress> {
         let missing_implicit_sender = self.function.is_none()
             && self.kind.is_none()
