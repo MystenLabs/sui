@@ -102,6 +102,8 @@ pub struct ConsensusCommitPrologueCommand {
 pub struct ProgrammableTransactionCommand {
     #[clap(long = "sender")]
     pub sender: Option<String>,
+    #[clap(long = "sponsor")]
+    pub sponsor: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
     #[clap(long = "gas-price")]
