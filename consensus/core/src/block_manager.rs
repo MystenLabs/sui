@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet}, iter, sync::Arc, time::Instant
+    collections::{BTreeMap, BTreeSet},
+    iter,
+    sync::Arc,
+    time::Instant,
 };
 
 use itertools::Itertools as _;
@@ -118,7 +121,8 @@ impl BlockManager {
             let unsuspended_blocks = self.try_unsuspend_children_blocks(block.reference());
 
             // Verify block timestamps
-            let blocks_to_accept = self.verify_block_timestamps_and_accept(iter::once(block).chain(unsuspended_blocks));
+            let blocks_to_accept = self
+                .verify_block_timestamps_and_accept(iter::once(block).chain(unsuspended_blocks));
             accepted_blocks.extend(blocks_to_accept);
         }
 
@@ -180,7 +184,10 @@ impl BlockManager {
 
                     // When gc is enabled it's possible that we indeed won't find any ancestors that are passed gc_round. That's ok. We don't need to panic here.
                     // We do want to panic if gc_enabled we and have an ancestor that is > gc_round, or gc is disabled.
-                    if gc_enabled && ancestor_ref.round > GENESIS_ROUND && ancestor_ref.round <= gc_round {
+                    if gc_enabled
+                        && ancestor_ref.round > GENESIS_ROUND
+                        && ancestor_ref.round <= gc_round
+                    {
                         debug!(
                             "Block {:?} has a missing ancestor: {:?} passed GC round {}",
                             b.reference(),
@@ -246,17 +253,13 @@ impl BlockManager {
         // then gc_round will be 0 and all ancestors will be considered.
         let ancestors = if gc_enabled {
             block
-            .ancestors()
-            .iter()
-            .filter(|ancestor| gc_round == GENESIS_ROUND || ancestor.round > gc_round)
-            .cloned()
-            .collect::<Vec<_>>()
+                .ancestors()
+                .iter()
+                .filter(|ancestor| ancestor.round == GENESIS_ROUND || ancestor.round > gc_round)
+                .cloned()
+                .collect::<Vec<_>>()
         } else {
-            block
-            .ancestors()
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>()
+            block.ancestors().to_vec()
         };
 
         // make sure that we have all the required ancestors in store
