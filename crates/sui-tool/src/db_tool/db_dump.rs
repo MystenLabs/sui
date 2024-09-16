@@ -75,7 +75,8 @@ pub fn table_summary(
                 let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
                 AuthorityEpochTables::open_readonly(epoch, &db_path).table_summary(table_name)
             } else {
-                AuthorityPerpetualTables::open_readonly(&db_path).table_summary(table_name)
+                unimplemented!("table_summary")
+                // AuthorityPerpetualTables::open(&db_path, None).table_summary(table_name)
             }
         }
         StoreName::Index => {
@@ -105,9 +106,10 @@ pub fn print_table_metadata(
                     .next_shared_object_versions
                     .rocksdb
             } else {
-                AuthorityPerpetualTables::open_readonly(&db_path)
-                    .objects
-                    .rocksdb
+                unimplemented!("print_table_metadata")
+                // AuthorityPerpetualTables::open_readonly(&db_path)
+                //     .objects
+                //     .rocksdb
             }
         }
         StoreName::Index => {
@@ -160,34 +162,35 @@ pub fn print_table_metadata(
 }
 
 pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usize) {
-    let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path);
-    let iter = perpetual_tables.objects.unbounded_iter();
-    let mut total_count = 0;
-    let mut duplicate_count = 0;
-    let mut total_bytes = 0;
-    let mut duplicated_bytes = 0;
-
-    let mut object_id: ObjectID = ObjectID::random();
-    let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
-
-    for (key, value) in iter {
-        if let StoreObject::Value(store_object) = value.migrate().into_inner() {
-            if let StoreData::Move(object) = store_object.data {
-                if object_id != key.0 {
-                    for (k, cnt) in data.iter() {
-                        total_bytes += k.len() * cnt;
-                        duplicated_bytes += k.len() * (cnt - 1);
-                        total_count += cnt;
-                        duplicate_count += cnt - 1;
-                    }
-                    object_id = key.0;
-                    data.clear();
-                }
-                *data.entry(object.contents().to_vec()).or_default() += 1;
-            }
-        }
-    }
-    (total_count, duplicate_count, total_bytes, duplicated_bytes)
+    unimplemented!("duplicate_objects_summary")
+    // let perpetual_tables = AuthorityPerpetualTables::open(&db_path, None);
+    // let iter = perpetual_tables.objects.unbounded_iter();
+    // let mut total_count = 0;
+    // let mut duplicate_count = 0;
+    // let mut total_bytes = 0;
+    // let mut duplicated_bytes = 0;
+    //
+    // let mut object_id: ObjectID = ObjectID::random();
+    // let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
+    //
+    // for (key, value) in iter {
+    //     if let StoreObject::Value(store_object) = value.migrate().into_inner() {
+    //         if let StoreData::Move(object) = store_object.data {
+    //             if object_id != key.0 {
+    //                 for (k, cnt) in data.iter() {
+    //                     total_bytes += k.len() * cnt;
+    //                     duplicated_bytes += k.len() * (cnt - 1);
+    //                     total_count += cnt;
+    //                     duplicate_count += cnt - 1;
+    //                 }
+    //                 object_id = key.0;
+    //                 data.clear();
+    //             }
+    //             *data.entry(object.contents().to_vec()).or_default() += 1;
+    //         }
+    //     }
+    // }
+    // (total_count, duplicate_count, total_bytes, duplicated_bytes)
 }
 
 pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {
