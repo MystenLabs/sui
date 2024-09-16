@@ -47,6 +47,7 @@ jobs:
         os:
           [
             ubuntu-ghcloud, # ubuntu-x86_64
+            ubuntu-arm64, # ubuntu-arm64
             windows-ghcloud, # windows-x86_64
             macos-latest-xl, # macos-x86_64
             macos-latest-xlarge # macos-arm64
@@ -136,6 +137,12 @@ jobs:
           PATH: "/opt/homebrew/bin:$PATH"
         run: |
           brew install postgresql
+
+      - name: Install postgres (Ubuntu arm64)
+        if: ${{ matrix.os == 'ubuntu-arm64' && env.s3_archive_exist == '' }}
+        shell: bash
+        run: |
+          sudo apt install libpq-dev
 
       - name: Remove unused apps (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_archive_exist == '' }}
