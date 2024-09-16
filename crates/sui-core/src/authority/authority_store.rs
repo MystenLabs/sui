@@ -50,6 +50,7 @@ use mysten_common::sync::notify_read::NotifyRead;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use typed_store::rocks::util::is_ref_count_value;
+use typed_store::tidehunter::th_db_map::{ThDbBatch, ThDbMap};
 
 const NUM_SHARDS: usize = 4096;
 
@@ -434,17 +435,14 @@ impl AuthorityStore {
         let marker_entry = self
             .perpetual_tables
             .object_per_epoch_marker_table
-            .safe_iter_with_bounds(Some(min_key), Some(max_key))
-            .skip_prior_to(&max_key)?
-            .next();
+            .last_in_range(&min_key, &max_key);
         match marker_entry {
-            Some(Ok(((epoch, key), marker))) => {
+            Some(((epoch, key), marker)) => {
                 // because of the iterator bounds these cannot fail
                 assert_eq!(epoch, epoch_id);
                 assert_eq!(key.0, *object_id);
                 Ok(Some((key.1, marker)))
             }
-            Some(Err(e)) => Err(e.into()),
             None => Ok(None),
         }
     }
@@ -553,18 +551,16 @@ impl AuthorityStore {
         let Some(prior_version) = version.one_before() else {
             return Ok(None);
         };
-        let mut iterator = self
+        let last = self
             .perpetual_tables
             .objects
-            .unbounded_iter()
-            .skip_prior_to(&ObjectKey(*object_id, prior_version))?;
+            .last_in_range(&ObjectKey::min_for_id(object_id), &ObjectKey(*object_id, prior_version));
 
-        if let Some((object_key, value)) = iterator.next() {
-            if object_key.0 == *object_id {
-                return Ok(Some(
-                    self.perpetual_tables.object_reference(&object_key, value)?,
-                ));
-            }
+        if let Some((object_key, value)) = last {
+            debug_assert_eq!(object_key.0, *object_id);
+            return Ok(Some(
+                self.perpetual_tables.object_reference(&object_key, value)?,
+            ));
         }
         Ok(None)
     }
@@ -604,17 +600,16 @@ impl AuthorityStore {
         version: VersionNumber,
         epoch_id: EpochId,
     ) -> Result<bool, SuiError> {
-        let object_key = ObjectKey::max_for_id(object_id);
-        let marker_key = (epoch_id, object_key);
+        let max_marker_key = (epoch_id, ObjectKey::max_for_id(object_id));
+        // todo is this right?
+        let min_marker_key = (epoch_id, ObjectKey::min_for_id(object_id));
 
         // Find the most recent version of the object that was deleted or wrapped.
         // Return true if the version is >= `version`. Otherwise return false.
         let marker_entry = self
             .perpetual_tables
             .object_per_epoch_marker_table
-            .unbounded_iter()
-            .skip_prior_to(&marker_key)?
-            .next();
+            .last_in_range(&min_marker_key, &max_marker_key);
         match marker_entry {
             Some(((epoch, key), marker)) => {
                 // Make sure object id matches and version is >= `version`
@@ -740,10 +735,11 @@ impl AuthorityStore {
                         )),
                     )?;
                     if let Some(indirect_object) = indirect_object {
-                        batch.merge_batch(
-                            &perpetual_db.indirect_move_objects,
-                            iter::once((indirect_object.inner().digest(), indirect_object)),
-                        )?;
+                        panic!("indirect_object not supported");
+                        // batch.merge_batch(
+                        //     &perpetual_db.indirect_move_objects,
+                        //     iter::once((indirect_object.inner().digest(), indirect_object)),
+                        // )?;
                     }
                     if !object.is_child_object() {
                         Self::initialize_live_object_markers(
@@ -856,7 +852,7 @@ impl AuthorityStore {
 
     fn write_one_transaction_outputs(
         &self,
-        write_batch: &mut DBBatch,
+        write_batch: &mut ThDbBatch,
         epoch_id: EpochId,
         tx_outputs: &TransactionOutputs,
     ) -> SuiResult {
@@ -927,19 +923,22 @@ impl AuthorityStore {
             .partition(|(idx, _)| matches!(&existing_digests[*idx], Some(value) if !is_ref_count_value(value)));
 
         write_batch.insert_batch(&self.perpetual_tables.objects, new_objects.into_iter())?;
+
         if !new_indirect_objects.is_empty() {
-            write_batch.merge_batch(
-                &self.perpetual_tables.indirect_move_objects,
-                new_indirect_objects.into_iter().map(|(_, pair)| pair),
-            )?;
+            panic!("indirect_move_objects not supported");
+            // write_batch.merge_batch(
+            //     &self.perpetual_tables.indirect_move_objects,
+            //     new_indirect_objects.into_iter().map(|(_, pair)| pair),
+            // )?;
         }
         if !existing_indirect_objects.is_empty() {
-            write_batch.partial_merge_batch(
-                &self.perpetual_tables.indirect_move_objects,
-                existing_indirect_objects
-                    .into_iter()
-                    .map(|(_, (digest, _))| (digest, 1_u64.to_le_bytes())),
-            )?;
+            panic!("existing_indirect_objects not supported");
+            // write_batch.partial_merge_batch(
+            //     &self.perpetual_tables.indirect_move_objects,
+            //     existing_indirect_objects
+            //         .into_iter()
+            //         .map(|(_, (digest, _))| (digest, 1_u64.to_le_bytes())),
+            // )?;
         }
 
         let event_digest = events.digest();
@@ -1111,14 +1110,11 @@ impl AuthorityStore {
         &self,
         object_id: ObjectID,
     ) -> SuiResult<ObjectRef> {
-        let mut iterator = self
+        let last = self
             .perpetual_tables
             .live_owned_object_markers
-            .unbounded_iter()
-            // Make the max possible entry for this object ID.
-            .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
-        Ok(iterator
-            .next()
+            .last_in_range(&(object_id, SequenceNumber::MIN, ObjectDigest::MIN), &(object_id, SequenceNumber::MAX, ObjectDigest::MAX));
+        Ok(last
             .and_then(|value| {
                 if value.0 .0 == object_id {
                     Some(value)
@@ -1161,7 +1157,7 @@ impl AuthorityStore {
     /// Returns SuiError::ObjectLockAlreadyInitialized if the lock already exists and is locked to a transaction
     fn initialize_live_object_markers_impl(
         &self,
-        write_batch: &mut DBBatch,
+        write_batch: &mut ThDbBatch,
         objects: &[ObjectRef],
         is_force_reset: bool,
     ) -> SuiResult {
@@ -1174,8 +1170,8 @@ impl AuthorityStore {
     }
 
     pub fn initialize_live_object_markers(
-        live_object_marker_table: &DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
-        write_batch: &mut DBBatch,
+        live_object_marker_table: &ThDbMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
+        write_batch: &mut ThDbBatch,
         objects: &[ObjectRef],
         is_force_reset: bool,
     ) -> SuiResult {
@@ -1215,7 +1211,7 @@ impl AuthorityStore {
     /// Removes locks for a given list of ObjectRefs.
     fn delete_live_object_markers(
         &self,
-        write_batch: &mut DBBatch,
+        write_batch: &mut ThDbBatch,
         objects: &[ObjectRef],
     ) -> SuiResult {
         trace!(?objects, "delete_locks");
@@ -1283,11 +1279,12 @@ impl AuthorityStore {
             iter::once(tx_digest),
         )?;
         if let Some(events_digest) = effects.events_digest() {
-            write_batch.schedule_delete_range(
-                &self.perpetual_tables.events,
-                &(*events_digest, usize::MIN),
-                &(*events_digest, usize::MAX),
-            )?;
+            // todo implement
+            // write_batch.schedule_delete_range(
+            //     &self.perpetual_tables.events,
+            //     &(*events_digest, usize::MIN),
+            //     &(*events_digest, usize::MAX),
+            // )?;
         }
 
         let tombstones = effects
@@ -1883,13 +1880,14 @@ impl AccumulatorStore for AuthorityStore {
     fn get_root_state_accumulator_for_highest_epoch(
         &self,
     ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, Accumulator))>> {
-        Ok(self
-            .perpetual_tables
-            .root_state_hash_by_epoch
-            .safe_iter()
-            .skip_to_last()
-            .next()
-            .transpose()?)
+        unimplemented!("get_root_state_accumulator_for_highest_epoch");
+        // Ok(self
+        //     .perpetual_tables
+        //     .root_state_hash_by_epoch
+        //     .safe_iter()
+        //     .skip_to_last()
+        //     .next()
+        //     .transpose()?)
     }
 
     fn insert_state_accumulator_for_epoch(
