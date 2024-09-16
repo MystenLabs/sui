@@ -114,7 +114,7 @@ impl BlockManager {
                     missing_blocks.extend(ancestors_to_fetch);
                     continue;
                 }
-                TryAcceptResult::Processed => continue,
+                TryAcceptResult::Processed | TryAcceptResult::Skipped => continue,
             };
 
             // If the block is accepted, try to unsuspend its children blocks if any.
@@ -247,6 +247,11 @@ impl BlockManager {
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
         if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref) {
             return TryAcceptResult::Processed;
+        }
+
+        // If the block is <= gc_round, then we simply skip its processing as there is no meaning do any action on it or even store it.
+        if gc_enabled && block.round() <= gc_round {
+            return TryAcceptResult::Skipped;
         }
 
         // Keep only the ancestors that are greater than the GC round to check for their existence. Keep in mind that if GC is disabled
@@ -516,6 +521,9 @@ enum TryAcceptResult {
     // The block has been processed before and already exists in BlockManager (and is suspended) or
     // in DagState (so has been already accepted). No further processing has been done at this point.
     Processed,
+    // When a received block is <= gc_round, then we simply skip its processing as there is no meaning
+    // do any action on it or even store it.
+    Skipped,
 }
 
 #[cfg(test)]
