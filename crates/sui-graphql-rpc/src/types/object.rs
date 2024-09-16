@@ -315,6 +315,8 @@ struct LatestAtKey {
     checkpoint_viewed_at: u64,
 }
 
+/// `DataLoader` key for fetching an `Object` at a specific version.
+/// This does not have any consistency constraints.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct PointLookupKey {
     id: SuiAddress,
@@ -574,7 +576,7 @@ impl Object {
 
 impl ObjectImpl<'_> {
     pub(crate) async fn version(&self) -> UInt53 {
-        self.0.version_impl().into()
+        self.0.version.into()
     }
 
     pub(crate) async fn status(&self) -> ObjectStatus {
@@ -751,20 +753,11 @@ impl Object {
         }
     }
 
-    pub(crate) fn new_wrapped_or_deleted(
-        object_id: SuiAddress,
-        object_version: u64,
-        checkpoint_viewed_at: u64,
-    ) -> Self {
-        Self {
-            address: object_id,
-            version: object_version,
-            kind: ObjectKind::WrappedOrDeleted,
-            checkpoint_viewed_at,
-            root_version: object_version,
-        }
-    }
-
+    /// Creates a ObjectKind::Serialized object from `SerializedObject` type,
+    /// which is an optional BCS serialized object.
+    /// If the serialized object is None, then the object is marked as WrappedOrDeleted.
+    /// The `checkpoint_viewed_at` is the checkpoint sequence number at which this object was viewed.
+    /// The `root_version` is the root parent object version for dynamic fields.
     pub(crate) fn new_serialized(
         object_id: SuiAddress,
         version: u64,
@@ -781,7 +774,13 @@ impl Object {
                 root_version,
             }
         } else {
-            Self::new_wrapped_or_deleted(object_id, version, checkpoint_viewed_at)
+            Self {
+                address: object_id,
+                version,
+                kind: ObjectKind::WrappedOrDeleted,
+                checkpoint_viewed_at,
+                root_version: version,
+            }
         }
     }
 
@@ -793,10 +792,6 @@ impl Object {
             K::Serialized(bytes) => bcs::from_bytes(bytes).ok(),
             K::WrappedOrDeleted => None,
         }
-    }
-
-    pub(crate) fn version_impl(&self) -> u64 {
-        self.version
     }
 
     /// Root parent object version for dynamic fields.
@@ -1307,16 +1302,16 @@ impl Loader<HistoricalKey> for Db {
                     // Filter by key's checkpoint viewed at here. Doing this in memory because it should be
                     // quite rare that this query actually filters something, but encoding it in SQL is
                     // complicated.
-                    .map_or(false, |&seq| key.checkpoint_viewed_at >= seq as u64)
+                    .is_some_and(|&seq| key.checkpoint_viewed_at >= seq as u64)
             })
             .collect();
-        let point_lookup_keys = filtered_keys
+        let point_lookup_keys: Vec<_> = filtered_keys
             .iter()
             .map(|key| PointLookupKey {
                 id: key.id,
                 version: key.version,
             })
-            .collect::<Vec<_>>();
+            .collect();
         let objects = self.load(&point_lookup_keys).await?;
         let results = filtered_keys
             .into_iter()
@@ -1413,7 +1408,7 @@ impl Loader<ParentVersionKey> for Db {
                     continue;
                 }
                 let key = ParentVersionKey {
-                    id: addr(&stored.object_id).unwrap(),
+                    id: addr(&stored.object_id)?,
                     checkpoint_viewed_at: group_key.checkpoint_viewed_at,
                     parent_version: group_key.parent_version,
                 };
@@ -1429,9 +1424,9 @@ impl Loader<ParentVersionKey> for Db {
             .collect::<Vec<_>>();
         let objects = self.load(&point_lookup_keys).await?;
         let results = group_map
-            .into_iter()
+            .into_keys()
             .zip(point_lookup_keys)
-            .filter_map(|((parent_key, _), lookup_key)| {
+            .filter_map(|(parent_key, lookup_key)| {
                 let object = objects.get(&lookup_key)?;
                 Some((
                     parent_key,
