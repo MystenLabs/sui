@@ -7,7 +7,7 @@ use crate::effects::{
     SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
 use crate::object::Object;
-use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
+use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction, Transaction};
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 
@@ -184,7 +184,7 @@ pub struct SystemStateRequest {
 
 /// Response type for version 3 of the handle certifacte validator API.
 ///
-/// The coorisponding version 3 request type allows for a client to request events as well as
+/// The corresponding version 3 request type allows for a client to request events as well as
 /// input/output objects from a transaction's execution. Given Validators operate with very
 /// aggressive object pruning, the return of input/output objects is only done immediately after
 /// the transaction has been executed locally on the validator and will not be returned for
@@ -212,6 +212,16 @@ pub struct HandleCertificateResponseV3 {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HandleCertificateRequestV3 {
     pub certificate: CertifiedTransaction,
+
+    pub include_events: bool,
+    pub include_input_objects: bool,
+    pub include_output_objects: bool,
+    pub include_auxiliary_data: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleTransactionRequestV2 {
+    pub transaction: Transaction,
 
     pub include_events: bool,
     pub include_input_objects: bool,

@@ -228,9 +228,11 @@ pub struct AuthorityMetrics {
     batch_size: Histogram,
 
     authority_state_handle_transaction_latency: Histogram,
+    authority_state_handle_transaction_v2_latency: Histogram,
 
     execute_certificate_latency_single_writer: Histogram,
     execute_certificate_latency_shared_object: Histogram,
+    await_transaction_latency: Histogram,
 
     execute_certificate_with_effects_latency: Histogram,
     internal_execution_latency: Histogram,
@@ -434,8 +436,22 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            authority_state_handle_transaction_v2_latency: register_histogram_with_registry!(
+                "authority_state_handle_transaction_v2_latency",
+                "Latency of handling transactions with v2",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             execute_certificate_latency_single_writer,
             execute_certificate_latency_shared_object,
+            await_transaction_latency: register_histogram_with_registry!(
+                "await_transaction_latency",
+                "Latency of awaiting user transaction execution, including waiting for inputs",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             execute_certificate_with_effects_latency: register_histogram_with_registry!(
                 "authority_state_execute_certificate_with_effects_latency",
                 "Latency of executing certificates with effects, including waiting for inputs",
@@ -839,14 +855,11 @@ impl AuthorityState {
         self.checkpoint_store.get_epoch_state_commitments(epoch)
     }
 
-    /// This is a private method and should be kept that way. It doesn't check whether
-    /// the provided transaction is a system transaction, and hence can only be called internally.
-    #[instrument(level = "trace", skip_all)]
-    async fn handle_transaction_impl(
+    fn handle_transaction_deny_checks(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: &VerifiedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<VerifiedSignedTransaction> {
+    ) -> SuiResult<CheckedInputObjects> {
         let tx_digest = transaction.digest();
         let tx_data = transaction.data().transaction_data();
 
@@ -899,6 +912,20 @@ impl AuthorityState {
                 &self.get_object_store(),
             )?;
         }
+
+        Ok(checked_input_objects)
+    }
+
+    /// This is a private method and should be kept that way. It doesn't check whether
+    /// the provided transaction is a system transaction, and hence can only be called internally.
+    #[instrument(level = "trace", skip_all)]
+    async fn handle_transaction_impl(
+        &self,
+        transaction: VerifiedTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<VerifiedSignedTransaction> {
+        let checked_input_objects =
+            self.handle_transaction_deny_checks(&transaction, epoch_store)?;
 
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
 
@@ -979,6 +1006,42 @@ impl AuthorityState {
                     .1,
             }),
         }
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub async fn handle_transaction_v2(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction: VerifiedTransaction,
+    ) -> SuiResult<Option<(SenderSignedData, TransactionStatus)>> {
+        let tx_digest = *transaction.digest();
+        debug!("handle_transaction");
+
+        // Ensure an idempotent answer.
+        let tx_status = self.get_transaction_status(&tx_digest, epoch_store)?;
+        if tx_status.is_some() {
+            return Ok(tx_status);
+        }
+
+        let _metrics_guard = self
+            .metrics
+            .authority_state_handle_transaction_v2_latency
+            .start_timer();
+        self.metrics.tx_orders.inc();
+
+        // The should_accept_user_certs check here is best effort, because
+        // between a validator signs a tx and a cert is formed, the validator
+        // could close the window.
+        if !epoch_store
+            .get_reconfig_state_read_lock_guard()
+            .should_accept_user_certs()
+        {
+            return Err(SuiError::ValidatorHaltedAtEpochEnd);
+        }
+
+        self.handle_transaction_deny_checks(&transaction, epoch_store)?;
+
+        Ok(None)
     }
 
     pub fn check_system_overload_at_signing(&self) -> bool {
@@ -1134,7 +1197,21 @@ impl AuthorityState {
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
         }
 
-        self.notify_read_effects(certificate).await
+        self.notify_read_effects(*certificate.digest()).await
+    }
+
+    /// Awaits the effects of executing a user transaction.
+    ///
+    /// Relies on consensus to enqueue the transaction for execution.
+    pub async fn await_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiResult<TransactionEffects> {
+        let _metrics_guard = self.metrics.await_transaction_latency.start_timer();
+        debug!("await_transaction");
+
+        // TODO(fastpath): Add handling for transactions rejected by Mysticeti fast path.
+        self.notify_read_effects(digest).await
     }
 
     /// Internal logic to execute a certificate.
@@ -1226,10 +1303,10 @@ impl AuthorityState {
 
     pub async fn notify_read_effects(
         &self,
-        certificate: &VerifiedCertificate,
+        digest: TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
         self.get_transaction_cache_reader()
-            .notify_read_executed_effects(&[*certificate.digest()])
+            .notify_read_executed_effects(&[digest])
             .await
             .map(|mut r| r.pop().expect("must return correct number of effects"))
     }

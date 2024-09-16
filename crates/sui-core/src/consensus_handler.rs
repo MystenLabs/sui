@@ -668,7 +668,7 @@ impl SequencedConsensusTransactionKind {
 
     pub fn is_executable_transaction(&self) -> bool {
         match self {
-            SequencedConsensusTransactionKind::External(ext) => ext.is_user_certificate(),
+            SequencedConsensusTransactionKind::External(ext) => ext.is_certified_transaction(),
             SequencedConsensusTransactionKind::System(_) => true,
         }
     }
