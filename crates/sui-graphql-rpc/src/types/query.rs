@@ -12,11 +12,11 @@ use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
-use super::dot_move::named_move_package::NamedMovePackage;
-use super::dot_move::named_type::NamedType;
 use super::move_package::{
     self, MovePackage, MovePackageCheckpointFilter, MovePackageVersionFilter,
 };
+use super::move_registry::named_move_package::NamedMovePackage;
+use super::move_registry::named_type::NamedType;
 use super::suins_registration::NameService;
 use super::uint53::UInt53;
 use super::{
