@@ -525,17 +525,20 @@ mod tests {
     use consensus_config::AuthorityIndex;
     use parking_lot::RwLock;
     use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
+    use rstest::rstest;
 
     use crate::{
-        block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+        block::{BlockAPI, BlockDigest, BlockRef, SignedBlock, VerifiedBlock},
         block_manager::BlockManager,
         block_verifier::{BlockVerifier, NoopBlockVerifier},
+        commit::TrustedCommit,
         context::Context,
         dag_state::DagState,
         error::{ConsensusError, ConsensusResult},
         storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
-        Round,
+        test_dag_parser::parse_dag,
+        CommitDigest, Round,
     };
 
     #[tokio::test]
@@ -670,10 +673,111 @@ mod tests {
         assert!(accepted_blocks.is_empty());
     }
 
+    /// Tests that the block manager accepts blocks when some or all of their causal history is below or equal to the GC round.
     #[tokio::test]
-    async fn accept_blocks_unsuspend_children_blocks() {
+    async fn accept_blocks_with_causal_history_below_gc_round() {
         // GIVEN
-        let (context, _key_pairs) = Context::new_for_test(4);
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+
+        // We set the gc depth to 4
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        // We "fake" the commit for round 10, so we can test the GC round 6 (commit_round - gc_depth = 10 - 4 = 6)
+        let last_commit = TrustedCommit::new_for_test(
+            10,
+            CommitDigest::MIN,
+            context.clock.timestamp_utc_ms(),
+            BlockRef::new(10, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+            vec![],
+        );
+        dag_state.write().set_last_commit(last_commit);
+        assert_eq!(
+            dag_state.read().gc_round(),
+            6,
+            "GC round should have moved to round 6"
+        );
+
+        let mut block_manager =
+            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+
+        // create a DAG of 10 rounds with some weak links for the blocks of round 9
+        let dag_str = "DAG {
+            Round 0 : { 4 },
+            Round 1 : { * },
+            Round 2 : { * },
+            Round 3 : { * },
+            Round 4 : { * },
+            Round 5 : { * },
+            Round 6 : { * },
+            Round 7 : {
+                A -> [*],
+                B -> [*],
+                C -> [*],
+            }
+            Round 8 : {
+                A -> [*],
+                B -> [*],
+                C -> [*],
+            },
+            Round 9 : {
+                A -> [A8, B8, C8, D6],
+                B -> [A8, B8, C8, D6],
+                C -> [A8, B8, C8, D6],
+                D -> [A8, B8, C8, D6],
+            },
+            Round 10 : { * },
+        }";
+
+        let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
+
+        // Now take all the blocks for round 7 & 8 , which are above the gc_round = 6.
+        // All those blocks should eventually be returned as accepted. Pay attention that without GC none of those blocks should get accepted.
+        let blocks_ranges = vec![7..=8 as Round, 9..=10 as Round];
+
+        for rounds_range in blocks_ranges {
+            let all_blocks = dag_builder
+                .blocks
+                .values()
+                .filter(|block| rounds_range.contains(&block.round()))
+                .cloned()
+                .collect::<Vec<_>>();
+
+            // WHEN
+            let mut reversed_blocks = all_blocks.clone();
+            reversed_blocks.sort_by_key(|b| std::cmp::Reverse(b.reference()));
+            let (mut accepted_blocks, missing) = block_manager.try_accept_blocks(reversed_blocks);
+            accepted_blocks.sort_by_key(|a| a.reference());
+
+            // THEN
+            assert_eq!(accepted_blocks, all_blocks.to_vec());
+            assert!(missing.is_empty());
+            assert!(block_manager.is_empty());
+
+            let (accepted_blocks, _) = block_manager.try_accept_blocks(all_blocks);
+            assert!(accepted_blocks.is_empty());
+        }
+    }
+
+    /// The test generate blocks for a well connected DAG and feed them to block manager in random order. In the end all the
+    /// blocks should be uniquely suspended and no missing blocks should exist. The test will run for both gc_enabled/disabled.
+    /// When gc is enabeld we set a high gc_depth value so in practice gc_round will be 0, but we'll be able to test in the common case
+    /// that this work exactly the same way as when gc is disabled.
+    #[rstest]
+    #[tokio::test]
+    async fn accept_blocks_unsuspend_children_blocks(#[values(false, true)] gc_enabled: bool) {
+        // GIVEN
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+
+        if gc_enabled {
+            context
+                .protocol_config
+                .set_consensus_gc_depth_for_testing(10);
+        }
         let context = Arc::new(context);
 
         // create a DAG of rounds 1 ~ 3
@@ -711,6 +815,82 @@ mod tests {
                 seed
             );
             assert!(block_manager.is_empty());
+        }
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn unsuspend_blocks_for_latest_gc_round(#[values(5, 10, 14)] gc_depth: u32) {
+        telemetry_subscribers::init_for_testing();
+        // GIVEN
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+
+        if gc_depth > 0 {
+            context
+                .protocol_config
+                .set_consensus_gc_depth_for_testing(gc_depth);
+        }
+        let context = Arc::new(context);
+
+        // create a DAG of rounds 1 ~ gc_depth * 2
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=gc_depth * 2).build();
+
+        // Pay attention that we start from round 2. Round 1 will always be missing so no matter what we do we can't unsuspend it unless
+        // gc_round has advanced to round >= 1.
+        let mut all_blocks = dag_builder
+            .blocks
+            .values()
+            .filter(|block| block.round() > 1)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        // Now randomize the sequence of sending the blocks to block manager. In the end all the blocks should be uniquely
+        // suspended and no missing blocks should exist.
+        for seed in 0..100u8 {
+            all_blocks.shuffle(&mut StdRng::from_seed([seed; 32]));
+
+            let store = Arc::new(MemStore::new());
+            let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+            let mut block_manager = BlockManager::new(
+                context.clone(),
+                dag_state.clone(),
+                Arc::new(NoopBlockVerifier),
+            );
+
+            // WHEN
+            for block in &all_blocks {
+                let (accepted_blocks, _) = block_manager.try_accept_blocks(vec![block.clone()]);
+                assert!(accepted_blocks.is_empty());
+            }
+            assert!(!block_manager.is_empty());
+
+            // AND
+            // Trigger a commit which will advance GC round
+            let last_commit = TrustedCommit::new_for_test(
+                gc_depth * 2,
+                CommitDigest::MIN,
+                context.clock.timestamp_utc_ms(),
+                BlockRef::new(
+                    gc_depth * 2,
+                    AuthorityIndex::new_for_test(0),
+                    BlockDigest::MIN,
+                ),
+                vec![],
+            );
+            dag_state.write().set_last_commit(last_commit);
+
+            // AND
+            block_manager.try_unsuspend_blocks_for_latest_gc_round();
+
+            // THEN
+            assert!(block_manager.is_empty());
+
+            // AND ensure that all have been accepted to the DAG
+            for block in &all_blocks {
+                assert!(dag_state.read().contains_block(&block.reference()));
+            }
         }
     }
 
