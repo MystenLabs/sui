@@ -1066,14 +1066,15 @@ impl DependencyGraph {
         package_graph.add_node(root_package_id);
 
         for schema::Dependency {
-            name,
+            id: dep_id,
             subst,
             digest,
         } in packages.root_dependencies.into_iter().flatten()
         {
+            let name = dep_id.clone();
             package_graph.add_edge(
                 root_package_id,
-                Symbol::from(name.as_str()),
+                PackageIdentifier::from(dep_id.as_str()),
                 Dependency {
                     mode: DependencyMode::Always,
                     subst: subst.map(parse_substitution).transpose()?,
@@ -1085,14 +1086,15 @@ impl DependencyGraph {
         }
 
         for schema::Dependency {
-            name,
+            id: dep_id,
             subst,
             digest,
         } in packages.root_dev_dependencies.into_iter().flatten()
         {
+            let name = dep_id.clone();
             package_graph.add_edge(
                 root_package_id,
-                Symbol::from(name.as_str()),
+                PackageIdentifier::from(dep_id.as_str()),
                 Dependency {
                     mode: DependencyMode::DevOnly,
                     subst: subst.map(parse_substitution).transpose()?,
@@ -1106,30 +1108,30 @@ impl DependencyGraph {
         // Fill in the remaining dependencies, and the package source information from the lock
         // file.
         for schema::Package {
-            name: pkg_name,
+            id: pkg_id,
             source,
             version,
             dependencies,
             dev_dependencies,
         } in packages.packages.into_iter().flatten()
         {
-            let pkg_name = PM::PackageName::from(pkg_name.as_str());
-            let source = parse_dependency(pkg_name.as_str(), source)
-                .with_context(|| format!("Deserializing dependency '{pkg_name}'"))?;
+            let pkg_id = PackageIdentifier::from(pkg_id.as_str());
+            let source = parse_dependency(pkg_id.as_str(), source)
+                .with_context(|| format!("Deserializing dependency '{pkg_id}'"))?;
 
             let source = match source {
                 PM::Dependency::Internal(source) => source,
                 PM::Dependency::External(resolver) => {
-                    bail!("Unexpected dependency '{pkg_name}' resolved externally by '{resolver}'");
+                    bail!("Unexpected dependency '{pkg_id}' resolved externally by '{resolver}'");
                 }
             };
 
             if source.subst.is_some() {
-                bail!("Unexpected 'addr_subst' in source for '{pkg_name}'")
+                bail!("Unexpected 'addr_subst' in source for '{pkg_id}'")
             }
 
             if source.digest.is_some() {
-                bail!("Unexpected 'digest' in source for '{pkg_name}'")
+                bail!("Unexpected 'digest' in source for '{pkg_id}'")
             }
 
             let pkg = Package {
@@ -1138,7 +1140,7 @@ impl DependencyGraph {
                 version: version.map(Symbol::from),
             };
 
-            match package_table.entry(pkg_name) {
+            match package_table.entry(pkg_id) {
                 Entry::Vacant(entry) => {
                     entry.insert(pkg);
                 }
@@ -1148,7 +1150,7 @@ impl DependencyGraph {
                 Entry::Occupied(entry) => {
                     bail!(
                         "Conflicting dependencies found:\n{0} = {1}\n{0} = {2}",
-                        pkg_name,
+                        pkg_id,
                         PackageWithResolverTOML(entry.get()),
                         PackageWithResolverTOML(&pkg),
                     );
@@ -1156,14 +1158,15 @@ impl DependencyGraph {
             };
 
             for schema::Dependency {
-                name: dep_name,
+                id: dep_id,
                 subst,
                 digest,
             } in dependencies.into_iter().flatten()
             {
+                let dep_name = dep_id.clone();
                 package_graph.add_edge(
-                    pkg_name,
-                    PM::PackageName::from(dep_name.as_str()),
+                    pkg_id,
+                    PackageIdentifier::from(dep_id.as_str()),
                     Dependency {
                         mode: DependencyMode::Always,
                         subst: subst.map(parse_substitution).transpose()?,
@@ -1175,14 +1178,15 @@ impl DependencyGraph {
             }
 
             for schema::Dependency {
-                name: dep_name,
+                id: dep_id,
                 subst,
                 digest,
             } in dev_dependencies.into_iter().flatten()
             {
+                let dep_name = dep_id.clone();
                 package_graph.add_edge(
-                    pkg_name,
-                    PM::PackageName::from(dep_name.as_str()),
+                    pkg_id,
+                    PackageIdentifier::from(dep_id.as_str()),
                     Dependency {
                         mode: DependencyMode::DevOnly,
                         subst: subst.map(parse_substitution).transpose()?,
@@ -1232,7 +1236,7 @@ impl DependencyGraph {
         for (id, pkg) in &self.package_table {
             writeln!(writer, "\n[[move.package]]")?;
 
-            writeln!(writer, "name = {}", str_escape(id.as_str())?)?;
+            writeln!(writer, "id = {}", str_escape(id.as_str())?)?;
             writeln!(writer, "source = {}", PackageTOML(pkg))?;
             if let Some(version) = &pkg.version {
                 writeln!(writer, "version = {}", str_escape(version.as_str())?)?;
@@ -1566,7 +1570,7 @@ impl<'a> fmt::Display for PackageWithResolverTOML<'a> {
 impl<'a> fmt::Display for DependencyTOML<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let DependencyTOML(
-            name,
+            id,
             Dependency {
                 mode: _,
                 subst,
@@ -1578,8 +1582,8 @@ impl<'a> fmt::Display for DependencyTOML<'a> {
 
         f.write_str("{ ")?;
 
-        write!(f, "name = ")?;
-        f.write_str(&str_escape(name.as_str())?)?;
+        write!(f, "id = ")?;
+        f.write_str(&str_escape(id.as_str())?)?;
 
         if let Some(digest) = digest {
             write!(f, ", digest = ")?;

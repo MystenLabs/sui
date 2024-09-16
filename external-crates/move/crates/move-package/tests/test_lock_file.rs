@@ -101,11 +101,11 @@ flavor = "sui"
         deps_digest = "0"
 
         dependencies = [
-          { name = "Dep" }
+          { id = "Dep" }
         ]
 
         [[move.package]]
-        name = "Dep"
+        id = "Dep"
         source = { local = "some/path" }
 	"#;
     fs::write(lock_path_with_graph.clone(), lock_graph_contents).unwrap();
@@ -139,11 +139,11 @@ flavor = "sui"
         manifest_digest = "0"
         deps_digest = "0"
         dependencies = [
-          { name = "Dep" },
+          { id = "Dep" },
         ]
 
         [[move.package]]
-        name = "Dep"
+        id = "Dep"
         source = { local = "some/path" }
 
         [move.toolchain-version]

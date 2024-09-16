@@ -31,7 +31,8 @@ use super::LockFile;
 /// V0: Base version.
 /// V1: Adds toolchain versioning support.
 /// V2: Adds support for managing addresses on package publish and upgrades.
-pub const VERSION: u64 = 2;
+/// V3: Renames dependency `name` field to `id` and adds a `name` field to store the name from the manifest.
+pub const VERSION: u64 = 3;
 
 /// Table for storing package info under an environment.
 const ENV_TABLE_NAME: &str = "env";
@@ -56,8 +57,8 @@ pub struct Packages {
 
 #[derive(Deserialize)]
 pub struct Package {
-    /// The name of the package (corresponds to the name field from its source manifest).
-    pub name: String,
+    /// Package identifier (as resolved by the package hook).
+    pub id: String,
 
     /// Where to find this dependency.  Schema is not described in terms of serde-compatible
     /// structs, so it is deserialized into a generic data structure.
@@ -73,9 +74,8 @@ pub struct Package {
 
 #[derive(Deserialize)]
 pub struct Dependency {
-    /// The name of the dependency (corresponds to the key for the dependency in the depending
-    /// package's source manifest).
-    pub name: String,
+    /// Package identifier (as resolved by the package hook).
+    pub id: String,
 
     /// Mappings for named addresses to apply to the package being depended on, when referred to by
     /// the depending package.
