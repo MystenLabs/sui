@@ -23,7 +23,7 @@ pub use worker_pool::WorkerPool;
 
 #[async_trait]
 pub trait Worker: Send + Sync {
-    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()>;
+    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()>;
     /// Optional method. Allows controlling when workflow progress is updated in the progress store.
     /// For instance, some pipelines may benefit from aggregating checkpoints, thus skipping
     /// the saving of updates for intermediate checkpoints.
@@ -35,7 +35,7 @@ pub trait Worker: Send + Sync {
         Some(sequence_number)
     }
 
-    fn preprocess_hook(&self, _: CheckpointData) -> Result<()> {
+    fn preprocess_hook(&self, _: &CheckpointData) -> Result<()> {
         Ok(())
     }
 }

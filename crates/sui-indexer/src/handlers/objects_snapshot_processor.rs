@@ -41,7 +41,7 @@ pub struct CheckpointObjectChanges {
 
 #[async_trait]
 impl Worker for ObjectsSnapshotProcessor {
-    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
+    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
         let checkpoint_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         // Index the object changes and send them to the committer.
         let object_changes: TransactionObjectChangesToCommit = CheckpointHandler::index_objects(
@@ -59,8 +59,9 @@ impl Worker for ObjectsSnapshotProcessor {
         Ok(())
     }
 
-    fn preprocess_hook(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
-        let package_objects = CheckpointHandler::get_package_objects(&[checkpoint]);
+    fn preprocess_hook(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
+        let package_objects =
+            CheckpointHandler::get_package_objects(std::slice::from_ref(checkpoint));
         self.package_buffer
             .lock()
             .unwrap()
