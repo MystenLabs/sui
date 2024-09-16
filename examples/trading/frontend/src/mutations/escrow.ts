@@ -9,6 +9,7 @@ import { SuiObjectData } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+//docs::#mutationacceptescrow
 /**
  * Builds and executes the PTB to accept an escrow.
  */
@@ -71,7 +72,9 @@ export function useAcceptEscrowMutation() {
     },
   });
 }
+//docs::/#mutationacceptescrow
 
+//docs::#mutationcancelescrow
 /**
  * Builds and executes the PTB to cancel an escrow.
  */
@@ -110,7 +113,9 @@ export function useCancelEscrowMutation() {
     },
   });
 }
+//docs::/#mutationcancelescrow
 
+//docs::#mutationcreateescrow
 /**
  * Builds and executes the PTB to create an escrow.
  */
@@ -144,3 +149,4 @@ export function useCreateEscrowMutation() {
     },
   });
 }
+//docs::/#mutationcreateescrow

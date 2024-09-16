@@ -12,6 +12,7 @@ const concepts = [
 			id: 'concepts/app-devs',
 		},
 		items: [
+			'concepts/graphql-rpc',
 			{
 				type: 'category',
 				label: 'Object Model',
@@ -98,7 +99,6 @@ const concepts = [
 					'concepts/transactions/gas-smashing',
 				],
 			},
-			'concepts/graphql-rpc',
 		],
 	},
 	{
