@@ -119,6 +119,10 @@ const config = {
             "current",
             "1.0.0",
           ],*/
+          admonitions: {
+            keywords: ["checkpoint"],
+            extendDefaults: true,
+          },
           remarkPlugins: [
             math,
             [

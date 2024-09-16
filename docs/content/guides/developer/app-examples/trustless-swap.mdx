@@ -57,12 +57,24 @@ To tamper with the object would require unlocking it, which consumes the key. Co
 
 The lock and key are made single-use by the signatures of the `lock` and `unlock` functions. `lock` accepts any object of type `T: store` (the `store` ability is necessary for storing it inside a `Locked<T>`), and creates both the `Locked<T>` and its corresponding `Key`:
 
+<details>
+<summary>
+`lock` function in `lock.move`
+</summary>
 {@inject: examples/trading/contracts/escrow/sources/lock.move#fun=lock noComments}
+</details>
+
 
 The `unlock` function accepts the `Locked<T>` and `Key` by value (which consumes them), and returns the underlying `T` as long as the correct key has been supplied for the lock:
 
+<details>
+<summary>
+`unlock` function in `lock.move`
+</summary>
 {@inject: examples/trading/contracts/escrow/sources/lock.move#variable=ELockKeyMismatch noComments}
 {@inject: examples/trading/contracts/escrow/sources/lock.move#fun=unlock noTitle noComments}
+</details>
+
 
 Together, they ensure that a lock and key cannot have existed before the lock operation, and will not exist after a successful unlock – it is single use.
 
@@ -119,14 +131,25 @@ You can start by implementing steps two and three, by defining a new type to hol
 
 You also need to create a function for creating the `Escrow` object. The object is shared because it needs to be accessed by the address that created it (in case the object needs to be returned) and by the intended recipient (to complete the swap).
 
+<details>
+<summary>
+`create` function in `shared.move`
+</summary>
 {@inject: examples/trading/contracts/escrow/sources/shared.move#fun=create noComments}
+</details>
+
 
 If the second party stops responding, the first party can unlock their object. You need to create a function so the second party can recover their object in the symmetric case as well.
 
 - It needs to check that the caller matches `sender`, because `Escrow` objects are shared and anybody can access them.
 - It accepts the `Escrow` by value so that it can clean it up after extracting the `escrowed` object, reclaiming the storage rebate for the sender and cleaning up an unused object on chain.
 
+<details>
+<summary>
+`return_to_sender` function in `shared.move`
+</summary>
 {@inject: examples/trading/contracts/escrow/sources/shared.move#fun=return_to_sender noComments}
+</details>
 
 Finally, you need to add a function to allow the first party to complete the trade.
 
@@ -135,8 +158,14 @@ Finally, you need to add a function to allow the first party to complete the tra
 - The call to `unlock` further checks that the key matches the locked object that was provided.
 - Instead of transferring the escrowed object to the recipient address, it is returned by the `swap` function. You can do this because you checked that the transaction sender is the recipient, and it makes this API more composable. Programmable transaction blocks (PTBs) provide the flexibility to decide whether to transfer the object as it is received or do something else with it.
 
+<details>
+<summary>
+``swap` function in `shared.move`
+</summary>
 {@inject: examples/trading/contracts/escrow/sources/shared.move#variable=EMismatchedSenderRecipient,EMismatchedExchangeObject singleSpace noComments}
 {@inject: examples/trading/contracts/escrow/sources/shared.move#fun=swap noComments noTitle}
+</details>
+
 
 :::tip Additional resources
 
@@ -196,84 +225,15 @@ Querying `Escrow` objects by their sender or recipient will require custom index
 
 {@inject: examples/trading/contracts/escrow/sources/shared.move#struct=EscrowCreated,EscrowSwapped,EscrowCancelled noComments}
 
-```move
-struct EscrowCreated has copy, drop {
-    escrow_id: ID,
-    key_id: ID,
-    sender: address,
-    recipient: address,
-    item_id: ID,
-}
-
-struct EscrowSwapped has copy, drop {
-    escrow_id: ID
-}
-
-struct EscrowCancelled has copy, drop {
-    escrow_id: ID
-}
-```
-
 Functions responsible for various aspects of the escrow's lifecycle emit these events. The custom indexer can then subscribe to transactions that emit these events and process only those, rather than the entire chain state:
 
-{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=create,swap,return_to_sender noComments}
-
-```move
-use sui::event;
-
-public fun create<T: key + store>(
-    escrowed: T,
-    exchange_key: ID,
-    recipient: address,
-    ctx: &mut TxContext
-) {
-    let escrow = Escrow<T> { /* ... */ };
-
-    event::emit(EscrowCreated {
-        escrow_id: object::id(&escrow),
-        key_id: exchange_key,
-        sender: escrow.sender,
-        recipient,
-        item_id: object::id(&escrowed),
-    });
-
-    /* ... */
-}
-
-public fun swap<T: key + store, U: key + store>(
-    escrow: Escrow<T>,
-    key: Key,
-    locked: Locked<U>,
-    ctx: &TxContext,
-): T {
-    let Escrow {
-        id,
-        sender,
-        recipient,
-        exchange_key,
-    } = escrow;
-
-    /* ... */
-
-    event::emit(EscrowSwapped {
-        escrow_id: object::uid_to_inner(&id),
-    });
-
-    /* ... */
-}
-
-public fun return_to_sender<T: key + store>(
-    escrow: Escrow<T>,
-    ctx: &TxContext
-): T {
-
-    event::emit(EscrowCancelled {
-        escrow_id: object::id(&escrow)
-    });
-
-    /* ... */
-}
-```
+<details>
+<summary>
+`emit` events included in functions from `shared.move`
+</summary>
+{@inject: examples/trading/contracts/escrow/sources/shared.move#use=sui::event}
+{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=create,swap,return_to_sender noTitle noComments}
+</details>
 
 :::tip Additional resources
 
@@ -288,71 +248,44 @@ Well done. You have written the Move package! 🚀
 
 To turn this into a complete dApp, you need to create a frontend. However, for the frontend to be updated, it has to listen to the blockchain as escrows are made and swaps are fulfilled.
 
-To achieve this, in the next step you [create an indexing service](#backend).
+To achieve this, in the next step you create an indexing service.
 
 ## Backend indexer {#backend}
 
-With the contract adapted to emit events, you can now write an indexer that keeps track of all active `Escrow` objects and exposes an API for querying objects by sender or recipient. The indexer will be backed by a Prisma DB with the following schema:
+With the contract adapted to emit events, you can now write an indexer that keeps track of all active `Escrow` objects and exposes an API for querying objects by sender or recipient. 
 
+The indexer is backed by a Prisma DB with the following schema:
+
+<details>
+<summary>
+`schema.prisma`
+</summary>
 {@inject: examples/trading/api/prisma/schema.prisma}
+</details>
 
 The core of the indexer is an event loop, initialized in a function called `setupListeners`.
 
 {@inject: examples/trading/api/indexer.ts}
 
-The indexer queries events related to the `escrow` module, using a `queryEvent` filter, and keeps track of a cursor representing the latest event it has processed so it can resume indexing from the right place even if it is restarted. The filter is looking for any events whose type is from the `escrow` module of our Move package:
+The indexer queries events related to the `escrow` module, using a `queryEvent` filter, and keeps track of a cursor representing the latest event it has processed so it can resume indexing from the right place even if it is restarted. The filter is looking for any events whose type is from the `escrow` module of the Move package (see the `event-indexer.ts` code that follows).
 
-```ts
-// indexer/event-indexer.ts
-import { SuiEventFilter, SuiEvent } from  '@mysten/sui.js/client';
-import { CONFIG } from '../config';
-import { prisma } from '../db';
-import { getClient } from '../sui-utils';
-import { handleEscrowObjects } from './escrow-handler';
+The core event job works by polling: It queries RPC for events following its latest cursor and sends them to a callback for processing. If it detects more than one page of new events, it immediately requests the next page. Otherwise, the job waits for the next polling interval before checking again.
 
-type EventTracker = {
-  type: string;
-  filter: SuiEventFilter;
-  callback: (events: SuiEvent[], type: string) => any;
-};
-
-const EVENTS_TO_TRACK: EventTracker[] = [
-  {
-    type: `${CONFIG.SWAP_CONTRACT.packageId}::escrow`,
-    filter: {
-      MoveEventModule: {
-        module: 'escrow',
-        package: CONFIG.SWAP_CONTRACT.packageId,
-      },
-    },
-    callback: handleEscrowObjects,
-  },
-];
-
-const getLatestCursor = async (tracker: EventTracker) => {
-  const cursor = await prisma.cursor.findUnique({
-    where: {
-      id: tracker.type,
-    },
-  });
-
-  return cursor || undefined;
-};
-
-export const setupListeners = async () => {
-  for (const event of EVENTS_TO_TRACK) {
-    runEventJob(getClient(CONFIG.NETWORK), event, await getLatestCursor(event));
-  }
-};
-```
-
-The core event job works by polling: It queries RPC for events following its latest cursor and sends them to a callback for processing. If it detects more than one page of new events, it immediately requests the next page. Otherwise, the job waits for the next polling interval before checking again:
-
+<details>
+<summary>
+`event-indexer.ts`
+</summary>
 {@inject: examples/trading/api/indexer/event-indexer.ts}
+</details>
 
 The callback is responsible for reading the event and updating the database accordingly. For demo purposes, SQLite is being used, and so you need to issue a separate `UPSERT` to the database for each escrowed object. In a production setting, however, you would want to batch requests to the database to optimize data flow.
 
+<details>
+<summary>
+`escrow-handler.ts`
+</summary>
 {@inject: examples/trading/api/indexer/escrow-handler.ts}
+</details>
 
 :::tip Additional resources
 
@@ -370,9 +303,15 @@ The data that the indexer captures can then be served over an API, so that a fro
 
 You want your API to accept the query string in the URL as the parameters for database `WHERE` query. Hence, you want a utility that can extract and parse the URL query string into valid query parameters for Prisma. With the `parseWhereStatement()` function, the callers filter the set of keys from the URL query string and transforms those corresponding key-value pairs into the correct format for Prisma.
 
+<details>
+<summary>
+`parseWhereStatement` in `api-queries.ts`
+</summary>
 {@inject: examples/trading/api/utils/api-queries.ts#enum=WhereParamTypes}
 {@inject: examples/trading/api/utils/api-queries.ts#type=WhereParam noTitle}
 {@inject: examples/trading/api/utils/api-queries.ts#variable=parseWhereStatement noTitle}
+</details>
+
 
 #### Query pagination
 
@@ -380,8 +319,13 @@ Pagination is another crucial part to ensure your API returns sufficient and/or 
 
 In this example, the `id` field of the model in the database as the cursor that allows clients to continue subsequent queries with the next page.
 
+<details>
+<summary>
+`parsePaginationForQuery` in `api-queries.ts`
+</summary>
 {@inject: examples/trading/api/utils/api-queries.ts#type=ApiPagination}
 {@inject: examples/trading/api/utils/api-queries.ts#variable=parsePaginationForQuery noTitle}
+</details>
 
 #### API endpoints
 
@@ -392,7 +336,12 @@ All the endpoints are defined in `server.ts`, particularly, there are two endpoi
 
 You define a list of valid query keys, such as `deleted`, `creator`, `keyId`, and `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, and `sender` for `Escrow` data. Pass the URL query string into the pre-defined utilities to output the correct parameters that Prisma can use.
 
+<details>
+<summary>
+`server.ts`
+</summary>
 {@inject: examples/trading/api/server.ts}
+</details>
 
 ### Deployment {#deployment}
 
@@ -406,7 +355,7 @@ Now that you have an indexer and an API service, you can deploy your move packag
 
   <details>
     <summary>
-      Toggle deployment instructions
+      Deployment instructions
     </summary>
     {@include: ../../../snippets/initialize-sui-client-cli.mdx}
 
@@ -799,7 +748,7 @@ export function Header() {
 
 The dApp Kit comes with a pre-built React.js component called `ConnectButton` displaying a button to connect and disconnect a wallet. The connecting and disconnecting wallet logic is handled seamlessly so you don't need to worry about repeating yourself doing the same logic all over again.
 
-:::danger[Checkpoint]
+:::checkpoint
 
 At this point, you have a basic routing setup. Run your app and ensure you can:
 
@@ -934,7 +883,7 @@ export function LockedDashboard() {
 ```
 </details>
 
-:::danger[Checkpoint]
+:::checkpoint
 
 Run your app and ensure you can:
 
@@ -994,7 +943,7 @@ Now the logic to create a dummy bear object exists. You just need to attach it i
   {@inject: examples/trading/frontend/src/components/Header.tsx}
 </details>
 
-:::danger[Checkpoint]
+:::checkpoint
 
 Run your app and ensure you can:
 
@@ -1056,7 +1005,7 @@ Update `src/components/locked/LockOwnedObjects.tsx` to include the `useLockObjec
   {@inject: examples/trading/frontend/src/components/locked/LockOwnedObjects.tsx}
 </details>
 
-:::danger[Checkpoint]
+:::checkpoint
 
 Run your app and ensure you can:
 
@@ -1181,7 +1130,7 @@ Update `src/routes/LockedDashboard.tsx` to include the `OwnedLockedList` compone
   {@inject: examples/trading/frontend/src/routes/LockedDashboard.tsx}
 </details>
 
-:::danger[Checkpoint]
+:::checkpoint
 
 Run your app and ensure you can:
 
@@ -1313,7 +1262,7 @@ export function Locked({
 ```
 </details>
 
-:::danger[Checkpoint]
+:::checkpoint
 
 Run your app and ensure you can:
 
@@ -1404,7 +1353,7 @@ This component uses tanstack's `useInfiniteQuery` instead of `useSuiClientInfini
   {@inject: examples/trading/frontend/src/hooks/useGetLockedObject.ts}
 </details>
 
-:::danger[Checkpoint]
+:::checkpoint
 
 Run your app and ensure you can:
 
@@ -1479,7 +1428,7 @@ export function useCreateEscrowMutation() {
   {@inject: examples/trading/frontend/src/components/escrows/CreateEscrow.tsx}
 </details>
 
-:::danger[Checkpoint]
+:::checkpoint
 
 Run your app and ensure you can:
 
@@ -1817,7 +1766,7 @@ export function EscrowDashboard() {
 ```
 </details>
 
-:::danger[Checkpoint]
+:::checkpoint
 
 Run your app and ensure you can:
 
@@ -1995,7 +1944,7 @@ export function useAcceptEscrowMutation() {
   {@inject: examples/trading/frontend/src/routes/EscrowDashboard.tsx}
 </details>
 
-:::danger[Checkpoint]
+:::checkpoint
 
 Run your app and ensure you can:
 

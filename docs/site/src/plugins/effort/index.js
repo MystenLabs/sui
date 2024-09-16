@@ -4,15 +4,13 @@
 // Plugin processes example sizes in the frontmatter to
 // place a admonition box explaining the rating.
 
-const visit = require("unist-util-visit");
-const { u } = require("unist-builder");
-
 function effortRemarkPlugin() {
   return (tree, file) => {
     if (file.data.frontMatter && file.data.frontMatter.effort) {
       const effortValue = file.data.frontMatter.effort;
       // Create a new node that represents the custom component
-      const customComponentNode = u("mdxJsxFlowElement", {
+      const customComponentNode = {
+        type: "mdxJsxFlowElement",
         name: "EffortBox",
         attributes: [
           {
@@ -22,7 +20,7 @@ function effortRemarkPlugin() {
           },
         ],
         children: [],
-      });
+      };
       tree.children.unshift(customComponentNode);
     }
   };

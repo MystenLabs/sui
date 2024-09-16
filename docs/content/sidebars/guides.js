@@ -153,6 +153,12 @@ const guides = [
 				},
 				items: [
 					'guides/developer/app-examples/e2e-counter',
+					'guides/developer/app-examples/trustless-swap',
+					'guides/developer/app-examples/coin-flip',
+					'guides/developer/app-examples/reviews-rating',
+					'guides/developer/app-examples/blackjack',
+					'guides/developer/app-examples/plinko',
+					'guides/developer/app-examples/tic-tac-toe',
 					{
 						type: 'category',
 						label: 'Trustless Swap',
