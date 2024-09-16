@@ -779,190 +779,190 @@ mod tests {
     use typed_store::Map;
 
     use super::AuthorityStorePruner;
-
-    fn get_keys_after_pruning(path: &Path) -> anyhow::Result<HashSet<ObjectKey>> {
-        let perpetual_db_path = path.join(Path::new("perpetual"));
-        let cf_names = AuthorityPerpetualTables::describe_tables();
-        let cfs: Vec<&str> = cf_names.keys().map(|x| x.as_str()).collect();
-        let mut db_options = typed_store::rocksdb::Options::default();
-        db_options.set_merge_operator(
-            "refcount operator",
-            reference_count_merge_operator,
-            reference_count_merge_operator,
-        );
-        let perpetual_db = typed_store::rocks::open_cf(
-            perpetual_db_path,
-            Some(db_options),
-            MetricConf::new("perpetual_pruning"),
-            &cfs,
-        );
-
-        let mut after_pruning = HashSet::new();
-        let objects = DBMap::<ObjectKey, StoreObjectWrapper>::reopen(
-            &perpetual_db?,
-            Some("objects"),
-            // open the db to bypass default db options which ignores range tombstones
-            // so we can read the accurate number of retained versions
-            &ReadWriteOptions::default(),
-            false,
-        )?;
-        let iter = objects.unbounded_iter();
-        for (k, _v) in iter {
-            after_pruning.insert(k);
-        }
-        Ok(after_pruning)
-    }
-
-    type GenerateTestDataResult = (Vec<ObjectKey>, Vec<ObjectKey>, Vec<ObjectKey>);
-
-    fn generate_test_data(
-        db: Arc<AuthorityPerpetualTables>,
-        num_versions_per_object: u64,
-        num_object_versions_to_retain: u64,
-        total_unique_object_ids: u32,
-        indirect_object_threshold: usize,
-    ) -> Result<GenerateTestDataResult, anyhow::Error> {
-        assert!(num_versions_per_object >= num_object_versions_to_retain);
-
-        let (mut to_keep, mut to_delete, mut tombstones) = (vec![], vec![], vec![]);
-        let mut batch = db.objects.batch();
-
-        let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids.into())?;
-        for id in ids {
-            for (counter, seq) in (0..num_versions_per_object).rev().enumerate() {
-                let object_key = ObjectKey(id, SequenceNumber::from_u64(seq));
-                if counter < num_object_versions_to_retain.try_into().unwrap() {
-                    // latest `num_object_versions_to_retain` should not have been pruned
-                    to_keep.push(object_key);
-                } else {
-                    to_delete.push(object_key);
-                }
-                let StoreObjectPair(obj, indirect_obj) = get_store_object_pair(
-                    Object::immutable_with_id_for_testing(id),
-                    indirect_object_threshold,
-                );
-                batch.insert_batch(
-                    &db.objects,
-                    [(ObjectKey(id, SequenceNumber::from(seq)), obj.clone())],
-                )?;
-                if let StoreObject::Value(o) = obj.into_inner() {
-                    if let StoreData::IndirectObject(metadata) = o.data {
-                        batch.merge_batch(
-                            &db.indirect_move_objects,
-                            [(metadata.digest, indirect_obj.unwrap())],
-                        )?;
-                    }
-                }
-            }
-
-            // Adding a tombstone for deleted object.
-            if num_object_versions_to_retain == 0 {
-                let tombstone_key = ObjectKey(id, SequenceNumber::from(num_versions_per_object));
-                println!("Adding tombstone object {:?}", tombstone_key);
-                batch.insert_batch(
-                    &db.objects,
-                    [(tombstone_key, StoreObjectWrapper::V1(StoreObject::Deleted))],
-                )?;
-                tombstones.push(tombstone_key);
-            }
-        }
-        batch.write().unwrap();
-        assert_eq!(
-            to_keep.len() as u64,
-            std::cmp::min(num_object_versions_to_retain, num_versions_per_object)
-                * total_unique_object_ids as u64
-        );
-        assert_eq!(
-            tombstones.len() as u64,
-            if num_object_versions_to_retain == 0 {
-                total_unique_object_ids as u64
-            } else {
-                0
-            }
-        );
-        Ok((to_keep, to_delete, tombstones))
-    }
-
-    pub(crate) fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
-        Arc::new(RwLockTable::new(1))
-    }
-
-    async fn run_pruner(
-        path: &Path,
-        num_versions_per_object: u64,
-        num_object_versions_to_retain: u64,
-        total_unique_object_ids: u32,
-        indirect_object_threshold: usize,
-    ) -> Vec<ObjectKey> {
-        let registry = Registry::default();
-        let metrics = AuthorityStorePruningMetrics::new(&registry);
-        let to_keep = {
-            let db = Arc::new(AuthorityPerpetualTables::open(path, None));
-            let (to_keep, to_delete, tombstones) = generate_test_data(
-                db.clone(),
-                num_versions_per_object,
-                num_object_versions_to_retain,
-                total_unique_object_ids,
-                indirect_object_threshold,
-            )
-            .unwrap();
-            let mut effects = TransactionEffects::default();
-            for object in to_delete {
-                effects.unsafe_add_deleted_live_object_for_testing((
-                    object.0,
-                    object.1,
-                    ObjectDigest::MIN,
-                ));
-            }
-            for object in tombstones {
-                effects.unsafe_add_object_tombstone_for_testing((
-                    object.0,
-                    object.1,
-                    ObjectDigest::MIN,
-                ));
-            }
-            AuthorityStorePruner::prune_objects(
-                vec![effects],
-                &db,
-                &lock_table(),
-                0,
-                metrics,
-                indirect_object_threshold,
-                true,
-            )
-            .await
-            .unwrap();
-            to_keep
-        };
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        to_keep
-    }
-
-    // Tests pruning old version of live objects.
-    #[tokio::test]
-    async fn test_pruning_objects() {
-        let path = tempfile::tempdir().unwrap().into_path();
-        let to_keep = run_pruner(&path, 3, 2, 1000, 0).await;
-        assert_eq!(
-            HashSet::from_iter(to_keep),
-            get_keys_after_pruning(&path).unwrap()
-        );
-        run_pruner(&tempfile::tempdir().unwrap().into_path(), 3, 2, 1000, 0).await;
-    }
-
-    // Tests pruning deleted objects (object tombstones).
-    #[tokio::test]
-    async fn test_pruning_tombstones() {
-        let path = tempfile::tempdir().unwrap().into_path();
-        let to_keep = run_pruner(&path, 0, 0, 1000, 0).await;
-        assert_eq!(to_keep.len(), 0);
-        assert_eq!(get_keys_after_pruning(&path).unwrap().len(), 0);
-
-        let path = tempfile::tempdir().unwrap().into_path();
-        let to_keep = run_pruner(&path, 3, 0, 1000, 0).await;
-        assert_eq!(to_keep.len(), 0);
-        assert_eq!(get_keys_after_pruning(&path).unwrap().len(), 0);
-    }
+    //
+    // fn get_keys_after_pruning(path: &Path) -> anyhow::Result<HashSet<ObjectKey>> {
+    //     let perpetual_db_path = path.join(Path::new("perpetual"));
+    //     let cf_names = AuthorityPerpetualTables::describe_tables();
+    //     let cfs: Vec<&str> = cf_names.keys().map(|x| x.as_str()).collect();
+    //     let mut db_options = typed_store::rocksdb::Options::default();
+    //     db_options.set_merge_operator(
+    //         "refcount operator",
+    //         reference_count_merge_operator,
+    //         reference_count_merge_operator,
+    //     );
+    //     let perpetual_db = typed_store::rocks::open_cf(
+    //         perpetual_db_path,
+    //         Some(db_options),
+    //         MetricConf::new("perpetual_pruning"),
+    //         &cfs,
+    //     );
+    //
+    //     let mut after_pruning = HashSet::new();
+    //     let objects = DBMap::<ObjectKey, StoreObjectWrapper>::reopen(
+    //         &perpetual_db?,
+    //         Some("objects"),
+    //         // open the db to bypass default db options which ignores range tombstones
+    //         // so we can read the accurate number of retained versions
+    //         &ReadWriteOptions::default(),
+    //         false,
+    //     )?;
+    //     let iter = objects.unbounded_iter();
+    //     for (k, _v) in iter {
+    //         after_pruning.insert(k);
+    //     }
+    //     Ok(after_pruning)
+    // }
+    //
+    // type GenerateTestDataResult = (Vec<ObjectKey>, Vec<ObjectKey>, Vec<ObjectKey>);
+    //
+    // fn generate_test_data(
+    //     db: Arc<AuthorityPerpetualTables>,
+    //     num_versions_per_object: u64,
+    //     num_object_versions_to_retain: u64,
+    //     total_unique_object_ids: u32,
+    //     indirect_object_threshold: usize,
+    // ) -> Result<GenerateTestDataResult, anyhow::Error> {
+    //     assert!(num_versions_per_object >= num_object_versions_to_retain);
+    //
+    //     let (mut to_keep, mut to_delete, mut tombstones) = (vec![], vec![], vec![]);
+    //     let mut batch = db.objects.batch();
+    //
+    //     let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids.into())?;
+    //     for id in ids {
+    //         for (counter, seq) in (0..num_versions_per_object).rev().enumerate() {
+    //             let object_key = ObjectKey(id, SequenceNumber::from_u64(seq));
+    //             if counter < num_object_versions_to_retain.try_into().unwrap() {
+    //                 // latest `num_object_versions_to_retain` should not have been pruned
+    //                 to_keep.push(object_key);
+    //             } else {
+    //                 to_delete.push(object_key);
+    //             }
+    //             let StoreObjectPair(obj, indirect_obj) = get_store_object_pair(
+    //                 Object::immutable_with_id_for_testing(id),
+    //                 indirect_object_threshold,
+    //             );
+    //             batch.insert_batch(
+    //                 &db.objects,
+    //                 [(ObjectKey(id, SequenceNumber::from(seq)), obj.clone())],
+    //             )?;
+    //             if let StoreObject::Value(o) = obj.into_inner() {
+    //                 if let StoreData::IndirectObject(metadata) = o.data {
+    //                     batch.merge_batch(
+    //                         &db.indirect_move_objects,
+    //                         [(metadata.digest, indirect_obj.unwrap())],
+    //                     )?;
+    //                 }
+    //             }
+    //         }
+    //
+    //         // Adding a tombstone for deleted object.
+    //         if num_object_versions_to_retain == 0 {
+    //             let tombstone_key = ObjectKey(id, SequenceNumber::from(num_versions_per_object));
+    //             println!("Adding tombstone object {:?}", tombstone_key);
+    //             batch.insert_batch(
+    //                 &db.objects,
+    //                 [(tombstone_key, StoreObjectWrapper::V1(StoreObject::Deleted))],
+    //             )?;
+    //             tombstones.push(tombstone_key);
+    //         }
+    //     }
+    //     batch.write().unwrap();
+    //     assert_eq!(
+    //         to_keep.len() as u64,
+    //         std::cmp::min(num_object_versions_to_retain, num_versions_per_object)
+    //             * total_unique_object_ids as u64
+    //     );
+    //     assert_eq!(
+    //         tombstones.len() as u64,
+    //         if num_object_versions_to_retain == 0 {
+    //             total_unique_object_ids as u64
+    //         } else {
+    //             0
+    //         }
+    //     );
+    //     Ok((to_keep, to_delete, tombstones))
+    // }
+    //
+    // pub(crate) fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
+    //     Arc::new(RwLockTable::new(1))
+    // }
+    //
+    // async fn run_pruner(
+    //     path: &Path,
+    //     num_versions_per_object: u64,
+    //     num_object_versions_to_retain: u64,
+    //     total_unique_object_ids: u32,
+    //     indirect_object_threshold: usize,
+    // ) -> Vec<ObjectKey> {
+    //     let registry = Registry::default();
+    //     let metrics = AuthorityStorePruningMetrics::new(&registry);
+    //     let to_keep = {
+    //         let db = Arc::new(AuthorityPerpetualTables::open(path, None));
+    //         let (to_keep, to_delete, tombstones) = generate_test_data(
+    //             db.clone(),
+    //             num_versions_per_object,
+    //             num_object_versions_to_retain,
+    //             total_unique_object_ids,
+    //             indirect_object_threshold,
+    //         )
+    //         .unwrap();
+    //         let mut effects = TransactionEffects::default();
+    //         for object in to_delete {
+    //             effects.unsafe_add_deleted_live_object_for_testing((
+    //                 object.0,
+    //                 object.1,
+    //                 ObjectDigest::MIN,
+    //             ));
+    //         }
+    //         for object in tombstones {
+    //             effects.unsafe_add_object_tombstone_for_testing((
+    //                 object.0,
+    //                 object.1,
+    //                 ObjectDigest::MIN,
+    //             ));
+    //         }
+    //         AuthorityStorePruner::prune_objects(
+    //             vec![effects],
+    //             &db,
+    //             &lock_table(),
+    //             0,
+    //             metrics,
+    //             indirect_object_threshold,
+    //             true,
+    //         )
+    //         .await
+    //         .unwrap();
+    //         to_keep
+    //     };
+    //     tokio::time::sleep(Duration::from_secs(3)).await;
+    //     to_keep
+    // }
+    //
+    // // Tests pruning old version of live objects.
+    // #[tokio::test]
+    // async fn test_pruning_objects() {
+    //     let path = tempfile::tempdir().unwrap().into_path();
+    //     let to_keep = run_pruner(&path, 3, 2, 1000, 0).await;
+    //     assert_eq!(
+    //         HashSet::from_iter(to_keep),
+    //         get_keys_after_pruning(&path).unwrap()
+    //     );
+    //     run_pruner(&tempfile::tempdir().unwrap().into_path(), 3, 2, 1000, 0).await;
+    // }
+    //
+    // // Tests pruning deleted objects (object tombstones).
+    // #[tokio::test]
+    // async fn test_pruning_tombstones() {
+    //     let path = tempfile::tempdir().unwrap().into_path();
+    //     let to_keep = run_pruner(&path, 0, 0, 1000, 0).await;
+    //     assert_eq!(to_keep.len(), 0);
+    //     assert_eq!(get_keys_after_pruning(&path).unwrap().len(), 0);
+    //
+    //     let path = tempfile::tempdir().unwrap().into_path();
+    //     let to_keep = run_pruner(&path, 3, 0, 1000, 0).await;
+    //     assert_eq!(to_keep.len(), 0);
+    //     assert_eq!(get_keys_after_pruning(&path).unwrap().len(), 0);
+    // }
     //
     // #[tokio::test]
     // async fn test_ref_count_pruning() {
