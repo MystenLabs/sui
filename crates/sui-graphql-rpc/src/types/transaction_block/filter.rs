@@ -26,9 +26,9 @@ pub(crate) struct TransactionBlockFilter {
     /// Limit to transaction that occured strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
 
-    #[cfg(feature = "staging")]
     /// Limit to transactions that interacted with the given address. The address could be a
     /// sender, sponsor, or recipient of the transaction.
+    #[cfg(feature = "staging")]
     pub affected_address: Option<SuiAddress>,
 
     /// Limit to transactions that were signed by the given address.

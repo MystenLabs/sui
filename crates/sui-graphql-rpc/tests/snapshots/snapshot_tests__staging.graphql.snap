@@ -175,6 +175,11 @@ enum AddressTransactionBlockRelationship {
 	Transactions that sent objects to this address.
 	"""
 	RECV
+	"""
+	Transactions that this address was involved in, either as the sender, sponsor, or as the
+	owner of some object that was created, modified or transfered.
+	"""
+	AFFECTED
 }
 
 """

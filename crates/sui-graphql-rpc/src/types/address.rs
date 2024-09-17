@@ -32,6 +32,10 @@ pub(crate) enum AddressTransactionBlockRelationship {
     Sign,
     /// Transactions that sent objects to this address.
     Recv,
+    /// Transactions that this address was involved in, either as the sender, sponsor, or as the
+    /// owner of some object that was created, modified or transfered.
+    #[cfg(feature = "staging")]
+    Affected,
 }
 
 /// The 32-byte address that is an account address (corresponding to a public key).
@@ -179,6 +183,12 @@ impl Address {
 
             Some(R::Recv) => TransactionBlockFilter {
                 recv_address: Some(self.address),
+                ..Default::default()
+            },
+
+            #[cfg(feature = "staging")]
+            Some(R::Affected) => TransactionBlockFilter {
+                affected_address: Some(self.address),
                 ..Default::default()
             },
         }) else {
