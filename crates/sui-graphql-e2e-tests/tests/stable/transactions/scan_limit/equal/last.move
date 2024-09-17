@@ -3,7 +3,7 @@
 
 // Mirrors scan_limit/equal/first.move, paginating backwards where first and scanLimit are equal.
 
-//# init --protocol-version 48 --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
 module Test::M1 {

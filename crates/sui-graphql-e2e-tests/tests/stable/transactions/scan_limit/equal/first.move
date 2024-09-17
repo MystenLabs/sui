@@ -4,7 +4,7 @@
 // Tests paginating forwards where first and scanLimit are equal. The 1st, 3rd, 5th, and 7th through
 // 10th transactions will match the filtering criteria.
 
-//# init --protocol-version 48 --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
 module Test::M1 {

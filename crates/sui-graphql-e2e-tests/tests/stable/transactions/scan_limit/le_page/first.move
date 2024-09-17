@@ -5,7 +5,7 @@
 // However, because we have a scanLimit of 2, we'll be limited to filtering only two candidate
 // transactions per page, of which one will match the filtering criteria.
 
-//# init --protocol-version 48 --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
 module Test::M1 {
