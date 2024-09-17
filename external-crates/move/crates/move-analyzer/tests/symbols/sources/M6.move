@@ -2,7 +2,7 @@ module Symbols::M6 {
 
     /// This is a documented struct
     /// With a multi-line docstring
-    struct DocumentedStruct has key, drop, store {
+    struct DocumentedStruct has drop, store {
         /// A documented field
         documented_field: u64,
     }
