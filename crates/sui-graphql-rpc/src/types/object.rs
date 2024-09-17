@@ -36,13 +36,14 @@ use crate::{filter, or_filter};
 use async_graphql::connection::{CursorType, Edge};
 use async_graphql::dataloader::Loader;
 use async_graphql::{connection::Connection, *};
-use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, SelectableHelper};
+use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
-use sui_indexer::models::objects::StoredHistoryObject;
-use sui_indexer::schema::{objects_history, objects_version};
+use sui_indexer::models::obj_indices::StoredObjectVersion;
+use sui_indexer::models::objects::{StoredFullHistoryObject, StoredHistoryObject};
+use sui_indexer::schema::{full_objects_history, objects_version};
 use sui_indexer::types::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types::OwnerType;
 use sui_types::object::bounded_visitor::BoundedVisitor;
@@ -50,10 +51,10 @@ use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
 };
 use sui_types::TypeTag;
-
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
     pub address: SuiAddress,
+    pub version: u64,
     pub kind: ObjectKind,
     /// The checkpoint sequence number at which this was viewed at.
     pub checkpoint_viewed_at: u64,
@@ -82,9 +83,11 @@ pub(crate) enum ObjectKind {
     NotIndexed(NativeObject),
     /// An object fetched from the index.
     Indexed(NativeObject, StoredHistoryObject),
+    /// An object in the bcs serialized form.
+    Serialized(Vec<u8>),
     /// The object is wrapped or deleted and only partial information can be loaded from the
-    /// indexer. The `u64` is the version of the object.
-    WrappedOrDeleted(u64),
+    /// indexer.
+    WrappedOrDeleted,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
@@ -307,6 +310,14 @@ struct ParentVersionKey {
 struct LatestAtKey {
     id: SuiAddress,
     checkpoint_viewed_at: u64,
+}
+
+/// `DataLoader` key for fetching an `Object` at a specific version.
+/// This does not have any consistency constraints.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+struct PointLookupKey {
+    id: SuiAddress,
+    version: u64,
 }
 
 /// An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
@@ -562,7 +573,7 @@ impl Object {
 
 impl ObjectImpl<'_> {
     pub(crate) async fn version(&self) -> UInt53 {
-        self.0.version_impl().into()
+        self.0.version.into()
     }
 
     pub(crate) async fn status(&self) -> ObjectStatus {
@@ -662,7 +673,7 @@ impl ObjectImpl<'_> {
     pub(crate) async fn bcs(&self) -> Result<Option<Base64>> {
         use ObjectKind as K;
         Ok(match &self.0.kind {
-            K::WrappedOrDeleted(_) => None,
+            K::WrappedOrDeleted => None,
             // WrappedOrDeleted objects are also read from the historical objects table, and they do
             // not have a serialized object, so the column is also nullable for stored historical
             // objects.
@@ -679,6 +690,7 @@ impl ObjectImpl<'_> {
                     .extend()?;
                 Some(Base64::from(&bytes))
             }
+            K::Serialized(bytes) => Some(Base64::from(bytes)),
         })
     }
 
@@ -731,27 +743,51 @@ impl Object {
         let root_version = root_version.unwrap_or_else(|| version_for_dynamic_fields(&native));
         Object {
             address,
+            version: native.version().value(),
             kind: ObjectKind::NotIndexed(native),
             checkpoint_viewed_at,
             root_version,
         }
     }
 
-    pub(crate) fn native_impl(&self) -> Option<&NativeObject> {
-        use ObjectKind as K;
-
-        match &self.kind {
-            K::NotIndexed(native) | K::Indexed(native, _) => Some(native),
-            K::WrappedOrDeleted(_) => None,
+    /// Creates a ObjectKind::Serialized object from `SerializedObject` type,
+    /// which is an optional BCS serialized object.
+    /// If the serialized object is None, then the object is marked as WrappedOrDeleted.
+    /// The `checkpoint_viewed_at` is the checkpoint sequence number at which this object was viewed.
+    /// The `root_version` is the root parent object version for dynamic fields.
+    pub(crate) fn new_serialized(
+        object_id: SuiAddress,
+        version: u64,
+        serialized: Option<Vec<u8>>,
+        checkpoint_viewed_at: u64,
+        root_version: u64,
+    ) -> Self {
+        if let Some(bytes) = serialized {
+            Self {
+                address: object_id,
+                version,
+                kind: ObjectKind::Serialized(bytes),
+                checkpoint_viewed_at,
+                root_version,
+            }
+        } else {
+            Self {
+                address: object_id,
+                version,
+                kind: ObjectKind::WrappedOrDeleted,
+                checkpoint_viewed_at,
+                root_version: version,
+            }
         }
     }
 
-    pub(crate) fn version_impl(&self) -> u64 {
+    pub(crate) fn native_impl(&self) -> Option<NativeObject> {
         use ObjectKind as K;
 
         match &self.kind {
-            K::NotIndexed(native) | K::Indexed(native, _) => native.version().value(),
-            K::WrappedOrDeleted(object_version) => *object_version,
+            K::NotIndexed(native) | K::Indexed(native, _) => Some(native.clone()),
+            K::Serialized(bytes) => bcs::from_bytes(bytes).ok(),
+            K::WrappedOrDeleted => None,
         }
     }
 
@@ -971,6 +1007,7 @@ impl Object {
                     root_version.unwrap_or_else(|| version_for_dynamic_fields(&native_object));
                 Ok(Self {
                     address,
+                    version: history_object.object_version as u64,
                     kind: ObjectKind::Indexed(native_object, history_object),
                     checkpoint_viewed_at,
                     root_version,
@@ -978,7 +1015,8 @@ impl Object {
             }
             NativeObjectStatus::WrappedOrDeleted => Ok(Self {
                 address,
-                kind: ObjectKind::WrappedOrDeleted(history_object.object_version as u64),
+                version: history_object.object_version as u64,
+                kind: ObjectKind::WrappedOrDeleted,
                 checkpoint_viewed_at,
                 root_version: history_object.object_version as u64,
             }),
@@ -1222,7 +1260,6 @@ impl Loader<HistoricalKey> for Db {
     type Error = Error;
 
     async fn load(&self, keys: &[HistoricalKey]) -> Result<HashMap<HistoricalKey, Object>, Error> {
-        use objects_history::dsl as h;
         use objects_version::dsl as v;
 
         let id_versions: BTreeSet<_> = keys
@@ -1230,18 +1267,13 @@ impl Loader<HistoricalKey> for Db {
             .map(|key| (key.id.into_vec(), key.version as i64))
             .collect();
 
-        let objects: Vec<StoredHistoryObject> = self
+        // Maps from (object_id, version) to sequence_number in the object_versions table.
+        let object_versions: HashMap<_, _> = self
             .execute(move |conn| {
                 async {
                     conn.results(move || {
-                        let mut query = h::objects_history
-                            .inner_join(
-                                v::objects_version.on(v::cp_sequence_number
-                                    .eq(h::checkpoint_sequence_number)
-                                    .and(v::object_id.eq(h::object_id))
-                                    .and(v::object_version.eq(h::object_version))),
-                            )
-                            .select(StoredHistoryObject::as_select())
+                        let mut query = v::objects_version
+                            .select(StoredObjectVersion::as_select())
                             .into_boxed();
 
                         for (id, version) in id_versions.iter().cloned() {
@@ -1255,38 +1287,47 @@ impl Loader<HistoricalKey> for Db {
                 }
                 .scope_boxed()
             })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch objects: {e}")))?;
-
-        let mut id_version_to_stored = BTreeMap::new();
-        for stored in objects {
-            let key = (addr(&stored.object_id)?, stored.object_version as u64);
-            id_version_to_stored.insert(key, stored);
-        }
-
-        let mut result = HashMap::new();
-        for key in keys {
-            let Some(stored) = id_version_to_stored.get(&(key.id, key.version)) else {
-                continue;
-            };
-
-            // Filter by key's checkpoint viewed at here. Doing this in memory because it should be
-            // quite rare that this query actually filters something, but encoding it in SQL is
-            // complicated.
-            if key.checkpoint_viewed_at < stored.checkpoint_sequence_number as u64 {
-                continue;
-            }
-
-            let object = Object::try_from_stored_history_object(
-                stored.clone(),
-                key.checkpoint_viewed_at,
-                // This conversion will use the object's own version as the `Object::root_version`.
-                None,
-            )?;
-            result.insert(*key, object);
-        }
-
-        Ok(result)
+            .await?
+            .into_iter()
+            .map(|v| ((v.object_id, v.object_version), v.cp_sequence_number))
+            .collect();
+        let filtered_keys: Vec<_> = keys
+            .iter()
+            .filter(|key| {
+                object_versions
+                    .get(&(key.id.into_vec(), key.version as i64))
+                    // Filter by key's checkpoint viewed at here. Doing this in memory because it should be
+                    // quite rare that this query actually filters something, but encoding it in SQL is
+                    // complicated.
+                    .is_some_and(|&seq| key.checkpoint_viewed_at >= seq as u64)
+            })
+            .collect();
+        let point_lookup_keys: Vec<_> = filtered_keys
+            .iter()
+            .map(|key| PointLookupKey {
+                id: key.id,
+                version: key.version,
+            })
+            .collect();
+        let objects = self.load(&point_lookup_keys).await?;
+        let results = filtered_keys
+            .into_iter()
+            .zip(point_lookup_keys)
+            .filter_map(|(hist_key, lookup_key)| {
+                let object = objects.get(&lookup_key)?;
+                Some((
+                    *hist_key,
+                    Object::new_serialized(
+                        lookup_key.id,
+                        lookup_key.version,
+                        object.clone(),
+                        hist_key.checkpoint_viewed_at,
+                        lookup_key.version,
+                    ),
+                ))
+            })
+            .collect();
+        Ok(results)
     }
 }
 
@@ -1326,19 +1367,12 @@ impl Loader<ParentVersionKey> for Db {
             .map(|(group_key, ids)| {
                 self.execute(move |conn| {
                     async move {
-                        let stored: Vec<StoredHistoryObject> = conn
+                        let stored: Vec<StoredObjectVersion> = conn
                             .results(move || {
-                                use objects_history::dsl as h;
                                 use objects_version::dsl as v;
 
-                                h::objects_history
-                                    .inner_join(
-                                        v::objects_version.on(v::cp_sequence_number
-                                            .eq(h::checkpoint_sequence_number)
-                                            .and(v::object_id.eq(h::object_id))
-                                            .and(v::object_version.eq(h::object_version))),
-                                    )
-                                    .select(StoredHistoryObject::as_select())
+                                v::objects_version
+                                    .select(StoredObjectVersion::as_select())
                                     .filter(v::object_id.eq_any(ids.iter().cloned()))
                                     .filter(v::object_version.le(group_key.parent_version as i64))
                                     .distinct_on(v::object_id)
@@ -1359,37 +1393,52 @@ impl Loader<ParentVersionKey> for Db {
                 })
             });
 
-        // Wait for the reads to all finish, and gather them into the result map.
         let groups = futures::future::join_all(futures).await;
-
-        let mut results = HashMap::new();
+        let mut group_map = HashMap::new();
         for group in groups {
             for (group_key, stored) in
                 group.map_err(|e| Error::Internal(format!("Failed to fetch objects: {e}")))?
             {
                 // This particular object is invalid -- it didn't exist at the checkpoint we are
                 // viewing at.
-                if group_key.checkpoint_viewed_at < stored.checkpoint_sequence_number as u64 {
+                if group_key.checkpoint_viewed_at < stored.cp_sequence_number as u64 {
                     continue;
                 }
-
-                let object = Object::try_from_stored_history_object(
-                    stored,
-                    group_key.checkpoint_viewed_at,
-                    // If `LatestAtKey::parent_version` is set, it must have been correctly
-                    // propagated from the `Object::root_version` of some object.
-                    Some(group_key.parent_version),
-                )?;
-
                 let key = ParentVersionKey {
-                    id: object.address,
+                    id: addr(&stored.object_id)?,
                     checkpoint_viewed_at: group_key.checkpoint_viewed_at,
                     parent_version: group_key.parent_version,
                 };
-
-                results.insert(key, object);
+                group_map.insert(key, stored.object_version);
             }
         }
+        let point_lookup_keys = group_map
+            .iter()
+            .map(|(parent_key, version)| PointLookupKey {
+                id: parent_key.id,
+                version: *version as u64,
+            })
+            .collect::<Vec<_>>();
+        let objects = self.load(&point_lookup_keys).await?;
+        let results = group_map
+            .into_keys()
+            .zip(point_lookup_keys)
+            .filter_map(|(parent_key, lookup_key)| {
+                let object = objects.get(&lookup_key)?;
+                Some((
+                    parent_key,
+                    Object::new_serialized(
+                        parent_key.id,
+                        lookup_key.version,
+                        object.clone(),
+                        parent_key.checkpoint_viewed_at,
+                        // If `ParentVersionKey::parent_version` is set, it must have been correctly
+                        // propagated from the `Object::root_version` of some object.
+                        parent_key.parent_version,
+                    ),
+                ))
+            })
+            .collect();
 
         Ok(results)
     }
@@ -1475,12 +1524,74 @@ impl Loader<LatestAtKey> for Db {
     }
 }
 
+#[async_trait::async_trait]
+impl Loader<PointLookupKey> for Db {
+    type Value = Option<Vec<u8>>;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[PointLookupKey],
+    ) -> Result<HashMap<PointLookupKey, Option<Vec<u8>>>, Error> {
+        use full_objects_history::dsl as f;
+
+        let id_versions: BTreeSet<_> = keys
+            .iter()
+            .map(|key| (key.id.into_vec(), key.version as i64))
+            .collect();
+        let objects = self
+            .execute(move |conn| {
+                async {
+                    conn.results(move || {
+                        let mut query = f::full_objects_history
+                            .select(StoredFullHistoryObject::as_select())
+                            .into_boxed();
+
+                        for (id, version) in id_versions.iter() {
+                            query = query.or_filter(
+                                f::object_id
+                                    .eq(id.clone())
+                                    .and(f::object_version.eq(*version)),
+                            );
+                        }
+
+                        query
+                    })
+                    .await
+                }
+                .scope_boxed()
+            })
+            .await?;
+        let objects_map: HashMap<_, _> = objects
+            .into_iter()
+            .map(|o| {
+                (
+                    PointLookupKey {
+                        id: addr(&o.object_id).unwrap(),
+                        version: o.object_version as u64,
+                    },
+                    o.serialized_object,
+                )
+            })
+            .collect();
+
+        let result = keys
+            .iter()
+            .filter_map(|key| {
+                let serialized = objects_map.get(key)?;
+                Some((*key, serialized.clone()))
+            })
+            .collect();
+        Ok(result)
+    }
+}
+
 impl From<&ObjectKind> for ObjectStatus {
     fn from(kind: &ObjectKind) -> Self {
         match kind {
             ObjectKind::NotIndexed(_) => ObjectStatus::NotIndexed,
-            ObjectKind::Indexed(_, _) => ObjectStatus::Indexed,
-            ObjectKind::WrappedOrDeleted(_) => ObjectStatus::WrappedOrDeleted,
+            ObjectKind::Indexed(_, _) | ObjectKind::Serialized(_) => ObjectStatus::Indexed,
+            ObjectKind::WrappedOrDeleted => ObjectStatus::WrappedOrDeleted,
         }
     }
 }

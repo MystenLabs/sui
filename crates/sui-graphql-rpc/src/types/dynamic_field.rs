@@ -274,9 +274,11 @@ impl TryFrom<MoveObject> for DynamicField {
         let super_ = &stored.super_;
 
         let native = match &super_.kind {
-            ObjectKind::NotIndexed(native) | ObjectKind::Indexed(native, _) => native,
+            ObjectKind::NotIndexed(native) | ObjectKind::Indexed(native, _) => native.clone(),
+            ObjectKind::Serialized(bytes) => bcs::from_bytes(bytes)
+                .map_err(|e| Error::Internal(format!("Failed to deserialize object: {e}")))?,
 
-            ObjectKind::WrappedOrDeleted(_) => {
+            ObjectKind::WrappedOrDeleted => {
                 return Err(Error::Internal(
                     "DynamicField is wrapped or deleted.".to_string(),
                 ));
