@@ -161,7 +161,7 @@ public fun create_from_raw_value(value: u64): FixedPoint32 {
 }
 
 /// Create a fixedpoint value from a raw value.
-#[deprecated]
+#[deprecated(note = b"Use `to_raw` instead"]
 public fun create_from_raw_value(value: u64): FixedPoint32 {
     FixedPoint32 { value }
 }
