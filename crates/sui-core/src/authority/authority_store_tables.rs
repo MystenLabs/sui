@@ -148,6 +148,14 @@ impl AuthorityPerpetualTables {
         parent_path: &Path,
         db_options_override: Option<AuthorityPerpetualTablesOptions>,
     ) -> Self {
+        Self::open_with_registry(parent_path, db_options_override, &Registry::default())
+    }
+
+    pub fn open_with_registry(
+        parent_path: &Path,
+        db_options_override: Option<AuthorityPerpetualTablesOptions>,
+        registry: &Registry,
+    ) -> Self {
         let db_options_override = db_options_override.unwrap_or_default();
         let db_options =
             db_options_override.apply_to(default_db_options().optimize_db_for_write_throughput(4));
@@ -178,7 +186,7 @@ impl AuthorityPerpetualTables {
             ),
         ]));
         let path = Self::path(parent_path);
-        let thdb = open_thdb(&path);
+        let thdb = open_thdb(&path, registry);
         let kfs = 4;
         Self {
             objects: ThDbMap::new(&thdb, (0, kfs)),

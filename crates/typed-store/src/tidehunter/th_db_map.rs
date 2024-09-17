@@ -1,6 +1,7 @@
 use crate::rocks::be_fix_int_ser;
 use crate::Map;
 use bincode::Options;
+use prometheus::Registry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Borrow;
@@ -276,8 +277,10 @@ fn deserialize_key<K: DeserializeOwned>(v: &[u8]) -> K {
         .unwrap()
 }
 
-pub fn open_thdb(path: &Path) -> Arc<Db> {
+pub fn open_thdb(path: &Path, registry: &Registry) -> Arc<Db> {
     fs::create_dir_all(path).unwrap();
-    let db = Db::open(path, Arc::new(Config::default()), Metrics::new()).unwrap();
+    let metrics = Metrics::new_in(registry);
+    let config = Arc::new(Config::default());
+    let db = Db::open(path, config, metrics).unwrap();
     Arc::new(db)
 }
