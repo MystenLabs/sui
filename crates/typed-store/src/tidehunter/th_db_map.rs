@@ -1,19 +1,19 @@
+use crate::rocks::be_fix_int_ser;
+use crate::Map;
+use bincode::Options;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::borrow::Borrow;
 use std::fs;
 use std::marker::PhantomData;
 use std::ops::{Bound, RangeBounds};
 use std::path::Path;
 use std::sync::Arc;
-use bincode::Options;
-use serde::Serialize;
-use serde::de::DeserializeOwned;
 use tidehunter::batch::WriteBatch;
 use tidehunter::config::Config;
 use tidehunter::db::{Db, DbError};
 use tidehunter::metrics::Metrics;
 use typed_store_error::TypedStoreError;
-use crate::Map;
-use crate::rocks::{be_fix_int_ser};
 
 pub struct ThDbMap<K, V> {
     db: Arc<Db>,
@@ -50,7 +50,10 @@ where
     pub fn last_in_range(&self, from_included: &K, to_included: &K) -> Option<(K, V)> {
         let from_included = self.serialize_key(from_included).into();
         let to_included = self.serialize_key(to_included).into();
-        let (key, value) = self.db.last_in_range(&from_included, &to_included).unwrap()?;
+        let (key, value) = self
+            .db
+            .last_in_range(&from_included, &to_included)
+            .unwrap()?;
         Some((self.deserialize_key(&key), self.deserialize_value(&value)))
     }
 
@@ -82,23 +85,38 @@ where
 }
 
 impl ThDbBatch {
-    pub fn insert_batch<J: Borrow<K>, K: Serialize + DeserializeOwned, U: Borrow<V>, V: Serialize + DeserializeOwned>(
+    pub fn insert_batch<
+        J: Borrow<K>,
+        K: Serialize + DeserializeOwned,
+        U: Borrow<V>,
+        V: Serialize + DeserializeOwned,
+    >(
         &mut self,
         db: &ThDbMap<K, V>,
         new_vals: impl IntoIterator<Item = (J, U)>,
     ) -> Result<&mut Self, TypedStoreError> {
-        assert!(Arc::ptr_eq(&db.db, &self.db), "Cross db batch calls not allowed");
-        for (k,v ) in new_vals {
+        assert!(
+            Arc::ptr_eq(&db.db, &self.db),
+            "Cross db batch calls not allowed"
+        );
+        for (k, v) in new_vals {
             self.batch.write(db.serialize_key(k), db.serialize_value(v));
         }
         Ok(self)
     }
-    pub fn delete_batch<J: Borrow<K>, K: Serialize + DeserializeOwned, V: Serialize + DeserializeOwned>(
+    pub fn delete_batch<
+        J: Borrow<K>,
+        K: Serialize + DeserializeOwned,
+        V: Serialize + DeserializeOwned,
+    >(
         &mut self,
         db: &ThDbMap<K, V>,
         purged_vals: impl IntoIterator<Item = J>,
     ) -> Result<&mut Self, TypedStoreError> {
-        assert!(Arc::ptr_eq(&db.db, &self.db), "Cross db batch calls not allowed");
+        assert!(
+            Arc::ptr_eq(&db.db, &self.db),
+            "Cross db batch calls not allowed"
+        );
         for key in purged_vals {
             self.batch.delete(db.serialize_key(key.borrow()));
         }
@@ -106,29 +124,33 @@ impl ThDbBatch {
     }
 
     pub fn write(self) -> Result<(), TypedStoreError> {
-        self.db.write_batch(self.batch).map_err(typed_store_error_from_db_error)
+        self.db
+            .write_batch(self.batch)
+            .map_err(typed_store_error_from_db_error)
     }
 }
 
 impl<'a, K, V> Map<'a, K, V> for ThDbMap<K, V>
 where
     K: Serialize + DeserializeOwned,
-    V: Serialize + DeserializeOwned, {
+    V: Serialize + DeserializeOwned,
+{
     type Error = TypedStoreError;
-    type Iterator = Box<dyn Iterator<Item=(K, V)> + 'a>;
-    type SafeIterator = Box<dyn Iterator<Item=Result<(K, V), TypedStoreError>> + 'a>;
-    type Keys = Box<dyn Iterator<Item=Result<K, TypedStoreError>>>;
-    type Values = Box<dyn Iterator<Item=Result<V, TypedStoreError>>>;
+    type Iterator = Box<dyn Iterator<Item = (K, V)> + 'a>;
+    type SafeIterator = Box<dyn Iterator<Item = Result<(K, V), TypedStoreError>> + 'a>;
+    type Keys = Box<dyn Iterator<Item = Result<K, TypedStoreError>>>;
+    type Values = Box<dyn Iterator<Item = Result<V, TypedStoreError>>>;
 
     fn contains_key(&self, key: &K) -> Result<bool, Self::Error> {
         let key = self.serialize_key(key);
-        self.db.exists(&key).map_err(typed_store_error_from_db_error)
+        self.db
+            .exists(&key)
+            .map_err(typed_store_error_from_db_error)
     }
 
     fn get(&self, key: &K) -> Result<Option<V>, Self::Error> {
         let key = self.serialize_key(key);
-        let v = self.db.get(&key)
-            .map_err(typed_store_error_from_db_error)?;
+        let v = self.db.get(&key).map_err(typed_store_error_from_db_error)?;
         if let Some(v) = v {
             Ok(Some(self.deserialize_value(&v)))
         } else {
@@ -138,15 +160,16 @@ where
 
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error> {
         let key = self.serialize_key(key);
-        let v = self.db.get(&key)
-            .map_err(typed_store_error_from_db_error)?;
-        Ok(v.map(|v|v.into_vec()))
+        let v = self.db.get(&key).map_err(typed_store_error_from_db_error)?;
+        Ok(v.map(|v| v.into_vec()))
     }
 
     fn insert(&self, key: &K, value: &V) -> Result<(), Self::Error> {
         let key = self.serialize_key(key);
         let value = self.serialize_value(value);
-        self.db.insert(key, value).map_err(typed_store_error_from_db_error)
+        self.db
+            .insert(key, value)
+            .map_err(typed_store_error_from_db_error)
     }
 
     fn remove(&self, key: &K) -> Result<(), Self::Error> {
@@ -179,7 +202,11 @@ where
         }))
     }
 
-    fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>) -> Self::Iterator {
+    fn iter_with_bounds(
+        &'a self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Self::Iterator {
         todo!()
     }
 
@@ -191,8 +218,14 @@ where
         todo!()
     }
 
-    fn safe_iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>) -> Self::SafeIterator {
-        todo!()
+    fn safe_iter_with_bounds(
+        &'a self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Self::SafeIterator {
+        let lower_bound = lower_bound.expect("lower_bound required");
+        let upper_bound = upper_bound.expect("upper_bound required");
+        self.safe_range_iter(lower_bound..=upper_bound)
     }
 
     fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator {
@@ -209,7 +242,9 @@ where
 
         Box::new(self.db.range_ordered_iterator(start..end).map(|r| {
             let (k, v) = r.unwrap();
-            let key = self.checked_deserialize_key(&k).expect("Somehow got key from wrong key space");
+            let key = self
+                .checked_deserialize_key(&k)
+                .expect("Somehow got key from wrong key space");
             Ok((key, self.deserialize_value(&v)))
         }))
     }
