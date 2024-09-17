@@ -279,6 +279,7 @@ impl CompilationEnv {
         flags: Flags,
         mut visitors: Vec<cli::compiler::Visitor>,
         save_hooks: Vec<SaveHook>,
+        warning_filters: Option<WarningFilters>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
@@ -369,7 +370,7 @@ impl CompilationEnv {
             f.add(WarningFilter::All(None));
             Some(f)
         } else {
-            None
+            warning_filters
         };
         let top_level_warning_filter_scope =
             Box::leak(Box::new(WarningFiltersScope::new(top_level_warning_filter)));
@@ -451,6 +452,19 @@ impl CompilationEnv {
     pub fn add_diags(&mut self, warning_filters: &WarningFiltersScope, diags: Diagnostics) {
         for diag in diags.into_vec() {
             self.add_diag(warning_filters, diag)
+        }
+    }
+
+    /// Aborts if the diagnostic is a warning
+    pub fn add_error_diag(&mut self, diag: Diagnostic) {
+        assert!(diag.info().severity() > Severity::Warning);
+        self.add_diag(WarningFiltersScope::EMPTY, diag)
+    }
+
+    /// Aborts if any diagnostic is a warning
+    pub fn add_error_diags(&mut self, diags: Diagnostics) {
+        for diag in diags.into_vec() {
+            self.add_error_diag(diag)
         }
     }
 

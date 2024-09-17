@@ -376,11 +376,14 @@ impl Compiler {
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
         )?;
-        let mut compilation_env =
-            CompilationEnv::new(flags, visitors, save_hooks, package_configs, default_config);
-        if let Some(filter) = warning_filter {
-            compilation_env.add_warning_filter_scope(filter);
-        }
+        let mut compilation_env = CompilationEnv::new(
+            flags,
+            visitors,
+            save_hooks,
+            warning_filter,
+            package_configs,
+            default_config,
+        );
         for (prefix, filters) in known_warning_filters {
             compilation_env.add_custom_known_filters(prefix, filters)?;
         }
