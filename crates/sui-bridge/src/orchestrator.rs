@@ -29,7 +29,8 @@ pub struct BridgeOrchestrator<C> {
     sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
     eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
     store: Arc<BridgeOrchestratorTables>,
-    monitor_tx: mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
+    sui_monitor_tx: mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
+    eth_monitor_tx: mysten_metrics::metered_channel::Sender<EthBridgeEvent>,
     metrics: Arc<BridgeMetrics>,
 }
 
@@ -42,7 +43,8 @@ where
         sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
         eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
         store: Arc<BridgeOrchestratorTables>,
-        monitor_tx: mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
+        sui_monitor_tx: mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
+        eth_monitor_tx: mysten_metrics::metered_channel::Sender<EthBridgeEvent>,
         metrics: Arc<BridgeMetrics>,
     ) -> Self {
         Self {
@@ -50,7 +52,8 @@ where
             sui_events_rx,
             eth_events_rx,
             store,
-            monitor_tx,
+            sui_monitor_tx,
+            eth_monitor_tx,
             metrics,
         }
     }
@@ -72,7 +75,7 @@ where
             store_clone,
             executor_sender_clone,
             self.sui_events_rx,
-            self.monitor_tx,
+            self.sui_monitor_tx,
             metrics_clone,
         )));
         let store_clone = self.store.clone();
@@ -93,6 +96,7 @@ where
             store_clone,
             executor_sender,
             self.eth_events_rx,
+            self.eth_monitor_tx,
             metrics_clone,
         )));
 
@@ -193,6 +197,7 @@ where
             u64,
             Vec<EthLog>,
         )>,
+        eth_monitor_tx: mysten_metrics::metered_channel::Sender<EthBridgeEvent>,
         metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting eth watcher task");
@@ -226,6 +231,12 @@ where
                 let bridge_event = opt_bridge_event.unwrap();
                 info!("Observed Eth bridge event: {:?}", bridge_event);
 
+                // Send event to monitor
+                eth_monitor_tx
+                    .send(bridge_event.clone())
+                    .await
+                    .expect("Sending event to monitor channel should not fail");
+
                 match bridge_event.try_into_bridge_action(log.tx_hash, log.log_index_in_tx) {
                     Ok(Some(action)) => actions.push(action),
                     Ok(None) => {}
@@ -233,7 +244,6 @@ where
                         error!(eth_tx_hash=?log.tx_hash, eth_event_index=?log.log_index_in_tx, "Error converting EthBridgeEvent to BridgeAction: {:?}", e);
                     }
                 }
-                // TODO: handle non Action events
             }
             if !actions.is_empty() {
                 info!("Received {} actions from Eth: {:?}", actions.len(), actions);
@@ -285,8 +295,10 @@ mod tests {
             sui_events_rx,
             _eth_events_tx,
             eth_events_rx,
-            monitor_tx,
-            _monitor_rx,
+            sui_monitor_tx,
+            _sui_monitor_rx,
+            eth_monitor_tx,
+            _eth_monitor_rx,
             sui_client,
             store,
         ) = setup();
@@ -299,7 +311,8 @@ mod tests {
             sui_events_rx,
             eth_events_rx,
             store.clone(),
-            monitor_tx,
+            sui_monitor_tx,
+            eth_monitor_tx,
             metrics,
         )
         .run(executor)
@@ -349,8 +362,10 @@ mod tests {
             sui_events_rx,
             eth_events_tx,
             eth_events_rx,
-            monitor_tx,
-            _monitor_rx,
+            sui_monitor_tx,
+            _sui_monitor_rx,
+            eth_monitor_tx,
+            _eth_monitor_rx,
             sui_client,
             store,
         ) = setup();
@@ -363,7 +378,8 @@ mod tests {
             sui_events_rx,
             eth_events_rx,
             store.clone(),
-            monitor_tx,
+            sui_monitor_tx,
+            eth_monitor_tx,
             metrics,
         )
         .run(executor)
@@ -419,8 +435,10 @@ mod tests {
             sui_events_rx,
             _eth_events_tx,
             eth_events_rx,
-            monitor_tx,
-            _monitor_rx,
+            sui_monitor_tx,
+            _sui_monitor_rx,
+            eth_monitor_tx,
+            _eth_monitor_rx,
             sui_client,
             store,
         ) = setup();
@@ -449,7 +467,8 @@ mod tests {
             sui_events_rx,
             eth_events_rx,
             store.clone(),
-            monitor_tx,
+            sui_monitor_tx,
+            eth_monitor_tx,
             metrics,
         )
         .run(executor)
@@ -472,6 +491,8 @@ mod tests {
         mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
         mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
         mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
+        mysten_metrics::metered_channel::Sender<EthBridgeEvent>,
+        mysten_metrics::metered_channel::Receiver<EthBridgeEvent>,
         SuiClient<SuiMockClient>,
         Arc<BridgeOrchestratorTables>,
     ) {
@@ -502,20 +523,29 @@ mod tests {
                 .channel_inflight
                 .with_label_values(&["unit_test_sui_events_queue"]),
         );
-        let (monitor_tx, monitor_rx) = mysten_metrics::metered_channel::channel(
+        let (sui_monitor_tx, sui_monitor_rx) = mysten_metrics::metered_channel::channel(
             10000,
             &mysten_metrics::get_metrics()
                 .unwrap()
                 .channel_inflight
-                .with_label_values(&["monitor_queue"]),
+                .with_label_values(&["sui_monitor_queue"]),
+        );
+        let (eth_monitor_tx, eth_monitor_rx) = mysten_metrics::metered_channel::channel(
+            10000,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channel_inflight
+                .with_label_values(&["eth_monitor_queue"]),
         );
         (
             sui_events_tx,
             sui_events_rx,
             eth_events_tx,
             eth_events_rx,
-            monitor_tx,
-            monitor_rx,
+            sui_monitor_tx,
+            sui_monitor_rx,
+            eth_monitor_tx,
+            eth_monitor_rx,
             sui_client,
             store,
         )
