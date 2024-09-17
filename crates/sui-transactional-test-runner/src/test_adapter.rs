@@ -739,6 +739,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 sponsor,
                 gas_budget,
                 gas_price,
+                gas_payment,
                 dev_inspect,
                 inputs,
             }) => {
@@ -784,8 +785,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 let summary = if !dev_inspect {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
-                    let transaction =
-                        self.sign_sponsor_txn(sender, sponsor, |sender, sponsor, gas| {
+                    let transaction = self.sign_sponsor_txn(
+                        sender,
+                        sponsor,
+                        gas_payment,
+                        |sender, sponsor, gas| {
                             TransactionData::new_programmable_allow_sponsor(
                                 sender,
                                 vec![gas],
@@ -794,7 +798,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                                 gas_price,
                                 sponsor,
                             )
-                        });
+                        },
+                    );
                     self.execute_txn(transaction).await?
                 } else {
                     assert!(
@@ -1364,13 +1369,16 @@ impl<'a> SuiTestAdapter {
         sender: Option<String>,
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
     ) -> Transaction {
-        self.sign_sponsor_txn(sender, None, move |sender, _, gas| txn_data(sender, gas))
+        self.sign_sponsor_txn(sender, None, None, move |sender, _, gas| {
+            txn_data(sender, gas)
+        })
     }
 
     fn sign_sponsor_txn(
         &self,
         sender: Option<String>,
         sponsor: Option<String>,
+        payment: Option<FakeID>,
         txn_data: impl FnOnce(
             /* sender */ SuiAddress,
             /* sponsor */ SuiAddress,
@@ -1380,12 +1388,19 @@ impl<'a> SuiTestAdapter {
         let sender = self.get_sender(sender);
         let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
-        let gas_payment = self
-            .get_object(&sender.gas, None)
+        let payment = if let Some(payment) = payment {
+            self.fake_to_real_object_id(payment)
+                .expect("Could not find specified payment object")
+        } else {
+            sponsor.gas
+        };
+
+        let payment_ref = self
+            .get_object(&payment, None)
             .unwrap()
             .compute_object_reference();
 
-        let data = txn_data(sender.address, sponsor.address, gas_payment);
+        let data = txn_data(sender.address, sponsor.address, payment_ref);
         if sender.address == sponsor.address {
             to_sender_signed_transaction(data, &sender.key_pair)
         } else {
