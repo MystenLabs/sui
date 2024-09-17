@@ -265,6 +265,12 @@ impl From<ModuleId> for (AccountAddress, Identifier) {
     }
 }
 
+impl<'id> From<&'id ModuleId> for (&'id AccountAddress, &'id Identifier) {
+    fn from(module_id: &'id ModuleId) -> Self {
+        (&module_id.address, &module_id.name)
+    }
+}
+
 impl ModuleId {
     pub fn new(address: AccountAddress, name: Identifier) -> Self {
         ModuleId { address, name }

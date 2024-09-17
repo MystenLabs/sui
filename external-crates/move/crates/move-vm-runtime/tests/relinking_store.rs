@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_vm_2::on_chain::ast::PackageStorageId;
+use move_vm_runtime::on_chain::ast::PackageStorageId;
 
 use move_binary_format::CompiledModule;
 use move_core_types::{

@@ -10,21 +10,17 @@
 
 #![deny(unsafe_code)]
 
-pub mod data_cache;
-mod interpreter;
-mod loader;
-pub mod logging;
-pub mod move_vm;
-pub mod native_extensions;
-pub mod native_functions;
-pub mod runtime;
-pub mod session;
-#[macro_use]
-mod tracing;
+mod jit;
+mod shared;
+
+pub mod cache;
+pub mod natives;
+pub mod on_chain;
+pub mod vm;
+
+// #[macro_use]
+// mod tracing;
 
 // Only include debugging functionality in debug builds
-#[cfg(any(debug_assertions, feature = "debugging"))]
-mod debug;
-
-#[cfg(test)]
-mod unit_tests;
+// #[cfg(any(debug_assertions, feature = "debugging"))]
+// mod debug;

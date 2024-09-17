@@ -2216,32 +2216,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-vm-2"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "better_any",
- "bumpalo",
- "fail",
- "hex",
- "move-binary-format",
- "move-bytecode-verifier",
- "move-compiler",
- "move-core-types",
- "move-ir-compiler",
- "move-vm-config",
- "move-vm-profiler",
- "move-vm-test-utils",
- "move-vm-types",
- "once_cell",
- "parking_lot 0.11.2",
- "petgraph",
- "proptest",
- "smallvec",
- "tracing",
-]
-
-[[package]]
 name = "move-vm-config"
 version = "0.1.0"
 dependencies = [

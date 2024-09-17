@@ -1,14 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    data_cache::TransactionDataCache,
-    loader::ast::{PackageStorageId, RuntimePackageId},
-    loader::vm_cache::VMCache,
-    native_functions::NativeFunctions,
-};
+mod relinking_store;
+
 use anyhow::Result;
-use move_binary_format::{errors::VMResult, file_format::CompiledModule};
+use move_binary_format::errors::VMResult;
+use move_binary_format::file_format::CompiledModule;
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::WarningFilters,
@@ -16,15 +13,20 @@ use move_compiler::{
     shared::PackageConfig,
     Compiler as MoveCompiler,
 };
-use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::ModuleId;
+use move_vm_runtime::on_chain::ast::{PackageStorageId, RuntimePackageId};
+use move_vm_runtime::{
+    cache::vm_cache::VMCache, natives::functions::NativeFunctions,
+    on_chain::data_cache::TransactionDataCache,
 };
 use move_vm_config::runtime::VMConfig;
-use move_vm_test_utils::{relinking_store::RelinkingStore, InMemoryStorage};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::{Path, PathBuf},
-};
+use move_vm_test_utils::InMemoryStorage;
+use relinking_store::RelinkingStore;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub fn expect_modules(
     units: impl IntoIterator<Item = AnnotatedCompiledUnit>,
@@ -60,11 +62,18 @@ struct Adapter {
 impl Adapter {
     fn new() -> Self {
         let storage = RelinkingStore::new(InMemoryStorage::new());
-        let native_functions = NativeFunctions::new(vec![]).unwrap();
-        let vm_config = VMConfig::default();
+        let native_functions = Arc::new(NativeFunctions::empty_for_testing().unwrap());
+        let vm_config = Arc::new(VMConfig::default());
         let cache = VMCache::new(native_functions, vm_config);
         let storage = TransactionDataCache::new(storage);
         Self { storage, cache }
+    }
+
+    fn make_base_path() -> PathBuf {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("tests");
+        path.push("move_packages");
+        path
     }
 
     fn compile_and_insert_packages_into_storage(
@@ -72,10 +81,7 @@ impl Adapter {
         package_name: &str,
         root_address: AccountAddress,
     ) {
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.push("src");
-        path.push("unit_tests");
-        path.push("packages");
+        let mut path = Adapter::make_base_path();
         path.push(package_name);
         let modules = compile_modules_in_file(&path, vec![]).unwrap();
         assert!(!modules.is_empty(), "Tried to publish an empty package");
@@ -103,18 +109,12 @@ impl Adapter {
         package_name: &str,
         dependencies: &[&str],
     ) -> BTreeMap<RuntimePackageId, Vec<CompiledModule>> {
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.push("src");
-        path.push("unit_tests");
-        path.push("packages");
+        let mut path = Adapter::make_base_path();
         path.push(package_name);
         let deps = dependencies
             .iter()
             .map(|dep| {
-                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                path.push("src");
-                path.push("unit_tests");
-                path.push("packages");
+                let mut path = Adapter::make_base_path();
                 path.push(dep);
                 path.to_string_lossy().to_string()
             })
@@ -174,7 +174,7 @@ fn cache_package_internal_package_calls_only_no_types() {
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package1.move", package_address);
 
-    let result = adapter.cache.load_and_cache_link_context(&adapter.storage);
+    let result = adapter.cache.resolve_link_context(&adapter.storage);
 
     // Verify that we've loaded the package correctly
     let result = result.unwrap();
@@ -190,7 +190,7 @@ fn cache_package_internal_package_calls_only_with_types() {
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package2.move", package_address);
 
-    let result = adapter.cache.load_and_cache_link_context(&adapter.storage);
+    let result = adapter.cache.resolve_link_context(&adapter.storage);
 
     // Verify that we've loaded the package correctly
     let result = result.unwrap();
@@ -198,7 +198,10 @@ fn cache_package_internal_package_calls_only_with_types() {
     assert_eq!(l_pkg.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.storage_id, package_address);
     assert_eq!(l_pkg.vtable.binaries.len(), 3);
-    println!("{:#?}", adapter.cache.type_cache.read().cached_types.id_map);
+    println!(
+        "{:#?}",
+        adapter.cache.type_cache().read().cached_types.id_map
+    );
 }
 
 #[test]
@@ -207,7 +210,7 @@ fn cache_package_external_package_calls_no_types() {
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package3.move", package2_address);
-    let result = adapter.cache.load_and_cache_link_context(&adapter.storage);
+    let result = adapter.cache.resolve_link_context(&adapter.storage);
 
     // Verify that we've loaded the packages correctly
     let results = result.unwrap();
@@ -222,15 +225,21 @@ fn cache_package_external_package_calls_no_types() {
     assert_eq!(l_pkg.vtable.binaries.len(), 1);
 }
 
+/// Generate a new, dummy cachce for testing.
+fn dummy_cache_for_testing() -> VMCache {
+    let native_functions = Arc::new(NativeFunctions::new(vec![]).unwrap());
+    let config = Arc::new(VMConfig::default());
+    VMCache::new(native_functions, config)
+}
+
 #[test]
 fn load_package_internal_package_calls_only_no_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package1.move", package_address);
 
-    let loader = VMCache::new(native_functions, VMConfig::default());
-    let result = loader.load_and_cache_link_context(&adapter.storage);
+    let cache = dummy_cache_for_testing();
+    let result = cache.resolve_link_context(&adapter.storage);
 
     // Verify that we've loaded the package correctly
     let l_pkg = result.unwrap();
@@ -244,12 +253,11 @@ fn load_package_internal_package_calls_only_no_types() {
 #[test]
 fn load_package_internal_package_calls_only_with_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package1.move", package_address);
 
-    let loader = VMCache::new(native_functions, VMConfig::default());
-    let result = loader.load_and_cache_link_context(&adapter.storage);
+    let cache = dummy_cache_for_testing();
+    let result = cache.resolve_link_context(&adapter.storage);
 
     // Verify that we've loaded the package correctly
     let l_pkg = result.unwrap();
@@ -258,19 +266,18 @@ fn load_package_internal_package_calls_only_with_types() {
     assert_eq!(l_pkg.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.storage_id, package_address);
     assert_eq!(l_pkg.vtable.binaries.len(), 3);
-    println!("{:#?}", loader.type_cache.read().cached_types.id_map);
+    println!("{:#?}", cache.type_cache().read().cached_types.id_map);
 }
 
 #[test]
 fn load_package_external_package_calls_no_types() {
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package3.move", package2_address);
 
-    let loader = VMCache::new(native_functions, VMConfig::default());
+    let cache = dummy_cache_for_testing();
 
-    let result = loader.load_and_cache_link_context(&adapter.storage);
+    let result = cache.resolve_link_context(&adapter.storage);
 
     // Verify that we've loaded the package correctly
     let l_pkg = result.unwrap();
@@ -288,16 +295,15 @@ fn load_package_external_package_calls_no_types() {
 #[test]
 fn cache_package_external_package_type_references() {
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package4.move", package2_address);
 
-    let loader = VMCache::new(native_functions, VMConfig::default());
+    let cache = dummy_cache_for_testing();
 
-    let result1 = loader.load_and_cache_link_context(&adapter.storage);
+    let result1 = cache.resolve_link_context(&adapter.storage);
 
     assert!(result1.is_ok());
-    assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 7);
+    assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 7);
 }
 
 #[test]
@@ -346,34 +352,32 @@ fn cache_package_external_generic_call_type_references() {
 fn cache_package_external_package_type_references_cache_reload() {
     let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package4.move", package1_address);
 
-    let loader = VMCache::new(native_functions, VMConfig::default());
+    let cache = dummy_cache_for_testing();
 
-    let result1 = loader.load_and_cache_link_context(&adapter.storage);
+    let result1 = cache.resolve_link_context(&adapter.storage);
     assert!(result1.is_ok());
-    assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 4);
+    assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 4);
 
     adapter.storage.get_remote_resolver_mut().context = package2_address;
-    let result2 = loader.load_and_cache_link_context(&adapter.storage);
+    let result2 = cache.resolve_link_context(&adapter.storage);
     assert!(result2.is_ok());
-    assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 7);
+    assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 7);
 }
 
 #[test]
 fn cache_package_external_package_type_references_with_shared_dep() {
     let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package5.move", package3_address);
 
-    let loader = VMCache::new(native_functions, VMConfig::default());
-    let result = loader.load_and_cache_link_context(&adapter.storage);
+    let cache = dummy_cache_for_testing();
+    let result = cache.resolve_link_context(&adapter.storage);
 
     assert!(result.is_ok());
-    assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 10);
+    assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 10);
 }
 
 #[test]
@@ -381,44 +385,42 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package5.move", package1_address);
 
     // Load from the bottom up
-    let loader = VMCache::new(native_functions, VMConfig::default());
-    let result1 = loader.load_and_cache_link_context(&adapter.storage);
+    let cache = dummy_cache_for_testing();
+    let result1 = cache.resolve_link_context(&adapter.storage);
     assert!(result1.is_ok());
-    assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 4);
+    assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 4);
 
     adapter.storage.get_remote_resolver_mut().context = package2_address;
-    let result2 = loader.load_and_cache_link_context(&adapter.storage);
+    let result2 = cache.resolve_link_context(&adapter.storage);
     assert!(result2.is_ok());
-    assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 7);
+    assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 7);
 
     adapter.storage.get_remote_resolver_mut().context = package3_address;
-    let result3 = loader.load_and_cache_link_context(&adapter.storage);
+    let result3 = cache.resolve_link_context(&adapter.storage);
     assert!(result3.is_ok());
-    assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 10);
+    assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 10);
 
     // Now load it the other way -- from the top down
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
-    let loader = VMCache::new(native_functions, VMConfig::default());
+    let cache = dummy_cache_for_testing();
 
     adapter.storage.get_remote_resolver_mut().context = package3_address;
-    let result3 = loader.load_and_cache_link_context(&adapter.storage);
+    let result3 = cache.resolve_link_context(&adapter.storage);
     assert!(result3.is_ok());
-    assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 10);
+    assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 10);
 
     adapter.storage.get_remote_resolver_mut().context = package1_address;
-    let result1 = loader.load_and_cache_link_context(&adapter.storage);
+    let result1 = cache.resolve_link_context(&adapter.storage);
     assert!(result1.is_ok());
-    assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 10);
+    assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 10);
 
     adapter.storage.get_remote_resolver_mut().context = package2_address;
-    let result2 = loader.load_and_cache_link_context(&adapter.storage);
+    let result2 = cache.resolve_link_context(&adapter.storage);
     assert!(result2.is_ok());
-    assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 10);
+    assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 10);
 }
 
 #[test]
@@ -482,7 +484,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache.read().len(), 1);
+    assert_eq!(adapter.cache.package_cache().read().len(), 1);
 
     // publish c v1
     let packages = adapter.compile_packages("rt_c_v1.move", &[]);
@@ -506,7 +508,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache.read().len(), 2);
+    assert_eq!(adapter.cache.package_cache().read().len(), 2);
 
     // publish b_v0 <- c_v0
     let packages = adapter.compile_packages("rt_b_v0.move", &["rt_c_v0.move"]);
@@ -522,7 +524,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache.read().len(), 3);
+    assert_eq!(adapter.cache.package_cache().read().len(), 3);
 
     // publish b_v0 <- c_v1
     let packages = adapter.compile_packages("rt_b_v0.move", &["rt_c_v1.move"]);
@@ -555,7 +557,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache.read().len(), 4);
+    assert_eq!(adapter.cache.package_cache().read().len(), 4);
 
     // publish a_v0 <- c_v1 && b_v0
     let packages = adapter.compile_packages("rt_a_v0.move", &["rt_c_v1.move", "rt_b_v0.move"]);
@@ -588,7 +590,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache.read().len(), 5);
+    assert_eq!(adapter.cache.package_cache().read().len(), 5);
 
     // publish a_v0 <- c_v0 && b_v0 -- ERROR since a_v0 requires c_v1+
     let packages = adapter.compile_packages("rt_a_v0.move", &["rt_c_v1.move", "rt_b_v0.move"]);
@@ -613,5 +615,5 @@ fn relink() {
         .unwrap_err();
 
     // cache stays the same since the publish failed
-    assert_eq!(adapter.cache.package_cache.read().len(), 5);
+    assert_eq!(adapter.cache.package_cache().read().len(), 5);
 }
