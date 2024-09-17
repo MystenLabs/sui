@@ -846,15 +846,11 @@ module std::vector_tests {
     fun profile_30_insertion_sort_by() {
         let mut unsorted = UNSORTED_30;
         unsorted.insertion_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
     }
 
     #[test]
     fun profile_30_merge_sort_by() {
         let mut unsorted = UNSORTED_30;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
         unsorted.merge_sort_by!(|a, b| *a < *b);
     }
 
@@ -862,15 +858,11 @@ module std::vector_tests {
     fun profile_40_insertion_sort_by() {
         let mut unsorted = UNSORTED_40;
         unsorted.insertion_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
     }
 
     #[test]
     fun profile_40_merge_sort_by() {
         let mut unsorted = UNSORTED_40;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
         unsorted.merge_sort_by!(|a, b| *a < *b);
     }
 
@@ -878,15 +870,11 @@ module std::vector_tests {
     fun profile_50_insertion_sort_by() {
         let mut unsorted = UNSORTED_50;
         unsorted.insertion_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
     }
 
     #[test]
     fun profile_50_merge_sort_by() {
         let mut unsorted = UNSORTED_50;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
         unsorted.merge_sort_by!(|a, b| *a < *b);
     }
 
@@ -894,15 +882,11 @@ module std::vector_tests {
     fun profile_100_insertion_sort_by() {
         let mut unsorted = UNSORTED_100;
         unsorted.insertion_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
     }
 
     #[test]
     fun profile_100_merge_sort_by() {
         let mut unsorted = UNSORTED_100;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
         unsorted.merge_sort_by!(|a, b| *a < *b);
     }
 
@@ -910,12 +894,88 @@ module std::vector_tests {
     fun profile_1000_insertion_sort_by() {
         let mut unsorted = UNSORTED_1000;
         unsorted.insertion_sort_by!(|a, b| *a < *b);
+    }
+
+    #[test]
+    fun profile_1000_merge_sort_by() {
+        let mut unsorted = UNSORTED_1000;
+        unsorted.merge_sort_by!(|a, b| *a < *b);
+    }
+
+    #[test]
+    fun reverse_profile_30_insertion_sort_by() {
+        let mut unsorted = UNSORTED_30;
+        unsorted.insertion_sort_by!(|a, b| *a < *b);
         unsorted.reverse();
         unsorted.insertion_sort_by!(|a, b| *a < *b);
     }
 
     #[test]
-    fun profile_1000_merge_sort_by() {
+    fun reverse_profile_30_merge_sort_by() {
+        let mut unsorted = UNSORTED_30;
+        unsorted.merge_sort_by!(|a, b| *a < *b);
+        unsorted.reverse();
+        unsorted.merge_sort_by!(|a, b| *a < *b);
+    }
+
+    #[test]
+    fun reverse_profile_40_insertion_sort_by() {
+        let mut unsorted = UNSORTED_40;
+        unsorted.insertion_sort_by!(|a, b| *a < *b);
+        unsorted.reverse();
+        unsorted.insertion_sort_by!(|a, b| *a < *b);
+    }
+
+    #[test]
+    fun reverse_profile_40_merge_sort_by() {
+        let mut unsorted = UNSORTED_40;
+        unsorted.merge_sort_by!(|a, b| *a < *b);
+        unsorted.reverse();
+        unsorted.merge_sort_by!(|a, b| *a < *b);
+    }
+
+    #[test]
+    fun reverse_profile_50_insertion_sort_by() {
+        let mut unsorted = UNSORTED_50;
+        unsorted.insertion_sort_by!(|a, b| *a < *b);
+        unsorted.reverse();
+        unsorted.insertion_sort_by!(|a, b| *a < *b);
+    }
+
+    #[test]
+    fun reverse_profile_50_merge_sort_by() {
+        let mut unsorted = UNSORTED_50;
+        unsorted.merge_sort_by!(|a, b| *a < *b);
+        unsorted.reverse();
+        unsorted.merge_sort_by!(|a, b| *a < *b);
+    }
+
+    #[test]
+    fun reverse_profile_100_insertion_sort_by() {
+        let mut unsorted = UNSORTED_100;
+        unsorted.insertion_sort_by!(|a, b| *a < *b);
+        unsorted.reverse();
+        unsorted.insertion_sort_by!(|a, b| *a < *b);
+    }
+
+    #[test]
+    fun reverse_profile_100_merge_sort_by() {
+        let mut unsorted = UNSORTED_100;
+        unsorted.merge_sort_by!(|a, b| *a < *b);
+        unsorted.reverse();
+        unsorted.merge_sort_by!(|a, b| *a < *b);
+    }
+
+    #[test]
+    fun reverse_profile_1000_insertion_sort_by() {
+        let mut unsorted = UNSORTED_1000;
+        unsorted.insertion_sort_by!(|a, b| *a < *b);
+        unsorted.reverse();
+        unsorted.insertion_sort_by!(|a, b| *a < *b);
+    }
+
+    #[test]
+    fun reverse_profile_1000_merge_sort_by() {
         let mut unsorted = UNSORTED_1000;
         unsorted.merge_sort_by!(|a, b| *a < *b);
         unsorted.reverse();
