@@ -18,7 +18,7 @@ use std::{
 use sui_tls::Allower;
 use sui_types::bridge::BridgeSummary;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 static JSON_RPC_STATE: Lazy<CounterVec> = Lazy::new(|| {
@@ -372,7 +372,7 @@ async fn extract_bridge(
                 let url_str = match String::from_utf8(cm.http_rest_url) {
                     Ok(url) => url,
                     Err(_) => {
-                        error!(
+                        warn!(
                             address =% cm.sui_address,
                             "Invalid UTF-8 sequence in http_rest_url for bridge node ",
                         );
@@ -383,7 +383,7 @@ async fn extract_bridge(
                 let mut bridge_url = match Url::parse(&url_str) {
                     Ok(url) => url,
                     Err(_) => {
-                        error!(url_str, "Unable to parse http_rest_url");
+                        warn!(url_str, "Unable to parse http_rest_url");
                         return None;
                     }
                 };
@@ -393,7 +393,7 @@ async fn extract_bridge(
                 let bridge_host = match bridge_url.host_str() {
                     Some(host) => host,
                     None => {
-                        error!(url_str, "Hostname is missing from http_rest_url");
+                        warn!(url_str, "Hostname is missing from http_rest_url");
                         return None;
                     }
                 };
@@ -406,7 +406,7 @@ async fn extract_bridge(
                         let metrics_pub_key: String = match serde_json::from_slice(&raw) {
                             Ok(key) => key,
                             Err(error) => {
-                                error!(?error, url_str, "Failed to deserialize response");
+                                warn!(?error, url_str, "Failed to deserialize response");
                                 return fallback_to_cached_key(
                                     &metrics_keys,
                                     &url_str,
@@ -417,7 +417,7 @@ async fn extract_bridge(
                         let metrics_bytes = match Base64::decode(&metrics_pub_key) {
                             Ok(pubkey_bytes) => pubkey_bytes,
                             Err(error) => {
-                                error!(
+                                warn!(
                                     ?error,
                                     bridge_name, "unable to decode public key for bridge node",
                                 );
@@ -432,7 +432,7 @@ async fn extract_bridge(
                                 pubkey
                             }
                             Err(error) => {
-                                error!(
+                                warn!(
                                     ?error,
                                     bridge_request_url,
                                     "unable to decode public key for bridge node",
