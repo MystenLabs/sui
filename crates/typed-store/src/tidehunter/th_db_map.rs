@@ -207,11 +207,13 @@ where
         lower_bound: Option<K>,
         upper_bound: Option<K>,
     ) -> Self::Iterator {
-        todo!()
+        let lower_bound = lower_bound.expect("lower_bound required");
+        let upper_bound = upper_bound.expect("upper_bound required");
+        self.range_iter(lower_bound..=upper_bound)
     }
 
     fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator {
-        todo!()
+        Box::new(self.safe_range_iter(range).map(|r| r.unwrap()))
     }
 
     fn safe_iter(&'a self) -> Self::SafeIterator {
