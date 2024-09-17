@@ -117,7 +117,7 @@ pub struct AuthorityPerpetualTables {
     pub(crate) epoch_start_configuration: ThDbMap<(), EpochStartConfiguration>,
 
     /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
-    pub(crate) pruned_checkpoint: ThDbMap<(), CheckpointSequenceNumber>,
+    pub pruned_checkpoint: ThDbMap<(), CheckpointSequenceNumber>,
 
     /// Expected total amount of SUI in the network. This is expected to remain constant
     /// throughout the lifetime of the network. We check it at the end of each epoch if
