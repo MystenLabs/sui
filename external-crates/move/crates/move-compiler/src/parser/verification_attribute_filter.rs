@@ -56,6 +56,7 @@ impl FilterContext for Context<'_> {
         // expansion
         // Ideally we would just have a warning filter scope here
         // (but again, need expansion for that)
+        let top_warning_filter_scope = self.env.top_level_warning_filter_scope();
         let silence_warning =
             !self.is_source_def || self.env.package_config(self.current_package).is_dependency;
         if !silence_warning {
@@ -64,8 +65,10 @@ impl FilterContext for Context<'_> {
                     "The '{}' attribute has been deprecated along with specification blocks",
                     VerificationAttribute::VERIFY_ONLY
                 );
-                self.env
-                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)));
+                self.env.add_diag(
+                    top_warning_filter_scope,
+                    diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)),
+                );
             }
         }
         should_remove

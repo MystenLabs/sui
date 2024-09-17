@@ -106,11 +106,6 @@ enum UnprefixedWarningFilters {
     Empty,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct WarningFiltersScope {
-    scopes: Vec<WarningFilters>,
-}
-
 #[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord)]
 enum MigrationChange {
     AddMut,
@@ -973,30 +968,6 @@ impl UnprefixedWarningFilters {
             categories: BTreeMap::new(),
             codes: filtered_codes,
         }
-    }
-}
-
-impl WarningFiltersScope {
-    pub fn new(top_level_warning_filter: Option<WarningFilters>) -> Self {
-        Self {
-            scopes: top_level_warning_filter.into_iter().collect(),
-        }
-    }
-
-    pub fn push(&mut self, filters: WarningFilters) {
-        self.scopes.push(filters)
-    }
-
-    pub fn pop(&mut self) {
-        self.scopes.pop();
-    }
-
-    pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
-        self.scopes.iter().any(|filters| filters.is_filtered(diag))
-    }
-
-    pub fn is_filtered_for_dependency(&self) -> bool {
-        self.scopes.iter().any(|filters| filters.for_dependency())
     }
 }
 

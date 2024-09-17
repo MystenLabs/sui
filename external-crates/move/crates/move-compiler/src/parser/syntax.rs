@@ -72,7 +72,8 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
     }
 
     fn add_diag(&mut self, diag: Diagnostic) {
-        self.env.add_diag(diag);
+        let warning_filters = self.env.top_level_warning_filter_scope();
+        self.env.add_diag(warning_filters, diag);
     }
 }
 
@@ -758,15 +759,13 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
                 "Macro invocation are disallowed here. Expected {}",
                 item_description()
             );
-            context
-                .env
-                .add_diag(diag!(Syntax::InvalidName, (*loc, msg)));
+            context.add_diag(diag!(Syntax::InvalidName, (*loc, msg)));
             is_macro = None;
         }
     }
     if let Some(sp!(ty_loc, _)) = tys {
         if !tyargs_allowed {
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Syntax::InvalidName,
                 (
                     ty_loc,
@@ -845,7 +844,7 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
             parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, name.loc);
         if let Some(loc) = &is_macro {
             if !macros_allowed {
-                context.env.add_diag(diag!(
+                context.add_diag(diag!(
                     Syntax::InvalidName,
                     (
                         *loc,
@@ -857,7 +856,7 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
         }
         if let Some(sp!(ty_loc, _)) = tys {
             if !tyargs_allowed {
-                context.env.add_diag(diag!(
+                context.add_diag(diag!(
                     Syntax::InvalidName,
                     (
                         ty_loc,
@@ -870,7 +869,7 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
 
         path.push_path_entry(name, tys, is_macro)
             .into_iter()
-            .for_each(|diag| context.env.add_diag(diag));
+            .for_each(|diag| context.add_diag(diag));
     }
     Ok(NameAccessChain_::Path(path))
 }
@@ -2124,7 +2123,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                                 Syntax::UnexpectedToken,
                                 (loc, "Invalid 'mut' keyword on non-variable pattern")
                             );
-                            context.env.add_diag(diag);
+                            context.add_diag(diag);
                         }
                     }
 
@@ -2946,9 +2945,7 @@ fn parse_type_(
         }
         _ => {
             if context.at_stop_set() {
-                context
-                    .env
-                    .add_diag(*unexpected_token_error(context.tokens, "a type name"));
+                context.add_diag(*unexpected_token_error(context.tokens, "a type name"));
                 Type_::UnresolvedError
             } else {
                 let tn = if whitespace_sensitive_ty_args {
@@ -3502,7 +3499,7 @@ fn check_enum_visibility(visibility: Option<Visibility>, context: &mut Context) 
             let note = "Visibility annotations are required on enum declarations.";
             let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
             err.add_note(note);
-            context.env.add_diag(err);
+            context.add_diag(err);
         }
     }
 }
@@ -3952,9 +3949,7 @@ fn parse_address_block(
                     addr_name.loc.start() as usize,
                     context.tokens.current_token_loc().end() as usize,
                 );
-                context
-                    .env
-                    .add_diag(diag!(Migration::AddressRemove, (loc, "address decl")));
+                context.add_diag(diag!(Migration::AddressRemove, (loc, "address decl")));
             }
             context.tokens.advance()?;
             let mut modules = vec![];
@@ -3969,7 +3964,7 @@ fn parse_address_block(
                     let (module, next_mod_attributes) = parse_module(attributes, context)?;
 
                     if in_migration_mode {
-                        context.env.add_diag(diag!(
+                        context.add_diag(diag!(
                             Migration::AddressAdd,
                             (
                                 module.name.loc(),
@@ -3989,7 +3984,7 @@ fn parse_address_block(
             }
             for module in &modules {
                 if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon) {
-                    context.env.add_diag(diag!(
+                    context.add_diag(diag!(
                         Declarations::InvalidModule,
                         (
                             module.name.loc(),
@@ -4001,9 +3996,7 @@ fn parse_address_block(
 
             if in_migration_mode {
                 let loc = context.tokens.current_token_loc();
-                context
-                    .env
-                    .add_diag(diag!(Migration::AddressRemove, (loc, "close lbrace")));
+                context.add_diag(diag!(Migration::AddressRemove, (loc, "close lbrace")));
             }
 
             consume_token(context.tokens, context.tokens.peek())?;
@@ -4023,7 +4016,7 @@ fn parse_address_block(
                 format!("Replace with '{}::{}'", addr, module.name),
             ));
         }
-        context.env.add_diag(diag);
+        context.add_diag(diag);
     }
 
     Ok(AddressDefinition {
@@ -4054,7 +4047,7 @@ fn parse_friend_decl(
         || "a friend declaration",
     )?;
     if friend.value.is_macro().is_some() || friend.value.has_tyargs() {
-        context.env.add_diag(diag!(
+        context.add_diag(diag!(
             Syntax::InvalidName,
             (friend.loc, "Invalid 'friend' name")
         ))
@@ -4669,7 +4662,7 @@ fn parse_file_def(
                             "Either move each 'module' label and definitions into its own file or \
                             define each as 'module <name> { contents }'",
                         );
-                        context.env.add_diag(diag);
+                        context.add_diag(diag);
                     }
                 }
                 defs.push(Definition::Module(module));

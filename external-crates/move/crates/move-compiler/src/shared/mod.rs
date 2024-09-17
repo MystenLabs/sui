@@ -237,9 +237,7 @@ pub type FilterName = Symbol;
 
 pub struct CompilationEnv {
     flags: Flags,
-    // // filters warnings when added.
-    // warning_filter: Vec<WarningFilters>,
-    top_level_warning_filter: Option<WarningFilters>,
+    top_level_warning_filter_scope: &'static WarningFiltersScope,
     diags: Diagnostics,
     visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
@@ -373,13 +371,15 @@ impl CompilationEnv {
         } else {
             None
         };
+        let top_level_warning_filter_scope =
+            Box::leak(Box::new(WarningFiltersScope::new(top_level_warning_filter)));
         let mut diags = Diagnostics::new();
         if flags.json_errors() {
             diags.set_format(DiagnosticsFormat::JSON);
         }
         Self {
             flags,
-            top_level_warning_filter,
+            top_level_warning_filter_scope,
             diags,
             visitors: Visitors::new(visitors),
             package_configs,
@@ -406,8 +406,8 @@ impl CompilationEnv {
         &self.mapped_files
     }
 
-    pub fn top_level_warning_filter_scope(&self) -> WarningFiltersScope {
-        WarningFiltersScope::new(self.top_level_warning_filter.clone())
+    pub fn top_level_warning_filter_scope(&self) -> &'static WarningFiltersScope {
+        self.top_level_warning_filter_scope
     }
 
     pub fn add_diag(&mut self, warning_filters: &WarningFiltersScope, mut diag: Diagnostic) {
@@ -497,29 +497,6 @@ impl CompilationEnv {
         debug_assert!(final_diags.max_severity_at_or_under_severity(Severity::Warning));
         final_diags
     }
-
-    /// Add a new filter for warnings
-    // pub fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-    //     self.warning_filter.push(filter)
-    // }
-
-    // pub fn pop_warning_filter_scope(&mut self) {
-    //     self.warning_filter.pop().unwrap();
-    // }
-
-    // fn is_filtered(&self, diag: &Diagnostic) -> bool {
-    //     self.warning_filter
-    //         .iter()
-    //         .rev()
-    //         .any(|filter| filter.is_filtered(diag))
-    // }
-
-    // fn filter_for_dependency(&self) -> bool {
-    //     self.warning_filter
-    //         .iter()
-    //         .rev()
-    //         .any(|filter| filter.for_dependency())
-    // }
 
     pub fn known_filter_names(&self) -> impl IntoIterator<Item = FilterPrefix> + '_ {
         self.known_filters.keys().copied()
