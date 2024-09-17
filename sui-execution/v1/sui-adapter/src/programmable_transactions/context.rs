@@ -7,7 +7,7 @@ pub use checked::*;
 mod checked {
     use std::{
         borrow::Borrow,
-        collections::{BTreeMap, HashMap},
+        collections::{BTreeMap, BTreeSet, HashMap},
         sync::Arc,
     };
 
@@ -1444,6 +1444,14 @@ mod checked {
             // we cannot panic here because during execution and publishing this is
             // currently called from the publish flow in the Move runtime
             Ok(())
+        }
+
+        fn load_package(&self, _package_id: &AccountAddress) -> VMResult<Vec<Vec<u8>>> {
+            todo!()
+        }
+
+        fn all_package_dependencies(&self) -> VMResult<BTreeSet<AccountAddress>> {
+            todo!()
         }
     }
 }
