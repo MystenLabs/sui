@@ -252,11 +252,11 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     // Print it out to CLI/logs
     resp.print(true);
 
-    let SuiClientCommandResult::TransactionBlock(ref response) = resp else {
+    let SuiClientCommandResult::TransactionBlock(response) = resp else {
         unreachable!("Invalid response");
     };
 
-    let SuiTransactionBlockEffects::V1(effects) = response.effects.as_ref().unwrap();
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
 
     assert!(effects.status.is_ok());
     assert_eq!(effects.gas_object().object_id(), gas_obj_id);
@@ -1072,12 +1072,12 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(ref response) = resp {
+    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
             gas_obj_id
         );
-        let x = response.effects.as_ref().unwrap();
+        let x = response.effects.unwrap();
         x.created().to_vec()
     } else {
         unreachable!("Invalid response");
@@ -1232,8 +1232,8 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     .await?;
 
     let (parent, child) =
-        if let SuiClientCommandResult::TransactionBlock(ref response) = start_call_result {
-            let created = response.effects.as_ref().unwrap().created().to_vec();
+        if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
+            let created = response.effects.unwrap().created().to_vec();
             let owners: BTreeSet<ObjectID> = created
                 .iter()
                 .flat_map(|refe| {
@@ -1320,12 +1320,12 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(ref response) = resp {
+    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
             gas_obj_id
         );
-        let x = response.effects.as_ref().unwrap();
+        let x = response.effects.unwrap();
         x.created().to_vec()
     } else {
         unreachable!("Invalid response");
@@ -2543,7 +2543,6 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-
     let g = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         assert_eq!(r.effects.as_ref().unwrap().gas_object().object_id(), gas);
@@ -3633,7 +3632,6 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-
     // transfer command will transfer the object_id1 to address2, and use object_id2 as gas
     // we check if object1 is owned by address 2 and if the gas object used is object_id2
     if let SuiClientCommandResult::TransactionBlock(response) = transfer {
@@ -3670,8 +3668,8 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     let (mut test_cluster, client, rgp, objects, recipients, addresses) =
         test_cluster_helper().await;
     let object_id1 = objects[0];
-    let address2 = addresses[0];
     let recipient1 = &recipients[0];
+    let address2 = addresses[0];
     let context = &mut test_cluster.wallet;
     let amount = 1000;
     let transfer_sui = SuiClientCommands::TransferSui {
@@ -3714,7 +3712,6 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     } else {
         panic!("TransferSui test failed");
     }
-
     // transfer the whole object by not passing an amount
     let transfer_sui = SuiClientCommands::TransferSui {
         to: recipient1.clone(),
@@ -3724,7 +3721,6 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
         assert!(response.status_ok().unwrap());
         assert_eq!(
@@ -3785,7 +3781,6 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
     .execute(context)
     .await
     .unwrap();
-
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui_cmd {
         assert!(response.status_ok().unwrap());
         let gas_used = response.effects.as_ref().unwrap().gas_object().object_id();
