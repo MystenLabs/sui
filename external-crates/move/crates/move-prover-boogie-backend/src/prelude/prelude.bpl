@@ -25,10 +25,17 @@ options provided to the prover.
 {%- endif %}
 
 // Prover
+procedure {:inline 1} $ShlBvBv256From8(src1: bv256, src2: bv8) returns (dst: bv256) {
+    call dst := $ShlBv256From8(src1, src2);
+}
+
 procedure {:inline 1} $0_prover_requires(p: bool) {
     assume p;
 }
 procedure {:inline 1} $0_prover_ensures(p: bool) {
+    assert {:msg "assert_failed(0,0,0): assertion does not hold"} p;
+}
+procedure {:inline 1} $0_prover_asserts(p: bool) {
     assert {:msg "assert_failed(0,0,0): assertion does not hold"} p;
 }
 
@@ -160,6 +167,14 @@ procedure {:inline 1} $0_prover_aborts_end() {}
 procedure {:inline 1} $0_prover_invariant_begin() {}
 procedure {:inline 1} $0_prover_invariant_end() {}
 
+procedure {:inline 1} $0_prover_val'$0_house_House'#0''(x: $0_house_House'#0') returns (y: $0_house_House'#0') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_ref'$0_house_House'#0''(x: $0_house_House'#0') returns (y: $0_house_House'#0') {
+    y := x;
+}
+
+/*
 procedure {:inline 1} $0_prover_val'address'(x: int) returns (y: int) {
     y := x;
 }
@@ -167,9 +182,6 @@ procedure {:inline 1} $0_prover_val'$2_balance_Balance'#0''(x: $2_balance_Balanc
     y := x;
 }
 procedure {:inline 1} $0_prover_val'$2_coin_Coin'#0''(x: $2_coin_Coin'#0') returns (y: $2_coin_Coin'#0') {
-    y := x;
-}
-procedure {:inline 1} $0_prover_val'$0_house_House'#0''(x: $0_house_House'#0') returns (y: $0_house_House'#0') {
     y := x;
 }
 procedure {:inline 1} $0_prover_val'$2_balance_Balance'$0_house_StakedHouseCoin'#0'''(x: $2_balance_Balance'$0_house_StakedHouseCoin'#0'') returns (y: $2_balance_Balance'$0_house_StakedHouseCoin'#0'') {
@@ -187,9 +199,6 @@ procedure {:inline 1} $0_prover_ref'$2_balance_Balance'#0''(x: $2_balance_Balanc
 procedure {:inline 1} $0_prover_ref'$2_coin_Coin'#0''(x: $2_coin_Coin'#0') returns (y: $2_coin_Coin'#0') {
     y := x;
 }
-procedure {:inline 1} $0_prover_ref'$0_house_House'#0''(x: $0_house_House'#0') returns (y: $0_house_House'#0') {
-    y := x;
-}
 procedure {:inline 1} $0_prover_ref'$2_balance_Balance'$0_house_StakedHouseCoin'#0'''(x: $2_balance_Balance'$0_house_StakedHouseCoin'#0'') returns (y: $2_balance_Balance'$0_house_StakedHouseCoin'#0'') {
     y := x;
 }
@@ -202,6 +211,7 @@ procedure {:inline 1} $0_prover_drop'$2_coin_Coin'#0''(x: $2_coin_Coin'#0') {}
 procedure {:inline 1} $0_prover_drop'$0_house_House'#0''(x: $0_house_House'#0') {}
 procedure {:inline 1} $0_prover_drop'$2_balance_Balance'$0_house_StakedHouseCoin'#0'''(x: $2_balance_Balance'$0_house_StakedHouseCoin'#0'') {}
 procedure {:inline 1} $0_prover_drop'$2_coin_Coin'$0_house_StakedHouseCoin'#0'''(x: $2_coin_Coin'$0_house_StakedHouseCoin'#0'') {}
+*/
 
 // temporary specs for sui native functions
 procedure {:inline 1} $2_tx_context_derive_id(x: Vec (int), y: int) returns (z: int) {}

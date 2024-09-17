@@ -221,7 +221,7 @@ impl BoogieOptions {
             add(&[&format!("-proverOpt:PROVER_PATH={}", &self.z3_exe)]);
         }
         if self.use_array_theory {
-            add(&["-useArrayTheory"]);
+            add(&["-useArrayAxioms"]);
             if matches!(self.vector_theory, VectorTheory::SmtArray) {
                 add(&["/proverOpt:O:smt.array.extensional=false"])
             }

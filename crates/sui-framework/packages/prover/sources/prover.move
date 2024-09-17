@@ -2,6 +2,7 @@
 module prover::prover {
     native public fun requires(p: bool);
     native public fun ensures(p: bool);
+    native public fun asserts(p: bool);
     public macro fun loop_invariant($invariants: ||) {
         invariant_begin();
         $invariants();
@@ -70,10 +71,6 @@ module prover::prover {
     native public fun aborts_end();
     native public fun invariant_begin();
     native public fun invariant_end();
-
-    public fun asserts(p: bool) {
-        ensures(p);
-    }
 
     native public fun val<T>(x: &T): T;
     native public fun ref<T>(x: T): &T;

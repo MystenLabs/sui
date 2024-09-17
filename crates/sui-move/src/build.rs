@@ -78,6 +78,8 @@ impl Build {
             let mut options = move_prover::cli::Options::default();
             // don't spawn async tasks when running Boogie--causes a crash if we do
             options.backend.sequential_task = true;
+            options.backend.use_array_theory = true;
+            options.backend.vc_timeout = 3000;
             run_boogie_gen(&model, options)?;
             return Ok(())
         }
