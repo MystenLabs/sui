@@ -86,9 +86,10 @@ pub async fn incidents_cmd(args: &IncidentsArgs) -> Result<()> {
         } => {
             let incidents = get_incidents(limit, days).await?;
             if *interactive {
-                notion::Notion::new()
-                    .get_incident_selection_incidents()
-                    .await;
+                // let notionIncidents = notion::Notion::new()
+                //     .get_incident_selection_incidents()
+                //     .await?;
+                notion::Notion::new().insert_incident().await?;
                 review_recent_incidents(incidents).await?
             } else {
                 print_recent_incidents(incidents, *long, *with_priority).await?
