@@ -243,6 +243,7 @@ impl ValidatorConfigBuilder {
             enable_validator_tx_finalizer: true,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
+            rpc_health_check: None,
         }
     }
 
@@ -528,6 +529,7 @@ impl FullnodeConfigBuilder {
             enable_validator_tx_finalizer: false,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
+            rpc_health_check: None,
         }
     }
 }

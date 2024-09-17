@@ -204,6 +204,9 @@ pub struct NodeConfig {
     /// By default, write stall is enabled on validators but not on fullnodes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_db_write_stall: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rpc_health_check: Option<RPCHealthCheck>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -1104,6 +1107,20 @@ impl AuthorityKeyPairWithPath {
 pub struct StateDebugDumpConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dump_file_directory: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RPCHealthCheck {
+    #[serde(default)]
+    pub enabled: bool,
+
+    #[serde(default = "default_max_checkpoint_lag_seconds")]
+    pub max_checkpoint_lag_seconds: u64,
+}
+
+fn default_max_checkpoint_lag_seconds() -> u64 {
+    300
 }
 
 #[cfg(test)]

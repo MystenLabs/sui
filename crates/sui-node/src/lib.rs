@@ -22,6 +22,7 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use sui_config::node::RPCHealthCheck;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
@@ -2051,6 +2052,13 @@ pub async fn build_http_server(
         router = router.merge(rest_service.into_router());
     }
 
+    if let Some(health_check_config) = config.rpc_health_check.clone() {
+        router = router
+            .route("/health", axum::routing::get(health_check_handler))
+            .route_layer(axum::Extension(health_check_config.clone()))
+            .route_layer(axum::Extension(prometheus_registry.clone()));
+    }
+
     let listener = tokio::net::TcpListener::bind(&config.json_rpc_address)
         .await
         .unwrap();
@@ -2070,6 +2078,51 @@ pub async fn build_http_server(
     info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
 
     Ok(Some(handle))
+}
+
+async fn health_check_handler(
+    axum::Extension(health_check_config): axum::Extension<RPCHealthCheck>,
+    axum::Extension(prometheus_registry): axum::Extension<Registry>,
+) -> impl axum::response::IntoResponse {
+    let metrics_families = prometheus_registry.gather();
+
+    for family in metrics_families {
+        if family.get_name() == "last_executed_checkpoint_timestamp_ms" {
+            // Directly extract the gauge value since there is only one metric in this family
+            if let Some(metric) = family.get_metric().first() {
+                let last_executed_checkpoint_ts_ms = metric.get_gauge().get_value() as u64;
+                if is_delay_greater_than_max_lag(
+                    last_executed_checkpoint_ts_ms,
+                    health_check_config.max_checkpoint_lag_seconds,
+                ) {
+                    info!(
+                        last_executed_checkpoint_ts_ms,
+                        "failing healthcheck due to checkpoint lag"
+                    );
+                    return (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down");
+                }
+                return (axum::http::StatusCode::OK, "up");
+            }
+        }
+    }
+
+    info!("last_executed_checkpoint_timestamp_ms not found");
+    (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down")
+}
+
+fn is_delay_greater_than_max_lag(unix_timestamp: u64, max_lag: u64) -> bool {
+    let timestamp_time = std::time::UNIX_EPOCH + Duration::from_millis(unix_timestamp);
+    match std::time::SystemTime::now().duration_since(timestamp_time) {
+        Ok(duration_since_timestamp) => {
+            // Compare the duration
+            duration_since_timestamp > Duration::from_secs(max_lag)
+        }
+        Err(_) => {
+            // SystemTime::now() is earlier than the unix timestamp
+            // This could happen if the system clock is changed
+            false
+        }
+    }
 }
 
 #[cfg(not(test))]
