@@ -237,12 +237,12 @@ export class MoveDebugSession extends LoggingDebugSession {
         const scopes: DebugProtocol.Scope[] = [];
         if (frame.locals.length > 0) {
             const localScopeReference = this.variableHandles.create({ locals: frame.locals[0] });
-            const localScope = new Scope('locals: ' + frame.name, localScopeReference, false);
+            const localScope = new Scope(`locals: ${frame.name}`, localScopeReference, false);
             scopes.push(localScope);
             // TODO: finish shadowed variables support
             for (let i = 1; i < frame.locals.length; i++) {
                 const shadowedScopeReference = this.variableHandles.create({ locals: frame.locals[i] });
-                const shadowedScope = new Scope('shadowed: ' + frame.name, shadowedScopeReference, false);
+                const shadowedScope = new Scope(`shadowed(${i}): ${frame.name}`, shadowedScopeReference, false);
                 scopes.push(shadowedScope);
             }
         }
