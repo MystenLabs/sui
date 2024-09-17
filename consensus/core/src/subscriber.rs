@@ -8,7 +8,7 @@ use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
 use tokio::{task::JoinHandle, time::sleep};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     block::BlockAPI as _,
@@ -59,11 +59,20 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let authority_service = self.authority_service.clone();
-        let last_received = self
-            .dag_state
-            .read()
-            .get_last_block_for_authority(peer)
-            .round();
+        let dag_state = self.dag_state.read();
+        let mut last_received = dag_state.get_last_block_for_authority(peer).round();
+        let gc_round = dag_state.gc_round();
+        let gc_enabled = dag_state.gc_enabled();
+
+        // If the latest block we have accepted by an authority is older than the current gc round,
+        // then do not attempt to fetch any blocks from that point as they will simply be skipped. Instead
+        // do attempt to fetch from the gc round.
+        if gc_enabled && last_received < gc_round {
+            warn!(
+                "Last received block for peer {peer} is older than GC round, {last_received} < {gc_round}, fetching from GC round"
+            );
+            last_received = gc_round;
+        }
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
