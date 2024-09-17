@@ -171,7 +171,7 @@ export class MoveDebugSession extends LoggingDebugSession {
         args: ILaunchRequestArguments
     ): Promise<void> {
         logger.setup(convertLoggerLogLevel(args.logLevel ?? LogLevel.None), false);
-        logger.log("Launching trace viewer for file: " + args.source + " and trace: " + args.traceInfo);
+        logger.log(`Launching trace viewer for file: ${args.source} and trace: ${args.traceInfo}`);
         try {
             await this.runtime.start(args.source, args.traceInfo, args.stopOnEntry || false);
         } catch (err) {
@@ -179,7 +179,7 @@ export class MoveDebugSession extends LoggingDebugSession {
             response.message = err instanceof Error ? err.message : String(err);
         }
         this.sendResponse(response);
-        this.sendEvent(new StoppedEvent("entry", MoveDebugSession.THREAD_ID));
+        this.sendEvent(new StoppedEvent('entry', MoveDebugSession.THREAD_ID));
     }
 
     protected configurationDoneRequest(
@@ -192,7 +192,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
         response.body = {
             threads: [
-                new Thread(MoveDebugSession.THREAD_ID, "Main Thread")
+                new Thread(MoveDebugSession.THREAD_ID, 'Main Thread')
             ]
         };
         this.sendResponse(response);
@@ -232,7 +232,7 @@ export class MoveDebugSession extends LoggingDebugSession {
         const runtimeStack = this.runtime.stack();
         const frame = runtimeStack.frames.find(frame => frame.id === frameId);
         if (!frame) {
-            throw new Error("No frame found for id: " + frameId);
+            throw new Error(`No frame found for id: ${frameId}`);
         }
         const scopes: DebugProtocol.Scope[] = [];
         if (frame.locals.length > 0) {
@@ -365,7 +365,7 @@ export class MoveDebugSession extends LoggingDebugSession {
         try {
             const steppedOut = this.runtime.stepOut();
             if (!steppedOut) {
-                logger.log("Cannot step out");
+                logger.log(`Cannot step out`);
             }
         } catch (err) {
             response.success = false;
@@ -381,7 +381,7 @@ export class MoveDebugSession extends LoggingDebugSession {
         try {
             const steppedBack = this.runtime.stepBack();
             if (!steppedBack) {
-                logger.log("Cannot step back");
+                logger.log(`Cannot step back`);
             }
         } catch (err) {
             response.success = false;
