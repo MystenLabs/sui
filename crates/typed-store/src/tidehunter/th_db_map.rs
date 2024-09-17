@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 use std::fs;
 use std::marker::PhantomData;
-use std::ops::RangeBounds;
+use std::ops::{Bound, RangeBounds};
 use std::path::Path;
 use std::sync::Arc;
 use bincode::Options;
@@ -163,7 +163,7 @@ where
     }
 
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError> {
-        todo!()
+        Ok(()) // todo implement
     }
 
     fn is_empty(&self) -> bool {
@@ -196,7 +196,22 @@ where
     }
 
     fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator {
-        todo!()
+        let start = range.start_bound();
+        let end = range.end_bound();
+        let Bound::Included(start) = start else {
+            panic!("Only included bounds currently implemented");
+        };
+        let Bound::Included(end) = end else {
+            panic!("Only included bounds currently implemented");
+        };
+        let start = self.serialize_key(start).into();
+        let end = self.serialize_key(end).into();
+
+        Box::new(self.db.range_ordered_iterator(start..end).map(|r| {
+            let (k, v) = r.unwrap();
+            let key = self.checked_deserialize_key(&k).expect("Somehow got key from wrong key space");
+            Ok((key, self.deserialize_value(&v)))
+        }))
     }
 
     fn keys(&'a self) -> Self::Keys {
