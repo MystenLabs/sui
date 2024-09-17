@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::sync::Arc;
-
 use anyhow::Result;
+use diesel::dsl::sql;
+use diesel::TextExpressionMethods;
 use diesel::{
-    dsl::sql, sql_types::Bool, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
-    OptionalExtension, QueryDsl, SelectableHelper, TextExpressionMethods,
+    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
+    OptionalExtension, QueryDsl, SelectableHelper,
 };
 use itertools::Itertools;
+use std::sync::Arc;
 use tap::{Pipe, TapFallible};
 use tracing::{debug, error, warn};
 
@@ -546,7 +547,6 @@ impl IndexerReader {
             .order(objects::object_id.asc())
             .limit(limit as i64)
             .into_boxed();
-        // TODO: replace the string match with exact column match
         if let Some(filter) = filter {
             match filter {
                 SuiObjectDataFilter::StructType(struct_tag) => {
@@ -646,7 +646,7 @@ impl IndexerReader {
             .await?;
 
         let mut query = transactions::table
-            .filter(transactions::checkpoint_sequence_number.between(tx_range.0, tx_range.1))
+            .filter(transactions::tx_sequence_number.between(tx_range.0, tx_range.1))
             .into_boxed();
 
         if let Some(cursor_tx_seq) = cursor_tx_seq {
@@ -953,10 +953,11 @@ impl IndexerReader {
         &self,
         tx_digest: TransactionDigest,
         cursor: Option<EventID>,
+        cursor_tx_seq: i64,
         limit: usize,
         descending_order: bool,
     ) -> IndexerResult<String> {
-        let cursor = if let Some(cursor) = cursor {
+        let cursor_clause = if let Some(cursor) = cursor {
             if cursor.tx_digest != tx_digest {
                 return Err(IndexerError::InvalidArgumentError(
                     "Cursor tx_digest does not match the tx_digest in the query.".into(),
@@ -974,18 +975,36 @@ impl IndexerReader {
         };
 
         let order_clause = if descending_order { "DESC" } else { "ASC" };
-        Ok(format!(
-            "SELECT * \
-            FROM EVENTS e \
-            JOIN TRANSACTIONS t \
-            ON t.tx_sequence_number = e.tx_sequence_number \
-            AND t.transaction_digest = '\\x{}'::bytea \
-            WHERE {cursor} \
+
+        // If the cursor is provided and matches tx_digest, we've already fetched the
+        // tx_sequence_number and can query events table directly. Otherwise, we can just consult
+        // the tx_digests table for the tx_sequence_number to key into events table.
+        if cursor.is_some() {
+            Ok(format!(
+                "SELECT * \
+            FROM EVENTS \
+            WHERE tx_sequence_number = {cursor_tx_seq} \
+            AND {cursor_clause} \
+            ORDER BY e.{EVENT_SEQUENCE_NUMBER_STR} {order_clause} \
+            LIMIT {limit}
+            "
+            ))
+        } else {
+            Ok(format!(
+                "SELECT * \
+            FROM EVENTS \
+            WHERE tx_sequence_number = ( \
+                SELECT tx_sequence_number \
+                FROM tx_digests \
+                WHERE tx_digest = '\\x{}'::bytea \
+            ) \
+            AND {cursor_clause} \
             ORDER BY e.{EVENT_SEQUENCE_NUMBER_STR} {order_clause} \
             LIMIT {limit}
             ",
-            Hex::encode(tx_digest.into_inner()),
-        ))
+                Hex::encode(tx_digest.into_inner()),
+            ))
+        }
     }
 
     pub async fn query_events(
@@ -1057,8 +1076,13 @@ impl IndexerReader {
                 limit,
             )
         } else if let EventFilter::Transaction(tx_digest) = filter {
-            // TODO: doesn't make sense to refetch the cursor, and it's only used by query_events. maybe we can combine
-            self.query_events_by_tx_digest_query(tx_digest, cursor, limit, descending_order)?
+            self.query_events_by_tx_digest_query(
+                tx_digest,
+                cursor,
+                tx_seq,
+                limit,
+                descending_order,
+            )?
         } else {
             let main_where_clause = match filter {
                 EventFilter::Package(package_id) => {
