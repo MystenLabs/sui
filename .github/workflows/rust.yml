@@ -132,6 +132,9 @@ jobs:
       - name: cargo test
         run: |
           cargo nextest run --profile ci -E '!package(sui-bridge)'
+      - name: cargo test (sui-graphql staging)
+        run: |
+          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
