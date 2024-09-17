@@ -696,7 +696,7 @@ impl WarningFiltersScope {
     }
 
     pub fn pop(&mut self) {
-        self.scopes.pop();
+        self.scopes.pop().unwrap();
     }
 
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {

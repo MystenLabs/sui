@@ -61,12 +61,16 @@ fn check_prim_definer(
     let Some(sp!(attr_loc, attr_)) = defines_prim_attr else {
         return;
     };
+    let warning_filters = env.top_level_warning_filter_scope();
     let Attribute_::Parameterized(_, params) = attr_ else {
         let msg = format!(
             "Expected a primitive type parameterization, e.g. '{}(<type>)'",
             DefinesPrimitive::DEFINES_PRIM
         );
-        env.add_diag(diag!(Attributes::InvalidUsage, (*attr_loc, msg)));
+        env.add_diag(
+            warning_filters,
+            diag!(Attributes::InvalidUsage, (*attr_loc, msg)),
+        );
         return;
     };
     if params.len() != 1 {
@@ -74,7 +78,10 @@ fn check_prim_definer(
             "Expected a single primitive type parameterization, e.g. '{}(<type>)'",
             DefinesPrimitive::DEFINES_PRIM
         );
-        env.add_diag(diag!(Attributes::InvalidUsage, (*attr_loc, msg)));
+        env.add_diag(
+            warning_filters,
+            diag!(Attributes::InvalidUsage, (*attr_loc, msg)),
+        );
         return;
     }
     let (_, _, sp!(param_loc, param_)) = params.into_iter().next().unwrap();
@@ -83,7 +90,10 @@ fn check_prim_definer(
             "Expected a primitive type parameterization, e.g. '{}(<type>)'",
             DefinesPrimitive::DEFINES_PRIM
         );
-        env.add_diag(diag!(Attributes::InvalidUsage, (*param_loc, msg)));
+        env.add_diag(
+            warning_filters,
+            diag!(Attributes::InvalidUsage, (*param_loc, msg)),
+        );
         return;
     };
     let Some(prim) = BuiltinTypeName_::resolve(name.value.as_str()) else {
@@ -92,18 +102,24 @@ fn check_prim_definer(
             DefinesPrimitive::DEFINES_PRIM,
             name,
         );
-        env.add_diag(diag!(Attributes::InvalidUsage, (name.loc, msg)));
+        env.add_diag(
+            warning_filters,
+            diag!(Attributes::InvalidUsage, (name.loc, msg)),
+        );
         return;
     };
 
     if let Some(prev) = definers.get(&prim) {
         if !allow_shadowing {
             let msg = format!("Duplicate definer annotated for primitive type '{}'", prim);
-            env.add_diag(diag!(
-                Attributes::InvalidUsage,
-                (*attr_loc, msg),
-                (prev.loc, "Previously declared here")
-            ));
+            env.add_diag(
+                warning_filters,
+                diag!(
+                    Attributes::InvalidUsage,
+                    (*attr_loc, msg),
+                    (prev.loc, "Previously declared here")
+                ),
+            );
         }
     } else {
         definers.insert(prim, mident);
