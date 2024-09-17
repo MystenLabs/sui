@@ -14,4 +14,4 @@ export interface ModuleInfo {
  * it means that it lives until the end of the current
  * frame.
  */
-export const INFINITE_LIFETIME = -1;
+export const FRAME_LIFETIME = -1;

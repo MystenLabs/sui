@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as fs from 'fs';
-import { INFINITE_LIFETIME, ModuleInfo } from './utils';
+import { FRAME_LIFETIME, ModuleInfo } from './utils';
 
 // Data types corresponding to trace file JSON schema.
 
@@ -236,7 +236,7 @@ export function readTrace(traceFilePath: string): ITrace {
                     const runtimeValue: TraceValue =
                         { type: TraceValKind.Runtime, value: JSON.stringify(value.RuntimeValue.value) };
                     paramValues.push(runtimeValue);
-                    lifetimeEnds[i] = INFINITE_LIFETIME;
+                    lifetimeEnds[i] = FRAME_LIFETIME;
                 }
             }
             localLifetimeEnds.set(frame.frame_id, lifetimeEnds);
@@ -270,7 +270,7 @@ export function readTrace(traceFilePath: string): ITrace {
             const lifetimeEnds = localLifetimeEnds.get(currentFrameID) || [];
             const lifetimeEndsMax = locaLifetimeEndsMax.get(currentFrameID) || [];
             for (let i = 0; i < lifetimeEnds.length; i++) {
-                if (lifetimeEnds[i] === undefined || lifetimeEnds[i] === INFINITE_LIFETIME) {
+                if (lifetimeEnds[i] === undefined || lifetimeEnds[i] === FRAME_LIFETIME) {
                     // only set new end of lifetime if it has not been set before
                     // or if variable is live
                     const pc = event.Instruction.pc;
@@ -291,7 +291,7 @@ export function readTrace(traceFilePath: string): ITrace {
                 const frameId = location.Local[0];
                 const localIndex = location.Local[1];
                 const lifetimeEnds = localLifetimeEnds.get(frameId) || [];
-                lifetimeEnds[localIndex] = INFINITE_LIFETIME;
+                lifetimeEnds[localIndex] = FRAME_LIFETIME;
                 localLifetimeEnds.set(frameId, lifetimeEnds);
 
                 if (effect.Write) {
