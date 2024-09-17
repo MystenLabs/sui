@@ -9,7 +9,7 @@ use crate::{
         absint::JoinResult,
         cfg::ImmForwardCFG,
         visitor::{
-            has_special, LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
+            cfg_satisfies, LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
             SimpleExecutionContext,
         },
         CFGContext, MemberName,
@@ -127,7 +127,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
         }
 
         // skip any function that doesn't create an object
-        has_special(
+        cfg_satisfies(
             cfg,
             |_| true,
             |e| {

@@ -773,7 +773,7 @@ impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
 // utils
 //**************************************************************************************************
 
-pub fn has_special<FCommand, FExp>(
+pub fn cfg_satisfies<FCommand, FExp>(
     cfg: &ImmForwardCFG,
     mut p_command: FCommand,
     mut p_exp: FExp,
@@ -782,10 +782,10 @@ where
     FCommand: FnMut(&Command) -> bool,
     FExp: FnMut(&Exp) -> bool,
 {
-    has_special_(cfg, &mut p_command, &mut p_exp)
+    cfg_satisfies_(cfg, &mut p_command, &mut p_exp)
 }
 
-pub fn has_special_command<FCommand, FExp>(
+pub fn command_satisfies<FCommand, FExp>(
     cmd: &Command,
     mut p_command: FCommand,
     mut p_exp: FExp,
@@ -794,26 +794,26 @@ where
     FCommand: FnMut(&Command) -> bool,
     FExp: FnMut(&Exp) -> bool,
 {
-    has_special_command_(cmd, &mut p_command, &mut p_exp)
+    command_satisfies_(cmd, &mut p_command, &mut p_exp)
 }
 
-pub fn has_special_exp<F>(e: &Exp, mut p: F) -> bool
+pub fn exp_satisfies<F>(e: &Exp, mut p: F) -> bool
 where
     F: FnMut(&Exp) -> bool,
 {
-    has_special_exp_(e, &mut p)
+    exp_satisfies_(e, &mut p)
 }
 
 pub fn calls_special_function(special: &[(&str, &str, &str)], cfg: &ImmForwardCFG) -> bool {
-    has_special(cfg, |_| true, |e| is_special_function(special, e))
+    cfg_satisfies(cfg, |_| true, |e| is_special_function(special, e))
 }
 
 pub fn calls_special_function_command(special: &[(&str, &str, &str)], cmd: &Command) -> bool {
-    has_special_command(cmd, |_| true, |e| is_special_function(special, e))
+    command_satisfies(cmd, |_| true, |e| is_special_function(special, e))
 }
 
 pub fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bool {
-    has_special_exp(e, |e| is_special_function(special, e))
+    exp_satisfies(e, |e| is_special_function(special, e))
 }
 
 fn is_special_function(special: &[(&str, &str, &str)], e: &Exp) -> bool {
@@ -824,7 +824,7 @@ fn is_special_function(special: &[(&str, &str, &str)], e: &Exp) -> bool {
     )
 }
 
-fn has_special_(
+fn cfg_satisfies_(
     cfg: &ImmForwardCFG,
     p_command: &mut impl FnMut(&Command) -> bool,
     p_exp: &mut impl FnMut(&Exp) -> bool,
@@ -832,11 +832,11 @@ fn has_special_(
     cfg.blocks().values().any(|block| {
         block
             .iter()
-            .any(|cmd| has_special_command_(cmd, p_command, p_exp))
+            .any(|cmd| command_satisfies_(cmd, p_command, p_exp))
     })
 }
 
-fn has_special_command_(
+fn command_satisfies_(
     cmd @ sp!(_, cmd_): &Command,
     p_command: &mut impl FnMut(&Command) -> bool,
     p_exp: &mut impl FnMut(&Exp) -> bool,
@@ -849,15 +849,15 @@ fn has_special_command_(
             | C::Return { exp: e, .. }
             | C::IgnoreAndPop { exp: e, .. }
             | C::JumpIf { cond: e, .. }
-            | C::VariantSwitch { subject: e, .. } => has_special_exp_(e, p_exp),
-            C::Mutate(el, er) => has_special_exp_(el, p_exp) || has_special_exp_(er, p_exp),
+            | C::VariantSwitch { subject: e, .. } => exp_satisfies_(e, p_exp),
+            C::Mutate(el, er) => exp_satisfies_(el, p_exp) || exp_satisfies_(er, p_exp),
             C::Jump { .. } => false,
             C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
         }
 }
 
 #[growing_stack]
-fn has_special_exp_(e: &Exp, p: &mut impl FnMut(&Exp) -> bool) -> bool {
+fn exp_satisfies_(e: &Exp, p: &mut impl FnMut(&Exp) -> bool) -> bool {
     use H::UnannotatedExp_ as E;
     if p(e) {
         return true;
@@ -877,15 +877,15 @@ fn has_special_exp_(e: &Exp, p: &mut impl FnMut(&Exp) -> bool) -> bool {
         | E::Dereference(e)
         | E::UnaryExp(_, e)
         | E::Borrow(_, e, _, _)
-        | E::Cast(e, _) => has_special_exp_(e, p),
+        | E::Cast(e, _) => exp_satisfies_(e, p),
 
-        E::BinopExp(el, _, er) => has_special_exp_(el, p) || has_special_exp_(er, p),
+        E::BinopExp(el, _, er) => exp_satisfies_(el, p) || exp_satisfies_(er, p),
 
-        E::ModuleCall(call) => call.arguments.iter().any(|arg| has_special_exp_(arg, p)),
-        E::Vector(_, _, _, es) | E::Multiple(es) => es.iter().any(move |e| has_special_exp_(e, p)),
+        E::ModuleCall(call) => call.arguments.iter().any(|arg| exp_satisfies_(arg, p)),
+        E::Vector(_, _, _, es) | E::Multiple(es) => es.iter().any(move |e| exp_satisfies_(e, p)),
 
         E::Pack(_, _, es) | E::PackVariant(_, _, _, es) => {
-            es.iter().any(|(_, _, e)| has_special_exp_(e, p))
+            es.iter().any(|(_, _, e)| exp_satisfies_(e, p))
         }
     }
 }
