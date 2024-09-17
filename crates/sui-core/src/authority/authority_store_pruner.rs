@@ -883,9 +883,9 @@ mod tests {
     //     Ok((to_keep, to_delete, tombstones))
     // }
     //
-    // pub(crate) fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
-    //     Arc::new(RwLockTable::new(1))
-    // }
+    pub(crate) fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
+        Arc::new(RwLockTable::new(1))
+    }
     //
     // async fn run_pruner(
     //     path: &Path,
