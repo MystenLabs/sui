@@ -1154,85 +1154,85 @@ mod pprof_tests {
         }
         false
     }
-
-    #[tokio::test]
-    // un-ignore once https://github.com/tikv/pprof-rs/issues/250 is fixed
-    #[ignore]
-    async fn ensure_no_tombstone_fragmentation_in_stack_frame_with_ignore_tombstones(
-    ) -> Result<(), anyhow::Error> {
-        // This test writes a bunch of objects to objects table, invokes pruning on it and
-        // then does a bunch of get(). We open the db with `ignore_range_delete` set to true (default mode).
-        // We then record a cpu profile of the `get()` calls and do not find any range fragmentation stack frame
-        // in it.
-        let registry = Registry::default();
-        let metrics = AuthorityStorePruningMetrics::new(&registry);
-        let primary_path = tempfile::tempdir()?.into_path();
-        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
-        let effects = insert_keys(&perpetual_db.objects)?;
-        AuthorityStorePruner::prune_objects(
-            vec![effects],
-            &perpetual_db,
-            &tests::lock_table(),
-            0,
-            metrics,
-            1,
-            true,
-        )
-        .await?;
-        let guard = pprof::ProfilerGuardBuilder::default()
-            .frequency(1000)
-            .build()
-            .unwrap();
-        read_keys(&perpetual_db.objects, 1000)?;
-        if let Ok(report) = guard.report().build() {
-            assert!(!report.data.keys().any(|f| f
-                .frames
-                .iter()
-                .any(|vs| is_rocksdb_range_tombstone_frame(vs))));
-        }
-        Ok(())
-    }
-
-    #[tokio::test]
-    // un-ignore once https://github.com/tikv/pprof-rs/issues/250 is fixed
-    #[ignore]
-    async fn ensure_no_tombstone_fragmentation_in_stack_frame_after_flush(
-    ) -> Result<(), anyhow::Error> {
-        // This test writes a bunch of objects to objects table, invokes pruning on it and
-        // then does a bunch of get(). We open the db with `ignore_range_delete` set to true (default mode).
-        // We then record a cpu profile of the `get()` calls and do not find any range fragmentation stack frame
-        // in it.
-        let primary_path = tempfile::tempdir()?.into_path();
-        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
-        let effects = insert_keys(&perpetual_db.objects)?;
-        let registry = Registry::default();
-        let metrics = AuthorityStorePruningMetrics::new(&registry);
-        AuthorityStorePruner::prune_objects(
-            vec![effects],
-            &perpetual_db,
-            &lock_table(),
-            0,
-            metrics,
-            1,
-            true,
-        )
-        .await?;
-        if let Ok(()) = perpetual_db.objects.flush() {
-            info!("Completed flushing objects table");
-        } else {
-            error!("Failed to flush objects table");
-        }
-        let guard = pprof::ProfilerGuardBuilder::default()
-            .frequency(1000)
-            .build()
-            .unwrap();
-        read_keys(&perpetual_db.objects, 1000)?;
-        if let Ok(report) = guard.report().build() {
-            assert!(!report.data.keys().any(|f| f
-                .frames
-                .iter()
-                .any(|vs| is_rocksdb_range_tombstone_frame(vs))));
-        }
-        Ok(())
-    }
+    //
+    // #[tokio::test]
+    // // un-ignore once https://github.com/tikv/pprof-rs/issues/250 is fixed
+    // #[ignore]
+    // async fn ensure_no_tombstone_fragmentation_in_stack_frame_with_ignore_tombstones(
+    // ) -> Result<(), anyhow::Error> {
+    //     // This test writes a bunch of objects to objects table, invokes pruning on it and
+    //     // then does a bunch of get(). We open the db with `ignore_range_delete` set to true (default mode).
+    //     // We then record a cpu profile of the `get()` calls and do not find any range fragmentation stack frame
+    //     // in it.
+    //     let registry = Registry::default();
+    //     let metrics = AuthorityStorePruningMetrics::new(&registry);
+    //     let primary_path = tempfile::tempdir()?.into_path();
+    //     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
+    //     let effects = insert_keys(&perpetual_db.objects)?;
+    //     AuthorityStorePruner::prune_objects(
+    //         vec![effects],
+    //         &perpetual_db,
+    //         &tests::lock_table(),
+    //         0,
+    //         metrics,
+    //         1,
+    //         true,
+    //     )
+    //     .await?;
+    //     let guard = pprof::ProfilerGuardBuilder::default()
+    //         .frequency(1000)
+    //         .build()
+    //         .unwrap();
+    //     read_keys(&perpetual_db.objects, 1000)?;
+    //     if let Ok(report) = guard.report().build() {
+    //         assert!(!report.data.keys().any(|f| f
+    //             .frames
+    //             .iter()
+    //             .any(|vs| is_rocksdb_range_tombstone_frame(vs))));
+    //     }
+    //     Ok(())
+    // }
+    //
+    // #[tokio::test]
+    // // un-ignore once https://github.com/tikv/pprof-rs/issues/250 is fixed
+    // #[ignore]
+    // async fn ensure_no_tombstone_fragmentation_in_stack_frame_after_flush(
+    // ) -> Result<(), anyhow::Error> {
+    //     // This test writes a bunch of objects to objects table, invokes pruning on it and
+    //     // then does a bunch of get(). We open the db with `ignore_range_delete` set to true (default mode).
+    //     // We then record a cpu profile of the `get()` calls and do not find any range fragmentation stack frame
+    //     // in it.
+    //     let primary_path = tempfile::tempdir()?.into_path();
+    //     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
+    //     let effects = insert_keys(&perpetual_db.objects)?;
+    //     let registry = Registry::default();
+    //     let metrics = AuthorityStorePruningMetrics::new(&registry);
+    //     AuthorityStorePruner::prune_objects(
+    //         vec![effects],
+    //         &perpetual_db,
+    //         &lock_table(),
+    //         0,
+    //         metrics,
+    //         1,
+    //         true,
+    //     )
+    //     .await?;
+    //     if let Ok(()) = perpetual_db.objects.flush() {
+    //         info!("Completed flushing objects table");
+    //     } else {
+    //         error!("Failed to flush objects table");
+    //     }
+    //     let guard = pprof::ProfilerGuardBuilder::default()
+    //         .frequency(1000)
+    //         .build()
+    //         .unwrap();
+    //     read_keys(&perpetual_db.objects, 1000)?;
+    //     if let Ok(report) = guard.report().build() {
+    //         assert!(!report.data.keys().any(|f| f
+    //             .frames
+    //             .iter()
+    //             .any(|vs| is_rocksdb_range_tombstone_frame(vs))));
+    //     }
+    //     Ok(())
+    // }
 }
