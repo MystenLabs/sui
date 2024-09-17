@@ -279,15 +279,15 @@ impl IndexStoreTables {
         epoch_store: &AuthorityPerEpochStore,
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
     ) -> Result<(), StorageError> {
-        let mut id_bytes = [0; ObjectID::LENGTH];
-        id_bytes[0] = task_id << (8 - bits);
-        let start_id = ObjectID::new(id_bytes);
-
-        id_bytes[0] |= (1 << (8 - bits)) - 1;
-        for element in id_bytes.iter_mut().skip(1) {
-            *element = u8::MAX;
-        }
-        let end_id = ObjectID::new(id_bytes);
+        // let mut id_bytes = [0; ObjectID::LENGTH];
+        // id_bytes[0] = task_id << (8 - bits);
+        // let start_id = ObjectID::new(id_bytes);
+        //
+        // id_bytes[0] |= (1 << (8 - bits)) - 1;
+        // for element in id_bytes.iter_mut().skip(1) {
+        //     *element = u8::MAX;
+        // }
+        // let end_id = ObjectID::new(id_bytes);
 
         let mut resolver = epoch_store
             .executor()
@@ -296,7 +296,7 @@ impl IndexStoreTables {
         let mut object_scanned: u64 = 0;
         for object in authority_store
             .perpetual_tables
-            .range_iter_live_object_set(Some(start_id), Some(end_id), false)
+            .iter_live_object_set( false)
             .filter_map(LiveObject::to_normal)
         {
             object_scanned += 1;

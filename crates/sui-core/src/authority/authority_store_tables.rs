@@ -427,8 +427,8 @@ impl AuthorityPerpetualTables {
 
     pub fn range_iter_live_object_set(
         &self,
-        lower_bound: Option<ObjectID>,
-        upper_bound: Option<ObjectID>,
+        // lower_bound: Option<ObjectID>,
+        // upper_bound: Option<ObjectID>,
         include_wrapped_object: bool,
     ) -> LiveSetIter<'_> {
         unimplemented!("range_iter_live_object_set"); // todo
