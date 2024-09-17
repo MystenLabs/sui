@@ -98,6 +98,14 @@ contract DeployBridge is Script {
             opts
         );
 
+        BridgeCommittee committeeImplementation =
+            BridgeCommittee(Upgrades.getImplementationAddress(bridgeCommittee));
+        committeeImplementation.initialize(
+            deployConfig.committeeMembers,
+            committeeMemberStake,
+            uint16(deployConfig.minCommitteeStakeRequired)
+        );
+
         // deploy bridge config =====================================================================
 
         // convert token prices from uint256 to uint64
@@ -121,8 +129,19 @@ contract DeployBridge is Script {
             opts
         );
 
+        BridgeConfig configImplementation =
+            BridgeConfig(Upgrades.getImplementationAddress(bridgeConfig));
+        configImplementation.initialize(
+            address(bridgeCommittee),
+            uint8(deployConfig.sourceChainId),
+            deployConfig.supportedTokens,
+            tokenPrices,
+            supportedChainIDs
+        );
+
         // initialize config in the bridge committee
-        BridgeCommittee(bridgeCommittee).initializeConfig(address(bridgeConfig));
+        BridgeCommittee(bridgeCommittee).initializeConfig(bridgeConfig);
+        committeeImplementation.initializeConfig(address(bridgeConfig));
 
         // deploy vault =============================================================================
 
@@ -145,6 +164,10 @@ contract DeployBridge is Script {
             opts
         );
 
+        BridgeLimiter limiterImplementation =
+            BridgeLimiter(Upgrades.getImplementationAddress(limiter));
+        limiterImplementation.initialize(bridgeCommittee, supportedChainIDs, chainLimits);
+
         uint8[] memory _destinationChains = new uint8[](1);
         _destinationChains[0] = 1;
 
@@ -155,6 +178,8 @@ contract DeployBridge is Script {
             abi.encodeCall(SuiBridge.initialize, (bridgeCommittee, address(vault), limiter)),
             opts
         );
+        SuiBridge bridgeImplementation = SuiBridge(Upgrades.getImplementationAddress(suiBridge));
+        bridgeImplementation.initialize(bridgeCommittee, address(vault), limiter);
 
         // transfer vault ownership to bridge
         vault.transferOwnership(suiBridge);
