@@ -368,4 +368,79 @@ module std::vector {
         zip_do_ref!($v1, $v2, |el1, el2| r.push_back($f(el1, el2)));
         r
     }
+
+    /// Insertion sort the vector `v` in place using the comparison function `le`.
+    public macro fun insertion_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
+        let v = $v;
+        let n = v.length();
+        let mut i = 1;
+        while (i < n) {
+            let mut j = i;
+            while (j > 0 && $le(&v[j], &v[j - 1])) {
+                v.swap(j, j - 1);
+                j = j - 1;
+            };
+            i = i + 1;
+        }
+    }
+
+    /// Merge sort the vector `v` in place using the comparison function `le`.
+    public macro fun merge_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
+        let v = $v;
+        let mut flags = vector[false];
+        let mut starts = vector[0];
+        let mut ends = vector[v.length()];
+        while (!flags.is_empty()) {
+            let (halves_sorted, start, end) =
+                (flags.pop_back(), starts.pop_back(), ends.pop_back());
+            let mid = (start + end) / 2;
+            if (halves_sorted) {
+                let mut mid = mid;
+                let mut l = start;
+                let mut r = mid;
+                while (l < mid && r < end) {
+                    if ($le(&v[l], &v[r])) {
+                        l = l + 1;
+                    } else {
+                        let mut i = r;
+                        while (i > l) {
+                            v.swap(i, i - 1);
+                            i = i - 1;
+                        };
+
+                        l = l + 1;
+                        mid = mid + 1;
+                        r = r + 1;
+                    }
+                }
+            } else {
+                // set up the "merge"
+                flags.push_back(true);
+                starts.push_back(start);
+                ends.push_back(end);
+                // set up the recursive calls
+                // v[start..mid]
+                if (mid - start > 1) {
+                    flags.push_back(false);
+                    starts.push_back(start);
+                    ends.push_back(mid);
+                };
+                // v[mid..end]
+                if (end - mid > 1) {
+                    flags.push_back(false);
+                    starts.push_back(mid);
+                    ends.push_back(end);
+                }
+            }
+        }
+    }
+
+    public macro fun is_sorted_by<$T>($v: &vector<$T>, $le: |&$T, &$T| -> bool): bool {
+        let v = $v;
+        let n_minus_1 = v.length().max(1) - 1;
+        'is_sorted_by: {
+            n_minus_1.do!(|i| if (!$le(&v[i], &v[i + 1])) return 'is_sorted_by false);
+            true
+        }
+    }
 }
