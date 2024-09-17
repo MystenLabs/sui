@@ -17,6 +17,7 @@ module bridge::bridge_env {
         TokenTransferAlreadyClaimed,
         TokenTransferApproved,
         TokenTransferClaimed,
+        TokenTransferClaimedV2,
         TokenTransferLimitExceed
     };
     use bridge::btc::{Self, BTC};
@@ -702,15 +703,18 @@ module bridge::bridge_env {
             total_supply_before + token_value == get_total_supply<T>(&bridge),
         );
         let claimed = event::events_by_type<TokenTransferClaimed>();
+        let claimedv2 = event::events_by_type<TokenTransferClaimedV2>();
         let already_claimed = event::events_by_type<
             TokenTransferAlreadyClaimed,
         >();
         let limit_exceeded = event::events_by_type<TokenTransferLimitExceed>();
         assert!(
-            claimed.length() == 1 || already_claimed.length() == 1 ||
-            limit_exceeded.length() == 1,
+            (claimed.length() == 1 && claimedv2.length() == 1) ||
+            already_claimed.length() == 1 || limit_exceeded.length() == 1,
         );
         let key = if (claimed.length() == 1) {
+            assert!(claimedv2.length() == 1);
+            assert!(claimed[0].transfer_claimed_key() == claimedv2[0].transfer_claimedv2_key());
             claimed[0].transfer_claimed_key()
         } else if (already_claimed.length() == 1) {
             already_claimed[0].transfer_already_claimed_key()
@@ -752,15 +756,18 @@ module bridge::bridge_env {
 
         // verify claim events
         let claimed = event::events_by_type<TokenTransferClaimed>();
+        let claimedv2 = event::events_by_type<TokenTransferClaimedV2>();
         let already_claimed = event::events_by_type<
             TokenTransferAlreadyClaimed,
         >();
         let limit_exceeded = event::events_by_type<TokenTransferLimitExceed>();
         assert!(
-            claimed.length() == 1 || already_claimed.length() == 1 ||
-            limit_exceeded.length() == 1,
+            (claimed.length() == 1 && claimedv2.length() == 1) ||
+            already_claimed.length() == 1 || limit_exceeded.length() == 1,
         );
         let (key, claim_status) = if (claimed.length() == 1) {
+            assert!(claimedv2.length() == 1);
+            assert!(claimed[0].transfer_claimed_key() == claimedv2[0].transfer_claimedv2_key());
             (claimed[0].transfer_claimed_key(), CLAIMED)
         } else if (already_claimed.length() == 1) {
             (already_claimed[0].transfer_already_claimed_key(), ALREADY_CLAIMED)

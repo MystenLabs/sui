@@ -134,6 +134,8 @@ pub fn into_token_transfers(
                     is_finalized: true,
                 }));
             }
+            // TODO: switch to `TokenTransferClaimed` once
+            // `TokenTransferClaimed` is no longer emitted on both testnet and mainnet
             "TokenTransferClaimed" => {
                 info!("Observed Sui Claim {:?}", ev);
                 metrics.total_sui_token_transfer_claimed.inc();

@@ -45,6 +45,16 @@ pub struct MoveTokenDepositedEvent {
     pub amount_sui_adjusted: u64,
 }
 
+// `TokenTransferClaimedV2` emitted in bridge.move
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct MoveTokenTransferClaimedV2 {
+    pub seq_num: u64,
+    pub source_chain: u8,
+    pub target_chain: u8,
+    pub token_type: u8,
+    pub amount_sui_adjusted: u64,
+}
+
 macro_rules! new_move_event {
     ($struct_name:ident, $move_struct_name:ident) => {
 
@@ -222,6 +232,17 @@ pub struct EmittedSuiToEthTokenBridgeV1 {
     pub amount_sui_adjusted: u64,
 }
 
+// Sanitized version of MoveTokenTransferClaimedV2
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
+pub struct TokenTransferClaimedV2 {
+    pub nonce: u64,
+    pub sui_chain_id: BridgeChainId,
+    pub eth_chain_id: BridgeChainId,
+    pub token_id: u8,
+    // The amount of tokens claimed with decimal points on Sui side
+    pub amount_sui_adjusted: u64,
+}
+
 // Sanitized version of MoveCommitteeUpdateEvent
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct CommitteeUpdate {
@@ -343,10 +364,58 @@ impl TryFrom<MoveTokenDepositedEvent> for EmittedSuiToEthTokenBridgeV1 {
     }
 }
 
+impl TryFrom<MoveTokenTransferClaimedV2> for TokenTransferClaimedV2 {
+    type Error = BridgeError;
+
+    fn try_from(event: MoveTokenTransferClaimedV2) -> BridgeResult<Self> {
+        if event.amount_sui_adjusted == 0 {
+            return Err(BridgeError::ZeroValueBridgeTransfer(format!(
+                "Failed to convert MoveTokenTransferClaimedV2 to TokenTransferClaimedV2. Manual intervention is required. 0 value transfer should not be allowed in Move: {:?}",
+                event,
+            )));
+        }
+
+        let token_id = event.token_type;
+        let sui_chain_id = BridgeChainId::try_from(event.source_chain).map_err(|_e| {
+            BridgeError::Generic(format!(
+                "Failed to convert MoveTokenTransferClaimedV2 to TokenTransferClaimedV2. Failed to convert source chain {} to BridgeChainId",
+                event.token_type,
+            ))
+        })?;
+        let eth_chain_id = BridgeChainId::try_from(event.target_chain).map_err(|_e| {
+            BridgeError::Generic(format!(
+                "Failed to convert MoveTokenTransferClaimedV2 to TokenTransferClaimedV2. Failed to convert target chain {} to BridgeChainId",
+                event.token_type,
+            ))
+        })?;
+        if !sui_chain_id.is_sui_chain() {
+            return Err(BridgeError::Generic(format!(
+                "Failed to convert MoveTokenTransferClaimedV2 to TokenTransferClaimedV2. Invalid source chain {}",
+                event.source_chain
+            )));
+        }
+        if eth_chain_id.is_sui_chain() {
+            return Err(BridgeError::Generic(format!(
+                "Failed to convert MoveTokenTransferClaimedV2 to TokenTransferClaimedV2. Invalid target chain {}",
+                event.target_chain
+            )));
+        }
+
+        Ok(Self {
+            nonce: event.seq_num,
+            sui_chain_id,
+            eth_chain_id,
+            token_id,
+            amount_sui_adjusted: event.amount_sui_adjusted,
+        })
+    }
+}
+
 crate::declare_events!(
     SuiToEthTokenBridgeV1(EmittedSuiToEthTokenBridgeV1) => ("bridge::TokenDepositedEvent", MoveTokenDepositedEvent),
     TokenTransferApproved(TokenTransferApproved) => ("bridge::TokenTransferApproved", MoveTokenTransferApproved),
     TokenTransferClaimed(TokenTransferClaimed) => ("bridge::TokenTransferClaimed", MoveTokenTransferClaimed),
+    TokenTransferClaimedV2(TokenTransferClaimedV2) => ("bridge::TokenTransferClaimedV2", MoveTokenTransferClaimedV2),
     TokenTransferAlreadyApproved(TokenTransferAlreadyApproved) => ("bridge::TokenTransferAlreadyApproved", MoveTokenTransferAlreadyApproved),
     TokenTransferAlreadyClaimed(TokenTransferAlreadyClaimed) => ("bridge::TokenTransferAlreadyClaimed", MoveTokenTransferAlreadyClaimed),
     TokenTransferLimitExceed(TokenTransferLimitExceed) => ("bridge::TokenTransferLimitExceed", MoveTokenTransferLimitExceed),
@@ -416,6 +485,7 @@ impl SuiBridgeEvent {
             }
             SuiBridgeEvent::TokenTransferApproved(_event) => None,
             SuiBridgeEvent::TokenTransferClaimed(_event) => None,
+            SuiBridgeEvent::TokenTransferClaimedV2(_event) => None,
             SuiBridgeEvent::TokenTransferAlreadyApproved(_event) => None,
             SuiBridgeEvent::TokenTransferAlreadyClaimed(_event) => None,
             SuiBridgeEvent::TokenTransferLimitExceed(_event) => None,

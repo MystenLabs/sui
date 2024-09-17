@@ -68,6 +68,14 @@ module bridge::bridge {
         amount: u64,
     }
 
+    public struct TokenTransferClaimedV2 has copy, drop {
+        seq_num: u64,
+        source_chain: u8,
+        target_chain: u8,
+        token_type: u8,
+        amount: u64,
+    }
+
     public struct EmergencyOpEvent has copy, drop {
         frozen: bool,
     }
@@ -540,7 +548,17 @@ module bridge::bridge {
 
         // Record changes
         record.claimed = true;
+
+        // Keep emitting `TokenTransferClaimed` event for backward compatibility.
+        // TOOD: remove `TokenTransferClaimed` once all clients no longer track this event.
         emit(TokenTransferClaimed { message_key: key });
+        emit(TokenTransferClaimedV2 {
+            seq_num: bridge_seq_num,
+            source_chain,
+            target_chain,
+            token_type: token_payload.token_type(),
+            amount,
+        });
 
         (option::some(token), owner)
     }
@@ -871,6 +889,12 @@ module bridge::bridge {
     public fun transfer_claimed_key(event: TokenTransferClaimed): BridgeMessageKey {
         event.message_key
     }
+
+    #[test_only]
+    public fun transfer_claimedv2_key(event: TokenTransferClaimedV2): BridgeMessageKey {
+        message::create_key(event.source_chain, message_types::token(), event.seq_num)
+    }
+
 
     #[test_only]
     public fun transfer_already_approved_key(event: TokenTransferAlreadyApproved): BridgeMessageKey {

@@ -68,6 +68,7 @@ where
                 SuiBridgeEvent::SuiToEthTokenBridgeV1(_) => (),
                 SuiBridgeEvent::TokenTransferApproved(_) => (),
                 SuiBridgeEvent::TokenTransferClaimed(_) => (),
+                SuiBridgeEvent::TokenTransferClaimedV2(_) => (),
                 SuiBridgeEvent::TokenTransferAlreadyApproved(_) => (),
                 SuiBridgeEvent::TokenTransferAlreadyClaimed(_) => (),
                 SuiBridgeEvent::TokenTransferLimitExceed(_) => {
