@@ -17,6 +17,8 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
     mapping(uint8 tokenID => uint64 tokenPrice) public tokenPrices;
     mapping(uint8 chainId => bool isSupported) public supportedChains;
 
+    /* ========== INITIALIZER ========== */
+
     /// @notice Constructor function for the BridgeConfig contract.
     /// @dev the provided arrays must have the same length.
     /// @param _committee The address of the BridgeCommittee contract.
