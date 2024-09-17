@@ -4,7 +4,10 @@
 //! `BridgeMonitor` receives all `SuiBridgeEvent` and `EthBridgeEvent`
 //! and handles them accordingly.
 
-use crate::abi::EthBridgeEvent;
+use crate::abi::{
+    EthBridgeCommitteeEvents, EthBridgeConfigEvents, EthBridgeEvent, EthBridgeLimiterEvents,
+    EthCommitteeUpgradeableContractEvents, EthSuiBridgeEvents,
+};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::{BlocklistValidatorEvent, CommitteeMemberUrlUpdateEvent};
@@ -88,8 +91,8 @@ where
                     }
                 }
                 eth_event = eth_monitor_rx.recv() => {
-                    if let Some(_eth_event) = eth_event {
-                        // TODO
+                    if let Some(eth_event) = eth_event {
+                        Self::handle_eth_events(eth_event, &bridge_metrics);
                     } else {
                         panic!("BridgeMonitor eth events channel was closed unexpectedly");
                     }
@@ -107,6 +110,16 @@ where
         bridge_metrics: &Arc<BridgeMetrics>,
         latest_token_config: &mut HashMap<u8, TypeTag>,
     ) {
+        info!("Received SuiBridgeEvent: {:?}", event);
+        macro_rules! bump_sui_counter {
+            ($action:expr) => {
+                bridge_metrics
+                    .observed_governance_actions
+                    .with_label_values(&[$action, "sui"])
+                    .inc();
+            };
+        }
+
         match event {
             SuiBridgeEvent::SuiToEthTokenBridgeV1(_) => (),
             SuiBridgeEvent::TokenTransferApproved(_) => (),
@@ -118,11 +131,11 @@ where
             }
 
             SuiBridgeEvent::EmergencyOpEvent(event) => {
-                info!("Received EmergencyOpEvent: {:?}", event);
-                bridge_metrics
-                    .observed_governance_actions
-                    .with_label_values(&["emergency_op", "sui"])
-                    .inc();
+                bump_sui_counter!(if event.frozen {
+                    "bridge_paused"
+                } else {
+                    "bridge_unpaused"
+                });
                 let is_paused = get_latest_bridge_pause_status_with_emergency_event(
                     sui_client.clone(),
                     event,
@@ -134,11 +147,15 @@ where
                     .expect("Bridge pause status watch channel should not be closed");
             }
 
-            SuiBridgeEvent::CommitteeMemberRegistration(_) => (),
-            SuiBridgeEvent::CommitteeUpdateEvent(_) => (),
+            SuiBridgeEvent::CommitteeMemberRegistration(_) => {
+                bump_sui_counter!("committee_member_registered");
+            }
+            SuiBridgeEvent::CommitteeUpdateEvent(_) => {
+                bump_sui_counter!("committee_updated");
+            }
 
             SuiBridgeEvent::CommitteeMemberUrlUpdateEvent(event) => {
-                info!("Received CommitteeMemberUrlUpdateEvent: {:?}", event);
+                bump_sui_counter!("committee_member_url_updated");
                 let new_committee = get_latest_bridge_committee_with_url_update_event(
                     sui_client.clone(),
                     event,
@@ -152,11 +169,11 @@ where
             }
 
             SuiBridgeEvent::BlocklistValidatorEvent(event) => {
-                info!("Received BlocklistValidatorEvent: {:?}", event);
-                bridge_metrics
-                    .observed_governance_actions
-                    .with_label_values(&["blocklist_validator", "sui"])
-                    .inc();
+                bump_sui_counter!(if event.blocklisted {
+                    "validator_blocklisted"
+                } else {
+                    "validator_unblocklisted"
+                });
                 let new_committee = get_latest_bridge_committee_with_blocklist_event(
                     sui_client.clone(),
                     event,
@@ -169,14 +186,12 @@ where
                 info!("Committee updated with BlocklistValidatorEvent");
             }
 
-            SuiBridgeEvent::TokenRegistrationEvent(_) => (),
+            SuiBridgeEvent::TokenRegistrationEvent(_) => {
+                bump_sui_counter!("new_token_registered");
+            }
 
             SuiBridgeEvent::NewTokenEvent(event) => {
-                info!("Received NewTokenEvent: {:?}", event);
-                bridge_metrics
-                    .observed_governance_actions
-                    .with_label_values(&["new_token", "sui"])
-                    .inc();
+                bump_sui_counter!("new_token_added");
                 if let std::collections::hash_map::Entry::Vacant(entry) =
                     // We only add new tokens but not remove so it's ok to just insert
                     latest_token_config.entry(event.token_id)
@@ -189,13 +204,95 @@ where
                 }
             }
 
-            SuiBridgeEvent::UpdateTokenPriceEvent(event) => {
-                info!("Received UpdateTokenPriceEvent: {:?}", event);
+            SuiBridgeEvent::UpdateTokenPriceEvent(_event) => {
+                bump_sui_counter!("token_price_updated");
+            }
+
+            SuiBridgeEvent::UpdateRouteLimitEvent(_event) => {
+                bump_sui_counter!("limit_updated");
+            }
+        }
+    }
+
+    fn handle_eth_events(event: EthBridgeEvent, bridge_metrics: &Arc<BridgeMetrics>) {
+        info!("Received EthBridgeEvent: {:?}", event);
+
+        macro_rules! bump_eth_counter {
+            ($action:expr) => {
                 bridge_metrics
                     .observed_governance_actions
-                    .with_label_values(&["update_token_price", "sui"])
-                    .inc();
-            }
+                    .with_label_values(&[$action, "eth"])
+                    .inc()
+            };
+        }
+
+        match event {
+            EthBridgeEvent::EthBridgeCommitteeEvents(event) => match event {
+                EthBridgeCommitteeEvents::BlocklistUpdatedFilter(event) => {
+                    bump_eth_counter!(if event.is_blocklisted {
+                        "validator_blocklisted"
+                    } else {
+                        "validator_unblocklisted"
+                    });
+                }
+                EthBridgeCommitteeEvents::InitializedFilter(_) => {
+                    bump_eth_counter!("committee_contract_initialized");
+                }
+                EthBridgeCommitteeEvents::UpgradedFilter(_) => {
+                    bump_eth_counter!("committee_contract_upgraded");
+                }
+            },
+            EthBridgeEvent::EthBridgeLimiterEvents(event) => match event {
+                EthBridgeLimiterEvents::InitializedFilter(_) => {
+                    bump_eth_counter!("limiter_contract_initialized");
+                }
+                EthBridgeLimiterEvents::UpgradedFilter(_) => {
+                    bump_eth_counter!("limiter_contract_upgraded");
+                }
+                EthBridgeLimiterEvents::OwnershipTransferredFilter(_) => {
+                    bump_eth_counter!("limiter_contract_ownership_transferred");
+                }
+                EthBridgeLimiterEvents::LimitUpdatedFilter(_) => {
+                    bump_eth_counter!("limit_updated");
+                }
+                // This event is deprecated but we keep it for ABI compatibility
+                // TODO: We can safely update abi and remove it once the testnet bridge contract is upgraded
+                EthBridgeLimiterEvents::HourlyTransferAmountUpdatedFilter(_) => (),
+            },
+            EthBridgeEvent::EthBridgeConfigEvents(event) => match event {
+                EthBridgeConfigEvents::InitializedFilter(_) => {
+                    bump_eth_counter!("config_contract_initialized");
+                }
+                EthBridgeConfigEvents::UpgradedFilter(_) => {
+                    bump_eth_counter!("config_contract_upgraded");
+                }
+                EthBridgeConfigEvents::TokenAddedFilter(_) => {
+                    bump_eth_counter!("new_token_added");
+                }
+                EthBridgeConfigEvents::TokenPriceUpdatedFilter(_) => {
+                    bump_eth_counter!("update_token_price");
+                }
+            },
+            EthBridgeEvent::EthCommitteeUpgradeableContractEvents(event) => match event {
+                EthCommitteeUpgradeableContractEvents::InitializedFilter(_) => {
+                    bump_eth_counter!("upgradeable_contract_initialized");
+                }
+                EthCommitteeUpgradeableContractEvents::UpgradedFilter(_) => {
+                    bump_eth_counter!("upgradeable_contract_upgraded");
+                }
+            },
+            EthBridgeEvent::EthSuiBridgeEvents(event) => match event {
+                EthSuiBridgeEvents::TokensClaimedFilter(_) => (),
+                EthSuiBridgeEvents::TokensDepositedFilter(_) => (),
+                EthSuiBridgeEvents::PausedFilter(_) => bump_eth_counter!("bridge_paused"),
+                EthSuiBridgeEvents::UnpausedFilter(_) => bump_eth_counter!("bridge_unpaused"),
+                EthSuiBridgeEvents::UpgradedFilter(_) => {
+                    bump_eth_counter!("bridge_contract_upgraded")
+                }
+                EthSuiBridgeEvents::InitializedFilter(_) => {
+                    bump_eth_counter!("bridge_contract_initialized")
+                }
+            },
         }
     }
 }
