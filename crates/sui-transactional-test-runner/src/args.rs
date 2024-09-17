@@ -108,6 +108,8 @@ pub struct ProgrammableTransactionCommand {
     pub gas_budget: Option<u64>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
+    #[clap(long = "gas-payment", value_parser = parse_fake_id)]
+    pub gas_payment: Option<FakeID>,
     #[clap(long = "dev-inspect")]
     pub dev_inspect: bool,
     #[clap(
