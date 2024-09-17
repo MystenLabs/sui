@@ -74,7 +74,7 @@ async fn execute_transaction(
 ) -> Result<ResponseContent<TransactionExecutionResponse>> {
     let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
     let request = sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
-        transaction: transaction.into(),
+        transaction: transaction.try_into()?,
         include_events: parameters.events,
         include_input_objects: parameters.input_objects || parameters.balance_changes,
         include_output_objects: parameters.output_objects || parameters.balance_changes,
@@ -108,19 +108,31 @@ async fn execute_transaction(
             ) => EffectsFinality::Checkpointed { checkpoint },
         };
 
-        (effects.into(), finality)
+        (effects.try_into()?, finality)
     };
 
     let events = if parameters.events {
-        events.map(Into::into)
+        events.map(TryInto::try_into).transpose()?
     } else {
         None
     };
 
-    let input_objects =
-        input_objects.map(|objects| objects.into_iter().map(Into::into).collect::<Vec<_>>());
-    let output_objects =
-        output_objects.map(|objects| objects.into_iter().map(Into::into).collect::<Vec<_>>());
+    let input_objects = input_objects
+        .map(|objects| {
+            objects
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
+    let output_objects = output_objects
+        .map(|objects| {
+            objects
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
 
     let balance_changes = match (parameters.balance_changes, &input_objects, &output_objects) {
         (true, Some(input_objects), Some(output_objects)) => Some(derive_balance_changes(

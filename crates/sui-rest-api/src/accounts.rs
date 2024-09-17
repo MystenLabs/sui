@@ -55,13 +55,13 @@ async fn list_account_objects(
     let mut object_info = state
         .inner()
         .account_owned_objects_info_iter(address.into(), start)?
+        .take(limit + 1)
         .map(|info| AccountOwnedObjectInfo {
             owner: info.owner.into(),
             object_id: info.object_id.into(),
             version: info.version.into(),
-            type_: struct_tag_core_to_sdk(info.type_.into()),
+            type_: struct_tag_core_to_sdk(info.type_.into()).expect("object types must be valid"),
         })
-        .take(limit + 1)
         .collect::<Vec<_>>();
 
     let cursor = if object_info.len() > limit {
