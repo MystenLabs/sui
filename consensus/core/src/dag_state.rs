@@ -180,13 +180,20 @@ impl DagState {
 
         for (i, round) in last_committed_rounds.into_iter().enumerate() {
             let authority_index = state.context.committee.to_authority_index(i).unwrap();
-            let blocks = state
-                .store
-                .scan_blocks_by_author(
-                    authority_index,
-                    Self::eviction_round(round, cached_rounds) + 1,
-                )
-                .unwrap();
+            let blocks = if state.gc_enabled() {
+                state
+                    .store
+                    .scan_blocks_by_author(authority_index, state.gc_eviction_round() + 1)
+                    .unwrap()
+            } else {
+                state
+                    .store
+                    .scan_blocks_by_author(
+                        authority_index,
+                        Self::eviction_round(round, cached_rounds) + 1,
+                    )
+                    .unwrap()
+            };
             for block in blocks {
                 state.update_block_metadata(&block);
             }
@@ -484,7 +491,12 @@ impl DagState {
                 .to_authority_index(authority_index)
                 .unwrap();
 
-            let last_evicted_round = self.authority_eviction_round(authority_index);
+            let last_evicted_round = if self.gc_enabled() {
+                self.gc_eviction_round()
+            } else {
+                self.authority_eviction_round(authority_index)
+            };
+
             if end_round.saturating_sub(1) <= last_evicted_round {
                 panic!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}", );
             }
@@ -520,7 +532,14 @@ impl DagState {
             return true;
         }
 
-        if slot.round <= self.authority_eviction_round(slot.authority) {
+        if self.gc_enabled() {
+            if slot.round <= self.gc_eviction_round() {
+                panic!(
+                    "Attempted to check for slot {slot} that is <= the last gc evicted round {}",
+                    self.gc_eviction_round()
+                );
+            }
+        } else if slot.round <= self.authority_eviction_round(slot.authority) {
             panic!(
                 "Attempted to check for slot {slot} that is <= the last evicted round {}",
                 self.authority_eviction_round(slot.authority)
@@ -803,22 +822,40 @@ impl DagState {
 
         // Clean up old cached data. After flushing, all cached blocks are guaranteed to be persisted.
         let mut total_recent_refs = 0;
-        for (authority_refs, last_committed_round) in self
-            .recent_refs
-            .iter_mut()
-            .zip(self.last_committed_rounds.iter())
-        {
-            while let Some(block_ref) = authority_refs.first() {
-                if block_ref.round
-                    <= Self::eviction_round(*last_committed_round, self.cached_rounds)
-                {
-                    self.recent_blocks.remove(block_ref);
-                    authority_refs.pop_first();
-                } else {
-                    break;
+
+        if self.gc_enabled() {
+            // If gc is enabled, then we want to clean up based on GC eviction round which should be universal for all authorities.
+            let eviction_round = self.gc_eviction_round();
+
+            for authority_refs in self.recent_refs.iter_mut() {
+                while let Some(block_ref) = authority_refs.first() {
+                    if block_ref.round <= eviction_round {
+                        self.recent_blocks.remove(block_ref);
+                        authority_refs.pop_first();
+                    } else {
+                        break;
+                    }
                 }
+                total_recent_refs += authority_refs.len();
             }
-            total_recent_refs += authority_refs.len();
+        } else {
+            for (authority_refs, last_committed_round) in self
+                .recent_refs
+                .iter_mut()
+                .zip(self.last_committed_rounds.iter())
+            {
+                while let Some(block_ref) = authority_refs.first() {
+                    if block_ref.round
+                        <= Self::eviction_round(*last_committed_round, self.cached_rounds)
+                    {
+                        self.recent_blocks.remove(block_ref);
+                        authority_refs.pop_first();
+                    } else {
+                        break;
+                    }
+                }
+                total_recent_refs += authority_refs.len();
+            }
         }
 
         let metrics = &self.context.metrics.node_metrics;
@@ -924,6 +961,13 @@ impl DagState {
     /// round <= the evict round have been cleaned up.
     fn eviction_round(commit_round: Round, cached_rounds: Round) -> Round {
         commit_round.saturating_sub(cached_rounds)
+    }
+
+    /// The round that is used to evict records below that round after a commit has happened and blocks need to get garbage
+    /// collected. The round is not strictly calculated based on the current gc_round, but it takes into account the `cached_rounds`
+    /// property, so some additional buffer can be given if needed to keep more blocks in memory.
+    fn gc_eviction_round(&self) -> Round {
+        self.gc_round().saturating_sub(self.cached_rounds)
     }
 
     #[cfg(test)]
