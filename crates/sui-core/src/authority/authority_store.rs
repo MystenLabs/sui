@@ -61,6 +61,7 @@ struct AuthorityStoreMetrics {
     sui_conservation_imbalance: IntGauge,
     sui_conservation_storage_fund: IntGauge,
     sui_conservation_storage_fund_imbalance: IntGauge,
+    markers_written: IntCounter,
     epoch_flags: IntGaugeVec,
 }
 
@@ -95,6 +96,11 @@ impl AuthorityStoreMetrics {
             sui_conservation_storage_fund_imbalance: register_int_gauge_with_registry!(
                 "sui_conservation_storage_fund_imbalance",
                 "Imbalance of storage fund, computed with storage_fund_balance - total_object_storage_rebates",
+                registry,
+            ).unwrap(),
+            markers_written: register_int_counter_with_registry!(
+                "markers_written",
+                "markers_written",
                 registry,
             ).unwrap(),
             epoch_flags: register_int_gauge_vec_with_registry!(
@@ -878,7 +884,7 @@ impl AuthorityStore {
 
         // Add batched writes for objects and locks.
         let effects_digest = effects.digest();
-
+        self.metrics.markers_written.inc_by(markers.len() as u64);
         write_batch.insert_batch(
             &self.perpetual_tables.object_per_epoch_marker_table,
             markers
