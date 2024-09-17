@@ -42,6 +42,25 @@ pub async fn run_bridge_node(
     init_all_struct_tags();
     let metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
     let (server_config, client_config) = config.validate(metrics.clone()).await?;
+    let sui_chain_identifier = server_config
+        .sui_client
+        .get_chain_identifier()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get sui chain identifier: {:?}", e))?;
+    let eth_chain_identifier = server_config
+        .eth_client
+        .get_chain_id()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get eth chain identifier: {:?}", e))?;
+    prometheus_registry
+        .register(mysten_metrics::bridge_uptime_metric(
+            "bridge",
+            metadata.version,
+            &sui_chain_identifier,
+            &eth_chain_identifier.to_string(),
+            client_config.is_some(),
+        ))
+        .unwrap();
 
     // Start Client
     let _handles = if let Some(client_config) = client_config {

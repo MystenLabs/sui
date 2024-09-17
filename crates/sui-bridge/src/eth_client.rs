@@ -53,9 +53,14 @@ impl<P> EthClient<P>
 where
     P: JsonRpcClient,
 {
+    pub async fn get_chain_id(&self) -> Result<u64, anyhow::Error> {
+        let chain_id = self.provider.get_chainid().await?;
+        Ok(chain_id.as_u64())
+    }
+
     // TODO assert chain identifier
     async fn describe(&self) -> anyhow::Result<()> {
-        let chain_id = self.provider.get_chainid().await?;
+        let chain_id = self.get_chain_id().await?;
         let block_number = self.provider.get_block_number().await?;
         tracing::info!(
             "EthClient is connected to chain {chain_id}, current block number: {block_number}"
