@@ -520,15 +520,8 @@ impl ModuleDefinitionResolver {
     // Function resolution
     //
 
-    pub(crate) fn function_from_instantiation(
-        &self,
-        idx: FunctionInstantiationIndex,
-    ) -> ArenaPointer<Function> {
-        let func_inst = self.loaded.function_instantiation_at(idx.0);
-        let CallType::Known(f_ptr) = func_inst.handle else {
-            unimplemented!("TODO: Need to replace this to handle virtual generic calls as part of plumbing in the new tables for the interpreter");
-        };
-        f_ptr
+    pub(crate) fn function_from_instantiation(&self, idx: FunctionInstantiationIndex) -> &CallType {
+        &self.loaded.function_instantiation_at(idx.0).handle
     }
 
     pub(crate) fn instantiate_generic_function(

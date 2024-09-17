@@ -155,7 +155,7 @@ pub struct Function {
 // - Virtual: the function is unknown and the index is the index in the global table of vtables
 //   that will be filled in at a later time before execution.
 pub enum CallType {
-    Known(ArenaPointer<Function>),
+    Direct(ArenaPointer<Function>),
     Virtual(VTableKey),
 }
 
@@ -367,14 +367,14 @@ pub enum Bytecode {
     ///
     /// ```..., value -> ...```
     StLoc(LocalIndex),
-    /// Call a well-known (intra-package) function. The stack has the arguments pushed first to
-    /// last. The arguments are consumed and pushed to the locals of the function.
-    /// Return values are pushed on the stack and available to the caller.
+    /// Call a well-known (usually intra-package) function. The stack has the arguments pushed
+    /// first to last. The arguments are consumed and pushed to the locals of the function. Return
+    /// values are pushed on the stack and available to the caller.
     ///
     /// Stack transition:
     ///
     /// ```..., arg(1), arg(2), ...,  arg(n) -> ..., return_value(1), return_value(2), ..., return_value(k)```
-    KnownCall(ArenaPointer<Function>),
+    DirectCall(ArenaPointer<Function>),
     /// Call an unknown (inter-package) function. The stack has the arguments pushed first to
     /// last. The arguments are consumed and pushed to the locals of the function.
     /// Return values are pushed on the stack and available to the caller.
@@ -800,10 +800,7 @@ impl LoadedModule {
         self.enums[idx.0 as usize].idx
     }
 
-    pub fn enum_instantiation_at(
-        &self,
-        idx: EnumDefInstantiationIndex,
-    ) -> &EnumInstantiation {
+    pub fn enum_instantiation_at(&self, idx: EnumDefInstantiationIndex) -> &EnumInstantiation {
         &self.enum_instantiations[idx.0 as usize]
     }
 
@@ -976,7 +973,7 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),
             Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
             Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
-            Bytecode::KnownCall(a) => write!(f, "Call({})", a.to_ref().name),
+            Bytecode::DirectCall(a) => write!(f, "Call({})", a.to_ref().name),
             Bytecode::VirtualCall(a) => write!(
                 f,
                 "Call(~{}::{}::{})",
@@ -1053,7 +1050,7 @@ impl ::std::fmt::Debug for Bytecode {
 impl std::fmt::Debug for CallType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CallType::Known(fun) => write!(f, "Known({})", fun.to_ref().name),
+            CallType::Direct(fun) => write!(f, "Known({})", fun.to_ref().name),
             CallType::Virtual(vtable) => write!(
                 f,
                 "Virtual({}::{}::{})",

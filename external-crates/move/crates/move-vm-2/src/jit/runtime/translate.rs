@@ -153,7 +153,7 @@ fn bytecode(
         FF::Bytecode::Call(ndx) => {
             let call_type = call(context, *ndx)?;
             match call_type {
-                CallType::Known(func) => Bytecode::KnownCall(func),
+                CallType::Direct(func) => Bytecode::DirectCall(func),
                 CallType::Virtual(vtable) => Bytecode::VirtualCall(vtable),
             }
         }
@@ -305,7 +305,7 @@ fn call(
         println!("Resolving function: {:?}", vtable_key);
     }
     Ok(match context.cache.try_resolve_function(&vtable_key) {
-        Some(func) => CallType::Known(func),
+        Some(func) => CallType::Direct(func),
         None => CallType::Virtual(vtable_key),
     })
 }

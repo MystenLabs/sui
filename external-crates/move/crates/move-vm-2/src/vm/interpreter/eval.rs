@@ -3,7 +3,7 @@
 
 use crate::{
     cache::{arena::ArenaPointer, type_cache::TypeCache},
-    jit::runtime::ast::{Bytecode, Function},
+    jit::runtime::ast::{Bytecode, CallType, Function},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     vm::interpreter::state::{CallFrame, MachineState, TypeWithTypeCache},
     vm::runtime_vtables::RuntimeVTables,
@@ -172,63 +172,31 @@ fn step(
         }
         Bytecode::CallGeneric(idx) => {
             profile_close_instr!(gas_meter, format!("{:?}", instruction));
-
             let ty_args = state
                 .current_frame
                 .resolver
                 .instantiate_generic_function(*idx, state.current_frame.ty_args())
                 .map_err(|e| set_err_info!(state.current_frame, e))?;
-            let function = state
+            let call_type = state
                 .current_frame
                 .resolver
                 .function_from_instantiation(*idx);
-            let fun_ref = function.to_ref();
-
-            profile_open_frame!(gas_meter, func_name.clone());
-
-            // Charge gas
-            let module_id = fun_ref.module_id();
-            let last_n_operands = state
-                .last_n_operands(fun_ref.arg_count())
-                .map_err(|e| set_err_info!(state.current_frame, e))?;
-            gas_meter
-                .charge_call_generic(
-                    module_id,
-                    fun_ref.name(),
-                    ty_args.iter().map(|ty| TypeWithTypeCache {
-                        ty,
-                        type_cache: run_context.type_cache,
-                    }),
-                    last_n_operands,
-                    (fun_ref.local_count() as u64).into(),
-                )
-                .map_err(|e| set_err_info!(state.current_frame, e))?;
-
+            let function = call_type_to_function(run_context, call_type)
+                .map_err(|err| set_err_info!(state.current_frame, err))?;
             call_function(state, run_context, gas_meter, function, ty_args)?;
             Ok(StepStatus::Running)
         }
-        Bytecode::VirtualCall(_vtable_key) => {
-            unimplemented!("TODO: implement virtual calls when adding vtables to interpreter")
-        }
-        Bytecode::KnownCall(function) => {
+        Bytecode::VirtualCall(vtable_key) => {
             profile_close_instr!(gas_meter, format!("{:?}", instruction));
-
-            let fun_ref = function.to_ref();
-            profile_open_frame!(gas_meter, func_name.clone());
-
-            // Charge gas
-            let module_id = fun_ref.module_id();
-            let last_n_operands = state
-                .last_n_operands(fun_ref.arg_count())
-                .map_err(|e| set_err_info!(state.current_frame, e))?;
-            gas_meter
-                .charge_call(
-                    module_id,
-                    fun_ref.name(),
-                    last_n_operands,
-                    (fun_ref.local_count() as u64).into(),
-                )
-                .map_err(|e| set_err_info!(state.current_frame, e))?;
+            let function = run_context
+                .vtables
+                .resolve_function(vtable_key)
+                .map_err(|err| set_err_info!(state.current_frame, err))?;
+            call_function(state, run_context, gas_meter, function, vec![])?;
+            Ok(StepStatus::Running)
+        }
+        Bytecode::DirectCall(function) => {
+            profile_close_instr!(gas_meter, format!("{:?}", instruction));
             call_function(state, run_context, gas_meter, *function, vec![])?;
             Ok(StepStatus::Running)
         }
@@ -240,6 +208,7 @@ fn step(
     }
 }
 
+#[inline]
 fn control_flow_instruction(instruction: &Bytecode) -> bool {
     match instruction {
         Bytecode::Ret
@@ -261,7 +230,7 @@ fn control_flow_instruction(instruction: &Bytecode) -> bool {
         | Bytecode::CopyLoc(_)
         | Bytecode::MoveLoc(_)
         | Bytecode::StLoc(_)
-        | Bytecode::KnownCall(_)
+        | Bytecode::DirectCall(_)
         | Bytecode::VirtualCall(_)
         | Bytecode::CallGeneric(_)
         | Bytecode::Pack(_)
@@ -323,6 +292,7 @@ fn control_flow_instruction(instruction: &Bytecode) -> bool {
     }
 }
 
+#[inline]
 fn op_step_impl(
     state: &mut MachineState,
     run_context: &mut RunContext,
@@ -345,7 +315,7 @@ fn op_step_impl(
         // These should have been handled in `step` above.
         Bytecode::Ret
         | Bytecode::CallGeneric(_)
-        | Bytecode::KnownCall(_)
+        | Bytecode::DirectCall(_)
         | Bytecode::VirtualCall(_) => unreachable!(),
         // -- INTERNAL CONTROL FLOW --------------
         // These all update the current frame's program counter.
@@ -861,6 +831,17 @@ fn op_step_impl(
     Ok(())
 }
 
+#[inline]
+fn call_type_to_function(
+    run_context: &RunContext,
+    call_type: &CallType,
+) -> PartialVMResult<ArenaPointer<Function>> {
+    match call_type {
+        CallType::Direct(ptr) => Ok(*ptr),
+        CallType::Virtual(vtable_key) => run_context.vtables.resolve_function(&vtable_key),
+    }
+}
+
 fn call_function(
     state: &mut MachineState,
     run_context: &mut RunContext,
@@ -869,6 +850,40 @@ fn call_function(
     ty_args: Vec<Type>,
 ) -> VMResult<()> {
     let fun_ref = function.to_ref();
+    profile_open_frame!(gas_meter, func_name.clone());
+
+    // Charge gas
+    let module_id = fun_ref.module_id();
+    let last_n_operands = state
+        .last_n_operands(fun_ref.arg_count())
+        .map_err(|e| set_err_info!(state.current_frame, e))?;
+
+    if ty_args.is_empty() {
+        // Charge for a non-generic call
+        gas_meter
+            .charge_call(
+                module_id,
+                fun_ref.name(),
+                last_n_operands,
+                (fun_ref.local_count() as u64).into(),
+            )
+            .map_err(|e| set_err_info!(state.current_frame, e))?;
+    } else {
+        // Charge for a generic call
+        gas_meter
+            .charge_call_generic(
+                module_id,
+                fun_ref.name(),
+                ty_args.iter().map(|ty| TypeWithTypeCache {
+                    ty,
+                    type_cache: run_context.type_cache,
+                }),
+                last_n_operands,
+                (fun_ref.local_count() as u64).into(),
+            )
+            .map_err(|e| set_err_info!(state.current_frame, e))?;
+    }
+
     if fun_ref.is_native() {
         call_native(state, run_context, gas_meter, fun_ref, ty_args)?;
 
@@ -1067,7 +1082,6 @@ fn partial_error_to_error<T>(
     result: PartialVMResult<T>,
 ) -> VMResult<T> {
     result.map_err(|err| {
-        // TODO: The run context should just hold the VM Config ref, not go get it from the Loader.
         let err = if run_context.vm_config().error_execution_state {
             err.with_exec_state(state.get_internal_state())
         } else {

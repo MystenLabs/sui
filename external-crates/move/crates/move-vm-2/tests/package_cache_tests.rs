@@ -3,12 +3,6 @@
 
 mod relinking_store;
 
-use move_vm_2::on_chain::ast::{PackageStorageId, RuntimePackageId};
-use move_vm_2::{
-    on_chain::data_cache::TransactionDataCache,
-    cache::vm_cache::VMCache,
-    natives::functions::NativeFunctions,
-};
 use anyhow::Result;
 use move_binary_format::errors::VMResult;
 use move_binary_format::file_format::CompiledModule;
@@ -22,6 +16,11 @@ use move_compiler::{
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
+use move_vm_2::on_chain::ast::{PackageStorageId, RuntimePackageId};
+use move_vm_2::{
+    cache::vm_cache::VMCache, natives::functions::NativeFunctions,
+    on_chain::data_cache::TransactionDataCache,
+};
 use move_vm_config::runtime::VMConfig;
 use move_vm_test_utils::InMemoryStorage;
 use relinking_store::RelinkingStore;
@@ -199,7 +198,10 @@ fn cache_package_internal_package_calls_only_with_types() {
     assert_eq!(l_pkg.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.storage_id, package_address);
     assert_eq!(l_pkg.vtable.binaries.len(), 3);
-    println!("{:#?}", adapter.cache.type_cache().read().cached_types.id_map);
+    println!(
+        "{:#?}",
+        adapter.cache.type_cache().read().cached_types.id_map
+    );
 }
 
 #[test]
