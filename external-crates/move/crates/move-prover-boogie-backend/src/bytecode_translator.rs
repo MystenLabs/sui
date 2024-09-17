@@ -896,7 +896,7 @@ impl<'env> FunctionTranslator<'env> {
 
         // Initial value of res when generating abort condition
         if &FunctionTranslationStyle::AbortsNot == style {
-            emitln!(writer, "res := false;");
+            emitln!(writer, "res := true;");
         }
 
         // Generate bytecode
@@ -1338,7 +1338,7 @@ impl<'env> FunctionTranslator<'env> {
                                             if let Some(s0) = srcs.get(0) {
                                                 emitln!(
                                                     self.writer(),
-                                                    "res := {};\nif (res) {{ return; }}",
+                                                    "res := {};\nif (!res) {{ return; }}",
                                                     str_local(*s0)
                                                 );
                                             }
