@@ -265,12 +265,9 @@ impl ServerBuilder {
         if self.router.is_none() {
             let router: Router = Router::new()
                 .route("/", post(graphql_handler))
-                .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
-                .route("/graphql/:version", post(graphql_handler))
                 .route("/health", get(health_check))
                 .route("/graphql/health", get(health_check))
-                .route("/graphql/:version/health", get(health_check))
                 .with_state(self.state.clone())
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
