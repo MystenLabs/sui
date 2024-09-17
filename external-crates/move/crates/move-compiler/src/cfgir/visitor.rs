@@ -773,37 +773,95 @@ impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
 // utils
 //**************************************************************************************************
 
+pub fn cfg_satisfies<FCommand, FExp>(
+    cfg: &ImmForwardCFG,
+    mut p_command: FCommand,
+    mut p_exp: FExp,
+) -> bool
+where
+    FCommand: FnMut(&Command) -> bool,
+    FExp: FnMut(&Exp) -> bool,
+{
+    cfg_satisfies_(cfg, &mut p_command, &mut p_exp)
+}
+
+pub fn command_satisfies<FCommand, FExp>(
+    cmd: &Command,
+    mut p_command: FCommand,
+    mut p_exp: FExp,
+) -> bool
+where
+    FCommand: FnMut(&Command) -> bool,
+    FExp: FnMut(&Exp) -> bool,
+{
+    command_satisfies_(cmd, &mut p_command, &mut p_exp)
+}
+
+pub fn exp_satisfies<F>(e: &Exp, mut p: F) -> bool
+where
+    F: FnMut(&Exp) -> bool,
+{
+    exp_satisfies_(e, &mut p)
+}
+
 pub fn calls_special_function(special: &[(&str, &str, &str)], cfg: &ImmForwardCFG) -> bool {
+    cfg_satisfies(cfg, |_| true, |e| is_special_function(special, e))
+}
+
+pub fn calls_special_function_command(special: &[(&str, &str, &str)], cmd: &Command) -> bool {
+    command_satisfies(cmd, |_| true, |e| is_special_function(special, e))
+}
+
+pub fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+    exp_satisfies(e, |e| is_special_function(special, e))
+}
+
+fn is_special_function(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+    use H::UnannotatedExp_ as E;
+    matches!(
+        &e.exp.value,
+        E::ModuleCall(call) if special.iter().any(|(a, m, f)| call.is(a, m, f)),
+    )
+}
+
+fn cfg_satisfies_(
+    cfg: &ImmForwardCFG,
+    p_command: &mut impl FnMut(&Command) -> bool,
+    p_exp: &mut impl FnMut(&Exp) -> bool,
+) -> bool {
     cfg.blocks().values().any(|block| {
         block
             .iter()
-            .any(|cmd| calls_special_function_command(special, cmd))
+            .any(|cmd| command_satisfies_(cmd, p_command, p_exp))
     })
 }
 
-pub fn calls_special_function_command(
-    special: &[(&str, &str, &str)],
-    sp!(_, cmd_): &Command,
+fn command_satisfies_(
+    cmd @ sp!(_, cmd_): &Command,
+    p_command: &mut impl FnMut(&Command) -> bool,
+    p_exp: &mut impl FnMut(&Exp) -> bool,
 ) -> bool {
     use H::Command_ as C;
-    match cmd_ {
-        C::Assign(_, _, e)
-        | C::Abort(_, e)
-        | C::Return { exp: e, .. }
-        | C::IgnoreAndPop { exp: e, .. }
-        | C::JumpIf { cond: e, .. }
-        | C::VariantSwitch { subject: e, .. } => calls_special_function_exp(special, e),
-        C::Mutate(el, er) => {
-            calls_special_function_exp(special, el) || calls_special_function_exp(special, er)
+    p_command(cmd)
+        || match cmd_ {
+            C::Assign(_, _, e)
+            | C::Abort(_, e)
+            | C::Return { exp: e, .. }
+            | C::IgnoreAndPop { exp: e, .. }
+            | C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. } => exp_satisfies_(e, p_exp),
+            C::Mutate(el, er) => exp_satisfies_(el, p_exp) || exp_satisfies_(er, p_exp),
+            C::Jump { .. } => false,
+            C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
         }
-        C::Jump { .. } => false,
-        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
-    }
 }
 
 #[growing_stack]
-pub fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bool {
+fn exp_satisfies_(e: &Exp, p: &mut impl FnMut(&Exp) -> bool) -> bool {
     use H::UnannotatedExp_ as E;
+    if p(e) {
+        return true;
+    }
     match &e.exp.value {
         E::Unit { .. }
         | E::Move { .. }
@@ -819,25 +877,15 @@ pub fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bo
         | E::Dereference(e)
         | E::UnaryExp(_, e)
         | E::Borrow(_, e, _, _)
-        | E::Cast(e, _) => calls_special_function_exp(special, e),
+        | E::Cast(e, _) => exp_satisfies_(e, p),
 
-        E::BinopExp(el, _, er) => {
-            calls_special_function_exp(special, el) || calls_special_function_exp(special, er)
-        }
+        E::BinopExp(el, _, er) => exp_satisfies_(el, p) || exp_satisfies_(er, p),
 
-        E::ModuleCall(call) => {
-            special.iter().any(|(a, m, f)| call.is(*a, *m, *f))
-                || call
-                    .arguments
-                    .iter()
-                    .any(|arg| calls_special_function_exp(special, arg))
-        }
-        E::Vector(_, _, _, es) | E::Multiple(es) => {
-            es.iter().any(|e| calls_special_function_exp(special, e))
-        }
+        E::ModuleCall(call) => call.arguments.iter().any(|arg| exp_satisfies_(arg, p)),
+        E::Vector(_, _, _, es) | E::Multiple(es) => es.iter().any(move |e| exp_satisfies_(e, p)),
 
-        E::Pack(_, _, es) | E::PackVariant(_, _, _, es) => es
-            .iter()
-            .any(|(_, _, e)| calls_special_function_exp(special, e)),
+        E::Pack(_, _, es) | E::PackVariant(_, _, _, es) => {
+            es.iter().any(|(_, _, e)| exp_satisfies_(e, p))
+        }
     }
 }

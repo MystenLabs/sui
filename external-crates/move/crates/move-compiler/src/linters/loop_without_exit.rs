@@ -8,7 +8,7 @@ use crate::{
     shared::CompilationEnv,
     typing::{
         ast::{self as T, UnannotatedExp_},
-        visitor::{has_special_exp, TypingVisitorConstructor, TypingVisitorContext},
+        visitor::{exp_satisfies, TypingVisitorConstructor, TypingVisitorContext},
     },
 };
 
@@ -63,5 +63,5 @@ impl TypingVisitorContext for Context<'_> {
 }
 
 fn has_return(e: &T::Exp) -> bool {
-    has_special_exp(e, |e| matches!(e.exp.value, UnannotatedExp_::Return(_)))
+    exp_satisfies(e, |e| matches!(e.exp.value, UnannotatedExp_::Return(_)))
 }
