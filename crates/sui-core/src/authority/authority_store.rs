@@ -551,10 +551,10 @@ impl AuthorityStore {
         let Some(prior_version) = version.one_before() else {
             return Ok(None);
         };
-        let last = self
-            .perpetual_tables
-            .objects
-            .last_in_range(&ObjectKey::min_for_id(object_id), &ObjectKey(*object_id, prior_version));
+        let last = self.perpetual_tables.objects.last_in_range(
+            &ObjectKey::min_for_id(object_id),
+            &ObjectKey(*object_id, prior_version),
+        );
 
         if let Some((object_key, value)) = last {
             debug_assert_eq!(object_key.0, *object_id);
@@ -1113,7 +1113,10 @@ impl AuthorityStore {
         let last = self
             .perpetual_tables
             .live_owned_object_markers
-            .last_in_range(&(object_id, SequenceNumber::MIN, ObjectDigest::MIN), &(object_id, SequenceNumber::MAX, ObjectDigest::MAX));
+            .last_in_range(
+                &(object_id, SequenceNumber::MIN, ObjectDigest::MIN),
+                &(object_id, SequenceNumber::MAX, ObjectDigest::MAX),
+            );
         Ok(last
             .and_then(|value| {
                 if value.0 .0 == object_id {

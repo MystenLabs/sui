@@ -23,8 +23,8 @@ use crate::authority::authority_store_types::{
     StoreMoveObjectWrapper, StoreObject, StoreObjectPair, StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use typed_store::DBMapUtils;
 use typed_store::tidehunter::th_db_map::{open_thdb, ThDbBatch, ThDbMap};
+use typed_store::DBMapUtils;
 
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
 pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
@@ -131,7 +131,6 @@ pub struct AuthorityPerpetualTables {
     pub(crate) expected_storage_fund_imbalance: ThDbMap<(), i64>,
 
     // todo rework this table for ThDbMap - all keys will go to the same bucket currently
-
     /// Table that stores the set of received objects and deleted objects and the version at
     /// which they were received. This is used to prevent possible race conditions around receiving
     /// objects (since they are not locked by the transaction manager) and for tracking shared
@@ -211,9 +210,10 @@ impl AuthorityPerpetualTables {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        let last = self
-            .objects
-            .last_in_range(&ObjectKey::min_for_id(&object_id), &ObjectKey(object_id, version));
+        let last = self.objects.last_in_range(
+            &ObjectKey::min_for_id(&object_id),
+            &ObjectKey(object_id, version),
+        );
         match last {
             Some((key, o)) => self.object(&key, o),
             None => Ok(None),
@@ -296,9 +296,10 @@ impl AuthorityPerpetualTables {
         &self,
         object_id: ObjectID,
     ) -> Result<Option<ObjectRef>, SuiError> {
-        let last = self
-            .objects
-            .last_in_range(&ObjectKey::min_for_id(&object_id), &ObjectKey::max_for_id(&object_id));
+        let last = self.objects.last_in_range(
+            &ObjectKey::min_for_id(&object_id),
+            &ObjectKey::max_for_id(&object_id),
+        );
 
         if let Some((object_key, value)) = last {
             debug_assert_eq!(object_key.0, object_id);
@@ -311,13 +312,14 @@ impl AuthorityPerpetualTables {
         &self,
         object_id: ObjectID,
     ) -> Result<Option<(ObjectKey, StoreObjectWrapper)>, SuiError> {
-        let last = self
-            .objects
-            .last_in_range(&ObjectKey::min_for_id(&object_id), &ObjectKey::max_for_id(&object_id));
+        let last = self.objects.last_in_range(
+            &ObjectKey::min_for_id(&object_id),
+            &ObjectKey::max_for_id(&object_id),
+        );
 
         if let Some((object_key, value)) = last {
             debug_assert_eq!(object_key.0, object_id);
-                return Ok(Some((object_key, value)));
+            return Ok(Some((object_key, value)));
         }
         Ok(None)
     }
@@ -409,11 +411,7 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
-        Ok(self
-            .objects
-            .unbounded_iter()
-            .next()
-            .is_none())
+        Ok(self.objects.unbounded_iter().next().is_none())
     }
 
     pub fn iter_live_object_set(&self, include_wrapped_object: bool) -> LiveSetIter<'_> {
@@ -497,12 +495,18 @@ impl AuthorityPerpetualTables {
         wb.write()?;
         Ok(())
     }
+}
 
-    // fallible get object methods for sui-tool, which may need to attempt to read a corrupted database
-    pub fn get_object_fallible(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
-        let obj_entry = self
-            .objects
-            .last_in_range(&ObjectKey::min_for_id(object_id), &ObjectKey::max_for_id(object_id));
+impl ObjectStore for AuthorityPerpetualTables {
+    /// Read an object and return it, or Ok(None) if the object was not found.
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
+        let obj_entry = self.objects.last_in_range(
+            &ObjectKey::min_for_id(object_id),
+            &ObjectKey::max_for_id(object_id),
+        );
 
         match obj_entry {
             Some((ObjectKey(obj_id, version), obj)) if obj_id == *object_id => {
