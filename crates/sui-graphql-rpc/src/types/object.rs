@@ -51,9 +51,6 @@ use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
 };
 use sui_types::TypeTag;
-
-type SerializedObject = Option<Vec<u8>>;
-
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
     pub address: SuiAddress,
@@ -761,7 +758,7 @@ impl Object {
     pub(crate) fn new_serialized(
         object_id: SuiAddress,
         version: u64,
-        serialized: SerializedObject,
+        serialized: Option<Vec<u8>>,
         checkpoint_viewed_at: u64,
         root_version: u64,
     ) -> Self {
@@ -1529,13 +1526,13 @@ impl Loader<LatestAtKey> for Db {
 
 #[async_trait::async_trait]
 impl Loader<PointLookupKey> for Db {
-    type Value = SerializedObject;
+    type Value = Option<Vec<u8>>;
     type Error = Error;
 
     async fn load(
         &self,
         keys: &[PointLookupKey],
-    ) -> Result<HashMap<PointLookupKey, SerializedObject>, Error> {
+    ) -> Result<HashMap<PointLookupKey, Option<Vec<u8>>>, Error> {
         use full_objects_history::dsl as f;
 
         let id_versions: BTreeSet<_> = keys
