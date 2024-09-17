@@ -7019,7 +7019,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/andll/tidehunter.git?rev=069d035#069d0358dac46c0cd0ef53b932c680654a9df84e"
+source = "git+https://github.com/andll/tidehunter.git?rev=d1f26de3f97b7d775cf99f98ff821b4d5b7afa5a#d1f26de3f97b7d775cf99f98ff821b4d5b7afa5a"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -15827,7 +15827,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/andll/tidehunter.git?rev=069d035#069d0358dac46c0cd0ef53b932c680654a9df84e"
+source = "git+https://github.com/andll/tidehunter.git?rev=d1f26de3f97b7d775cf99f98ff821b4d5b7afa5a#d1f26de3f97b7d775cf99f98ff821b4d5b7afa5a"
 dependencies = [
  "bincode",
  "bytes",
@@ -15835,6 +15835,7 @@ dependencies = [
  "memmap2 0.7.1",
  "minibytes",
  "parking_lot 0.12.3",
+ "prometheus",
  "serde",
  "smallvec",
 ]
