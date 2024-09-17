@@ -411,7 +411,9 @@ impl AuthorityPerpetualTables {
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
             .objects
-            .is_empty())
+            .unbounded_iter()
+            .next()
+            .is_none())
     }
 
     pub fn iter_live_object_set(&self, include_wrapped_object: bool) -> LiveSetIter<'_> {
