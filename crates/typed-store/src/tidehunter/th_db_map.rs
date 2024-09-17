@@ -116,7 +116,7 @@ where
     V: Serialize + DeserializeOwned, {
     type Error = TypedStoreError;
     type Iterator = Box<dyn Iterator<Item=(K, V)> + 'a>;
-    type SafeIterator = Box<dyn Iterator<Item=Result<(K, V), TypedStoreError>>>;
+    type SafeIterator = Box<dyn Iterator<Item=Result<(K, V), TypedStoreError>> + 'a>;
     type Keys = Box<dyn Iterator<Item=Result<K, TypedStoreError>>>;
     type Values = Box<dyn Iterator<Item=Result<V, TypedStoreError>>>;
 
