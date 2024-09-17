@@ -7,6 +7,7 @@ use std::ops::Range;
 use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
@@ -709,6 +710,13 @@ impl RpcExampleProvider {
             type Error = Error;
             fn get_module(&self, _id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
                 Ok(None)
+            }
+
+            fn get_package(
+                &self,
+                _id: &AccountAddress,
+            ) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+                todo!()
             }
         }
         let result = SuiTransactionBlockResponse {

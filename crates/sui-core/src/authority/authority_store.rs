@@ -20,7 +20,7 @@ use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
 use itertools::izip;
-use move_core_types::resolver::ModuleResolver;
+use move_core_types::{account_address::AccountAddress, resolver::ModuleResolver};
 use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
@@ -1963,6 +1963,10 @@ impl ModuleResolver for ResolverWrapper {
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.inc_cache_size_gauge();
         get_module(&*self.resolver, module_id)
+    }
+
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        todo!()
     }
 }
 

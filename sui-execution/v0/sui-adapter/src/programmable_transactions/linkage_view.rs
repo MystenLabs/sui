@@ -345,6 +345,10 @@ impl<'state> ModuleResolver for LinkageView<'state> {
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         get_module(self, id)
     }
+
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        todo!()
+    }
 }
 
 impl<'state> BackingPackageStore for LinkageView<'state> {

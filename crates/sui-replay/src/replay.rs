@@ -2050,6 +2050,10 @@ impl ModuleResolver for LocalExec {
             });
         res
     }
+
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        todo!()
+    }
 }
 
 impl ModuleResolver for &mut LocalExec {
@@ -2058,6 +2062,10 @@ impl ModuleResolver for &mut LocalExec {
     fn get_module(&self, module_id: &ModuleId) -> SuiResult<Option<Vec<u8>>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_module(module_id)
+    }
+
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        todo!()
     }
 }
 

@@ -18,7 +18,9 @@ use crate::{
 use better_any::{Tid, TidAble};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use move_core_types::{
+    account_address::AccountAddress, language_storage::ModuleId, resolver::ModuleResolver,
+};
 use std::collections::BTreeMap;
 
 // TODO: We should use AuthorityTemporaryStore instead.
@@ -99,6 +101,10 @@ impl ModuleResolver for InMemoryStorage {
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         get_module(self, module_id)
     }
+
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        todo!()
+    }
 }
 
 impl ModuleResolver for &mut InMemoryStorage {
@@ -106,6 +112,10 @@ impl ModuleResolver for &mut InMemoryStorage {
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         (**self).get_module(module_id)
+    }
+
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        todo!()
     }
 }
 

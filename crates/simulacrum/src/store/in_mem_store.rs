@@ -3,7 +3,9 @@
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use move_core_types::{
+    account_address::AccountAddress, language_storage::ModuleId, resolver::ModuleResolver,
+};
 use std::collections::{BTreeMap, HashMap};
 use sui_config::genesis;
 use sui_types::storage::{get_module, load_package_object_from_object_store, PackageObject};
@@ -302,6 +304,10 @@ impl ModuleResolver for InMemoryStore {
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         get_module(self, module_id)
+    }
+
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        todo!()
     }
 }
 

@@ -7,6 +7,7 @@ use std::str::FromStr;
 use std::vec;
 
 use anyhow::anyhow;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::ModuleResolver;
@@ -607,6 +608,13 @@ impl TryFrom<TransactionData> for Operations {
             type Error = Error;
             fn get_module(&self, _id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
                 Ok(None)
+            }
+
+            fn get_package(
+                &self,
+                _id: &AccountAddress,
+            ) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+                todo!()
             }
         }
         // Rosetta don't need the call args to be parsed into readable format
