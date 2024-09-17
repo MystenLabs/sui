@@ -44,7 +44,6 @@ contract BridgeCommitteeTest is BridgeBaseTest {
             _committeeMembers[i] = address(i);
         }
 
-        // vm.expectRevert(bytes("BridgeCommittee: Committee length must be less than 256"));
         address _committee = Upgrades.deployUUPSProxy("BridgeCommittee.sol", "", opts);
 
         vm.expectRevert(bytes("BridgeCommittee: Committee length must be less than 256"));
