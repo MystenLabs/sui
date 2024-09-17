@@ -101,7 +101,7 @@ type Address implements IOwner {
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
 	"""
 	Similar behavior to the `transactionBlocks` in Query but supporting the additional
-	`AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+	`AddressTransactionBlockRelationship` filter, which defaults to `SENT`.
 	
 	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
 	results. It is required for queries that apply more than two complex filters (on function,
@@ -164,13 +164,21 @@ type AddressOwner {
 }
 
 """
-The possible relationship types for a transaction block: sign, sent, received, or paid.
+The possible relationship types for a transaction block: sent, or received.
 """
 enum AddressTransactionBlockRelationship {
 	"""
-	Transactions this address has signed either as a sender or as a sponsor.
+	Transactions this address has sent. NOTE: this input filter has been deprecated in favor of
+	`SENT` which behaves identically but is named more clearly. Both filters restrict
+	transactions by their sender, only, not signers in general.
+	
+	This filter will be removed after 1.36.0 (2024-10-14).
 	"""
 	SIGN
+	"""
+	Transactions this address has sent.
+	"""
+	SENT
 	"""
 	Transactions that sent objects to this address.
 	"""
@@ -4317,9 +4325,17 @@ input TransactionBlockFilter {
 	"""
 	beforeCheckpoint: UInt53
 	"""
-	Limit to transactions that were signed by the given address.
+	Limit to transactions that were sent by the given address. NOTE: this input filter has been
+	deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
+	Both filters restrict transactions by their sender, only, not signers in general.
+	
+	This filter will be removed after 1.36.0 (2024-10-14).
 	"""
 	signAddress: SuiAddress
+	"""
+	Limit to transactions that were sent by the given address.
+	"""
+	sentAddress: SuiAddress
 	"""
 	Limit to transactions that sent an object to the given address.
 	"""
