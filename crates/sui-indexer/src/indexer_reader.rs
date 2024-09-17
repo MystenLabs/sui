@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use diesel::{
-    dsl::sql, sql_types::Bool, ExpressionMethods, OptionalExtension, QueryDsl,
-    TextExpressionMethods,
+    dsl::sql, sql_types::Bool, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
+    OptionalExtension, QueryDsl, SelectableHelper, TextExpressionMethods,
 };
 use itertools::Itertools;
 use tap::{Pipe, TapFallible};
@@ -39,7 +39,6 @@ use sui_types::{coin::CoinMetadata, event::EventID};
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
 use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
-use crate::models::tx_indices::StoredTxDigest;
 use crate::schema::pruner_cp_watermark;
 use crate::schema::tx_digests;
 use crate::{
@@ -463,18 +462,16 @@ impl IndexerReader {
             .map(|digest| digest.inner().to_vec())
             .collect::<Vec<_>>();
 
-        // There is no index for `transaction_digest` on the `transactions` table, so an initial
-        // roundtrip is needed to map digest to sequence number.
-        let tx_seq_nums = tx_digests::table
+        transactions::table
+            .inner_join(
+                tx_digests::table
+                    .on(transactions::tx_sequence_number.eq(tx_digests::tx_sequence_number)),
+            )
             .filter(tx_digests::tx_digest.eq_any(digests))
-            .load::<StoredTxDigest>(&mut connection)
-            .await?
-            .into_iter()
-            .map(|tx_digest| tx_digest.tx_sequence_number)
-            .collect::<Vec<i64>>();
-
-        self.multi_get_transactions_with_sequence_numbers(tx_seq_nums, None)
+            .select(StoredTransaction::as_select())
+            .load::<StoredTransaction>(&mut connection)
             .await
+            .map_err(Into::into)
     }
 
     async fn stored_transaction_to_transaction_block(
@@ -549,6 +546,7 @@ impl IndexerReader {
             .order(objects::object_id.asc())
             .limit(limit as i64)
             .into_boxed();
+        // TODO: replace the string match with exact column match
         if let Some(filter) = filter {
             match filter {
                 SuiObjectDataFilter::StructType(struct_tag) => {
@@ -815,6 +813,7 @@ impl IndexerReader {
                 );
                 (inner_query, "1 = 1".into())
             }
+            // TODO: replace with tx_affected_address
             Some(TransactionFilter::FromOrToAddress { addr }) => {
                 let address = Hex::encode(addr.to_vec());
                 let inner_query = format!(
@@ -922,14 +921,17 @@ impl IndexerReader {
 
         let mut connection = self.pool.get().await?;
 
-        let tx_seq: i64 = tx_digests::table
-            .select(tx_digests::tx_sequence_number)
-            .filter(tx_digests::tx_digest.eq(digest.into_inner().to_vec()))
-            .first(&mut connection)
-            .await?;
-
+        // Use the tx_digests lookup table for the corresponding tx_sequence_number, and then fetch
+        // event-relevant data from the entry on the transactions table.
         let (timestamp_ms, serialized_events) = transactions::table
-            .filter(transactions::tx_sequence_number.eq(tx_seq))
+            .filter(
+                transactions::tx_sequence_number
+                    .nullable()
+                    .eq(tx_digests::table
+                        .select(tx_digests::tx_sequence_number)
+                        .filter(tx_digests::tx_digest.eq(digest.into_inner().to_vec()))
+                        .single_value()),
+            )
             .select((transactions::timestamp_ms, transactions::events))
             .first::<(i64, StoredTransactionEvents)>(&mut connection)
             .await?;
@@ -1004,7 +1006,14 @@ impl IndexerReader {
             } = cursor;
             let tx_seq = transactions::table
                 .select(transactions::tx_sequence_number)
-                .filter(transactions::transaction_digest.eq(tx_digest.into_inner().to_vec()))
+                .filter(
+                    transactions::tx_sequence_number
+                        .nullable()
+                        .eq(tx_digests::table
+                            .select(tx_digests::tx_sequence_number)
+                            .filter(tx_digests::tx_digest.eq(tx_digest.into_inner().to_vec()))
+                            .single_value()),
+                )
                 .first::<i64>(&mut connection)
                 .await?;
             (tx_seq, event_seq)
@@ -1048,6 +1057,7 @@ impl IndexerReader {
                 limit,
             )
         } else if let EventFilter::Transaction(tx_digest) = filter {
+            // TODO: doesn't make sense to refetch the cursor, and it's only used by query_events. maybe we can combine
             self.query_events_by_tx_digest_query(tx_digest, cursor, limit, descending_order)?
         } else {
             let main_where_clause = match filter {
