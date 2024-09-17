@@ -1554,7 +1554,8 @@ impl SuiClientCommands {
                 }
                 let transaction = Transaction::from_generic_sig_data(data, sigs);
 
-                let response = context.execute_transaction_may_fail(transaction).await?;
+                let client = context.get_client().await?;
+                let response = client.execute_tx(transaction).await?;
                 SuiClientCommandResult::TransactionBlock(response)
             }
             SuiClientCommands::ExecuteCombinedSignedTx { signed_tx_bytes } => {
@@ -1565,7 +1566,8 @@ impl SuiClientCommands {
                         .map_err(|_| anyhow!("Invalid Base64 encoding"))?
                 ).map_err(|_| anyhow!("Failed to parse SenderSignedData bytes, check if it matches the output of sui client commands with --serialize-signed-transaction"))?;
                 let transaction = Envelope::<SenderSignedData, EmptySignInfo>::new(data);
-                let response = context.execute_transaction_may_fail(transaction).await?;
+                let client = context.get_client().await?;
+                let response = client.execute_tx(transaction).await?;
                 SuiClientCommandResult::TransactionBlock(response)
             }
             SuiClientCommands::NewEnv {
@@ -2868,11 +2870,9 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             ))
         } else {
             let transaction = Transaction::new(sender_signed_data);
-            debug!("Executing transaction: {:?}", transaction);
-            let mut response = context
-                .execute_transaction_may_fail(transaction.clone())
-                .await?;
-            debug!("Transaction executed: {:?}", transaction);
+            debug!("Executing transaction: {:?}", &transaction);
+            let mut response = client.execute_tx(transaction.clone()).await?;
+            debug!("Transaction executed: {:?}", &transaction);
             if let Some(effects) = response.effects.as_mut() {
                 prerender_clever_errors(effects, client.read_api()).await;
             }
