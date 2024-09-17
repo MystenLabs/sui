@@ -115,6 +115,10 @@ pub const SUI_LOCAL_NETWORK_GAS_URL: &str = "http://127.0.0.1:5003/gas";
 pub const SUI_DEVNET_URL: &str = "https://fullnode.devnet.sui.io:443";
 pub const SUI_TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
 
+const WAIT_FOR_LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(90);
+const WAIT_FOR_LOCAL_EXECUTION_DELAY: Duration = Duration::from_millis(200);
+const WAIT_FOR_LOCAL_EXECUTION_INTERVAL: Duration = Duration::from_secs(2);
+
 /// A Sui client builder for connecting to the Sui network
 ///
 /// By default the `maximum concurrent requests` is set to 256 and
@@ -546,7 +550,8 @@ impl SuiClient {
         &self,
         tx: Transaction,
     ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
-        Ok(self
+        let tx_clone = tx.clone();
+        let resp = self
         .quorum_driver_api()
         .execute_transaction_block(
             tx,
@@ -558,7 +563,32 @@ impl SuiClient {
                 .with_balance_changes(),
             Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
         )
-        .await?)
+        .await?;
+
+        // poll for tx to simulate wait for local execution
+        tokio::time::timeout(WAIT_FOR_LOCAL_EXECUTION_TIMEOUT, async {
+            // Apply a short delay to give the full node a chance to catch up.
+            tokio::time::sleep(WAIT_FOR_LOCAL_EXECUTION_DELAY).await;
+
+            let mut interval = tokio::time::interval(WAIT_FOR_LOCAL_EXECUTION_INTERVAL);
+            loop {
+                interval.tick().await;
+
+                if let Ok(poll_response) = self
+                    .read_api()
+                    .get_transaction_with_options(
+                        *tx_clone.digest(),
+                        SuiTransactionBlockResponseOptions::default(),
+                    )
+                    .await
+                {
+                    break poll_response;
+                }
+            }
+        })
+        .await?;
+
+        Ok(resp)
     }
 }
 

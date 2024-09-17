@@ -44,7 +44,6 @@ use sui_json_rpc_types::{
     get_new_package_obj_from_response, OwnedObjectRef, SuiExecutionStatus, SuiObjectData,
     SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
     SuiTransactionBlockDataAPI, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -62,9 +61,6 @@ use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 const TEST_DATA_DIR: &str = "tests/data/";
-const WAIT_FOR_LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(90);
-const WAIT_FOR_LOCAL_EXECUTION_DELAY: Duration = Duration::from_millis(200);
-const WAIT_FOR_LOCAL_EXECUTION_INTERVAL: Duration = Duration::from_secs(2);
 
 #[sim_test]
 async fn test_genesis() -> Result<(), anyhow::Error> {
@@ -252,8 +248,6 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     // Print it out to CLI/logs
     resp.print(true);
@@ -284,12 +278,6 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(
-        context,
-        &start_call_result.tx_block_response().unwrap().digest,
-    )
-    .await;
 
     let shared_id_str =
         if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
@@ -575,8 +563,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let package = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert!(
@@ -660,8 +646,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
     resp.print(true);
 
     // Get the created object
@@ -761,7 +745,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         SuiJsonValue::new(json!(address2))?,
     ];
 
-    let resp = SuiClientCommands::Call {
+    SuiClientCommands::Call {
         package,
         module: "object_basics".to_string(),
         function: "transfer".to_string(),
@@ -772,8 +756,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     // Try a call with customized gas price.
     let args = vec![
@@ -792,8 +774,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     if let SuiClientCommandResult::TransactionBlock(txn_response) = result {
         assert_eq!(
@@ -847,8 +827,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     // Print it out to CLI/logs
     resp.print(true);
@@ -919,8 +897,6 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     // Get Package ID and version
     let (expect_original_id, expect_version, _) =
@@ -991,8 +967,6 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert_eq!(
@@ -1028,12 +1002,6 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(
-        context,
-        &start_call_result.tx_block_response().unwrap().digest,
-    )
-    .await;
 
     let shared_id = if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
         response.effects.unwrap().created().to_vec()[0]
@@ -1103,8 +1071,6 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(ref response) = resp {
         assert_eq!(
@@ -1140,12 +1106,6 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(
-        context,
-        &start_call_result.tx_block_response().unwrap().digest,
-    )
-    .await;
 
     let (parent, child) =
         if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
@@ -1235,8 +1195,6 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert_eq!(
@@ -1272,12 +1230,6 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(
-        context,
-        &start_call_result.tx_block_response().unwrap().digest,
-    )
-    .await;
 
     let (parent, child) =
         if let SuiClientCommandResult::TransactionBlock(ref response) = start_call_result {
@@ -1367,8 +1319,6 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(ref response) = resp {
         assert_eq!(
@@ -1404,12 +1354,6 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(
-        context,
-        &start_call_result.tx_block_response().unwrap().digest,
-    )
-    .await;
 
     let (parent, child) =
         if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
@@ -1501,8 +1445,6 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     // Print it out to CLI/logs
     resp.print(true);
@@ -1798,8 +1740,6 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     // Print it out to CLI/logs
     resp.print(true);
@@ -1870,8 +1810,6 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     resp.print(true);
 
@@ -1937,8 +1875,6 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
         unreachable!("Invalid response");
@@ -1992,12 +1928,6 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(
-        context,
-        &upgrade_response.tx_block_response().unwrap().digest,
-    )
-    .await;
 
     // Get Original Package ID and version
     let (expect_original_id, _, _) = get_new_package_obj_from_response(&publish_response)
@@ -2078,8 +2008,6 @@ async fn test_package_management_on_upgrade_command_conflict() -> Result<(), any
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
         unreachable!("Invalid response");
@@ -2197,8 +2125,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     // Print it out to CLI/logs
     resp.print(true);
@@ -2305,8 +2231,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     // Print it out to CLI/logs
     resp.print(true);
@@ -2619,8 +2543,6 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let g = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
@@ -2675,8 +2597,6 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let g = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         let object_id = r
@@ -2740,8 +2660,6 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
@@ -2808,8 +2726,6 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
@@ -2878,8 +2794,6 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
@@ -2946,7 +2860,6 @@ async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    wait_for_tx_by_polling(context, &txn.transaction_data().digest()).await;
     Ok(())
 }
 
@@ -3506,8 +3419,6 @@ async fn test_pay() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &pay.tx_block_response().unwrap().digest).await;
 
     // Pay command takes the input coins and transfers the given amounts from each input coin (in order)
     // to the recipients
@@ -3589,8 +3500,6 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &pay_sui.tx_block_response().unwrap().digest).await;
 
     // pay sui takes the input coins and transfers from each of them (in order) the amounts to the
     // respective receipients.
@@ -3668,8 +3577,6 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &pay_all_sui.tx_block_response().unwrap().digest).await;
 
     // pay all sui will take the input coins and smash them into one coin and transfer that coin to
     // the recipient, so we check that the recipient has one object, if the tx status is success,
@@ -3726,8 +3633,6 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &transfer.tx_block_response().unwrap().digest).await;
 
     // transfer command will transfer the object_id1 to address2, and use object_id2 as gas
     // we check if object1 is owned by address 2 and if the gas object used is object_id2
@@ -3778,9 +3683,6 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &transfer_sui.tx_block_response().unwrap().digest).await;
-
     // transfer sui will transfer the amount from object_id1 to address2, and use the same object
     // as gas, and we check if the recipient address received the object, and the expected balance
     // is correct
@@ -3822,8 +3724,6 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &transfer_sui.tx_block_response().unwrap().digest).await;
 
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
         assert!(response.status_ok().unwrap());
@@ -3946,8 +3846,6 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    // execute does not wait for local execution to finish, so poll for tx
-    wait_for_tx_by_polling(context, &resp.tx_block_response().unwrap().digest).await;
 
     // Print it out to CLI/logs
     resp.print(true);
@@ -4126,39 +4024,4 @@ async fn test_parse_host_port() {
     assert!(parse_host_port(input.to_string(), 9123).is_err());
     let input = "127.9.0.1:asb";
     assert!(parse_host_port(input.to_string(), 9123).is_err());
-}
-
-/// Wait for transaction by polling the fullnode for its digest
-/// This is used to simulate WaitForLocalExecution in the CLI, which has been "deprecated" in
-/// favor of WaitForEffectsCert. This is used in tests where we want to wait for a transaction
-/// to be executed on the fullnode before proceeding.
-// this is not a public function on TestCluster because many tests use &mut WalletContext multiple
-// times in a test, which restricts from calling this function multiple times in a test due to
-// mutably and immutably trying to borrow the WalletContext.
-async fn wait_for_tx_by_polling(
-    wallet: &mut WalletContext,
-    tx: &sui_types::digests::TransactionDigest,
-) {
-    tokio::time::timeout(WAIT_FOR_LOCAL_EXECUTION_TIMEOUT, async {
-        // Apply a short delay to give the full node a chance to catch up.
-        tokio::time::sleep(WAIT_FOR_LOCAL_EXECUTION_DELAY).await;
-
-        let mut interval = tokio::time::interval(WAIT_FOR_LOCAL_EXECUTION_INTERVAL);
-        loop {
-            interval.tick().await;
-
-            if let Ok(poll_response) = wallet
-                .get_client()
-                .await
-                .unwrap()
-                .read_api()
-                .get_transaction_with_options(*tx, SuiTransactionBlockResponseOptions::default())
-                .await
-            {
-                break poll_response;
-            }
-        }
-    })
-    .await
-    .unwrap();
 }
