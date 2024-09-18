@@ -56,13 +56,16 @@ async fn list_account_objects(
         .inner()
         .account_owned_objects_info_iter(address.into(), start)?
         .take(limit + 1)
-        .map(|info| AccountOwnedObjectInfo {
-            owner: info.owner.into(),
-            object_id: info.object_id.into(),
-            version: info.version.into(),
-            type_: struct_tag_core_to_sdk(info.type_.into()).expect("object types must be valid"),
+        .map(|info| {
+            AccountOwnedObjectInfo {
+                owner: info.owner.into(),
+                object_id: info.object_id.into(),
+                version: info.version.into(),
+                type_: struct_tag_core_to_sdk(info.type_.into())?,
+            }
+            .pipe(Ok)
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
 
     let cursor = if object_info.len() > limit {
         // SAFETY: We've already verified that object_info is greater than limit, which is
