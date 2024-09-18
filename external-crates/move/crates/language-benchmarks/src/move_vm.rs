@@ -75,9 +75,9 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
 }
 
 fn create_vm() -> MoveVM {
-    MoveVM::new(move_stdlib_natives::all_natives(
+    MoveVM::new(move_vm_runtime::natives::move_stdlib::all_natives(
         AccountAddress::from_hex_literal("0x1").unwrap(),
-        move_stdlib_natives::GasParameters::zeros(),
+        move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
         /* silent debug */ true,
     ))
     .unwrap()

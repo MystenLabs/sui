@@ -20,7 +20,7 @@ fn test_publish_module_with_custom_max_binary_format_version() {
     // Should accept both modules with the default settings
     {
         let storage = InMemoryStorage::new();
-        let vm = MoveVM::new(move_stdlib_natives::all_natives(
+        let vm = MoveVM::new(move_vm_runtime::natives::move_stdlib::all_natives(
             AccountAddress::from_hex_literal("0x1").unwrap(),
             move_stdlib_natives::GasParameters::zeros(),
             /* silent debug */ true,
@@ -53,9 +53,9 @@ fn test_publish_module_with_custom_max_binary_format_version() {
         vm_config.binary_config.max_binary_format_version = max_updated;
 
         let vm = MoveVM::new_with_config(
-            move_stdlib_natives::all_natives(
+            move_vm_runtime::natives::move_stdlib::all_natives(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
-                move_stdlib_natives::GasParameters::zeros(),
+                move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
                 /* silent debug */ true,
             ),
             vm_config,

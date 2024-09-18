@@ -13,9 +13,9 @@ use move_vm_config::runtime::VMConfig;
 
 use std::sync::Arc;
 
-struct VirtualMachine {
+pub struct VirtualMachine {
     /// The VM package cache for the VM, holding currently-loaded packages.
-    cache: VMCache,
+    cache: Arc<VMCache>,
     /// The native functions the Move VM uses
     natives: Arc<NativeFunctions>,
     /// The Move VM's configuration.
@@ -23,9 +23,20 @@ struct VirtualMachine {
 }
 
 impl VirtualMachine {
+    pub fn new(natives: NativeFunctions, vm_config: VMConfig) -> Self {
+        let natives = Arc::new(natives);
+        let vm_config = Arc::new(vm_config);
+        let cache = Arc::new(VMCache::new(natives.clone(), vm_config.clone()));
+        Self {
+            cache,
+            natives,
+            vm_config,
+        }
+    }
+
     // Blocks on the loader.
     // TODO: Have this hand back a tokio Notify
-    fn make_instance<'native, DataCache: MoveResolver>(
+    pub fn make_instance<'native, DataCache: MoveResolver>(
         &mut self,
         remote: DataCache,
     ) -> VMResult<VirtualMachineInstance<'native, DataCache>> {
@@ -34,7 +45,7 @@ impl VirtualMachine {
         // Called and checked linkage, etc.
         let instance = VirtualMachineInstance {
             virtual_tables,
-            type_cache: self.cache.type_cache.clone(),
+            vm_cache: self.cache.clone(),
             vm_config: self.vm_config.clone(),
             data_cache,
             native_extensions: NativeContextExtensions::default(),

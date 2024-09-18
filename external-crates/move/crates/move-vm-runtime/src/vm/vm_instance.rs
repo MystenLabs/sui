@@ -2,15 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, type_cache::TypeCache},
+    cache::{arena::ArenaPointer, vm_cache::VMCache},
     jit::runtime::ast::{Function, VTableKey},
     natives::extensions::NativeContextExtensions,
-    on_chain::data_cache::TransactionDataCache,
+    on_chain::{ast::PackageStorageId, data_cache::TransactionDataCache},
     shared::serialization::{SerializedReturnValues, *},
-    vm::interpreter,
-    vm::runtime_vtables::RuntimeVTables,
+    vm::{interpreter, runtime_vtables::RuntimeVTables},
 };
-
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::LocalIndex,
@@ -18,15 +16,17 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::script_signature;
 use move_core_types::{
-    account_address::AccountAddress, effects::ChangeSet, identifier::IdentStr,
-    language_storage::ModuleId, resolver::MoveResolver, vm_status::StatusCode,
+    account_address::AccountAddress,
+    effects::ChangeSet,
+    identifier::IdentStr,
+    language_storage::{ModuleId, TypeTag},
+    resolver::MoveResolver,
+    vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{gas::GasMeter, loaded_data::runtime_types::Type};
-
-use parking_lot::RwLock;
-
 use std::{borrow::Borrow, sync::Arc};
+use tracing::warn;
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -42,8 +42,8 @@ pub struct VirtualMachineInstance<'extensions, S: MoveResolver> {
     pub(crate) data_cache: TransactionDataCache<S>,
     /// Native context extensions for the interpreter
     pub(crate) native_extensions: NativeContextExtensions<'extensions>,
-    /// An arc-lock reference to the VM's Type Cache
-    pub(crate) type_cache: Arc<RwLock<TypeCache>>,
+    /// An arc-lock reference to the VM's cache
+    pub(crate) vm_cache: Arc<VMCache>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
 }
@@ -134,28 +134,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
         )
     }
 
-    /// Publish the given module.
-    ///
-    /// The Move VM MUST return a user error, i.e., an error that's not an invariant violation, if
-    ///   - The module fails to deserialize or verify.
-    ///   - The sender address does not match that of the module.
-    ///
-    /// The Move VM should not be able to produce other user errors.
-    /// Besides, no user input should cause the Move VM to return an invariant violation.
-    ///
-    /// In case an invariant violation occurs, the whole Session should be considered corrupted and
-    /// one shall not proceed with effect generation.
-    pub fn publish_module(
-        &mut self,
-        module: Vec<u8>,
-        sender: AccountAddress,
-        gas_meter: &mut impl GasMeter,
-    ) -> VMResult<()> {
-        self.publish_module_bundle(vec![module], sender, gas_meter);
-        todo!("Package publish should also update the vtables.");
-    }
-
-    /// Publish a series of modules.
+    /// Publish a package.
     ///
     /// The Move VM MUST return a user error, i.e., an error that's not an invariant violation, if
     /// any module fails to deserialize or verify (see the full list of  failing conditions in the
@@ -167,13 +146,34 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
     ///
     /// In case an invariant violation occurs, the whole Session should be considered corrupted and
     /// one shall not proceed with effect generation.
-    pub fn publish_module_bundle(
+    pub fn publish_package(
         &mut self,
-        modules: Vec<Vec<u8>>,
-        sender: AccountAddress,
-        gas_meter: &mut impl GasMeter,
+        package_id: PackageStorageId,
+        package: Vec<Vec<u8>>,
+        _gas_meter: &mut impl GasMeter,
     ) -> VMResult<()> {
-        todo!()
+        let compiled_modules = match package
+            .iter()
+            .map(|blob| {
+                CompiledModule::deserialize_with_config(blob, &self.vm_config.binary_config)
+                    .map(|m| (m.self_id().name().to_owned(), blob.clone()))
+            })
+            .collect::<PartialVMResult<Vec<_>>>()
+        {
+            Ok(modules) => modules,
+            Err(err) => {
+                warn!("[VM] module deserialization failed {:?}", err);
+                return Err(err.finish(Location::Undefined));
+            }
+        };
+
+        self.vm_cache
+            .publish_package(package, &self.data_cache, package_id)?;
+
+        self.data_cache
+            .publish_package(package_id, compiled_modules);
+
+        Ok(())
     }
 
     /// Finish up the session and produce the side effects.
@@ -208,6 +208,13 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
                 .map_err(|e| e.finish(Location::Undefined)),
             remote,
         )
+    }
+
+    pub fn load_type(&self, tag: &TypeTag) -> VMResult<Type> {
+        self.vm_cache
+            .type_cache
+            .read()
+            .load_type(tag, &self.data_cache)
     }
 
     // -------------------------------------------
@@ -310,7 +317,8 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
             .0
             .iter()
             .map(|tok| {
-                self.type_cache
+                self.vm_cache
+                    .type_cache
                     .read()
                     .make_type(&compiled_module, tok, &self.data_cache)
             })
@@ -322,7 +330,8 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
             .0
             .iter()
             .map(|tok| {
-                self.type_cache
+                self.vm_cache
+                    .type_cache
                     .read()
                     .make_type(&compiled_module, tok, &self.data_cache)
             })
@@ -330,7 +339,8 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
             .map_err(|err| err.finish(Location::Undefined))?;
 
         // verify type arguments
-        self.type_cache
+        self.vm_cache
+            .type_cache
             .read()
             .verify_ty_args(fun_ref.type_parameters(), ty_args)
             .map_err(|e| e.finish(Location::Module(runtime_id.clone())))?;
@@ -369,7 +379,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
             })
             .collect::<Vec<_>>();
         let (mut dummy_locals, deserialized_args) = deserialize_args(
-            &self.type_cache,
+            &self.vm_cache.type_cache,
             &self.vm_config,
             arg_types,
             serialized_args,
@@ -386,14 +396,14 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
             ty_args,
             deserialized_args,
             &self.virtual_tables,
-            self.type_cache.clone(),
+            self.vm_cache.type_cache.clone(),
             self.vm_config.clone(),
             &mut self.native_extensions,
             gas_meter,
         )?;
 
         let serialized_return_values = serialize_return_values(
-            &self.type_cache,
+            &self.vm_cache.type_cache,
             &self.vm_config,
             &return_types,
             return_values,
@@ -407,8 +417,12 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
                     idx,
                     self.vm_config.enable_invariant_violation_check_in_swap_loc,
                 )?;
-                let (bytes, layout) =
-                    serialize_return_value(&self.type_cache, &self.vm_config, &ty, local_val)?;
+                let (bytes, layout) = serialize_return_value(
+                    &self.vm_cache.type_cache,
+                    &self.vm_config,
+                    &ty,
+                    local_val,
+                )?;
                 Ok((idx as LocalIndex, bytes, layout))
             })
             .collect::<PartialVMResult<_>>()

@@ -14,6 +14,8 @@ use move_core_types::{
 use move_vm_types::data_store::DataStore;
 use std::collections::{btree_map::BTreeMap, BTreeSet};
 
+use super::ast::PackageStorageId;
+
 pub struct AccountDataCache {
     module_map: BTreeMap<Identifier, Vec<u8>>,
 }
@@ -75,6 +77,21 @@ impl<S: MoveResolver> TransactionDataCache<S> {
 
     pub fn get_remote_resolver_mut(&mut self) -> &mut S {
         &mut self.remote
+    }
+
+    pub fn publish_package(
+        &mut self,
+        package: PackageStorageId,
+        modules: impl IntoIterator<Item = (Identifier, Vec<u8>)>,
+    ) {
+        let account_cache = self
+            .module_map
+            .entry(package)
+            .or_insert_with(AccountDataCache::new);
+
+        for (module_name, blob) in modules.into_iter() {
+            account_cache.module_map.insert(module_name, blob);
+        }
     }
 }
 

@@ -32,8 +32,9 @@ use std::{collections::HashMap, sync::Arc};
 ///
 /// TODO(tzakian): The representation can be optimized to use a more efficient data structure for
 /// vtable/cross-package function resolution but we will keep it simple for now.
+#[derive(Clone)]
 pub struct RuntimeVTables {
-    loaded_packages: HashMap<RuntimePackageId, Arc<LoadedPackage>>,
+    pub(crate) loaded_packages: HashMap<RuntimePackageId, Arc<LoadedPackage>>,
     cached_types: Arc<RwLock<TypeCache>>,
 }
 

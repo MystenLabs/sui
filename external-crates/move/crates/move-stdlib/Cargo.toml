@@ -23,7 +23,6 @@ walkdir.workspace = true
 sha2.workspace = true
 anyhow.workspace = true
 hex.workspace = true
-move-stdlib-natives.workspace = true
 
 [dev-dependencies]
 move-unit-test.workspace = true

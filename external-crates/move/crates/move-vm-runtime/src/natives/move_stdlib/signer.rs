@@ -2,13 +2,15 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::helpers::make_module_natives;
+use crate::{
+    native_charge_gas_early_exit,
+    natives::{
+        functions::{NativeContext, NativeFunction},
+        make_module_natives,
+    },
+};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_vm_runtime::{
-    native_charge_gas_early_exit,
-    native_functions::{NativeContext, NativeFunction},
-};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,

@@ -19,6 +19,9 @@ once_cell.workspace = true
 parking_lot.workspace = true
 tracing.workspace = true
 smallvec.workspace = true
+hex.workspace = true
+sha2.workspace = true
+sha3.workspace = true
 
 # referred to via path for execution versioning
 move-bytecode-verifier = { path = "../move-bytecode-verifier" }

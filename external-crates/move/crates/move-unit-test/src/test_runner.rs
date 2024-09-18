@@ -30,7 +30,7 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
-use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use move_vm_runtime::{natives::functions::NativeFunctionTable, vm::vm::VirtualMachine};
 use move_vm_test_utils::{
     gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
     InMemoryStorage,
@@ -39,7 +39,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
 
-use move_vm_runtime::native_extensions::NativeContextExtensions;
+use move_vm_runtime::natives::extensions::NativeContextExtensions;
 
 /// Test state common to all tests
 pub struct SharedTestingConfig {
@@ -123,9 +123,9 @@ impl TestRunner {
         let modules = tests.module_info.values().map(|info| &info.module);
         let starting_storage_state = setup_test_storage(modules)?;
         let native_function_table = native_function_table.unwrap_or_else(|| {
-            move_stdlib_natives::all_natives(
+            move_vm_runtime::natives::move_stdlib::all_natives(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
-                move_stdlib_natives::GasParameters::zeros(),
+                move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
                 /* silent */ false,
             )
         });
@@ -246,54 +246,55 @@ impl SharedTestingConfig {
         VMResult<Vec<Vec<u8>>>,
         TestRunInfo,
     ) {
-        let move_vm = MoveVM::new(self.native_function_table.clone()).unwrap();
-        let extensions = extensions::new_extensions();
-        let mut session =
-            move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
-        let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
-        move_vm_profiler::gas_profiler_feature_enabled! {
-            use move_vm_profiler::GasProfiler;
-            use move_vm_types::gas::GasMeter;
-            gas_meter.set_profiler(GasProfiler::init_default_cfg(
-                function_name.to_owned(),
-                self.execution_bound,
-            ));
-        }
-
-        // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
-
-        let now = Instant::now();
-        let serialized_return_values_result = session.execute_function_bypass_visibility(
-            &test_plan.module_id,
-            IdentStr::new(function_name).unwrap(),
-            vec![], // no ty args, at least for now
-            serialize_values(arguments.iter()),
-            &mut gas_meter,
-        );
-        let mut return_result = serialized_return_values_result.map(|res| {
-            res.return_values
-                .into_iter()
-                .map(|(bytes, _layout)| bytes)
-                .collect()
-        });
-        if !self.report_stacktrace_on_abort {
-            if let Err(err) = &mut return_result {
-                err.remove_exec_state();
-            }
-        }
-        let test_run_info = TestRunInfo::new(
-            now.elapsed(),
-            // TODO(Gas): This doesn't look quite right...
-            //            We're not computing the number of instructions executed even with a unit gas schedule.
-            Gas::new(self.execution_bound)
-                .checked_sub(gas_meter.remaining_gas())
-                .unwrap()
-                .into(),
-        );
-        match session.finish_with_extensions().0 {
-            Ok((cs, extensions)) => (Ok(cs), Ok(extensions), return_result, test_run_info),
-            Err(err) => (Err(err.clone()), Err(err), return_result, test_run_info),
-        }
+        todo!("Update with new VM");
+        //     let move_vm = MoveVM::new(self.native_function_table.clone()).unwrap();
+        //     let extensions = extensions::new_extensions();
+        //     let mut session =
+        //         move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
+        //     let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
+        //     move_vm_profiler::gas_profiler_feature_enabled! {
+        //         use move_vm_profiler::GasProfiler;
+        //         use move_vm_types::gas::GasMeter;
+        //         gas_meter.set_profiler(GasProfiler::init_default_cfg(
+        //             function_name.to_owned(),
+        //             self.execution_bound,
+        //         ));
+        //     }
+        //
+        //     // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
+        //
+        //     let now = Instant::now();
+        //     let serialized_return_values_result = session.execute_function_bypass_visibility(
+        //         &test_plan.module_id,
+        //         IdentStr::new(function_name).unwrap(),
+        //         vec![], // no ty args, at least for now
+        //         serialize_values(arguments.iter()),
+        //         &mut gas_meter,
+        //     );
+        //     let mut return_result = serialized_return_values_result.map(|res| {
+        //         res.return_values
+        //             .into_iter()
+        //             .map(|(bytes, _layout)| bytes)
+        //             .collect()
+        //     });
+        //     if !self.report_stacktrace_on_abort {
+        //         if let Err(err) = &mut return_result {
+        //             err.remove_exec_state();
+        //         }
+        //     }
+        //     let test_run_info = TestRunInfo::new(
+        //         now.elapsed(),
+        //         // TODO(Gas): This doesn't look quite right...
+        //         //            We're not computing the number of instructions executed even with a unit gas schedule.
+        //         Gas::new(self.execution_bound)
+        //             .checked_sub(gas_meter.remaining_gas())
+        //             .unwrap()
+        //             .into(),
+        //     );
+        //     match session.finish_with_extensions().0 {
+        //         Ok((cs, extensions)) => (Ok(cs), Ok(extensions), return_result, test_run_info),
+        //         Err(err) => (Err(err.clone()), Err(err), return_result, test_run_info),
+        //     }
     }
 
     fn exec_module_tests_with_move_vm(

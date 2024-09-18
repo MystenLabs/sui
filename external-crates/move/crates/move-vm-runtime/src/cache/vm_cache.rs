@@ -116,7 +116,7 @@ impl VMCache {
         modules: Vec<Vec<u8>>,
         data_store: &impl DataStore,
         runtime_package_id: RuntimePackageId,
-    ) -> VMResult<()> {
+    ) -> VMResult<LoadedPackage> {
         let loading_package = self.deserialize_and_verify_package(modules)?;
 
         // Make sure all modules' self addresses match the `runtime_package_id`.
@@ -155,16 +155,15 @@ impl VMCache {
             &cached_packages,
         )?;
 
-        // Cache the package and its types.
-        self.cache_package(
+        // Load the package, but don't insert it into the cache yet.
+        // FIXME: This will insert it into the type cache currently, see TODO on type cache.
+        self.load_package_no_cache(
             storage_id,
             loading_package,
             &self.natives,
             data_store,
             &self.type_cache,
-        )?;
-
-        Ok(())
+        )
     }
 
     /// Retrieves a single module from the cache. NOTE: this package is _not_ checked for cyclic
@@ -343,6 +342,33 @@ impl VMCache {
             "Mismatch in number of packages in linkage table and cached packages"
         );
         Ok(cached_packages)
+    }
+
+    fn load_package_no_cache(
+        &self,
+        package_key: PackageStorageId,
+        loading_package: DeserializedPackage,
+        natives: &NativeFunctions,
+        data_store: &impl DataStore,
+        type_cache: &RwLock<TypeCache>,
+    ) -> VMResult<LoadedPackage> {
+        if self.cached_package_at(package_key).is_some() {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Package already cached when publishing".to_string())
+                    .finish(Location::Undefined),
+            );
+        }
+
+        translate::package(
+            package_key,
+            loading_package.runtime_id,
+            loading_package.into_modules(),
+            natives,
+            type_cache,
+            data_store,
+        )
+        .map_err(|e| e.finish(Location::Undefined))
     }
 
     fn cache_package(

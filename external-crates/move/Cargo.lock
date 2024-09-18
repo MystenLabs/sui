@@ -1323,7 +1323,6 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-stdlib",
- "move-stdlib-natives",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -1706,7 +1705,6 @@ dependencies = [
  "move-package",
  "move-prover",
  "move-stdlib",
- "move-stdlib-natives",
  "move-unit-test",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -2076,26 +2074,11 @@ dependencies = [
  "move-docgen",
  "move-package",
  "move-prover",
- "move-stdlib-natives",
  "move-unit-test",
  "move-vm-runtime",
  "sha2",
  "tempfile",
  "walkdir",
-]
-
-[[package]]
-name = "move-stdlib-natives"
-version = "0.1.1"
-dependencies = [
- "hex",
- "move-binary-format",
- "move-core-types",
- "move-vm-runtime",
- "move-vm-types",
- "sha2",
- "sha3",
- "smallvec",
 ]
 
 [[package]]
@@ -2169,7 +2152,6 @@ dependencies = [
  "move-ir-compiler",
  "move-ir-types",
  "move-stdlib",
- "move-stdlib-natives",
  "move-symbol-pool",
  "move-vm-config",
  "move-vm-runtime",
@@ -2203,7 +2185,6 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-stdlib",
- "move-stdlib-natives",
  "move-symbol-pool",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -2236,7 +2217,6 @@ dependencies = [
  "move-core-types",
  "move-ir-to-bytecode",
  "move-stdlib",
- "move-stdlib-natives",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -2278,6 +2258,8 @@ dependencies = [
  "parking_lot 0.11.2",
  "petgraph",
  "proptest",
+ "sha2",
+ "sha3",
  "smallvec",
  "tracing",
 ]
@@ -3554,7 +3536,6 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-stdlib",
- "move-stdlib-natives",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
