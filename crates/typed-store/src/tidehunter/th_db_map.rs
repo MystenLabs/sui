@@ -286,6 +286,10 @@ pub fn open_thdb(path: &Path, registry: &Registry) -> Arc<Db> {
     fs::create_dir_all(path).unwrap();
     let metrics = Metrics::new_in(registry);
     let config = Arc::new(Config::default());
+    // run snapshot every 16 Gb written to wal
+    config.snapshot_written_bytes = 16 * 1024 * 1024 * 1024;
     let db = Db::open(path, config, metrics).unwrap();
-    Arc::new(db)
+    let db = Arc::new(db);
+    db.start_periodic_snapshot();
+    db
 }
