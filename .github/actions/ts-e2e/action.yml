@@ -29,7 +29,7 @@ runs:
     - name: cargo build
       if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to s3 yet
       run: |
-        cargo build --bin sui --features indexer
+        cargo build --bin sui
       shell: bash
 
     - name: Dowload from S3

@@ -37,7 +37,7 @@ cargo run --bin sui -- start --with-faucet --force-regenesis
 
 If you want to run a local network with the indexer enabled (note that `libpq` is required), you can run the following command after following the steps in the next section to set up an indexer DB:
 ```sh
-cargo run --bin sui --features indexer -- start --with-faucet --force-regenesis --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2
+cargo run --bin sui -- start --with-faucet --force-regenesis --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2
 ```
 
 ### Running standalone indexer
