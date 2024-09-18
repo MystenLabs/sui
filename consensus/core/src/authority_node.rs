@@ -250,7 +250,8 @@ where
             block_manager,
             // For streaming RPC, Core will be notified when consumer is available.
             // For non-streaming RPC, there is no way to know so default to true.
-            !N::Client::SUPPORT_STREAMING,
+            //N::Client::SUPPORT_STREAMING,
+            true,
             commit_observer,
             core_signals,
             protocol_keypair,

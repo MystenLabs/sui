@@ -116,7 +116,8 @@ impl CoreThread {
                 }
                 _ = self.rx_consumer_availability.changed() => {
                     let _scope = monitored_scope("CoreThread::loop::set_consumer_availability");
-                    let available = *self.rx_consumer_availability.borrow();
+                    //let available = *self.rx_consumer_availability.borrow();
+                    let available = true;
                     self.core.set_consumer_availability(available);
                     if available {
                         // If a consumer becomes available, try to produce a new block to ensure liveness,
@@ -143,9 +144,9 @@ impl ChannelCoreThreadDispatcher {
     pub(crate) fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadHandle) {
         let (sender, receiver) =
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
-        let (tx_consumer_availability, mut rx_consumer_availability) = watch::channel(false);
+        let (tx_consumer_availability, rx_consumer_availability) = watch::channel(false);
         let (tx_last_known_proposed_round, mut rx_last_known_proposed_round) = watch::channel(0);
-        rx_consumer_availability.mark_unchanged();
+        //rx_consumer_availability.mark_unchanged();
         rx_last_known_proposed_round.mark_unchanged();
         let core_thread = CoreThread {
             core,
