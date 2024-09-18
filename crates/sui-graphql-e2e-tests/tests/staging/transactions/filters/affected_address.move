@@ -61,7 +61,7 @@
   }
 
   # For contrast, the transactions that A is the sender for
-  sentByA: transactionBlocks(filter: { kind: PROGRAMMABLE_TX, signAddress: "@{A}" }) {
+  sentByA: transactionBlocks(filter: { kind: PROGRAMMABLE_TX, sentAddress: "@{A}" }) {
     nodes { ...CoinBalances }
   }
 

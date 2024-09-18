@@ -25,11 +25,17 @@ pub(crate) struct Address {
     pub checkpoint_viewed_at: u64,
 }
 
-/// The possible relationship types for a transaction block: sign, sent, received, or paid.
+/// The possible relationship types for a transaction block: sent, or received.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum AddressTransactionBlockRelationship {
-    /// Transactions this address has signed either as a sender or as a sponsor.
+    /// Transactions this address has sent. NOTE: this input filter has been deprecated in favor of
+    /// `SENT` which behaves identically but is named more clearly. Both filters restrict
+    /// transactions by their sender, only, not signers in general.
+    ///
+    /// This filter will be removed after 1.36.0 (2024-10-14).
     Sign,
+    /// Transactions this address has sent.
+    Sent,
     /// Transactions that sent objects to this address.
     Recv,
     /// Transactions that this address was involved in, either as the sender, sponsor, or as the
@@ -140,7 +146,7 @@ impl Address {
     }
 
     /// Similar behavior to the `transactionBlocks` in Query but supporting the additional
-    /// `AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+    /// `AddressTransactionBlockRelationship` filter, which defaults to `SENT`.
     ///
     /// `scanLimit` restricts the number of candidate transactions scanned when gathering a page of
     /// results. It is required for queries that apply more than two complex filters (on function,
@@ -175,9 +181,9 @@ impl Address {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let Some(filter) = filter.unwrap_or_default().intersect(match relation {
-            // Relationship defaults to "signer" if none is supplied.
-            Some(R::Sign) | None => TransactionBlockFilter {
-                sign_address: Some(self.address),
+            // Relationship defaults to "sent" if none is supplied.
+            Some(R::Sign) | Some(R::Sent) | None => TransactionBlockFilter {
+                sent_address: Some(self.address),
                 ..Default::default()
             },
 
