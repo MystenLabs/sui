@@ -49,170 +49,49 @@
 
 //# run-graphql
 { # A should be affected by all the transactions above
-  transactionBlocks(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{A}" }, scanLimit: 1000) {
-    nodes {
-      effects {
-        objectChanges {
-          nodes {
-            inputState {
-              asMoveObject {
-                asCoin {
-                  coinBalance
-                }
-              }
-            }
-            outputState {
-              asMoveObject {
-                asCoin {
-                  coinBalance
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+  affectsA: transactionBlocks(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{A}" }, scanLimit: 1000) {
+    nodes { ...CoinBalances }
   }
-}
 
-//# run-graphql
-{ # Same as above, but nesting the transaction block query inside an address query
-  address(address: "@{A}") {
+  # Same as above, but nesting the transaction block query inside an address query
+  affectsAViaAddress: address(address: "@{A}") {
     transactionBlocks(filter: { kind: PROGRAMMABLE_TX }, relation: AFFECTED, scanLimit: 1000) {
+      nodes { ...CoinBalances }
+    }
+  }
+
+  # For contrast, the transactions that A is the sender for
+  sentByA: transactionBlocks(filter: { kind: PROGRAMMABLE_TX, sentAddress: "@{A}" }) {
+    nodes { ...CoinBalances }
+  }
+
+  # ...and the transactions that A was a recipient for
+  receivedByA: transactionBlocks(filter: { kind: PROGRAMMABLE_TX, recvAddress: "@{A}" }, scanLimit: 1000) {
+    nodes { ...CoinBalances }
+  }
+
+  # B was not affected by all the transactions
+  affectsB: transactionBlocks(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{B}" }, scanLimit: 1000) {
+    nodes { ...CoinBalances }
+  }
+
+  # And neither was C
+  affectsC: transactionBlocks(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{C}" }, scanLimit: 1000) {
+    nodes { ...CoinBalances }
+  }
+}
+
+fragment CoinBalances on TransactionBlock {
+  effects {
+    objectChanges {
       nodes {
-        effects {
-          objectChanges {
-            nodes {
-              inputState {
-                asMoveObject {
-                  asCoin {
-                    coinBalance
-                  }
-                }
-              }
-              outputState {
-                asMoveObject {
-                  asCoin {
-                    coinBalance
-                  }
-                }
-              }
-            }
-          }
-        }
+        inputState { ...CoinBalance }
+        outputState { ...CoinBalance }
       }
     }
   }
 }
 
-//# run-graphql
-{ # For contrast, the transactions that A is the sender for
-  transactionBlocks(filter: { kind: PROGRAMMABLE_TX, sentAddress: "@{A}" }) {
-    nodes {
-      effects {
-        objectChanges {
-          nodes {
-            inputState {
-              asMoveObject {
-                asCoin {
-                  coinBalance
-                }
-              }
-            }
-            outputState {
-              asMoveObject {
-                asCoin {
-                  coinBalance
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-//# run-graphql
-{ # ...and the transactions that A was a recipient for
-  transactionBlocks(filter: { kind: PROGRAMMABLE_TX, recvAddress: "@{A}" }, scanLimit: 1000) {
-    nodes {
-      effects {
-        objectChanges {
-          nodes {
-            inputState {
-              asMoveObject {
-                asCoin {
-                  coinBalance
-                }
-              }
-            }
-            outputState {
-              asMoveObject {
-                asCoin {
-                  coinBalance
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-//# run-graphql
-{ # B was not affected by all the transactions
-  transactionBlocks(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{B}" }, scanLimit: 1000) {
-    nodes {
-      effects {
-        objectChanges {
-          nodes {
-            inputState {
-              asMoveObject {
-                asCoin {
-                  coinBalance
-                }
-              }
-            }
-            outputState {
-              asMoveObject {
-                asCoin {
-                  coinBalance
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-//# run-graphql
-{ # And neither was C
-  transactionBlocks(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{C}" }, scanLimit: 1000) {
-    nodes {
-      effects {
-        objectChanges {
-          nodes {
-            inputState {
-              asMoveObject {
-                asCoin {
-                  coinBalance
-                }
-              }
-            }
-            outputState {
-              asMoveObject {
-                asCoin {
-                  coinBalance
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+fragment CoinBalance on Object {
+  asMoveObject { asCoin { coinBalance } }
 }

@@ -1,4 +1,4 @@
-processed 14 tasks
+processed 9 tasks
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
@@ -51,11 +51,11 @@ task 7, line 48:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 8, lines 50-76:
+task 8, lines 50-97:
 //# run-graphql
 Response: {
   "data": {
-    "transactionBlocks": {
+    "affectsA": {
       "nodes": [
         {
           "effects": {
@@ -242,15 +242,8 @@ Response: {
           }
         }
       ]
-    }
-  }
-}
-
-task 9, lines 78-106:
-//# run-graphql
-Response: {
-  "data": {
-    "address": {
+    },
+    "affectsAViaAddress": {
       "transactionBlocks": {
         "nodes": [
           {
@@ -439,15 +432,8 @@ Response: {
           }
         ]
       }
-    }
-  }
-}
-
-task 10, lines 108-134:
-//# run-graphql
-Response: {
-  "data": {
-    "transactionBlocks": {
+    },
+    "sentByA": {
       "nodes": [
         {
           "effects": {
@@ -576,15 +562,8 @@ Response: {
           }
         }
       ]
-    }
-  }
-}
-
-task 11, lines 136-162:
-//# run-graphql
-Response: {
-  "data": {
-    "transactionBlocks": {
+    },
+    "receivedByA": {
       "nodes": [
         {
           "effects": {
@@ -723,15 +702,8 @@ Response: {
           }
         }
       ]
-    }
-  }
-}
-
-task 12, lines 164-190:
-//# run-graphql
-Response: {
-  "data": {
-    "transactionBlocks": {
+    },
+    "affectsB": {
       "nodes": [
         {
           "effects": {
@@ -850,15 +822,8 @@ Response: {
           }
         }
       ]
-    }
-  }
-}
-
-task 13, lines 192-218:
-//# run-graphql
-Response: {
-  "data": {
-    "transactionBlocks": {
+    },
+    "affectsC": {
       "nodes": [
         {
           "effects": {
