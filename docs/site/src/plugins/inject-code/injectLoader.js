@@ -103,7 +103,7 @@ const addCodeInject = function (source) {
                   if (isMove) {
                     funStr = `^(\\s*)*?(pub(lic)? )?fu?n \\b${fn}\\b.*?}\\n(\\s*?})?(?=\\n)?`;
                   } else if (isTs) {
-                    funStr = `^( *)(async )?(export (default )?)?function \\b${fn}\\b.*?\\n\\1}\\n`;
+                    funStr = `^(\\s*)(async )?(export (default )?)?function \\b${fn}\\b.*?\\n\\1}\\n`;
                   }
                   const funRE = new RegExp(funStr, "msi");
                   const funMatch = funRE.exec(injectFileContent);
