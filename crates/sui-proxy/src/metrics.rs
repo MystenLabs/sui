@@ -79,7 +79,7 @@ async fn metrics(
         .filter_map(|v| {
             if v.get_name() == "consumer_operations_submitted" {
                 // Expecting one metric, so return the first one, as it is the only one
-                v.get_metric().get(0).map(|m| m.get_counter().get_value())
+                v.get_metric().first().map(|m| m.get_counter().get_value())
             } else {
                 None
             }
