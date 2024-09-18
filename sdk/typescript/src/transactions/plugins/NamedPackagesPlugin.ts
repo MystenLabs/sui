@@ -27,10 +27,10 @@ export type NamedPackagesPluginOptions = {
 	 * 	Expected format example:
 	 *  {
 	 * 		packages: {
-	 * 			'std@framework': '0x1234',
+	 * 			'@framework/std': '0x1234',
 	 * 		},
 	 * 		types: {
-	 * 			'std@framework::string::String': '0x1234::string::String',
+	 * 			'@framework/std::string::String': '0x1234::string::String',
 	 * 		},
 	 * 	}
 	 *
@@ -42,7 +42,7 @@ export type NamedPackagesPluginOptions = {
  * @experimental This plugin is in experimental phase and there might be breaking changes in the future
  *
  * Adds named resolution so that you can use .move names in your transactions.
- * e.g. `app@org::type::Type` will be resolved to `0x1234::type::Type`.
+ * e.g. `@org/app::type::Type` will be resolved to `0x1234::type::Type`.
  * This plugin will resolve all names & types in the transaction block.
  *
  * To install this plugin globally in your app, use:
