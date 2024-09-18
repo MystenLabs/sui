@@ -1,15 +1,31 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-import { logger } from '@vscode/debugadapter';
 import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import toml from 'toml';
 import { ISourceMap, IFileInfo, readAllSourceMaps } from './source_map_utils';
-import { TraceEvent, readTrace } from './trace_utils';
+import { TraceEffectKind, TraceEvent, TraceEventKind, TraceLocKind, TraceValKind, TraceValue, readTrace } from './trace_utils';
 import { ModuleInfo } from './utils';
+
+/**
+ * Describes the runtime variable scope (e.g., local variables
+ * or shadowed variables).
+ */
+export interface IRuntimeVariableScope {
+    locals: (IRuntimeVariable | undefined)[];
+}
+
+/**
+ * Describes a runtime local variable.
+ */
+interface IRuntimeVariable {
+    name: string;
+    value: string;
+    type: string;
+}
 
 /**
  * Describes a stack frame in the runtime and its current state
@@ -26,6 +42,11 @@ interface IRuntimeStackFrame {
     file: string;
     // Current line in the file correponding to currently viewed instruction.
     line: number; // 1-based
+    // Local variable types by variable frame index.
+    localsTypes: string[];
+    // Local variables per scope (local scope at 0 and then following block scopes),
+    // indexed by variable frame index.
+    locals: (IRuntimeVariable | undefined)[][];
 }
 
 /**
@@ -52,7 +73,7 @@ export enum RuntimeEvents {
 export class Runtime extends EventEmitter {
 
     // Trace being viewed.
-    private trace = { events: [] as TraceEvent[] };
+    private trace = { events: [] as TraceEvent[], localLifetimeEnds: new Map<number, number[]>() };
 
     // Index of the current trace event being processed.
     private eventIndex = 0;
@@ -74,11 +95,9 @@ export class Runtime extends EventEmitter {
      *
      */
     public async start(source: string, traceInfo: string, stopOnEntry: boolean): Promise<void> {
-        logger.log("Starting runtime for file: " + source + " and trace: " + traceInfo);
-
         const pkgRoot = await findPkgRoot(source);
         if (!pkgRoot) {
-            throw new Error("Cannot find package root for file: " + source);
+            throw new Error(`Cannot find package root for file: ${source}`);
         }
         const manifest_path = path.join(pkgRoot, 'Move.toml');
 
@@ -86,7 +105,7 @@ export class Runtime extends EventEmitter {
         // name containing this package's build files
         const pkg_name = getPkgNameFromManifest(manifest_path);
         if (!pkg_name) {
-            throw Error("Cannot find package name in manifest file: " + manifest_path);
+            throw Error(`Cannot find package name in manifest file: ${manifest_path}`);
         }
 
         // create file maps for all files in the `build` directory, including both package source
@@ -107,11 +126,16 @@ export class Runtime extends EventEmitter {
 
         // setup frame stack with the first frame
         const currentEvent = this.trace.events[this.eventIndex];
-        if (currentEvent.type !== 'OpenFrame') {
-            throw new Error("First event in trace is not an OpenFrame event");
+        if (currentEvent.type !== TraceEventKind.OpenFrame) {
+            throw new Error(`First event in trace is not an OpenFrame event`);
         }
         const newFrame =
-            this.newStackFrame(currentEvent.id, currentEvent.name, currentEvent.modInfo);
+            this.newStackFrame(
+                currentEvent.id,
+                currentEvent.name,
+                currentEvent.modInfo,
+                currentEvent.localsTypes
+            );
         this.frameStack = {
             frames: [newFrame]
         };
@@ -147,34 +171,64 @@ export class Runtime extends EventEmitter {
             return true;
         }
         let currentEvent = this.trace.events[this.eventIndex];
-        if (currentEvent.type === 'Instruction') {
+        if (currentEvent.type === TraceEventKind.Instruction) {
             let sameLine = this.instruction(currentEvent);
             if (sameLine && nextLineSkip) {
                 return this.step(next, stopAtCloseFrame, nextLineSkip);
             }
             this.sendEvent(RuntimeEvents.stopOnStep);
             return false;
-        } else if (currentEvent.type === 'OpenFrame') {
+        } else if (currentEvent.type === TraceEventKind.OpenFrame) {
             // create a new frame and push it onto the stack
             const newFrame =
-                this.newStackFrame(currentEvent.id, currentEvent.name, currentEvent.modInfo);
+                this.newStackFrame(
+                    currentEvent.id,
+                    currentEvent.name,
+                    currentEvent.modInfo,
+                    currentEvent.localsTypes
+                );
+            // set values of parameters in the new frame
             this.frameStack.frames.push(newFrame);
+            for (let i = 0; i < currentEvent.paramValues.length; i++) {
+                localWrite(newFrame, i, currentEvent.paramValues[i]);
+            }
+
             if (next) {
                 // step out of the frame right away
-                return this.stepOut();
+                this.stepOut();
+                return false;
             } else {
                 return this.step(next, stopAtCloseFrame, nextLineSkip);
             }
-        } else if (currentEvent.type === 'CloseFrame') {
+        } else if (currentEvent.type === TraceEventKind.CloseFrame) {
             if (stopAtCloseFrame) {
                 // don't do anything as the caller needs to inspect
                 // the event before proceeing
                 return false;
             } else {
                 // pop the top frame from the stack
+                if (this.frameStack.frames.length <= 0) {
+                    throw new Error('No frame to pop at CloseFrame event with ID: '
+                        + currentEvent.id);
+                }
                 this.frameStack.frames.pop();
                 return this.step(next, stopAtCloseFrame, nextLineSkip);
             }
+        } else if (currentEvent.type === TraceEventKind.Effect) {
+            const effect = currentEvent.effect;
+            if (effect.type === TraceEffectKind.Write) {
+                const stackHeight = this.frameStack.frames.length;
+                if (stackHeight <= 0) {
+                    throw new Error('No frame on the stack when processing a write');
+                }
+                const currentFrame = this.frameStack.frames[stackHeight - 1];
+                const traceLocation = effect.location;
+                const traceValue = effect.value;
+                if (traceLocation.type === TraceLocKind.Local) {
+                    localWrite(currentFrame, traceLocation.localIndex, traceValue);
+                }
+            }
+            return this.step(next, stopAtCloseFrame, nextLineSkip);
         } else {
             // ignore other events
             return this.step(next, stopAtCloseFrame, nextLineSkip);
@@ -184,14 +238,13 @@ export class Runtime extends EventEmitter {
     /**
      * Handles "step out" adapter action.
      *
-     * @returns `true` if the trace viewing session is finished, `false` otherwise.
+     * @returns `true` if was able to step out of the frame, `false` otherwise.
      * @throws Error with a descriptive error message if the step out event cannot be handled.
      */
     public stepOut(): boolean {
         const stackHeight = this.frameStack.frames.length;
         if (stackHeight <= 1) {
             // do nothing as there is no frame to step out to
-            logger.log("At the outermost function, cannot step out");
             this.sendEvent(RuntimeEvents.stopOnStep);
             return false;
         }
@@ -203,11 +256,11 @@ export class Runtime extends EventEmitter {
         while (true) {
             if (this.step(/* next */ false, /* stopAtCloseFrame */ true, /* nextLineSkip */ true)) {
                 // trace viewing session finished
-                throw new Error("Cannot find corresponding CloseFrame event for function: " +
+                throw new Error('Cannot find corresponding CloseFrame event for function: ' +
                     currentFrame.name);
             }
             currentEvent = this.trace.events[this.eventIndex];
-            if (currentEvent.type === 'CloseFrame') {
+            if (currentEvent.type === TraceEventKind.CloseFrame) {
                 const currentFrameID = currentFrame.id;
                 // `step` call finished at the CloseFrame event
                 // but did not process it so we need pop the frame here
@@ -238,19 +291,17 @@ export class Runtime extends EventEmitter {
         if (this.eventIndex <= 1) {
             // no where to step back to (event 0 is the `OpenFrame` event for the first frame)
             // and is processed in runtime.start() which is executed only once
-            logger.log("At the beginning of the trace, cannot step back");
             this.sendEvent(RuntimeEvents.stopOnStep);
             return false;
         }
         let currentEvent = this.trace.events[this.eventIndex - 1];
-        if (currentEvent.type === 'CloseFrame') {
+        if (currentEvent.type === TraceEventKind.CloseFrame) {
             // cannot step back into or over function calls
-            logger.log("After a function call, cannot step back");
             this.sendEvent(RuntimeEvents.stopOnStep);
             return false;
         } else {
             this.eventIndex--;
-            if (currentEvent.type === 'Instruction') {
+            if (currentEvent.type === TraceEventKind.Instruction) {
                 let sameLine = this.instruction(currentEvent);
                 if (sameLine) {
                     this.stepBack();
@@ -258,23 +309,23 @@ export class Runtime extends EventEmitter {
                 }
                 this.sendEvent(RuntimeEvents.stopOnStep);
                 return true;
-            } else if (currentEvent.type === 'OpenFrame') {
+            } else if (currentEvent.type === TraceEventKind.OpenFrame) {
                 const stackHeight = this.frameStack.frames.length;
                 if (stackHeight <= 0) {
                     // should never happen but better to signal than crash
-                    throw new Error("Error stepping back to caller function "
+                    throw new Error('Error stepping back to caller function '
                         + currentEvent.name
-                        + " as there is no frame on the stack"
+                        + ' as there is no frame on the stack'
                     );
                 }
                 if (stackHeight <= 1) {
                     // should never happen as we never step back out of the outermost function
                     // (never step back to event 0 as per first conditional in this function)
-                    throw new Error("Error stepping back to caller function "
+                    throw new Error('Error stepping back to caller function '
                         + currentEvent.name
-                        + " from callee "
+                        + ' from callee '
                         + this.frameStack.frames[stackHeight - 1].name
-                        + " as there would be no frame on the stack afterwards"
+                        + ' as there would be no frame on the stack afterwards'
                     );
                 }
                 // pop the top frame from the stack
@@ -284,30 +335,32 @@ export class Runtime extends EventEmitter {
                 // recursing to previous events
                 if (this.eventIndex <= 1) {
                     // no where to step back to
-                    logger.log("At the beginning of the trace, cannot step back");
                     this.sendEvent(RuntimeEvents.stopOnStep);
                     return true; // we actually stepped back just can't step back further
                 }
                 this.eventIndex--;
                 let prevCurrentEvent = this.trace.events[this.eventIndex];
-                if (prevCurrentEvent.type !== 'Instruction') {
-                    throw new Error("Expected an Instruction event before OpenFrame event in function"
+                if (prevCurrentEvent.type !== TraceEventKind.Instruction) {
+                    throw new Error('Expected an Instruction event before OpenFrame event in function'
                         + currentEvent.name
                     );
                 }
                 if (!this.instruction(prevCurrentEvent)) {
                     // we should be steppping back to the instruction on the same line
                     // as the one in the current frame
-                    throw new Error("Wrong line of an instruction (at PC " + prevCurrentEvent.pc + ")"
-                        + " in the caller function"
+                    throw new Error('Wrong line of an instruction (at PC ' + prevCurrentEvent.pc + ')'
+                        + ' in the caller function '
                         + currentEvent.name
-                        + " to step back to from callee "
+                        + ' to step back to from callee '
                         + this.frameStack.frames[stackHeight - 1].name
-                        + " as there would be no frame on the stack afterwards"
+                        + ' as there would be no frame on the stack afterwards'
                     );
                 }
                 this.sendEvent(RuntimeEvents.stopOnStep);
                 return true;
+            } else if (currentEvent.type === TraceEventKind.Effect) {
+                // TODO: implement reverting writes when stepping back
+                return this.stepBack();
             } else {
                 // ignore other events
                 this.stepBack();
@@ -350,13 +403,17 @@ export class Runtime extends EventEmitter {
      * `false` otherwise (so that instructions on the same line can be skipped).
      * @throws Error with a descriptive error message if instruction event cannot be handled.
      */
-    private instruction(instructionEvent: Extract<TraceEvent, { type: 'Instruction' }>): boolean {
+    private instruction(instructionEvent: Extract<TraceEvent, { type: TraceEventKind.Instruction }>): boolean {
         const stackHeight = this.frameStack.frames.length;
+        if (stackHeight <= 0) {
+            throw new Error('No frame on the stack when processing Instruction event at PC: '
+                + instructionEvent.pc);
+        }
         // newest frame is at the top of the stack
-        let currentFrame = this.frameStack.frames[stackHeight - 1];
+        const currentFrame = this.frameStack.frames[stackHeight - 1];
         const currentFun = currentFrame.sourceMap.functions.get(currentFrame.name);
         if (!currentFun) {
-            throw new Error("Cannot find function: " + currentFrame.name + " in source map");
+            throw new Error(`Cannot find function: ${currentFrame.name} in source map`);
         }
 
         // if map does not contain an entry for a PC that can be found in the trace file,
@@ -366,10 +423,23 @@ export class Runtime extends EventEmitter {
             : currentFun.pcLocs[instructionEvent.pc];
 
         if (!currentPCLoc) {
-            throw new Error("Cannot find location for PC: "
+            throw new Error('Cannot find location for PC: '
                 + instructionEvent.pc
-                + " in function: "
+                + ' in function: '
                 + currentFrame.name);
+        }
+
+        // if current instruction ends lifetime of a local variable, mark this in the
+        // local variable array
+        const frameLocalLifetimeEnds = this.trace.localLifetimeEnds.get(currentFrame.id);
+        if (frameLocalLifetimeEnds) {
+            for (let i = 0; i < currentFrame.locals.length; i++) {
+                for (let j = 0; j < currentFrame.locals[i].length; j++) {
+                    if (frameLocalLifetimeEnds[j] === instructionEvent.pc) {
+                        currentFrame.locals[i][j] = undefined;
+                    }
+                }
+            }
         }
 
         if (currentPCLoc.line === currentFrame.line) {
@@ -388,35 +458,46 @@ export class Runtime extends EventEmitter {
      * @param frameID frame identifier from the trace event.
      * @param funName function name.
      * @param modInfo information about module containing the function.
+     * @param localsTypes types of local variables in the frame.
      * @returns new frame.
      * @throws Error with a descriptive error message if frame cannot be constructed.
      */
-    private newStackFrame(frameID: number, funName: string, modInfo: ModuleInfo): IRuntimeStackFrame {
+    private newStackFrame(
+        frameID: number,
+        funName: string,
+        modInfo: ModuleInfo,
+        localsTypes: string[]
+    ): IRuntimeStackFrame {
         const sourceMap = this.sourceMapsMap.get(JSON.stringify(modInfo));
 
         if (!sourceMap) {
-            throw new Error("Cannot find source map for module: "
+            throw new Error('Cannot find source map for module: '
                 + modInfo.name
-                + " in package: "
+                + ' in package: '
                 + modInfo.addr);
         }
         const currentFile = this.filesMap.get(sourceMap.fileHash);
 
         if (!currentFile) {
-            throw new Error("Cannot find file with hash: " + sourceMap.fileHash);
+            throw new Error(`Cannot find file with hash: ${sourceMap.fileHash}`);
         }
 
+        let locals = [];
+        // create first scope for local variables
+        locals[0] = [];
         const stackFrame: IRuntimeStackFrame = {
             sourceMap,
             id: frameID,
             name: funName,
             file: currentFile.path,
-            line: 0 // line will be updated when next event (Instruction) is processed
+            line: 0, // line will be updated when next event (Instruction) is processed
+            localsTypes,
+            locals
         };
 
         if (this.trace.events.length <= this.eventIndex + 1 ||
-            this.trace.events[this.eventIndex + 1].type !== 'Instruction') {
-            throw new Error("Expected an Instruction event after OpenFrame event");
+            this.trace.events[this.eventIndex + 1].type !== TraceEventKind.Instruction) {
+            throw new Error('Expected an Instruction event after OpenFrame event');
         }
         return stackFrame;
     }
@@ -432,6 +513,51 @@ export class Runtime extends EventEmitter {
             this.emit(event, ...args);
         }, 0);
     }
+}
+
+/**
+ * Handles a write to a local variable in the current frame.
+ *
+ * @param currentFrame current frame.
+ * @param localIndex variable index in the frame.
+ * @param runtimeValue variable value.
+ */
+function localWrite(
+    currentFrame: IRuntimeStackFrame,
+    localIndex: number,
+    traceValue: TraceValue
+): void {
+    if (traceValue.type !== TraceValKind.Runtime) {
+        throw new Error('Expected a RuntimeValue when writing local variable at index: '
+            + localIndex
+            + ' in function: '
+            + currentFrame.name
+            + ' but got: '
+            + traceValue.type);
+    }
+    const type = currentFrame.localsTypes[localIndex];
+    if (!type) {
+        throw new Error('Cannot find type for local variable at index: '
+            + localIndex
+            + ' in function: '
+            + currentFrame.name);
+    }
+    const value = traceValue.value;
+    const funEntry = currentFrame.sourceMap.functions.get(currentFrame.name);
+    if (!funEntry) {
+        throw new Error('Cannot find function entry in source map for function: '
+            + currentFrame.name);
+    }
+    const name = funEntry.localsNames[localIndex];
+    if (!name) {
+        throw new Error('Cannot find local variable at index: '
+            + localIndex
+            + ' in function: '
+            + currentFrame.name);
+    }
+    // TODO: if a variable has the same name but a different index (it is shadowed)
+    // it has to be put in a different scope (e.g., locals[1], locals[2], etc.)
+    currentFrame.locals[0][localIndex] = { name, value, type };
 }
 
 /**

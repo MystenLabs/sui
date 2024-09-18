@@ -58,8 +58,15 @@ interface ILoc {
  * Describes a function in the source map.
  */
 interface ISourceMapFunction {
-    // Locations indexed with PC values.
+    /**
+     * Locations indexed with PC values.
+     */
     pcLocs: ILoc[],
+    /**
+     * Names of local variables by their index in the frame
+     * (parameters first, then actual locals).
+     */
+    localsNames: string[]
 }
 
 /**
@@ -82,7 +89,7 @@ export interface ISourceMap {
     modInfo: ModuleInfo,
     functions: Map<string, ISourceMapFunction>,
     // Lines that are not present in the source map.
-    optimized_lines: number[]
+    optimizedLines: number[]
 }
 
 export function readAllSourceMaps(
@@ -98,7 +105,7 @@ export function readAllSourceMaps(
             const stats = fs.statSync(filePath);
             if (stats.isDirectory()) {
                 processDirectory(filePath);
-            } else if (path.extname(f) === ".json") {
+            } else if (path.extname(f) === '.json') {
                 const sourceMap = readSourceMap(filePath, filesMap);
                 sourceMapsMap.set(JSON.stringify(sourceMap.modInfo), sourceMap);
             }
@@ -116,6 +123,7 @@ export function readAllSourceMaps(
  * @param sourceMapPath path to the source map JSON file.
  * @param filesMap map from file hash to file information.
  * @returns source map.
+ * @throws Error if with a descriptive error message if the source map cannot be read.
  */
 function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>): ISourceMap {
     const sourceMapJSON: ISrcRootObject = JSON.parse(fs.readFileSync(sourceMapPath, 'utf8'));
@@ -128,9 +136,9 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
     const functions = new Map<string, ISourceMapFunction>();
     const fileInfo = filesMap.get(fileHash);
     if (!fileInfo) {
-        throw new Error("Could not find file with hash: "
+        throw new Error('Could not find file with hash: '
             + fileHash
-            + " when processing source map at: "
+            + ' when processing source map at: '
             + sourceMapPath);
     }
     const allSourceMapLines = new Set<number>();
@@ -161,7 +169,27 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
             prevPC = currentPC;
             prevLoc = currentLoc;
         }
-        functions.set(funName, { pcLocs });
+
+        const localsNames: string[] = [];
+        for (const param of funEntry.parameters) {
+            const paramName = param[0].split("#")[0];
+            if (!paramName) {
+                localsNames.push(param[0]);
+            } else {
+                localsNames.push(paramName);
+            }
+        }
+
+        for (const local of funEntry.locals) {
+            const localsName = local[0].split("#")[0];
+            if (!localsName) {
+                localsNames.push(local[0]);
+            } else {
+                localsNames.push(localsName);
+            }
+        }
+
+        functions.set(funName, { pcLocs, localsNames });
     }
     let optimized_lines: number[] = [];
     for (let i = 0; i < fileInfo.lines.length; i++) {
@@ -170,7 +198,7 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
         }
     }
 
-    return { fileHash, modInfo, functions, optimized_lines };
+    return { fileHash, modInfo, functions, optimizedLines: optimized_lines };
 }
 
 /**
