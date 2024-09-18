@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::Result;
 use diesel::dsl::sql;
+use diesel::sql_types::Bool;
 use diesel::TextExpressionMethods;
 use diesel::{
-    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
-    OptionalExtension, QueryDsl, SelectableHelper,
+    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, OptionalExtension, QueryDsl,
+    SelectableHelper,
 };
 use itertools::Itertools;
 use std::sync::Arc;
