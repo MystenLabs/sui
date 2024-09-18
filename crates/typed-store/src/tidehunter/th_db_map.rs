@@ -61,6 +61,10 @@ where
 
     fn serialize_key(&self, k: impl Borrow<K>) -> Vec<u8> {
         let mut key = be_fix_int_ser(k.borrow()).unwrap();
+        let chop_key = self.kf_spec.2;
+        if chop_key > 0 {
+            key = key.split_off(chop_key as usize);
+        }
         key.insert(0, self.kf_spec.0);
         key
     }
