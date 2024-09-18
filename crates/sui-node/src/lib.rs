@@ -1929,9 +1929,8 @@ fn build_kv_store(
 
     let network_str = match state.get_chain_identifier().map(|c| c.chain()) {
         Some(Chain::Mainnet) => "/mainnet",
-        Some(Chain::Testnet) => "/testnet",
         _ => {
-            info!("using local db only for kv store for unknown chain");
+            info!("using local db only for kv store");
             return Ok(Arc::new(db_store));
         }
     };
