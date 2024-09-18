@@ -25,6 +25,11 @@ abstract contract CommitteeUpgradeable is
 
     /* ========== INITIALIZER ========== */
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function __CommitteeUpgradeable_init(address _committee) internal onlyInitializing {
         __ReentrancyGuard_init();
         __MessageVerifier_init(_committee);
