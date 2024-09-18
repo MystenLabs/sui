@@ -29,7 +29,7 @@ runs:
     - name: cargo build
       if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to s3 yet
       run: |
-        if [ ${{ inputs.ref }} == 'devnet' || ${{ inputs.ref }} == 'testnet' ]; then 
+        if [[ "${{ inputs.ref }}" == 'devnet' || "${{ inputs.ref }}" == 'testnet' ]]; then
           cargo build --bin sui --features indexer
         else
           cargo build --bin sui
