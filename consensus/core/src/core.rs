@@ -829,22 +829,8 @@ impl Core {
         let mut ancestors_to_propose = high_score_ancestors;
         let mut excluded_ancestors = Vec::new();
         for (score, ancestor) in low_score_ancestors.into_iter() {
-            let block_hostname = &self.context.committee.authority(ancestor.author()).hostname;
             if parent_round_quorum.reached_threshold(&self.context.committee) {
-                if self.propagation_delay_per_authority[ancestor.author()] <= 1 {
-                    self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
-                    debug!("Included low score weak link ancestor {ancestor} with score {score} & propogation delay {} to propose for round {clock_round}", self.propagation_delay_per_authority[ancestor.author()]);
-                    ancestors_to_propose.push(ancestor);
-                } else {
-                    debug!("Parent quorum threshold reached with good ancestors. Excluding low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
-                    self.context
-                        .metrics
-                        .node_metrics
-                        .excluded_proposal_ancestors_count_by_authority
-                        .with_label_values(&[block_hostname])
-                        .inc();
-                    excluded_ancestors.push((score, ancestor));
-                }
+                excluded_ancestors.push((score, ancestor));
                 continue;
             }
 
@@ -854,24 +840,72 @@ impl Core {
                 debug!("Included low score strong link ancestor {ancestor} with score {score} to propose for round {clock_round}");
                 ancestors_to_propose.push(ancestor);
             } else {
-                if self.propagation_delay_per_authority[ancestor.author()] <= 1 {
-                    self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
-                    debug!("Included low score weak link ancestor {ancestor} with score {score} & propogation delay {} to propose for round {clock_round}", self.propagation_delay_per_authority[ancestor.author()]);
-                    ancestors_to_propose.push(ancestor);
-                } else {
-                    debug!("Excluded low score weak link ancestor {ancestor} with score {score} to propose for round {clock_round}");
-                    self.context
-                        .metrics
-                        .node_metrics
-                        .excluded_proposal_ancestors_count_by_authority
-                        .with_label_values(&[block_hostname])
-                        .inc();
-                    excluded_ancestors.push((score, ancestor));
-                }
+                excluded_ancestors.push((score, ancestor));
             }
         }
 
-        // TODO(arun): Add re-inclusion code here?
+        // inclusion of weak links for low score ancestors
+        for (score, ancestor) in excluded_ancestors.iter() {
+            let excluded_author = ancestor.author();
+            let block_hostname = &self.context.committee.authority(excluded_author).hostname;
+            let network_quorum_round = self.propagation_delay_per_authority[excluded_author];
+            if let Some(last_block_ref) = self.last_included_ancestors[excluded_author] {
+                if last_block_ref.round < network_quorum_round {
+                    if ancestor.round() == network_quorum_round {
+                        // include this block
+                        self.last_included_ancestors[excluded_author] = Some(ancestor.reference());
+                        debug!("Included excluded ancestor {ancestor} with score {score} & propogation delay {} to propose for round {clock_round}", self.propagation_delay_per_authority[excluded_author]);
+                        self.context
+                            .metrics
+                            .node_metrics
+                            .included_excluded_proposal_ancestors_count_by_authority
+                            .with_label_values(&[block_hostname])
+                            .inc();
+                        ancestors_to_propose.push(ancestor.clone());
+                    } else {
+                        // get ancestor from store that is at network round
+                        let blocks =
+                            self.dag_state
+                                .read()
+                                .get_uncommitted_blocks_at_slot(Slot::new(
+                                    network_quorum_round,
+                                    excluded_author,
+                                ));
+                        if blocks.len() > 1 {
+                            warn!("Multiple potential ancestor blocks found {blocks:?}, will include the first.");
+                        }
+
+                        // include this block from store
+                        if let Some(block) = blocks.first() {
+                            self.last_included_ancestors[excluded_author] = Some(block.reference());
+                            ancestors_to_propose.push(block.clone());
+                            debug!("Included excluded ancestor authority with score {score} with weak link {block} to propose for round {clock_round}");
+                            self.context
+                                .metrics
+                                .node_metrics
+                                .included_excluded_proposal_ancestors_count_by_authority
+                                .with_label_values(&[block_hostname])
+                                .inc();
+                        } else {
+                            warn!("No earlier ancestor found for excluded ancestor {ancestor} with score {score} to propose for round {clock_round}");
+                        }
+                    }
+
+                    // we have included the ancestor in either case so we can go to the next iteration
+                    continue;
+                }
+            }
+
+            // exclude
+            debug!("Excluded low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
+            self.context
+                .metrics
+                .node_metrics
+                .excluded_proposal_ancestors_count_by_authority
+                .with_label_values(&[block_hostname])
+                .inc();
+        }
+
         info!(
             "Included {} ancestors & excluded {} ancestors",
             ancestors_to_propose.len(),
@@ -1829,8 +1863,7 @@ mod test {
                     if block.author() != AuthorityIndex::new_for_test(3) {
                         // Assert blocks created include only 3 ancestors per block as one
                         // should be excluded
-                        // TODO(arun): Is test necessary now that block is included with prop delay
-                        assert_eq!(block.ancestors().len(), 4);
+                        assert_eq!(block.ancestors().len(), 3);
                     } else {
                         // Authority 3 is the low scoring authority so it will still include
                         // its own blocks.

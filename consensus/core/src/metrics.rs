@@ -141,6 +141,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) last_decided_leader_round: IntGauge,
     pub(crate) leader_timeout_total: IntCounterVec,
     pub(crate) excluded_proposal_ancestors_count_by_authority: IntCounterVec,
+    pub(crate) included_excluded_proposal_ancestors_count_by_authority: IntCounterVec,
     pub(crate) missing_blocks_total: IntCounter,
     pub(crate) missing_blocks_after_fetch_total: IntCounter,
     pub(crate) num_of_bad_nodes: IntGauge,
@@ -174,6 +175,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetch_once_latency: Histogram,
     pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
     pub(crate) round_prober_quorum_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_low_quorum_round: IntGaugeVec,
     pub(crate) round_prober_propagation_delays: Histogram,
     pub(crate) round_prober_last_propagation_delay: IntGauge,
     pub(crate) round_prober_request_errors: IntCounter,
@@ -437,6 +439,12 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
+            included_excluded_proposal_ancestors_count_by_authority: register_int_counter_vec_with_registry!(
+                "included_excluded_proposal_ancestors_count_by_authority",
+                "Total number of included excluded ancestors per authority during proposal.",
+                &["authority"],
+                registry,
+            ).unwrap(),
             missing_blocks_total: register_int_counter_with_registry!(
                 "missing_blocks_total",
                 "Total cumulative number of missing blocks",
@@ -614,6 +622,12 @@ impl NodeMetrics {
             round_prober_quorum_round_gaps: register_int_gauge_vec_with_registry!(
                 "round_prober_quorum_round_gaps",
                 "Round gaps among peers for blocks proposed from each authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_low_quorum_round: register_int_gauge_vec_with_registry!(
+                "round_prober_low_quorum_round",
+                "Low quorum round among peers for blocks proposed from each authority",
                 &["authority"],
                 registry
             ).unwrap(),

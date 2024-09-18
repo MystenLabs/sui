@@ -210,8 +210,14 @@ impl<C: NetworkClient> RoundProber<C> {
                 .round_prober_quorum_round_gaps
                 .with_label_values(&[&authority.hostname])
                 .set((high - low) as i64);
+            self.context
+                .metrics
+                .node_metrics
+                .round_prober_low_quorum_round
+                .with_label_values(&[&authority.hostname])
+                .set(*low as i64);
 
-            propagation_delay_per_authority[authority_index] = high - low;
+            propagation_delay_per_authority[authority_index] = *low;
         }
         // TODO: consider using own quorum round gap to control proposing in addition to
         // propagation delay. For now they seem to be about the same.
@@ -504,11 +510,11 @@ mod test {
         // 110 - 100 = 10
         assert_eq!(
             propagation_delay_per_authority,
-            vec![10, 115, 27, 0, 45, 54, 63]
+            vec![10, 0, 103, 0, 105, 106, 107]
         );
         assert_eq!(
             core_thread_dispatcher.propagation_delay_per_authority(),
-            vec![10, 115, 27, 0, 45, 54, 63]
+            vec![10, 0, 103, 0, 105, 106, 107]
         );
     }
 
