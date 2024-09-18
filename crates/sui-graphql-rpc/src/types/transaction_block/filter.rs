@@ -76,7 +76,7 @@ impl TransactionBlockFilter {
 
             #[cfg(feature = "staging")]
             affected_address: intersect!(affected_address, intersect::by_eq)?,
-            sign_address: intersect!(sent_address, intersect::by_eq)?,
+            sign_address: intersect!(sign_address, intersect::by_eq)?,
             sent_address: intersect!(sent_address, intersect::by_eq)?,
             recv_address: intersect!(recv_address, intersect::by_eq)?,
             input_object: intersect!(input_object, intersect::by_eq)?,
