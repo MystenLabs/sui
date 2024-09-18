@@ -55,4 +55,18 @@ module Symbols::M5 {
 
     const SOME_CONST: u64 = 7;
 
+    public fun long_param_list(foo: u64, bar: u64, baz: u64, qux: u64) {}
+
+    public fun short_type_param_list<TYPE1, TYPE2>() {}
+
+    public fun long_type_param_list<TYPE1, TYPE2, TYPE3>() {}
+
+    public fun combined_short_type_param_list<TYPE1, TYPE2>(
+        foo: u64, bar: u64, baz: u64, qux: u64
+    ) {}
+
+    public fun combined_long_type_param_list<TYPE1, TYPE2, TYPE3>(
+        foo: u64, bar: u64, baz: u64, qux: u64
+    ) {}
+
 }

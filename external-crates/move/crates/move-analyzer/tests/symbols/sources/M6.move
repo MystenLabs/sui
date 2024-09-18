@@ -45,4 +45,38 @@ module Symbols::M6 {
         param
     }
 
+    /// A documented function with code block
+    /// (should preserved indentation in the code block)
+    ///
+    /// ```rust
+    /// fun foo() {
+    ///     42
+    /// }
+    /// ```
+    fun code_block_doc_slash() {}
+
+    /**
+       A documented function with code block
+       (should preserved indentation in the code block)
+
+       ```rust
+       fun foo() {
+           42
+       }
+       ```
+    */
+    fun code_block_doc_star() {}
+
+    /**
+      Misformatted docstring to have fewer whitespace in the body than
+      at the ending marker.
+
+
+  Beginning of this string should not disappear.
+
+Beginning of this string should not disappear either.
+
+    */
+    fun misformatted_docstring() {}
+
 }

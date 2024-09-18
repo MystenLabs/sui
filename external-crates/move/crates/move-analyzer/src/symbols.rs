@@ -656,20 +656,35 @@ impl fmt::Display for DefInfo {
                 ret_type,
                 _,
             ) => {
-                let type_args_str = type_args_to_ide_string(type_args, /* verbose */ true);
+                const SINGLE_LINE_TYPE_ARGS_NUM: usize = 2;
+                // The strategy for displaying function signature is as follows:
+                // - if there are more than SINGLE_LINE_TYPE_ARGS_NUM type args,
+                //   they are displayed on separate lines
+                // - "regular" args are always displayed on separate lines, which
+                //   which is motivated by the fact that datatypes are displayed
+                //   in a fully-qualified form (i.e., with package and module name),
+                //   and that makes the function name already long and (likely)
+                //   the length of each individual type also long (modulo primitive
+                //   types of course, but I think we can live with that)
+                let type_args_str = type_args_to_ide_string(
+                    type_args,
+                    /* separate_lines */ type_args.len() > SINGLE_LINE_TYPE_ARGS_NUM,
+                    /* verbose */ true,
+                );
+                let args_str = typed_id_list_to_ide_string(
+                    arg_names, arg_types, '(', ')', /* separate_lines */ true,
+                    /* verbose */ true,
+                );
                 let ret_type_str = ret_type_to_ide_str(ret_type, /* verbose */ true);
                 write!(
                     f,
-                    "{}{}fun {}::{}{}({}){}",
+                    "{}{}fun {}::{}{}{}{}",
                     visibility_to_ide_string(visibility),
                     fun_type_to_ide_string(fun_type),
                     mod_ident_to_ide_string(mod_ident),
                     name,
                     type_args_str,
-                    typed_id_list_to_ide_string(
-                        arg_names, arg_types, /* separate_lines */ false,
-                        /* verbose */ true
-                    ),
+                    args_str,
                     ret_type_str,
                 )
             }
@@ -699,7 +714,7 @@ impl fmt::Display for DefInfo {
                 } else {
                     write!(
                         f,
-                        "{}struct {}::{}{}{} {{\n{}\n}}",
+                        "{}struct {}::{}{}{} {}",
                         visibility_to_ide_string(visibility),
                         mod_ident_to_ide_string(mod_ident),
                         name,
@@ -708,6 +723,8 @@ impl fmt::Display for DefInfo {
                         typed_id_list_to_ide_string(
                             field_names,
                             field_types,
+                            '{',
+                            '}',
                             /* separate_lines */ true,
                             /* verbose */ true
                         ),
@@ -757,18 +774,24 @@ impl fmt::Display for DefInfo {
                         mod_ident_to_ide_string(mod_ident),
                         enum_name,
                         name,
-                        type_list_to_ide_string(field_types, /* verbose */ true)
+                        type_list_to_ide_string(
+                            field_types,
+                            /* separate_lines */ false,
+                            /* verbose */ true
+                        )
                     )
                 } else {
                     write!(
                         f,
-                        "{}::{}::{}{{{}}}",
+                        "{}::{}::{}{}",
                         mod_ident_to_ide_string(mod_ident),
                         enum_name,
                         name,
                         typed_id_list_to_ide_string(
                             field_names,
                             field_types,
+                            '{',
+                            '}',
                             /* separate_lines */ false,
                             /* verbose */ true,
                         ),
@@ -916,11 +939,17 @@ fn visibility_to_ide_string(visibility: &Visibility) -> String {
     visibility_str
 }
 
-pub fn type_args_to_ide_string(type_args: &[Type], verbose: bool) -> String {
+pub fn type_args_to_ide_string(type_args: &[Type], separate_lines: bool, verbose: bool) -> String {
     let mut type_args_str = "".to_string();
     if !type_args.is_empty() {
         type_args_str.push('<');
-        type_args_str.push_str(&type_list_to_ide_string(type_args, verbose));
+        if separate_lines {
+            type_args_str.push('\n');
+        }
+        type_args_str.push_str(&type_list_to_ide_string(type_args, separate_lines, verbose));
+        if separate_lines {
+            type_args_str.push('\n');
+        }
         type_args_str.push('>');
     }
     type_args_str
@@ -939,10 +968,12 @@ fn datatype_type_args_to_ide_string(type_args: &[(Type, bool)], verbose: bool) -
 fn typed_id_list_to_ide_string(
     names: &[Name],
     types: &[Type],
+    list_start: char,
+    list_end: char,
     separate_lines: bool,
     verbose: bool,
 ) -> String {
-    names
+    let list = names
         .iter()
         .zip(types.iter())
         .map(|(n, t)| {
@@ -953,7 +984,12 @@ fn typed_id_list_to_ide_string(
             }
         })
         .collect::<Vec<_>>()
-        .join(if separate_lines { ",\n" } else { ", " })
+        .join(if separate_lines { ",\n" } else { ", " });
+    if separate_lines && !list.is_empty() {
+        format!("{}\n{}\n{}", list_start, list, list_end)
+    } else {
+        format!("{}{}{}", list_start, list, list_end)
+    }
 }
 
 pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
@@ -969,20 +1005,30 @@ pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
         }
         Type_::Apply(_, sp!(_, type_name), ss) => match type_name {
             TypeName_::Multiple(_) => {
-                format!("({})", type_list_to_ide_string(ss, verbose))
+                format!(
+                    "({})",
+                    type_list_to_ide_string(ss, /* separate_lines */ false, verbose)
+                )
             }
             TypeName_::Builtin(name) => {
                 if ss.is_empty() {
                     format!("{}", name)
                 } else {
-                    format!("{}<{}>", name, type_list_to_ide_string(ss, verbose))
+                    format!(
+                        "{}<{}>",
+                        name,
+                        type_list_to_ide_string(ss, /* separate_lines */ false, verbose)
+                    )
                 }
             }
             TypeName_::ModuleType(sp!(_, module_ident), struct_name) => {
                 let type_args = if ss.is_empty() {
                     "".to_string()
                 } else {
-                    format!("<{}>", type_list_to_ide_string(ss, verbose))
+                    format!(
+                        "<{}>",
+                        type_list_to_ide_string(ss, /* separate_lines */ false, verbose)
+                    )
                 };
                 if verbose {
                     format!("{}::{}{}", module_ident, struct_name, type_args,)
@@ -994,7 +1040,7 @@ pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
         Type_::Fun(args, ret) => {
             format!(
                 "|{}| -> {}",
-                type_list_to_ide_string(args, verbose),
+                type_list_to_ide_string(args, /* separate_lines */ false, verbose),
                 type_to_ide_string(ret, verbose)
             )
         }
@@ -1004,12 +1050,18 @@ pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
     }
 }
 
-pub fn type_list_to_ide_string(types: &[Type], verbose: bool) -> String {
+pub fn type_list_to_ide_string(types: &[Type], separate_lines: bool, verbose: bool) -> String {
     types
         .iter()
-        .map(|t| type_to_ide_string(t, verbose))
+        .map(|t| {
+            if separate_lines {
+                format!("\t{}", type_to_ide_string(t, verbose))
+            } else {
+                type_to_ide_string(t, verbose)
+            }
+        })
         .collect::<Vec<_>>()
-        .join(", ")
+        .join(if separate_lines { ",\n" } else { ", " })
 }
 
 fn datatype_type_list_to_ide_string(types: &[(Type, bool)], verbose: bool) -> String {
@@ -2712,7 +2764,7 @@ fn extract_doc_string(
     // Detect the two different types of docstrings
     if line_before.starts_with("///") {
         while let Some(stripped_line) = line_before.strip_prefix("///") {
-            doc_string = format!("{}\n{}", stripped_line.trim(), doc_string);
+            doc_string = format!("{}\n{}", stripped_line, doc_string);
             if iter == 0 {
                 break;
             }
@@ -2721,7 +2773,13 @@ fn extract_doc_string(
         }
     } else if line_before.ends_with("*/") {
         let mut doc_string_found = false;
-        line_before = file_lines[iter].strip_suffix("*/").unwrap_or("").trim();
+        // we need a line with preserved (whitespace) prefix so that
+        // we can trim other lines in the doc comment to the same prefix
+        let mut current_line = file_lines[iter].trim_end();
+        current_line = current_line.strip_suffix("*/").unwrap_or("");
+        let current_line_len = current_line.len();
+        line_before = current_line.trim();
+        let trimmed_len = current_line_len - line_before.len();
 
         // Loop condition is a safe guard.
         while !doc_string_found {
@@ -2745,7 +2803,36 @@ fn extract_doc_string(
             }
 
             iter -= 1;
-            line_before = file_lines[iter].trim();
+
+            // we need to trim the block comment line the same as
+            // the line containing its ending marker
+            current_line = file_lines[iter].trim_end();
+            let first_non_whitespace = current_line
+                .chars()
+                .position(|c| !c.is_whitespace())
+                .unwrap_or_default();
+            if first_non_whitespace < trimmed_len {
+                // There is not enough whitespace to trim but trim as much as you can.
+                // The reason likely is that the docsting is misformatted, for example:
+                // ```
+                //   /**
+                //     Properly formatted line
+                //     Another properly formatted line
+                // Misformatted line
+                //   */
+                // ```
+                //
+                // This will result in the following doc comment extracted:
+                //     Properly formatted line
+                //```
+                //   Properly formatted line
+                //   Another properly formatted line
+                //Misformatted line
+                //```
+                line_before = current_line.trim_start();
+            } else {
+                line_before = current_line[trimmed_len..].into();
+            }
         }
 
         // No doc_string found - return String::new();
