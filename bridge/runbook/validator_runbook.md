@@ -7,9 +7,9 @@ title: Sui Bridge Validator Runbook
 Install `sui`, `sui-bridge-cli` binaries:
 ```bash
 # install from tip of `main`
-cargo install --locked --git "https://github.com/MystenLabs/sui.git" sui sui-bridge-cli
+$ cargo install --locked --git "https://github.com/MystenLabs/sui.git" sui sui-bridge-cli
 # install with a commit sha
-cargo install --locked --git "https://github.com/MystenLabs/sui.git" --rev {SHA} sui sui-bridge-cli
+$ cargo install --locked --git "https://github.com/MystenLabs/sui.git" --rev {SHA} sui sui-bridge-cli
 ```
 
 ## Committee Registeration
@@ -22,7 +22,7 @@ The required metadata includes two things:
 
 To create a `BridgeAuthorityKey`, run
 ```bash
-sui-bridge-cli create-bridge-validator-key {PATH_TO_WRITE}
+$ sui-bridge-cli create-bridge-validator-key {PATH_TO_WRITE}
 ```
 This creates the keypair and writes it to `{PATH_TO_WRITE}`.
 
@@ -31,13 +31,13 @@ This creates the keypair and writes it to `{PATH_TO_WRITE}`.
 ### Registration
 Once you have both authority key file and REST API URL ready, you can register them by using sui cli:
 ```bash
-sui validator register-bridge-committee --bridge-authority-key-path <BRIDGE_AUTHORITY_KEY_PATH> --bridge-authority-url <BRIDGE_AUTHORITY_URL>
+$ sui validator register-bridge-committee --bridge-authority-key-path <BRIDGE_AUTHORITY_KEY_PATH> --bridge-authority-url <BRIDGE_AUTHORITY_URL>
 ```
 
 #### Offline Signing
 If your validator account key is kept in cold storage or you want to do offline signing, use flag `--print-only` and provide validator address with `--validator-address`. This prints serialized unsigned transaction bytes, then you can use your preferred signing process to produce signed bytes. Run the following command to execute it:
 ```bash
-sui client execute-signed-tx
+$ sui client execute-signed-tx
 ```
 
 #### Update Metadata
@@ -45,8 +45,8 @@ Both key and URL are changeable **before the committee is finalized**. If you wi
 
 #### View Registered Metadata
 To double check your registered the correct metadata onchain, run
-```
-sui-bridge-cli view-bridge-registration --sui-rpc-url {SUI_FULLNODE_URL}
+```bash
+$ sui-bridge-cli view-bridge-registration --sui-rpc-url {SUI_FULLNODE_URL}
 ```
 
 ## Bridge Node
@@ -89,6 +89,7 @@ frontend http-in
     default_backend bridgevalidator
 
 backend bridgevalidator
+    # Note the port needs to match the value in Bridge Node config, default is 9191
     server bridgevalidator 0.0.0.0:9191
 ```
 
@@ -97,9 +98,9 @@ If choosing to use an open source load-balancing option, make sure to set up met
 ### Bridge Node Config
 Use `sui-bridge-cli` command to create a template. If you want to run `BridgeClient` (see the following section), pass `--run-client` as a parameter.
 
-```
-sui-bridge-cli create-bridge-node-config-template {PATH}
-sui-bridge-cli create-bridge-node-config-template --run-client {PATH}
+```bash
+$ sui-bridge-cli create-bridge-node-config-template {PATH}
+$ sui-bridge-cli create-bridge-node-config-template --run-client {PATH}
 ```
 
 In the generated config:
@@ -139,3 +140,47 @@ To create a `BridgeClient` keypair, run
 sui-bridge-cli create-bridge-client-key <PATH_TO_BRIDGE_CLIENT_KEY>
 ```
 This prints the newly created Sui Address. Then we need to fund this address with some SUI for operations.
+
+
+### Build Bridge Node
+
+Build or install Bridge Node in one of the following ways:
+
+1. `cargo install`
+```bash
+$ cargo install --locked --git "https://github.com/MystenLabs/sui.git" --branch {BRANCH-NAME} sui-bridge
+# OR
+$ cargo install --locked --git "https://github.com/MystenLabs/sui.git" --rev {SHA-NAME} sui-bridge
+```
+
+2. compile from source code
+```bash
+$ git clone https://github.com/MystenLabs/sui.git
+$ cd sui
+$ git fetch origin {BRANCH-NAME|SHA}
+$ git checkout {BRANCH-NAME|SHA}
+$ cargo build --release --bin sui-bridge
+```
+
+3. `curl`/`wget` pre-built binaries (for linux/amd64 only)
+```
+curl https://sui-releases.s3.us-east-1.amazonaws.com/{SHA}/sui-bridge -o sui-bridge
+```
+
+4. use pre-built docker image. Pull from docker hub: `mysten/sui-tools:{SHA}`
+
+
+### Run Bridge Node
+It is similar to running a sui-node using systemd or ansible. The command to start the bridge node is:
+
+```bash
+$ RUST_LOG=info,sui_bridge=debug sui-bridge --config-path {BRIDGE-NODE-CONFIG-PATH}
+```
+
+### Ingress
+Bridge Node listens for tcp connections over port `9191` (or your preferred port as configured in Bridge Node Config), you’ll need to allow incoming connections for that port on the host which is running Bridge Node.
+
+Test ingress with curl on a remote machine and expect a `200` response:
+```bash
+$ curl -v {YOUR_BRIDGE_URL}
+```
