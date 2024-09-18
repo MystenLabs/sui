@@ -46,3 +46,173 @@
 //> TransferObjects([Gas], Input(0))
 
 //# create-checkpoint
+
+//# run-graphql
+{ # A should be affected by all the transactions above
+  transactionBlocks(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{A}" }, scanLimit: 1000) {
+    nodes {
+      effects {
+        objectChanges {
+          nodes {
+            inputState {
+              asMoveObject {
+                asCoin {
+                  coinBalance
+                }
+              }
+            }
+            outputState {
+              asMoveObject {
+                asCoin {
+                  coinBalance
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # Same as above, but nesting the transaction block query inside an address query
+  address(address: "@{A}") {
+    transactionBlocks(filter: { kind: PROGRAMMABLE_TX }, relation: AFFECTED, scanLimit: 1000) {
+      nodes {
+        effects {
+          objectChanges {
+            nodes {
+              inputState {
+                asMoveObject {
+                  asCoin {
+                    coinBalance
+                  }
+                }
+              }
+              outputState {
+                asMoveObject {
+                  asCoin {
+                    coinBalance
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # For contrast, the transactions that A is the sender for
+  transactionBlocks(filter: { kind: PROGRAMMABLE_TX, sentAddress: "@{A}" }) {
+    nodes {
+      effects {
+        objectChanges {
+          nodes {
+            inputState {
+              asMoveObject {
+                asCoin {
+                  coinBalance
+                }
+              }
+            }
+            outputState {
+              asMoveObject {
+                asCoin {
+                  coinBalance
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # ...and the transactions that A was a recipient for
+  transactionBlocks(filter: { kind: PROGRAMMABLE_TX, recvAddress: "@{A}" }, scanLimit: 1000) {
+    nodes {
+      effects {
+        objectChanges {
+          nodes {
+            inputState {
+              asMoveObject {
+                asCoin {
+                  coinBalance
+                }
+              }
+            }
+            outputState {
+              asMoveObject {
+                asCoin {
+                  coinBalance
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # B was not affected by all the transactions
+  transactionBlocks(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{B}" }, scanLimit: 1000) {
+    nodes {
+      effects {
+        objectChanges {
+          nodes {
+            inputState {
+              asMoveObject {
+                asCoin {
+                  coinBalance
+                }
+              }
+            }
+            outputState {
+              asMoveObject {
+                asCoin {
+                  coinBalance
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # And neither was C
+  transactionBlocks(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{C}" }, scanLimit: 1000) {
+    nodes {
+      effects {
+        objectChanges {
+          nodes {
+            inputState {
+              asMoveObject {
+                asCoin {
+                  coinBalance
+                }
+              }
+            }
+            outputState {
+              asMoveObject {
+                asCoin {
+                  coinBalance
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

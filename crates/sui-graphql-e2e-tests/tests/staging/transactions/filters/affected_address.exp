@@ -1,4 +1,4 @@
-processed 8 tasks
+processed 14 tasks
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
@@ -50,3 +50,875 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 task 7, line 48:
 //# create-checkpoint
 Checkpoint created: 1
+
+task 8, lines 50-76:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "1000000"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "300000000000000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999996024000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999996024000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999992026120"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "2000000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999992026120"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999987028240"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "3000000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999987028240"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999981030360"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "4000000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "3000000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "1990120"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "4000000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "2990120"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 9, lines 78-106:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "transactionBlocks": {
+        "nodes": [
+          {
+            "effects": {
+              "objectChanges": {
+                "nodes": [
+                  {
+                    "inputState": null,
+                    "outputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "1000000"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "inputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "300000000000000"
+                        }
+                      }
+                    },
+                    "outputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "299999996024000"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "effects": {
+              "objectChanges": {
+                "nodes": [
+                  {
+                    "inputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "299999996024000"
+                        }
+                      }
+                    },
+                    "outputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "299999992026120"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "inputState": null,
+                    "outputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "2000000"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "effects": {
+              "objectChanges": {
+                "nodes": [
+                  {
+                    "inputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "299999992026120"
+                        }
+                      }
+                    },
+                    "outputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "299999987028240"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "inputState": null,
+                    "outputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "3000000"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "effects": {
+              "objectChanges": {
+                "nodes": [
+                  {
+                    "inputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "299999987028240"
+                        }
+                      }
+                    },
+                    "outputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "299999981030360"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "inputState": null,
+                    "outputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "4000000"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "effects": {
+              "objectChanges": {
+                "nodes": [
+                  {
+                    "inputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "3000000"
+                        }
+                      }
+                    },
+                    "outputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "1990120"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "effects": {
+              "objectChanges": {
+                "nodes": [
+                  {
+                    "inputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "4000000"
+                        }
+                      }
+                    },
+                    "outputState": {
+                      "asMoveObject": {
+                        "asCoin": {
+                          "coinBalance": "2990120"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 10, lines 108-134:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "1000000"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "300000000000000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999996024000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999992026120"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999987028240"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "3000000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999987028240"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999981030360"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "4000000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "3000000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "1990120"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 11, lines 136-162:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "1000000"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "300000000000000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999996024000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999996024000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999992026120"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "2000000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999992026120"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999987028240"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "3000000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999987028240"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999981030360"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "4000000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12, lines 164-190:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "1000000"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "300000000000000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999996024000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999996024000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999992026120"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "2000000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "3000000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "1990120"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "4000000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "2990120"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 13, lines 192-218:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999996024000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "299999992026120"
+                      }
+                    }
+                  }
+                },
+                {
+                  "inputState": null,
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "2000000"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "inputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "4000000"
+                      }
+                    }
+                  },
+                  "outputState": {
+                    "asMoveObject": {
+                      "asCoin": {
+                        "coinBalance": "2990120"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
