@@ -3,7 +3,7 @@ module prover::prover {
     native public fun requires(p: bool);
     native public fun ensures(p: bool);
     native public fun asserts(p: bool);
-    public macro fun loop_invariant($invariants: ||) {
+    public macro fun invariant($invariants: ||) {
         invariant_begin();
         $invariants();
         invariant_end();
