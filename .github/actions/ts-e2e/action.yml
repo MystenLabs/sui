@@ -41,7 +41,7 @@ runs:
       working-directory: ./target/debug
       run: |
         mkdir -p $PWD/target/debug
-        wget -O target/debug/sui https://sui-releases.s3.us-east-1.amazonaws.com/${{ github.sha }}/debug/sui-pg
+        wget -O target/debug/sui https://sui-releases.s3.us-east-1.amazonaws.com/${{ github.sha }}/debug/sui
         chmod +x $PWD/target/debug/sui
       shell: bash
 
