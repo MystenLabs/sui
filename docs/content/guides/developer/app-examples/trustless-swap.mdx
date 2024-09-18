@@ -190,7 +190,7 @@ The test body starts with a call to `test_scenario::begin` and ends with a call 
 
 {@inject: examples/trading/contracts/escrow/sources/shared.move#test}
 
-The first transaction is from `BOB` who creates a coin and locks it. You may remember the ID of the coin and the ID of the key, which you will need later, but now you transfer the locked object and the key itself to `BOB`, because this is what would happen with a real transaction: When simulating transactions in a test, you should only keep around primitive values, not whole objects, which would need to be written to chain between transactions.
+The first transaction is from `BOB` who creates a coin and locks it. You must remember the ID of the coin and the ID of the key, which you will need later, and then you transfer the locked object and the key itself to `BOB`, because this is what would happen in a real transaction: When simulating transactions in a test, you should only keep around primitive values, not whole objects, which would need to be written to chain between transactions.
 
 Write these transactions inside the `test_successful_swap` function, between the call to `begin` and `end`.
 
