@@ -20,7 +20,9 @@ use move_model::{
     ast::{Attribute, TempIndex, TraceKind},
     code_writer::CodeWriter,
     emit, emitln,
-    model::{DatatypeId, FieldId, GlobalEnv, Loc, NodeId, QualifiedInstId, StructEnv},
+    model::{
+        DatatypeId, FieldId, FunId, GlobalEnv, Loc, NodeId, QualifiedId, QualifiedInstId, StructEnv,
+    },
     pragmas::{ADDITION_OVERFLOW_UNCHECKED_PRAGMA, SEED_PRAGMA, TIMEOUT_PRAGMA},
     ty::{PrimitiveType, Type, TypeDisplayContext, BOOL_TYPE},
     well_known::{TYPE_INFO_MOVE, TYPE_NAME_GET_MOVE, TYPE_NAME_MOVE},
@@ -62,6 +64,8 @@ pub struct BoogieTranslator<'env> {
     writer: &'env CodeWriter,
     spec_translator: SpecTranslator<'env>,
     targets: &'env FunctionTargetsHolder,
+    verification_targets: BTreeSet<QualifiedId<FunId>>,
+    called_targets: BTreeSet<QualifiedId<FunId>>,
 }
 
 pub struct FunctionTranslator<'env> {
@@ -84,12 +88,30 @@ impl<'env> BoogieTranslator<'env> {
         targets: &'env FunctionTargetsHolder,
         writer: &'env CodeWriter,
     ) -> Self {
+        let (verification_targets, called_targets): (BTreeSet<_>, Vec<_>) = env
+            .get_modules()
+            .flat_map(|module_env| {
+                module_env
+                    .get_functions()
+                    .filter(|function_env| function_env.get_name_str().ends_with("_spec"))
+                    .map(|function_env| {
+                        (
+                            function_env.get_qualified_id(),
+                            function_env.get_transitive_closure_of_called_functions(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unzip();
+
         Self {
             env,
             options,
             targets,
             writer,
             spec_translator: SpecTranslator::new(writer, env, options),
+            verification_targets,
+            called_targets: called_targets.into_iter().flatten().collect(),
         }
     }
 
@@ -243,6 +265,10 @@ impl<'env> BoogieTranslator<'env> {
                 }
                 for (variant, ref fun_target) in self.targets.get_targets(fun_env) {
                     if variant.is_verified() {
+                        if !self.verification_targets.contains(&fun_env.get_qualified_id()) {
+                            continue;
+                        }
+
                         verified_functions_count += 1;
                         // Always produce a verified functions with an empty instantiation such that
                         // there is at least one top-level entry points for a VC.
@@ -281,6 +307,10 @@ impl<'env> BoogieTranslator<'env> {
                             .translate();
                         }
                     } else {
+                        if !self.called_targets.contains(&fun_env.get_qualified_id()) {
+                            continue;
+                        }
+
                         // This variant is inlined, so translate for all type instantiations.
                         for type_inst in mono_info
                             .funs
