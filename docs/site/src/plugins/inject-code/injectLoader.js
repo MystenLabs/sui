@@ -507,7 +507,12 @@ const addCodeInject = function (source) {
                 injectFile,
                 processed,
               );
-              res = res.replace(replacer, processedFileContent);
+              // Temporarily replace double spaces with tabs. Replaced back downstream.
+              // Prevents unexpected whitespace removal from util functions.
+              res = res.replace(
+                replacer,
+                processedFileContent.replace(/ {2}/g, `\t`),
+              );
             }
           } else {
             res = res.replace(

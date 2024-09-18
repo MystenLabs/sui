@@ -246,7 +246,7 @@ const config = {
       prism: {
         theme: themes.github,
         darkTheme: themes.nightOwl,
-        additionalLanguages: ["rust", "typescript", "toml"],
+        additionalLanguages: ["rust", "typescript", "toml", "json"],
       },
     }),
 };
