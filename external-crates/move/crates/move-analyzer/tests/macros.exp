@@ -38,7 +38,7 @@ Use: 'n foo(', start: 12, end: 18
 Def: 'vector', line: 6, def char: 12
 TypeDef: no info
 On Hover:
-module std::vector
+module vector
 
  A variable-sized container that can hold any type. Indexing is 0-based, and
  vectors are growable. This module has many native functions.

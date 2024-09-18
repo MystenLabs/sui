@@ -83,8 +83,8 @@ pub fn call_completion_item(
     let macro_suffix = if is_macro { "!" } else { "" };
     let label_details = Some(CompletionItemLabelDetails {
         detail: Some(format!(
-            " ({}::{})",
-            mod_ident_to_ide_string(mod_ident),
+            " ({}{})",
+            mod_ident_to_ide_string(mod_ident, None, true),
             function_name
         )),
         description: Some(sig_string),

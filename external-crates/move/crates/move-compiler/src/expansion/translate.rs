@@ -11,7 +11,11 @@ use crate::{
             AliasEntry, AliasMapBuilder, ParserExplicitUseFun, UnnecessaryAlias, UseFunsBuilder,
         },
         aliases::AliasSet,
-        ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, TargetKind},
+        ast::{
+            self as E, Address, Fields, ModuleIdent, ModuleIdent_, ModuleMemberKind, NameCase,
+            TargetKind, IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES, IMPLICIT_SUI_MEMBERS,
+            IMPLICIT_SUI_MODULES,
+        },
         byte_string, hex_string,
         path_expander::{
             access_result, Access, LegacyPathExpander, ModuleAccessResult, Move2024PathExpander,
@@ -326,35 +330,6 @@ fn compute_address_conflicts(
         .chain(addr_to_name_conflicts)
         .collect()
 }
-
-// Implicit aliases for the Move Stdlib:
-// use std::vector;
-// use std::option::{Self, Option};
-const IMPLICIT_STD_MODULES: &[Symbol] = &[symbol!("option"), symbol!("vector")];
-const IMPLICIT_STD_MEMBERS: &[(Symbol, Symbol, ModuleMemberKind)] = &[(
-    symbol!("option"),
-    symbol!("Option"),
-    ModuleMemberKind::Struct,
-)];
-
-// Implicit aliases for Sui mode:
-// use sui::object::{Self, ID, UID};
-// use sui::transfer;
-// use sui::tx_context::{Self, TxContext};
-const IMPLICIT_SUI_MODULES: &[Symbol] = &[
-    symbol!("object"),
-    symbol!("transfer"),
-    symbol!("tx_context"),
-];
-const IMPLICIT_SUI_MEMBERS: &[(Symbol, Symbol, ModuleMemberKind)] = &[
-    (symbol!("object"), symbol!("ID"), ModuleMemberKind::Struct),
-    (symbol!("object"), symbol!("UID"), ModuleMemberKind::Struct),
-    (
-        symbol!("tx_context"),
-        symbol!("TxContext"),
-        ModuleMemberKind::Struct,
-    ),
-];
 
 fn default_aliases(context: &mut Context) -> AliasMapBuilder {
     let current_package = context.current_package();
@@ -3655,59 +3630,6 @@ fn check_valid_local_name(context: &mut Context, v: &Var) {
 
 fn is_valid_local_variable_name(s: Symbol) -> bool {
     Var::is_valid_name(s) && !Var::is_syntax_identifier_name(s)
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum ModuleMemberKind {
-    Constant,
-    Function,
-    Struct,
-    Enum,
-}
-
-impl ModuleMemberKind {
-    pub fn case(self) -> NameCase {
-        match self {
-            ModuleMemberKind::Constant => NameCase::Constant,
-            ModuleMemberKind::Function => NameCase::Function,
-            ModuleMemberKind::Struct => NameCase::Struct,
-            ModuleMemberKind::Enum => NameCase::Enum,
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum NameCase {
-    Constant,
-    Function,
-    Struct,
-    Enum,
-    Module,
-    ModuleMemberAlias(ModuleMemberKind),
-    ModuleAlias,
-    Variable,
-    Address,
-    TypeParameter,
-}
-
-impl NameCase {
-    pub const fn name(&self) -> &'static str {
-        match self {
-            NameCase::Constant => "constant",
-            NameCase::Function => "function",
-            NameCase::Struct => "struct",
-            NameCase::Enum => "enum",
-            NameCase::Module => "module",
-            NameCase::ModuleMemberAlias(ModuleMemberKind::Function) => "function alias",
-            NameCase::ModuleMemberAlias(ModuleMemberKind::Constant) => "constant alias",
-            NameCase::ModuleMemberAlias(ModuleMemberKind::Struct) => "struct alias",
-            NameCase::ModuleMemberAlias(ModuleMemberKind::Enum) => "enum alias",
-            NameCase::ModuleAlias => "module alias",
-            NameCase::Variable => "variable",
-            NameCase::Address => "address",
-            NameCase::TypeParameter => "type parameter",
-        }
-    }
 }
 
 fn check_valid_module_member_name(

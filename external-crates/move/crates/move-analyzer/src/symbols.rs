@@ -90,10 +90,13 @@ use move_command_line_common::files::FileHash;
 use move_compiler::{
     command_line::compiler::{construct_pre_compiled_lib, FullyCompiledProgram},
     editions::{Edition, FeatureGate, Flavor},
-    expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
+    expansion::ast::{
+        self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility,
+        IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES,
+    },
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeName_, Type_, VariantFields},
-    parser::ast as P,
+    parser::ast::{self as P},
     shared::{
         files::{FileId, MappedFiles},
         unique_map::UniqueMap,
@@ -109,6 +112,7 @@ use move_compiler::{
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_package::{
     compilation::{build_plan::BuildPlan, compiled_package::ModuleFormat},
@@ -118,7 +122,7 @@ use move_package::{
 use move_symbol_pool::Symbol;
 
 const MANIFEST_FILE_NAME: &str = "Move.toml";
-
+const STD_LIB_PKG_ADDRESS: &str = "0x1";
 type SourceFiles = BTreeMap<FileHash, (FileName, String, bool)>;
 
 /// Information about the compiled package and data structures
@@ -678,10 +682,10 @@ impl fmt::Display for DefInfo {
                 let ret_type_str = ret_type_to_ide_str(ret_type, /* verbose */ true);
                 write!(
                     f,
-                    "{}{}fun {}::{}{}{}{}",
+                    "{}{}fun {}{}{}{}{}",
                     visibility_to_ide_string(visibility),
                     fun_type_to_ide_string(fun_type),
-                    mod_ident_to_ide_string(mod_ident),
+                    mod_ident_to_ide_string(mod_ident, None, true),
                     name,
                     type_args_str,
                     args_str,
@@ -704,9 +708,9 @@ impl fmt::Display for DefInfo {
                 if field_names.is_empty() {
                     write!(
                         f,
-                        "{}struct {}::{}{}{} {{}}",
+                        "{}struct {}{}{}{} {{}}",
                         visibility_to_ide_string(visibility),
-                        mod_ident_to_ide_string(mod_ident),
+                        mod_ident_to_ide_string(mod_ident, Some(name), true),
                         name,
                         type_args_str,
                         abilities_str,
@@ -714,9 +718,9 @@ impl fmt::Display for DefInfo {
                 } else {
                     write!(
                         f,
-                        "{}struct {}::{}{}{} {}",
+                        "{}struct {}{}{}{} {}",
                         visibility_to_ide_string(visibility),
-                        mod_ident_to_ide_string(mod_ident),
+                        mod_ident_to_ide_string(mod_ident, Some(name), true),
                         name,
                         type_args_str,
                         abilities_str,
@@ -738,9 +742,9 @@ impl fmt::Display for DefInfo {
                 if variants.is_empty() {
                     write!(
                         f,
-                        "{}enum {}::{}{}{} {{}}",
+                        "{}enum {}{}{}{} {{}}",
                         visibility_to_ide_string(visibility),
-                        mod_ident_to_ide_string(mod_ident),
+                        mod_ident_to_ide_string(mod_ident, Some(name), true),
                         name,
                         type_args_str,
                         abilities_str,
@@ -748,9 +752,9 @@ impl fmt::Display for DefInfo {
                 } else {
                     write!(
                         f,
-                        "{}enum {}::{}{}{} {{\n{}\n}}",
+                        "{}enum {}{}{}{} {{\n{}\n}}",
                         visibility_to_ide_string(visibility),
-                        mod_ident_to_ide_string(mod_ident),
+                        mod_ident_to_ide_string(mod_ident, Some(name), true),
                         name,
                         type_args_str,
                         abilities_str,
@@ -762,16 +766,16 @@ impl fmt::Display for DefInfo {
                 if field_types.is_empty() {
                     write!(
                         f,
-                        "{}::{}::{}",
-                        mod_ident_to_ide_string(mod_ident),
+                        "{}{}::{}",
+                        mod_ident_to_ide_string(mod_ident, Some(enum_name), true),
                         enum_name,
                         name
                     )
                 } else if *positional {
                     write!(
                         f,
-                        "{}::{}::{}({})",
-                        mod_ident_to_ide_string(mod_ident),
+                        "{}{}::{}({})",
+                        mod_ident_to_ide_string(mod_ident, Some(enum_name), true),
                         enum_name,
                         name,
                         type_list_to_ide_string(
@@ -783,8 +787,8 @@ impl fmt::Display for DefInfo {
                 } else {
                     write!(
                         f,
-                        "{}::{}::{}{}",
-                        mod_ident_to_ide_string(mod_ident),
+                        "{}{}::{}{}",
+                        mod_ident_to_ide_string(mod_ident, Some(enum_name), true),
                         enum_name,
                         name,
                         typed_id_list_to_ide_string(
@@ -801,8 +805,8 @@ impl fmt::Display for DefInfo {
             Self::Field(mod_ident, struct_name, name, t, _) => {
                 write!(
                     f,
-                    "{}::{}\n{}: {}",
-                    mod_ident_to_ide_string(mod_ident),
+                    "{}{}\n{}: {}",
+                    mod_ident_to_ide_string(mod_ident, Some(struct_name), true),
                     struct_name,
                     name,
                     type_to_ide_string(t, /* verbose */ true)
@@ -1021,7 +1025,7 @@ pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
                     )
                 }
             }
-            TypeName_::ModuleType(sp!(_, module_ident), struct_name) => {
+            TypeName_::ModuleType(sp!(_, mod_ident), datatype_name) => {
                 let type_args = if ss.is_empty() {
                     "".to_string()
                 } else {
@@ -1031,9 +1035,14 @@ pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
                     )
                 };
                 if verbose {
-                    format!("{}::{}{}", module_ident, struct_name, type_args,)
+                    format!(
+                        "{}{}{}",
+                        mod_ident_to_ide_string(mod_ident, Some(&datatype_name.value()), true),
+                        datatype_name,
+                        type_args
+                    )
                 } else {
-                    struct_name.to_string()
+                    datatype_name.to_string()
                 }
             }
         },
@@ -1179,15 +1188,59 @@ fn ast_value_to_ide_string(sp!(_, val): &Value) -> String {
     }
 }
 
-pub fn mod_ident_to_ide_string(mod_ident: &E::ModuleIdent_) -> String {
+/// Creates a string representing a module ID, either on it's owne as in `pkg::module`
+/// or as part of a datatype or function type, in which it should be `pkg::module::`.
+/// If it's part of the datatype, name of the datatype is passed in `datatype_name_opt`.
+pub fn mod_ident_to_ide_string(
+    mod_ident: &ModuleIdent_,
+    datatype_name_opt: Option<&Symbol>,
+    is_access_chain_prefix: bool, // part of access chaing that should end with `::`
+) -> String {
     use E::Address as A;
+    // the module ID is to be a prefix to a data
+    let suffix = if is_access_chain_prefix { "::" } else { "" };
     match mod_ident.address {
-        A::Numerical {
-            name: None, value, ..
-        } => format!("{value}::{}", mod_ident.module).to_string(),
-        A::Numerical { name: Some(n), .. } | A::NamedUnassigned(n) => {
-            format!("{n}::{}", mod_ident.module).to_string()
+        A::Numerical { name, value, .. } => {
+            let pkg_name = match name {
+                Some(n) => n.to_string(),
+                None => value.to_string(),
+            };
+
+            let Ok(std_lib_pkg_address) = AccountAddress::from_hex_literal(STD_LIB_PKG_ADDRESS)
+            else {
+                // getting stdlib address did not work - use the whole thing
+                return format!("{pkg_name}::{}{}", mod_ident.module, suffix);
+            };
+            if value.value.into_inner() != std_lib_pkg_address {
+                // it's not a stdlib package - use the whole thing
+                return format!("{pkg_name}::{}{}", mod_ident.module, suffix);
+            }
+            // try stripping both package and module if this conversion
+            // is for a datatype, oherwise try only stripping package
+            if let Some(datatype_name) = datatype_name_opt {
+                if IMPLICIT_STD_MEMBERS.iter().any(
+                    |(implicit_mod_name, implicit_datatype_name, _)| {
+                        mod_ident.module.value() == *implicit_mod_name
+                            && datatype_name == implicit_datatype_name
+                    },
+                ) {
+                    // strip both package and module (whether its meant to be
+                    // part of access chain or not, if there is not module,
+                    // there should be no `::` at the end)
+                    return "".to_string();
+                }
+            }
+            if IMPLICIT_STD_MODULES
+                .iter()
+                .any(|implicit_mod_name| mod_ident.module.value() == *implicit_mod_name)
+            {
+                // strip package
+                return format!("{}{}", mod_ident.module.value(), suffix);
+            }
+            // stripping prefix didn't work - use the whole thing
+            format!("{pkg_name}::{}{}", mod_ident.module, suffix)
         }
+        A::NamedUnassigned(n) => format!("{n}::{}", mod_ident.module).to_string(),
     }
 }
 
@@ -2627,7 +2680,7 @@ fn get_mod_outer_defs(
         );
         def_info.insert(
             mod_defs.name_loc,
-            DefInfo::Module(mod_ident_to_ide_string(&ident), doc_comment),
+            DefInfo::Module(mod_ident_to_ide_string(&ident, None, false), doc_comment),
         );
     }
 
