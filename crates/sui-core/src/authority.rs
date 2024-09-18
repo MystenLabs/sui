@@ -3422,7 +3422,8 @@ impl AuthorityState {
     /// Advance the epoch store to the next epoch for testing only.
     /// This only manually sets all the places where we have the epoch number.
     /// It doesn't properly reconfigure the node, hence should be only used for testing.
-    pub async fn reconfigure_for_testing(&self) {
+    #[cfg(any(test, feature = "test-utils"))]
+    pub async fn reconfigure_for_testing(self: &Arc<AuthorityState>) {
         let mut execution_lock = self.execution_lock_for_reconfiguration().await;
         let epoch_store = self.epoch_store_for_testing().clone();
         let protocol_config = epoch_store.protocol_config().clone();

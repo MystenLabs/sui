@@ -3,7 +3,13 @@ source: crates/sui-swarm-config/tests/snapshot_tests.rs
 expression: genesis.sui_system_object().into_genesis_version_for_tooling()
 ---
 epoch: 0
+<<<<<<< HEAD
 protocol_version: 86
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+protocol_version: 60
+=======
+protocol_version: 61
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
 system_state_version: 1
 validators:
   total_stake: 20000000000000000
@@ -240,13 +246,31 @@ validators:
         next_epoch_worker_address: ~
         extra_fields:
           id:
-            id: "0x10c60beae46f7f486d47f0cc3ce6e096c6e397a3cc57c076dddeb6979fdc328b"
+<<<<<<< HEAD
+            id: "0x2590e7ddfc91ec845a09fd5866d12f77c6addeaae571c1537d084896270fa8b3"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+            id: "0x0cdb59bd57ec62ffd1886d2c74b0f133859ef8cafabbb06490d7ccaad72704b3"
+=======
+            id: "0xc7e49487dc27703828d38516b64e1fe8841b678422efb3258c48cd1ab0f5fbc8"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
           size: 0
       voting_power: 10000
-      operation_cap_id: "0xe7f6148d11dcca62489df429bb83cc2f79da66befafc9fb17623dfee0eff8feb"
+<<<<<<< HEAD
+      operation_cap_id: "0x82a75ffe2c9292c2121ba3fd1dc9466dabf3fa256a41d8e041d01ab850aefe05"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+      operation_cap_id: "0x882402178f68f1bb8fa326d71c102852501253ec847532084649406bd27cafd2"
+=======
+      operation_cap_id: "0x037ae08f2fba1b711149b5f8502b7bc04d30caf3142f0ef0e0cffeb87f05a4ae"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
       gas_price: 1000
       staking_pool:
-        id: "0x4b834bc5d20444df6d149d769433421ee4ca54222a232b9af11c57b0e7144f0f"
+<<<<<<< HEAD
+        id: "0x678f649f71ac62358183e2644b1c5a2c77837094b2ed5c83f5aa0eaf5bf967fd"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+        id: "0x098aeb5c5b84ab5376c27bcc662d5fbeeff135fdd1166656d81e5c9f600842a1"
+=======
+        id: "0x35b6eb200b1c83dcf097c7a1fdd55cf2ebe7e9f91348eeb61392754bf6b75505"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
         activation_epoch: 0
         deactivation_epoch: ~
         sui_balance: 20000000000000000
@@ -254,14 +278,26 @@ validators:
           value: 0
         pool_token_balance: 20000000000000000
         exchange_rates:
-          id: "0xb600cbd0cc76c8f0f92ed883dcc262d6813255730bb565ba8125cd446f492826"
+<<<<<<< HEAD
+          id: "0x0941717941245a7ba0741e89e094c1390feedc12848ca0b8627b87992ab24965"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+          id: "0x6538c7f4a3f65ed77ec21e5f7b391fd5ff58ea13631ecfffb16f1c8ccc72806b"
+=======
+          id: "0xdf7cb13037359145b99e75cd2c241c8ec54e27f3e2c3e5130d6f5330efeb9e89"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
           size: 1
         pending_stake: 0
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
         extra_fields:
           id:
-            id: "0xe2aea2636c35f9a3a9f67835269867a12ae4ef3c430d74412555b046e7d8f882"
+<<<<<<< HEAD
+            id: "0x6afd33e416e59eca454bc85db124491936f615b6e02cf634a7d204fa45f2f4e8"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+            id: "0xc14811e3e18d269abc6e3302c6b484aa3d48523241238a3b7a0e15eb45c12172"
+=======
+            id: "0x44d0fc1421e9f12c952de950ef4022de7f9dfa9a6c382b343ce3415465e85e0d"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
           size: 0
       commission_rate: 200
       next_epoch_stake: 20000000000000000
@@ -269,27 +305,63 @@ validators:
       next_epoch_commission_rate: 200
       extra_fields:
         id:
-          id: "0xb8307dbfd8e56a6293a97f6b194afed18840d18f6cd9ae8c4cf99db300afa8d7"
+<<<<<<< HEAD
+          id: "0x98154faa48a72f0d8ea0ea4e5a54b7042def0b246524d96f7b7500bcf4a7ec82"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+          id: "0x36bccda14a517940ca6410ad0a7b48f64d6fad6101c4d26c25cbf4937a533aac"
+=======
+          id: "0xed5ac6e9315b7bfd93b9ae34abfef6f4b4fa75cbba83b95e216466a0be9c16a2"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
         size: 0
   pending_active_validators:
     contents:
-      id: "0xf48546e485034dc5c4e40c8abcb22b2131ca0f537831f988daaeee7580766f77"
+<<<<<<< HEAD
+      id: "0x70efd4d703cfc861d124c65fa7a7ab328c527d192f8b03d09fed59e70b6596d4"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+      id: "0xf6a36c6124d6ed74d8d9db39cb96b4cf36688563a420d340bed6015dadab6932"
+=======
+      id: "0xb41cf445c30bedd43adda7389b9f26ff5761097a74aff8c6abc9ab8390bbc41d"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
       size: 0
   pending_removals: []
   staking_pool_mappings:
-    id: "0xe09b951e66269e5b9804e454b287cbbfb7c7ea359e019748161c94a498e5ea8b"
+<<<<<<< HEAD
+    id: "0x3c2b3f1d3bd79a5ca3f26f495b22c49a7e95a5304d4ba1ad1bb3f6fb3320168d"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+    id: "0xd8f16068f1d4e8bdaae0e34b63e955243c11affb4c75f5ce4bc0bba9538fa899"
+=======
+    id: "0x6b5813504fb66e6aacd2f9ce7c84c656f770c7cbdb7b901a5dcbd620a02544aa"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
     size: 1
   inactive_validators:
-    id: "0x40cf9bdfff63ddf79adef058ddbe3f53ca3aa651351b38efae34af0aa74ca74b"
+<<<<<<< HEAD
+    id: "0x2669cbf5e192839ed9e2086f2114f48e4046a521e54b5e0a567ce7e6170536ef"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+    id: "0xf8e063e7121cfe05350887be73b7d2b2bfdfd4e2f51583565f06c46b0fe14b99"
+=======
+    id: "0x6ad4dc51b60eb86ca8ee742c24d63752bed3dc4340ee11f4108f1d768445f67f"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
     size: 0
   validator_candidates:
-    id: "0x7b266af279ba1b2afed41af9d942e7a9801ee9faab2914f28b6a4164575da837"
+<<<<<<< HEAD
+    id: "0x2212ffb7bd8c594b85203f8809320b08ea6e63c54951bfc7db2a1b186f98fb67"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+    id: "0x10a6ecdb1d3718003efbbc43256d7912150d201b0c51a0e52ce0298658d48a39"
+=======
+    id: "0x2dceedb281425ca7eec8b2d0e65863a806cd0384a2a8eda97a88785c77d5d204"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
     size: 0
   at_risk_validators:
     contents: []
   extra_fields:
     id:
-      id: "0xe6ef0a1ae12580043262072111642c76b65da0733142a47737845471b8333411"
+<<<<<<< HEAD
+      id: "0xc125e964cc5ed7cc0e3d6786f1137aeddabfe0f919973aa6b8bc9f164c3bd15d"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+      id: "0x15d36de0cdc373e3f14de7f2b38ab83e19d89fd7c67a9d17e289835b6cc29227"
+=======
+      id: "0x064d5f61130f3938c57c13d9fa1e887a761a02fa375510f4f41fcd1e2d52997a"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
     size: 0
 storage_fund:
   total_object_storage_rebates:
@@ -306,7 +378,13 @@ parameters:
   validator_low_stake_grace_period: 7
   extra_fields:
     id:
-      id: "0x94a118ee78bfc79579cba85e6fdfb28efdc583a9c6ae15de94a04f83b6df6730"
+<<<<<<< HEAD
+      id: "0xf27c35525780f12915b4ac06eadfa8107900974c36dbf4a68851d7d5be6b64ba"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+      id: "0x16556a79e5b11a4e143d3746b02755461fac9bf51bbbf1bcd741ee23dd7056a0"
+=======
+      id: "0x5cc2ff41ed3befe2a5e596841685eac8e584b4f14c196e41b7a63ae77ddd3c3a"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
     size: 0
 reference_gas_price: 1000
 validator_report_records:
@@ -320,7 +398,13 @@ stake_subsidy:
   stake_subsidy_decrease_rate: 1000
   extra_fields:
     id:
-      id: "0xc1f9091df4d28ced9ef290bff8021a5d7707dc772e51628a474d28f8885fb957"
+<<<<<<< HEAD
+      id: "0x25ec9efd1f092a166147f85e288a226da763e20f276e86cd5f8a7a71781a3acd"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+      id: "0xeac63720f1d2653149631374110574691bf087d4111dab217ac5de88225294b9"
+=======
+      id: "0xe8c2342b9e93ce6a55e58d422c8e3c228105287665b6c1c963535d8c6f1c7418"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
     size: 0
 safe_mode: false
 safe_mode_storage_rewards:
@@ -332,5 +416,12 @@ safe_mode_non_refundable_storage_fee: 0
 epoch_start_timestamp_ms: 10
 extra_fields:
   id:
-    id: "0x5bf33043816213ef2ff84e8fd1fdf1852d1bcdc82454b6a3329a593e82196656"
+<<<<<<< HEAD
+    id: "0x1235e021e76070949ab9cd2266f81f369f1db708c9dfb081003e27f0145bf95f"
+||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
+    id: "0xe61333df374e35d3b01680fb57e860b33b45d3d699bc6dc2a61b975f882c4720"
+=======
+    id: "0x0055b6e98f166455d70a76c51bfa0ca92aae5fdf7636f116d6f3cb531906cbc8"
+>>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
   size: 0
+

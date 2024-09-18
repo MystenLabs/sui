@@ -65,6 +65,7 @@ use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
+    VersionNumber,
 };
 use sui_types::bridge::{get_bridge, Bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
@@ -1853,6 +1854,23 @@ impl ObjectCacheRead for WritebackCache {
             })
             .map(|_| ())
             .boxed()
+    }
+
+    fn get_current_epoch_stable_sequence_number(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> Option<VersionNumber> {
+        // Read object first to get the latest version before checking the marker table. This
+        // ensures that we don't run into read-after-write type concurrency issues.
+        let object = ObjectCacheRead::get_object(self, object_id);
+        match self.get_marker_value(object_id, SequenceNumber::new(), epoch_id) {
+            Some(MarkerValue::ConfigUpdate(seqno)) => Some(seqno),
+            Some(
+                MarkerValue::Received | MarkerValue::OwnedDeleted | MarkerValue::SharedDeleted(_),
+            )
+            | None => object.map(|o| o.version()),
+        }
     }
 }
 
