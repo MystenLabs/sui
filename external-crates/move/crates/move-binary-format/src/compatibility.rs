@@ -4,14 +4,17 @@
 
 use std::collections::BTreeSet;
 
+use crate::normalized::{Enum, Function, Struct};
 use crate::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{AbilitySet, DatatypeTyParameter, Visibility},
     file_format_common::VERSION_5,
     normalized::Module,
 };
-use move_core_types::vm_status::StatusCode;
-
+use move_core_types::{
+    account_address::AccountAddress, identifier::IdentStr, vm_status::StatusCode,
+};
+use move_core_types::language_storage::ModuleId;
 // ***************************************************************************
 // ******************* IMPORTANT NOTE ON COMPATIBILITY ***********************
 // ***************************************************************************
@@ -69,6 +72,178 @@ impl Default for Compatibility {
     }
 }
 
+// TODO: cli compatability mode impl
+pub trait CompatibilityMode: Default {
+    type Error;
+
+    fn module_id_mismatch(
+        &mut self,
+        old_addr: &AccountAddress,
+        old_name: &IdentStr,
+        new_addr: &AccountAddress,
+        new_name: &IdentStr,
+    );
+
+    fn struct_missing(&mut self, old_struct: &Struct);
+    fn struct_ability_mismatch(&mut self, old_struct: &Struct, new_struct: &Struct);
+    fn struct_type_param_mismatch(&mut self, old_struct: &Struct, new_struct: &Struct);
+    fn struct_field_mismatch(&mut self, old_struct: &Struct, new_struct: &Struct);
+
+    fn enum_missing(&mut self, old_enum: &Enum);
+    fn enum_ability_mismatch(&mut self, old_enum: &Enum, new_enum: &Enum);
+    fn enum_type_param_mismatch(&mut self, old_enum: &Enum, new_enum: &Enum);
+    fn enum_new_variant(&mut self, old_enum: &Enum, new_enum: &Enum);
+    fn enum_variant_missing(&mut self, old_enum: &Enum, tag: usize);
+    fn enum_variant_mismatch(&mut self, old_enum: &Enum, new_enum: &Enum, tag: usize);
+
+    fn function_missing_public(&mut self, old_func: &Function);
+    fn function_missing_friend(&mut self, old_funcs: &Function);
+    fn function_missing_entry(&mut self, old_func: &Function);
+    fn function_lost_public_visibility(&mut self, old_func: &Function);
+    fn function_lost_friend_visibility(&mut self, old_func: &Function);
+    fn function_previously_friend(&mut self, old_func: &Function);
+    fn function_visibility_mismatch(&mut self, old_func: &Function, new_func: &Function);
+    fn function_entry_compatibility(&mut self, old_func: &Function, new_func: &Function);
+
+    fn friend_module_missing(&mut self, old_friend_module_ids: BTreeSet<ModuleId>, new_friend_module_ids: BTreeSet<ModuleId>);
+
+    fn finish(&self, _: &Compatibility) -> Result<(), Self::Error>;
+}
+
+struct ExecutionCompatibilityMode {
+    datatype_and_function_linking: bool,
+    datatype_layout: bool,
+    friend_linking: bool,
+    entry_linking: bool,
+    no_new_variants: bool,
+}
+
+impl Default for ExecutionCompatibilityMode {
+    fn default() -> Self {
+        Self {
+            datatype_and_function_linking: true,
+            datatype_layout: true,
+            friend_linking: true,
+            entry_linking: true,
+            no_new_variants: true,
+        }
+    }
+}
+
+impl CompatibilityMode for ExecutionCompatibilityMode {
+    type Error = ();
+
+    fn module_id_mismatch(
+        &mut self,
+        _old_addr: &AccountAddress,
+        _old_name: &IdentStr,
+        _new_addr: &AccountAddress,
+        _new_name: &IdentStr,
+    ) {
+        self.datatype_and_function_linking = false;
+    }
+
+    fn struct_missing(&mut self, _old_struct: &Struct) {
+        self.datatype_and_function_linking = false;
+        self.datatype_layout = false;
+    }
+
+    fn struct_ability_mismatch(&mut self, _old_struct: &Struct, _new_struct: &Struct) {
+        self.datatype_and_function_linking = false;
+    }
+
+    fn struct_type_param_mismatch(&mut self, _old_struct: &Struct, _new_struct: &Struct) {
+        self.datatype_and_function_linking = false;
+    }
+
+    fn struct_field_mismatch(&mut self, _old_struct: &Struct, _new_struct: &Struct) {
+        self.datatype_layout = false;
+    }
+
+    fn enum_missing(&mut self, _old_enum: &Enum) {
+        self.datatype_and_function_linking = false;
+        self.datatype_layout = false;
+    }
+
+    fn enum_ability_mismatch(&mut self, _old_enum: &Enum, _new_enum: &Enum) {
+        self.datatype_and_function_linking = false;
+    }
+
+    fn enum_type_param_mismatch(&mut self, _old_enum: &Enum, _new_enum: &Enum) {
+        self.datatype_and_function_linking = false;
+    }
+
+    fn enum_new_variant(&mut self, _old_enum: &Enum, _new_enum: &Enum) {
+        self.no_new_variants = false;
+    }
+
+    fn enum_variant_missing(&mut self, _old_enum: &Enum, _tag: usize) {
+        self.datatype_layout = false;
+    }
+
+    fn enum_variant_mismatch(&mut self, _old_enum: &Enum, _new_enum: &Enum, _tag: usize) {
+        self.datatype_layout = false;
+    }
+
+    fn function_missing_public(&mut self, _old_func: &Function) {
+        self.datatype_and_function_linking = false;
+    }
+
+    fn function_missing_friend(&mut self, _old_func: &Function) {
+        self.friend_linking = false;
+    }
+
+    fn function_missing_entry(&mut self, _old_func: &Function) {
+        self.entry_linking = false;
+    }
+
+    fn function_previously_friend(&mut self, _old_func: &Function) {
+        self.friend_linking = false;
+    }
+
+    fn function_lost_public_visibility(&mut self, _old_func: &Function) {
+        self.datatype_and_function_linking = false;
+    }
+
+    fn function_lost_friend_visibility(&mut self, _old_func: &Function) {
+        self.friend_linking = false;
+    }
+
+    fn function_visibility_mismatch(&mut self, _old_func: &Function, _new_func: &Function) {
+        self.datatype_and_function_linking = false;
+    }
+
+    fn function_entry_compatibility(&mut self, _old_func: &Function, _new_func: &Function) {
+        self.entry_linking = false;
+    }
+
+    fn friend_module_missing(&mut self, _old_friend_module_ids: BTreeSet<ModuleId>, _new_friend_module_ids: BTreeSet<ModuleId>) {
+        self.friend_linking = false;
+    }
+
+    fn finish(&self, compatability: &Compatibility) -> Result<(), ()> {
+        if compatability.check_datatype_and_pub_function_linking
+            && !self.datatype_and_function_linking
+        {
+            return Err(());
+        }
+        if compatability.check_datatype_layout && !self.datatype_layout {
+            return Err(());
+        }
+        if compatability.check_friend_linking && !self.friend_linking {
+            return Err(());
+        }
+        if compatability.check_private_entry_linking && !self.entry_linking {
+            return Err(());
+        }
+        if compatability.disallow_new_variants && !self.no_new_variants {
+            return Err(());
+        }
+
+        Ok(())
+    }
+}
+
 impl Compatibility {
     pub fn full_check() -> Self {
         Self::default()
@@ -92,15 +267,25 @@ impl Compatibility {
 
     /// Check compatibility for `new_module` relative to old module `old_module`.
     pub fn check(&self, old_module: &Module, new_module: &Module) -> PartialVMResult<()> {
-        let mut datatype_and_function_linking = true;
-        let mut datatype_layout = true;
-        let mut friend_linking = true;
-        let mut entry_linking = true;
-        let mut no_new_variants = true;
+        self.check_::<ExecutionCompatibilityMode>(old_module, new_module)
+            .map_err(|_| PartialVMError::new(StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE))
+    }
+
+    pub fn check_<M: CompatibilityMode>(
+        &self,
+        old_module: &Module,
+        new_module: &Module,
+    ) -> Result<(), M::Error> {
+        let mut context = M::default();
 
         // module's name and address are unchanged
         if old_module.address != new_module.address || old_module.name != new_module.name {
-            datatype_and_function_linking = false;
+            context.module_id_mismatch(
+                &old_module.address,
+                &old_module.name,
+                &new_module.address,
+                &new_module.name,
+            );
         }
 
         // old module's structs are a subset of the new module's structs
@@ -109,22 +294,28 @@ impl Compatibility {
                 // Struct not present in new . Existing modules that depend on this struct will fail to link with the new version of the module.
                 // Also, struct layout cannot be guaranteed transitively, because after
                 // removing the struct, it could be re-added later with a different layout.
-                datatype_and_function_linking = false;
-                datatype_layout = false;
-                break;
+                context.struct_missing(old_struct);
+                continue;
             };
 
+            // ability mismatch, store old new
             if !datatype_abilities_compatible(
                 self.disallowed_new_abilities,
                 old_struct.abilities,
                 new_struct.abilities,
-            ) || !datatype_type_parameters_compatible(
+            ) {
+                context.struct_ability_mismatch(old_struct, new_struct);
+            }
+
+            if !datatype_type_parameters_compatible(
+                // type param mismatch
                 self.disallow_change_datatype_type_params,
                 &old_struct.type_parameters,
                 &new_struct.type_parameters,
             ) {
-                datatype_and_function_linking = false;
+                context.struct_type_param_mismatch(old_struct, new_struct);
             }
+            // create a diff of the fields?
             if new_struct.fields != old_struct.fields {
                 // Fields changed. Code in this module will fail at runtime if it tries to
                 // read a previously published struct value
@@ -132,46 +323,51 @@ impl Compatibility {
                 // choose that changing the name (but not position or type) of a field is
                 // compatible. The VM does not care about the name of a field
                 // (it's purely informational), but clients presumably do.
-                datatype_layout = false
+
+                // field layout mismatch
+                context.struct_field_mismatch(old_struct, new_struct);
             }
         }
 
+        // enums relatively similar but has a variant check
+        // variants have fields which need checking
+        // store
         for (name, old_enum) in &old_module.enums {
             let Some(new_enum) = new_module.enums.get(name) else {
                 // Enum not present in new. Existing modules that depend on this enum will fail to link with the new version of the module.
                 // Also, enum layout cannot be guaranteed transitively, because after
                 // removing the enum, it could be re-added later with a different layout.
-                datatype_and_function_linking = false;
-                datatype_layout = false;
-                break;
+
+                context.enum_missing(old_enum);
+                continue;
             };
 
             if !datatype_abilities_compatible(
                 self.disallowed_new_abilities,
                 old_enum.abilities,
                 new_enum.abilities,
-            ) || !datatype_type_parameters_compatible(
+            ) {
+                context.enum_ability_mismatch(old_enum, new_enum);
+            }
+
+            if !datatype_type_parameters_compatible(
                 self.disallow_change_datatype_type_params,
                 &old_enum.type_parameters,
                 &new_enum.type_parameters,
             ) {
-                datatype_and_function_linking = false;
+                context.enum_type_param_mismatch(old_enum, new_enum);
             }
 
             if new_enum.variants.len() > old_enum.variants.len() {
-                no_new_variants = false;
-            }
-
-            if new_enum.variants.len() < old_enum.variants.len() {
-                datatype_layout = false;
+                context.enum_new_variant(old_enum, new_enum);
             }
 
             for (tag, old_variant) in old_enum.variants.iter().enumerate() {
                 // If the new enum has fewer variants than the old one, datatype_layout is false
                 // and we don't need to check the rest of the variants.
                 let Some(new_variant) = new_enum.variants.get(tag) else {
-                    datatype_layout = false;
-                    break;
+                    context.enum_variant_missing(old_enum, tag);
+                    continue;
                 };
                 if new_variant.name != old_variant.name {
                     // TODO: Variant renamed. This is a stricter definition than required.
@@ -179,7 +375,7 @@ impl Compatibility {
                     // type) of a variant is compatible. The VM does not care about the name of a
                     // variant if it's non-public (it's purely informational), but clients
                     // presumably would.
-                    datatype_layout = false;
+                    context.enum_variant_mismatch(old_enum, new_enum, tag);
                 }
                 if new_variant.fields != old_variant.fields {
                     // Fields changed. Code in this module will fail at runtime if it tries to
@@ -188,7 +384,7 @@ impl Compatibility {
                     // choose that changing the name (but not position or type) of a field is
                     // compatible. The VM does not care about the name of a field
                     // (it's purely informational), but clients presumably do.
-                    datatype_layout = false
+                    context.enum_variant_mismatch(old_enum, new_enum, tag);
                 }
             }
         }
@@ -208,15 +404,14 @@ impl Compatibility {
         // friend list. But for simplicity, we decided to go to the more restrictive form now and
         // we may revisit this in the future.
         for (name, old_func) in &old_module.functions {
+            // if we don't find a function in the new module
             let Some(new_func) = new_module.functions.get(name) else {
                 if old_func.visibility == Visibility::Friend {
-                    friend_linking = false;
+                    context.function_missing_friend(old_func);
                 } else if old_func.visibility != Visibility::Private {
-                    datatype_and_function_linking = false;
+                    context.function_missing_public(old_func);
                 } else if old_func.is_entry && self.check_private_entry_linking {
-                    // This must be a private entry function. So set the link breakage if we're
-                    // checking for that.
-                    entry_linking = false;
+                    context.function_missing_entry(old_func);
                 }
                 continue;
             };
@@ -224,9 +419,11 @@ impl Compatibility {
             // Check visibility compatibility
             match (old_func.visibility, new_func.visibility) {
                 (Visibility::Public, Visibility::Private | Visibility::Friend) => {
-                    datatype_and_function_linking = false
+                    context.function_lost_public_visibility(old_func);
                 }
-                (Visibility::Friend, Visibility::Private) => friend_linking = false,
+                (Visibility::Friend, Visibility::Private) => {
+                    context.function_lost_friend_visibility(old_func);
+                }
                 _ => (),
             }
 
@@ -236,9 +433,9 @@ impl Compatibility {
                 && old_func.visibility != Visibility::Private
                 && old_func.is_entry != new_func.is_entry
             {
-                entry_linking = false
+                context.function_entry_compatibility(old_func, new_func);
             } else if old_func.is_entry && !new_func.is_entry {
-                entry_linking = false;
+                context.function_entry_compatibility(old_func, new_func);
             }
 
             // Check signature compatibility
@@ -250,13 +447,17 @@ impl Compatibility {
                 )
             {
                 match old_func.visibility {
-                    Visibility::Friend => friend_linking = false,
-                    Visibility::Public => datatype_and_function_linking = false,
+                    Visibility::Friend => {
+                        context.function_previously_friend(old_func);
+                    }
+                    Visibility::Public => {
+                        context.function_visibility_mismatch(old_func, new_func);
+                    }
                     Visibility::Private => (),
                 }
 
                 if old_func.is_entry {
-                    entry_linking = false;
+                    context.function_entry_compatibility(old_func, new_func);
                 }
             }
         }
@@ -269,35 +470,10 @@ impl Compatibility {
         let old_friend_module_ids: BTreeSet<_> = old_module.friends.iter().cloned().collect();
         let new_friend_module_ids: BTreeSet<_> = new_module.friends.iter().cloned().collect();
         if !old_friend_module_ids.is_subset(&new_friend_module_ids) {
-            friend_linking = false;
+            context.friend_module_missing(old_friend_module_ids, new_friend_module_ids);
         }
 
-        if self.check_datatype_and_pub_function_linking && !datatype_and_function_linking {
-            return Err(PartialVMError::new(
-                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-            ));
-        }
-        if self.check_datatype_layout && !datatype_layout {
-            return Err(PartialVMError::new(
-                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-            ));
-        }
-        if self.check_friend_linking && !friend_linking {
-            return Err(PartialVMError::new(
-                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-            ));
-        }
-        if self.check_private_entry_linking && !entry_linking {
-            return Err(PartialVMError::new(
-                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-            ));
-        }
-        if self.disallow_new_variants && !no_new_variants {
-            return Err(PartialVMError::new(
-                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-            ));
-        }
-        Ok(())
+        context.finish(self)
     }
 }
 
