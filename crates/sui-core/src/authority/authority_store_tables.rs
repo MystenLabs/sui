@@ -190,7 +190,7 @@ impl AuthorityPerpetualTables {
         let kfs = 4;
         Self {
             objects: ThDbMap::new(&thdb, (0, kfs, 0)),
-            indirect_move_objects: ThDbMap::new(&thdb, (1, kfs, 0)),
+            indirect_move_objects: ThDbMap::new(&thdb, (1, kfs, 0)), // todo chop off too?
             live_owned_object_markers: ThDbMap::new(&thdb, (2, kfs, 0)),
             transactions: ThDbMap::new(&thdb, (3, kfs, 8)),
             effects: ThDbMap::new(&thdb, (4, kfs, 8)),
