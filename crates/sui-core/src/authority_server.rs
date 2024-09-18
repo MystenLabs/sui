@@ -19,7 +19,9 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3};
+use sui_types::messages_grpc::{
+    HandleCertificateRequestV3, HandleCertificateResponseV3, HandleTransactionResponseV2,
+};
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
     SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
@@ -474,7 +476,7 @@ impl ValidatorService {
         &self,
         request: tonic::Request<HandleTransactionRequestV2>,
         // TODO: Do we want to make a new response type for this?
-    ) -> WrappedServiceResponse<HandleCertificateResponseV3> {
+    ) -> WrappedServiceResponse<HandleTransactionResponseV2> {
         let Self {
             state,
             consensus_adapter,
@@ -541,8 +543,8 @@ impl ValidatorService {
                 .and_then(Result::ok);
 
             return Ok((
-                tonic::Response::new(HandleCertificateResponseV3 {
-                    effects: signed_effects,
+                tonic::Response::new(HandleTransactionResponseV2 {
+                    effects: signed_effects.into_data(),
                     events: include_events.then_some(events),
                     input_objects,
                     output_objects,
@@ -694,16 +696,40 @@ impl ValidatorService {
             }))
             .unwrap();
 
-        self.handle_submit_to_consensus(
-            consensus_transactions,
-            include_events,
-            include_input_objects,
-            include_output_objects,
-            include_auxiliary_data,
-            epoch_store,
-            wait_for_effects,
-        )
-        .await
+        let (responses, weight) = self
+            .handle_submit_to_consensus(
+                consensus_transactions,
+                include_events,
+                include_input_objects,
+                include_output_objects,
+                include_auxiliary_data,
+                epoch_store,
+                wait_for_effects,
+            )
+            .await?;
+        // Sign the returned TransactionEffects.
+        let responses = if let Some(responses) = responses {
+            Some(
+                responses
+                    .into_iter()
+                    .map(|response| {
+                        let signed_effects =
+                            self.state.sign_effects(response.effects, epoch_store)?;
+                        Ok(HandleCertificateResponseV3 {
+                            effects: signed_effects.into_inner(),
+                            events: response.events,
+                            input_objects: response.input_objects,
+                            output_objects: response.output_objects,
+                            auxiliary_data: response.auxiliary_data,
+                        })
+                    })
+                    .collect::<Result<Vec<HandleCertificateResponseV3>, tonic::Status>>()?,
+            )
+        } else {
+            None
+        };
+
+        Ok((responses, weight))
     }
 
     async fn handle_submit_to_consensus(
@@ -715,7 +741,7 @@ impl ValidatorService {
         _include_auxiliary_data: bool,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         wait_for_effects: bool,
-    ) -> Result<(Option<Vec<HandleCertificateResponseV3>>, Weight), tonic::Status> {
+    ) -> Result<(Option<Vec<HandleTransactionResponseV2>>, Weight), tonic::Status> {
         let consensus_transactions: Vec<_> = consensus_transactions.into();
         {
             // code block within reconfiguration lock
@@ -813,14 +839,13 @@ impl ValidatorService {
                     .then(|| self.state.get_transaction_output_objects(&effects))
                     .and_then(Result::ok);
 
-                let signed_effects = self.state.sign_effects(effects, epoch_store)?;
                 if let ConsensusTransactionKind::CertifiedTransaction(certificate) = &tx.kind {
                     epoch_store.insert_tx_cert_sig(certificate.digest(), certificate.auth_sig())?;
                     // TODO(fastpath): Make sure consensus handler does this for a UserTransaction.
                 }
 
-                Ok::<_, SuiError>(HandleCertificateResponseV3 {
-                    effects: signed_effects.into_inner(),
+                Ok::<_, SuiError>(HandleTransactionResponseV2 {
+                    effects,
                     events,
                     input_objects,
                     output_objects,
@@ -847,7 +872,7 @@ impl ValidatorService {
     async fn transaction_v2_impl(
         &self,
         request: tonic::Request<HandleTransactionRequestV2>,
-    ) -> WrappedServiceResponse<HandleCertificateResponseV3> {
+    ) -> WrappedServiceResponse<HandleTransactionResponseV2> {
         self.handle_transaction_v2(request).await
     }
 
@@ -1339,7 +1364,7 @@ impl Validator for ValidatorService {
     async fn transaction_v2(
         &self,
         request: tonic::Request<HandleTransactionRequestV2>,
-    ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleTransactionResponseV2>, tonic::Status> {
         let validator_service = self.clone();
 
         // Spawns a task which handles the transaction. The task will unconditionally continue

@@ -36,7 +36,7 @@ fn main() -> Result<()> {
                 .name("transaction_v2")
                 .route_name("TransactionV2")
                 .input_type("sui_types::messages_grpc::HandleTransactionRequestV2")
-                .output_type("sui_types::messages_grpc::HandleCertificateResponseV3")
+                .output_type("sui_types::messages_grpc::HandleTransactionResponseV2")
                 .codec_path(codec_path)
                 .build(),
         )
