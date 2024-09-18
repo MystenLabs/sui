@@ -61,8 +61,8 @@ const addCodeInject = function (source) {
               language = fileExt;
           }
 
-          const isMove = language === "move" ? true : false;
-          const isTs = language === "ts" || language === "js" ? true : false;
+          const isMove = language === "move";
+          const isTs = language === "ts" || language === "js";
 
           if (fs.existsSync(fullPath)) {
             let injectFileContent = fs.readFileSync(fullPath, "utf8");
