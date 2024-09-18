@@ -189,20 +189,20 @@ impl AuthorityPerpetualTables {
         let thdb = open_thdb(&path, registry);
         let kfs = 4;
         Self {
-            objects: ThDbMap::new(&thdb, (0, kfs)),
-            indirect_move_objects: ThDbMap::new(&thdb, (1, kfs)),
-            live_owned_object_markers: ThDbMap::new(&thdb, (2, kfs)),
-            transactions: ThDbMap::new(&thdb, (3, kfs)),
-            effects: ThDbMap::new(&thdb, (4, kfs)),
-            executed_effects: ThDbMap::new(&thdb, (5, kfs)),
-            events: ThDbMap::new(&thdb, (6, kfs)),
-            executed_transactions_to_checkpoint: ThDbMap::new(&thdb, (7, kfs)),
-            root_state_hash_by_epoch: ThDbMap::new(&thdb, (8, kfs)),
-            epoch_start_configuration: ThDbMap::new(&thdb, (9, kfs)),
-            pruned_checkpoint: ThDbMap::new(&thdb, (10, kfs)),
-            expected_network_sui_amount: ThDbMap::new(&thdb, (11, kfs)),
-            expected_storage_fund_imbalance: ThDbMap::new(&thdb, (12, kfs)),
-            object_per_epoch_marker_table: ThDbMap::new(&thdb, (13, kfs)),
+            objects: ThDbMap::new(&thdb, (0, kfs, 0)),
+            indirect_move_objects: ThDbMap::new(&thdb, (1, kfs, 0)),
+            live_owned_object_markers: ThDbMap::new(&thdb, (2, kfs, 0)),
+            transactions: ThDbMap::new(&thdb, (3, kfs, 8)),
+            effects: ThDbMap::new(&thdb, (4, kfs, 8)),
+            executed_effects: ThDbMap::new(&thdb, (5, kfs, 8)),
+            events: ThDbMap::new(&thdb, (6, kfs, 8)),
+            executed_transactions_to_checkpoint: ThDbMap::new(&thdb, (7, kfs, 8)),
+            root_state_hash_by_epoch: ThDbMap::new(&thdb, (8, kfs, 0)),
+            epoch_start_configuration: ThDbMap::new(&thdb, (9, kfs, 0)),
+            pruned_checkpoint: ThDbMap::new(&thdb, (10, kfs, 0)),
+            expected_network_sui_amount: ThDbMap::new(&thdb, (11, kfs, 0)),
+            expected_storage_fund_imbalance: ThDbMap::new(&thdb, (12, kfs, 0)),
+            object_per_epoch_marker_table: ThDbMap::new(&thdb, (13, kfs, 0)),
         }
     }
 

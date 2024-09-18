@@ -18,7 +18,8 @@ use typed_store_error::TypedStoreError;
 
 pub struct ThDbMap<K, V> {
     db: Arc<Db>,
-    kf_spec: (u8, u8),
+    // kf_id, kf_id_bits, key_chop_off_bytes
+    kf_spec: (u8, u8, u8),
     _phantom: PhantomData<(K, V)>,
 }
 
@@ -32,7 +33,7 @@ where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    pub fn new(db: &Arc<Db>, kf_spec: (u8, u8)) -> Self {
+    pub fn new(db: &Arc<Db>, kf_spec: (u8, u8, u8)) -> Self {
         let db = db.clone();
         Self {
             db,
