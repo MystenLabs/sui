@@ -15,12 +15,12 @@ Transaction.registerGlobalSerializationPlugin(
 		}),
 		overrides: {
 			packages: {
-				'std@framework': '0x1',
-				'std@framework/v1': '0x1',
+				'@framework/std': '0x1',
+				'@framework/std/1': '0x1',
 			},
 			types: {
-				'std@framework::string::String': '0x1::string::String',
-				'std@framework::vector::empty<std@framework::string::String>':
+				'@framework/std::string::String': '0x1::string::String',
+				'@framework/std::vector::empty<@framework/std::string::String>':
 					'0x1::vector::empty<0x1::string::String>',
 			},
 		},
@@ -33,20 +33,26 @@ describe('Name Resolution Plugin (.move)', () => {
 
 		// replace .move names properly
 		transaction.moveCall({
-			target: 'std@framework::string::utf8',
+			target: '@framework/std::string::utf8',
 			arguments: [transaction.pure.string('Hello, world!')],
 		});
 
 		// replace type args properly
 		transaction.moveCall({
-			target: 'std@framework::vector::empty',
-			typeArguments: ['std@framework::string::String'],
+			target: '@framework/std::vector::empty',
+			typeArguments: ['@framework/std::string::String'],
 		});
 
 		// replace nested type args properly
 		transaction.moveCall({
-			target: 'std@framework/v1::vector::empty',
-			typeArguments: ['std@framework::vector::empty<std@framework::string::String>'],
+			target: '@framework/std/1::vector::empty',
+			typeArguments: ['@framework/std::vector::empty<@framework/std::string::String>'],
+		});
+
+		// replace type args in `MakeMoveVec` call.
+		transaction.makeMoveVec({
+			type: '@framework/std::string::String',
+			elements: [transaction.pure.string('Hello, world!')],
 		});
 
 		const json = JSON.parse(await transaction.toJSON());

@@ -9,7 +9,7 @@ export type NamedPackagesPluginCache = {
 	types: Record<string, string>;
 };
 
-const NAME_SEPARATOR = '@';
+const NAME_SEPARATOR = '/';
 
 export type NameResolutionRequest = {
 	id: number;
@@ -28,6 +28,12 @@ export const findTransactionBlockNames = (
 	const types: Set<string> = new Set();
 
 	for (const command of builder.commands) {
+		if (command.MakeMoveVec?.type) {
+			getNamesFromTypeList([command.MakeMoveVec.type]).forEach((type) => {
+				types.add(type);
+			});
+			continue;
+		}
 		if (!('MoveCall' in command)) continue;
 		const tx = command.MoveCall;
 
@@ -39,12 +45,9 @@ export const findTransactionBlockNames = (
 			packages.add(pkg);
 		}
 
-		for (const type of tx.typeArguments ?? []) {
-			if (type.includes(NAME_SEPARATOR)) {
-				if (!isValidNamedType(type)) throw new Error(`Invalid type with names: ${type}`);
-				types.add(type);
-			}
-		}
+		getNamesFromTypeList(tx.typeArguments ?? []).forEach((type) => {
+			types.add(type);
+		});
 	}
 
 	return {
@@ -54,11 +57,34 @@ export const findTransactionBlockNames = (
 };
 
 /**
+ * Returns a list of unique types that include a name
+ * from the given list.
+ *  */
+function getNamesFromTypeList(types: string[]) {
+	const names = new Set<string>();
+	for (const type of types) {
+		if (type.includes(NAME_SEPARATOR)) {
+			if (!isValidNamedType(type)) throw new Error(`Invalid type with names: ${type}`);
+			names.add(type);
+		}
+	}
+	return [...names];
+}
+
+/**
  * Replace all names & types in a transaction block
  * with their resolved names/types.
  */
 export const replaceNames = (builder: TransactionDataBuilder, cache: NamedPackagesPluginCache) => {
 	for (const command of builder.commands) {
+		// Replacements for `MakeMoveVec` commands (that can include types)
+		if (command.MakeMoveVec?.type) {
+			if (!command.MakeMoveVec.type.includes(NAME_SEPARATOR)) continue;
+			if (!cache.types[command.MakeMoveVec.type])
+				throw new Error(`No resolution found for type: ${command.MakeMoveVec.type}`);
+			command.MakeMoveVec.type = cache.types[command.MakeMoveVec.type];
+		}
+		// Replacements for `MoveCall` commands (that can include packages & types)
 		const tx = command.MoveCall;
 		if (!tx) continue;
 
