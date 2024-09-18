@@ -5,11 +5,12 @@ rust_binary(
 )
 mypkg(
     name="sui-proxy",
-    version="bf9f49ff50ff1c4b3378319dfb16dd0a",
+    version="77007d47482d76f49ed5326807b6f2a0",
 )
 podman_build(
     name="sui-proxy-image",
     registry="docker//us-central1-docker.pkg.dev/cryptic-bolt-398315/sui-proxy",
     dockerfile="sui_proxy_dockerfile",
     resources=[":sui-proxy"],
+    tag="testnet"
 )
