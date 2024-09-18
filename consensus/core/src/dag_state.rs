@@ -981,6 +981,7 @@ mod test {
     use std::vec;
 
     use parking_lot::RwLock;
+    use rstest::rstest;
 
     use super::*;
     use crate::{
@@ -1417,6 +1418,57 @@ mod test {
     }
 
     #[tokio::test]
+    #[should_panic(expected = "Attempted to check for slot A4 that is <= the last gc evicted round 4")]
+    async fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range_gc_enabled() {
+        /// Keep 4 rounds from the highest committed round. This is considered universal and minimum necessary blocks to hold
+        /// for the correct node operation.
+        const GC_DEPTH: u32 = 4;
+        /// Additionally keep another 2 rounds on top of the GC depth.
+        const CACHED_ROUNDS: Round = 2;
+        
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_consensus_gc_depth_for_testing(GC_DEPTH);
+        context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
+
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create test blocks for round 1 ~ 10 for authority 0
+        let mut blocks = Vec::new();
+        for round in 1..=10 {
+            let block = VerifiedBlock::new_for_test(TestBlock::new(round, 0).build());
+            blocks.push(block.clone());
+            dag_state.accept_block(block);
+        }
+
+        // Now add a commit to trigger an eviction
+        dag_state.add_commit(TrustedCommit::new_for_test(
+            1 as CommitIndex,
+            CommitDigest::MIN,
+            0,
+            blocks.last().unwrap().reference(),
+            blocks
+                .into_iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+        ));
+
+        dag_state.flush();
+
+        // Eviction round should be now at committed_round - gc_depth - cached_rounds = 10 - 4 - 2 = 4. 
+        // The first available round should be 5.
+        assert_eq!(dag_state.gc_eviction_round(), 4);
+    
+        assert!(dag_state.contains_cached_block_at_slot(Slot::new(5, AuthorityIndex::new_for_test(0))), "Block at slot 5 should be found");
+
+        // When trying to request for authority 0 at block slot 8 it should panic, as anything
+        // that is <= 4 should be evicted
+        let _ =
+            dag_state.contains_cached_block_at_slot(Slot::new(4, AuthorityIndex::new_for_test(0)));
+    }
+
+    #[tokio::test]
     async fn test_get_blocks_in_cache_or_store() {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -1475,14 +1527,22 @@ mod test {
     }
 
     // TODO: Remove when DistributedVoteScoring is enabled.
+    #[rstest]
     #[tokio::test]
-    async fn test_flush_and_recovery_with_unscored_subdag() {
+    async fn test_flush_and_recovery_with_unscored_subdag(#[values(0, 5)] gc_depth: u32) {
         telemetry_subscribers::init_for_testing();
         let num_authorities: u32 = 4;
         let (mut context, _) = Context::new_for_test(num_authorities as usize);
         context
             .protocol_config
             .set_consensus_distributed_vote_scoring_strategy_for_testing(false);
+
+        if gc_depth > 0 {
+            context
+                .protocol_config
+                .set_consensus_gc_depth_for_testing(gc_depth);
+        }
+
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());
@@ -1591,11 +1651,19 @@ mod test {
         assert_eq!(dag_state.unscored_committed_subdags_count(), 5);
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_flush_and_recovery() {
+    async fn test_flush_and_recovery(#[values(0, 5)] gc_depth: u32) {
         telemetry_subscribers::init_for_testing();
         let num_authorities: u32 = 4;
-        let (context, _) = Context::new_for_test(num_authorities as usize);
+        let (mut context, _) = Context::new_for_test(num_authorities as usize);
+
+        if gc_depth > 0 {
+            context
+                .protocol_config
+                .set_consensus_gc_depth_for_testing(gc_depth);
+        }
+
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());
@@ -1859,6 +1927,55 @@ mod test {
 
         // Flush the store so we keep in memory only the last 1 round from the last commit for each
         // authority.
+        dag_state.flush();
+
+        // THEN the method should panic, as some authorities have already evicted rounds <= round 2
+        let end_round = 2;
+        dag_state.get_last_cached_block_per_authority(end_round);
+    }
+
+    #[tokio::test]
+    #[should_panic(
+        expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority A"
+    )]
+    async fn test_get_cached_last_block_per_authority_requesting_out_of_round_range_gc_enabled() {
+        // GIVEN
+        const CACHED_ROUNDS: Round = 1;
+        const GC_DEPTH: u32 = 1;
+        let (mut context, _) = Context::new_for_test(4);
+        context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
+        context.protocol_config.set_consensus_gc_depth_for_testing(GC_DEPTH);
+
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create no blocks for authority 0
+        // Create one block (round 1) for authority 1
+        // Create two blocks (rounds 1,2) for authority 2
+        // Create three blocks (rounds 1,2,3) for authority 3
+        let mut all_blocks = Vec::new();
+        for author in 1..=3 {
+            for round in 1..=author {
+                let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
+                all_blocks.push(block.clone());
+                dag_state.accept_block(block);
+            }
+        }
+
+        dag_state.add_commit(TrustedCommit::new_for_test(
+            1 as CommitIndex,
+            CommitDigest::MIN,
+            0,
+            all_blocks.last().unwrap().reference(),
+            all_blocks
+                .into_iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+        ));
+
+        // Flush the store so we keep in memory only the last 1 round from the last commit for each
+        // authority (gc_depth) and 1 additional round (cached_rounds).
         dag_state.flush();
 
         // THEN the method should panic, as some authorities have already evicted rounds <= round 2
