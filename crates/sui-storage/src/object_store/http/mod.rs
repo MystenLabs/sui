@@ -10,6 +10,7 @@ use std::sync::Arc;
 use crate::object_store::http::gcs::GoogleCloudStorage;
 use crate::object_store::http::local::LocalStorage;
 use crate::object_store::http::s3::AmazonS3;
+use reqwest_middleware::ClientWithMiddleware;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 
 use crate::object_store::ObjectStoreGetExt;
@@ -19,7 +20,7 @@ use futures::{StreamExt, TryStreamExt};
 use object_store::path::Path;
 use object_store::{Error, GetResult, GetResultPayload, ObjectMeta};
 use reqwest::header::{HeaderMap, CONTENT_LENGTH, ETAG, LAST_MODIFIED};
-use reqwest::{Client, Method};
+use reqwest::Method;
 
 // http://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
 //
@@ -74,7 +75,7 @@ async fn get(
     url: &str,
     store: &'static str,
     location: &Path,
-    client: &Client,
+    client: &ClientWithMiddleware,
 ) -> Result<GetResult> {
     let request = client.request(Method::GET, url);
     let response = request.send().await.context("failed to get")?;

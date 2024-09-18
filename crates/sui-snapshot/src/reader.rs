@@ -36,7 +36,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::time::Instant;
-use tracing::{error, info};
+use tracing::info;
 
 pub type SnapshotChecksums = (DigestByBucketAndPartition, Accumulator);
 pub type DigestByBucketAndPartition = BTreeMap<u32, BTreeMap<u32, [u8; 32]>>;
@@ -369,40 +369,16 @@ impl StateSnapshotReaderV1 {
                         let remote_object_store = remote_object_store.clone();
                         let sha3_digests_cloned = sha3_digests.clone();
                         async move {
-                            // Download object file with retries
-                            let max_timeout = Duration::from_secs(30);
-                            let mut timeout = Duration::from_secs(2);
-                            timeout += timeout / 2;
-                            timeout = std::cmp::min(max_timeout, timeout);
-                            let mut attempts = 0usize;
-                            let bytes = loop {
-                                match remote_object_store.get_bytes(&file_path).await {
-                                    Ok(bytes) => {
-                                        break bytes;
-                                    }
-                                    Err(err) => {
-                                        error!(
-                                            "Obj {} .get failed (attempt {}): {}",
-                                            file_metadata.file_path(&epoch_dir),
-                                            attempts,
-                                            err,
-                                        );
-                                        if timeout > max_timeout {
-                                            panic!(
-                                                "Failed to get obj file {} after {} attempts",
-                                                file_metadata.file_path(&epoch_dir),
-                                                attempts,
-                                            );
-                                        } else {
-                                            attempts += 1;
-                                            tokio::time::sleep(timeout).await;
-                                            timeout += timeout / 2;
-                                            continue;
-                                        }
-                                    }
-                                }
-                            };
-
+                            let bytes = remote_object_store
+                                .get_bytes(&file_path)
+                                .await
+                                .unwrap_or_else(|e| {
+                                    panic!(
+                                        "Failed to get obj file {}: {:?}",
+                                        file_metadata.file_path(&epoch_dir),
+                                        e
+                                    );
+                                });
                             let sha3_digest = sha3_digests_cloned.lock().await;
                             let bucket_map = sha3_digest
                                 .get(bucket)

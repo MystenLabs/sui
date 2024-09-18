@@ -428,6 +428,8 @@ reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "rustls-tls",
 ] }
+reqwest-retry = "0.6.1"
+reqwest-middleware = "0.3.3"
 roaring = "0.10.6"
 ron = "0.8.0"
 rstest = "0.16.0"

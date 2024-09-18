@@ -7,28 +7,47 @@ use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use object_store::path::Path;
-use object_store::GetResult;
+use object_store::{BackoffConfig, GetResult, RetryConfig};
 use percent_encoding::{utf8_percent_encode, PercentEncode};
-use reqwest::Client;
-use reqwest::ClientBuilder;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::fmt;
 use std::sync::Arc;
+use sui_config::object_storage_config::retry_config;
 
 #[derive(Debug)]
 pub(crate) struct S3Client {
     endpoint: String,
-    client: Client,
+    client: ClientWithMiddleware,
 }
 
 impl S3Client {
     pub fn new(endpoint: &str) -> Result<Self> {
-        let mut builder = ClientBuilder::new();
-        builder = builder.user_agent(DEFAULT_USER_AGENT);
-        let client = builder.https_only(false).build()?;
+        let RetryConfig {
+            backoff:
+                BackoffConfig {
+                    init_backoff,
+                    max_backoff,
+                    base,
+                },
+            max_retries,
+            ..
+        } = retry_config();
+        let retry_policy = ExponentialBackoff::builder()
+            .retry_bounds(init_backoff, max_backoff)
+            .base(base as u32)
+            .build_with_max_retries(max_retries as u32);
+        let reqwest_client = reqwest::Client::builder()
+            .user_agent(DEFAULT_USER_AGENT)
+            .https_only(false)
+            .build()?;
+        let middleware_client = ClientBuilder::new(reqwest_client)
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
 
         Ok(Self {
             endpoint: endpoint.to_string(),
-            client,
+            client: middleware_client,
         })
     }
     async fn get(&self, location: &Path) -> Result<GetResult> {
