@@ -143,6 +143,27 @@ impl Default for IngestionConfig {
     }
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct SqlBackFillConfig {
+    /// Maximum number of concurrent tasks to run.
+    #[arg(
+        long,
+        default_value_t = Self::DEFAULT_MAX_CONCURRENCY,
+    )]
+    pub max_concurrency: usize,
+    /// Number of checkpoints to backfill in a single SQL command.
+    #[arg(
+        long,
+        default_value_t = Self::DEFAULT_CHUNK_SIZE,
+    )]
+    pub chunk_size: usize,
+}
+
+impl SqlBackFillConfig {
+    const DEFAULT_MAX_CONCURRENCY: usize = 10;
+    const DEFAULT_CHUNK_SIZE: usize = 1000;
+}
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     Indexer {
@@ -177,6 +198,8 @@ pub enum Command {
         checkpoint_column_name: String,
         first_checkpoint: u64,
         last_checkpoint: u64,
+        #[command(flatten)]
+        backfill_config: SqlBackFillConfig,
     },
 }
 

@@ -79,6 +79,7 @@ async fn main() -> anyhow::Result<()> {
             checkpoint_column_name,
             first_checkpoint,
             last_checkpoint,
+            backfill_config,
         } => {
             run_sql_backfill(
                 &sql,
@@ -86,6 +87,7 @@ async fn main() -> anyhow::Result<()> {
                 first_checkpoint,
                 last_checkpoint,
                 pool,
+                backfill_config,
             )
             .await;
         }
