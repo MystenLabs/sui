@@ -7,7 +7,7 @@ use itertools::Itertools;
 use move_command_line_common::env::{read_bool_env_var, read_env_var};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use std::{path::PathBuf, process::Command};
 
 /// Default flags passed to boogie. Additional flags will be added to this via the -B option.
 const DEFAULT_BOOGIE_FLAGS: &[&str] = &[
@@ -145,6 +145,7 @@ pub struct BoogieOptions {
     pub loop_unroll: Option<u64>,
     /// Optional aggregate function names for native methods implementing mutable borrow semantics
     pub borrow_aggregates: Vec<BorrowAggregate>,
+    pub prelude_extra: Option<PathBuf>
 }
 
 impl Default for BoogieOptions {
@@ -182,6 +183,7 @@ impl Default for BoogieOptions {
             custom_natives: None,
             loop_unroll: None,
             borrow_aggregates: vec![],
+            prelude_extra: Some(PathBuf::from("prelude_extra.bpl"))
         }
     }
 }

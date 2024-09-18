@@ -4,7 +4,7 @@
 
 #![forbid(unsafe_code)]
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fs};
 
 use itertools::Itertools;
 #[allow(unused_imports)]
@@ -307,6 +307,13 @@ pub fn add_prelude(
 
     let expanded_content = tera.render("prelude", &context)?;
     emitln!(writer, &expanded_content);
+
+    if let Some(path) = &options.prelude_extra {
+        if let Ok(content) = fs::read_to_string(path) {
+            emitln!(writer, &content);
+        }
+    }
+
     Ok(())
 }
 
