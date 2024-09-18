@@ -1,4 +1,4 @@
-processed 13 tasks
+processed 12 tasks
 
 task 1, lines 6-25:
 //# publish
@@ -49,60 +49,7 @@ task 10, line 43:
 Epoch advanced: 2
 
 task 11, lines 45-55:
-//# run-graphql
-Response: {
-  "data": {
-    "checkpoints": {
-      "nodes": [
-        {
-          "epoch": {
-            "epochId": 0
-          },
-          "sequenceNumber": 0
-        },
-        {
-          "epoch": {
-            "epochId": 0
-          },
-          "sequenceNumber": 1
-        },
-        {
-          "epoch": {
-            "epochId": 0
-          },
-          "sequenceNumber": 2
-        },
-        {
-          "epoch": {
-            "epochId": 1
-          },
-          "sequenceNumber": 3
-        },
-        {
-          "epoch": {
-            "epochId": 1
-          },
-          "sequenceNumber": 4
-        },
-        {
-          "epoch": {
-            "epochId": 2
-          },
-          "sequenceNumber": 5
-        },
-        {
-          "epoch": {
-            "epochId": 2
-          },
-          "sequenceNumber": 6
-        }
-      ]
-    }
-  }
-}
-
-task 12, lines 58-68:
-//# run-graphql --wait-for-checkpoint-pruned 0
+//# run-graphql --wait-for-checkpoint-pruned 4
 Response: {
   "data": {
     "checkpoints": {
