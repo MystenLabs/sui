@@ -124,7 +124,7 @@ impl TransactionBlockFilter {
         let missing_implicit_sender = missing_implicit_sender && self.affected_address.is_none();
 
         missing_implicit_sender
-            .then_some(self.sent_address)
+            .then_some(self.sent_address.or(self.sign_address))
             .flatten()
     }
 
@@ -133,6 +133,7 @@ impl TransactionBlockFilter {
     pub(crate) fn has_filters(&self) -> bool {
         let has_filters = self.function.is_some()
             || self.kind.is_some()
+            || self.sign_address.is_some()
             || self.sent_address.is_some()
             || self.recv_address.is_some()
             || self.input_object.is_some()
