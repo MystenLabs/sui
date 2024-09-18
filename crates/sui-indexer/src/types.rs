@@ -92,7 +92,7 @@ impl IndexedCheckpoint {
 
 /// Represents system state and summary info at the start and end of an epoch. Optional fields are
 /// populated at epoch boundary, since they cannot be determined at the start of the epoch.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct IndexedEpochInfo {
     pub epoch: u64,
     pub first_checkpoint_id: u64,
@@ -101,7 +101,7 @@ pub struct IndexedEpochInfo {
     pub protocol_version: u64,
     pub total_stake: u64,
     pub storage_fund_balance: u64,
-    pub system_state: Vec<u8>,
+    pub system_state_summary: SuiSystemStateSummary,
     pub epoch_total_transactions: Option<u64>,
     pub last_checkpoint_id: Option<u64>,
     pub epoch_end_timestamp: Option<u64>,
@@ -132,8 +132,18 @@ impl IndexedEpochInfo {
             // the event is optional b/c no such event for the first epoch.
             total_stake: event.map(|e| e.total_stake).unwrap_or(0),
             storage_fund_balance: event.map(|e| e.storage_fund_balance).unwrap_or(0),
-            system_state: bcs::to_bytes(&new_system_state_summary).unwrap(),
-            ..Default::default()
+            system_state_summary: new_system_state_summary,
+            epoch_total_transactions: None,
+            last_checkpoint_id: None,
+            epoch_end_timestamp: None,
+            storage_fund_reinvestment: None,
+            storage_charge: None,
+            storage_rebate: None,
+            stake_subsidy_amount: None,
+            total_gas_fees: None,
+            total_stake_rewards_distributed: None,
+            leftover_storage_fund_inflow: None,
+            epoch_commitments: None,
         }
     }
 
@@ -141,7 +151,7 @@ impl IndexedEpochInfo {
     /// `network_total_tx_num_at_last_epoch_end` is needed to determine the number of transactions
     /// that occurred in the epoch X-1.
     pub fn from_end_of_epoch_data(
-        system_state_summary: &SuiSystemStateSummary,
+        system_state_summary: SuiSystemStateSummary,
         last_checkpoint_summary: &CertifiedCheckpointSummary,
         event: &SystemEpochInfoEvent,
         network_total_tx_num_at_last_epoch_end: u64,
@@ -165,7 +175,7 @@ impl IndexedEpochInfo {
                 .end_of_epoch_data
                 .as_ref()
                 .map(|e| e.epoch_commitments.clone()),
-            system_state: bcs::to_bytes(system_state_summary).unwrap(),
+            system_state_summary,
             // The following felds will not and shall not be upserted
             // into DB. We have them below to make compiler and diesel happy
             first_checkpoint_id: 0,
