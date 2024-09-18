@@ -43,20 +43,6 @@ impl From<bcs::Error> for SdkTypeConversionError {
 
 macro_rules! bcs_convert_impl {
     ($core:ty, $external:ty) => {
-        // impl From<$core> for $external {
-        //     fn from(value: $core) -> Self {
-        //         let bytes = bcs::to_bytes(&value).unwrap();
-        //         bcs::from_bytes(&bytes).unwrap()
-        //     }
-        // }
-
-        // impl From<$external> for $core {
-        //     fn from(value: $external) -> Self {
-        //         let bytes = bcs::to_bytes(&value).unwrap();
-        //         bcs::from_bytes(&bytes).unwrap()
-        //     }
-        // }
-
         impl TryFrom<$core> for $external {
             type Error = bcs::Error;
 
