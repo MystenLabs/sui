@@ -658,7 +658,10 @@ impl ObjectImpl<'_> {
         let Some(filter) = filter
             .unwrap_or_default()
             .intersect(TransactionBlockFilter {
+                #[cfg(not(feature = "staging"))]
                 recv_address: Some(self.0.address),
+                #[cfg(feature = "staging")]
+                affected_address: Some(self.0.address),
                 ..Default::default()
             })
         else {

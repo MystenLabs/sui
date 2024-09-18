@@ -26,6 +26,11 @@ pub(crate) struct TransactionBlockFilter {
     /// Limit to transaction that occured strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
 
+    /// Limit to transactions that interacted with the given address. The address could be a
+    /// sender, sponsor, or recipient of the transaction.
+    #[cfg(feature = "staging")]
+    pub affected_address: Option<SuiAddress>,
+
     /// Limit to transactions that were signed by the given address.
     pub sign_address: Option<SuiAddress>,
 
@@ -62,6 +67,8 @@ impl TransactionBlockFilter {
             at_checkpoint: intersect!(at_checkpoint, intersect::by_eq)?,
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
 
+            #[cfg(feature = "staging")]
+            affected_address: intersect!(affected_address, intersect::by_eq)?,
             sign_address: intersect!(sign_address, intersect::by_eq)?,
             recv_address: intersect!(recv_address, intersect::by_eq)?,
             input_object: intersect!(input_object, intersect::by_eq)?,
@@ -82,6 +89,8 @@ impl TransactionBlockFilter {
         [
             self.function.is_some(),
             self.kind.is_some(),
+            #[cfg(feature = "staging")]
+            self.affected_address.is_some(),
             self.recv_address.is_some(),
             self.input_object.is_some(),
             self.changed_object.is_some(),
@@ -94,30 +103,38 @@ impl TransactionBlockFilter {
     }
 
     /// If we don't query a lookup table that has a denormalized sender column, we need to
-    /// explicitly sp
+    /// explicitly specify the sender with a query on `tx_sender`. This function returns the sender
+    /// we need to add an explicit query for if one is required, or `None` otherwise.
     pub(crate) fn explicit_sender(&self) -> Option<SuiAddress> {
-        if self.function.is_none()
+        let missing_implicit_sender = self.function.is_none()
             && self.kind.is_none()
             && self.recv_address.is_none()
             && self.input_object.is_none()
-            && self.changed_object.is_none()
-        {
-            self.sign_address
-        } else {
-            None
-        }
+            && self.changed_object.is_none();
+
+        #[cfg(feature = "staging")]
+        let missing_implicit_sender = missing_implicit_sender && self.affected_address.is_none();
+
+        missing_implicit_sender
+            .then_some(self.sign_address)
+            .flatten()
     }
 
     /// A TransactionBlockFilter is considered not to have any filters if no filters are specified,
     /// or if the only filters are on `checkpoint`.
     pub(crate) fn has_filters(&self) -> bool {
-        self.function.is_some()
+        let has_filters = self.function.is_some()
             || self.kind.is_some()
             || self.sign_address.is_some()
             || self.recv_address.is_some()
             || self.input_object.is_some()
             || self.changed_object.is_some()
-            || self.transaction_ids.is_some()
+            || self.transaction_ids.is_some();
+
+        #[cfg(feature = "staging")]
+        let has_filters = has_filters || self.affected_address.is_some();
+
+        has_filters
     }
 
     pub(crate) fn is_empty(&self) -> bool {
