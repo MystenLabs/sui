@@ -1409,6 +1409,13 @@ impl PgIndexerStore {
                 .await?;
 
                 diesel::delete(
+                    tx_affected_objects::table
+                        .filter(tx_affected_objects::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
                     tx_senders::table
                         .filter(tx_senders::tx_sequence_number.between(min_tx, max_tx)),
                 )
