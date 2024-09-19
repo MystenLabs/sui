@@ -145,7 +145,18 @@ pub enum SuiCommand {
     /// generate the genesis blob, and start the network.
     ///
     /// Note that if you want to start an indexer, Postgres DB is required.
-    #[clap(name = "start")]
+    ///
+    /// ProtocolConfig parameters can be overridden individually by setting env variables as
+    /// follows:
+    /// - SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE=1
+    /// - Then, to configure an override, use the prefix `SUI_PROTOCOL_CONFIG_OVERRIDE_`
+    ///   along with the parameter name. For example, to increase the interval between
+    ///   checkpoint creation to >1/s, you might set:
+    ///   SUI_PROTOCOL_CONFIG_OVERRIDE_min_checkpoint_interval_ms=1000
+    ///
+    /// Note that ProtocolConfig parameters must match between all nodes, or the network
+    /// may break. Changing these values outside of local networks is very dangerous.
+    #[clap(name = "start", verbatim_doc_comment)]
     Start {
         /// Config directory that will be used to store network config, node db, keystore
         /// sui genesis -f --with-faucet generates a genesis config that can be used to start this
