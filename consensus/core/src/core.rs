@@ -733,24 +733,24 @@ impl Core {
             return false;
         }
 
-        if self.propagation_delay
-            > self
-                .context
-                .parameters
-                .propagation_delay_stop_proposal_threshold
-        {
-            debug!(
-                "Skip proposing for round {clock_round}, high propagation delay {} > {}.",
-                self.propagation_delay,
-                self.context
-                    .parameters
-                    .propagation_delay_stop_proposal_threshold
-            );
-            core_skipped_proposals
-                .with_label_values(&["high_propagation_delay"])
-                .inc();
-            return false;
-        }
+        // if self.propagation_delay
+        //     > self
+        //         .context
+        //         .parameters
+        //         .propagation_delay_stop_proposal_threshold
+        // {
+        //     debug!(
+        //         "Skip proposing for round {clock_round}, high propagation delay {} > {}.",
+        //         self.propagation_delay,
+        //         self.context
+        //             .parameters
+        //             .propagation_delay_stop_proposal_threshold
+        //     );
+        //     core_skipped_proposals
+        //         .with_label_values(&["high_propagation_delay"])
+        //         .inc();
+        //     return false;
+        // }
 
         let Some(last_known_proposed_round) = self.last_known_proposed_round else {
             debug!("Skip proposing for round {clock_round}, last known proposed round has not been synced yet.");
