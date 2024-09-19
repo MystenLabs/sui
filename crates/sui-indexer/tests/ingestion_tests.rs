@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::models::{objects::StoredObject, transactions::StoredTransaction};
-use sui_indexer::schema::{objects, transactions};
+use sui_indexer::schema::{events, objects, transactions};
 use sui_indexer::store::{indexer_store::IndexerStore, PgIndexerStore};
 use sui_indexer::tempdb::get_available_port;
 use sui_indexer::tempdb::TempDb;
@@ -27,6 +27,8 @@ use tokio::task::JoinHandle;
 async fn set_up(
     sim: Arc<Simulacrum>,
     data_ingestion_path: PathBuf,
+    epochs_to_keep: Option<u64>,
+    stashed_mode: bool,
 ) -> (
     JoinHandle<()>,
     PgIndexerStore,
@@ -43,11 +45,16 @@ async fn set_up(
             .start_service(server_url)
             .await;
     });
+    let reader_writer_config = if stashed_mode {
+        ReaderWriterConfig::stashed_writer_mode(None, epochs_to_keep)
+    } else {
+        ReaderWriterConfig::writer_mode(None, epochs_to_keep)
+    };
     // Starts indexer
     let (pg_store, pg_handle, _) = start_test_indexer(
         database.database().url().as_str().to_owned(),
         format!("http://{}", server_url),
-        ReaderWriterConfig::writer_mode(None, None),
+        reader_writer_config,
         data_ingestion_path,
     )
     .await;
@@ -75,6 +82,20 @@ async fn wait_for_checkpoint(
     Ok(())
 }
 
+async fn wait_for_pruned_epoch(pg_store: &PgIndexerStore, epoch: u64) -> Result<(), IndexerError> {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while {
+            let min_epoch = pg_store.get_available_epoch_range().await.unwrap().0;
+            min_epoch < epoch
+        } {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .expect("Timeout waiting for indexer to prune epoch");
+    Ok(())
+}
+
 #[tokio::test]
 pub async fn test_transaction_table() -> Result<(), IndexerError> {
     let tempdir = tempdir().unwrap();
@@ -91,7 +112,7 @@ pub async fn test_transaction_table() -> Result<(), IndexerError> {
     // Create a checkpoint which should include the transaction we executed.
     let checkpoint = sim.create_checkpoint();
 
-    let (_, pg_store, _, _database) = set_up(Arc::new(sim), data_ingestion_path).await;
+    let (_, pg_store, _, _database) = set_up(Arc::new(sim), data_ingestion_path, None, false).await;
 
     // Wait for the indexer to catch up to the checkpoint.
     wait_for_checkpoint(&pg_store, 1).await?;
@@ -137,7 +158,7 @@ pub async fn test_object_type() -> Result<(), IndexerError> {
     // Create a checkpoint which should include the transaction we executed.
     let _ = sim.create_checkpoint();
 
-    let (_, pg_store, _, _database) = set_up(Arc::new(sim), data_ingestion_path).await;
+    let (_, pg_store, _, _database) = set_up(Arc::new(sim), data_ingestion_path, None, false).await;
 
     // Wait for the indexer to catch up to the checkpoint.
     wait_for_checkpoint(&pg_store, 1).await?;
@@ -165,5 +186,78 @@ pub async fn test_object_type() -> Result<(), IndexerError> {
     );
     assert_eq!(db_object.object_type_module, Some("coin".to_string()));
     assert_eq!(db_object.object_type_name, Some("Coin".to_string()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_stashed_mode() -> Result<(), IndexerError> {
+    let tempdir = tempdir().unwrap();
+    let mut sim = Simulacrum::new();
+    let data_ingestion_path = tempdir.path().to_path_buf();
+    sim.set_data_ingestion_path(data_ingestion_path.clone());
+
+    // Execute a simple transaction.
+    let transfer_recipient = SuiAddress::random_for_testing_only();
+    let (transaction, _) = sim.transfer_txn(transfer_recipient);
+    let (effects, err) = sim.execute_transaction(transaction.clone()).unwrap();
+    let tx1_digest = effects.transaction_digest();
+    assert!(err.is_none());
+
+    // Create a checkpoint which should include the transaction we executed.
+    let _ = sim.create_checkpoint();
+    sim.advance_epoch(false);
+
+    // Now do another transaction in epoch 2.
+    let (transaction, _) = sim.transfer_txn(transfer_recipient);
+    let (effects, err) = sim.execute_transaction(transaction.clone()).unwrap();
+    assert!(err.is_none());
+    let tx2_digest = effects.transaction_digest();
+    let _ = sim.create_checkpoint();
+    sim.advance_epoch(false);
+    sim.advance_epoch(false);
+    sim.advance_epoch(false);
+
+    // Set retention to 4 epochs and use Stashed mode.
+    let (_, pg_store, _, _database) =
+        set_up(Arc::new(sim), data_ingestion_path, Some(4), true).await;
+
+    // Wait for the pruner to catch up to given epoch.
+    wait_for_pruned_epoch(&pg_store, 1).await?;
+
+    let mut connection = pg_store.pool().dedicated_connection().await.unwrap();
+
+    // There should be 4 transactions in the table now: three epoch change txns and one transfer.
+    let tx_count: i64 = transactions::table
+        .select(diesel::dsl::count_star())
+        .first::<i64>(&mut connection)
+        .await
+        .expect("Failed reading tx count from PostgresDB");
+    assert_eq!(tx_count, 4);
+
+    // Reading the first txn should fail since it has been pruned away.
+    let txn1_res: Result<StoredTransaction, _> = transactions::table
+        .filter(transactions::transaction_digest.eq(tx1_digest.inner().to_vec()))
+        .first::<StoredTransaction>(&mut connection)
+        .await;
+    assert!(txn1_res.is_err());
+
+    // Reading the second one should succeed.
+    let txn2_res: Result<StoredTransaction, _> = transactions::table
+        .filter(transactions::transaction_digest.eq(tx2_digest.inner().to_vec()))
+        .first::<StoredTransaction>(&mut connection)
+        .await;
+    assert!(txn2_res.is_ok());
+    assert_eq!(
+        txn2_res.unwrap().transaction_digest,
+        tx2_digest.inner().to_vec()
+    );
+
+    // Also check that we are indeed in Stashed mode, i.e. no events are committed.
+    let event_count: i64 = events::table
+        .select(diesel::dsl::count_star())
+        .first::<i64>(&mut connection)
+        .await
+        .expect("Failed reading event count from PostgresDB");
+    assert_eq!(event_count, 0);
     Ok(())
 }

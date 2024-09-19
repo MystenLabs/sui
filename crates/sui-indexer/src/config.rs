@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::{Args, Parser, Subcommand};
+use std::str::FromStr;
 use std::{net::SocketAddr, path::PathBuf};
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -24,8 +25,39 @@ pub struct IndexerConfig {
     #[clap(long, default_value = "0.0.0.0:9184")]
     pub metrics_address: SocketAddr,
 
+    #[clap(long, default_value_t = IndexerMode::default())]
+    pub mode: IndexerMode,
+
     #[command(subcommand)]
     pub command: Command,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub enum IndexerMode {
+    #[default]
+    Public,
+    Stashed,
+}
+
+impl std::fmt::Display for IndexerMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            IndexerMode::Public => write!(f, "public"),
+            IndexerMode::Stashed => write!(f, "stashed"),
+        }
+    }
+}
+
+impl FromStr for IndexerMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "public" => Ok(IndexerMode::Public),
+            "stashed" => Ok(IndexerMode::Stashed),
+            _ => Err(format!("Invalid indexer mode: {}", s)),
+        }
+    }
 }
 
 #[derive(Args, Debug, Clone)]

@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 
+use crate::config::IndexerMode;
 use crate::config::IngestionConfig;
 use crate::config::PruningOptions;
 use crate::config::RestoreConfig;
@@ -28,6 +29,7 @@ pub enum ReaderWriterConfig {
     Writer {
         snapshot_config: SnapshotLagConfig,
         pruning_options: PruningOptions,
+        indexer_mode: IndexerMode,
     },
 }
 
@@ -47,6 +49,18 @@ impl ReaderWriterConfig {
         Self::Writer {
             snapshot_config: snapshot_config.unwrap_or_default(),
             pruning_options: PruningOptions { epochs_to_keep },
+            indexer_mode: IndexerMode::Public,
+        }
+    }
+
+    pub fn stashed_writer_mode(
+        snapshot_config: Option<SnapshotLagConfig>,
+        epochs_to_keep: Option<u64>,
+    ) -> Self {
+        Self::Writer {
+            snapshot_config: snapshot_config.unwrap_or_default(),
+            pruning_options: PruningOptions { epochs_to_keep },
+            indexer_mode: IndexerMode::Stashed,
         }
     }
 }
@@ -103,7 +117,18 @@ pub async fn start_test_indexer_impl(
         .await
         .unwrap();
     let restore_config = RestoreConfig::default();
-    let store = PgIndexerStore::new(pool.clone(), restore_config, indexer_metrics.clone());
+    let indexer_mode = if let ReaderWriterConfig::Writer { indexer_mode, .. } = reader_writer_config
+    {
+        indexer_mode
+    } else {
+        IndexerMode::Public
+    };
+    let store = PgIndexerStore::new(
+        pool.clone(),
+        restore_config,
+        indexer_mode,
+        indexer_metrics.clone(),
+    );
 
     let handle = match reader_writer_config {
         ReaderWriterConfig::Reader {
@@ -119,6 +144,7 @@ pub async fn start_test_indexer_impl(
         ReaderWriterConfig::Writer {
             snapshot_config,
             pruning_options,
+            indexer_mode,
         } => {
             let connection = Connection::dedicated(&db_url.parse().unwrap())
                 .await
@@ -136,6 +162,7 @@ pub async fn start_test_indexer_impl(
                     indexer_metrics,
                     snapshot_config,
                     pruning_options,
+                    indexer_mode,
                     cancel,
                 )
                 .await

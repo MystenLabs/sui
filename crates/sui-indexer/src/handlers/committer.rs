@@ -11,6 +11,7 @@ use tracing::{error, info};
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
+use crate::config::IndexerMode;
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
 use crate::types::IndexerResult;
@@ -21,6 +22,7 @@ pub(crate) const CHECKPOINT_COMMIT_BATCH_SIZE: usize = 100;
 
 pub async fn start_tx_checkpoint_commit_task<S>(
     state: S,
+    mode: IndexerMode,
     metrics: IndexerMetrics,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
     commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
@@ -60,7 +62,7 @@ where
             next_checkpoint_sequence_number += 1;
             let epoch_number_option = epoch.as_ref().map(|epoch| epoch.new_epoch.epoch);
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
-                commit_checkpoints(&state, batch, epoch, &metrics, &commit_notifier).await;
+                commit_checkpoints(&state, batch, epoch, mode, &metrics, &commit_notifier).await;
                 batch = vec![];
             }
             if let Some(epoch_number) = epoch_number_option {
@@ -74,7 +76,7 @@ where
             }
         }
         if !batch.is_empty() && unprocessed.is_empty() {
-            commit_checkpoints(&state, batch, None, &metrics, &commit_notifier).await;
+            commit_checkpoints(&state, batch, None, mode, &metrics, &commit_notifier).await;
             batch = vec![];
         }
     }
@@ -90,6 +92,7 @@ async fn commit_checkpoints<S>(
     state: &S,
     indexed_checkpoint_batch: Vec<CheckpointDataToCommit>,
     epoch: Option<EpochToCommit>,
+    mode: IndexerMode,
     metrics: &IndexerMetrics,
     commit_notifier: &watch::Sender<Option<CheckpointSequenceNumber>>,
 ) where
@@ -156,8 +159,6 @@ async fn commit_checkpoints<S>(
         let mut persist_tasks = vec![
             state.persist_transactions(tx_batch),
             state.persist_tx_indices(tx_indices_batch),
-            state.persist_events(events_batch),
-            state.persist_event_indices(event_indices_batch),
             state.persist_displays(display_updates_batch),
             state.persist_packages(packages_batch),
             // TODO: There are a few ways we could make the following more memory efficient.
@@ -166,9 +167,14 @@ async fn commit_checkpoints<S>(
             // 2. We could avoid clone by using Arc.
             state.persist_objects(object_changes_batch.clone()),
             state.persist_object_history(object_history_changes_batch.clone()),
-            state.persist_full_objects_history(object_history_changes_batch.clone()),
             state.persist_object_versions(object_versions_batch.clone()),
         ];
+        if let IndexerMode::Public = mode {
+            persist_tasks.push(state.persist_events(events_batch));
+            persist_tasks.push(state.persist_event_indices(event_indices_batch));
+            persist_tasks
+                .push(state.persist_full_objects_history(object_history_changes_batch.clone()));
+        }
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));
         }

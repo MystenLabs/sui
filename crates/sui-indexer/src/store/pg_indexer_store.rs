@@ -61,6 +61,7 @@ use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTrans
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStore;
 use super::ObjectChangeToCommit;
+use crate::config::IndexerMode;
 
 use diesel::upsert::excluded;
 use sui_types::digests::{ChainIdentifier, CheckpointDigest};
@@ -104,12 +105,14 @@ pub struct PgIndexerStore {
     metrics: IndexerMetrics,
     partition_manager: PgPartitionManager,
     config: PgIndexerStoreConfig,
+    mode: IndexerMode,
 }
 
 impl PgIndexerStore {
     pub fn new(
         pool: ConnectionPool,
         restore_config: RestoreConfig,
+        mode: IndexerMode,
         metrics: IndexerMetrics,
     ) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
@@ -133,6 +136,7 @@ impl PgIndexerStore {
             pool,
             metrics,
             partition_manager,
+            mode,
             config,
         }
     }
@@ -1119,6 +1123,11 @@ impl PgIndexerStore {
                     .execute(conn)
                     .await?;
 
+                // Stashed mode only needs above tables.
+                if let IndexerMode::Stashed = self.mode {
+                    return Ok(());
+                }
+
                 diesel::insert_into(tx_input_objects::table)
                     .values(&input_objects)
                     .on_conflict_do_nothing()
@@ -1911,7 +1920,6 @@ impl IndexerStore for PgIndexerStore {
             .checkpoint_db_commit_latency_tx_indices
             .start_timer();
         let chunks = chunk!(indices, self.config.parallel_chunk_size);
-
         let futures = chunks
             .into_iter()
             .map(|chunk| self.persist_tx_indices_chunk(chunk))

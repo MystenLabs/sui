@@ -19,7 +19,9 @@ use sui_data_ingestion_core::{
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::build_json_rpc_server;
-use crate::config::{IngestionConfig, JsonRpcConfig, PruningOptions, SnapshotLagConfig};
+use crate::config::{
+    IndexerMode, IngestionConfig, JsonRpcConfig, PruningOptions, SnapshotLagConfig,
+};
 use crate::database::ConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
@@ -32,29 +34,13 @@ use crate::store::{IndexerStore, PgIndexerStore};
 pub struct Indexer;
 
 impl Indexer {
-    pub async fn start_writer(
-        config: &IngestionConfig,
-        store: PgIndexerStore,
-        metrics: IndexerMetrics,
-    ) -> Result<(), IndexerError> {
-        let snapshot_config = SnapshotLagConfig::default();
-        Indexer::start_writer_with_config(
-            config,
-            store,
-            metrics,
-            snapshot_config,
-            PruningOptions::default(),
-            CancellationToken::new(),
-        )
-        .await
-    }
-
     pub async fn start_writer_with_config(
         config: &IngestionConfig,
         store: PgIndexerStore,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
         pruning_options: PruningOptions,
+        mode: IndexerMode,
         cancel: CancellationToken,
     ) -> Result<(), IndexerError> {
         info!(
@@ -118,7 +104,7 @@ impl Indexer {
             2,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker = new_handlers(store, metrics, primary_watermark, cancel.clone()).await?;
+        let worker = new_handlers(store, mode, metrics, primary_watermark, cancel.clone()).await?;
         let worker_pool = WorkerPool::new(
             worker,
             "primary".to_string(),
