@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
-use csv::Writer;
+use csv::{ReaderBuilder, Writer};
 use diesel::dsl::{max, min};
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
@@ -308,14 +308,14 @@ impl PgIndexerStore {
 
     async fn persist_display_updates(
         &self,
-        display_updates: BTreeMap<String, StoredDisplay>,
+        display_updates: Vec<StoredDisplay>,
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::insert_into(display::table)
-                    .values(display_updates.values().collect::<Vec<_>>())
+                    .values(display_updates)
                     .on_conflict(display::object_type)
                     .do_update()
                     .set((
@@ -1846,8 +1846,8 @@ impl IndexerStore for PgIndexerStore {
         if display_updates.is_empty() {
             return Ok(());
         }
-
-        self.persist_display_updates(display_updates).await
+        self.persist_display_updates(display_updates.values().cloned().collect::<Vec<_>>())
+            .await
     }
 
     async fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError> {
@@ -1979,26 +1979,21 @@ impl IndexerStore for PgIndexerStore {
 
     async fn upload_display(&self, epoch_number: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
-
         let mut connection = self.pool.get().await?;
-
         let mut buffer = Cursor::new(Vec::new());
         {
             let mut writer = Writer::from_writer(&mut buffer);
-
             let displays = display::table
                 .load::<StoredDisplay>(&mut connection)
                 .await
                 .map_err(Into::into)
                 .context("Failed to get display from database")?;
-
             info!("Read {} displays", displays.len());
             writer
                 .write_record(["object_type", "id", "version", "bcs"])
                 .map_err(|_| {
                     IndexerError::GcsError("Failed to write display to csv".to_string())
                 })?;
-
             for display in displays {
                 writer
                     .write_record(&[
@@ -2009,7 +2004,6 @@ impl IndexerStore for PgIndexerStore {
                     ])
                     .map_err(|_| IndexerError::GcsError("Failed to write to csv".to_string()))?;
             }
-
             writer
                 .flush()
                 .map_err(|_| IndexerError::GcsError("Failed to flush csv".to_string()))?;
@@ -2030,7 +2024,6 @@ impl IndexerStore for PgIndexerStore {
             let remote_store = remote_store_config.make().map_err(|e| {
                 IndexerError::GcsError(format!("Failed to make GCS remote store: {}", e))
             })?;
-
             let path = Path::from(format!("display_{}.csv", epoch_number).as_str());
             put(&remote_store, &path, buffer.into_inner().into())
                 .await
@@ -2039,6 +2032,18 @@ impl IndexerStore for PgIndexerStore {
             warn!("Either GCS cred path or bucket is not set, skipping display upload.");
         }
         Ok(())
+    }
+
+    async fn restore_display(&self, bytes: bytes::Bytes) -> Result<(), IndexerError> {
+        let cursor = Cursor::new(bytes);
+        let mut csv_reader = ReaderBuilder::new().has_headers(true).from_reader(cursor);
+        let displays = csv_reader
+            .deserialize()
+            .collect::<Result<Vec<StoredDisplay>, csv::Error>>()
+            .map_err(|e| {
+                IndexerError::GcsError(format!("Failed to deserialize display records: {}", e))
+            })?;
+        self.persist_display_updates(displays).await
     }
 
     async fn get_network_total_transactions_by_end_of_epoch(

@@ -101,4 +101,5 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
     ) -> Result<u64, IndexerError>;
 
     async fn upload_display(&self, epoch: u64) -> Result<(), IndexerError>;
+    async fn restore_display(&self, bytes: bytes::Bytes) -> Result<(), IndexerError>;
 }
