@@ -572,7 +572,9 @@ impl Core {
                     {
                         self.peer_quorum_propogation_scores = {
                             let guard = self.dag_state.read();
-                            guard.calculate_scoring_subdag_certified_vote_scores()
+                            // TODO: Confirm distrubted vote scoring is best
+                            // guard.calculate_scoring_subdag_certified_vote_scores()
+                            guard.calculate_scoring_subdag_distributed_vote_scores()
                         };
 
                         self.leader_schedule
@@ -800,7 +802,7 @@ impl Core {
 
         let mut parent_round_quorum = StakeAggregator::<QuorumThreshold>::new();
 
-        // Check total stake of high scoring ancestors
+        // Check total stake of high scoring parent round ancestors
         for ancestor in high_score_ancestors.iter() {
             if ancestor.round() == clock_round - 1 {
                 parent_round_quorum.add(ancestor.author(), &self.context.committee);
@@ -854,6 +856,7 @@ impl Core {
                     if ancestor.round() == network_quorum_round {
                         // include this block
                         self.last_included_ancestors[excluded_author] = Some(ancestor.reference());
+                        ancestors_to_propose.push(ancestor.clone());
                         debug!("Included excluded ancestor {ancestor} with score {score} & propogation delay {} to propose for round {clock_round}", self.propagation_delay_per_authority[excluded_author]);
                         self.context
                             .metrics
@@ -861,7 +864,6 @@ impl Core {
                             .included_excluded_proposal_ancestors_count_by_authority
                             .with_label_values(&[block_hostname])
                             .inc();
-                        ancestors_to_propose.push(ancestor.clone());
                     } else {
                         // get ancestor from store that is at network round
                         let blocks =
@@ -888,6 +890,15 @@ impl Core {
                                 .inc();
                         } else {
                             warn!("No earlier ancestor found for excluded ancestor {ancestor} with score {score} to propose for round {clock_round}");
+
+                            debug!("Excluded low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
+                            self.context
+                                .metrics
+                                .node_metrics
+                                .excluded_proposal_ancestors_count_by_authority
+                                .with_label_values(&[block_hostname])
+                                .inc();
+                            continue;
                         }
                     }
 
