@@ -102,7 +102,7 @@
 		"test:unit": "vitest run unit __tests__",
 		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 180000 && vitest run e2e",
 		"test:e2e:nowait": "vitest run e2e",
-		"prepare:e2e": "docker-compose down && docker-compose up -d && cargo build --bin sui --features indexer --profile dev && cross-env RUST_LOG=warn,sui=error,anemo_tower=warn,consensus=off ../../target/debug/sui start --with-faucet --force-regenesis --with-indexer --pg-port 5435 --pg-db-name sui_indexer_v2 --with-graphql",
+		"prepare:e2e": "docker-compose down && docker-compose up -d && cargo build --bin sui --profile dev && cross-env RUST_LOG=warn,sui=error,anemo_tower=warn,consensus=off ../../target/debug/sui start --with-faucet --force-regenesis --with-indexer --pg-port 5435 --pg-db-name sui_indexer_v2 --with-graphql",
 		"prepublishOnly": "pnpm build",
 		"size": "size-limit",
 		"analyze": "size-limit --why",

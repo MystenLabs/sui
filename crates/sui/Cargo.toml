@@ -56,8 +56,8 @@ sui-cluster-test.workspace = true
 sui-execution = { path = "../../sui-execution" }
 sui-faucet.workspace = true
 sui-swarm-config.workspace = true
-sui-graphql-rpc = {workspace = true, optional = true}
-sui-indexer = { workspace = true, optional = true }
+sui-graphql-rpc = {workspace = true }
+sui-indexer = { workspace = true }
 sui-genesis-builder.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true
@@ -133,4 +133,3 @@ gas-profiler = [
     "sui-types/gas-profiler",
     "sui-execution/gas-profiler",
 ]
-indexer = ["dep:sui-indexer", "dep:sui-graphql-rpc"]

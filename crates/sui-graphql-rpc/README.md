@@ -68,7 +68,7 @@ For local dev, it might be useful to spin up an indexer as well. Instructions ar
 
 ## Compatibility with json-rpc
 
-`cargo run --bin sui --features indexer -- start --with-faucet --force-regenesis --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --with-graphql`
+`cargo run --bin sui -- start --with-faucet --force-regenesis --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --with-graphql`
 
 `pnpm --filter @mysten/graphql-transport test:e2e`
 
