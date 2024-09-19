@@ -66,8 +66,8 @@ impl TypeTag {
     ///   ground types.
     ///
     /// - Structs are represented as fully qualified type names, with or without the prefix "0x"
-    ///   depending on the `with_prefix` flag, e.g. "0x000...0001::string::String" or
-    ///   "0x000...000a::m::T<0x000... ...000a::n::U<u64>>".
+    ///   depending on the `with_prefix` flag, e.g. `0x000...0001::string::String` or
+    ///   `0x000...000a::m::T<0x000...000a::n::U<u64>>`.
     ///
     /// - Addresses are hex-encoded lowercase values of length 32 (zero-padded).
     ///
@@ -181,8 +181,8 @@ impl StructTag {
     /// Return a canonical string representation of the struct.
     ///
     /// - Structs are represented as fully qualified type names, with or without the prefix "0x"
-    ///   depending on the `with_prefix` flag, e.g. "0x000...0001::string::String" or
-    ///   "0x000...000a::m::T<0x000... ...000a::n::U<u64>>".
+    ///   depending on the `with_prefix` flag, e.g. `0x000...0001::string::String` or
+    ///   `0x000...000a::m::T<0x000...000a::n::U<u64>>`.
     ///
     /// - Addresses are hex-encoded lowercase values of length 32 (zero-padded).
     ///
