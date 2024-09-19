@@ -58,6 +58,34 @@ impl Client {
         self.inner.bcs(response).await.map(Response::into_inner)
     }
 
+    pub async fn get_full_checkpoints_batch(
+        &self,
+        start: CheckpointSequenceNumber,
+        batch_size: u32,
+        max_wait_ms: Option<u64>,
+    ) -> Result<Vec<CheckpointData>> {
+        let url = self.inner.url().join("checkpoints/full/batch")?;
+
+        let mut query = vec![
+            ("start", start.to_string()),
+            ("batch_size", batch_size.to_string()),
+        ];
+        if let Some(wait) = max_wait_ms {
+            query.push(("max_wait_ms", wait.to_string()));
+        }
+
+        let response = self
+            .inner
+            .client()
+            .get(url)
+            .query(&query)
+            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
+            .send()
+            .await?;
+
+        self.inner.bcs(response).await.map(Response::into_inner)
+    }
+
     pub async fn get_checkpoint_summary(
         &self,
         checkpoint_sequence_number: CheckpointSequenceNumber,
