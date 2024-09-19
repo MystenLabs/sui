@@ -212,7 +212,7 @@ impl TypeInput {
                     .map(|t| t.as_type_tag())
                     .collect::<Result<_>>()?;
                 T::Struct(Box::new(StructTag {
-                    address: address.clone(),
+                    address: *address,
                     module: Identifier::new(module.to_owned())?,
                     name: Identifier::new(name.to_owned())?,
                     type_params,
