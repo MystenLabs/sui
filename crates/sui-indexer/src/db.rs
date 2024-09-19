@@ -24,7 +24,7 @@ const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
 
 #[derive(Args, Debug, Clone)]
 pub struct ConnectionPoolConfig {
-    #[arg(long, default_value_t = 100)]
+    #[arg(long, default_value_t = 20)]
     #[arg(env = "DB_POOL_SIZE")]
     pub pool_size: u32,
     #[arg(long, value_parser = parse_duration, default_value = "30")]
