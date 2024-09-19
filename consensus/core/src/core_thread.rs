@@ -139,7 +139,8 @@ impl CoreThread {
                 _ = self.rx_subscriber_exists.changed() => {
                     let _scope = monitored_scope("CoreThread::loop::set_subscriber_exists");
                     let should_propose_before = self.core.should_propose();
-                    let exists = *self.rx_subscriber_exists.borrow();
+                    // let exists = *self.rx_subscriber_exists.borrow();
+                    let exists = true;
                     self.core.set_subscriber_exists(exists);
                     if !should_propose_before && self.core.should_propose() {
                         // If core cannnot propose before but can propose now, try to produce a new block to ensure liveness,
@@ -195,11 +196,11 @@ impl ChannelCoreThreadDispatcher {
 
         let (sender, receiver) =
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
-        let (tx_subscriber_exists, mut rx_subscriber_exists) = watch::channel(false);
+        let (tx_subscriber_exists, rx_subscriber_exists) = watch::channel(true);
         let (tx_propagation_delay_and_quorum_rounds, mut rx_propagation_delay_and_quorum_rounds) =
             watch::channel((0, vec![(0, 0); context.committee.size()]));
         let (tx_last_known_proposed_round, mut rx_last_known_proposed_round) = watch::channel(0);
-        rx_subscriber_exists.mark_unchanged();
+        // rx_subscriber_exists.mark_unchanged();
         rx_propagation_delay_and_quorum_rounds.mark_unchanged();
         rx_last_known_proposed_round.mark_unchanged();
         let core_thread = CoreThread {
