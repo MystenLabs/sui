@@ -728,7 +728,9 @@ impl DagState {
         self.last_committed_rounds.clone()
     }
 
-    /// The latest Garbage Collection (GC) round that is calculated based on the latest committed leader round. When GC is disabled that will return the genesis round.
+    /// The GC round is the highest round that blocks of equal or lower round are considered obsolete and no longer possible to be committed.
+    /// There is no meaning accepting any blocks with round <= gc_round. The Garbage Collection (GC) round is calculated based on the latest
+    /// committed leader round. When GC is disabled that will return the genesis round.
     pub(crate) fn gc_round(&self) -> Round {
         let gc_depth = self.context.protocol_config.gc_depth();
         if gc_depth > 0 {

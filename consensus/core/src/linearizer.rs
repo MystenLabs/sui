@@ -72,6 +72,8 @@ impl Linearizer {
                         .filter(|ancestor| {
                             // We skip the block if we already committed it or we reached a
                             // round that we already committed.
+                            // TODO: for Fast Path we need to ammend the recursion rule here and allow us to commit blocks all the way up to the `gc_round`.
+                            // Some additional work will be needed to make sure that we keep the uncommitted blocks up to the `gc_round` across commits.
                             !committed.contains(ancestor)
                                 && last_committed_rounds[ancestor.author] < ancestor.round
                         })
@@ -99,7 +101,7 @@ impl Linearizer {
         // The above code should have not yielded any blocks that are <= gc_round, but just to make sure that we'll never
         // commit anything that should be garbage collected we attempt to prune here as well.
         if gc_enabled {
-            to_commit.retain(|block| block.round() > gc_round);
+            assert!(to_commit.iter().all(|block| block.round() > gc_round), "No blocks <= {gc_round} should be committed. Commit index {}, leader round {}, blocks {to_commit:?}.", last_commit_index, leader_block_ref);
         }
 
         // Sort the blocks of the sub-dag blocks
