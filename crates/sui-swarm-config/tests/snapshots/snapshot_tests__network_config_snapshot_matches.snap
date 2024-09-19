@@ -105,6 +105,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Testnet:
@@ -114,6 +115,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Unknown:
@@ -263,6 +265,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Testnet:
@@ -272,6 +275,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Unknown:
@@ -421,6 +425,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Testnet:
@@ -430,6 +435,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Unknown:
@@ -579,6 +585,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Testnet:
@@ -588,6 +595,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Unknown:
@@ -737,6 +745,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Testnet:
@@ -746,6 +755,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Unknown:
@@ -895,6 +905,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Testnet:
@@ -904,6 +915,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Unknown:
@@ -1053,6 +1065,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Testnet:
@@ -1062,6 +1075,7 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
         - Playtron
         - Twitch
       Unknown:
