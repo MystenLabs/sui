@@ -1352,6 +1352,7 @@
                 "throughput_aware_consensus_submission": false,
                 "txn_base_cost_as_multiplier": false,
                 "upgraded_multisig_supported": false,
+                "validate_identifier_inputs": false,
                 "verify_legacy_zklogin_address": false,
                 "zklogin_auth": false
               },

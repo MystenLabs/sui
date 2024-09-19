@@ -32,7 +32,8 @@ use anyhow::{bail, Result};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::prelude::*;
 use ref_cast::RefCast;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_with::{DeserializeAs as _, SerializeAs};
 use std::{borrow::Borrow, fmt, ops::Deref, str::FromStr};
 
 /// Return true if this character can appear in a Move identifier.
@@ -89,10 +90,28 @@ pub(crate) static ALLOWED_NO_SELF_IDENTIFIERS: &str =
 /// An owned identifier.
 ///
 /// For more details, see the module level documentation.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
 pub struct Identifier(Box<str>);
 // An identifier cannot be mutated so use Box<str> instead of String -- it is 1 word smaller.
+
+impl Serialize for Identifier {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serde_with::DisplayFromStr::serialize_as(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Identifier {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_with::DisplayFromStr::deserialize_as(deserializer)
+    }
+}
 
 impl Identifier {
     /// Creates a new `Identifier` instance.
@@ -103,6 +122,17 @@ impl Identifier {
         } else {
             bail!("Invalid identifier '{}'", s);
         }
+    }
+
+    /// Creates a new `Identifier` from a string without checking if it is a valid identifier. This
+    /// should not be used under normal circumstances, but is used in cases where we need to
+    /// preserve backwards compatibility.
+    ///
+    /// # Safety
+    ///
+    /// Only use this function when preserving backwards compatibility.
+    pub unsafe fn new_unchecked(s: impl Into<Box<str>>) -> Self {
+        Self(s.into())
     }
 
     /// Returns true if this string is a valid identifier.

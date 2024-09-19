@@ -5,6 +5,8 @@ use async_graphql::*;
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{annotated_value as A, language_storage::TypeTag};
 use serde::{Deserialize, Serialize};
+use sui_types::base_types::MoveObjectType;
+use sui_types::type_input::TypeInput;
 
 use crate::data::package_resolver::PackageResolver;
 use crate::error::Error;
@@ -13,7 +15,7 @@ use super::open_move_type::MoveAbility;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MoveType {
-    pub native: TypeTag,
+    pub native: TypeInput,
 }
 
 scalar!(
@@ -56,11 +58,11 @@ type MoveTypeLayout =
     }
   | { enum: [{
           type: string,
-          variants: [{ 
+          variants: [{
               name: string,
               fields: [{ name: string, layout: MoveTypeLayout }],
           }]
-      }] 
+      }]
   }"
 );
 
@@ -140,38 +142,37 @@ impl MoveType {
         self.signature_impl().extend()
     }
 
-    /// Structured representation of the "shape" of values that match this type.
-    async fn layout(&self, ctx: &Context<'_>) -> Result<MoveTypeLayout> {
+    /// Structured representation of the "shape" of values that match this type. May return no
+    /// layout if the type is invalid.
+    async fn layout(&self, ctx: &Context<'_>) -> Result<Option<MoveTypeLayout>> {
         let resolver: &PackageResolver = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
 
-        MoveTypeLayout::try_from(self.layout_impl(resolver).await.extend()?).extend()
+        let Some(layout) = self.layout_impl(resolver).await.extend()? else {
+            return Ok(None);
+        };
+
+        Ok(Some(MoveTypeLayout::try_from(layout).extend()?))
     }
 
-    /// The abilities this concrete type has.
-    async fn abilities(&self, ctx: &Context<'_>) -> Result<Vec<MoveAbility>> {
+    /// The abilities this concrete type has. Returns no abilities if the type is invalid.
+    async fn abilities(&self, ctx: &Context<'_>) -> Result<Option<Vec<MoveAbility>>> {
         let resolver: &PackageResolver = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
 
-        Ok(self
-            .abilities_impl(resolver)
-            .await
-            .extend()?
-            .into_iter()
-            .map(MoveAbility::from)
-            .collect())
+        let Some(abilities) = self.abilities_impl(resolver).await.extend()? else {
+            return Ok(None);
+        };
+
+        Ok(Some(abilities.into_iter().map(MoveAbility::from).collect()))
     }
 }
 
 impl MoveType {
-    pub(crate) fn new(native: TypeTag) -> MoveType {
-        Self { native }
-    }
-
     fn signature_impl(&self) -> Result<MoveTypeSignature, Error> {
         MoveTypeSignature::try_from(self.native.clone())
     }
@@ -179,36 +180,60 @@ impl MoveType {
     pub(crate) async fn layout_impl(
         &self,
         resolver: &PackageResolver,
-    ) -> Result<A::MoveTypeLayout, Error> {
-        resolver
-            .type_layout(self.native.clone())
-            .await
-            .map_err(|e| {
-                Error::Internal(format!(
-                    "Error calculating layout for {}: {e}",
-                    self.native.to_canonical_display(/* with_prefix */ true),
-                ))
-            })
+    ) -> Result<Option<A::MoveTypeLayout>, Error> {
+        let Ok(tag) = self.native.as_type_tag() else {
+            return Ok(None);
+        };
+
+        Ok(Some(resolver.type_layout(tag).await.map_err(|e| {
+            Error::Internal(format!(
+                "Error calculating layout for {}: {e}",
+                self.native.to_canonical_display(/* with_prefix */ true),
+            ))
+        })?))
     }
 
     pub(crate) async fn abilities_impl(
         &self,
         resolver: &PackageResolver,
-    ) -> Result<AbilitySet, Error> {
-        resolver.abilities(self.native.clone()).await.map_err(|e| {
+    ) -> Result<Option<AbilitySet>, Error> {
+        let Ok(tag) = self.native.as_type_tag() else {
+            return Ok(None);
+        };
+
+        Ok(Some(resolver.abilities(tag).await.map_err(|e| {
             Error::Internal(format!(
                 "Error calculating abilities for {}: {e}",
                 self.native.to_canonical_string(/* with_prefix */ true),
             ))
-        })
+        })?))
     }
 }
 
-impl TryFrom<TypeTag> for MoveTypeSignature {
+impl From<MoveObjectType> for MoveType {
+    fn from(obj: MoveObjectType) -> Self {
+        let tag: TypeTag = obj.into();
+        Self { native: tag.into() }
+    }
+}
+
+impl From<TypeTag> for MoveType {
+    fn from(tag: TypeTag) -> Self {
+        Self { native: tag.into() }
+    }
+}
+
+impl From<TypeInput> for MoveType {
+    fn from(native: TypeInput) -> Self {
+        Self { native }
+    }
+}
+
+impl TryFrom<TypeInput> for MoveTypeSignature {
     type Error = Error;
 
-    fn try_from(tag: TypeTag) -> Result<Self, Error> {
-        use TypeTag as T;
+    fn try_from(tag: TypeInput) -> Result<Self, Error> {
+        use TypeInput as T;
 
         Ok(match tag {
             T::Signer => return Err(unexpected_signer_error()),
@@ -227,8 +252,8 @@ impl TryFrom<TypeTag> for MoveTypeSignature {
 
             T::Struct(s) => Self::Datatype {
                 package: s.address.to_canonical_string(/* with_prefix */ true),
-                module: s.module.to_string(),
-                type_: s.name.to_string(),
+                module: s.module,
+                type_: s.name,
                 type_parameters: s
                     .type_params
                     .into_iter()
@@ -329,7 +354,7 @@ mod tests {
 
     fn signature(repr: impl Into<String>) -> Result<MoveTypeSignature, Error> {
         let tag = TypeTag::from_str(repr.into().as_str()).unwrap();
-        MoveType::new(tag).signature_impl()
+        MoveType::from(tag).signature_impl()
     }
 
     #[test]

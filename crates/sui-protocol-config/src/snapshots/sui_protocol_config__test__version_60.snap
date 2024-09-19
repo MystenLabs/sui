@@ -67,6 +67,7 @@ feature_flags:
   rethrow_serialization_type_layout_errors: true
   consensus_distributed_vote_scoring_strategy: true
   consensus_round_prober: true
+  validate_identifier_inputs: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -333,3 +334,4 @@ checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: true
 max_accumulated_txn_cost_per_object_in_mysticeti_commit: 10
+

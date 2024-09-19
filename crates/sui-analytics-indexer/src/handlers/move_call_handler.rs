@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use move_core_types::identifier::IdentStr;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
@@ -80,7 +79,7 @@ impl MoveCallHandler {
         checkpoint: u64,
         timestamp_ms: u64,
         transaction_digest: String,
-        move_calls: &[(&ObjectID, &IdentStr, &IdentStr)],
+        move_calls: &[(&ObjectID, &str, &str)],
         state: &mut State,
     ) {
         for (package, module, function) in move_calls.iter() {

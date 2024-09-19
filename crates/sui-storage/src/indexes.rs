@@ -11,7 +11,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use itertools::Itertools;
-use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -461,7 +460,7 @@ impl IndexStore {
         sender: SuiAddress,
         active_inputs: impl Iterator<Item = ObjectID>,
         mutated_objects: impl Iterator<Item = (ObjectRef, Owner)> + Clone,
-        move_functions: impl Iterator<Item = (ObjectID, Identifier, Identifier)> + Clone,
+        move_functions: impl Iterator<Item = (ObjectID, String, String)> + Clone,
         events: &TransactionEvents,
         object_index_changes: ObjectIndexChanges,
         digest: &TransactionDigest,
@@ -503,12 +502,8 @@ impl IndexStore {
 
         batch.insert_batch(
             &self.tables.transactions_by_move_function,
-            move_functions.map(|(obj_id, module, function)| {
-                (
-                    (obj_id, module.to_string(), function.to_string(), sequence),
-                    *digest,
-                )
-            }),
+            move_functions
+                .map(|(obj_id, module, function)| ((obj_id, module, function, sequence), *digest)),
         )?;
 
         batch.insert_batch(

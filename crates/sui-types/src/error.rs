@@ -287,6 +287,9 @@ pub enum UserInputError {
 
     #[error("Coin type is globally paused for use: {coin_type}")]
     CoinTypeGlobalPause { coin_type: String },
+
+    #[error("Invalid identifier found in the transaction: {error}")]
+    InvalidIdentifier { error: String },
 }
 
 #[derive(

@@ -2497,13 +2497,14 @@ type MoveType {
 	"""
 	signature: MoveTypeSignature!
 	"""
-	Structured representation of the "shape" of values that match this type.
+	Structured representation of the "shape" of values that match this type. May return no
+	layout if the type is invalid.
 	"""
-	layout: MoveTypeLayout!
+	layout: MoveTypeLayout
 	"""
-	The abilities this concrete type has.
+	The abilities this concrete type has. Returns no abilities if the type is invalid.
 	"""
-	abilities: [MoveAbility!]!
+	abilities: [MoveAbility!]
 }
 
 """
@@ -2522,11 +2523,11 @@ type MoveTypeLayout =
     }
   | { enum: [{
           type: string,
-          variants: [{ 
+          variants: [{
               name: string,
               fields: [{ name: string, layout: MoveTypeLayout }],
           }]
-      }] 
+      }]
   }
 """
 scalar MoveTypeLayout
