@@ -156,7 +156,7 @@ Command:
       MakeMoveVec:
         TUPLE:
           - OPTION:
-              TYPENAME: TypeTag
+              TYPENAME: TypeInput
           - SEQ:
               TYPENAME: Argument
     6:
@@ -542,8 +542,6 @@ IDOperation:
       Created: UNIT
     2:
       Deleted: UNIT
-Identifier:
-  NEWTYPESTRUCT: STR
 Intent:
   STRUCT:
     - scope: U8
@@ -569,8 +567,7 @@ ModuleId:
   STRUCT:
     - address:
         TYPENAME: AccountAddress
-    - name:
-        TYPENAME: Identifier
+    - name: STR
 MoveLocation:
   STRUCT:
     - module:
@@ -760,13 +757,11 @@ ProgrammableMoveCall:
   STRUCT:
     - package:
         TYPENAME: ObjectID
-    - module:
-        TYPENAME: Identifier
-    - function:
-        TYPENAME: Identifier
+    - module: STR
+    - function: STR
     - type_arguments:
         SEQ:
-          TYPENAME: TypeTag
+          TYPENAME: TypeInput
     - arguments:
         SEQ:
           TYPENAME: Argument
@@ -828,14 +823,21 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+StructInput:
+  STRUCT:
+    - address:
+        TYPENAME: AccountAddress
+    - module: STR
+    - name: STR
+    - type_args:
+        SEQ:
+          TYPENAME: TypeInput
 StructTag:
   STRUCT:
     - address:
         TYPENAME: AccountAddress
-    - module:
-        TYPENAME: Identifier
-    - name:
-        TYPENAME: Identifier
+    - module: STR
+    - name: STR
     - type_args:
         SEQ:
           TYPENAME: TypeTag
@@ -1038,6 +1040,34 @@ TypeArgumentError:
       TypeNotFound: UNIT
     1:
       ConstraintNotSatisfied: UNIT
+TypeInput:
+  ENUM:
+    0:
+      bool: UNIT
+    1:
+      u8: UNIT
+    2:
+      u64: UNIT
+    3:
+      u128: UNIT
+    4:
+      address: UNIT
+    5:
+      signer: UNIT
+    6:
+      vector:
+        NEWTYPE:
+          TYPENAME: TypeInput
+    7:
+      struct:
+        NEWTYPE:
+          TYPENAME: StructInput
+    8:
+      u16: UNIT
+    9:
+      u32: UNIT
+    10:
+      u256: UNIT
 TypeOrigin:
   STRUCT:
     - module_name: STR

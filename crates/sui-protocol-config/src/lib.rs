@@ -529,6 +529,10 @@ struct FeatureFlags {
     // Probe rounds received by peers from every authority.
     #[serde(skip_serializing_if = "is_false")]
     consensus_round_prober: bool,
+
+    // Validate identifier inputs separately
+    #[serde(skip_serializing_if = "is_false")]
+    validate_identifier_inputs: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1586,6 +1590,10 @@ impl ProtocolConfig {
 
     pub fn consensus_round_prober(&self) -> bool {
         self.feature_flags.consensus_round_prober
+    }
+
+    pub fn validate_identifier_inputs(&self) -> bool {
+        self.feature_flags.validate_identifier_inputs
     }
 }
 
@@ -2762,6 +2770,7 @@ impl ProtocolConfig {
                 }
                 60 => {
                     cfg.max_type_to_layout_nodes = Some(512);
+                    cfg.feature_flags.validate_identifier_inputs = true;
                 }
                 // Use this template when making changes:
                 //

@@ -31,7 +31,6 @@ use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::Command;
 use sui_types::transaction::ObjectArg;
-use sui_types::transaction::ProgrammableMoveCall;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionKind;
@@ -596,13 +595,13 @@ where
             CallArg::Pure(bcs::to_bytes(&source_chain_id).unwrap()),
             CallArg::Pure(bcs::to_bytes(&seq_number).unwrap()),
         ],
-        commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
-            package: BRIDGE_PACKAGE_ID,
-            module: Identifier::new("bridge").unwrap(),
-            function: Identifier::new(function_name).unwrap(),
-            type_arguments: vec![],
-            arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
-        }))],
+        commands: vec![Command::move_call(
+            BRIDGE_PACKAGE_ID,
+            Identifier::new("bridge").unwrap(),
+            Identifier::new(function_name).unwrap(),
+            vec![],
+            vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
+        )],
     };
     let kind = TransactionKind::programmable(pt);
     let resp = sui_client

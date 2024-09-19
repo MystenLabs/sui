@@ -459,8 +459,8 @@ mod sim_only_tests {
                 &cluster,
                 ProgrammableMoveCall {
                     package: sui_extra,
-                    module: ident_str!("msim_extra_1").to_owned(),
-                    function: ident_str!("canary").to_owned(),
+                    module: "msim_extra_1".to_owned(),
+                    function: "canary".to_owned(),
                     type_arguments: vec![],
                     arguments: vec![],
                 }
@@ -489,8 +489,8 @@ mod sim_only_tests {
             cluster,
             ProgrammableMoveCall {
                 package: SUI_SYSTEM_PACKAGE_ID,
-                module: ident_str!("msim_extra_1").to_owned(),
-                function: ident_str!("canary").to_owned(),
+                module: "msim_extra_1".to_owned(),
+                function: "canary".to_owned(),
                 type_arguments: vec![],
                 arguments: vec![],
             },

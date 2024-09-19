@@ -7321,6 +7321,7 @@ dependencies = [
  "ref-cast",
  "serde",
  "serde_bytes",
+ "serde_with 3.9.0",
  "thiserror",
  "uint",
 ]
