@@ -19,9 +19,9 @@ round_prober_interval_ms: 5000
 round_prober_request_timeout_ms: 2000
 propagation_delay_stop_proposal_threshold: 20
 dag_state_cached_rounds: 500
-commit_sync_parallel_fetches: 20
+commit_sync_parallel_fetches: 8
 commit_sync_batch_size: 100
-commit_sync_batches_ahead: 80
+commit_sync_batches_ahead: 32
 anemo:
   excessive_message_size: 8388608
 tonic:

@@ -711,7 +711,7 @@ mod tests {
         let parameters = Parameters {
             db_path: db_dir.path().to_path_buf(),
             dag_state_cached_rounds: 5,
-            commit_sync_parallel_fetches: 3,
+            commit_sync_parallel_fetches: 2,
             commit_sync_batch_size: 3,
             sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
