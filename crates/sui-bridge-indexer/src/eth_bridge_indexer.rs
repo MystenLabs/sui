@@ -415,69 +415,74 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
         let bridge_event = eth_bridge_event.unwrap();
         let timestamp_ms = block.timestamp.as_u64() * 1000;
         let gas = transaction.gas;
+        let mut processed_txn_data = Vec::new();
+        let txn_sender = transaction.from.as_bytes().to_vec();
+        let txn_hash = transaction.hash.as_bytes().to_vec();
 
-        let transfer = match bridge_event {
+        match bridge_event {
             EthBridgeEvent::EthSuiBridgeEvents(bridge_event) => match bridge_event {
                 EthSuiBridgeEvents::TokensDepositedFilter(bridge_event) => {
                     info!("Observed Eth Deposit at block: {}", log.block_number());
                     self.metrics.total_eth_token_deposited.inc();
-                    ProcessedTxnData::TokenTransfer(TokenTransfer {
+                    processed_txn_data.push(ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.source_chain_id,
                         nonce: bridge_event.nonce,
                         block_height: log.block_number(),
                         timestamp_ms,
-                        txn_hash: transaction.hash.as_bytes().to_vec(),
-                        txn_sender: bridge_event.sender_address.as_bytes().to_vec(),
+                        txn_hash: txn_hash.clone(),
+                        txn_sender: txn_sender.clone(),
                         status: TokenTransferStatus::Deposited,
                         gas_usage: gas.as_u64() as i64,
                         data_source: BridgeDataSource::Eth,
                         is_finalized,
                         data: Some(TokenTransferData {
-                            sender_address: bridge_event.sender_address.as_bytes().to_vec(),
+                            sender_address: txn_sender.clone(),
                             destination_chain: bridge_event.destination_chain_id,
                             recipient_address: bridge_event.recipient_address.to_vec(),
                             token_id: bridge_event.token_id,
                             amount: bridge_event.sui_adjusted_amount,
                             is_finalized,
                         }),
-                    })
+                    }));
                 }
                 EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
                     info!("Observed Eth Claim at block: {}", log.block_number());
                     self.metrics.total_eth_token_transfer_claimed.inc();
-                    ProcessedTxnData::TokenTransfer(TokenTransfer {
+                    processed_txn_data.push(ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.source_chain_id,
                         nonce: bridge_event.nonce,
                         block_height: log.block_number(),
                         timestamp_ms,
-                        txn_hash: transaction.hash.as_bytes().to_vec(),
-                        txn_sender: bridge_event.sender_address.to_vec(),
+                        txn_hash: txn_hash.clone(),
+                        txn_sender: txn_sender.clone(),
                         status: TokenTransferStatus::Claimed,
                         gas_usage: gas.as_u64() as i64,
                         data_source: BridgeDataSource::Eth,
                         data: None,
                         is_finalized,
-                    })
+                    }));
                 }
                 EthSuiBridgeEvents::PausedFilter(_) => {
                     info!("Observed Eth Pause at block: {}", log.block_number());
 
-                    ProcessedTxnData::GovernanceAction(GovernanceAction {
-                        tx_digest: transaction.hash.as_bytes().to_vec(),
-                        sender: transaction.from.as_bytes().to_vec(),
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::EmergencyOperation,
-                    })
+                        data: serde_json::to_value(bridge_event).unwrap(),
+                    }));
                 }
                 EthSuiBridgeEvents::UnpausedFilter(_) => {
                     info!("Observed Eth Unpause at block: {}", log.block_number());
 
-                    ProcessedTxnData::GovernanceAction(GovernanceAction {
-                        tx_digest: transaction.hash.as_bytes().to_vec(),
-                        sender: transaction.from.as_bytes().to_vec(),
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::EmergencyOperation,
-                    })
+                        data: serde_json::to_value(bridge_event).unwrap(),
+                    }));
                 }
                 EthSuiBridgeEvents::UpgradedFilter(_) => {
                     info!(
@@ -485,17 +490,15 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         log.block_number()
                     );
 
-                    ProcessedTxnData::GovernanceAction(GovernanceAction {
-                        tx_digest: transaction.hash.as_bytes().to_vec(),
-                        sender: transaction.from.as_bytes().to_vec(),
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::UpgradeEVMContract,
-                    })
+                        data: serde_json::to_value(bridge_event).unwrap(),
+                    }));
                 }
-                EthSuiBridgeEvents::InitializedFilter(_) => {
-                    self.metrics.total_eth_bridge_txn_other.inc();
-                    return Ok(vec![]);
-                }
+                EthSuiBridgeEvents::InitializedFilter(_) => {}
             },
             EthBridgeEvent::EthBridgeCommitteeEvents(bridge_event) => match bridge_event {
                 EthBridgeCommitteeEvents::BlocklistUpdatedFilter(_) => {
@@ -504,12 +507,13 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         log.block_number()
                     );
 
-                    ProcessedTxnData::GovernanceAction(GovernanceAction {
-                        tx_digest: transaction.hash.as_bytes().to_vec(),
-                        sender: transaction.from.as_bytes().to_vec(),
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::UpdateCommitteeBlocklist,
-                    })
+                        data: serde_json::to_value(bridge_event).unwrap(),
+                    }));
                 }
                 EthBridgeCommitteeEvents::UpgradedFilter(_) => {
                     info!(
@@ -517,17 +521,15 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         log.block_number()
                     );
 
-                    ProcessedTxnData::GovernanceAction(GovernanceAction {
-                        tx_digest: transaction.hash.as_bytes().to_vec(),
-                        sender: transaction.from.as_bytes().to_vec(),
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::UpgradeEVMContract,
-                    })
+                        data: serde_json::to_value(bridge_event).unwrap(),
+                    }));
                 }
-                EthBridgeCommitteeEvents::InitializedFilter(_) => {
-                    self.metrics.total_eth_bridge_txn_other.inc();
-                    return Ok(vec![]);
-                }
+                EthBridgeCommitteeEvents::InitializedFilter(_) => {}
             },
             EthBridgeEvent::EthBridgeLimiterEvents(bridge_event) => match bridge_event {
                 EthBridgeLimiterEvents::LimitUpdatedFilter(_) => {
@@ -536,12 +538,13 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         log.block_number()
                     );
 
-                    ProcessedTxnData::GovernanceAction(GovernanceAction {
-                        tx_digest: transaction.hash.as_bytes().to_vec(),
-                        sender: transaction.from.as_bytes().to_vec(),
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::UpdateBridgeLimit,
-                    })
+                        data: serde_json::to_value(bridge_event).unwrap(),
+                    }));
                 }
                 EthBridgeLimiterEvents::UpgradedFilter(_) => {
                     info!(
@@ -549,19 +552,17 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         log.block_number()
                     );
 
-                    ProcessedTxnData::GovernanceAction(GovernanceAction {
-                        tx_digest: transaction.hash.as_bytes().to_vec(),
-                        sender: transaction.from.as_bytes().to_vec(),
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::UpgradeEVMContract,
-                    })
+                        data: serde_json::to_value(bridge_event).unwrap(),
+                    }));
                 }
                 EthBridgeLimiterEvents::InitializedFilter(_)
                 | EthBridgeLimiterEvents::HourlyTransferAmountUpdatedFilter(_)
-                | EthBridgeLimiterEvents::OwnershipTransferredFilter(_) => {
-                    self.metrics.total_eth_bridge_txn_other.inc();
-                    return Ok(vec![]);
-                }
+                | EthBridgeLimiterEvents::OwnershipTransferredFilter(_) => {}
             },
             EthBridgeEvent::EthBridgeConfigEvents(bridge_event) => match bridge_event {
                 EthBridgeConfigEvents::TokenPriceUpdatedFilter(_) => {
@@ -570,22 +571,24 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         log.block_number()
                     );
 
-                    ProcessedTxnData::GovernanceAction(GovernanceAction {
-                        tx_digest: transaction.hash.as_bytes().to_vec(),
-                        sender: transaction.from.as_bytes().to_vec(),
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::UpdateTokenPrices,
-                    })
+                        data: serde_json::to_value(bridge_event).unwrap(),
+                    }));
                 }
                 EthBridgeConfigEvents::TokenAddedFilter(_) => {
                     info!("Observed Eth AddSuiTokens at block: {}", log.block_number());
 
-                    ProcessedTxnData::GovernanceAction(GovernanceAction {
-                        tx_digest: transaction.hash.as_bytes().to_vec(),
-                        sender: transaction.from.as_bytes().to_vec(),
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::AddEVMTokens,
-                    })
+                        data: serde_json::to_value(bridge_event).unwrap(),
+                    }));
                 }
                 EthBridgeConfigEvents::UpgradedFilter(_) => {
                     info!(
@@ -593,23 +596,18 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         log.block_number()
                     );
 
-                    ProcessedTxnData::GovernanceAction(GovernanceAction {
-                        tx_digest: transaction.hash.as_bytes().to_vec(),
-                        sender: transaction.from.as_bytes().to_vec(),
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::UpgradeEVMContract,
-                    })
+                        data: serde_json::to_value(bridge_event).unwrap(),
+                    }));
                 }
-                EthBridgeConfigEvents::InitializedFilter(_) => {
-                    self.metrics.total_eth_bridge_txn_other.inc();
-                    return Ok(vec![]);
-                }
+                EthBridgeConfigEvents::InitializedFilter(_) => {}
             },
-            EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => {
-                self.metrics.total_eth_bridge_txn_other.inc();
-                return Ok(vec![]);
-            }
+            EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => {}
         };
-        Ok(vec![transfer])
+        Ok(processed_txn_data)
     }
 }

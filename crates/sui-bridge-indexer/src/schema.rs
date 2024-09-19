@@ -65,6 +65,7 @@ diesel::table! {
         sender_address -> Bytea,
         timestamp_ms -> Int8,
         action -> Text,
+        data -> Jsonb,
     }
 }
 

@@ -5,7 +5,9 @@ use anyhow::Error;
 use tracing::info;
 
 use sui_bridge::events::{
-    MoveTokenDepositedEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
+    EmergencyOpEvent, MoveBlocklistValidatorEvent, MoveTokenDepositedEvent,
+    MoveTokenRegistrationEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
+    UpdateRouteLimitEvent, UpdateTokenPriceEvent,
 };
 use sui_indexer_builder::indexer_builder::DataMapper;
 use sui_types::effects::TransactionEffectsAPI;
@@ -148,52 +150,62 @@ fn process_sui_event(
             }
             "UpdateRouteLimitEvent" => {
                 info!("Observed Sui Route Limit Update {:?}", ev);
+                let event: UpdateRouteLimitEvent = bcs::from_bytes(&ev.contents)?;
 
                 Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
                     tx_digest: tx.transaction.digest().inner().to_vec(),
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
                     action: GovernanceActionType::UpdateBridgeLimit,
+                    data: serde_json::to_value(event).unwrap(),
                 }))
             }
             "EmergencyOpEvent" => {
                 info!("Observed Sui Emergency Op {:?}", ev);
+                let event: EmergencyOpEvent = bcs::from_bytes(&ev.contents)?;
 
                 Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
                     tx_digest: tx.transaction.digest().inner().to_vec(),
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
                     action: GovernanceActionType::EmergencyOperation,
+                    data: serde_json::to_value(event).unwrap(),
                 }))
             }
             "BlocklistValidatorEvent" => {
                 info!("Observed Sui Blocklist Validator {:?}", ev);
+                let event: MoveBlocklistValidatorEvent = bcs::from_bytes(&ev.contents)?;
 
                 Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
                     tx_digest: tx.transaction.digest().inner().to_vec(),
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
                     action: GovernanceActionType::UpdateCommitteeBlocklist,
+                    data: serde_json::to_value(event).unwrap(),
                 }))
             }
             "TokenRegistrationEvent" => {
                 info!("Observed Sui Token Registration {:?}", ev);
+                let event: MoveTokenRegistrationEvent = bcs::from_bytes(&ev.contents)?;
 
                 Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
                     tx_digest: tx.transaction.digest().inner().to_vec(),
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
                     action: GovernanceActionType::AddSuiTokens,
+                    data: serde_json::to_value(event).unwrap(),
                 }))
             }
             "UpdateTokenPriceEvent" => {
                 info!("Observed Sui Token Price Update {:?}", ev);
+                let event: UpdateTokenPriceEvent = bcs::from_bytes(&ev.contents)?;
 
                 Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
                     tx_digest: tx.transaction.digest().inner().to_vec(),
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
                     action: GovernanceActionType::UpdateTokenPrices,
+                    data: serde_json::to_value(event).unwrap(),
                 }))
             }
             _ => {

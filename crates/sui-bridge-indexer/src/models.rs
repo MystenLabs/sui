@@ -88,4 +88,5 @@ pub struct GovernanceAction {
     pub sender_address: Vec<u8>,
     pub timestamp_ms: i64,
     pub action: String,
+    pub data: serde_json::Value,
 }

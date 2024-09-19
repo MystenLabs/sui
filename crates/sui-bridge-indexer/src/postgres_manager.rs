@@ -3,6 +3,7 @@
 
 use crate::models::SuiProgressStore;
 use crate::schema::governance_actions;
+use crate::schema::sui_progress_store::txn_digest;
 use crate::schema::{sui_error_transactions, token_transfer_data};
 use crate::{schema, schema::token_transfer, ProcessedTxnData};
 use diesel::query_dsl::methods::FilterDsl;

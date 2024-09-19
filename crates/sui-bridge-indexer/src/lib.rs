@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::{Display, Formatter};
+use strum_macros::Display;
 
 use sui_types::base_types::{SuiAddress, TransactionDigest};
 
@@ -60,6 +61,7 @@ pub struct GovernanceAction {
     sender: Vec<u8>,
     timestamp_ms: u64,
     action: GovernanceActionType,
+    data: serde_json::Value,
 }
 
 #[derive(Clone)]
@@ -124,6 +126,7 @@ impl GovernanceAction {
             sender_address: self.sender.to_vec(),
             timestamp_ms: self.timestamp_ms as i64,
             action: self.action.to_string(),
+            data: self.data.clone(),
         }
     }
 }
@@ -146,7 +149,7 @@ impl Display for TokenTransferStatus {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Display)]
 pub(crate) enum GovernanceActionType {
     UpdateCommitteeBlocklist,
     EmergencyOperation,
@@ -155,21 +158,6 @@ pub(crate) enum GovernanceActionType {
     UpgradeEVMContract,
     AddSuiTokens,
     AddEVMTokens,
-}
-
-impl Display for GovernanceActionType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let str = match self {
-            GovernanceActionType::UpdateCommitteeBlocklist => "UpdateCommitteeBlocklist",
-            GovernanceActionType::EmergencyOperation => "EmergencyOperation",
-            GovernanceActionType::UpdateBridgeLimit => "UpdateBridgeLimit",
-            GovernanceActionType::UpdateTokenPrices => "UpdateTokenPrices",
-            GovernanceActionType::UpgradeEVMContract => "UpgradeEVMContract",
-            GovernanceActionType::AddSuiTokens => "AddSuiTokens",
-            GovernanceActionType::AddEVMTokens => "AddEVMTokens",
-        };
-        write!(f, "{str}")
-    }
 }
 
 #[derive(Clone)]
