@@ -44,5 +44,4 @@ lazy_natives = []
 gas-profiler = [
     "move-vm-config/gas-profiler",
     "move-vm-profiler/gas-profiler",
-    "move-vm-types/gas-profiler",
 ]
