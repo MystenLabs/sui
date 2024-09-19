@@ -150,6 +150,10 @@ async fn commit_checkpoints<S>(
     let packages_batch = packages_batch.into_iter().flatten().collect::<Vec<_>>();
     let checkpoint_num = checkpoint_batch.len();
     let tx_count = tx_batch.len();
+    let raw_checkpoints_batch = checkpoint_batch
+        .iter()
+        .map(|c| c.into())
+        .collect::<Vec<_>>();
 
     {
         let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
@@ -168,6 +172,7 @@ async fn commit_checkpoints<S>(
             state.persist_object_history(object_history_changes_batch.clone()),
             state.persist_full_objects_history(object_history_changes_batch.clone()),
             state.persist_object_versions(object_versions_batch.clone()),
+            state.persist_raw_checkpoints(raw_checkpoints_batch),
         ];
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));

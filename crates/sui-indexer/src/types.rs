@@ -16,8 +16,8 @@ use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::effects::TransactionEffects;
 use sui_types::event::SystemEpochInfoEvent;
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointCommitment, CheckpointDigest, CheckpointSequenceNumber,
-    EndOfEpochData,
+    CertifiedCheckpointSummary, CheckpointCommitment, CheckpointContents, CheckpointDigest,
+    CheckpointSequenceNumber, EndOfEpochData,
 };
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
@@ -29,6 +29,7 @@ pub type IndexerResult<T> = Result<T, IndexerError>;
 
 #[derive(Debug, Default)]
 pub struct IndexedCheckpoint {
+    // TODO: A lot of fields are now redundant with certified_checkpoint and checkpoint_contents.
     pub sequence_number: u64,
     pub checkpoint_digest: CheckpointDigest,
     pub epoch: u64,
@@ -48,12 +49,15 @@ pub struct IndexedCheckpoint {
     pub end_of_epoch: bool,
     pub min_tx_sequence_number: u64,
     pub max_tx_sequence_number: u64,
+    // FIXME: Remove the Default derive and make these fields mandatory.
+    pub certified_checkpoint: Option<CertifiedCheckpointSummary>,
+    pub checkpoint_contents: Option<CheckpointContents>,
 }
 
 impl IndexedCheckpoint {
     pub fn from_sui_checkpoint(
-        checkpoint: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
-        contents: &sui_types::messages_checkpoint::CheckpointContents,
+        checkpoint: &CertifiedCheckpointSummary,
+        contents: &CheckpointContents,
         successful_tx_num: usize,
     ) -> Self {
         let total_gas_cost = checkpoint.epoch_rolling_gas_cost_summary.computation_cost as i64
@@ -86,6 +90,8 @@ impl IndexedCheckpoint {
             checkpoint_commitments: checkpoint.checkpoint_commitments.clone(),
             min_tx_sequence_number,
             max_tx_sequence_number,
+            certified_checkpoint: Some(checkpoint.clone()),
+            checkpoint_contents: Some(contents.clone()),
         }
     }
 }

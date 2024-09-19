@@ -179,7 +179,7 @@ impl IndexerFormalSnapshotRestorer {
                                     match object {
                                         LiveObject::Normal(obj) => {
                                             // TODO: placeholder values for df_info and checkpoint_seq_num,
-                                            // will clean it up when the columne cleanup is done.
+                                            // will clean it up when the column cleanup is done.
                                             let indexed_object =
                                                 IndexedObject::from_object(0, obj, None);
                                             move_objects.push(indexed_object);
@@ -274,6 +274,8 @@ impl IndexerFormalSnapshotRestorer {
             .persist_chain_identifier(chain_identifier.into_inner().to_vec())
             .await?;
         assert!(next_checkpoint_after_epoch > 0);
+        // FIXME: This is a temporary hack to add a checkpoint watermark.
+        // Once we have proper watermark tables, we should remove the following code.
         let last_cp = IndexedCheckpoint {
             sequence_number: next_checkpoint_after_epoch - 1,
             ..Default::default()

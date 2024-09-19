@@ -10,6 +10,7 @@ use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
 use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
+use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use crate::types::{
     EventIndex, IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
 };
@@ -106,5 +107,11 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
     ) -> Result<u64, IndexerError>;
 
     async fn upload_display(&self, epoch: u64) -> Result<(), IndexerError>;
+
     async fn restore_display(&self, bytes: bytes::Bytes) -> Result<(), IndexerError>;
+
+    async fn persist_raw_checkpoints(
+        &self,
+        checkpoints: Vec<StoredRawCheckpoint>,
+    ) -> Result<(), IndexerError>;
 }
