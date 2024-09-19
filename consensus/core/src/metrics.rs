@@ -515,7 +515,7 @@ impl NodeMetrics {
                 "The number of missing ancestors by ancestor authority across received blocks",
                 &["authority"],
                 registry,
-            ).unwrap(),  
+            ).unwrap(),
             block_manager_gc_unsuspended_blocks: register_int_counter_vec_with_registry!(
                 "block_manager_gc_unsuspended_blocks",
                 "The number of unsuspended blocks garbage collected by the block manager counted by block's source authority",
