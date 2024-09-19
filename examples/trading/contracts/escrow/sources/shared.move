@@ -65,6 +65,7 @@ module escrow::shared {
 
     // === Public Functions ===
 
+    //docs::#noemit
     public fun create<T: key + store>(
         escrowed: T,
         exchange_key: ID,
@@ -78,6 +79,7 @@ module escrow::shared {
             exchange_key,
         };
 
+        //docs::#noemit-pause
         event::emit(EscrowCreated {
             escrow_id: object::id(&escrow),
             key_id: exchange_key,
@@ -85,11 +87,13 @@ module escrow::shared {
             recipient,
             item_id: object::id(&escrowed),
         });
+        //docs::#noemit-resume
 
         dof::add(&mut escrow.id, EscrowedObjectKey {}, escrowed);
 
         transfer::public_share_object(escrow);
     }
+    //docs::/#noemit
 
     /// The `recipient` of the escrow can exchange `obj` with the escrowed item
     public fun swap<T: key + store, U: key + store>(

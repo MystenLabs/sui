@@ -12,23 +12,24 @@ export default function EffortBox(props) {
   if (!props.effort) {
     return;
   }
-  const effort =
-    props.effort[0] === "s"
-      ? "basic"
-      : props.effort[0] === "m"
-        ? "involved"
-        : "advanced";
-  const time =
-    effort === "basic"
-      ? "30-45 minutes"
-      : effort === "involved"
-        ? "1-1.5 hours"
-        : "2 hours or more";
+
+  function timeAndEffort(effort: string): [string, string] {
+    if (effort[0] === "s") {
+      return ["30-45 minutes", "basic"];
+    } else if (effort[0] === "m") {
+      return ["1-1.5 hours", "involved"];
+    } else {
+      return ["2 hours or more", "advanced"];
+    }
+  }
+
+  const [time, effort] = timeAndEffort(props.effort);
   return (
     <Admonition
-      title="Effort"
+      title="Expected effort"
       icon="🧠"
       className="!my-12 bg-sui-ghost-white border-sui-ghost-dark dark:bg-sui-ghost-dark dark:border-sui-ghost-white"
+      type="info"
     >
       <p className="pt-2">
         This guide is rated as <span className="font-bold">{effort}</span>.
