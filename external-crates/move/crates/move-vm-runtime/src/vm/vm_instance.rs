@@ -2,15 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, type_cache::TypeCache},
+    cache::{arena::ArenaPointer, vm_cache::VMCache},
     jit::runtime::ast::{Function, VTableKey},
     natives::extensions::NativeContextExtensions,
-    on_chain::data_cache::TransactionDataCache,
+    on_chain::{ast::PackageStorageId, data_cache::TransactionDataCache},
     shared::serialization::{SerializedReturnValues, *},
-    vm::interpreter,
-    vm::runtime_vtables::RuntimeVTables,
+    vm::{interpreter, runtime_vtables::RuntimeVTables},
 };
-
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::LocalIndex,
@@ -18,32 +16,37 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::script_signature;
 use move_core_types::{
-    account_address::AccountAddress, effects::ChangeSet, identifier::IdentStr,
-    language_storage::ModuleId, resolver::MoveResolver, vm_status::StatusCode,
+    account_address::AccountAddress,
+    effects::ChangeSet,
+    identifier::IdentStr,
+    language_storage::{ModuleId, TypeTag},
+    resolver::MoveResolver,
+    vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{gas::GasMeter, loaded_data::runtime_types::Type};
-
-use parking_lot::RwLock;
-
 use std::{borrow::Borrow, sync::Arc};
+use tracing::warn;
 
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
 
-// A runnable Instance of a Virtual Machine. This is an instance with respect to some DataStore,
-// holding the Runtime VTables for that data store. This instance is the main "execution" context
-// for a virtual machine, allowing calls to `execute_function`, etc.
-pub struct VirtualMachineInstance<'extensions, S: MoveResolver> {
+/// A runnable Instance of a Virtual Machine. This is an instance with respect to some DataStore,
+/// holding the Runtime VTables for that data store in order to invoke functions from it. This
+/// instance is the main "execution" context for a virtual machine, allowing calls to
+/// `execute_function` to run Move code located in the VM Cache.
+///
+/// Note this is NOT for publication. See `vm.rs` for publication.
+pub struct VirtualMachineExecutionInstance<'extensions, S: MoveResolver> {
     /// The VM cache
     pub(crate) virtual_tables: RuntimeVTables,
     /// The data store used to create this VM instance
     pub(crate) data_cache: TransactionDataCache<S>,
     /// Native context extensions for the interpreter
     pub(crate) native_extensions: NativeContextExtensions<'extensions>,
-    /// An arc-lock reference to the VM's Type Cache
-    pub(crate) type_cache: Arc<RwLock<TypeCache>>,
+    /// An arc-lock reference to the VM's cache
+    pub(crate) vm_cache: Arc<VMCache>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
 }
@@ -55,7 +58,7 @@ pub struct VMInstanceFunction {
     pub return_type: Vec<Type>,
 }
 
-impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, DataCache> {
+impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'extensions, DataCache> {
     // -------------------------------------------
     // Entry Points
     // -------------------------------------------
@@ -134,80 +137,15 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
         )
     }
 
-    /// Publish the given module.
-    ///
-    /// The Move VM MUST return a user error, i.e., an error that's not an invariant violation, if
-    ///   - The module fails to deserialize or verify.
-    ///   - The sender address does not match that of the module.
-    ///
-    /// The Move VM should not be able to produce other user errors.
-    /// Besides, no user input should cause the Move VM to return an invariant violation.
-    ///
-    /// In case an invariant violation occurs, the whole Session should be considered corrupted and
-    /// one shall not proceed with effect generation.
-    pub fn publish_module(
-        &mut self,
-        module: Vec<u8>,
-        sender: AccountAddress,
-        gas_meter: &mut impl GasMeter,
-    ) -> VMResult<()> {
-        self.publish_module_bundle(vec![module], sender, gas_meter);
-        todo!("Package publish should also update the vtables.");
-    }
-
-    /// Publish a series of modules.
-    ///
-    /// The Move VM MUST return a user error, i.e., an error that's not an invariant violation, if
-    /// any module fails to deserialize or verify (see the full list of  failing conditions in the
-    /// `publish_module` API). The publishing of the module series is an all-or-nothing action:
-    /// either all modules are published to the data store or none is.
-    ///
-    /// Similar to the `publish_module` API, the Move VM should not be able to produce other user
-    /// errors. Besides, no user input should cause the Move VM to return an invariant violation.
-    ///
-    /// In case an invariant violation occurs, the whole Session should be considered corrupted and
-    /// one shall not proceed with effect generation.
-    pub fn publish_module_bundle(
-        &mut self,
-        modules: Vec<Vec<u8>>,
-        sender: AccountAddress,
-        gas_meter: &mut impl GasMeter,
-    ) -> VMResult<()> {
-        todo!()
-    }
-
-    /// Finish up the session and produce the side effects.
-    ///
-    /// This function should always succeed with no user errors returned, barring invariant violations.
-    ///
-    /// This MUST NOT be called if there is a previous invocation that failed with an invariant violation.
-    pub fn finish(self) -> (VMResult<ChangeSet>, DataCache) {
-        let (res, remote) = self.data_cache.into_effects();
-        (res.map_err(|e| e.finish(Location::Undefined)), remote)
-    }
-
     pub fn vm_config(&self) -> &move_vm_config::runtime::VMConfig {
         &self.vm_config
     }
 
-    /// Same like `finish`, but also extracts the native context extensions from the session.
-    pub fn finish_with_extensions(
-        self,
-    ) -> (
-        VMResult<(ChangeSet, NativeContextExtensions<'extensions>)>,
-        DataCache,
-    ) {
-        let VirtualMachineInstance {
-            data_cache,
-            native_extensions,
-            ..
-        } = self;
-        let (res, remote) = data_cache.into_effects();
-        (
-            res.map(|change_set| (change_set, native_extensions))
-                .map_err(|e| e.finish(Location::Undefined)),
-            remote,
-        )
+    pub fn load_type(&self, tag: &TypeTag) -> VMResult<Type> {
+        self.vm_cache
+            .type_cache
+            .read()
+            .load_type(tag, &self.data_cache)
     }
 
     // -------------------------------------------
@@ -217,7 +155,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
     /// Entry point for function execution, allowing an instance to run the specified function.
     /// Note that the specified module is a `runtime_id`, meaning it should already be resolved
     /// with respect to the linkage context.
-    pub(crate) fn execute_function(
+    fn execute_function(
         &mut self,
         runtime_id: &ModuleId,
         function_name: &IdentStr,
@@ -310,7 +248,8 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
             .0
             .iter()
             .map(|tok| {
-                self.type_cache
+                self.vm_cache
+                    .type_cache
                     .read()
                     .make_type(&compiled_module, tok, &self.data_cache)
             })
@@ -322,7 +261,8 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
             .0
             .iter()
             .map(|tok| {
-                self.type_cache
+                self.vm_cache
+                    .type_cache
                     .read()
                     .make_type(&compiled_module, tok, &self.data_cache)
             })
@@ -330,7 +270,8 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
             .map_err(|err| err.finish(Location::Undefined))?;
 
         // verify type arguments
-        self.type_cache
+        self.vm_cache
+            .type_cache
             .read()
             .verify_ty_args(fun_ref.type_parameters(), ty_args)
             .map_err(|e| e.finish(Location::Module(runtime_id.clone())))?;
@@ -369,7 +310,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
             })
             .collect::<Vec<_>>();
         let (mut dummy_locals, deserialized_args) = deserialize_args(
-            &self.type_cache,
+            &self.vm_cache.type_cache,
             &self.vm_config,
             arg_types,
             serialized_args,
@@ -386,14 +327,14 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
             ty_args,
             deserialized_args,
             &self.virtual_tables,
-            self.type_cache.clone(),
+            self.vm_cache.type_cache.clone(),
             self.vm_config.clone(),
             &mut self.native_extensions,
             gas_meter,
         )?;
 
         let serialized_return_values = serialize_return_values(
-            &self.type_cache,
+            &self.vm_cache.type_cache,
             &self.vm_config,
             &return_types,
             return_values,
@@ -407,8 +348,12 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
                     idx,
                     self.vm_config.enable_invariant_violation_check_in_swap_loc,
                 )?;
-                let (bytes, layout) =
-                    serialize_return_value(&self.type_cache, &self.vm_config, &ty, local_val)?;
+                let (bytes, layout) = serialize_return_value(
+                    &self.vm_cache.type_cache,
+                    &self.vm_config,
+                    &ty,
+                    local_val,
+                )?;
                 Ok((idx as LocalIndex, bytes, layout))
             })
             .collect::<PartialVMResult<_>>()

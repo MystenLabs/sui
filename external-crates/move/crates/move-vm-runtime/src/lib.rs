@@ -11,7 +11,7 @@
 #![deny(unsafe_code)]
 
 mod jit;
-mod shared;
+pub mod shared;
 
 pub mod cache;
 pub mod natives;

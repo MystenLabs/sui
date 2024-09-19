@@ -233,3 +233,31 @@ macro_rules! native_gas_total_cost {
         $native_context.gas_budget().checked_sub($gas_left).unwrap()
     }};
 }
+
+// Manual implementation of Debug for NativeFunctions
+impl std::fmt::Debug for NativeFunctions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeFunctions")
+            .field("functions", &format_function_map(&self.0))
+            .finish()
+    }
+}
+
+// Helper function to format the HashMap structure
+fn format_function_map(
+    map: &HashMap<AccountAddress, HashMap<String, HashMap<String, NativeFunction>>>,
+) -> String {
+    let mut result = String::new();
+
+    for (address, module_map) in map {
+        result.push_str(&format!("Account: {:?}\n", address));
+        for (module_name, function_map) in module_map {
+            result.push_str(&format!("  Module: {}\n", module_name));
+            for (function_name, _) in function_map {
+                result.push_str(&format!("    Function: {}\n", function_name));
+            }
+        }
+    }
+
+    result
+}

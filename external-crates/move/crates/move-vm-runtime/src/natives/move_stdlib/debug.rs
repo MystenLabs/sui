@@ -2,10 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::helpers::make_module_natives;
+use crate::natives::functions::{NativeContext, NativeFunction};
+use crate::natives::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
-use move_vm_runtime::native_functions::{NativeContext, NativeFunction};
 #[allow(unused_imports)]
 use move_vm_types::{
     loaded_data::runtime_types::Type,
@@ -189,12 +189,12 @@ pub fn make_all(
 
 #[cfg(feature = "testing")]
 mod testing {
+    use crate::natives::functions::NativeContext;
     use move_binary_format::errors::{PartialVMError, PartialVMResult};
     use move_core_types::{
         account_address::AccountAddress, annotated_value as A, language_storage::TypeTag,
         runtime_value as R, vm_status::StatusCode,
     };
-    use move_vm_runtime::native_functions::NativeContext;
     use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
     use std::{fmt, fmt::Write};
 

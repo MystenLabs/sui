@@ -16,12 +16,12 @@ use move_compiler::{
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
+use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::on_chain::ast::{PackageStorageId, RuntimePackageId};
 use move_vm_runtime::{
     cache::vm_cache::VMCache, natives::functions::NativeFunctions,
     on_chain::data_cache::TransactionDataCache,
 };
-use move_vm_config::runtime::VMConfig;
 use move_vm_test_utils::InMemoryStorage;
 use relinking_store::RelinkingStore;
 use std::collections::{BTreeMap, BTreeSet};
@@ -164,7 +164,7 @@ impl Adapter {
             })
             .collect();
         self.cache
-            .publish_package(modules, &self.storage, runtime_package_id)
+            .verify_package_for_publication(modules, &self.storage, runtime_package_id)
     }
 }
 

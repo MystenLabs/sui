@@ -29,8 +29,11 @@ use move_stdlib::move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::{
-    move_vm::MoveVM,
-    session::{SerializedReturnValues, Session},
+    natives::functions::NativeFunctions, shared::serialization::SerializedReturnValues,
+};
+use move_vm_runtime::{
+    natives::move_stdlib::{all_natives, GasParameters},
+    vm::vm::VirtualMachine,
 };
 use move_vm_test_utils::{gas_schedule::GasStatus, InMemoryStorage};
 use once_cell::sync::Lazy;
@@ -76,6 +79,8 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
+        println!("---- INITIALIZING -------------------------------------------------------------");
+        println!("grabbing init arguments");
         let (additional_mapping, compiler_edition) = match task_opt.map(|t| t.command) {
             Some((InitCommand { named_addresses }, AdapterInitArgs { edition })) => {
                 let addresses = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -85,6 +90,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
             None => (BTreeMap::new(), Edition::LEGACY),
         };
 
+        println!("generating named address map");
         let mut named_address_mapping = move_stdlib_named_addresses();
         for (name, addr) in additional_mapping {
             if named_address_mapping.contains_key(&name) {
@@ -95,6 +101,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
             }
             named_address_mapping.insert(name, addr);
         }
+        println!("creating adapter");
         let mut adapter = Self {
             compiled_state: CompiledState::new(
                 named_address_mapping,
@@ -107,22 +114,34 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
             storage: InMemoryStorage::new(),
         };
 
+        println!("doing initial publish");
         adapter
-            .perform_session_action(
+            .perform_action(
                 None,
-                |session, gas_status| {
-                    for module in &*MOVE_STDLIB_COMPILED {
-                        let mut module_bytes = vec![];
-                        module
-                            .serialize_with_version(module.version, &mut module_bytes)
-                            .unwrap();
+                |vm, storage, gas_status| {
+                    let mut sender = None;
+                    println!("serializing modules");
+                    let modules = MOVE_STDLIB_COMPILED
+                        .iter()
+                        .map(|module| {
+                            let mut module_bytes = vec![];
+                            sender = Some(*module.self_id().address());
+                            module
+                                .serialize_with_version(module.version, &mut module_bytes)
+                                .unwrap();
+                            module_bytes
+                        })
+                        .collect::<Vec<_>>();
 
-                        let id = module.self_id();
-                        let sender = *id.address();
-                        session
-                            .publish_module(module_bytes, sender, gas_status)
-                            .unwrap();
-                    }
+                    println!("calling publish");
+                    let pub_storage: &InMemoryStorage = storage;
+                    let (changeset, _storage) = vm.publish_package(
+                        pub_storage,
+                        sender.expect("Must have at least one module"),
+                        modules,
+                        gas_status,
+                    );
+                    storage.apply(changeset?).unwrap();
                     Ok(())
                 },
                 VMConfig::default(),
@@ -151,6 +170,8 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
         gas_budget: Option<u64>,
         _extra_args: Self::ExtraPublishArgs,
     ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
+        println!("---- PUBLISHING MODULE --------------------------------------------------------");
+        println!("computing module bytes");
         let all_bytes = modules
             .iter()
             .map(|m| {
@@ -161,11 +182,25 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
             })
             .collect::<Result<_>>()?;
 
+        println!("collecting ID");
         let id = modules.first().unwrap().module.self_id();
+        println!("computing sender");
         let sender = *id.address();
-        match self.perform_session_action(
+        println!("performing publish");
+        match self.perform_action(
             gas_budget,
-            |session, gas_status| session.publish_module_bundle(all_bytes, sender, gas_status),
+            |vm, storage, gas_status| {
+                let pub_storage: &InMemoryStorage = storage;
+                println!("doing publish");
+                let (changeset, _storage) =
+                    vm.publish_package(&pub_storage, sender, all_bytes, gas_status);
+                println!("applying changeset");
+                // save changeset
+                // TODO support events
+                storage.apply(changeset?).unwrap();
+                println!("done");
+                Ok(())
+            },
             VMConfig::default(),
         ) {
             Ok(()) => Ok((None, modules)),
@@ -187,6 +222,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
         gas_budget: Option<u64>,
         _extra_args: Self::ExtraRunArgs,
     ) -> Result<(Option<String>, SerializedReturnValues)> {
+        println!("---- CALLING FUNCTION ---------------------------------------------------------");
         let signers: Vec<_> = signers
             .into_iter()
             .map(|addr| self.compiled_state().resolve_address(&addr))
@@ -203,15 +239,22 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
             .chain(args)
             .collect();
         let serialized_return_values = self
-            .perform_session_action(
+            .perform_action(
                 gas_budget,
-                |session, gas_status| {
+                |vm, storage, gas_status| {
+                    println!("Current storage: {:?}", storage);
+                    println!("Current vm: {:#?}", vm);
+                    let instance_storage: &InMemoryStorage = storage;
+                    println!("Generating VM instance");
+                    let mut vm_instance = vm.make_instance(instance_storage)?;
+                    println!("Creating type arguments");
                     let type_args: Vec<_> = type_arg_tags
                         .into_iter()
-                        .map(|tag| session.load_type(&tag))
+                        .map(|tag| vm_instance.load_type(&tag))
                         .collect::<VMResult<_>>()?;
 
-                    session.execute_function_bypass_visibility(
+                    println!("Doing call");
+                    vm_instance.execute_function_bypass_visibility(
                         module, function, type_args, args, gas_status,
                     )
                 },
@@ -262,40 +305,33 @@ pub fn format_vm_error(e: &VMError) -> String {
 }
 
 impl SimpleVMTestAdapter {
-    fn perform_session_action<Ret>(
+    fn perform_action<Ret>(
         &mut self,
         gas_budget: Option<u64>,
-        f: impl FnOnce(&mut Session<&InMemoryStorage>, &mut GasStatus) -> VMResult<Ret>,
+        f: impl FnOnce(&mut VirtualMachine, &mut InMemoryStorage, &mut GasStatus) -> VMResult<Ret>,
         vm_config: VMConfig,
     ) -> VMResult<Ret> {
+        println!("creating natives");
         // start session
-        let vm = MoveVM::new_with_config(
-            move_stdlib_natives::all_natives(
-                STD_ADDR,
-                // TODO: come up with a suitable gas schedule
-                move_stdlib_natives::GasParameters::zeros(),
-                /* silent */ false,
-            ),
-            vm_config,
+        let natives = NativeFunctions::new(all_natives(
+            STD_ADDR,
+            GasParameters::zeros(),
+            /* silent */ false,
+        ))
+        .map_err(|e| e.finish(Location::Undefined))?;
+        println!("creating VM");
+        let mut vm = VirtualMachine::new(natives, vm_config);
+        println!("creating gas_status");
+        let mut gas_status = move_cli::sandbox::utils::get_gas_status(
+            &move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE,
+            gas_budget,
         )
         .unwrap();
-        let (mut session, mut gas_status) = {
-            let gas_status = move_cli::sandbox::utils::get_gas_status(
-                &move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE,
-                gas_budget,
-            )
-            .unwrap();
-            let session = vm.new_session(&self.storage);
-            (session, gas_status)
-        };
 
         // perform op
-        let res = f(&mut session, &mut gas_status)?;
+        println!("performing operation");
+        let res = f(&mut vm, &mut self.storage, &mut gas_status)?;
 
-        // save changeset
-        // TODO support events
-        let changeset = session.finish().0?;
-        self.storage.apply(changeset).unwrap();
         Ok(res)
     }
 }

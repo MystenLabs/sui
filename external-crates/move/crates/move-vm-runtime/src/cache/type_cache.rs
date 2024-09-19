@@ -34,6 +34,9 @@ pub type DatatypeCacheIndex = u64;
 pub type DatatypeKey = (DefiningTypeId, Identifier, Identifier);
 pub type DatatypeCache = BinaryCache<DatatypeKey, CachedDatatype>;
 
+// TODO: Think about how we want to handle parallelization and scratch/transaction-local types
+// here. Also worth thinking about type layout differences(?) between package types.
+#[derive(Debug)]
 pub struct TypeCache {
     pub cached_types: DatatypeCache,
     pub cached_instantiations: HashMap<CachedTypeIndex, HashMap<Vec<Type>, DatatypeInfo>>,

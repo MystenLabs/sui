@@ -6,7 +6,7 @@
 //! Such extensions are enabled by cfg features and must be compiled into the test
 //! to be usable.
 
-use move_vm_runtime::native_extensions::NativeContextExtensions;
+use move_vm_runtime::natives::extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 

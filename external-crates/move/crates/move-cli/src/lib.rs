@@ -20,7 +20,7 @@ pub const DEFAULT_BUILD_DIR: &str = ".";
 use anyhow::Result;
 use clap::Parser;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
-use move_vm_runtime::native_functions::NativeFunction;
+use move_vm_runtime::natives::functions::NativeFunction;
 use move_vm_test_utils::gas_schedule::CostTable;
 use std::path::PathBuf;
 

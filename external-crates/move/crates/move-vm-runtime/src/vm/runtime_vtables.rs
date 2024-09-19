@@ -9,7 +9,7 @@
 
 use crate::{
     cache::{arena::ArenaPointer, type_cache::TypeCache},
-    jit::runtime::ast::{Function, LoadedModule, LoadedPackage, VTableKey},
+    jit::runtime::ast::{Function, Module, Package, VTableKey},
     on_chain::ast::RuntimePackageId,
 };
 use move_binary_format::{
@@ -32,8 +32,9 @@ use std::{collections::HashMap, sync::Arc};
 ///
 /// TODO(tzakian): The representation can be optimized to use a more efficient data structure for
 /// vtable/cross-package function resolution but we will keep it simple for now.
+#[derive(Clone)]
 pub struct RuntimeVTables {
-    loaded_packages: HashMap<RuntimePackageId, Arc<LoadedPackage>>,
+    pub(crate) loaded_packages: HashMap<RuntimePackageId, Arc<Package>>,
     cached_types: Arc<RwLock<TypeCache>>,
 }
 
@@ -43,7 +44,7 @@ impl RuntimeVTables {
     /// Create a new RuntimeVTables instance.
     /// NOTE: This assumes linkage has already occured.
     pub fn new(
-        loaded_packages: HashMap<RuntimePackageId, Arc<LoadedPackage>>,
+        loaded_packages: HashMap<RuntimePackageId, Arc<Package>>,
         cached_types: Arc<RwLock<TypeCache>>,
     ) -> VMResult<Self> {
         Ok(Self {
@@ -52,7 +53,7 @@ impl RuntimeVTables {
         })
     }
 
-    pub fn get_package(&self, id: &RuntimePackageId) -> PartialVMResult<Arc<LoadedPackage>> {
+    pub fn get_package(&self, id: &RuntimePackageId) -> PartialVMResult<Arc<Package>> {
         self.loaded_packages.get(id).cloned().ok_or_else(|| {
             PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
                 .with_message(format!("Package {} not found", id))
@@ -78,10 +79,7 @@ impl RuntimeVTables {
             })
     }
 
-    pub fn resolve_loaded_module(
-        &self,
-        runtime_id: &ModuleId,
-    ) -> PartialVMResult<Arc<LoadedModule>> {
+    pub fn resolve_loaded_module(&self, runtime_id: &ModuleId) -> PartialVMResult<Arc<Module>> {
         let (package, module_id) = runtime_id.into();
         let package = self.loaded_packages.get(package).ok_or_else(|| {
             PartialVMError::new(StatusCode::MISSING_DEPENDENCY)

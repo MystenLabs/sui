@@ -36,7 +36,7 @@ use move_core_types::{
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
-use move_vm_runtime::session::SerializedReturnValues;
+use move_vm_runtime::shared::serialization::SerializedReturnValues;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::{Debug, Write as FmtWrite},

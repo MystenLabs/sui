@@ -16,6 +16,7 @@ static PROFILER_ENABLED: Lazy<bool> =
 
 pub const DEFAULT_MAX_VALUE_NEST_DEPTH: u64 = 128;
 
+#[derive(Debug)]
 /// Dynamic config options for the Move VM.
 pub struct VMConfig {
     pub verifier: VerifierConfig,
