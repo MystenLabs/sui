@@ -45,13 +45,13 @@ pub struct VTableKey {
 pub type PackageVTable = BinaryCache<(Identifier, Identifier), ArenaPointer<Function>>;
 
 /// Representation of a loaded package.
-pub struct LoadedPackage {
+pub struct Package {
     pub storage_id: PackageStorageId,
     pub runtime_id: RuntimePackageId,
 
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
-    pub loaded_modules: BinaryCache<Identifier, LoadedModule>,
+    pub loaded_modules: BinaryCache<Identifier, Module>,
 
     // NB: this is needed for the bytecode verifier. If we update the bytecode verifier we should
     // be able to remove this.
@@ -67,7 +67,7 @@ pub struct LoadedPackage {
 // When code executes indexes in instructions are resolved against those runtime structure
 // so that any data needed for execution is immediately available
 #[derive(Debug)]
-pub struct LoadedModule {
+pub struct Module {
     #[allow(dead_code)]
     pub id: ModuleId,
 
@@ -233,6 +233,7 @@ pub struct VariantDef {
 // Cache for data associated to a Struct, used for de/serialization and more
 //
 
+#[derive(Debug)]
 pub struct DatatypeInfo {
     pub runtime_tag: Option<StructTag>,
     pub defining_tag: Option<StructTag>,
@@ -753,7 +754,7 @@ pub enum Bytecode {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-impl LoadedModule {
+impl Module {
     pub fn struct_at(&self, idx: StructDefinitionIndex) -> CachedTypeIndex {
         self.structs[idx.0 as usize].idx
     }
@@ -1057,5 +1058,18 @@ impl std::fmt::Debug for CallType {
                 vtable.package_key, vtable.module_name, vtable.function_name
             ),
         }
+    }
+}
+
+// Manually implementing Debug for Package
+impl std::fmt::Debug for Package {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Package")
+            .field("storage_id", &self.storage_id)
+            .field("runtime_id", &self.runtime_id)
+            .field("loaded_modules", &self.loaded_modules)
+            .field("compiled_modules", &self.compiled_modules)
+            .field("vtable", &self.vtable)
+            .finish()
     }
 }

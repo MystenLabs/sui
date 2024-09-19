@@ -93,6 +93,14 @@ impl<S: MoveResolver> TransactionDataCache<S> {
             account_cache.module_map.insert(module_name, blob);
         }
     }
+
+    pub fn into_remote(self) -> S {
+        let TransactionDataCache {
+            remote,
+            module_map: _,
+        } = self;
+        remote
+    }
 }
 
 // `DataStore` implementation for the `TransactionDataCache`

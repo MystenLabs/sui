@@ -32,10 +32,13 @@ use tracing::warn;
 // Types
 // -------------------------------------------------------------------------------------------------
 
-// A runnable Instance of a Virtual Machine. This is an instance with respect to some DataStore,
-// holding the Runtime VTables for that data store. This instance is the main "execution" context
-// for a virtual machine, allowing calls to `execute_function`, etc.
-pub struct VirtualMachineInstance<'extensions, S: MoveResolver> {
+/// A runnable Instance of a Virtual Machine. This is an instance with respect to some DataStore,
+/// holding the Runtime VTables for that data store in order to invoke functions from it. This
+/// instance is the main "execution" context for a virtual machine, allowing calls to
+/// `execute_function` to run Move code located in the VM Cache.
+///
+/// Note this is NOT for publication. See `vm.rs` for publication.
+pub struct VirtualMachineExecutionInstance<'extensions, S: MoveResolver> {
     /// The VM cache
     pub(crate) virtual_tables: RuntimeVTables,
     /// The data store used to create this VM instance
@@ -55,7 +58,7 @@ pub struct VMInstanceFunction {
     pub return_type: Vec<Type>,
 }
 
-impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, DataCache> {
+impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'extensions, DataCache> {
     // -------------------------------------------
     // Entry Points
     // -------------------------------------------
@@ -134,80 +137,8 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
         )
     }
 
-    /// Publish a package.
-    ///
-    /// The Move VM MUST return a user error, i.e., an error that's not an invariant violation, if
-    /// any module fails to deserialize or verify (see the full list of  failing conditions in the
-    /// `publish_module` API). The publishing of the module series is an all-or-nothing action:
-    /// either all modules are published to the data store or none is.
-    ///
-    /// Similar to the `publish_module` API, the Move VM should not be able to produce other user
-    /// errors. Besides, no user input should cause the Move VM to return an invariant violation.
-    ///
-    /// In case an invariant violation occurs, the whole Session should be considered corrupted and
-    /// one shall not proceed with effect generation.
-    pub fn publish_package(
-        &mut self,
-        package_id: PackageStorageId,
-        package: Vec<Vec<u8>>,
-        _gas_meter: &mut impl GasMeter,
-    ) -> VMResult<()> {
-        let compiled_modules = match package
-            .iter()
-            .map(|blob| {
-                CompiledModule::deserialize_with_config(blob, &self.vm_config.binary_config)
-                    .map(|m| (m.self_id().name().to_owned(), blob.clone()))
-            })
-            .collect::<PartialVMResult<Vec<_>>>()
-        {
-            Ok(modules) => modules,
-            Err(err) => {
-                warn!("[VM] module deserialization failed {:?}", err);
-                return Err(err.finish(Location::Undefined));
-            }
-        };
-
-        self.vm_cache
-            .publish_package(package, &self.data_cache, package_id)?;
-
-        self.data_cache
-            .publish_package(package_id, compiled_modules);
-
-        Ok(())
-    }
-
-    /// Finish up the session and produce the side effects.
-    ///
-    /// This function should always succeed with no user errors returned, barring invariant violations.
-    ///
-    /// This MUST NOT be called if there is a previous invocation that failed with an invariant violation.
-    pub fn finish(self) -> (VMResult<ChangeSet>, DataCache) {
-        let (res, remote) = self.data_cache.into_effects();
-        (res.map_err(|e| e.finish(Location::Undefined)), remote)
-    }
-
     pub fn vm_config(&self) -> &move_vm_config::runtime::VMConfig {
         &self.vm_config
-    }
-
-    /// Same like `finish`, but also extracts the native context extensions from the session.
-    pub fn finish_with_extensions(
-        self,
-    ) -> (
-        VMResult<(ChangeSet, NativeContextExtensions<'extensions>)>,
-        DataCache,
-    ) {
-        let VirtualMachineInstance {
-            data_cache,
-            native_extensions,
-            ..
-        } = self;
-        let (res, remote) = data_cache.into_effects();
-        (
-            res.map(|change_set| (change_set, native_extensions))
-                .map_err(|e| e.finish(Location::Undefined)),
-            remote,
-        )
     }
 
     pub fn load_type(&self, tag: &TypeTag) -> VMResult<Type> {
@@ -224,7 +155,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineInstance<'extensions, D
     /// Entry point for function execution, allowing an instance to run the specified function.
     /// Note that the specified module is a `runtime_id`, meaning it should already be resolved
     /// with respect to the linkage context.
-    pub(crate) fn execute_function(
+    fn execute_function(
         &mut self,
         runtime_id: &ModuleId,
         function_name: &IdentStr,

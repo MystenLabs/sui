@@ -12,7 +12,7 @@
 // dependencies fail the linkage checks in this module.
 
 use crate::{
-    jit::runtime::ast::LoadedPackage,
+    jit::runtime::ast::Package,
     on_chain::ast::{DeserializedPackage, PackageStorageId, RuntimePackageId},
 };
 use move_binary_format::{
@@ -29,7 +29,7 @@ use std::{
 /// Verifies that all packages in the provided map have valid linkage and no cyclic dependencies
 /// between them.
 pub fn verify_linkage_and_cyclic_checks(
-    cached_packages: &BTreeMap<PackageStorageId, Arc<LoadedPackage>>,
+    cached_packages: &BTreeMap<PackageStorageId, Arc<Package>>,
 ) -> VMResult<()> {
     let relocation_map: HashMap<RuntimePackageId, PackageStorageId> = cached_packages
         .iter()
@@ -62,7 +62,7 @@ pub fn verify_linkage_and_cyclic_checks(
 /// dependencies).
 pub fn verify_linkage_and_cyclic_checks_for_publication(
     package_to_publish: &DeserializedPackage,
-    cached_packages: &BTreeMap<PackageStorageId, Arc<LoadedPackage>>,
+    cached_packages: &BTreeMap<PackageStorageId, Arc<Package>>,
 ) -> VMResult<()> {
     let relocation_map: HashMap<RuntimePackageId, PackageStorageId> = cached_packages
         .iter()
@@ -108,7 +108,7 @@ pub fn verify_linkage_and_cyclic_checks_for_publication(
 /// they are the same for publication).
 fn verify_package_no_cyclic_relationships(
     package: &[&CompiledModule],
-    cached_packages: &BTreeMap<PackageStorageId, Arc<LoadedPackage>>,
+    cached_packages: &BTreeMap<PackageStorageId, Arc<Package>>,
     relocation_map: &HashMap<PackageStorageId, RuntimePackageId>,
 ) -> VMResult<()> {
     let (module, bundle_verified) = if package.len() == 1 {
@@ -145,7 +145,7 @@ fn verify_package_no_cyclic_relationships(
 // all modules in the provided package have valid linkage to their dependencies.
 fn verify_package_valid_linkage(
     package: &[&CompiledModule],
-    cached_packages: &BTreeMap<PackageStorageId, Arc<LoadedPackage>>,
+    cached_packages: &BTreeMap<PackageStorageId, Arc<Package>>,
     relocation_map: &HashMap<PackageStorageId, RuntimePackageId>,
 ) -> VMResult<()> {
     let package_module_map = package

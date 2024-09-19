@@ -8,6 +8,7 @@ use move_binary_format::errors::PartialVMResult;
 // A simple cache that offers both a HashMap and a Vector lookup.
 // Values are forced into a `Arc` so they can be used from multiple thread.
 // Access to this cache is always under a `RwLock`.
+#[derive(Debug)]
 pub struct BinaryCache<K, V> {
     pub id_map: HashMap<K, usize>,
     pub binaries: Vec<Arc<V>>,

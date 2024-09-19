@@ -49,7 +49,7 @@ struct PackageContext<'a> {
     pub runtime_id: RuntimePackageId,
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
-    pub loaded_modules: BinaryCache<Identifier, LoadedModule>,
+    pub loaded_modules: BinaryCache<Identifier, Module>,
 
     // NB: this is needed for the bytecode verifier. If we update the bytecode verifier we should
     // be able to remove this.
@@ -349,7 +349,7 @@ fn module(
     package_context: &mut PackageContext,
     type_cache: &RwLock<TypeCache>,
     data_store: &impl DataStore,
-) -> Result<LoadedModule, PartialVMError> {
+) -> Result<Module, PartialVMError> {
     let self_id = module.self_id();
     println!("Loading module: {}", self_id);
 
@@ -558,7 +558,7 @@ fn module(
         type_cache: _,
     } = context;
 
-    Ok(LoadedModule {
+    Ok(Module {
         id: self_id,
         type_refs,
         structs,
@@ -808,7 +808,7 @@ pub fn package(
     natives: &NativeFunctions,
     type_cache: &RwLock<TypeCache>,
     data_store: &impl DataStore,
-) -> PartialVMResult<LoadedPackage> {
+) -> PartialVMResult<Package> {
     let module_ids_in_pkg = package_modules
         .iter()
         .map(|m| m.self_id())
@@ -870,7 +870,7 @@ pub fn package(
         type_cache: _,
     } = package_context;
 
-    Ok(LoadedPackage {
+    Ok(Package {
         storage_id,
         runtime_id,
         loaded_modules,

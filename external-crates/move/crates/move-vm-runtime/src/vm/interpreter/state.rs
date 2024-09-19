@@ -6,7 +6,7 @@ use crate::{
         arena::ArenaPointer,
         type_cache::{self, TypeCache},
     },
-    jit::runtime::ast::{CallType, Function, LoadedModule},
+    jit::runtime::ast::{CallType, Function, Module},
     shared::constants::{
         CALL_STACK_SIZE_LIMIT, MAX_TYPE_INSTANTIATION_NODES, OPERAND_STACK_SIZE_LIMIT,
     },
@@ -93,7 +93,7 @@ pub(super) struct CallStack(Vec<CallFrame>);
 #[derive(Debug)]
 pub(crate) struct ModuleDefinitionResolver {
     compiled: Arc<CompiledModule>,
-    loaded: Arc<LoadedModule>,
+    loaded: Arc<Module>,
 }
 
 /// A `Frame` is the execution context for a function. It holds the locals of the function and
