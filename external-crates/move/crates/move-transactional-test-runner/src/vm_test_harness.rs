@@ -32,7 +32,7 @@ use move_vm_runtime::{
     natives::functions::NativeFunctions, shared::serialization::SerializedReturnValues,
 };
 use move_vm_runtime::{
-    natives::move_stdlib::{all_natives, GasParameters},
+    natives::move_stdlib::{stdlib_native_functions, GasParameters},
     vm::vm::VirtualMachine,
 };
 use move_vm_test_utils::{gas_schedule::GasStatus, InMemoryStorage};
@@ -315,12 +315,9 @@ impl SimpleVMTestAdapter {
     ) -> VMResult<Ret> {
         println!("creating natives");
         // start session
-        let natives = NativeFunctions::new(all_natives(
-            STD_ADDR,
-            GasParameters::zeros(),
-            /* silent */ false,
-        ))
-        .map_err(|e| e.finish(Location::Undefined))?;
+        let natives =
+            stdlib_native_functions(STD_ADDR, GasParameters::zeros(), /* silent */ false)
+                .map_err(|e| e.finish(Location::Undefined))?;
         println!("creating VM");
         let mut vm = VirtualMachine::new(natives, vm_config);
         println!("creating gas_status");

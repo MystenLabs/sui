@@ -34,7 +34,7 @@ use move_core_types::{
     runtime_value::MoveValue,
     vm_status::StatusCode,
 };
-use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::vm::vm::VirtualMachine;
 use move_vm_test_utils::{DeltaStorage, InMemoryStorage};
 use move_vm_types::gas::UnmeteredGasMeter;
 use once_cell::sync::Lazy;
@@ -132,11 +132,14 @@ fn execute_function_in_module(
         module.identifier_at(entry_name_idx)
     };
     {
-        let vm = MoveVM::new(move_vm_runtime::natives::move_stdlib::all_natives(
-            AccountAddress::from_hex_literal("0x1").unwrap(),
-            move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
-            /* silent debug */ true,
-        ))
+        let vm = VirtualMachine::new_with_default_config(
+            move_vm_runtime::natives::move_stdlib::stdlib_native_functions(
+                AccountAddress::from_hex_literal("0x1").unwrap(),
+                move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
+                /* silent debug */ true,
+            )
+            .unwrap(),
+        )
         .unwrap();
 
         let mut changeset = ChangeSet::new();

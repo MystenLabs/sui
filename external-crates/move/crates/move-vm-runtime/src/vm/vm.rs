@@ -42,6 +42,17 @@ impl VirtualMachine {
         }
     }
 
+    pub fn new_with_default_config(natives: NativeFunctions) -> Self {
+        let natives = Arc::new(natives);
+        let vm_config = Arc::new(VMConfig::default());
+        let cache = Arc::new(VMCache::new(natives.clone(), vm_config.clone()));
+        Self {
+            cache,
+            natives,
+            vm_config,
+        }
+    }
+
     /// Makes an Execution Instance for running a Move function invocation.
     /// Note this will hit the VM Cache to construct VTables for that execution, which may block on
     /// cache loading efforts.
@@ -50,12 +61,9 @@ impl VirtualMachine {
         &mut self,
         remote: DataCache,
     ) -> VMResult<VirtualMachineExecutionInstance<'extensions, DataCache>> {
-        println!("Creating data cache");
         let data_cache = TransactionDataCache::new(remote);
-        println!("Computing virtual tables");
         let virtual_tables = self.cache.generate_runtime_vtables(&data_cache)?;
         // Called and checked linkage, etc.
-        println!("Creating instance");
         let instance = VirtualMachineExecutionInstance {
             virtual_tables,
             vm_cache: self.cache.clone(),

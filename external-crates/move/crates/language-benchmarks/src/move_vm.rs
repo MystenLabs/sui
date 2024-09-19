@@ -11,8 +11,8 @@ use move_core_types::{
     language_storage::{ModuleId, CORE_CODE_ADDRESS},
 };
 
-use move_vm_runtime::move_vm::MoveVM;
-use move_vm_test_utils::BlankStorage;
+use move_vm_runtime::{natives::move_stdlib::stdlib_native_functions, vm::vm::VirtualMachine};
+use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::gas::UnmeteredGasMeter;
 use once_cell::sync::Lazy;
 use std::{path::PathBuf, sync::Arc};
@@ -41,8 +41,8 @@ static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
 /// Entry point for the bench, provide a function name to invoke in Module Bench in bench.move.
 pub fn bench<M: Measurement + 'static>(c: &mut Criterion<M>, filename: &str) {
     let modules = compile_modules(filename);
-    let move_vm = create_vm();
-    execute(c, &move_vm, modules, filename);
+    let mut move_vm = create_vm();
+    execute(c, &mut move_vm, modules, filename);
 }
 
 fn make_path(file: &str) -> PathBuf {
@@ -74,38 +74,45 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
         .collect()
 }
 
-fn create_vm() -> MoveVM {
-    MoveVM::new(move_vm_runtime::natives::move_stdlib::all_natives(
-        AccountAddress::from_hex_literal("0x1").unwrap(),
-        move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
-        /* silent debug */ true,
-    ))
-    .unwrap()
+fn create_vm() -> VirtualMachine {
+    VirtualMachine::new_with_default_config(
+        stdlib_native_functions(
+            AccountAddress::from_hex_literal("0x1").unwrap(),
+            move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
+            /* silent debug */ true,
+        )
+        .unwrap(),
+    )
 }
 
 // execute a given function in the Bench module
 fn execute<M: Measurement + 'static>(
     c: &mut Criterion<M>,
-    move_vm: &MoveVM,
+    move_vm: &mut VirtualMachine,
     modules: Vec<CompiledModule>,
     file: &str,
 ) {
     // establish running context
-    let storage = BlankStorage::new();
+    let mut storage = InMemoryStorage::new();
+    storage.context = CORE_CODE_ADDRESS;
     let sender = CORE_CODE_ADDRESS;
-    let mut session = move_vm.new_session(&storage);
+
+    let modules = modules
+        .into_iter()
+        .map(|module| {
+            let mut mod_blob = vec![];
+            module
+                .serialize_with_version(module.version, &mut mod_blob)
+                .expect("Module serialization error");
+            mod_blob
+        })
+        .collect::<Vec<_>>();
 
     // TODO: we may want to use a real gas meter to make benchmarks more realistic.
 
-    for module in modules {
-        let mut mod_blob = vec![];
-        module
-            .serialize_with_version(module.version, &mut mod_blob)
-            .expect("Module serialization error");
-        session
-            .publish_module(mod_blob, sender, &mut UnmeteredGasMeter)
-            .expect("Module must load");
-    }
+    let (changeset, mut storage) =
+        move_vm.publish_package(storage, sender, modules, &mut UnmeteredGasMeter);
+    storage.apply(changeset.unwrap()).unwrap();
 
     // module and function to call
     let module_id = ModuleId::new(sender, Identifier::new("bench").unwrap());
@@ -114,7 +121,9 @@ fn execute<M: Measurement + 'static>(
     // benchmark
     c.bench_function(file, |b| {
         b.iter_with_large_drop(|| {
-            session
+            move_vm
+                .make_instance(&storage)
+                .unwrap()
                 .execute_function_bypass_visibility(
                     &module_id,
                     &fun_name,

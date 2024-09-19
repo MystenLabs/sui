@@ -4,7 +4,7 @@
 use move_binary_format::{file_format::basic_test_module, file_format_common::VERSION_MAX};
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
-use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::{natives::move_stdlib::stdlib_native_functions, vm::vm::VirtualMachine};
 use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::gas::UnmeteredGasMeter;
 
@@ -20,11 +20,14 @@ fn test_publish_module_with_custom_max_binary_format_version() {
     // Should accept both modules with the default settings
     {
         let storage = InMemoryStorage::new();
-        let vm = MoveVM::new(move_vm_runtime::natives::move_stdlib::all_natives(
-            AccountAddress::from_hex_literal("0x1").unwrap(),
-            move_stdlib_natives::GasParameters::zeros(),
-            /* silent debug */ true,
-        ))
+        let vm = VirtualMachine::new_with_default_config(
+            stdlib_native_functions(
+                AccountAddress::from_hex_literal("0x1").unwrap(),
+                move_stdlib_natives::GasParameters::zeros(),
+                /* silent debug */ true,
+            )
+            .unwrap(),
+        )
         .unwrap();
         let mut sess = vm.new_session(&storage);
 
@@ -53,7 +56,7 @@ fn test_publish_module_with_custom_max_binary_format_version() {
         vm_config.binary_config.max_binary_format_version = max_updated;
 
         let vm = MoveVM::new_with_config(
-            move_vm_runtime::natives::move_stdlib::all_natives(
+            move_vm_runtime::natives::move_stdlib::stdlib_native_function_table(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
                 move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
                 /* silent debug */ true,

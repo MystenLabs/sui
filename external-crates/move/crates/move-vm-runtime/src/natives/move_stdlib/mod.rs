@@ -12,7 +12,8 @@ pub mod type_name;
 pub mod unit_test;
 pub mod vector;
 
-use crate::natives::functions::{make_table_from_iter, NativeFunctionTable};
+use crate::natives::functions::{make_table_from_iter, NativeFunctionTable, NativeFunctions};
+use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
 
 #[derive(Debug, Clone)]
@@ -141,7 +142,7 @@ impl GasParameters {
     }
 }
 
-pub fn all_natives(
+pub fn stdlib_native_function_table(
     move_std_addr: AccountAddress,
     gas_params: GasParameters,
     debug_is_silent: bool,
@@ -172,4 +173,16 @@ pub fn all_natives(
     }
 
     make_table_from_iter(move_std_addr, natives)
+}
+
+pub fn stdlib_native_functions(
+    move_std_addr: AccountAddress,
+    gas_params: GasParameters,
+    debug_is_silent: bool,
+) -> PartialVMResult<NativeFunctions> {
+    NativeFunctions::new(stdlib_native_function_table(
+        move_std_addr,
+        gas_params,
+        debug_is_silent,
+    ))
 }

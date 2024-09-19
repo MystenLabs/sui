@@ -4,7 +4,7 @@
 use crate::compiler::{as_module, compile_units, serialize_module_at_max_version};
 use move_core_types::account_address::AccountAddress;
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
-use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::vm::vm::VirtualMachine;
 use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::gas::UnmeteredGasMeter;
 
@@ -38,12 +38,13 @@ fn test_publish_module_with_nested_loops() {
     // Should succeed with max_loop_depth = 2
     {
         let storage = InMemoryStorage::new();
-        let vm = MoveVM::new_with_config(
-            move_vm_runtime::natives::move_stdlib::all_natives(
+        let vm = VirtualMachine::new(
+            move_vm_runtime::natives::move_stdlib::stdlib_native_functions(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
                 move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
                 /* silent debug */ true,
-            ),
+            )
+            .unwrap(),
             VMConfig {
                 verifier: VerifierConfig {
                     max_loop_depth: Some(2),
@@ -63,7 +64,7 @@ fn test_publish_module_with_nested_loops() {
     {
         let storage = InMemoryStorage::new();
         let vm = MoveVM::new_with_config(
-            move_vm_runtime::natives::move_stdlib::all_natives(
+            move_vm_runtime::natives::move_stdlib::stdlib_native_function_table(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
                 move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
                 /* silent debug */ true,

@@ -291,7 +291,6 @@ impl VMCache {
     ) -> VMResult<BTreeMap<PackageStorageId, Arc<Package>>> {
         let root_package = data_store.link_context();
         let mut all_packages = data_store.all_package_dependencies()?;
-        println!("doing load and cache for root {root_package} and packages {all_packages:#?}");
         all_packages.insert(root_package);
         self.load_and_cache_packages(data_store, all_packages)
     }

@@ -44,7 +44,9 @@ impl LinkageResolver for BlankStorage {
         Ok(module_id.clone())
     }
 
-    fn all_package_dependencies(&self) -> std::result::Result<BTreeSet<AccountAddress>, Self::Error> {
+    fn all_package_dependencies(
+        &self,
+    ) -> std::result::Result<BTreeSet<AccountAddress>, Self::Error> {
         Ok(BTreeSet::new())
     }
 }
@@ -100,7 +102,9 @@ impl<'a, 'b, S: LinkageResolver> LinkageResolver for DeltaStorage<'a, 'b, S> {
         self.base.defining_module(module_id, struct_)
     }
 
-    fn all_package_dependencies(&self) -> std::result::Result<BTreeSet<AccountAddress>, Self::Error> {
+    fn all_package_dependencies(
+        &self,
+    ) -> std::result::Result<BTreeSet<AccountAddress>, Self::Error> {
         self.base.all_package_dependencies()
     }
 }

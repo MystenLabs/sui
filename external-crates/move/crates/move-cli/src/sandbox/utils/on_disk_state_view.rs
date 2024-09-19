@@ -268,7 +268,9 @@ impl LinkageResolver for OnDiskStateView {
         todo!("VM rewrite")
     }
 
-    fn all_package_dependencies(&self) -> std::result::Result<std::collections::BTreeSet<AccountAddress>, Self::Error> {
+    fn all_package_dependencies(
+        &self,
+    ) -> std::result::Result<std::collections::BTreeSet<AccountAddress>, Self::Error> {
         todo!("VM rewrite")
     }
 }
