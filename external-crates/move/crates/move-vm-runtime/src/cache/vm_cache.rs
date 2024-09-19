@@ -396,16 +396,14 @@ impl VMCache {
                 PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
                     .with_message(msg)
                     .finish(Location::Undefined) // TODO(tzakian): add Location::Package
-            })
-            .map_err(expect_no_verification_errors)?;
+            })?;
 
             // bytecode verifier checks that can be performed with the module itself
             move_bytecode_verifier::verify_module_with_config_unmetered(
                 &self.vm_config.verifier,
                 &module,
-            )
-            .map_err(expect_no_verification_errors)?;
-            check_natives(&self.natives, &module).map_err(expect_no_verification_errors)?;
+            )?;
+            check_natives(&self.natives, &module)?;
             modules.push(module)
         }
 
