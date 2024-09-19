@@ -177,7 +177,8 @@ const MAX_PROTOCOL_VERSION: u64 = 60;
 // Version 58: Optimize boolean binops
 //             Finalize bridge committee on mainnet.
 //             Switch to distributed vote scoring in consensus in devnet
-// Version 59: Validation of public inputs for Groth16 verification.
+// Version 59: Enable round prober in consensus.
+// Version 60: Validation of public inputs for Groth16 verification.
 //             Enable configuration of maximum number of type nodes in a type layout.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -3082,6 +3083,17 @@ mod test {
 
         prot.set_attr_for_testing("max_arguments".to_string(), "456".to_string());
         assert_eq!(prot.max_arguments(), 456);
+    }
+
+    #[test]
+    #[should_panic(expected = "unsupported version")]
+    fn max_version_test() {
+        // When this does not panic, version higher than MAX_PROTOCOL_VERSION exists.
+        // To fix, bump MAX_PROTOCOL_VERSION or disable this check for the version.
+        let _ = ProtocolConfig::get_for_version_impl(
+            ProtocolVersion::new(MAX_PROTOCOL_VERSION + 1),
+            Chain::Unknown,
+        );
     }
 
     #[test]
