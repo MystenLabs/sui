@@ -243,7 +243,7 @@ async fn test_generate_lock_file() {
         source = { local = "../../../../../sui-framework/packages/sui-framework" }
 
         dependencies = [
-          { id = "MoveStdlib", name = "MoveStdLib" },
+          { id = "MoveStdlib", name = "MoveStdlib" },
         ]
 
         [move.toolchain-version]

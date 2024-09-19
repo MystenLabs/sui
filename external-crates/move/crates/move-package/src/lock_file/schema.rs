@@ -32,7 +32,7 @@ use super::LockFile;
 /// V1: Adds toolchain versioning support.
 /// V2: Adds support for managing addresses on package publish and upgrades.
 /// V3: Renames dependency `name` field to `id` and adds a `name` field to store the name from the manifest.
-pub const VERSION: u64 = 3;
+pub const VERSION: u16 = 3;
 
 /// Table for storing package info under an environment.
 const ENV_TABLE_NAME: &str = "env";
@@ -114,7 +114,7 @@ pub struct ManagedPackage {
 
 #[derive(Serialize, Deserialize)]
 pub struct Header {
-    pub version: u64,
+    pub version: u16,
     /// A hash of the manifest file content this lock file was generated from computed using SHA-256
     /// hashing algorithm.
     pub manifest_digest: String,
@@ -203,9 +203,9 @@ impl Header {
         let Schema { move_: header } =
             toml::de::from_str::<Schema<Header>>(contents).context("Deserializing lock header")?;
 
-        if header.version > VERSION {
+        if header.version != VERSION {
             bail!(
-                "Lock file format is too new, expected version {} or below, found {}",
+                "Lock file format mismatch, expected version {}, found {}",
                 VERSION,
                 header.version
             );
@@ -256,7 +256,8 @@ pub fn update_dependency_graph(
         .as_table_mut()
         .ok_or_else(|| anyhow!("Could not find or create move table in Move.lock"))?;
 
-    // Update `manifest_digest` and `deps_digest` in `[move]` table section.
+    // Update `version`, `manifest_digest`, and `deps_digest` in `[move]` table section.
+    move_table["version"] = value(VERSION as i64);
     move_table["manifest_digest"] = value(manifest_digest);
     move_table["deps_digest"] = value(deps_digest);
 

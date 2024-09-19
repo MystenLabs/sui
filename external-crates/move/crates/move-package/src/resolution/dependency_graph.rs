@@ -232,6 +232,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let lock_file = File::open(lock_path);
         let digest_and_lock_contents = lock_file
             .map(|mut lock_file| match schema::Header::read(&mut lock_file) {
+                Ok(header) if header.version < schema::VERSION => None, // outdated lock file - regenerate
                 Ok(header) => Some((header.manifest_digest, header.deps_digest, lock_string_opt)),
                 Err(_) => None, // malformed header - regenerate lock file
             })
