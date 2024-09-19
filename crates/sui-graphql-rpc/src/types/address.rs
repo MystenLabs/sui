@@ -32,11 +32,15 @@ pub(crate) enum AddressTransactionBlockRelationship {
     /// `SENT` which behaves identically but is named more clearly. Both filters restrict
     /// transactions by their sender, only, not signers in general.
     ///
-    /// This filter will be removed after 1.36.0 (2024-10-14).
+    /// This filter will be removed with 1.36.0 (2024-10-14).
     Sign,
     /// Transactions this address has sent.
     Sent,
-    /// Transactions that sent objects to this address.
+    /// Transactions that sent objects to this address. NOTE: this input filter has been deprecated
+    /// in favor of `AFFECTED`, which offers an easier to understand behavior.
+    ///
+    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+    /// `AFFECTED` is introduced, whichever is later.
     Recv,
     /// Transactions that this address was involved in, either as the sender, sponsor, or as the
     /// owner of some object that was created, modified or transfered.
