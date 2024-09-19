@@ -4,19 +4,27 @@
 use std::num::NonZeroUsize;
 
 use prometheus::Registry;
+use sui_types::digests::CheckpointDigest;
 use tracing::info;
 
 use sui_archival::reader::{ArchiveReader, ArchiveReaderMetrics};
 use sui_config::node::ArchiveReaderConfig;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 
+use crate::errors::IndexerError;
 use crate::types::IndexerResult;
 
-pub async fn read_next_checkpoint_after_epoch(
+#[derive(Clone, Debug)]
+pub struct RestoreCheckpointInfo {
+    pub next_checkpoint_after_epoch: u64,
+    pub chain_identifier: CheckpointDigest,
+}
+
+pub async fn read_restore_checkpoint_info(
     cred_path: String,
     archive_bucket: Option<String>,
     epoch: u64,
-) -> IndexerResult<u64> {
+) -> IndexerResult<RestoreCheckpointInfo> {
     let archive_store_config = ObjectStoreConfig {
         object_store: Some(ObjectStoreType::GCS),
         bucket: archive_bucket,
@@ -39,5 +47,16 @@ pub async fn read_next_checkpoint_after_epoch(
         "Read from archives: next checkpoint sequence after epoch {} is: {}",
         epoch, next_checkpoint_after_epoch
     );
-    Ok(next_checkpoint_after_epoch)
+    let cp_summaries = archive_reader
+        .get_summaries_for_list_no_verify(vec![0])
+        .await
+        .map_err(|e| IndexerError::ArchiveReaderError(format!("Failed to get summaries: {}", e)))?;
+    let first_cp = cp_summaries
+        .first()
+        .ok_or_else(|| IndexerError::ArchiveReaderError("No checkpoint found".to_string()))?;
+    let chain_identifier = *first_cp.digest();
+    Ok(RestoreCheckpointInfo {
+        next_checkpoint_after_epoch,
+        chain_identifier,
+    })
 }

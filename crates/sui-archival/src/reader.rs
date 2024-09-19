@@ -361,6 +361,44 @@ impl ArchiveReader {
             .await
     }
 
+    pub async fn get_summaries_for_list_no_verify(
+        &self,
+        cp_list: Vec<CheckpointSequenceNumber>,
+    ) -> Result<Vec<CertifiedCheckpointSummary>> {
+        let summary_files = self.get_summary_files_for_list(cp_list.clone()).await?;
+        let remote_object_store = self.remote_object_store.clone();
+        let stream = futures::stream::iter(summary_files.iter())
+            .map(|summary_metadata| {
+                let remote_object_store = remote_object_store.clone();
+                async move {
+                    let summary_data =
+                        get(&remote_object_store, &summary_metadata.file_path()).await?;
+                    Ok::<Bytes, anyhow::Error>(summary_data)
+                }
+            })
+            .boxed();
+
+        stream
+            .buffer_unordered(self.concurrency)
+            .try_fold(Vec::new(), |mut acc, summary_data| async move {
+                let summary_result: Result<Vec<CertifiedCheckpointSummary>, anyhow::Error> =
+                    make_iterator::<CertifiedCheckpointSummary, Reader<Bytes>>(
+                        SUMMARY_FILE_MAGIC,
+                        summary_data.reader(),
+                    )
+                    .map(|summary_iter| summary_iter.collect::<Vec<_>>());
+
+                match summary_result {
+                    Ok(summaries) => {
+                        acc.extend(summaries);
+                        Ok(acc)
+                    }
+                    Err(e) => Err(e),
+                }
+            })
+            .await
+    }
+
     /// Load checkpoints+txns+effects from archive into the input store `S` for the given
     /// checkpoint range. If latest available checkpoint in archive is older than the start of the
     /// input range then this call fails with an error otherwise we load as many checkpoints as
