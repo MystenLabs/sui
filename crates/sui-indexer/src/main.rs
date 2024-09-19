@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use clap::Parser;
-use sui_indexer::config::Command;
+use tokio_util::sync::CancellationToken;
+use tracing::warn;
+
+use sui_indexer::config::{Command, UploadOptions};
 use sui_indexer::database::ConnectionPool;
 use sui_indexer::db::{check_db_migration_consistency, reset_database, run_migrations};
 use sui_indexer::indexer::Indexer;
 use sui_indexer::metrics::{
     spawn_connection_pool_metric_collector, start_prometheus_server, IndexerMetrics,
 };
+use sui_indexer::restorer::formal_snapshot::IndexerFormalSnapshotRestorer;
 use sui_indexer::sql_backfill::run_sql_backfill;
 use sui_indexer::store::PgIndexerStore;
-use tokio_util::sync::CancellationToken;
-use tracing::warn;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -40,12 +41,11 @@ async fn main() -> anyhow::Result<()> {
             ingestion_config,
             snapshot_config,
             pruning_options,
-            restore_config,
+            upload_options,
         } => {
             // Make sure to run all migrations on startup, and also serve as a compatibility check.
             run_migrations(pool.dedicated_connection().await?).await?;
-
-            let store = PgIndexerStore::new(pool, restore_config, indexer_metrics.clone());
+            let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
 
             Indexer::start_writer_with_config(
                 &ingestion_config,
@@ -90,6 +90,16 @@ async fn main() -> anyhow::Result<()> {
                 backfill_config,
             )
             .await;
+        }
+        Command::Restore(restore_config) => {
+            let upload_options = UploadOptions {
+                gcs_display_bucket: Some(restore_config.gcs_display_bucket.clone()),
+                gcs_cred_path: Some(restore_config.gcs_snapshot_bucket.clone()),
+            };
+            let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
+            let mut formal_restorer =
+                IndexerFormalSnapshotRestorer::new(store, restore_config).await?;
+            formal_restorer.restore().await?;
         }
     }
 

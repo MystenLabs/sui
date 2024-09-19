@@ -174,7 +174,7 @@ pub enum Command {
         #[command(flatten)]
         pruning_options: PruningOptions,
         #[command(flatten)]
-        restore_config: RestoreConfig,
+        upload_options: UploadOptions,
     },
     JsonRpcService(JsonRpcConfig),
     ResetDatabase {
@@ -201,6 +201,8 @@ pub enum Command {
         #[command(flatten)]
         backfill_config: SqlBackFillConfig,
     },
+    /// Restore the database from formal snaphots.
+    Restore(RestoreConfig),
 }
 
 #[derive(Args, Default, Debug, Clone)]
@@ -240,11 +242,33 @@ impl Default for SnapshotLagConfig {
 }
 
 #[derive(Args, Debug, Clone, Default)]
-pub struct RestoreConfig {
-    #[arg(long, env = "GCS_CRED_PATH")]
-    pub gcs_cred_path: Option<String>,
+pub struct UploadOptions {
     #[arg(long, env = "GCS_DISPLAY_BUCKET")]
     pub gcs_display_bucket: Option<String>,
+    #[arg(long, env = "GCS_CRED_PATH")]
+    pub gcs_cred_path: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct RestoreConfig {
+    #[arg(long, env = "GCS_ARCHIVE_BUCKET")]
+    pub gcs_archive_bucket: String,
+    #[arg(long, env = "GCS_CRED_PATH")]
+    pub gcs_cred_path: String,
+    #[arg(long, env = "GCS_DISPLAY_BUCKET")]
+    pub gcs_display_bucket: String,
+    #[arg(long, env = "GCS_SNAPSHOT_DIR")]
+    pub gcs_snapshot_dir: String,
+    #[arg(long, env = "GCS_SNAPSHOT_BUCKET")]
+    pub gcs_snapshot_bucket: String,
+    #[arg(long, env = "START_EPOCH")]
+    pub start_epoch: u64,
+    #[arg(long, env = "S3_ENDPOINT")]
+    pub s3_endpoint: String,
+    #[arg(env = "OBJECT_STORE_CONCURRENT_LIMIT")]
+    pub object_store_concurrent_limit: usize,
+    #[arg(env = "OBJECT_STORE_MAX_TIMEOUT_SECS")]
+    pub object_store_max_timeout_secs: u64,
 }
 
 #[cfg(test)]
