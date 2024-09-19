@@ -204,7 +204,7 @@ impl From<IndexedDeletedObject> for StoredObjectSnapshot {
 
 #[derive(Queryable, Insertable, Selectable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects_history, primary_key(object_id, object_version, checkpoint_sequence_number))]
-pub struct StoredObjectHistory {
+pub struct StoredHistoryObject {
     pub object_id: Vec<u8>,
     pub object_version: i64,
     pub object_status: i16,
@@ -222,7 +222,7 @@ pub struct StoredObjectHistory {
     pub df_kind: Option<i16>,
 }
 
-impl From<IndexedObject> for StoredObjectHistory {
+impl From<IndexedObject> for StoredHistoryObject {
     fn from(o: IndexedObject) -> Self {
         let IndexedObject {
             checkpoint_sequence_number,
@@ -264,7 +264,7 @@ impl From<IndexedObject> for StoredObjectHistory {
     }
 }
 
-impl From<IndexedDeletedObject> for StoredObjectHistory {
+impl From<IndexedDeletedObject> for StoredHistoryObject {
     fn from(o: IndexedDeletedObject) -> Self {
         Self {
             object_id: o.object_id.to_vec(),

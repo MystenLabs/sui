@@ -42,7 +42,7 @@ use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::obj_indices::StoredObjectVersion;
-use sui_indexer::models::objects::{StoredFullHistoryObject, StoredObjectHistory};
+use sui_indexer::models::objects::{StoredFullHistoryObject, StoredHistoryObject};
 use sui_indexer::schema::{full_objects_history, objects_version};
 use sui_indexer::types::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types::OwnerType;
@@ -82,7 +82,7 @@ pub(crate) enum ObjectKind {
     /// been indexed yet.
     NotIndexed(NativeObject),
     /// An object fetched from the index.
-    Indexed(NativeObject, StoredObjectHistory),
+    Indexed(NativeObject, StoredHistoryObject),
     /// An object in the bcs serialized form.
     Serialized(Vec<u8>),
     /// The object is wrapped or deleted and only partial information can be loaded from the
@@ -850,7 +850,7 @@ impl Object {
                     };
 
                     Ok(Some(
-                        page.paginate_raw_query::<StoredObjectHistory>(
+                        page.paginate_raw_query::<StoredHistoryObject>(
                             conn,
                             checkpoint_viewed_at,
                             objects_query(&filter, range, &page),
@@ -979,7 +979,7 @@ impl Object {
     /// we use [`version_for_dynamic_fields`] to infer a root version to then propagate from this
     /// object down to its dynamic fields.
     pub(crate) fn try_from_stored_history_object(
-        history_object: StoredObjectHistory,
+        history_object: StoredHistoryObject,
         checkpoint_viewed_at: u64,
         root_version: Option<u64>,
     ) -> Result<Self, Error> {
@@ -1218,7 +1218,7 @@ impl Checkpointed for Cursor {
 
 impl ScanLimited for Cursor {}
 
-impl RawPaginated<Cursor> for StoredObjectHistory {
+impl RawPaginated<Cursor> for StoredHistoryObject {
     fn filter_ge(cursor: &Cursor, query: RawQuery) -> RawQuery {
         filter!(
             query,
@@ -1248,7 +1248,7 @@ impl RawPaginated<Cursor> for StoredObjectHistory {
     }
 }
 
-impl Target<Cursor> for StoredObjectHistory {
+impl Target<Cursor> for StoredHistoryObject {
     fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(HistoricalObjectCursor::new(
             self.object_id.clone(),
@@ -1473,7 +1473,7 @@ impl Loader<LatestAtKey> for Db {
                             let Some(range) =
                                 AvailableRange::result(conn, checkpoint_viewed_at).await?
                             else {
-                                return Ok::<Vec<(u64, StoredObjectHistory)>, diesel::result::Error>(
+                                return Ok::<Vec<(u64, StoredHistoryObject)>, diesel::result::Error>(
                                     vec![],
                                 );
                             };

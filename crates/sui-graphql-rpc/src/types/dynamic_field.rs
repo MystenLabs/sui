@@ -6,7 +6,7 @@ use async_graphql::*;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::annotated_value::{self as A, MoveStruct};
 use move_core_types::language_storage::TypeTag;
-use sui_indexer::models::objects::StoredObjectHistory;
+use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::types::OwnerType;
 use sui_types::dynamic_field::{
     derive_dynamic_field_id, extract_id_value, DynamicFieldInfo, DynamicFieldType,
@@ -218,7 +218,7 @@ impl DynamicField {
                     };
 
                     Ok(Some(
-                        page.paginate_raw_query::<StoredObjectHistory>(
+                        page.paginate_raw_query::<StoredHistoryObject>(
                             conn,
                             checkpoint_viewed_at,
                             dynamic_fields_query(parent, parent_version, range, &page),

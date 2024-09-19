@@ -34,7 +34,7 @@ use async_graphql::{connection::Connection, *};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use serde::{Deserialize, Serialize};
-use sui_indexer::models::objects::StoredObjectHistory;
+use sui_indexer::models::objects::StoredHistoryObject;
 use sui_json_rpc::name_service::{
     Domain as NativeDomain, NameRecord, NameServiceConfig, NameServiceError,
 };
@@ -513,7 +513,7 @@ impl NameService {
                         move |newer| newer,
                     );
 
-                    let objects: Vec<StoredObjectHistory> =
+                    let objects: Vec<StoredHistoryObject> =
                         conn.results(move || sql.clone().into_boxed()).await?;
 
                     Ok(Some((timestamp_ms, objects)))

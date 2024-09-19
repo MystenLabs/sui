@@ -39,7 +39,7 @@ use crate::models::epoch::{StoredFeatureFlag, StoredProtocolConfig};
 use crate::models::events::StoredEvent;
 use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{
-    StoredDeletedObject, StoredFullHistoryObject, StoredObject, StoredObjectHistory,
+    StoredDeletedObject, StoredFullHistoryObject, StoredHistoryObject, StoredObject,
     StoredObjectSnapshot,
 };
 use crate::models::packages::StoredPackage;
@@ -475,7 +475,7 @@ impl PgIndexerStore {
 
     async fn persist_objects_history_chunk(
         &self,
-        stored_objects_history: Vec<StoredObjectHistory>,
+        stored_objects_history: Vec<StoredHistoryObject>,
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         let guard = self
@@ -2121,14 +2121,14 @@ fn make_objects_to_commit(
 
 fn make_objects_history_to_commit(
     tx_object_changes: Vec<TransactionObjectChangesToCommit>,
-) -> Vec<StoredObjectHistory> {
-    let deleted_objects: Vec<StoredObjectHistory> = tx_object_changes
+) -> Vec<StoredHistoryObject> {
+    let deleted_objects: Vec<StoredHistoryObject> = tx_object_changes
         .clone()
         .into_iter()
         .flat_map(|changes| changes.deleted_objects)
         .map(|o| o.into())
         .collect();
-    let mutated_objects: Vec<StoredObjectHistory> = tx_object_changes
+    let mutated_objects: Vec<StoredHistoryObject> = tx_object_changes
         .into_iter()
         .flat_map(|changes| changes.changed_objects)
         .map(|o| o.into())
