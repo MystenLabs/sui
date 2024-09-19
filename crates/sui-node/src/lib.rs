@@ -22,7 +22,6 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use sui_config::node::RPCHealthCheck;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
@@ -2039,7 +2038,7 @@ pub async fn build_http_server(
 
     if config.enable_experimental_rest_api {
         let mut rest_service = sui_rest_api::RestService::new(
-            Arc::new(RestReadStore::new(state, store)),
+            Arc::new(RestReadStore::new(state.clone(), store)),
             software_version,
         );
 
@@ -2051,13 +2050,11 @@ pub async fn build_http_server(
 
         router = router.merge(rest_service.into_router());
     }
-
-    if let Some(health_check_config) = config.rpc_health_check.clone() {
-        router = router
-            .route("/health", axum::routing::get(health_check_handler))
-            .route_layer(axum::Extension(health_check_config.clone()))
-            .route_layer(axum::Extension(prometheus_registry.clone()));
-    }
+    // TODO: Remove this health check when experimental REST API becomes default
+    // This is a copy of the health check in crates/sui-rest-api/src/health.rs
+    router = router
+        .route("/health", axum::routing::get(health_check_handler))
+        .route_layer(axum::Extension(state));
 
     let listener = tokio::net::TcpListener::bind(&config.json_rpc_address)
         .await
@@ -2080,49 +2077,49 @@ pub async fn build_http_server(
     Ok(Some(handle))
 }
 
-async fn health_check_handler(
-    axum::Extension(health_check_config): axum::Extension<RPCHealthCheck>,
-    axum::Extension(prometheus_registry): axum::Extension<Registry>,
-) -> impl axum::response::IntoResponse {
-    let metrics_families = prometheus_registry.gather();
-
-    for family in metrics_families {
-        if family.get_name() == "last_executed_checkpoint_timestamp_ms" {
-            // Directly extract the gauge value since there is only one metric in this family
-            if let Some(metric) = family.get_metric().first() {
-                let last_executed_checkpoint_ts_ms = metric.get_gauge().get_value() as u64;
-                if is_delay_greater_than_max_lag(
-                    last_executed_checkpoint_ts_ms,
-                    health_check_config.max_checkpoint_lag_seconds,
-                ) {
-                    info!(
-                        last_executed_checkpoint_ts_ms,
-                        "failing healthcheck due to checkpoint lag"
-                    );
-                    return (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down");
-                }
-                return (axum::http::StatusCode::OK, "up");
-            }
-        }
-    }
-
-    info!("last_executed_checkpoint_timestamp_ms not found");
-    (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down")
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct Threshold {
+    pub threshold_seconds: Option<u32>,
 }
 
-fn is_delay_greater_than_max_lag(unix_timestamp: u64, max_lag: u64) -> bool {
-    let timestamp_time = std::time::UNIX_EPOCH + Duration::from_millis(unix_timestamp);
-    match std::time::SystemTime::now().duration_since(timestamp_time) {
-        Ok(duration_since_timestamp) => {
-            // Compare the duration
-            duration_since_timestamp > Duration::from_secs(max_lag)
-        }
-        Err(_) => {
-            // SystemTime::now() is earlier than the unix timestamp
-            // This could happen if the system clock is changed
-            false
+async fn health_check_handler(
+    axum::extract::Query(Threshold { threshold_seconds }): axum::extract::Query<Threshold>,
+    axum::Extension(state): axum::Extension<Arc<AuthorityState>>,
+) -> impl axum::response::IntoResponse {
+    if let Some(threshold_seconds) = threshold_seconds {
+        // Attempt to get the latest checkpoint
+        let summary = match state
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint()
+        {
+            Ok(Some(summary)) => summary,
+            Ok(None) => {
+                warn!("Highest executed checkpoint not found");
+                return (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down");
+            }
+            Err(err) => {
+                warn!("Failed to retrieve highest executed checkpoint: {:?}", err);
+                return (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down");
+            }
+        };
+
+        // Calculate the threshold time based on the provided threshold_seconds
+        let latest_chain_time = summary.timestamp();
+        let threshold =
+            std::time::SystemTime::now() - Duration::from_secs(threshold_seconds as u64);
+
+        // Check if the latest checkpoint is within the threshold
+        if latest_chain_time < threshold {
+            warn!(
+                ?latest_chain_time,
+                ?threshold,
+                "failing healthcheck due to checkpoint lag"
+            );
+            return (axum::http::StatusCode::SERVICE_UNAVAILABLE, "down");
         }
     }
+    // if health endpoint is responding and no threshold is given, respond success
+    (axum::http::StatusCode::OK, "up")
 }
 
 #[cfg(not(test))]
