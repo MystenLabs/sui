@@ -98,6 +98,7 @@ pub(crate) struct Core {
     /// This is currently being used to avoid equivocations during a node recovering from amnesia. When value is None it means that
     /// the last block sync mechanism is enabled, but it hasn't been initialised yet.
     last_known_proposed_round: Option<Round>,
+    ignore_proposal_checks_for_testing: bool,
 }
 
 impl Core {
@@ -169,6 +170,7 @@ impl Core {
             block_signer,
             dag_state,
             last_known_proposed_round: min_propose_round,
+            ignore_proposal_checks_for_testing: false,
         }
         .recover()
     }
@@ -652,12 +654,17 @@ impl Core {
         info!("Last known proposed round set to {round}");
     }
 
+    pub(crate) fn ignore_proposal_checks_for_testing(&mut self, ignore: bool) {
+        self.ignore_proposal_checks_for_testing = ignore;
+        info!("Ignore proposal checks set to {ignore}");
+    }
+
     /// Whether the core should propose new blocks.
     pub(crate) fn should_propose(&self) -> bool {
         let clock_round = self.threshold_clock.get_round();
         let core_skipped_proposals = &self.context.metrics.node_metrics.core_skipped_proposals;
 
-        if !self.subscriber_exists {
+        if !self.ignore_proposal_checks_for_testing && !self.subscriber_exists {
             debug!("Skip proposing for round {clock_round}, no subscriber exists.");
             core_skipped_proposals
                 .with_label_values(&["no_subscriber"])
@@ -665,11 +672,12 @@ impl Core {
             return false;
         }
 
-        if self.propagation_delay
-            > self
-                .context
-                .parameters
-                .propagation_delay_stop_proposal_threshold
+        if !self.ignore_proposal_checks_for_testing
+            && self.propagation_delay
+                > self
+                    .context
+                    .parameters
+                    .propagation_delay_stop_proposal_threshold
         {
             debug!(
                 "Skip proposing for round {clock_round}, high propagation delay {} > {}.",
