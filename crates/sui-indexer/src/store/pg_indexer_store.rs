@@ -50,8 +50,9 @@ use crate::schema::{
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
     event_struct_package, events, feature_flags, full_objects_history, objects, objects_history,
     objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
-    transactions, tx_affected_addresses, tx_calls_fun, tx_calls_mod, tx_calls_pkg,
-    tx_changed_objects, tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
+    transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun, tx_calls_mod,
+    tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds, tx_recipients,
+    tx_senders,
 };
 use crate::store::transaction_with_retry;
 use crate::types::EventIndex;
@@ -1027,6 +1028,7 @@ impl PgIndexerStore {
         let len = indices.len();
         let (
             affected_addresses,
+            affected_objects,
             senders,
             recipients,
             input_objects,
@@ -1048,9 +1050,11 @@ impl PgIndexerStore {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                Vec::new(),
             ),
             |(
                 mut tx_affected_addresses,
+                mut tx_affected_objects,
                 mut tx_senders,
                 mut tx_recipients,
                 mut tx_input_objects,
@@ -1063,17 +1067,19 @@ impl PgIndexerStore {
             ),
              index| {
                 tx_affected_addresses.extend(index.0);
-                tx_senders.extend(index.1);
-                tx_recipients.extend(index.2);
-                tx_input_objects.extend(index.3);
-                tx_changed_objects.extend(index.4);
-                tx_pkgs.extend(index.5);
-                tx_mods.extend(index.6);
-                tx_funs.extend(index.7);
-                tx_digests.extend(index.8);
-                tx_kinds.extend(index.9);
+                tx_affected_objects.extend(index.1);
+                tx_senders.extend(index.2);
+                tx_recipients.extend(index.3);
+                tx_input_objects.extend(index.4);
+                tx_changed_objects.extend(index.5);
+                tx_pkgs.extend(index.6);
+                tx_mods.extend(index.7);
+                tx_funs.extend(index.8);
+                tx_digests.extend(index.9);
+                tx_kinds.extend(index.10);
                 (
                     tx_affected_addresses,
+                    tx_affected_objects,
                     tx_senders,
                     tx_recipients,
                     tx_input_objects,
@@ -1091,6 +1097,12 @@ impl PgIndexerStore {
             async {
                 diesel::insert_into(tx_affected_addresses::table)
                     .values(&affected_addresses)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+
+                diesel::insert_into(tx_affected_objects::table)
+                    .values(&affected_objects)
                     .on_conflict_do_nothing()
                     .execute(conn)
                     .await?;

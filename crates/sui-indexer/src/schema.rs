@@ -289,6 +289,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    tx_affected_objects (affected, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        affected -> Bytea,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
     tx_calls_fun (package, module, func, tx_sequence_number) {
         tx_sequence_number -> Int8,
         package -> Bytea,
@@ -384,6 +392,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     pruner_cp_watermark,
     transactions,
     tx_affected_addresses,
+    tx_affected_objects,
     tx_calls_fun,
     tx_calls_mod,
     tx_calls_pkg,
