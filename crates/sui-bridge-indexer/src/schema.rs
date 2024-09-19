@@ -61,6 +61,7 @@ diesel::table! {
 
 diesel::table! {
     governance_actions (txn_digest) {
+        id -> Int8,
         txn_digest -> Bytea,
         sender_address -> Bytea,
         timestamp_ms -> Int8,
