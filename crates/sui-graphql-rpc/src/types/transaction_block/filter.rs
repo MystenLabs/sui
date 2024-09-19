@@ -35,19 +35,32 @@ pub(crate) struct TransactionBlockFilter {
     /// deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
     /// Both filters restrict transactions by their sender, only, not signers in general.
     ///
-    /// This filter will be removed after 1.36.0 (2024-10-14).
+    /// This filter will be removed with 1.36.0 (2024-10-14).
     pub sign_address: Option<SuiAddress>,
 
     /// Limit to transactions that were sent by the given address.
     pub sent_address: Option<SuiAddress>,
 
-    /// Limit to transactions that sent an object to the given address.
+    /// Limit to transactions that sent an object to the given address. NOTE: this input filter has
+    /// been deprecated in favor of `affectedAddress` which offers an easier to understand
+    /// behavior.
+    ///
+    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+    /// `affectedAddress` is introduced, whichever is later.
     pub recv_address: Option<SuiAddress>,
 
-    /// Limit to transactions that accepted the given object as an input.
+    /// Limit to transactions that accepted the given object as an input. NOTE: this input filter
+    /// has been deprecated in favor of `affectedObject` which offers an easier to under behavior.
+    ///
+    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+    /// `affectedObject` is introduced, whichever is later.
     pub input_object: Option<SuiAddress>,
 
-    /// Limit to transactions that output a versioon of this object.
+    /// Limit to transactions that output a versioon of this object. NOTE: this input filter has
+    /// been deprecated in favor of `affectedObject` which offers an easier to understand behavor.
+    ///
+    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+    /// `affectedObject` is introduced, whichever is later.
     pub changed_object: Option<SuiAddress>,
 
     /// Select transactions by their digest.

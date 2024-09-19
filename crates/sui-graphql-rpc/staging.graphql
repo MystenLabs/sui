@@ -168,7 +168,7 @@ enum AddressTransactionBlockRelationship {
 	`SENT` which behaves identically but is named more clearly. Both filters restrict
 	transactions by their sender, only, not signers in general.
 	
-	This filter will be removed after 1.36.0 (2024-10-14).
+	This filter will be removed with 1.36.0 (2024-10-14).
 	"""
 	SIGN
 	"""
@@ -176,7 +176,11 @@ enum AddressTransactionBlockRelationship {
 	"""
 	SENT
 	"""
-	Transactions that sent objects to this address.
+	Transactions that sent objects to this address. NOTE: this input filter has been deprecated
+	in favor of `AFFECTED`, which offers an easier to understand behavior.
+	
+	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+	`AFFECTED` is introduced, whichever is later.
 	"""
 	RECV
 	"""
@@ -4336,7 +4340,7 @@ input TransactionBlockFilter {
 	deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
 	Both filters restrict transactions by their sender, only, not signers in general.
 	
-	This filter will be removed after 1.36.0 (2024-10-14).
+	This filter will be removed with 1.36.0 (2024-10-14).
 	"""
 	signAddress: SuiAddress
 	"""
@@ -4344,15 +4348,28 @@ input TransactionBlockFilter {
 	"""
 	sentAddress: SuiAddress
 	"""
-	Limit to transactions that sent an object to the given address.
+	Limit to transactions that sent an object to the given address. NOTE: this input filter has
+	been deprecated in favor of `affectedAddress` which offers an easier to understand
+	behavior.
+	
+	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+	`affectedAddress` is introduced, whichever is later.
 	"""
 	recvAddress: SuiAddress
 	"""
-	Limit to transactions that accepted the given object as an input.
+	Limit to transactions that accepted the given object as an input. NOTE: this input filter
+	has been deprecated in favor of `affectedObject` which offers an easier to under behavior.
+	
+	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+	`affectedObject` is introduced, whichever is later.
 	"""
 	inputObject: SuiAddress
 	"""
-	Limit to transactions that output a versioon of this object.
+	Limit to transactions that output a versioon of this object. NOTE: this input filter has
+	been deprecated in favor of `affectedObject` which offers an easier to understand behavor.
+	
+	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+	`affectedObject` is introduced, whichever is later.
 	"""
 	changedObject: SuiAddress
 	"""
