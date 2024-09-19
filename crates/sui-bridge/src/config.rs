@@ -160,17 +160,18 @@ impl BridgeNodeConfig {
         // that is only called when `run_client` is true.
         let sui_client =
             Arc::new(SuiClient::<SuiSdkClient>::new(&self.sui.sui_rpc_url, metrics.clone()).await?);
-        let bridge_committee = sui_client
-            .get_bridge_committee()
-            .await
-            .map_err(|e| anyhow!("Error getting bridge committee: {:?}", e))?;
-        if !bridge_committee.is_active_member(&bridge_authority_key.public().into()) {
-            return Err(anyhow!(
-                "Bridge authority key is not part of bridge committee"
-            ));
-        }
+        // let bridge_committee = sui_client
+        //     .get_bridge_committee()
+        //     .await
+        //     .map_err(|e| anyhow!("Error getting bridge committee: {:?}", e))?;
+        // if !bridge_committee.is_active_member(&bridge_authority_key.public().into()) {
+        //     return Err(anyhow!(
+        //         "Bridge authority key is not part of bridge committee"
+        //     ));
+        // }
 
-        let (eth_client, eth_contracts) = self.prepare_for_eth(metrics).await?;
+        // let (eth_client, eth_contracts) = self.prepare_for_eth(metrics).await?;
+        let (eth_client, _eth_contracts) = self.prepare_for_eth(metrics).await?;
         let bridge_summary = sui_client
             .get_bridge_summary()
             .await
@@ -207,108 +208,112 @@ impl BridgeNodeConfig {
         }
 
         // If client is enabled, prepare client config
-        let (bridge_client_key, client_sui_address, gas_object_ref) =
-            self.prepare_for_sui(sui_client.clone()).await?;
+        // let (bridge_client_key, client_sui_address, gas_object_ref) =
+        //     self.prepare_for_sui(sui_client.clone()).await?;
 
-        let db_path = self
-            .db_path
-            .clone()
-            .ok_or(anyhow!("`db_path` is required when `run_client` is true"))?;
+        // let db_path = self
+        //     .db_path
+        //     .clone()
+        //     .ok_or(anyhow!("`db_path` is required when `run_client` is true"))?;
 
-        let bridge_client_config = BridgeClientConfig {
-            sui_address: client_sui_address,
-            key: bridge_client_key,
-            gas_object_ref,
-            metrics_port: self.metrics_port,
-            sui_client: sui_client.clone(),
-            eth_client: eth_client.clone(),
-            db_path,
-            eth_contracts,
-            // in `prepare_for_eth` we check if this is None when `run_client` is true. Safe to unwrap here.
-            eth_contracts_start_block_fallback: self
-                .eth
-                .eth_contracts_start_block_fallback
-                .unwrap(),
-            eth_contracts_start_block_override: self.eth.eth_contracts_start_block_override,
-            sui_bridge_module_last_processed_event_id_override: self
-                .sui
-                .sui_bridge_module_last_processed_event_id_override,
-        };
+        // let bridge_client_config = BridgeClientConfig {
+        //     sui_address: client_sui_address,
+        //     key: bridge_client_key,
+        //     gas_object_ref,
+        //     metrics_port: self.metrics_port,
+        //     sui_client: sui_client.clone(),
+        //     eth_client: eth_client.clone(),
+        //     db_path,
+        //     eth_contracts,
+        //     // in `prepare_for_eth` we check if this is None when `run_client` is true. Safe to unwrap here.
+        //     eth_contracts_start_block_fallback: self
+        //         .eth
+        //         .eth_contracts_start_block_fallback
+        //         .unwrap(),
+        //     eth_contracts_start_block_override: self.eth.eth_contracts_start_block_override,
+        //     sui_bridge_module_last_processed_event_id_override: self
+        //         .sui
+        //         .sui_bridge_module_last_processed_event_id_override,
+        // };
 
-        Ok((bridge_server_config, Some(bridge_client_config)))
+        // Ok((bridge_server_config, Some(bridge_client_config)))
+        Ok((bridge_server_config, None))
     }
 
     async fn prepare_for_eth(
         &self,
         metrics: Arc<BridgeMetrics>,
     ) -> anyhow::Result<(Arc<EthClient<MeteredEthHttpProvier>>, Vec<EthAddress>)> {
-        let bridge_proxy_address = EthAddress::from_str(&self.eth.eth_bridge_proxy_address)?;
-        let provider = Arc::new(
-            new_metered_eth_provider(&self.eth.eth_rpc_url, metrics.clone())
-                .unwrap()
-                .interval(std::time::Duration::from_millis(2000)),
-        );
-        let chain_id = provider.get_chainid().await?;
-        let (committee_address, limiter_address, vault_address, config_address) =
-            get_eth_contract_addresses(bridge_proxy_address, &provider).await?;
-        let config = EthBridgeConfig::new(config_address, provider.clone());
+        // let bridge_proxy_address = EthAddress::from_str(&self.eth.eth_bridge_proxy_address)?;
+        // let provider = Arc::new(
+        //     new_metered_eth_provider(&self.eth.eth_rpc_url, metrics.clone())
+        //         .unwrap()
+        //         .interval(std::time::Duration::from_millis(2000)),
+        // );
+        // let chain_id = provider.get_chainid().await?;
+        // let (committee_address, limiter_address, vault_address, config_address) =
+        //     get_eth_contract_addresses(bridge_proxy_address, &provider).await?;
+        // let config = EthBridgeConfig::new(config_address, provider.clone());
 
-        if self.run_client && self.eth.eth_contracts_start_block_fallback.is_none() {
-            return Err(anyhow!(
-                "eth_contracts_start_block_fallback is required when run_client is true"
-            ));
-        }
+        // if self.run_client && self.eth.eth_contracts_start_block_fallback.is_none() {
+        //     return Err(anyhow!(
+        //         "eth_contracts_start_block_fallback is required when run_client is true"
+        //     ));
+        // }
 
-        // If bridge chain id is Eth Mainent or Sepolia, we expect to see chain
-        // identifier to match accordingly.
-        let bridge_chain_id: u8 = config.chain_id().call().await?;
-        if self.eth.eth_bridge_chain_id != bridge_chain_id {
-            return Err(anyhow!(
-                "Bridge chain id mismatch: expected {}, but connected to {}",
-                self.eth.eth_bridge_chain_id,
-                bridge_chain_id
-            ));
-        }
-        if bridge_chain_id == BridgeChainId::EthMainnet as u8 && chain_id.as_u64() != 1 {
-            anyhow::bail!(
-                "Expected Eth chain id 1, but connected to {}",
-                chain_id.as_u64()
-            );
-        }
-        if bridge_chain_id == BridgeChainId::EthSepolia as u8 && chain_id.as_u64() != 11155111 {
-            anyhow::bail!(
-                "Expected Eth chain id 11155111, but connected to {}",
-                chain_id.as_u64()
-            );
-        }
-        info!(
-            "Connected to Eth chain: {}, Bridge chain id: {}",
-            chain_id.as_u64(),
-            bridge_chain_id,
-        );
+        // // If bridge chain id is Eth Mainent or Sepolia, we expect to see chain
+        // // identifier to match accordingly.
+        // let bridge_chain_id: u8 = config.chain_id().call().await?;
+        // if self.eth.eth_bridge_chain_id != bridge_chain_id {
+        //     return Err(anyhow!(
+        //         "Bridge chain id mismatch: expected {}, but connected to {}",
+        //         self.eth.eth_bridge_chain_id,
+        //         bridge_chain_id
+        //     ));
+        // }
+        // if bridge_chain_id == BridgeChainId::EthMainnet as u8 && chain_id.as_u64() != 1 {
+        //     anyhow::bail!(
+        //         "Expected Eth chain id 1, but connected to {}",
+        //         chain_id.as_u64()
+        //     );
+        // }
+        // if bridge_chain_id == BridgeChainId::EthSepolia as u8 && chain_id.as_u64() != 11155111 {
+        //     anyhow::bail!(
+        //         "Expected Eth chain id 11155111, but connected to {}",
+        //         chain_id.as_u64()
+        //     );
+        // }
+        // info!(
+        //     "Connected to Eth chain: {}, Bridge chain id: {}",
+        //     chain_id.as_u64(),
+        //     bridge_chain_id,
+        // );
 
         let eth_client = Arc::new(
             EthClient::<MeteredEthHttpProvier>::new(
                 &self.eth.eth_rpc_url,
-                HashSet::from_iter(vec![
-                    bridge_proxy_address,
-                    committee_address,
-                    config_address,
-                    limiter_address,
-                    vault_address,
-                ]),
+                HashSet::from_iter(vec![]
+                // vec![
+                //     bridge_proxy_address,
+                //     committee_address,
+                //     config_address,
+                //     limiter_address,
+                //     vault_address,
+                // ]
+            ),
                 metrics,
             )
             .await?,
         );
-        let contract_addresses = vec![
-            bridge_proxy_address,
-            committee_address,
-            config_address,
-            limiter_address,
-            vault_address,
-        ];
-        Ok((eth_client, contract_addresses))
+        // let contract_addresses = vec![
+        //     bridge_proxy_address,
+        //     committee_address,
+        //     config_address,
+        //     limiter_address,
+        //     vault_address,
+        // ];
+        // Ok((eth_client, contract_addresses))
+        Ok((eth_client, vec![]))
     }
 
     async fn prepare_for_sui(

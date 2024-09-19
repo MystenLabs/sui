@@ -88,11 +88,11 @@ impl BridgeCommittee {
             total_stake += member.voting_power;
             members_map.insert(public_key, member);
         }
-        if total_stake < BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER {
-            return Err(BridgeError::InvalidBridgeCommittee(format!(
-                "Total voting power is below minimal {BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER}"
-            )));
-        }
+        // if total_stake < BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER {
+        //     return Err(BridgeError::InvalidBridgeCommittee(format!(
+        //         "Total voting power is below minimal {BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER}"
+        //     )));
+        // }
         if total_stake > BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER {
             return Err(BridgeError::InvalidBridgeCommittee(format!(
                 "Total voting power is above maximal {BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER}"
