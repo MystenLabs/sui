@@ -963,6 +963,22 @@ impl DagState {
         commit_round.saturating_sub(cached_rounds)
     }
 
+    /// Returns the eviction round for the provided authority. As long as the authority's latest commit round
+    /// remains above the gc eviction round, then the gc_eviction_round is returned. Otherwise, we always want to 
+    /// keep at least the latest block in memory + cached_rounds per authority.
+    fn authority_gc_eviction_round(&self, authority_index: AuthorityIndex) -> Round {
+        let commit_round = self.last_committed_rounds[authority_index];
+        if commit_round <= self.gc_round() {
+            self.recent_refs[authority_index]
+                .last()
+                .map(|block_ref| block_ref.round)
+                .unwrap_or(GENESIS_ROUND)
+
+        } else {
+            self.gc_eviction_round()
+        }
+    }
+
     /// The round that is used to evict records below that round after a commit has happened and blocks need to get garbage
     /// collected. The round is not strictly calculated based on the current gc_round, but it takes into account the `cached_rounds`
     /// property, so some additional buffer can be given if needed to keep more blocks in memory.
