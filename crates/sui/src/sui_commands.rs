@@ -33,13 +33,13 @@ use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
 use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, SimpleFaucet};
-#[cfg(feature = "indexer")]
+use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
+
 use sui_graphql_rpc::{
     config::{ConnectionConfig, ServiceConfig},
     test_infra::cluster::start_graphql_server_with_fn_rpc,
 };
-#[cfg(feature = "indexer")]
-use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
+
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
@@ -62,21 +62,19 @@ const DEFAULT_EPOCH_DURATION_MS: u64 = 60_000;
 const DEFAULT_FAUCET_NUM_COINS: usize = 5; // 5 coins per request was the default in sui-test-validator
 const DEFAULT_FAUCET_MIST_AMOUNT: u64 = 200_000_000_000; // 200 SUI
 const DEFAULT_FAUCET_PORT: u16 = 9123;
-#[cfg(feature = "indexer")]
+
 const DEFAULT_GRAPHQL_PORT: u16 = 9125;
-#[cfg(feature = "indexer")]
+
 const DEFAULT_INDEXER_PORT: u16 = 9124;
 
-#[cfg(feature = "indexer")]
 #[derive(Args)]
-pub struct IndexerFeatureArgs {
+pub struct IndexerArgs {
     /// Start an indexer with default host and port: 0.0.0.0:9124. This flag accepts also a port,
     /// a host, or both (e.g., 0.0.0.0:9124).
     /// When providing a specific value, please use the = sign between the flag and value:
     /// `--with-indexer=6124` or `--with-indexer=0.0.0.0`, or `--with-indexer=0.0.0.0:9124`
     /// The indexer will be started in writer mode and reader mode.
     #[clap(long,
-            default_value = "0.0.0.0:9124",
             default_missing_value = "0.0.0.0:9124",
             num_args = 0..=1,
             require_equals = true,
@@ -120,8 +118,7 @@ pub struct IndexerFeatureArgs {
     pg_password: String,
 }
 
-#[cfg(feature = "indexer")]
-impl IndexerFeatureArgs {
+impl IndexerArgs {
     pub fn for_testing() -> Self {
         Self {
             with_indexer: None,
@@ -179,9 +176,8 @@ pub enum SuiCommand {
         )]
         with_faucet: Option<String>,
 
-        #[cfg(feature = "indexer")]
         #[clap(flatten)]
-        indexer_feature_args: IndexerFeatureArgs,
+        indexer_feature_args: IndexerArgs,
 
         /// Port to start the Fullnode RPC server on. Default port is 9000.
         #[clap(long, default_value = "9000")]
@@ -355,7 +351,7 @@ impl SuiCommand {
                 config_dir,
                 force_regenesis,
                 with_faucet,
-                #[cfg(feature = "indexer")]
+
                 indexer_feature_args,
                 fullnode_rpc_port,
                 no_full_node,
@@ -364,7 +360,6 @@ impl SuiCommand {
                 start(
                     config_dir.clone(),
                     with_faucet,
-                    #[cfg(feature = "indexer")]
                     indexer_feature_args,
                     force_regenesis,
                     epoch_duration_ms,
@@ -569,7 +564,7 @@ impl SuiCommand {
 async fn start(
     config: Option<PathBuf>,
     with_faucet: Option<String>,
-    #[cfg(feature = "indexer")] indexer_feature_args: IndexerFeatureArgs,
+    indexer_feature_args: IndexerArgs,
     force_regenesis: bool,
     epoch_duration_ms: Option<u64>,
     fullnode_rpc_port: u16,
@@ -582,8 +577,7 @@ async fn start(
         );
     }
 
-    #[cfg(feature = "indexer")]
-    let IndexerFeatureArgs {
+    let IndexerArgs {
         mut with_indexer,
         with_graphql,
         pg_port,
@@ -593,12 +587,12 @@ async fn start(
         pg_password,
     } = indexer_feature_args;
 
-    #[cfg(feature = "indexer")]
+    let pg_address = format!("postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}");
+
     if with_graphql.is_some() {
         with_indexer = Some(with_indexer.unwrap_or_default());
     }
 
-    #[cfg(feature = "indexer")]
     if with_indexer.is_some() {
         ensure!(
             !no_full_node,
@@ -663,13 +657,12 @@ async fn start(
             .with_network_config(network_config);
     }
 
-    #[cfg(feature = "indexer")]
     let data_ingestion_path = tempdir()?.into_path();
 
     // the indexer requires to set the fullnode's data ingestion directory
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
-    #[cfg(feature = "indexer")]
+
     if with_indexer.is_some() {
         swarm_builder = swarm_builder.with_data_ingestion_dir(data_ingestion_path.clone());
     }
@@ -694,14 +687,20 @@ async fn start(
     // the indexer requires a fullnode url with protocol specified
     let fullnode_url = format!("http://{}", fullnode_url);
     info!("Fullnode URL: {}", fullnode_url);
-    #[cfg(feature = "indexer")]
-    let pg_address = format!("postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}");
 
-    #[cfg(feature = "indexer")]
     if let Some(input) = with_indexer {
         let indexer_address = parse_host_port(input, DEFAULT_INDEXER_PORT)
             .map_err(|_| anyhow!("Invalid indexer host and port"))?;
-        tracing::info!("Starting the indexer service at {indexer_address}");
+        info!("Starting the indexer service at {indexer_address}");
+        // Start in reader mode
+        start_test_indexer(
+            pg_address.clone(),
+            fullnode_url.clone(),
+            ReaderWriterConfig::reader_mode(indexer_address.to_string()),
+            data_ingestion_path.clone(),
+        )
+        .await;
+        info!("Indexer started in reader mode");
         // Start in writer mode
         start_test_indexer(
             pg_address.clone(),
@@ -710,20 +709,9 @@ async fn start(
             data_ingestion_path.clone(),
         )
         .await;
-        info!("Indexer in writer mode started");
-
-        // Start in reader mode
-        start_test_indexer(
-            pg_address.clone(),
-            fullnode_url.clone(),
-            ReaderWriterConfig::reader_mode(indexer_address.to_string()),
-            data_ingestion_path,
-        )
-        .await;
-        info!("Indexer in reader mode started");
+        info!("Indexer started in writer mode");
     }
 
-    #[cfg(feature = "indexer")]
     if let Some(input) = with_graphql {
         let graphql_address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
             .map_err(|_| anyhow!("Invalid graphql host and port"))?;
