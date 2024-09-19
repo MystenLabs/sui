@@ -676,6 +676,10 @@ mod tests {
         fn highest_received_rounds(&self) -> Vec<Round> {
             todo!()
         }
+
+        fn ignore_proposal_checks_for_testing(&self, _ignore: bool) -> Result<(), CoreError> {
+            todo!()
+        }
     }
 
     #[derive(Default)]

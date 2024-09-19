@@ -25,8 +25,10 @@ use crate::{
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
     network::{
-        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
-        NetworkManager,
+        admin_server::{start_admin_server, AdminServerHandle},
+        anemo_network::AnemoManager,
+        tonic_network::TonicManager,
+        NetworkClient as _, NetworkManager,
     },
     round_prober::{RoundProber, RoundProberHandle},
     storage::rocksdb_store::RocksDBStore,
@@ -156,6 +158,7 @@ where
     subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
     network_manager: N,
     sync_last_known_own_block: bool,
+    admin_server_handle: AdminServerHandle,
 }
 
 impl<N> AuthorityNode<N>
@@ -322,7 +325,7 @@ where
             block_verifier,
             commit_vote_monitor,
             synchronizer.clone(),
-            core_dispatcher,
+            core_dispatcher.clone(),
             signals_receivers.block_broadcast_receiver(),
             dag_state.clone(),
             store,
@@ -347,6 +350,8 @@ where
 
         network_manager.install_service(network_service).await;
 
+        let admin_server_handle = start_admin_server(core_dispatcher);
+
         info!(
             "Consensus authority started, took {:?}",
             start_time.elapsed()
@@ -366,6 +371,7 @@ where
             subscriber,
             network_manager,
             sync_last_known_own_block,
+            admin_server_handle,
         }
     }
 
@@ -401,6 +407,7 @@ where
             subscriber.stop();
         }
         self.network_manager.stop().await;
+        self.admin_server_handle.stop().await;
 
         self.context
             .metrics

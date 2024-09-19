@@ -358,6 +358,10 @@ mod test {
         fn highest_received_rounds(&self) -> Vec<Round> {
             self.highest_received_rounds.clone()
         }
+
+        fn ignore_proposal_checks_for_testing(&self, _ignore: bool) -> Result<(), CoreError> {
+            unimplemented!()
+        }
     }
 
     struct FakeNetworkClient {
