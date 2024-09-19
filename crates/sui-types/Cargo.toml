@@ -103,7 +103,6 @@ default = []
 test-utils = []
 gas-profiler = [
     "move-vm-profiler/gas-profiler",
-    "move-vm-types/gas-profiler",
     "move-vm-test-utils/gas-profiler",
 ]
 fuzzing = ["move-core-types/fuzzing"]

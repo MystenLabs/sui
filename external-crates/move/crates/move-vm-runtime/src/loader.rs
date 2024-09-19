@@ -1357,7 +1357,6 @@ impl Loader {
         ty.subst(ty_args)
     }
 
-    #[cfg(feature = "gas-profiler")]
     pub(crate) fn make_type(
         &self,
         module: &CompiledModule,
