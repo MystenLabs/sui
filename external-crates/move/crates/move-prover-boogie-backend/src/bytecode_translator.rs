@@ -2403,17 +2403,23 @@ impl<'env> FunctionTranslator<'env> {
                     }
                 }
                 if &FunctionTranslationStyle::Default == style {
-                    if let Some(AbortAction::Jump(target, code)) = aa {
-                        emitln!(self.writer(), "if ($abort_flag) {");
-                        self.writer().indent();
-                        *last_tracked_loc = None;
-                        self.track_loc(last_tracked_loc, &loc);
-                        let code_str = str_local(*code);
-                        emitln!(self.writer(), "{} := $abort_code;", code_str);
-                        self.track_abort(&code_str);
-                        emitln!(self.writer(), "goto L{};", target.as_usize());
-                        self.writer().unindent();
-                        emitln!(self.writer(), "}");
+                    match aa {
+                        Some(AbortAction::Jump(target, code)) => {
+                            emitln!(self.writer(), "if ($abort_flag) {");
+                            self.writer().indent();
+                            *last_tracked_loc = None;
+                            self.track_loc(last_tracked_loc, &loc);
+                            let code_str = str_local(*code);
+                            emitln!(self.writer(), "{} := $abort_code;", code_str);
+                            self.track_abort(&code_str);
+                            emitln!(self.writer(), "goto L{};", target.as_usize());
+                            self.writer().unindent();
+                            emitln!(self.writer(), "}");
+                        }
+                        Some(AbortAction::Check) => {
+                            emitln!(self.writer(), "assert {:msg \"assert_failed(0,0,0): code should not abort\"} !$abort_flag;");
+                        }
+                        None => {}
                     }
                 }
             }
