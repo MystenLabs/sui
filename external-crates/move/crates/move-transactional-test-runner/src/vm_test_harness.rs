@@ -242,6 +242,8 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
             .perform_action(
                 gas_budget,
                 |vm, storage, gas_status| {
+                    // Set the storage's root context to the call module's address.
+                    storage.context = module.address().clone();
                     println!("Current storage: {:?}", storage);
                     println!("Current vm: {:#?}", vm);
                     let instance_storage: &InMemoryStorage = storage;

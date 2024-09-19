@@ -27,6 +27,26 @@ impl BlankStorage {
 
 impl LinkageResolver for BlankStorage {
     type Error = ();
+
+    fn link_context(&self) -> AccountAddress {
+        AccountAddress::ZERO
+    }
+
+    fn relocate(&self, module_id: &ModuleId) -> std::result::Result<ModuleId, Self::Error> {
+        Ok(module_id.clone())
+    }
+
+    fn defining_module(
+        &self,
+        module_id: &ModuleId,
+        _struct: &move_core_types::identifier::IdentStr,
+    ) -> std::result::Result<ModuleId, Self::Error> {
+        Ok(module_id.clone())
+    }
+
+    fn all_package_dependencies(&self) -> std::result::Result<BTreeSet<AccountAddress>, Self::Error> {
+        Ok(BTreeSet::new())
+    }
 }
 
 impl ModuleResolver for BlankStorage {
@@ -70,6 +90,18 @@ impl<'a, 'b, S: LinkageResolver> LinkageResolver for DeltaStorage<'a, 'b, S> {
 
     fn relocate(&self, module_id: &ModuleId) -> std::result::Result<ModuleId, Self::Error> {
         self.base.relocate(module_id)
+    }
+
+    fn defining_module(
+        &self,
+        module_id: &ModuleId,
+        struct_: &move_core_types::identifier::IdentStr,
+    ) -> std::result::Result<ModuleId, Self::Error> {
+        self.base.defining_module(module_id, struct_)
+    }
+
+    fn all_package_dependencies(&self) -> std::result::Result<BTreeSet<AccountAddress>, Self::Error> {
+        self.base.all_package_dependencies()
     }
 }
 
@@ -125,7 +157,8 @@ struct InMemoryAccountStorage {
 /// Simple in-memory storage that can be used as a Move VM storage backend for testing purposes.
 #[derive(Debug, Clone)]
 pub struct InMemoryStorage {
-    accounts: BTreeMap<AccountAddress, InMemoryAccountStorage>,
+    pub context: AccountAddress,
+    pub accounts: BTreeMap<AccountAddress, InMemoryAccountStorage>,
 }
 
 fn apply_changes<K, V>(
@@ -216,6 +249,7 @@ impl InMemoryStorage {
     pub fn new() -> Self {
         Self {
             accounts: BTreeMap::new(),
+            context: AccountAddress::ZERO,
         }
     }
 
@@ -227,12 +261,31 @@ impl InMemoryStorage {
     }
 }
 
-/// Use all default implementations for InMemoryStorage implementation of LinkageResolver
+/// The LinkageResolver for InMemoryStorage does no aliasing; all addresses appear as defined. This
+/// works out for the testing harness.
 impl LinkageResolver for InMemoryStorage {
     type Error = ();
 
     fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error> {
         Ok(self.accounts.keys().cloned().collect())
+    }
+
+    fn link_context(&self) -> AccountAddress {
+        self.context
+    }
+
+    fn relocate(&self, module_id: &ModuleId) -> std::result::Result<ModuleId, Self::Error> {
+        // No motion for relocation
+        Ok(module_id.clone())
+    }
+
+    // FIXME (cswords): Should this do something else?
+    fn defining_module(
+        &self,
+        module_id: &ModuleId,
+        _struct: &move_core_types::identifier::IdentStr,
+    ) -> std::result::Result<ModuleId, Self::Error> {
+        Ok(module_id.clone())
     }
 }
 

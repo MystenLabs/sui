@@ -21,14 +21,10 @@ pub trait LinkageResolver {
 
     /// The link context identifies the mapping from runtime `ModuleId`s to the `ModuleId`s in
     /// storage that they are loaded from as returned by `relocate`.
-    fn link_context(&self) -> AccountAddress {
-        AccountAddress::ZERO
-    }
+    fn link_context(&self) -> AccountAddress;
 
     /// Translate the runtime `module_id` to the on-chain `ModuleId` that it should be loaded from.
-    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-        Ok(module_id.clone())
-    }
+    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error>;
 
     /// Translate the runtime fully-qualified struct name to the on-chain `ModuleId` that originally
     /// defined that type.
@@ -36,14 +32,10 @@ pub trait LinkageResolver {
         &self,
         module_id: &ModuleId,
         _struct: &IdentStr,
-    ) -> Result<ModuleId, Self::Error> {
-        Ok(module_id.clone())
-    }
+    ) -> Result<ModuleId, Self::Error>;
 
     /// Return the transitive closure of all package dependencies of the current linkage context.
-    fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error> {
-        Ok(BTreeSet::new())
-    }
+    fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error>;
 }
 
 /// A persistent storage backend that can resolve modules by address + name.

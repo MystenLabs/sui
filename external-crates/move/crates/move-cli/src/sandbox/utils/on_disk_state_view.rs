@@ -251,6 +251,26 @@ impl OnDiskStateView {
 /// Default implementation of LinkageResolver (no re-linking).
 impl LinkageResolver for OnDiskStateView {
     type Error = anyhow::Error;
+
+    fn link_context(&self) -> AccountAddress {
+        todo!("VM rewrite")
+    }
+
+    fn relocate(&self, module_id: &ModuleId) -> std::result::Result<ModuleId, Self::Error> {
+        todo!("VM rewrite")
+    }
+
+    fn defining_module(
+        &self,
+        module_id: &ModuleId,
+        _struct: &move_core_types::identifier::IdentStr,
+    ) -> std::result::Result<ModuleId, Self::Error> {
+        todo!("VM rewrite")
+    }
+
+    fn all_package_dependencies(&self) -> std::result::Result<std::collections::BTreeSet<AccountAddress>, Self::Error> {
+        todo!("VM rewrite")
+    }
 }
 
 impl ModuleResolver for OnDiskStateView {
