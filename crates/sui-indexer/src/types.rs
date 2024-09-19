@@ -27,7 +27,7 @@ use sui_types::transaction::SenderSignedData;
 
 pub type IndexerResult<T> = Result<T, IndexerError>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct IndexedCheckpoint {
     pub sequence_number: u64,
     pub checkpoint_digest: CheckpointDigest,

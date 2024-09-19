@@ -25,9 +25,9 @@ use sui_types::accumulator::Accumulator;
 use crate::config::RestoreConfig;
 use crate::errors::IndexerError;
 use crate::handlers::TransactionObjectChangesToCommit;
-use crate::restorer::archives::read_next_checkpoint_after_epoch;
+use crate::restorer::archives::{read_restore_checkpoint_info, RestoreCheckpointInfo};
 use crate::store::{indexer_store::IndexerStore, PgIndexerStore};
-use crate::types::IndexedObject;
+use crate::types::{IndexedCheckpoint, IndexedObject};
 
 pub type DigestByBucketAndPartition = BTreeMap<u32, BTreeMap<u32, [u8; 32]>>;
 pub type SnapshotChecksums = (DigestByBucketAndPartition, Accumulator);
@@ -37,7 +37,6 @@ pub struct IndexerFormalSnapshotRestorer {
     store: PgIndexerStore,
     reader: StateSnapshotReaderV1,
     restore_config: RestoreConfig,
-    next_checkpoint_after_epoch: u64,
 }
 
 impl IndexerFormalSnapshotRestorer {
@@ -89,17 +88,9 @@ impl IndexerFormalSnapshotRestorer {
             restore_config.start_epoch
         );
 
-        let next_checkpoint_after_epoch = read_next_checkpoint_after_epoch(
-            restore_config.gcs_cred_path.clone(),
-            Some(restore_config.gcs_archive_bucket.clone()),
-            restore_config.start_epoch,
-        )
-        .await?;
-
         Ok(Self {
             store,
             reader,
-            next_checkpoint_after_epoch,
             restore_config: restore_config.clone(),
         })
     }
@@ -125,6 +116,8 @@ impl IndexerFormalSnapshotRestorer {
         info!("Finished restoring move objects");
         self.restore_display_table().await?;
         info!("Finished restoring display table");
+        self.restore_cp_watermark_and_chain_id().await?;
+        info!("Finished restoring checkpoint info");
         Ok(())
     }
 
@@ -161,7 +154,6 @@ impl IndexerFormalSnapshotRestorer {
                     let store_clone = self.store.clone();
                     let bar_clone = move_object_progress_bar.clone();
                     let restore_config = self.restore_config.clone();
-                    let next_checkpoint_after_epoch = self.next_checkpoint_after_epoch;
 
                     let restore_task = task::spawn(async move {
                         let _permit = sema_limit_clone.acquire().await.unwrap();
@@ -186,14 +178,11 @@ impl IndexerFormalSnapshotRestorer {
                                 for object in obj_iter {
                                     match object {
                                         LiveObject::Normal(obj) => {
-                                            if !obj.is_package() {
-                                                let indexed_object = IndexedObject::from_object(
-                                                    next_checkpoint_after_epoch,
-                                                    obj,
-                                                    None,
-                                                );
-                                                move_objects.push(indexed_object);
-                                            }
+                                            // TODO: placeholder values for df_info and checkpoint_seq_num,
+                                            // will clean it up when the columne cleanup is done.
+                                            let indexed_object =
+                                                IndexedObject::from_object(0, obj, None);
+                                            move_objects.push(indexed_object);
                                         }
                                         LiveObject::Wrapped(_) => {}
                                     }
@@ -267,6 +256,29 @@ impl IndexerFormalSnapshotRestorer {
         let path = Path::from(format!("display_{}.csv", start_epoch).as_str());
         let bytes: bytes::Bytes = get(&remote_store, &path).await?;
         self.store.restore_display(bytes).await?;
+        Ok(())
+    }
+
+    async fn restore_cp_watermark_and_chain_id(&self) -> Result<(), IndexerError> {
+        let restore_checkpoint_info = read_restore_checkpoint_info(
+            self.restore_config.gcs_cred_path.clone(),
+            Some(self.restore_config.gcs_archive_bucket.clone()),
+            self.restore_config.start_epoch,
+        )
+        .await?;
+        let RestoreCheckpointInfo {
+            next_checkpoint_after_epoch,
+            chain_identifier,
+        } = restore_checkpoint_info;
+        self.store
+            .persist_chain_identifier(chain_identifier.into_inner().to_vec())
+            .await?;
+        assert!(next_checkpoint_after_epoch > 0);
+        let last_cp = IndexedCheckpoint {
+            sequence_number: next_checkpoint_after_epoch - 1,
+            ..Default::default()
+        };
+        self.store.persist_checkpoints(vec![last_cp]).await?;
         Ok(())
     }
 }

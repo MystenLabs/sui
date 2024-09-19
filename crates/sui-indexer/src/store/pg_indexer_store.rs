@@ -651,23 +651,7 @@ impl PgIndexerStore {
             let checkpoint_digest = first_checkpoint.checkpoint_digest.into_inner().to_vec();
             self.persist_protocol_configs_and_feature_flags(checkpoint_digest.clone())
                 .await?;
-
-            transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-                async {
-                    let checkpoint_digest =
-                        first_checkpoint.checkpoint_digest.into_inner().to_vec();
-                    diesel::insert_into(chain_identifier::table)
-                        .values(StoredChainIdentifier { checkpoint_digest })
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context("failed to write to chain_identifier table")?;
-                    Ok::<(), IndexerError>(())
-                }
-                .scope_boxed()
-            })
-            .await?;
+            self.persist_chain_identifier(checkpoint_digest).await?;
         }
         let guard = self
             .metrics
@@ -2137,6 +2121,29 @@ impl IndexerStore for PgIndexerStore {
                     .await
                     .map_err(IndexerError::from)
                     .context("Failed to write to feature_flags table")?;
+                Ok::<(), IndexerError>(())
+            }
+            .scope_boxed()
+        })
+        .await?;
+        Ok(())
+    }
+
+    async fn persist_chain_identifier(
+        &self,
+        checkpoint_digest: Vec<u8>,
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::insert_into(chain_identifier::table)
+                    .values(StoredChainIdentifier { checkpoint_digest })
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("failed to write to chain_identifier table")?;
                 Ok::<(), IndexerError>(())
             }
             .scope_boxed()

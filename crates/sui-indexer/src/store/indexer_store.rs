@@ -69,6 +69,11 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
         checkpoints: Vec<IndexedCheckpoint>,
     ) -> Result<(), IndexerError>;
 
+    async fn persist_chain_identifier(
+        &self,
+        checkpoint_digest: Vec<u8>,
+    ) -> Result<(), IndexerError>;
+
     async fn persist_transactions(
         &self,
         transactions: Vec<IndexedTransaction>,
