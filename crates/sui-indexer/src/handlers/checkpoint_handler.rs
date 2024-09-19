@@ -29,7 +29,6 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::object::Object;
 use sui_types::object::Owner;
-use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::transaction::TransactionDataAPI;
 
@@ -186,12 +185,12 @@ impl CheckpointHandler {
         // Genesis epoch
         if *checkpoint_summary.sequence_number() == 0 {
             info!("Processing genesis epoch");
-            let system_state: SuiSystemStateSummary =
+            let system_state_summary =
                 get_sui_system_state(&checkpoint_object_store)?.into_sui_system_state_summary();
             return Ok(Some(EpochToCommit {
                 last_epoch: None,
                 new_epoch: IndexedEpochInfo::from_new_system_state_summary(
-                    system_state,
+                    system_state_summary,
                     0, //first_checkpoint_id
                     None,
                 ),
@@ -204,7 +203,7 @@ impl CheckpointHandler {
             return Ok(None);
         }
 
-        let system_state: SuiSystemStateSummary =
+        let system_state_summary =
             get_sui_system_state(&checkpoint_object_store)?.into_sui_system_state_summary();
 
         let epoch_event = transactions
@@ -228,11 +227,11 @@ impl CheckpointHandler {
         // side, where we can guarantee that the previous epoch's checkpoints have been written to
         // db.
 
-        let network_tx_count_prev_epoch = match system_state.epoch {
+        let network_tx_count_prev_epoch = match system_state_summary.epoch {
             // If first epoch change, this number is 0
             1 => Ok(0),
             _ => {
-                let last_epoch = system_state.epoch - 2;
+                let last_epoch = system_state_summary.epoch - 2;
                 state
                     .get_network_total_transactions_by_end_of_epoch(last_epoch)
                     .await
@@ -241,13 +240,13 @@ impl CheckpointHandler {
 
         Ok(Some(EpochToCommit {
             last_epoch: Some(IndexedEpochInfo::from_end_of_epoch_data(
-                &system_state,
+                system_state_summary.clone(),
                 checkpoint_summary,
                 &event,
                 network_tx_count_prev_epoch,
             )),
             new_epoch: IndexedEpochInfo::from_new_system_state_summary(
-                system_state,
+                system_state_summary,
                 checkpoint_summary.sequence_number + 1, // first_checkpoint_id
                 Some(&event),
             ),

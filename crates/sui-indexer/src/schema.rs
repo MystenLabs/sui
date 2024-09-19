@@ -61,6 +61,7 @@ diesel::table! {
         total_stake_rewards_distributed -> Nullable<Int8>,
         leftover_storage_fund_inflow -> Nullable<Int8>,
         epoch_commitments -> Nullable<Bytea>,
+        system_state_summary_json -> Nullable<Jsonb>,
     }
 }
 
