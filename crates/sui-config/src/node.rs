@@ -288,6 +288,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "KarrierOne".to_string(),
         "Credenza3".to_string(),
         "Playtron".to_string(),
+        "Onefc".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
