@@ -532,6 +532,10 @@ impl ValidatorService {
             })?;
         if let Some((
             _sender_signed_data,
+            // TODO(fastpath): Suppress duplicate transaction submission in consensus
+            // adapter, if not already done. (If we get back `TransactionStatus::Signed``
+            // here we still need to proceed with submission logic, because the previous
+            // RPC might have been dropped after signing but before submission.)
             TransactionStatus::Executed(_sign_info, signed_effects, events),
         )) = tx_status
         {

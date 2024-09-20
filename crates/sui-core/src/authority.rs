@@ -1039,9 +1039,18 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        self.handle_transaction_deny_checks(&transaction, epoch_store)?;
-
-        Ok(None)
+        match self.handle_transaction_impl(transaction, epoch_store).await {
+            // TODO(fastpath): We don't actually need the signed transaction here but just call
+            // into this function to acquire locks. Consider refactoring to avoid the extra work.
+            Ok(_signed) => Ok(None),
+            // It happens frequently that while we are checking the validity of the transaction, it
+            // has just been executed.
+            // In that case, we could still return Ok to avoid showing confusing errors.
+            Err(e) => self
+                .get_transaction_status(&tx_digest, epoch_store)?
+                .ok_or(e)
+                .map(Some),
+        }
     }
 
     pub fn check_system_overload_at_signing(&self) -> bool {
