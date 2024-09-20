@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 use std::string::ToString;
 use std::sync::Arc;
 
 use axum::routing::post;
 use axum::{Extension, Router};
+use lru::LruCache;
 use move_core_types::language_storage::TypeTag;
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
@@ -19,6 +20,10 @@ use crate::errors::Error;
 use crate::errors::Error::MissingMetadata;
 use crate::state::{CheckpointBlockProvider, OnlineServerContext};
 use crate::types::{Currency, CurrencyMetadata, SuiEnv};
+
+#[cfg(test)]
+#[path = "unit_tests/lib_tests.rs"]
+mod lib_tests;
 
 /// This lib implements the Rosetta online and offline server defined by the [Rosetta API Spec](https://www.rosetta-api.org/docs/Reference.html)
 mod account;
@@ -45,7 +50,7 @@ pub struct RosettaOnlineServer {
 
 impl RosettaOnlineServer {
     pub fn new(env: SuiEnv, client: SuiClient) -> Self {
-        let coin_cache = CoinMetadataCache::new(client.clone());
+        let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(1000).unwrap());
         let blocks = Arc::new(CheckpointBlockProvider::new(
             client.clone(),
             coin_cache.clone(),
@@ -115,20 +120,20 @@ impl RosettaOfflineServer {
 #[derive(Clone)]
 pub struct CoinMetadataCache {
     client: SuiClient,
-    metadata: Arc<Mutex<HashMap<TypeTag, Currency>>>,
+    metadata: Arc<Mutex<LruCache<TypeTag, Currency>>>,
 }
 
 impl CoinMetadataCache {
-    pub fn new(client: SuiClient) -> Self {
-        CoinMetadataCache {
+    pub fn new(client: SuiClient, size: NonZeroUsize) -> Self {
+        Self {
             client,
-            metadata: Default::default(),
+            metadata: Arc::new(Mutex::new(LruCache::new(size))),
         }
     }
 
     pub async fn get_currency(&self, type_tag: &TypeTag) -> Result<Currency, Error> {
         let mut cache = self.metadata.lock().await;
-        if !cache.contains_key(type_tag) {
+        if !cache.contains(type_tag) {
             let metadata = self
                 .client
                 .coin_read_api()
@@ -143,7 +148,7 @@ impl CoinMetadataCache {
                     coin_type: type_tag.to_string(),
                 },
             };
-            cache.insert(type_tag.clone(), ccy);
+            cache.push(type_tag.clone(), ccy);
         }
         cache.get(type_tag).cloned().ok_or(MissingMetadata)
     }

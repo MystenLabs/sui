@@ -14474,6 +14474,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "hyper 1.4.1",
+ "lru 0.10.0",
  "move-cli",
  "move-core-types",
  "mysten-metrics",
