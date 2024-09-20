@@ -142,9 +142,9 @@ lints!(
     ),
     (
         SelfAssignment,
-        LinterDiagnosticCategory::Style,
+        LinterDiagnosticCategory::Suspicious,
         "self_assignment",
-        "self assignment"
+        "assignment preserves the same value"
     ),
 );
 
