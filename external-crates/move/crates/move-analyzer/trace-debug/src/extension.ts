@@ -27,8 +27,10 @@ const DEBUGGER_TYPE = 'move-debug';
  * Provider of on-hover information during debug session.
  */
 class MoveEvaluatableExpressionProvider {
-    // TODO: implement a more sophisticated provider that actually provides correct on-hover information
-    provideEvaluatableExpression(document: TextDocument, position: Position, token: CancellationToken) {
+    // TODO: implement a more sophisticated provider that actually provides correct on-hover information,
+    // at least for variable definitions whose locations are readily available in the source map
+    // (user can always use go-to-def to see the definition and the value)
+    provideEvaluatableExpression(_document: TextDocument, _position: Position, _token: CancellationToken) {
         // suppress debug-time on hover information for now
         return null;
     }
