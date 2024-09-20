@@ -753,7 +753,7 @@ impl Core {
         );
 
         // TODO(arun): Set as const or protocol config
-        let bottom_percentage = 1;
+        let bottom_percentage = 10;
         let scores = self.peer_quorum_propogation_scores.clone();
         // TODO(arun): Should never be empty once propogation score recovery is in place
         let propogation_scores_ready = !scores.scores_per_authority.is_empty();
