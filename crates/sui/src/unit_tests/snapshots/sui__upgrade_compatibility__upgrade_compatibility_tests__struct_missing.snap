@@ -1,0 +1,6 @@
+---
+source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
+expression: err.to_string()
+---
+Upgrade compatibility check failed with the following errors:
+- StructMissing { name: Identifier("StructToBeRemoved"), old_struct: Struct { abilities: [], type_parameters: [], fields: [Field { name: Identifier("b"), type_: U64 }] } }
