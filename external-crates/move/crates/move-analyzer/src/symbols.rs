@@ -90,9 +90,9 @@ use move_command_line_common::files::FileHash;
 use move_compiler::{
     command_line::compiler::{construct_pre_compiled_lib, FullyCompiledProgram},
     editions::{Edition, FeatureGate, Flavor},
-    expansion::ast::{
-        self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility,
-        IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES,
+    expansion::{
+        ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
+        name_validation::{IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES},
     },
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeName_, Type_, VariantFields},
