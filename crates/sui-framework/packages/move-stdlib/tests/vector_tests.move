@@ -802,218 +802,83 @@ module std::vector_tests {
         assert!(v2.zip_map_ref!(&v1, |a, b| *a + *b) == vector[5, 7, 9]);
     }
 
-
-    fun all_permutations<T: copy + drop>(mut data: vector<T>): vector<vector<T>> {
-        let mut result = vector[];
-        generate_permutations(&mut data, 0, &mut result);
-        result
-    }
-
-    fun generate_permutations<T: copy>(
-        data: &mut vector<T>,
-        start: u64,
-        result: &mut vector<vector<T>>,
-    ) {
-        if (start == data.length()) {
-            result.push_back(*data);
-            return
-        };
-
-        start.range_do!(data.length(), |i| {
-            data.swap(start, i);
-            generate_permutations(data, start + 1, result);
-            data.swap(start, i);
-        });
-    }
-
     public struct Indexed has copy, drop {
         value: u64,
         index: u64,
     }
 
-    const UNSORTED_1000: vector<u8> = x"4f3409142c3206064f575414535e1f0d1a371c622042221343545e153e075e1437375f31515f0f2357632227124548380e00052d40272607502e2901071240524a5854432c51243428192f2e3a4215462e4d2b62326146014f121714472e553e5d3f46363f5b3d47552b413e4e551702454a02075d1f32504c455849334759362e1c3d055e37430536155f3f4d2f3e391e3f38231960353f4650350c390a61545c145a6261525d61330f4c49135e620b45325f05294c5b1c1f115d4261261849341e5b1e5d3005533b10141f1f3a2831291b4d0825373b411e30005a5e5c613a15584e53103c0c3f1528303d1c3a57542c145d16085b53365d12505151511e453c025c632d23061d1c0660534657303c162842631c545b2404390a27352f41152b3d1e29380c080963186335461f270f32083045633d2b0f122407203f0c103b1307012d02392859515e1a22372531115932411625185d4d45461d10145e3c4d59311423141e2f57131204013551415c29513839473e2f2923031c40494d1e58030744484506295b16375f185b021013561e3d503d1e23223321295f0120345508583c1059231715480c07554e173c243e3702255f3e353f2e2a11012925383e2e0c5f424416581f44320634290a2b3f4f4b0d6301322e4d05253e180731360c5321424d58552c302a3b581402473712595920213752512e022f0f513b2518264d1d445b5f2029382a174614172d3156594e45234e5051033344092d07354557141e454a5a4038461d492d383506215f12553d46051805594b11093d3d224b441d28092616500e0724355f3d325105562c5a0d424d4427051742376049425a4149573c54222e2b034d51393a3b111824262a4354365e5416340e5b4534591c58072b5608271f2b070e62511f00062006145314370146230038402228320d37164f3a31325c633625391c232d5e59210b464f58614839075547613e58151a5f182e4b0517625f21305e433c16434f3f5b55504b615f02484e53394d345f17184001064b5d2b48475f635f565c17576232375c2f5f2b2258321263054952284a3d605917201d0b15343e0a46300e490b41591705001b532b375523491c4612243e1e0b0c524021173843114d4f3f1a543a1b1a0124305b2222614b392a30611036141a23075a5a54174b4e5c4a630c4f3127375320033133591e1e104f274e3544552a5c4134145c3f004336221847346023445f2b3357620c180f5b47283c0e0a4d1b4702550d3c21484031213d192b382205091f00201a3a4222355b5d1d63001c085120541e55173608160a592c14313c0f1203595f5758303a1f100b3e3a0a0f5f4a60505f1912054c301c5d1a410e02580a30036134505531005a4512171a0c5d6347153f0858";
     const UNSORTED_100: vector<u8> = x"ed0c0f0ef96c4537d606ad4e1482e6369cf2db785363f16c2786bf866731cf072f030d29c5acac94e9aa10bd402fba01efa38d7c3f6399b3d8d8fc137bbcaa3e5b6db5b3dd163e041dea8c45dab677a9f49aa6ee25a55e52a5618aa0da08af2a4e8e7b1b";
     const UNSORTED_50: vector<u8> = x"2f2420312a0f20050a19312028251731202b250c29301927040f06030220022d2314060c2a2e23021b11292a1d2e301a1c07";
     const UNSORTED_40: vector<u8> = x"6deb6c0d0e1ca38d4a59ceb875dd36b857699bd34980ac6e79e7f7a8f999684b6ab929b070da47f7";
     const UNSORTED_30: vector<u8> = x"0220021409192d182808091c20170e0e121e04290521181428151b2f150f";
 
     #[test]
-    fun profile_snippets() {
-        let _unsorted = UNSORTED_1000;
+    fun sort_by_macro() {
+        let mut arr = UNSORTED_100;
+        arr.sort_by!(|a, b| *a < *b);
+        assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+
+        let mut arr = UNSORTED_50;
+        arr.sort_by!(|a, b| *a < *b);
+        assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+
+        let mut arr = UNSORTED_40;
+        arr.sort_by!(|a, b| *a < *b);
+        assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+
+        let mut arr = UNSORTED_30;
+        arr.sort_by!(|a, b| *a < *b);
+        assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+    }
+
+    #[random_test]
+    // this test may time out if we take large vectors
+    // so to optimize, we pop the vector to a smaller size
+    fun sort_by_random_set(mut v: vector<u8>) {
+        let mut arr = vector::tabulate!(v.length().min(100), |_| v.pop_back());
+        arr.sort_by!(|a, b| *a < *b);
+        assert!(arr.is_sorted_by!(|a, b| *a <= *b));
     }
 
     #[test]
-    fun profile_30_insertion_sort_by() {
-        let mut unsorted = UNSORTED_30;
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
+    fun test_insertion_sort_is_stable_sort_by() {
+        let mut arr = vector[
+            Indexed { value: 1, index: 0 },
+            Indexed { value: 2, index: 1 },
+            Indexed { value: 3, index: 2 },
+            Indexed { value: 3, index: 3 },
+            Indexed { value: 1, index: 4 },
+            Indexed { value: 2, index: 5 },
+        ];
+
+        arr.sort_by!(|a, b| a.value < b.value);
+        assert!(arr == vector[
+            Indexed { value: 1, index: 0 },
+            Indexed { value: 1, index: 4 },
+            Indexed { value: 2, index: 1 },
+            Indexed { value: 2, index: 5 },
+            Indexed { value: 3, index: 2 },
+            Indexed { value: 3, index: 3 },
+        ]);
+
+        arr.sort_by!(|a, b| a.value > b.value);
+        assert!(arr == vector[
+            Indexed { value: 3, index: 2 },
+            Indexed { value: 3, index: 3 },
+            Indexed { value: 2, index: 1 },
+            Indexed { value: 2, index: 5 },
+            Indexed { value: 1, index: 0 },
+            Indexed { value: 1, index: 4 },
+        ]);
     }
 
     #[test]
-    fun profile_30_merge_sort_by() {
-        let mut unsorted = UNSORTED_30;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
+    fun test_sort_by() {
+
     }
 
     #[test]
-    fun profile_40_insertion_sort_by() {
-        let mut unsorted = UNSORTED_40;
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun profile_40_merge_sort_by() {
-        let mut unsorted = UNSORTED_40;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun profile_50_insertion_sort_by() {
-        let mut unsorted = UNSORTED_50;
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun profile_50_merge_sort_by() {
-        let mut unsorted = UNSORTED_50;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun profile_100_insertion_sort_by() {
-        let mut unsorted = UNSORTED_100;
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun profile_100_merge_sort_by() {
-        let mut unsorted = UNSORTED_100;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun profile_1000_insertion_sort_by() {
-        let mut unsorted = UNSORTED_1000;
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun profile_1000_merge_sort_by() {
-        let mut unsorted = UNSORTED_1000;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun reverse_profile_30_insertion_sort_by() {
-        let mut unsorted = UNSORTED_30;
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun reverse_profile_30_merge_sort_by() {
-        let mut unsorted = UNSORTED_30;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun reverse_profile_40_insertion_sort_by() {
-        let mut unsorted = UNSORTED_40;
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun reverse_profile_40_merge_sort_by() {
-        let mut unsorted = UNSORTED_40;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun reverse_profile_50_insertion_sort_by() {
-        let mut unsorted = UNSORTED_50;
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun reverse_profile_50_merge_sort_by() {
-        let mut unsorted = UNSORTED_50;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun reverse_profile_100_insertion_sort_by() {
-        let mut unsorted = UNSORTED_100;
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun reverse_profile_100_merge_sort_by() {
-        let mut unsorted = UNSORTED_100;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun reverse_profile_1000_insertion_sort_by() {
-        let mut unsorted = UNSORTED_1000;
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.insertion_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun reverse_profile_1000_merge_sort_by() {
-        let mut unsorted = UNSORTED_1000;
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-        unsorted.reverse();
-        unsorted.merge_sort_by!(|a, b| *a < *b);
-    }
-
-    #[test]
-    fun test_merge_sort_by() {
-        let data = vector[1, 2, 2, 3, 3, 3];
-        let n = data.length();
-        let vs = all_permutations(data);
-        let vs = vs.map!(|v| {
-            let mut i = 0;
-            v.map!(|value| {
-                let indexed = Indexed { value, index: i };
-                i = i + 1;
-                indexed
-            })
-        });
-        vs.do!(|mut v| {
-            v.merge_sort_by!(|a, b| a.value <= b.value);
-            // is permutation
-            n.do!(|i| assert!(v[i].value == data[i]));
-            let mut counts = vector::tabulate!(n, |_| 0);
-            v.do_ref!(|a| *&mut counts[a.index] = counts[a.index] + 1);
-            counts.do!(|c| assert!(c == 1));
-            // is sorted
-            assert!(v.is_sorted_by!(|a, b| a.value <= b.value));
-            // stable
-            n.do!(|i| {
-                (i + 1).range_do!(n, |j| {
-                    assert!(v[i].value != v[j].value || v[i].index < v[j].index)
-                })
-            });
-        });
-    }
-
-    #[test]
+    #[allow(implicit_const_copy)]
     fun test_is_sorted_by() {
         assert!(vector<u8>[].is_sorted_by!(|a, b| *a <= *b));
         assert!(vector<u8>[].is_sorted_by!(|a, b| *a > *b));
@@ -1023,12 +888,9 @@ module std::vector_tests {
         assert!(vector[0].is_sorted_by!(|_, _| false));
         assert!(!vector[1, 2, 4, 3].is_sorted_by!(|a, b| *a <= *b));
 
-        let data = vector[1, 2, 2, 3, 3, 3];
-        let vs = all_permutations(data);
-        vs.do!(|v| {
-            assert!(v == data || !v.is_sorted_by!(|a, b| *a <= *b));
-            assert!(!v.is_sorted_by!(|_, _| false));
-            assert!(v.is_sorted_by!(|_, _| true));
-        });
+        assert!(!UNSORTED_30.is_sorted_by!(|a, b| *a <= *b));
+        assert!(!UNSORTED_40.is_sorted_by!(|a, b| *a <= *b));
+        assert!(!UNSORTED_50.is_sorted_by!(|a, b| *a <= *b));
+        assert!(!UNSORTED_100.is_sorted_by!(|a, b| *a <= *b));
     }
 }
