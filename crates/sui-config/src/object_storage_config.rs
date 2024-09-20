@@ -190,8 +190,13 @@ impl ObjectStoreConfig {
             headers.insert(x_project_header, HeaderValue::from_str(google_project_id)?);
             headers.insert(iam_req_header, HeaderValue::from_str(google_project_id)?);
 
-            builder =
-                builder.with_client_options(ClientOptions::new().with_default_headers(headers));
+            builder = builder.with_client_options(
+                ClientOptions::new()
+                    .with_default_headers(headers)
+                    .with_timeout_disabled()
+                    .with_connect_timeout_disabled()
+                    .with_pool_idle_timeout(std::time::Duration::from_secs(300)),
+            );
         }
 
         Ok(Arc::new(LimitStore::new(
