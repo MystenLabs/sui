@@ -69,6 +69,18 @@ impl Context<'_> {
                     )
                 ))
             }
+            TE::TempBorrow(_, inner) if all_deref_borrow(inner) => {
+                self.env.add_diag(diag!(
+                    StyleCodes::RedundantRefDeref.diag_info(),
+                    (
+                        exp.exp.loc,
+                        format!(
+                            "Redundant borrow-dereference detected. \
+                                         Use the inner expression directly."
+                        )
+                    )
+                ))
+            }
             TE::Borrow(false, _, _) if exp.exp.loc != deref_exp.exp.loc => {
                 self.env.add_diag(diag!(
                     StyleCodes::RedundantRefDeref.diag_info(),
@@ -95,6 +107,18 @@ impl Context<'_> {
             }
             _ => (),
         }
+    }
+}
+
+/// Indicates if the expression is of the form `[&*]+....e`
+fn all_deref_borrow(exp: &Box<Exp>) -> bool {
+    let TE::Dereference(deref_exp) = &exp.exp.value else {
+        return false;
+    };
+    match &deref_exp.exp.value {
+        TE::TempBorrow(_, inner) => all_deref_borrow(inner),
+        TE::Borrow(_, _, _) | TE::BorrowLocal(_, _) => true,
+        _ => false,
     }
 }
 

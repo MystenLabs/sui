@@ -23,6 +23,14 @@ warning[Lint W01005]: redundant reference/dereference
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W01005]: redundant reference/dereference
+   ┌─ tests/linter/incorrect_redundant_ref_deref.move:57:21
+   │
+57 │         let _ref = &*(&*(&resource));  // Triple nested borrow-dereference, might be missed
+   │                     ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01005]: redundant reference/dereference
    ┌─ tests/linter/incorrect_redundant_ref_deref.move:57:24
    │
 57 │         let _ref = &*(&*(&resource));  // Triple nested borrow-dereference, might be missed
@@ -85,6 +93,14 @@ warning[Lint W01005]: redundant reference/dereference
    │                     ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01005]: redundant reference/dereference
+    ┌─ tests/linter/incorrect_redundant_ref_deref.move:107:21
+    │
+107 │         let _ref = &*&(&*&resource.value);  // Multiple redundant borrows on field
+    │                     ^^^^^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
+    │
+    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E04004]: expected a single non-reference type
     ┌─ tests/linter/incorrect_redundant_ref_deref.move:107:22

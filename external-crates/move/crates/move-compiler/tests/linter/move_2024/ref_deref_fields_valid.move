@@ -16,11 +16,11 @@ public struct S<T: copy + drop> has drop {
 }
 
 public fun case_5<T: copy + drop>(s: S<T>) {
-    let _value: T = *&(s.value);  // Complex field expression
+    let _value: T = s.value;  // Complex field expression
 }
 
 public fun case_5_b<T: copy + drop>(s: S<T>) {
-    let _value: T = *&(s.value); // Complex field expression
+    let _value: T = s.value; // Complex field expression
 }
 
 public fun case_5_c<T: copy + drop>(s: &S<T>) {
