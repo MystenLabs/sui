@@ -11,10 +11,10 @@ use crate::{
     file_format_common::VERSION_5,
     normalized::Module,
 };
+use move_core_types::language_storage::ModuleId;
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, vm_status::StatusCode,
 };
-use move_core_types::language_storage::ModuleId;
 // ***************************************************************************
 // ******************* IMPORTANT NOTE ON COMPATIBILITY ***********************
 // ***************************************************************************
@@ -105,7 +105,11 @@ pub trait CompatibilityMode: Default {
     fn function_visibility_mismatch(&mut self, old_func: &Function, new_func: &Function);
     fn function_entry_compatibility(&mut self, old_func: &Function, new_func: &Function);
 
-    fn friend_module_missing(&mut self, old_friend_module_ids: BTreeSet<ModuleId>, new_friend_module_ids: BTreeSet<ModuleId>);
+    fn friend_module_missing(
+        &mut self,
+        old_friend_module_ids: BTreeSet<ModuleId>,
+        new_friend_module_ids: BTreeSet<ModuleId>,
+    );
 
     fn finish(&self, _: &Compatibility) -> Result<(), Self::Error>;
 }
@@ -217,7 +221,11 @@ impl CompatibilityMode for ExecutionCompatibilityMode {
         self.entry_linking = false;
     }
 
-    fn friend_module_missing(&mut self, _old_friend_module_ids: BTreeSet<ModuleId>, _new_friend_module_ids: BTreeSet<ModuleId>) {
+    fn friend_module_missing(
+        &mut self,
+        _old_friend_module_ids: BTreeSet<ModuleId>,
+        _new_friend_module_ids: BTreeSet<ModuleId>,
+    ) {
         self.friend_linking = false;
     }
 
@@ -428,13 +436,12 @@ impl Compatibility {
             }
 
             // Check entry compatibility
-            if old_module.file_format_version < VERSION_5
+            if (old_module.file_format_version < VERSION_5
                 && new_module.file_format_version < VERSION_5
-                && old_func.visibility != Visibility::Private
                 && old_func.is_entry != new_func.is_entry
+                && old_func.visibility != Visibility::Private)
+                || old_func.is_entry && !new_func.is_entry
             {
-                context.function_entry_compatibility(old_func, new_func);
-            } else if old_func.is_entry && !new_func.is_entry {
                 context.function_entry_compatibility(old_func, new_func);
             }
 
