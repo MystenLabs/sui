@@ -728,6 +728,25 @@ impl DagState {
         self.last_committed_rounds.clone()
     }
 
+    /// The GC round is the highest round that blocks of equal or lower round are considered obsolete and no longer possible to be committed.
+    /// There is no meaning accepting any blocks with round <= gc_round. The Garbage Collection (GC) round is calculated based on the latest
+    /// committed leader round. When GC is disabled that will return the genesis round.
+    pub(crate) fn gc_round(&self) -> Round {
+        let gc_depth = self.context.protocol_config.gc_depth();
+        if gc_depth > 0 {
+            // GC is enabled, only then calculate the diff
+            self.last_commit_round().saturating_sub(gc_depth)
+        } else {
+            // Otherwise just return genesis round. That also acts as a safety mechanism so we never attempt to truncate anything
+            // even accidentally.
+            GENESIS_ROUND
+        }
+    }
+
+    pub(crate) fn gc_enabled(&self) -> bool {
+        self.context.protocol_config.gc_depth() > 0
+    }
+
     /// After each flush, DagState becomes persisted in storage and it expected to recover
     /// all internal states from storage after restarts.
     pub(crate) fn flush(&mut self) {
