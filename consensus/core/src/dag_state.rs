@@ -1043,6 +1043,7 @@ mod test {
         block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
         storage::{mem_store::MemStore, WriteBatch},
         test_dag_builder::DagBuilder,
+        test_dag_parser::parse_dag,
     };
 
     #[tokio::test]
@@ -1904,12 +1905,19 @@ mod test {
         assert_eq!(cached_blocks[0].round(), 12);
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_get_cached_last_block_per_authority() {
+    async fn test_get_cached_last_block_per_authority(#[values(0, 1)] gc_depth: u32) {
         // GIVEN
         const CACHED_ROUNDS: Round = 2;
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
+
+        if gc_depth > 0 {
+            context
+                .protocol_config
+                .set_consensus_gc_depth_for_testing(gc_depth);
+        }
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -1919,24 +1927,35 @@ mod test {
         // Create one block (round 1) for authority 1
         // Create two blocks (rounds 1,2) for authority 2
         // Create three blocks (rounds 1,2,3) for authority 3
-        let mut all_blocks = Vec::new();
-        for author in 1..=3 {
-            for round in 1..=author {
-                let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
-                all_blocks.push(block.clone());
-                dag_state.accept_block(block);
-            }
+        let dag_str = "DAG {
+            Round 0 : { 4 },
+            Round 1 : {
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 2 : {
+                C -> [*],
+                D -> [*],
+            },
+            Round 3 : {
+                D -> [*],
+            },
+        }";
+
+        let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
+
+        // Accept all blocks
+        for block in dag_builder.all_blocks() {
+            dag_state.accept_block(block);
         }
 
         dag_state.add_commit(TrustedCommit::new_for_test(
             1 as CommitIndex,
             CommitDigest::MIN,
             context.clock.timestamp_utc_ms(),
-            all_blocks.last().unwrap().reference(),
-            all_blocks
-                .into_iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
+            dag_builder.leader_block(3).unwrap().reference(),
+            vec![],
         ));
 
         // WHEN search for the latest blocks
@@ -1951,6 +1970,9 @@ mod test {
 
         // WHEN we flush the DagState - after adding a commit with all the blocks, we expect this to trigger
         // a clean up in the internal cache. That will keep the all the blocks with rounds >= authority_commit_round - CACHED_ROUND.
+        //
+        // When GC is enabled then we'll keep all the blocks that are > gc_round (2) and for those who don't have blocks > gc_round, we'll keep
+        // all their highest round blocks for CACHED_ROUNDS.
         dag_state.flush();
 
         // AND we request before round 3
@@ -2013,7 +2035,7 @@ mod test {
 
     #[tokio::test]
     #[should_panic(
-        expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority A"
+        expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority C"
     )]
     async fn test_get_cached_last_block_per_authority_requesting_out_of_round_range_gc_enabled() {
         // GIVEN
@@ -2033,33 +2055,48 @@ mod test {
         // Create one block (round 1) for authority 1
         // Create two blocks (rounds 1,2) for authority 2
         // Create three blocks (rounds 1,2,3) for authority 3
-        let mut all_blocks = Vec::new();
-        for author in 1..=3 {
-            for round in 1..=author {
-                let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
-                all_blocks.push(block.clone());
-                dag_state.accept_block(block);
-            }
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder
+            .layers(1..=1)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+        dag_builder
+            .layers(2..=2)
+            .authorities(vec![
+                AuthorityIndex::new_for_test(0),
+                AuthorityIndex::new_for_test(1),
+            ])
+            .skip_block()
+            .build();
+        dag_builder
+            .layers(3..=3)
+            .authorities(vec![
+                AuthorityIndex::new_for_test(0),
+                AuthorityIndex::new_for_test(1),
+                AuthorityIndex::new_for_test(2),
+            ])
+            .skip_block()
+            .build();
+
+        // Accept all blocks
+        for block in dag_builder.all_blocks() {
+            dag_state.accept_block(block);
         }
 
         dag_state.add_commit(TrustedCommit::new_for_test(
             1 as CommitIndex,
             CommitDigest::MIN,
             0,
-            all_blocks.last().unwrap().reference(),
-            all_blocks
-                .into_iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
+            dag_builder.leader_block(3).unwrap().reference(),
+            vec![],
         ));
 
-        // Flush the store so we keep in memory only the last 1 round from the last commit for each
-        // authority (gc_depth) and 1 additional round (cached_rounds).
+        // Flush the store so we update the evict rounds
         dag_state.flush();
 
         // THEN the method should panic, as some authorities have already evicted rounds <= round 2
-        let end_round = 2;
-        dag_state.get_last_cached_block_per_authority(end_round);
+        dag_state.get_last_cached_block_per_authority(2);
     }
 
     #[tokio::test]
