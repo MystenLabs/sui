@@ -38,7 +38,7 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_exp_custom(&mut self, exp: &mut Exp) -> bool {
+    fn visit_exp_custom(&mut self, exp: &Exp) -> bool {
         self.check_redundant_ref_deref(exp);
         false
     }

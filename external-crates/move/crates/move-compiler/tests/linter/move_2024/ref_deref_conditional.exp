@@ -6,7 +6,7 @@ error[E01003]: invalid modifier
   │
   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:10:17
    │
 10 │     let _ref = &*&resource;  // Should be flagged
@@ -14,7 +14,7 @@ warning[Lint W01005]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:16:21
    │
 16 │     let _ref = &mut *&resource;  // Should be flagged
@@ -22,7 +22,7 @@ warning[Lint W01005]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:22:17
    │
 22 │     let _ref = &*&resource.value;  // Should be flagged
@@ -47,7 +47,7 @@ error[E07002]: mutable ownership violated
 30 │     resource.value = 20;  // Modifying the resource
    │     ^^^^^^^^^^^^^^ Invalid mutable borrow at field 'value'.
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:37:17
    │
 37 │     let _ref = &*(&*&resource);  // Should be flagged
@@ -55,7 +55,7 @@ warning[Lint W01005]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:37:20
    │
 37 │     let _ref = &*(&*&resource);  // Should be flagged
@@ -63,7 +63,7 @@ warning[Lint W01005]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:50:17
    │
 50 │     let _copy = *&resource;  // Should be flagged, making a copy
@@ -71,7 +71,7 @@ warning[Lint W01005]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:59:17
    │
 59 │     let _ref = &*&get_resource();  // Should be flagged
@@ -79,7 +79,7 @@ warning[Lint W01005]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:64:17
    │
 64 │     let _ref = &*&0;  // Should be flagged
@@ -87,7 +87,7 @@ warning[Lint W01005]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:72:21
    │
 72 │         let _ref = &*&resource;  // Should be flagged regardless
@@ -95,7 +95,7 @@ warning[Lint W01005]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:83:17
    │
 83 │     let _ref = &*&E;  // Should be flagged
@@ -103,7 +103,7 @@ warning[Lint W01005]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01005]: redundant reference/dereference
+warning[Lint W01008]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:88:17
    │
 88 │     let _ref = &*&vector[1,2,3];  // Should be flagged
