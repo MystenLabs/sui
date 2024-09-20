@@ -26,6 +26,7 @@ const providerToAmpli: Record<
 	ZkLoginProvider,
 	ClickedSocialSignInButtonProperties['signInProvider']
 > = {
+	apple: 'Apple',
 	google: 'Google',
 	twitch: 'Twitch',
 	facebook: 'Facebook',
@@ -52,6 +53,7 @@ export function ZkLoginButtons({
 	const [createInProgressProvider, setCreateInProgressProvider] = useState<ZkLoginProvider | null>(
 		null,
 	);
+
 	const { data: accountsTotalByType, isPending } = useCountAccountsByType();
 	return (
 		<div
@@ -60,38 +62,43 @@ export function ZkLoginButtons({
 				'flex-row gap-2': layout === 'row',
 			})}
 		>
-			{zkLoginProviders.map(({ provider, enabled, tooltip }) => (
-				<div key={provider} className="flex-1">
-					<SocialButton
-						title={accountsTotalByType?.zkLogin?.extra?.[provider] ? 'Already signed-in' : tooltip}
-						provider={provider}
-						onClick={async () => {
-							ampli.clickedSocialSignInButton({
-								signInProvider: providerToAmpli[provider],
-								sourceFlow,
-							});
-							setCreateInProgressProvider(provider);
-							try {
-								if (onButtonClick) {
-									await onButtonClick(provider);
-								}
-							} finally {
-								setCreateInProgressProvider(null);
+			{zkLoginProviders.map(({ provider, enabled, tooltip }) => {
+				return (
+					<div key={provider} className="flex-1">
+						<SocialButton
+							title={
+								accountsTotalByType?.zkLogin?.extra?.[provider] ? 'Already signed-in' : tooltip
 							}
-						}}
-						disabled={
-							!enabled ||
-							buttonsDisabled ||
-							createInProgressProvider !== null ||
-							isPending ||
-							!!accountsTotalByType?.zkLogin?.extra?.[provider] ||
-							!!forcedZkLoginProvider
-						}
-						loading={createInProgressProvider === provider || forcedZkLoginProvider === provider}
-						showLabel={showLabel}
-					/>
-				</div>
-			))}
+							provider={provider}
+							onClick={async () => {
+								ampli.clickedSocialSignInButton({
+									signInProvider: providerToAmpli[provider],
+									sourceFlow,
+								});
+								setCreateInProgressProvider(provider);
+								try {
+									if (onButtonClick) {
+										console.log('provider', provider);
+										await onButtonClick(provider);
+									}
+								} finally {
+									// setCreateInProgressProvider(null);
+								}
+							}}
+							disabled={
+								!enabled ||
+								buttonsDisabled ||
+								createInProgressProvider !== null ||
+								isPending ||
+								!!accountsTotalByType?.zkLogin?.extra?.[provider] ||
+								!!forcedZkLoginProvider
+							}
+							loading={createInProgressProvider === provider || forcedZkLoginProvider === provider}
+							showLabel={showLabel}
+						/>
+					</div>
+				);
+			})}
 		</div>
 	);
 }

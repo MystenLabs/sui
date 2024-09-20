@@ -24,6 +24,7 @@ import { Button } from '../../shared/ButtonUI';
 import { Link } from '../../shared/Link';
 
 const providerToName: Record<ZkLoginProvider, string> = {
+	apple: 'Apple',
 	google: 'Google',
 	facebook: 'Facebook',
 	twitch: 'Twitch',

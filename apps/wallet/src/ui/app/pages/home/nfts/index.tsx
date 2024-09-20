@@ -46,16 +46,35 @@ function NftsPage() {
 	const handleFilterChange = async (tag: any) => {
 		await setToSessionStorage<string>('NFTS_PAGE_NAVIGATION', tag.link);
 	};
+	const a = {
+		objectId: '0x3af52c25dae6749045b2ceed6ac0f57e21905981659d622bd21e414ed1bf9c00',
+		version: '81729675',
+		digest: '5k27zHiP2EhPErASYUHjcskQWYmZrNmJfGP38cxgWbvf',
+		type: '0xf80e71b9fe884d3170e04f85ea91151f569e2077a909d05ac90d4cd497bc3037::SUIREWARD_W::SUIREWARD_PASS',
+		display: {
+			data: {
+				description:
+					'The DEEP token secures the DeepBook protocol, the premier wholesale liquidity venue for on-chain trading. Holders of this NFT will be able to convert it to DEEP tokens upon launch.',
+				image_url:
+					'https://suivision.mypinata.cloud/ipfs/Qmept9qMaZ6qXPP1MNwwZ9ftkUHJEQwpM8pPbgNsxbz5r4?pinataGatewayToken=XRz-H79S4Su_2PfKu9Ka-W7djbN8b0emIpVtsLxkbnebfobn-IIl-y6Elzyza7p-&img-fit=cover&img-quality=80&img-onerror=redirect&img-fit=pad&img-format=webp',
+				name: 'cool beanz',
+			},
+			error: null,
+		},
+	};
+	ownedAssets?.visual.push(a);
 	const { filterType } = useParams();
 	const filteredNFTs = useMemo(() => {
 		let filteredData = ownedAssets?.visual;
 		if (filterType) {
 			filteredData = ownedAssets?.[filterType as AssetFilterTypes] ?? [];
 		}
+
 		return filteredData?.filter((ownedAsset) => {
 			if (!ownedAsset.type) {
 				return true;
 			}
+
 			const normalizedType = normalizeStructTag(ownedAsset.type);
 			return !blockedObjectList?.includes(normalizedType);
 		});

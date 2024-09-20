@@ -52,6 +52,7 @@ export function WelcomePage() {
 						buttonsDisabled={createAccountsMutation.isSuccess}
 						sourceFlow="Onboarding"
 						onButtonClick={async (provider) => {
+							console.log({ provider });
 							setAccountsFormValues({ type: 'zkLogin', provider });
 							await createAccountsMutation.mutateAsync(
 								{

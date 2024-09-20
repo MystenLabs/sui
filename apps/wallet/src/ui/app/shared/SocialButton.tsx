@@ -19,6 +19,7 @@ const styles = cva(
 	{
 		variants: {
 			provider: {
+				apple: 'bg-white text-steel-dark border border-solid border-steel hover:border-steel-dark',
 				microsoft:
 					'bg-white text-steel-dark border border-solid border-steel hover:border-steel-dark',
 				google: 'bg-white text-steel-dark border border-solid border-steel hover:border-steel-dark',
@@ -62,6 +63,10 @@ const socialSignInProviderInfo: Record<
 	kakao: {
 		icon: SocialKakao24,
 		label: 'Sign in with Kakao',
+	},
+	apple: {
+		icon: SocialKakao24,
+		label: 'Apple',
 	},
 };
 

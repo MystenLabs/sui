@@ -77,6 +77,7 @@ function AppWrapper() {
 							client={queryClient}
 							persistOptions={{
 								persister,
+								buster: Date.now().toString(),
 								dehydrateOptions: {
 									shouldDehydrateQuery: ({ meta }) => !meta?.skipPersistedCache,
 								},

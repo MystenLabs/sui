@@ -1,0 +1,6 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["node_modules", "lib"]
+build_info = true
+extra_output = ["storageLayout"]

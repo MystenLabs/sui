@@ -1,0 +1,13 @@
+name: Setup Node environment
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18.x
+        cache: yarn
+
+    - name: Install dependencies
+      run: yarn --frozen-lockfile --prefer-offline
+      shell: bash

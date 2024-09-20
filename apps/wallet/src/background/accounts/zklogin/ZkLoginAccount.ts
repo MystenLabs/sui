@@ -266,6 +266,7 @@ export class ZkLoginAccount
 		const { sub, aud, iss } = await deobfuscate<JwtSerializedClaims>(claims);
 		const epoch = await getCurrentEpoch();
 		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZkLogin(Number(epoch));
+
 		const jwt = await zkLoginAuthenticate({ provider, nonce, loginHint: sub });
 		const decodedJWT = decodeJwt(jwt);
 		if (decodedJWT.aud !== aud || decodedJWT.sub !== sub || decodedJWT.iss !== iss) {

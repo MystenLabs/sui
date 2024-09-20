@@ -10,6 +10,10 @@ export function useBlockedObjectList() {
 	return useQuery({
 		queryKey: ['apps-backend', 'guardian', 'object-list'],
 		queryFn: () => request<{ blocklist: string[] }>('guardian/object-list'),
-		select: (data) => data?.blocklist.map(normalizeStructTag) ?? [],
+		select: (data) => {
+			return data?.blocklist.map(normalizeStructTag) ?? [];
+		},
+		staleTime: 0,
+		gcTime: 0,
 	});
 }

@@ -48,6 +48,7 @@ export function useCreateAccountsMutation() {
 			let createdAccounts;
 			const accountsFormValues = accountsFormValuesRef.current;
 			if (type === 'zkLogin' && validateAccountFormValues(type, accountsFormValues)) {
+				console.log({ accountsFormValues });
 				createdAccounts = await backgroundClient.createAccounts(accountsFormValues);
 			} else if (
 				(type === 'new-mnemonic' || type === 'import-mnemonic') &&

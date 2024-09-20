@@ -3,7 +3,7 @@
 
 import Browser from 'webextension-polyfill';
 
-export type ZkLoginProvider = 'google' | 'twitch' | 'facebook' | 'kakao';
+export type ZkLoginProvider = 'apple' | 'google' | 'twitch' | 'facebook' | 'kakao';
 
 export interface ZkLoginProviderData {
 	clientID: string;
@@ -24,6 +24,21 @@ export interface ZkLoginProviderData {
 const isDev = process.env.NODE_ENV === 'development';
 
 export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData> = {
+	apple: {
+		clientID: 'com.mystenlabs.suiwallet',
+		url: 'https://appleid.apple.com/auth/authorize',
+		buildExtraParams: () => {
+			const params = new URLSearchParams({
+				client_id: 'com.mystenlabs.suiwallet',
+				response_mode: 'form_post',
+				response_type: 'code id_token',
+				scope: '',
+			});
+			return params;
+		},
+		enabled: true,
+		order: 4,
+	},
 	google: {
 		clientID: '946731352276-pk5glcg8cqo38ndb39h7j093fpsphusu.apps.googleusercontent.com',
 		url: 'https://accounts.google.com/o/oauth2/v2/auth',

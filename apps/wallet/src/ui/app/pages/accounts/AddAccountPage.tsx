@@ -108,6 +108,8 @@ export function AddAccountPage() {
 							sourceFlow={sourceFlow}
 							forcedZkLoginProvider={forcedZkLoginProvider}
 							onButtonClick={async (provider) => {
+								console.log({ provider });
+								alert('her');
 								if (isPopup) {
 									await openTabWithSearchParam('forceZkLoginProvider', provider);
 									window.close();

@@ -132,7 +132,7 @@ export function AddressInput({
 				</div>
 			</div>
 
-			{meta.touched && !isValidating ? (
+			{field.value && !isValidating ? (
 				<div className="mt-2.5 w-full">
 					<Alert noBorder rounded="lg" mode={meta.error || warningData ? 'issue' : 'success'}>
 						{warningData === RecipientWarningType.OBJECT ? (

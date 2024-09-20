@@ -39,6 +39,7 @@ const accountTypeToLabel: Record<AccountType, string> = {
 };
 
 const providerToLabel: Record<ZkLoginProvider, string> = {
+	apple: 'Apple',
 	google: 'Google',
 	twitch: 'Twitch',
 	facebook: 'Facebook',
