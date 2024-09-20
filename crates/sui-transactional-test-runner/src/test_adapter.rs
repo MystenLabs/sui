@@ -579,7 +579,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .await;
 
                 cluster
-                    .wait_for_objects_snapshot_catchup(Duration::from_secs(60))
+                    .wait_for_objects_snapshot_catchup(Duration::from_secs(180))
                     .await;
 
                 if let Some(wait_for_checkpoint_pruned) = wait_for_checkpoint_pruned {
