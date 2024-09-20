@@ -3,7 +3,6 @@ module 0x42::SuppressCases {
         value: u64,
     }
 
-
     #[allow(lint(redundant_ref_deref))]
     public fun case_1() {
         let resource = MyResource { value: 10 };
