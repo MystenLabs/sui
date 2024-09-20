@@ -9,5 +9,6 @@ pub mod events;
 pub mod obj_indices;
 pub mod objects;
 pub mod packages;
+pub mod raw_checkpoints;
 pub mod transactions;
 pub mod tx_indices;

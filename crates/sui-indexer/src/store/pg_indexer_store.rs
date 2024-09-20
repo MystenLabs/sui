@@ -49,9 +49,9 @@ use crate::schema::{
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
     event_struct_package, events, feature_flags, full_objects_history, objects, objects_history,
     objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
-    transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun, tx_calls_mod,
-    tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds, tx_recipients,
-    tx_senders,
+    raw_checkpoints, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
+    tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
+    tx_recipients, tx_senders,
 };
 use crate::store::transaction_with_retry;
 use crate::types::EventIndex;
@@ -60,6 +60,7 @@ use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTrans
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::{IndexerStore, ObjectsToCommit};
 
+use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use diesel::upsert::excluded;
 use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 
@@ -574,6 +575,28 @@ impl PgIndexerStore {
                         .map_err(IndexerError::from)
                         .context("Failed to write to objects_version table")?;
                 }
+                Ok::<(), IndexerError>(())
+            }
+            .scope_boxed()
+        })
+        .await
+    }
+
+    async fn persist_raw_checkpoints_impl(
+        &self,
+        raw_checkpoints: &[StoredRawCheckpoint],
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::insert_into(raw_checkpoints::table)
+                    .values(raw_checkpoints)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed to write to raw_checkpoints table")?;
                 Ok::<(), IndexerError>(())
             }
             .scope_boxed()
@@ -2096,6 +2119,13 @@ impl IndexerStore for PgIndexerStore {
         })
         .await?;
         Ok(())
+    }
+
+    async fn persist_raw_checkpoints(
+        &self,
+        checkpoints: Vec<StoredRawCheckpoint>,
+    ) -> Result<(), IndexerError> {
+        self.persist_raw_checkpoints_impl(&checkpoints).await
     }
 }
 

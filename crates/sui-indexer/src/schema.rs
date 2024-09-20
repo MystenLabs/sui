@@ -256,6 +256,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    raw_checkpoints (sequence_number) {
+        sequence_number -> Int8,
+        certified_checkpoint -> Bytea,
+        checkpoint_contents -> Bytea,
+    }
+}
+
+diesel::table! {
     transactions (tx_sequence_number) {
         tx_sequence_number -> Int8,
         transaction_digest -> Bytea,
@@ -381,6 +389,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     packages,
     protocol_configs,
     pruner_cp_watermark,
+    raw_checkpoints,
     transactions,
     tx_affected_addresses,
     tx_affected_objects,
