@@ -205,7 +205,7 @@ impl Visitor for BoundedVisitor {
         let tag = driver.struct_layout().type_.clone().into();
 
         self.debit_type_size(&tag)?;
-        for field in &driver.struct_layout().fields {
+        for field in driver.struct_layout().fields.iter() {
             self.debit(field.name.len())?;
         }
 
@@ -469,7 +469,10 @@ mod tests {
             .map(|(name, layout)| A::MoveFieldLayout::new(Identifier::new(name).unwrap(), layout))
             .collect();
 
-        A::MoveTypeLayout::Struct(A::MoveStructLayout { type_, fields })
+        A::MoveTypeLayout::Struct(Box::new(A::MoveStructLayout {
+            type_,
+            fields: Box::new(fields),
+        }))
     }
 
     /// BCS encode Move value.

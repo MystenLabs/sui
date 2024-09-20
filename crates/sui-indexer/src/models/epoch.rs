@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::{Insertable, Queryable, Selectable};
-
 use crate::schema::epochs;
 use crate::types::IndexedEpochInfo;
 use crate::{errors::IndexerError, schema::feature_flags, schema::protocol_configs};
+use diesel::{Insertable, Queryable, Selectable};
 use sui_json_rpc_types::{EndOfEpochInfo, EpochInfo};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
@@ -31,6 +30,7 @@ pub struct StoredEpochInfo {
     pub total_stake_rewards_distributed: Option<i64>,
     pub leftover_storage_fund_inflow: Option<i64>,
     pub epoch_commitments: Option<Vec<u8>>,
+    pub system_state_summary_json: Option<serde_json::Value>,
 }
 
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
@@ -82,6 +82,9 @@ impl StoredEpochInfo {
     pub fn from_epoch_beginning_info(e: &IndexedEpochInfo) -> Self {
         Self {
             epoch: e.epoch as i64,
+            system_state_summary_json: Some(
+                serde_json::to_value(e.system_state_summary.clone()).unwrap(),
+            ),
             first_checkpoint_id: e.first_checkpoint_id as i64,
             epoch_start_timestamp: e.epoch_start_timestamp as i64,
             reference_gas_price: e.reference_gas_price as i64,
@@ -95,7 +98,10 @@ impl StoredEpochInfo {
     pub fn from_epoch_end_info(e: &IndexedEpochInfo) -> Self {
         Self {
             epoch: e.epoch as i64,
-            system_state: e.system_state.clone(),
+            // TODO: Deprecate this.
+            system_state: bcs::to_bytes(&e.system_state_summary.clone()).unwrap(),
+            // At epoch end the system state would be the state of the next epoch, so we ignore it.
+            system_state_summary_json: None,
             epoch_total_transactions: e.epoch_total_transactions.map(|v| v as i64),
             last_checkpoint_id: e.last_checkpoint_id.map(|v| v as i64),
             epoch_end_timestamp: e.epoch_end_timestamp.map(|v| v as i64),
@@ -153,6 +159,11 @@ impl TryFrom<StoredEpochInfo> for EpochInfo {
     fn try_from(value: StoredEpochInfo) -> Result<Self, Self::Error> {
         let epoch = value.epoch as u64;
         let end_of_epoch_info = (&value).into();
+        // FIXME: We should not swallow the error here.
+        // However currently there is a bug in the system_state column where it's always
+        // off-by-one, and hence there will be a period of time when
+        // this conversion will fail.
+        // We should fix this once we replace it with the new json column.
         let system_state: Option<SuiSystemStateSummary> = bcs::from_bytes(&value.system_state)
             .map_err(|_| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(

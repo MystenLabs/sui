@@ -1,12 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! `BridgeMonitor` receives all `SuiBridgeEvent` and handles them accordingly.
+//! `BridgeMonitor` receives all `SuiBridgeEvent` and `EthBridgeEvent`
+//! and handles them accordingly.
 
+use crate::abi::{
+    EthBridgeCommitteeEvents, EthBridgeConfigEvents, EthBridgeEvent, EthBridgeLimiterEvents,
+    EthCommitteeUpgradeableContractEvents, EthSuiBridgeEvents,
+};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::{BlocklistValidatorEvent, CommitteeMemberUrlUpdateEvent};
 use crate::events::{EmergencyOpEvent, SuiBridgeEvent};
+use crate::metrics::BridgeMetrics;
 use crate::retry_with_max_elapsed_time;
 use crate::sui_client::{SuiClient, SuiClientInner};
 use crate::types::{BridgeCommittee, IsBridgePaused};
@@ -21,10 +27,12 @@ const REFRESH_BRIDGE_RETRY_TIMES: u64 = 3;
 
 pub struct BridgeMonitor<C> {
     sui_client: Arc<SuiClient<C>>,
-    monitor_rx: mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
+    sui_monitor_rx: mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
+    eth_monitor_rx: mysten_metrics::metered_channel::Receiver<EthBridgeEvent>,
     bridge_auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
     bridge_paused_watch_tx: tokio::sync::watch::Sender<IsBridgePaused>,
     sui_token_type_tags: Arc<ArcSwap<HashMap<u8, TypeTag>>>,
+    bridge_metrics: Arc<BridgeMetrics>,
 }
 
 impl<C> BridgeMonitor<C>
@@ -33,17 +41,21 @@ where
 {
     pub fn new(
         sui_client: Arc<SuiClient<C>>,
-        monitor_rx: mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
+        sui_monitor_rx: mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
+        eth_monitor_rx: mysten_metrics::metered_channel::Receiver<EthBridgeEvent>,
         bridge_auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
         bridge_paused_watch_tx: tokio::sync::watch::Sender<IsBridgePaused>,
         sui_token_type_tags: Arc<ArcSwap<HashMap<u8, TypeTag>>>,
+        bridge_metrics: Arc<BridgeMetrics>,
     ) -> Self {
         Self {
             sui_client,
-            monitor_rx,
+            sui_monitor_rx,
+            eth_monitor_rx,
             bridge_auth_agg,
             bridge_paused_watch_tx,
             sui_token_type_tags,
+            bridge_metrics,
         }
     }
 
@@ -51,88 +63,237 @@ where
         tracing::info!("Starting BridgeMonitor");
         let Self {
             sui_client,
-            mut monitor_rx,
+            mut sui_monitor_rx,
+            mut eth_monitor_rx,
             bridge_auth_agg,
             bridge_paused_watch_tx,
             sui_token_type_tags,
+            bridge_metrics,
         } = self;
         let mut latest_token_config = (*sui_token_type_tags.load().clone()).clone();
 
-        while let Some(events) = monitor_rx.recv().await {
-            match events {
-                SuiBridgeEvent::SuiToEthTokenBridgeV1(_) => (),
-                SuiBridgeEvent::TokenTransferApproved(_) => (),
-                SuiBridgeEvent::TokenTransferClaimed(_) => (),
-                SuiBridgeEvent::TokenTransferAlreadyApproved(_) => (),
-                SuiBridgeEvent::TokenTransferAlreadyClaimed(_) => (),
-                SuiBridgeEvent::TokenTransferLimitExceed(_) => {
-                    // TODO
-                }
-
-                SuiBridgeEvent::EmergencyOpEvent(event) => {
-                    info!("Received EmergencyOpEvent: {:?}", event);
-                    let is_paused = get_latest_bridge_pause_status_with_emergency_event(
-                        sui_client.clone(),
-                        event,
-                        Duration::from_secs(10),
-                    )
-                    .await;
-                    bridge_paused_watch_tx
-                        .send(is_paused)
-                        .expect("Bridge pause status watch channel should not be closed");
-                }
-
-                SuiBridgeEvent::CommitteeMemberRegistration(_) => (),
-                SuiBridgeEvent::CommitteeUpdateEvent(_) => (),
-
-                SuiBridgeEvent::CommitteeMemberUrlUpdateEvent(event) => {
-                    info!("Received CommitteeMemberUrlUpdateEvent: {:?}", event);
-                    let new_committee = get_latest_bridge_committee_with_url_update_event(
-                        sui_client.clone(),
-                        event,
-                        Duration::from_secs(10),
-                    )
-                    .await;
-                    bridge_auth_agg.store(Arc::new(BridgeAuthorityAggregator::new(Arc::new(
-                        new_committee,
-                    ))));
-                    info!("Committee updated with CommitteeMemberUrlUpdateEvent");
-                }
-
-                SuiBridgeEvent::BlocklistValidatorEvent(event) => {
-                    info!("Received BlocklistValidatorEvent: {:?}", event);
-                    let new_committee = get_latest_bridge_committee_with_blocklist_event(
-                        sui_client.clone(),
-                        event,
-                        Duration::from_secs(10),
-                    )
-                    .await;
-                    bridge_auth_agg.store(Arc::new(BridgeAuthorityAggregator::new(Arc::new(
-                        new_committee,
-                    ))));
-                    info!("Committee updated with BlocklistValidatorEvent");
-                }
-
-                SuiBridgeEvent::TokenRegistrationEvent(_) => (),
-
-                SuiBridgeEvent::NewTokenEvent(event) => {
-                    if let std::collections::hash_map::Entry::Vacant(entry) =
-                        // We only add new tokens but not remove so it's ok to just insert
-                        latest_token_config.entry(event.token_id)
-                    {
-                        entry.insert(event.type_name.clone());
-                        sui_token_type_tags.store(Arc::new(latest_token_config.clone()));
+        loop {
+            tokio::select! {
+                sui_event = sui_monitor_rx.recv() => {
+                    if let Some(sui_event) = sui_event {
+                        Self::handle_sui_events(
+                            sui_event,
+                            &sui_client,
+                            &bridge_auth_agg,
+                            &bridge_paused_watch_tx,
+                            &sui_token_type_tags,
+                            &bridge_metrics,
+                            &mut latest_token_config,
+                        )
+                        .await;
                     } else {
-                        // invariant
-                        assert_eq!(event.type_name, latest_token_config[&event.token_id]);
+                        panic!("BridgeMonitor sui events channel was closed unexpectedly");
                     }
                 }
-
-                SuiBridgeEvent::UpdateTokenPriceEvent(_) => (),
+                eth_event = eth_monitor_rx.recv() => {
+                    if let Some(eth_event) = eth_event {
+                        Self::handle_eth_events(eth_event, &bridge_metrics);
+                    } else {
+                        panic!("BridgeMonitor eth events channel was closed unexpectedly");
+                    }
+                }
             }
         }
+    }
 
-        panic!("BridgeMonitor channel was closed unexpectedly");
+    async fn handle_sui_events(
+        event: SuiBridgeEvent,
+        sui_client: &Arc<SuiClient<C>>,
+        bridge_auth_agg: &Arc<ArcSwap<BridgeAuthorityAggregator>>,
+        bridge_paused_watch_tx: &tokio::sync::watch::Sender<IsBridgePaused>,
+        sui_token_type_tags: &Arc<ArcSwap<HashMap<u8, TypeTag>>>,
+        bridge_metrics: &Arc<BridgeMetrics>,
+        latest_token_config: &mut HashMap<u8, TypeTag>,
+    ) {
+        info!("Received SuiBridgeEvent: {:?}", event);
+        macro_rules! bump_sui_counter {
+            ($action:expr) => {
+                bridge_metrics
+                    .observed_governance_actions
+                    .with_label_values(&[$action, "sui"])
+                    .inc();
+            };
+        }
+
+        match event {
+            SuiBridgeEvent::SuiToEthTokenBridgeV1(_) => (),
+            SuiBridgeEvent::TokenTransferApproved(_) => (),
+            SuiBridgeEvent::TokenTransferClaimed(_) => (),
+            SuiBridgeEvent::TokenTransferAlreadyApproved(_) => (),
+            SuiBridgeEvent::TokenTransferAlreadyClaimed(_) => (),
+            SuiBridgeEvent::TokenTransferLimitExceed(_) => {
+                // TODO do we want to do anything here?
+            }
+
+            SuiBridgeEvent::EmergencyOpEvent(event) => {
+                bump_sui_counter!(if event.frozen {
+                    "bridge_paused"
+                } else {
+                    "bridge_unpaused"
+                });
+                let is_paused = get_latest_bridge_pause_status_with_emergency_event(
+                    sui_client.clone(),
+                    event,
+                    Duration::from_secs(10),
+                )
+                .await;
+                bridge_paused_watch_tx
+                    .send(is_paused)
+                    .expect("Bridge pause status watch channel should not be closed");
+            }
+
+            SuiBridgeEvent::CommitteeMemberRegistration(_) => {
+                bump_sui_counter!("committee_member_registered");
+            }
+            SuiBridgeEvent::CommitteeUpdateEvent(_) => {
+                bump_sui_counter!("committee_updated");
+            }
+
+            SuiBridgeEvent::CommitteeMemberUrlUpdateEvent(event) => {
+                bump_sui_counter!("committee_member_url_updated");
+                let new_committee = get_latest_bridge_committee_with_url_update_event(
+                    sui_client.clone(),
+                    event,
+                    Duration::from_secs(10),
+                )
+                .await;
+                bridge_auth_agg.store(Arc::new(BridgeAuthorityAggregator::new(Arc::new(
+                    new_committee,
+                ))));
+                info!("Committee updated with CommitteeMemberUrlUpdateEvent");
+            }
+
+            SuiBridgeEvent::BlocklistValidatorEvent(event) => {
+                bump_sui_counter!(if event.blocklisted {
+                    "validator_blocklisted"
+                } else {
+                    "validator_unblocklisted"
+                });
+                let new_committee = get_latest_bridge_committee_with_blocklist_event(
+                    sui_client.clone(),
+                    event,
+                    Duration::from_secs(10),
+                )
+                .await;
+                bridge_auth_agg.store(Arc::new(BridgeAuthorityAggregator::new(Arc::new(
+                    new_committee,
+                ))));
+                info!("Committee updated with BlocklistValidatorEvent");
+            }
+
+            SuiBridgeEvent::TokenRegistrationEvent(_) => {
+                bump_sui_counter!("new_token_registered");
+            }
+
+            SuiBridgeEvent::NewTokenEvent(event) => {
+                bump_sui_counter!("new_token_added");
+                if let std::collections::hash_map::Entry::Vacant(entry) =
+                    // We only add new tokens but not remove so it's ok to just insert
+                    latest_token_config.entry(event.token_id)
+                {
+                    entry.insert(event.type_name.clone());
+                    sui_token_type_tags.store(Arc::new(latest_token_config.clone()));
+                } else {
+                    // invariant
+                    assert_eq!(event.type_name, latest_token_config[&event.token_id]);
+                }
+            }
+
+            SuiBridgeEvent::UpdateTokenPriceEvent(_event) => {
+                bump_sui_counter!("token_price_updated");
+            }
+
+            SuiBridgeEvent::UpdateRouteLimitEvent(_event) => {
+                bump_sui_counter!("limit_updated");
+            }
+        }
+    }
+
+    fn handle_eth_events(event: EthBridgeEvent, bridge_metrics: &Arc<BridgeMetrics>) {
+        info!("Received EthBridgeEvent: {:?}", event);
+
+        macro_rules! bump_eth_counter {
+            ($action:expr) => {
+                bridge_metrics
+                    .observed_governance_actions
+                    .with_label_values(&[$action, "eth"])
+                    .inc()
+            };
+        }
+
+        match event {
+            EthBridgeEvent::EthBridgeCommitteeEvents(event) => match event {
+                EthBridgeCommitteeEvents::BlocklistUpdatedFilter(event) => {
+                    bump_eth_counter!(if event.is_blocklisted {
+                        "validator_blocklisted"
+                    } else {
+                        "validator_unblocklisted"
+                    });
+                }
+                EthBridgeCommitteeEvents::InitializedFilter(_) => {
+                    bump_eth_counter!("committee_contract_initialized");
+                }
+                EthBridgeCommitteeEvents::UpgradedFilter(_) => {
+                    bump_eth_counter!("committee_contract_upgraded");
+                }
+            },
+            EthBridgeEvent::EthBridgeLimiterEvents(event) => match event {
+                EthBridgeLimiterEvents::InitializedFilter(_) => {
+                    bump_eth_counter!("limiter_contract_initialized");
+                }
+                EthBridgeLimiterEvents::UpgradedFilter(_) => {
+                    bump_eth_counter!("limiter_contract_upgraded");
+                }
+                EthBridgeLimiterEvents::OwnershipTransferredFilter(_) => {
+                    bump_eth_counter!("limiter_contract_ownership_transferred");
+                }
+                EthBridgeLimiterEvents::LimitUpdatedFilter(_) => {
+                    bump_eth_counter!("limit_updated");
+                }
+                // This event is deprecated but we keep it for ABI compatibility
+                // TODO: We can safely update abi and remove it once the testnet bridge contract is upgraded
+                EthBridgeLimiterEvents::HourlyTransferAmountUpdatedFilter(_) => (),
+            },
+            EthBridgeEvent::EthBridgeConfigEvents(event) => match event {
+                EthBridgeConfigEvents::InitializedFilter(_) => {
+                    bump_eth_counter!("config_contract_initialized");
+                }
+                EthBridgeConfigEvents::UpgradedFilter(_) => {
+                    bump_eth_counter!("config_contract_upgraded");
+                }
+                EthBridgeConfigEvents::TokenAddedFilter(_) => {
+                    bump_eth_counter!("new_token_added");
+                }
+                EthBridgeConfigEvents::TokenPriceUpdatedFilter(_) => {
+                    bump_eth_counter!("update_token_price");
+                }
+            },
+            EthBridgeEvent::EthCommitteeUpgradeableContractEvents(event) => match event {
+                EthCommitteeUpgradeableContractEvents::InitializedFilter(_) => {
+                    bump_eth_counter!("upgradeable_contract_initialized");
+                }
+                EthCommitteeUpgradeableContractEvents::UpgradedFilter(_) => {
+                    bump_eth_counter!("upgradeable_contract_upgraded");
+                }
+            },
+            EthBridgeEvent::EthSuiBridgeEvents(event) => match event {
+                EthSuiBridgeEvents::TokensClaimedFilter(_) => (),
+                EthSuiBridgeEvents::TokensDepositedFilter(_) => (),
+                EthSuiBridgeEvents::PausedFilter(_) => bump_eth_counter!("bridge_paused"),
+                EthSuiBridgeEvents::UnpausedFilter(_) => bump_eth_counter!("bridge_unpaused"),
+                EthSuiBridgeEvents::UpgradedFilter(_) => {
+                    bump_eth_counter!("bridge_contract_upgraded")
+                }
+                EthSuiBridgeEvents::InitializedFilter(_) => {
+                    bump_eth_counter!("bridge_contract_initialized")
+                }
+            },
+        }
     }
 }
 
@@ -718,13 +879,16 @@ mod tests {
     #[tokio::test]
     async fn test_update_bridge_authority_aggregation_with_url_change_event() {
         let (
-            monitor_tx,
-            monitor_rx,
+            sui_monitor_tx,
+            sui_monitor_rx,
+            _eth_monitor_tx,
+            eth_monitor_rx,
             sui_client_mock,
             sui_client,
             bridge_pause_tx,
             _bridge_pause_rx,
             mut authorities,
+            bridge_metrics,
         ) = setup();
         let old_committee = BridgeCommittee::new(authorities.clone()).unwrap();
         let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
@@ -734,10 +898,12 @@ mod tests {
         let _handle = tokio::task::spawn(
             BridgeMonitor::new(
                 sui_client.clone(),
-                monitor_rx,
+                sui_monitor_rx,
+                eth_monitor_rx,
                 agg.clone(),
                 bridge_pause_tx,
                 sui_token_type_tags,
+                bridge_metrics,
             )
             .run(),
         );
@@ -747,7 +913,7 @@ mod tests {
         let new_committee_summary =
             bridge_committee_to_bridge_committee_summary(new_committee.clone());
         sui_client_mock.set_bridge_committee(new_committee_summary.clone());
-        monitor_tx
+        sui_monitor_tx
             .send(SuiBridgeEvent::CommitteeMemberUrlUpdateEvent(
                 CommitteeMemberUrlUpdateEvent {
                     member: authorities[0].pubkey.clone(),
@@ -772,13 +938,16 @@ mod tests {
     #[tokio::test]
     async fn test_update_bridge_authority_aggregation_with_blocklist_event() {
         let (
-            monitor_tx,
-            monitor_rx,
+            sui_monitor_tx,
+            sui_monitor_rx,
+            _eth_monitor_tx,
+            eth_monitor_rx,
             sui_client_mock,
             sui_client,
             bridge_pause_tx,
             _bridge_pause_rx,
             mut authorities,
+            bridge_metrics,
         ) = setup();
         let old_committee = BridgeCommittee::new(authorities.clone()).unwrap();
         let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
@@ -788,10 +957,12 @@ mod tests {
         let _handle = tokio::task::spawn(
             BridgeMonitor::new(
                 sui_client.clone(),
-                monitor_rx,
+                sui_monitor_rx,
+                eth_monitor_rx,
                 agg.clone(),
                 bridge_pause_tx,
                 sui_token_type_tags,
+                bridge_metrics,
             )
             .run(),
         );
@@ -801,7 +972,7 @@ mod tests {
         let new_committee_summary =
             bridge_committee_to_bridge_committee_summary(new_committee.clone());
         sui_client_mock.set_bridge_committee(new_committee_summary.clone());
-        monitor_tx
+        sui_monitor_tx
             .send(SuiBridgeEvent::BlocklistValidatorEvent(
                 BlocklistValidatorEvent {
                     public_keys: vec![to_blocklist.pubkey.clone()],
@@ -824,13 +995,16 @@ mod tests {
     #[tokio::test]
     async fn test_update_bridge_pause_status_with_emergency_event() {
         let (
-            monitor_tx,
-            monitor_rx,
+            sui_monitor_tx,
+            sui_monitor_rx,
+            _eth_monitor_tx,
+            eth_monitor_rx,
             sui_client_mock,
             sui_client,
             bridge_pause_tx,
             bridge_pause_rx,
             authorities,
+            bridge_metrics,
         ) = setup();
         let event = EmergencyOpEvent {
             frozen: !*bridge_pause_tx.borrow(), // toggle the bridge pause status
@@ -843,16 +1017,18 @@ mod tests {
         let _handle = tokio::task::spawn(
             BridgeMonitor::new(
                 sui_client.clone(),
-                monitor_rx,
+                sui_monitor_rx,
+                eth_monitor_rx,
                 agg.clone(),
                 bridge_pause_tx,
                 sui_token_type_tags,
+                bridge_metrics,
             )
             .run(),
         );
 
         sui_client_mock.set_is_bridge_paused(event.frozen);
-        monitor_tx
+        sui_monitor_tx
             .send(SuiBridgeEvent::EmergencyOpEvent(event.clone()))
             .await
             .unwrap();
@@ -865,13 +1041,16 @@ mod tests {
     #[tokio::test]
     async fn test_update_sui_token_type_tags() {
         let (
-            monitor_tx,
-            monitor_rx,
+            sui_monitor_tx,
+            sui_monitor_rx,
+            _eth_monitor_tx,
+            eth_monitor_rx,
             _sui_client_mock,
             sui_client,
             bridge_pause_tx,
             _bridge_pause_rx,
             authorities,
+            bridge_metrics,
         ) = setup();
         let event = NewTokenEvent {
             token_id: 255,
@@ -889,15 +1068,17 @@ mod tests {
         let _handle = tokio::task::spawn(
             BridgeMonitor::new(
                 sui_client.clone(),
-                monitor_rx,
+                sui_monitor_rx,
+                eth_monitor_rx,
                 agg.clone(),
                 bridge_pause_tx,
                 sui_token_type_tags_clone,
+                bridge_metrics,
             )
             .run(),
         );
 
-        monitor_tx
+        sui_monitor_tx
             .send(SuiBridgeEvent::NewTokenEvent(event.clone()))
             .await
             .unwrap();
@@ -915,26 +1096,38 @@ mod tests {
     fn setup() -> (
         mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
         mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
+        mysten_metrics::metered_channel::Sender<EthBridgeEvent>,
+        mysten_metrics::metered_channel::Receiver<EthBridgeEvent>,
         SuiMockClient,
         Arc<SuiClient<SuiMockClient>>,
         tokio::sync::watch::Sender<IsBridgePaused>,
         tokio::sync::watch::Receiver<IsBridgePaused>,
         Vec<BridgeAuthority>,
+        Arc<BridgeMetrics>,
     ) {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
         mysten_metrics::init_metrics(&registry);
         init_all_struct_tags();
+        let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
 
         let sui_client_mock = SuiMockClient::default();
         let sui_client = Arc::new(SuiClient::new_for_testing(sui_client_mock.clone()));
-        let (monitor_tx, monitor_rx) = mysten_metrics::metered_channel::channel(
+        let (sui_monitor_tx, sui_monitor_rx) = mysten_metrics::metered_channel::channel(
             10000,
             &mysten_metrics::get_metrics()
                 .unwrap()
                 .channel_inflight
-                .with_label_values(&["monitor_queue"]),
+                .with_label_values(&["sui_monitor_queue"]),
         );
+        let (eth_monitor_tx, eth_monitor_rx) = mysten_metrics::metered_channel::channel(
+            10000,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channel_inflight
+                .with_label_values(&["eth_monitor_queue"]),
+        );
+
         let (bridge_pause_tx, bridge_pause_rx) = tokio::sync::watch::channel(false);
         let authorities = vec![
             get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
@@ -943,13 +1136,16 @@ mod tests {
             get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
         ];
         (
-            monitor_tx,
-            monitor_rx,
+            sui_monitor_tx,
+            sui_monitor_rx,
+            eth_monitor_tx,
+            eth_monitor_rx,
             sui_client_mock,
             sui_client,
             bridge_pause_tx,
             bridge_pause_rx,
             authorities,
+            bridge_metrics,
         )
     }
 }

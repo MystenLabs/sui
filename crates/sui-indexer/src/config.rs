@@ -80,7 +80,7 @@ pub struct JsonRpcConfig {
     pub rpc_address: SocketAddr,
 
     #[clap(long)]
-    pub rpc_client_url: Url,
+    pub rpc_client_url: String,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -143,6 +143,27 @@ impl Default for IngestionConfig {
     }
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct SqlBackFillConfig {
+    /// Maximum number of concurrent tasks to run.
+    #[arg(
+        long,
+        default_value_t = Self::DEFAULT_MAX_CONCURRENCY,
+    )]
+    pub max_concurrency: usize,
+    /// Number of checkpoints to backfill in a single SQL command.
+    #[arg(
+        long,
+        default_value_t = Self::DEFAULT_CHUNK_SIZE,
+    )]
+    pub chunk_size: usize,
+}
+
+impl SqlBackFillConfig {
+    const DEFAULT_MAX_CONCURRENCY: usize = 10;
+    const DEFAULT_CHUNK_SIZE: usize = 1000;
+}
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     Indexer {
@@ -152,12 +173,36 @@ pub enum Command {
         snapshot_config: SnapshotLagConfig,
         #[command(flatten)]
         pruning_options: PruningOptions,
+        #[command(flatten)]
+        upload_options: UploadOptions,
     },
     JsonRpcService(JsonRpcConfig),
     ResetDatabase {
         #[clap(long)]
         force: bool,
     },
+    /// Run through the migration scripts.
+    RunMigrations,
+    /// Backfill DB tables for checkpoint range [\first_checkpoint, \last_checkpoint].
+    /// by running a SQL query provided in \sql.
+    /// The tool will automatically slice it into smaller checkpoint ranges and for each range [start, end],
+    /// it augments the \sql query with:
+    ///   "WHERE {checkpoint_column_name} BETWEEN {start} AND {end}"
+    /// to avoid running out of memory.
+    /// Example:
+    ///  ./sui-indexer --database-url <...> sql-back-fill
+    ///   "INSERT INTO full_objects_history (object_id, object_version, serialized_object) SELECT object_id, object_version, serialized_object FROM objects_history"
+    ///   "checkpoint_sequence_number" 0 100000
+    SqlBackFill {
+        sql: String,
+        checkpoint_column_name: String,
+        first_checkpoint: u64,
+        last_checkpoint: u64,
+        #[command(flatten)]
+        backfill_config: SqlBackFillConfig,
+    },
+    /// Restore the database from formal snaphots.
+    Restore(RestoreConfig),
 }
 
 #[derive(Args, Default, Debug, Clone)]
@@ -169,18 +214,11 @@ pub struct PruningOptions {
 #[derive(Args, Debug, Clone)]
 pub struct SnapshotLagConfig {
     #[arg(
-        long = "object-snapshot-min-checkpoint-lag",
+        long = "objects-snapshot-min-checkpoint-lag",
         default_value_t = Self::DEFAULT_MIN_LAG,
         env = "OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG",
     )]
     pub snapshot_min_lag: usize,
-
-    #[arg(
-        long = "object-snapshot-max-checkpoint-lag",
-        default_value_t = Self::DEFAULT_MAX_LAG,
-        env = "OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG",
-    )]
-    pub snapshot_max_lag: usize,
 
     #[arg(
         long = "objects-snapshot-sleep-duration",
@@ -190,7 +228,6 @@ pub struct SnapshotLagConfig {
 }
 
 impl SnapshotLagConfig {
-    const DEFAULT_MAX_LAG: usize = 900;
     const DEFAULT_MIN_LAG: usize = 300;
     const DEFAULT_SLEEP_DURATION_SEC: u64 = 5;
 }
@@ -198,11 +235,40 @@ impl SnapshotLagConfig {
 impl Default for SnapshotLagConfig {
     fn default() -> Self {
         SnapshotLagConfig {
-            snapshot_min_lag: Self::DEFAULT_MAX_LAG,
-            snapshot_max_lag: Self::DEFAULT_MIN_LAG,
+            snapshot_min_lag: Self::DEFAULT_MIN_LAG,
             sleep_duration: Self::DEFAULT_SLEEP_DURATION_SEC,
         }
     }
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct UploadOptions {
+    #[arg(long, env = "GCS_DISPLAY_BUCKET")]
+    pub gcs_display_bucket: Option<String>,
+    #[arg(long, env = "GCS_CRED_PATH")]
+    pub gcs_cred_path: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct RestoreConfig {
+    #[arg(long, env = "GCS_ARCHIVE_BUCKET")]
+    pub gcs_archive_bucket: String,
+    #[arg(long, env = "GCS_CRED_PATH")]
+    pub gcs_cred_path: String,
+    #[arg(long, env = "GCS_DISPLAY_BUCKET")]
+    pub gcs_display_bucket: String,
+    #[arg(long, env = "GCS_SNAPSHOT_DIR")]
+    pub gcs_snapshot_dir: String,
+    #[arg(long, env = "GCS_SNAPSHOT_BUCKET")]
+    pub gcs_snapshot_bucket: String,
+    #[arg(long, env = "START_EPOCH")]
+    pub start_epoch: u64,
+    #[arg(long, env = "S3_ENDPOINT")]
+    pub s3_endpoint: String,
+    #[arg(env = "OBJECT_STORE_CONCURRENT_LIMIT")]
+    pub object_store_concurrent_limit: usize,
+    #[arg(env = "OBJECT_STORE_MAX_TIMEOUT_SECS")]
+    pub object_store_max_timeout_secs: u64,
 }
 
 #[cfg(test)]

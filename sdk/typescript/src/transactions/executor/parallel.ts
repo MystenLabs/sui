@@ -5,7 +5,11 @@ import { toB64 } from '@mysten/bcs';
 
 import { bcs } from '../../bcs/index.js';
 import type { SuiObjectRef } from '../../bcs/types.js';
-import type { SuiClient, SuiTransactionBlockResponseOptions } from '../../client/index.js';
+import type {
+	SuiClient,
+	SuiTransactionBlockResponse,
+	SuiTransactionBlockResponseOptions,
+} from '../../client/index.js';
 import type { Signer } from '../../cryptography/index.js';
 import type { ObjectCacheOptions } from '../ObjectCache.js';
 import { Transaction } from '../Transaction.js';
@@ -108,6 +112,7 @@ export class ParallelTransactionExecutor {
 		const { promise, resolve, reject } = promiseWithResolvers<{
 			digest: string;
 			effects: string;
+			data: SuiTransactionBlockResponse;
 		}>();
 		const usedObjects = await this.#getUsedObjects(transaction);
 
@@ -262,6 +267,7 @@ export class ParallelTransactionExecutor {
 			return {
 				digest: results.digest,
 				effects: toB64(effectsBytes),
+				data: results,
 			};
 		} catch (error) {
 			if (gasCoin) {

@@ -3,14 +3,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use arc_swap::ArcSwap;
-use narwhal_config::Stake;
-use sui_types::base_types::AuthorityName;
+use consensus_config::Committee as ConsensusCommittee;
+use sui_types::{base_types::AuthorityName, committee::Committee};
 use tracing::debug;
 
-use crate::{
-    authority::AuthorityMetrics,
-    consensus_types::{committee_api::CommitteeAPI, AuthorityIndex},
-};
+use crate::{authority::AuthorityMetrics, consensus_types::AuthorityIndex};
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -21,7 +18,8 @@ use crate::{
 /// schedule since the chances of getting them sequenced are lower.
 pub(crate) fn update_low_scoring_authorities(
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-    committee: &impl CommitteeAPI,
+    sui_committee: &Committee,
+    consensus_committee: &ConsensusCommittee,
     reputation_score_sorted_desc: Option<Vec<(AuthorityIndex, u64)>>,
     metrics: &Arc<AuthorityMetrics>,
     consensus_bad_nodes_stake_threshold: u64,
@@ -41,20 +39,20 @@ pub(crate) fn update_low_scoring_authorities(
 
     let mut final_low_scoring_map = HashMap::new();
     let mut total_stake = 0;
-    for (authority_index, score) in scores_per_authority_order_asc {
-        let authority_name = committee
-            .authority_pubkey_by_index(authority_index)
+    for (index, score) in scores_per_authority_order_asc {
+        let authority_name = sui_committee.authority_by_index(index).unwrap();
+        let authority_index = consensus_committee
+            .to_authority_index(index as usize)
             .unwrap();
-        let hostname = committee
-            .authority_hostname_by_index(authority_index)
-            .unwrap();
-        let stake = committee.authority_stake_by_index(authority_index);
+        let consensus_authority = consensus_committee.authority(authority_index);
+        let hostname = &consensus_authority.hostname;
+        let stake = consensus_authority.stake;
         total_stake += stake;
 
         let included = if total_stake
-            <= (consensus_bad_nodes_stake_threshold * committee.total_stake()) / 100 as Stake
+            <= consensus_bad_nodes_stake_threshold * consensus_committee.total_stake() / 100
         {
-            final_low_scoring_map.insert(authority_name, score);
+            final_low_scoring_map.insert(*authority_name, score);
             true
         } else {
             false
@@ -85,98 +83,72 @@ mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use arc_swap::ArcSwap;
-    use fastcrypto::traits::{InsecureDefault, KeyPair as _};
-    use mysten_network::Multiaddr;
-    use narwhal_config::{Committee, CommitteeBuilder};
-    use narwhal_crypto::{KeyPair, NetworkPublicKey};
-    use narwhal_types::ReputationScores;
+    use consensus_config::{local_committee_and_keys, Committee as ConsensusCommittee};
     use prometheus::Registry;
-    use rand::{
-        rngs::{OsRng, StdRng},
-        SeedableRng,
-    };
+    use sui_types::{committee::Committee, crypto::AuthorityPublicKeyBytes};
 
-    use crate::{
-        authority::AuthorityMetrics, consensus_types::AuthorityIndex,
-        scoring_decision::update_low_scoring_authorities,
-    };
+    use crate::{authority::AuthorityMetrics, scoring_decision::update_low_scoring_authorities};
 
     #[test]
     #[cfg_attr(msim, ignore)]
     pub fn test_update_low_scoring_authorities() {
         // GIVEN
         // Total stake is 8 for this committee and every authority has equal stake = 1
-        let committee = generate_committee(8);
-
-        let mut authorities = committee.authorities();
-        let a1 = authorities.next().unwrap();
-        let a2 = authorities.next().unwrap();
-        let a3 = authorities.next().unwrap();
-        let a4 = authorities.next().unwrap();
-        let a5 = authorities.next().unwrap();
-        let a6 = authorities.next().unwrap();
-        let a7 = authorities.next().unwrap();
-        let a8 = authorities.next().unwrap();
+        let (sui_committee, consensus_committee) = generate_committees(8);
 
         let low_scoring = Arc::new(ArcSwap::from_pointee(HashMap::new()));
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
 
         // there is a low outlier in the non zero scores, exclude it as well as down nodes
-        let mut scores = HashMap::new();
-        scores.insert(a1.id(), 350_u64);
-        scores.insert(a2.id(), 390_u64);
-        scores.insert(a3.id(), 50_u64);
-        scores.insert(a4.id(), 50_u64);
-        scores.insert(a5.id(), 0_u64); // down node
-        scores.insert(a6.id(), 300_u64);
-        scores.insert(a7.id(), 340_u64);
-        scores.insert(a8.id(), 310_u64);
-        let reputation_scores = ReputationScores {
-            scores_per_authority: scores,
-            final_of_schedule: true,
-        };
+        let authorities_by_score_desc = vec![
+            (1, 390_u64),
+            (0, 350_u64),
+            (6, 340_u64),
+            (7, 310_u64),
+            (5, 300_u64),
+            (3, 50_u64),
+            (2, 50_u64),
+            (4, 0_u64), // down node
+        ];
 
         // WHEN
-        let consensus_bad_nodes_stake_threshold = 33; // 33 * 8 / 100 = 2 maximum stake that will considered low scoring
+        let consensus_bad_nodes_stake_threshold = 33; // 33 * 8 / 100 = 2 low scoring validator
 
         update_low_scoring_authorities(
             low_scoring.clone(),
-            committee.as_ref(),
-            Some(
-                reputation_scores
-                    .authorities_by_score_desc()
-                    .into_iter()
-                    .map(|(id, score)| (id.0 as AuthorityIndex, score))
-                    .collect(),
-            ),
+            &sui_committee,
+            &consensus_committee,
+            Some(authorities_by_score_desc.clone()),
             &metrics,
             consensus_bad_nodes_stake_threshold,
         );
 
         // THEN
         assert_eq!(low_scoring.load().len(), 2);
-        println!("low scoring {:?}", low_scoring.load());
         assert_eq!(
-            *low_scoring.load().get(&a3.protocol_key().into()).unwrap(), // Since a3 & a4 have equal scores, we resolve the decision with a3.id < a4.id
+            *low_scoring
+                .load()
+                // authority 2 is 2nd to the last in authorities_by_score_desc
+                .get(sui_committee.authority_by_index(2).unwrap())
+                .unwrap(),
             50
         );
         assert_eq!(
-            *low_scoring.load().get(&a5.protocol_key().into()).unwrap(),
+            *low_scoring
+                .load()
+                // authority 4 is the last in authorities_by_score_desc
+                .get(sui_committee.authority_by_index(4).unwrap())
+                .unwrap(),
             0
         );
 
         // WHEN setting the threshold to lower
-        let consensus_bad_nodes_stake_threshold = 20; // 20 * 8 / 100 = 1 maximum
+        let consensus_bad_nodes_stake_threshold = 20; // 20 * 8 / 100 = 1 low scoring validator
         update_low_scoring_authorities(
             low_scoring.clone(),
-            committee.as_ref(),
-            Some(
-                reputation_scores
-                    .authorities_by_score_desc()
-                    .into_iter()
-                    .map(|(id, score)| (id.0 as AuthorityIndex, score))
-                    .collect(),
-            ),
+            &sui_committee,
+            &consensus_committee,
+            Some(authorities_by_score_desc.clone()),
             &metrics,
             consensus_bad_nodes_stake_threshold,
         );
@@ -184,31 +156,31 @@ mod tests {
         // THEN
         assert_eq!(low_scoring.load().len(), 1);
         assert_eq!(
-            *low_scoring.load().get(&a5.protocol_key().into()).unwrap(),
+            *low_scoring
+                .load()
+                .get(sui_committee.authority_by_index(4).unwrap())
+                .unwrap(),
             0
         );
     }
 
-    /// Generate a random committee for the given size. It's important to create the Authorities
-    /// via the committee to ensure than an AuthorityIdentifier will be assigned, as this is dynamically
-    /// calculated during committee creation.
-    fn generate_committee(committee_size: usize) -> Arc<Committee> {
-        let mut committee_builder = CommitteeBuilder::new(0);
-        let mut rng = StdRng::from_rng(&mut OsRng).unwrap();
+    /// Generate a pair of Sui and consensus committees for the given size.
+    fn generate_committees(committee_size: usize) -> (Committee, ConsensusCommittee) {
+        let (consensus_committee, _) = local_committee_and_keys(0, vec![1; committee_size]);
 
-        for i in 0..committee_size {
-            let pair = KeyPair::generate(&mut rng);
-            let public_key = pair.public().clone();
+        let public_keys = consensus_committee
+            .authorities()
+            .map(|(_i, authority)| authority.authority_key.inner())
+            .collect::<Vec<_>>();
+        let sui_authorities = public_keys
+            .iter()
+            .map(|key| (AuthorityPublicKeyBytes::from(*key), 1))
+            .collect::<Vec<_>>();
+        let sui_committee = Committee::new_for_testing_with_normalized_voting_power(
+            0,
+            sui_authorities.iter().cloned().collect(),
+        );
 
-            committee_builder = committee_builder.add_authority(
-                public_key.clone(),
-                1,
-                Multiaddr::empty(),
-                NetworkPublicKey::insecure_default(),
-                i.to_string(),
-            );
-        }
-
-        Arc::new(committee_builder.build())
+        (sui_committee, consensus_committee)
     }
 }

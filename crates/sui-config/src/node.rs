@@ -270,6 +270,10 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Microsoft".to_string(),
         "KarrierOne".to_string(),
         "Credenza3".to_string(),
+        "Playtron".to_string(),
+        "Threedos".to_string(),
+        "Onefc".to_string(),
+        "FanTV".to_string(),
         "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(), // test tenant in mysten aws
         "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(), // ambrus, external partner
     ]);
@@ -283,6 +287,8 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(),
         "KarrierOne".to_string(),
         "Credenza3".to_string(),
+        "Playtron".to_string(),
+        "Onefc".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);

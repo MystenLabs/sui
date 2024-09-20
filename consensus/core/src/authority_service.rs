@@ -55,17 +55,10 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
-        // Set the subscribed peers by default to 0
-        for (_, authority) in context.committee.authorities() {
-            context
-                .metrics
-                .node_metrics
-                .subscribed_peers
-                .with_label_values(&[authority.hostname.as_str()])
-                .set(0);
-        }
-
-        let subscription_counter = Arc::new(SubscriptionCounter::new(core_dispatcher.clone()));
+        let subscription_counter = Arc::new(SubscriptionCounter::new(
+            context.clone(),
+            core_dispatcher.clone(),
+        ));
         Self {
             context,
             block_verifier,
@@ -254,7 +247,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         );
 
         let broadcasted_blocks = BroadcastedBlockStream::new(
-            self.context.clone(),
             peer,
             self.rx_block_broadcaster.resubscribe(),
             self.subscription_counter.clone(),
@@ -416,40 +408,96 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         Ok(result)
     }
+
+    async fn handle_get_latest_rounds(&self, _peer: AuthorityIndex) -> ConsensusResult<Vec<Round>> {
+        fail_point_async!("consensus-rpc-response");
+
+        let mut highest_received_rounds = self.core_dispatcher.highest_received_rounds();
+        // Own blocks do not go through the core dispatcher, so they need to be set separately.
+        highest_received_rounds[self.context.own_index] = self
+            .dag_state
+            .read()
+            .get_last_block_for_authority(self.context.own_index)
+            .round();
+
+        Ok(highest_received_rounds)
+    }
+}
+
+struct Counter {
+    count: usize,
+    subscriptions_by_authority: Vec<usize>,
 }
 
 /// Atomically counts the number of active subscriptions to the block broadcast stream,
 /// and dispatch commands to core based on the changes.
 struct SubscriptionCounter {
-    counter: parking_lot::Mutex<usize>,
+    context: Arc<Context>,
+    counter: parking_lot::Mutex<Counter>,
     dispatcher: Arc<dyn CoreThreadDispatcher>,
 }
 
 impl SubscriptionCounter {
-    fn new(dispatcher: Arc<dyn CoreThreadDispatcher>) -> Self {
+    fn new(context: Arc<Context>, dispatcher: Arc<dyn CoreThreadDispatcher>) -> Self {
+        // Set the subscribed peers by default to 0
+        for (_, authority) in context.committee.authorities() {
+            context
+                .metrics
+                .node_metrics
+                .subscribed_by
+                .with_label_values(&[authority.hostname.as_str()])
+                .set(0);
+        }
+
         Self {
-            counter: parking_lot::Mutex::new(0),
+            counter: parking_lot::Mutex::new(Counter {
+                count: 0,
+                subscriptions_by_authority: vec![0; context.committee.size()],
+            }),
             dispatcher,
+            context,
         }
     }
 
-    fn increment(&self) -> Result<(), ConsensusError> {
+    fn increment(&self, peer: AuthorityIndex) -> Result<(), ConsensusError> {
         let mut counter = self.counter.lock();
-        *counter += 1;
-        if *counter == 1 {
+        counter.count += 1;
+        counter.subscriptions_by_authority[peer] += 1;
+
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
+        self.context
+            .metrics
+            .node_metrics
+            .subscribed_by
+            .with_label_values(&[peer_hostname])
+            .set(1);
+
+        if counter.count == 1 {
             self.dispatcher
-                .set_consumer_availability(true)
+                .set_subscriber_exists(true)
                 .map_err(|_| ConsensusError::Shutdown)?;
         }
         Ok(())
     }
 
-    fn decrement(&self) -> Result<(), ConsensusError> {
+    fn decrement(&self, peer: AuthorityIndex) -> Result<(), ConsensusError> {
         let mut counter = self.counter.lock();
-        *counter -= 1;
-        if *counter == 0 {
+        counter.count -= 1;
+        counter.subscriptions_by_authority[peer] -= 1;
+
+        if counter.subscriptions_by_authority[peer] == 0 {
+            let peer_hostname = &self.context.committee.authority(peer).hostname;
+            self.context
+                .metrics
+                .node_metrics
+                .subscribed_by
+                .with_label_values(&[peer_hostname])
+                .set(0);
+        }
+
+        if counter.count == 0 {
             self.dispatcher
-                .set_consumer_availability(false)
+                .set_subscriber_exists(false)
                 .map_err(|_| ConsensusError::Shutdown)?;
         }
         Ok(())
@@ -463,7 +511,6 @@ type BroadcastedBlockStream = BroadcastStream<VerifiedBlock>;
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
 struct BroadcastStream<T> {
-    context: Arc<Context>,
     peer: AuthorityIndex,
     // Stores the receiver across poll_next() calls.
     inner: ReusableBoxFuture<
@@ -479,22 +526,17 @@ struct BroadcastStream<T> {
 
 impl<T: 'static + Clone + Send> BroadcastStream<T> {
     pub fn new(
-        context: Arc<Context>,
         peer: AuthorityIndex,
         rx: broadcast::Receiver<T>,
         subscription_counter: Arc<SubscriptionCounter>,
     ) -> Self {
-        let peer_hostname = &context.committee.authority(peer).hostname;
-        context
-            .metrics
-            .node_metrics
-            .subscribed_peers
-            .with_label_values(&[peer_hostname])
-            .set(1);
-        // Failure can only be due to core shutdown.
-        let _ = subscription_counter.increment();
+        if let Err(err) = subscription_counter.increment(peer) {
+            match err {
+                ConsensusError::Shutdown => {}
+                _ => panic!("Unexpected error: {err}"),
+            }
+        }
         Self {
-            context,
             peer,
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
             subscription_counter,
@@ -535,15 +577,12 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
 
 impl<T> Drop for BroadcastStream<T> {
     fn drop(&mut self) {
-        let peer_hostname = &self.context.committee.authority(self.peer).hostname;
-        self.context
-            .metrics
-            .node_metrics
-            .subscribed_peers
-            .with_label_values(&[peer_hostname])
-            .set(0);
-        // Failure can only be due to core shutdown.
-        let _ = self.subscription_counter.decrement();
+        if let Err(err) = self.subscription_counter.decrement(self.peer) {
+            match err {
+                ConsensusError::Shutdown => {}
+                _ => panic!("Unexpected error: {err}"),
+            }
+        }
     }
 }
 
@@ -622,10 +661,19 @@ mod tests {
             Ok(Default::default())
         }
 
-        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
             todo!()
         }
+
+        fn set_propagation_delay(&self, _delay: Round) -> Result<(), CoreError> {
+            todo!()
+        }
+
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
+            todo!()
+        }
+
+        fn highest_received_rounds(&self) -> Vec<Round> {
             todo!()
         }
     }
@@ -680,6 +728,14 @@ mod tests {
             _authorities: Vec<AuthorityIndex>,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn get_latest_rounds(
+            &self,
+            _peer: AuthorityIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Round>> {
             unimplemented!("Unimplemented")
         }
     }

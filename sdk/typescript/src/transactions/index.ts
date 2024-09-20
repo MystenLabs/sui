@@ -47,3 +47,10 @@ export type {
 } from './json-rpc-resolver.js';
 
 export { Arguments } from './Arguments.js';
+
+export {
+	namedPackagesPlugin,
+	type NamedPackagesPluginOptions,
+} from './plugins/NamedPackagesPlugin.js';
+
+export { type NamedPackagesPluginCache } from './plugins/utils.js';

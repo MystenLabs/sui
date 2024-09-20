@@ -5,7 +5,7 @@ task 0, lines 1-14:
 Error: Function execution failed with VMError: {
     major_status: VECTOR_OPERATION_ERROR,
     sub_status: Some(1),
-    location: 0x1::m,
+    location: 0x5::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 7)],
 }
@@ -15,7 +15,7 @@ task 1, lines 15-28:
 Error: Function execution failed with VMError: {
     major_status: VECTOR_OPERATION_ERROR,
     sub_status: Some(1),
-    location: 0x2::m,
+    location: 0x6::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 7)],
 }
@@ -25,7 +25,7 @@ task 2, lines 29-41:
 Error: Function execution failed with VMError: {
     major_status: VECTOR_OPERATION_ERROR,
     sub_status: Some(1),
-    location: 0x3::m,
+    location: 0x7::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 5)],
 }

@@ -44,6 +44,7 @@ rand.workspace = true
 lru.workspace = true
 shared-crypto.workspace = true
 backoff.workspace = true
+mysten-common.workspace = true
 enum_dispatch.workspace = true
 sui-json-rpc-api.workspace = true
 sui-test-transaction-builder.workspace = true

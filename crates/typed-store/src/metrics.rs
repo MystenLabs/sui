@@ -77,6 +77,8 @@ impl SamplingInterval {
 pub struct ColumnFamilyMetrics {
     pub rocksdb_total_sst_files_size: IntGaugeVec,
     pub rocksdb_total_blob_files_size: IntGaugeVec,
+    pub rocksdb_total_num_files: IntGaugeVec,
+    pub rocksdb_num_level0_files: IntGaugeVec,
     pub rocksdb_current_size_active_mem_tables: IntGaugeVec,
     pub rocksdb_size_all_mem_tables: IntGaugeVec,
     pub rocksdb_num_snapshots: IntGaugeVec,
@@ -112,6 +114,20 @@ impl ColumnFamilyMetrics {
             rocksdb_total_blob_files_size: register_int_gauge_vec_with_registry!(
                 "rocksdb_total_blob_files_size",
                 "The storage size occupied by the blob files in the column family",
+                &["cf_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_total_num_files: register_int_gauge_vec_with_registry!(
+                "rocksdb_total_num_files",
+                "Total number of files used in the column family",
+                &["cf_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_num_level0_files: register_int_gauge_vec_with_registry!(
+                "rocksdb_num_level0_files",
+                "Number of level 0 files in the column family",
                 &["cf_name"],
                 registry,
             )

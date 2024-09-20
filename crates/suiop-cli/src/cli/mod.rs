@@ -8,6 +8,7 @@ mod incidents;
 pub mod lib;
 pub mod pulumi;
 pub mod service;
+mod slack;
 
 pub use ci::{ci_cmd, CIArgs};
 pub use docker::{docker_cmd, DockerArgs};

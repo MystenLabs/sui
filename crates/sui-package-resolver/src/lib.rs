@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::{borrow::Cow, collections::BTreeMap};
 use sui_types::base_types::is_primitive_type_tag;
 use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction};
+use sui_types::type_input::{StructInput, TypeInput};
 
 use crate::error::Error;
 use move_binary_format::errors::Location;
@@ -503,9 +504,12 @@ impl<S: PackageStore> Resolver<S> {
                     }
                 }
 
-                Command::MakeMoveVec(Some(tag), elems) if is_primitive_type_tag(tag) => {
-                    for elem in elems {
-                        register_type(elem, tag)?;
+                Command::MakeMoveVec(Some(tag), elems) => {
+                    let tag = as_type_tag(tag)?;
+                    if is_primitive_type_tag(&tag) {
+                        for elem in elems {
+                            register_type(elem, &tag)?;
+                        }
                     }
                 }
 
@@ -1027,7 +1031,7 @@ impl OpenSignature {
     /// parameters. This function does not check that the supplied type parameters are valid (meet
     /// the ability constraints of the struct or function this signature is part of), but will
     /// produce an error if the signature references a type parameter that is out of bounds.
-    pub fn instantiate(&self, type_params: &[TypeTag]) -> Result<Signature> {
+    pub fn instantiate(&self, type_params: &[TypeInput]) -> Result<Signature> {
         Ok(Signature {
             ref_: self.ref_,
             body: self.body.instantiate(type_params)?,
@@ -1070,7 +1074,7 @@ impl OpenSignatureBody {
         })
     }
 
-    fn instantiate(&self, type_params: &[TypeTag]) -> Result<TypeTag> {
+    fn instantiate(&self, type_params: &[TypeInput]) -> Result<TypeTag> {
         use OpenSignatureBody as O;
         use TypeTag as T;
 
@@ -1095,10 +1099,11 @@ impl OpenSignatureBody {
                     .collect::<Result<_>>()?,
             })),
 
-            O::TypeParameter(ix) => type_params
-                .get(*ix as usize)
-                .cloned()
-                .ok_or_else(|| Error::TypeParamOOB(*ix, type_params.len()))?,
+            O::TypeParameter(ix) => as_type_tag(
+                type_params
+                    .get(*ix as usize)
+                    .ok_or_else(|| Error::TypeParamOOB(*ix, type_params.len()))?,
+            )?,
         })
     }
 }
@@ -1453,10 +1458,10 @@ impl<'l> ResolutionContext<'l> {
                 }
 
                 (
-                    MoveTypeLayout::Struct(MoveStructLayout {
+                    MoveTypeLayout::Struct(Box::new(MoveStructLayout {
                         type_,
-                        fields: resolved_fields,
-                    }),
+                        fields: Box::new(resolved_fields),
+                    })),
                     field_depth + 1,
                 )
             }
@@ -1481,10 +1486,10 @@ impl<'l> ResolutionContext<'l> {
                 }
 
                 (
-                    MoveTypeLayout::Enum(MoveEnumLayout {
+                    MoveTypeLayout::Enum(Box::new(MoveEnumLayout {
                         type_,
                         variants: resolved_variants,
-                    }),
+                    })),
                     field_depth + 1,
                 )
             }
@@ -1668,6 +1673,38 @@ fn ident(s: &str) -> Result<Identifier> {
     Identifier::new(s).map_err(|_| Error::NotAnIdentifier(s.to_string()))
 }
 
+pub fn as_type_tag(type_input: &TypeInput) -> Result<TypeTag> {
+    use TypeInput as I;
+    use TypeTag as T;
+    Ok(match type_input {
+        I::Bool => T::Bool,
+        I::U8 => T::U8,
+        I::U16 => T::U16,
+        I::U32 => T::U32,
+        I::U64 => T::U64,
+        I::U128 => T::U128,
+        I::U256 => T::U256,
+        I::Address => T::Address,
+        I::Signer => T::Signer,
+        I::Vector(t) => T::Vector(Box::new(as_type_tag(t)?)),
+        I::Struct(s) => {
+            let StructInput {
+                address,
+                module,
+                name,
+                type_params,
+            } = s.as_ref();
+            let type_params = type_params.iter().map(as_type_tag).collect::<Result<_>>()?;
+            T::Struct(Box::new(StructTag {
+                address: *address,
+                module: ident(module)?,
+                name: ident(name)?,
+                type_params,
+            }))
+        }
+    })
+}
+
 /// Read and deserialize a signature index (from function parameter or return types) into a vector
 /// of signatures.
 fn read_signature(idx: SignatureIndex, bytecode: &CompiledModule) -> Result<Vec<OpenSignature>> {
@@ -1689,7 +1726,7 @@ mod tests {
     use std::sync::Arc;
     use std::{path::PathBuf, str::FromStr, sync::RwLock};
     use sui_types::base_types::random_object_ref;
-    use sui_types::transaction::{ObjectArg, ProgrammableMoveCall};
+    use sui_types::transaction::ObjectArg;
 
     use move_compiler::compiled_unit::NamedCompiledModule;
     use sui_move_build::{BuildConfig, CompiledPackage};
@@ -2243,7 +2280,7 @@ mod tests {
     #[tokio::test]
     async fn test_signature_instantiation() {
         use OpenSignatureBody as O;
-        use TypeTag as T;
+        use TypeInput as T;
 
         let sig = O::Datatype(
             key("0x2::table::Table"),
@@ -2262,7 +2299,7 @@ mod tests {
     #[tokio::test]
     async fn test_signature_instantiation_error() {
         use OpenSignatureBody as O;
-        use TypeTag as T;
+        use TypeInput as T;
 
         let sig = O::Datatype(
             key("0x2::table::Table"),
@@ -2571,13 +2608,13 @@ mod tests {
                     I::Pure(bcs::to_bytes("hello").unwrap()),
                     I::Pure(bcs::to_bytes("world").unwrap()),
                 ],
-                commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
-                    package: addr("0xe0").into(),
-                    module: ident_str!("m").to_owned(),
-                    function: ident_str!("foo").to_owned(),
-                    type_arguments: vec![t],
-                    arguments: (0..=6).map(Argument::Input).collect(),
-                }))],
+                commands: vec![Command::move_call(
+                    addr("0xe0").into(),
+                    ident_str!("m").to_owned(),
+                    ident_str!("foo").to_owned(),
+                    vec![t],
+                    (0..=6).map(Argument::Input).collect(),
+                )],
             }
         }
 
@@ -2651,20 +2688,20 @@ mod tests {
                 I::Pure(bcs::to_bytes("world").unwrap()),
             ],
             commands: vec![
-                Command::MoveCall(Box::new(ProgrammableMoveCall {
-                    package: addr("0xe0").into(),
-                    module: ident_str!("m").to_owned(),
-                    function: ident_str!("foo").to_owned(),
-                    type_arguments: vec![T::U64],
-                    arguments: (0..=6).map(Argument::Input).collect(),
-                })),
-                Command::MoveCall(Box::new(ProgrammableMoveCall {
-                    package: addr("0xe0").into(),
-                    module: ident_str!("m").to_owned(),
-                    function: ident_str!("foo").to_owned(),
-                    type_arguments: vec![T::U64],
-                    arguments: (0..=6).map(Argument::Input).collect(),
-                })),
+                Command::move_call(
+                    addr("0xe0").into(),
+                    ident_str!("m").to_owned(),
+                    ident_str!("foo").to_owned(),
+                    vec![T::U64],
+                    (0..=6).map(Argument::Input).collect(),
+                ),
+                Command::move_call(
+                    addr("0xe0").into(),
+                    ident_str!("m").to_owned(),
+                    ident_str!("foo").to_owned(),
+                    vec![T::U64],
+                    (0..=6).map(Argument::Input).collect(),
+                ),
             ],
         };
 
@@ -2682,11 +2719,11 @@ mod tests {
 
         insta::assert_snapshot!(output);
     }
-
     #[tokio::test]
     async fn test_pure_input_layouts_conflicting() {
         use CallArg as I;
         use ObjectArg::ImmOrOwnedObject as O;
+        use TypeInput as TI;
         use TypeTag as T;
 
         let (_, cache) = package_cache([
@@ -2708,16 +2745,16 @@ mod tests {
                 I::Pure(bcs::to_bytes("world").unwrap()),
             ],
             commands: vec![
-                Command::MoveCall(Box::new(ProgrammableMoveCall {
-                    package: addr("0xe0").into(),
-                    module: ident_str!("m").to_owned(),
-                    function: ident_str!("foo").to_owned(),
-                    type_arguments: vec![T::U64],
-                    arguments: (0..=6).map(Argument::Input).collect(),
-                })),
+                Command::move_call(
+                    addr("0xe0").into(),
+                    ident_str!("m").to_owned(),
+                    ident_str!("foo").to_owned(),
+                    vec![T::U64],
+                    (0..=6).map(Argument::Input).collect(),
+                ),
                 // This command is using the input that was previously used as a U64, but now as a
                 // U32, which will cause an error.
-                Command::MakeMoveVec(Some(T::U32), vec![Argument::Input(3)]),
+                Command::MakeMoveVec(Some(TI::U32), vec![Argument::Input(3)]),
             ],
         };
 

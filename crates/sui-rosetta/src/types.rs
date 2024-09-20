@@ -29,6 +29,10 @@ use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
 use crate::SUI;
 
+#[cfg(test)]
+#[path = "unit_tests/types_tests.rs"]
+mod types_tests;
+
 pub type BlockHeight = u64;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -95,20 +99,63 @@ impl From<SuiAddress> for AccountIdentifier {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Currency {
     pub symbol: String,
     pub decimals: u64,
+    #[serde(default)]
+    pub metadata: CurrencyMetadata,
 }
-#[derive(Serialize, Deserialize)]
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct CurrencyMetadata {
+    pub coin_type: String,
+}
+
+impl Default for CurrencyMetadata {
+    fn default() -> Self {
+        SUI.metadata.clone()
+    }
+}
+
+impl Default for Currency {
+    fn default() -> Self {
+        SUI.clone()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[serde(transparent)]
+pub struct Currencies(pub Vec<Currency>);
+
+impl Default for Currencies {
+    fn default() -> Self {
+        Currencies(vec![Currency::default()])
+    }
+}
+
+fn deserialize_or_default_currencies<'de, D>(deserializer: D) -> Result<Currencies, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<Vec<Currency>> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(vec) if vec.is_empty() => Ok(Currencies::default()),
+        Some(vec) => Ok(Currencies(vec)),
+        None => Ok(Currencies::default()),
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AccountBalanceRequest {
     pub network_identifier: NetworkIdentifier,
     pub account_identifier: AccountIdentifier,
     #[serde(default)]
     pub block_identifier: PartialBlockIdentifier,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub currencies: Vec<Currency>,
+    #[serde(default, deserialize_with = "deserialize_or_default_currencies")]
+    pub currencies: Currencies,
 }
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AccountBalanceResponse {
     pub block_identifier: BlockIdentifier,
@@ -133,6 +180,7 @@ pub type BlockHash = CheckpointDigest;
 pub struct Amount {
     #[serde(with = "str_format")]
     pub value: i128,
+    #[serde(default)]
     pub currency: Currency,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<AmountMetadata>,
@@ -152,10 +200,10 @@ pub struct SubBalance {
 }
 
 impl Amount {
-    pub fn new(value: i128) -> Self {
+    pub fn new(value: i128, currency: Option<Currency>) -> Self {
         Self {
             value,
-            currency: SUI.clone(),
+            currency: currency.unwrap_or_default(),
             metadata: None,
         }
     }
@@ -164,7 +212,7 @@ impl Amount {
 
         Self {
             value,
-            currency: SUI.clone(),
+            currency: Currency::default(),
             metadata: Some(AmountMetadata { sub_balances }),
         }
     }
@@ -409,6 +457,7 @@ pub enum OperationType {
     StakePrinciple,
     // sui-rosetta supported operation type
     PaySui,
+    PayCoin,
     Stake,
     WithdrawStake,
     // All other Sui transaction types, readonly
@@ -617,6 +666,7 @@ pub struct ConstructionMetadata {
     pub total_coin_value: u64,
     pub gas_price: u64,
     pub budget: u64,
+    pub currency: Option<Currency>,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
@@ -867,6 +917,12 @@ pub enum InternalOperation {
         recipients: Vec<SuiAddress>,
         amounts: Vec<u64>,
     },
+    PayCoin {
+        sender: SuiAddress,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        currency: Currency,
+    },
     Stake {
         sender: SuiAddress,
         validator: SuiAddress,
@@ -883,6 +939,7 @@ impl InternalOperation {
     pub fn sender(&self) -> SuiAddress {
         match self {
             InternalOperation::PaySui { sender, .. }
+            | InternalOperation::PayCoin { sender, .. }
             | InternalOperation::Stake { sender, .. }
             | InternalOperation::WithdrawStake { sender, .. } => *sender,
         }
@@ -897,6 +954,24 @@ impl InternalOperation {
             } => {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 builder.pay_sui(recipients, amounts)?;
+                builder.finish()
+            }
+            Self::PayCoin {
+                recipients,
+                amounts,
+                ..
+            } => {
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.pay(metadata.objects.clone(), recipients, amounts)?;
+                let currency_str = serde_json::to_string(&metadata.currency.unwrap()).unwrap();
+                // This is a workaround in order to have the currency info available during the process
+                // of constructing back the Operations object from the transaction data. A process that
+                // takes place upon the request to the construction's /parse endpoint. The pure value is
+                // not actually being used in any on-chain transaction execution and its sole purpose
+                // is to act as a bearer of the currency info between the various steps of the flow.
+                // See also the value is being later accessed within the operations.rs file's
+                // parse_programmable_transaction function.
+                builder.pure(currency_str)?;
                 builder.finish()
             }
             InternalOperation::Stake {

@@ -210,7 +210,7 @@ impl ReadApi {
         }
         self.metrics
             .get_tx_blocks_limit
-            .report(digests.len() as u64);
+            .observe(digests.len() as f64);
 
         let opts = opts.unwrap_or_default();
 
@@ -466,7 +466,7 @@ impl ReadApi {
 
         self.metrics
             .get_tx_blocks_result_size
-            .report(converted_tx_block_resps.len() as u64);
+            .observe(converted_tx_block_resps.len() as f64);
         self.metrics
             .get_tx_blocks_result_size_total
             .inc_by(converted_tx_block_resps.len() as u64);
@@ -543,7 +543,7 @@ impl ReadApiServer for ReadApi {
             if object_ids.len() <= *QUERY_MAX_RESULT_LIMIT {
                 self.metrics
                     .get_objects_limit
-                    .report(object_ids.len() as u64);
+                    .observe(object_ids.len() as f64);
                 let mut futures = vec![];
                 for object_id in object_ids {
                     futures.push(self.get_object(object_id, options.clone()));
@@ -567,7 +567,7 @@ impl ReadApiServer for ReadApi {
 
                 self.metrics
                     .get_objects_result_size
-                    .report(objects.len() as u64);
+                    .observe(objects.len() as f64);
                 self.metrics
                     .get_objects_result_size_total
                     .inc_by(objects.len() as u64);
@@ -964,7 +964,7 @@ impl ReadApiServer for ReadApi {
             let state = self.state.clone();
             let kv_store = self.transaction_kv_store.clone();
 
-            self.metrics.get_checkpoints_limit.report(limit as u64);
+            self.metrics.get_checkpoints_limit.observe(limit as f64);
 
             let mut data = spawn_monitored_task!(Self::get_checkpoints_internal(
                 state,
@@ -988,7 +988,7 @@ impl ReadApiServer for ReadApi {
 
             self.metrics
                 .get_checkpoints_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .get_checkpoints_result_size_total
                 .inc_by(data.len() as u64);
@@ -1325,28 +1325,36 @@ fn convert_to_response(
     let mut response = SuiTransactionBlockResponse::new(cache.digest);
     response.errors = cache.errors;
 
-    if opts.show_raw_input && cache.transaction.is_some() {
-        let sender_signed_data = cache.transaction.as_ref().unwrap().data();
-        let raw_tx = bcs::to_bytes(sender_signed_data)
-            .map_err(|e| anyhow!("Failed to serialize raw transaction with error: {}", e))?; // TODO: is this a client or server error?
-        response.raw_transaction = raw_tx;
-    }
-
-    if opts.show_input && cache.transaction.is_some() {
-        let tx_block =
-            SuiTransactionBlock::try_from(cache.transaction.unwrap().into_data(), module_cache)?;
-        response.transaction = Some(tx_block);
-    }
-
-    if opts.show_effects && cache.effects.is_some() {
-        let effects = cache.effects.unwrap().try_into().map_err(|e| {
-            anyhow!(
+    if let Some(transaction) = cache.transaction {
+        if opts.show_raw_input {
+            response.raw_transaction = bcs::to_bytes(transaction.data()).map_err(|e| {
                 // TODO: is this a client or server error?
-                "Failed to convert transaction block effects with error: {}",
-                e
-            )
-        })?;
-        response.effects = Some(effects);
+                anyhow!("Failed to serialize raw transaction with error: {e}")
+            })?;
+        }
+
+        if opts.show_input {
+            response.transaction = Some(SuiTransactionBlock::try_from(
+                transaction.into_data(),
+                module_cache,
+            )?);
+        }
+    }
+
+    if let Some(effects) = cache.effects {
+        if opts.show_raw_effects {
+            response.raw_effects = bcs::to_bytes(&effects).map_err(|e| {
+                // TODO: is this a client or server error?
+                anyhow!("Failed to serialize transaction block effects with error: {e}")
+            })?;
+        }
+
+        if opts.show_effects {
+            response.effects = Some(effects.try_into().map_err(|e| {
+                // TODO: is this a client or server error?
+                anyhow!("Failed to convert transaction block effects with error: {e}")
+            })?);
+        }
     }
 
     response.checkpoint = cache.checkpoint_seq;
@@ -1363,6 +1371,7 @@ fn convert_to_response(
     if opts.show_object_changes {
         response.object_changes = cache.object_changes;
     }
+
     Ok(response)
 }
 

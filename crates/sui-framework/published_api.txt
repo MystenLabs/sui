@@ -490,6 +490,9 @@ validator_staking_pool_id
 staking_pool_mappings
 	public fun
 	0x3::validator_set
+validator_address_by_pool_id
+	public fun
+	0x3::validator_set
 pool_exchange_rates
 	public(package) fun
 	0x3::validator_set
@@ -805,6 +808,9 @@ get_storage_fund_total_balance
 get_storage_fund_object_rebates
 	public(package) fun
 	0x3::sui_system_state_inner
+validator_address_by_pool_id
+	public(package) fun
+	0x3::sui_system_state_inner
 pool_exchange_rates
 	public(package) fun
 	0x3::sui_system_state_inner
@@ -922,6 +928,9 @@ update_validator_next_epoch_network_pubkey
 update_candidate_validator_network_pubkey
 	public entry fun
 	0x3::sui_system
+validator_address_by_pool_id
+	public fun
+	0x3::sui_system
 pool_exchange_rates
 	public fun
 	0x3::sui_system
@@ -985,48 +994,6 @@ ecvrf_verify
 ed25519_verify
 	public fun
 	0x2::ed25519
-Curve
-	public struct
-	0x2::groth16
-PreparedVerifyingKey
-	public struct
-	0x2::groth16
-PublicProofInputs
-	public struct
-	0x2::groth16
-ProofPoints
-	public struct
-	0x2::groth16
-bls12381
-	public fun
-	0x2::groth16
-bn254
-	public fun
-	0x2::groth16
-pvk_from_bytes
-	public fun
-	0x2::groth16
-pvk_to_bytes
-	public fun
-	0x2::groth16
-public_proof_inputs_from_bytes
-	public fun
-	0x2::groth16
-proof_points_from_bytes
-	public fun
-	0x2::groth16
-prepare_verifying_key
-	public fun
-	0x2::groth16
-prepare_verifying_key_internal
-	fun
-	0x2::groth16
-verify_groth16_proof
-	public fun
-	0x2::groth16
-verify_groth16_proof_internal
-	fun
-	0x2::groth16
 blake2b256
 	public fun
 	0x2::hash
@@ -2332,6 +2299,48 @@ create_internal
 add_internal
 	fun
 	0x2::display
+Curve
+	public struct
+	0x2::groth16
+PreparedVerifyingKey
+	public struct
+	0x2::groth16
+PublicProofInputs
+	public struct
+	0x2::groth16
+ProofPoints
+	public struct
+	0x2::groth16
+bls12381
+	public fun
+	0x2::groth16
+bn254
+	public fun
+	0x2::groth16
+pvk_from_bytes
+	public fun
+	0x2::groth16
+pvk_to_bytes
+	public fun
+	0x2::groth16
+public_proof_inputs_from_bytes
+	public fun
+	0x2::groth16
+proof_points_from_bytes
+	public fun
+	0x2::groth16
+prepare_verifying_key
+	public fun
+	0x2::groth16
+prepare_verifying_key_internal
+	fun
+	0x2::groth16
+verify_groth16_proof
+	public fun
+	0x2::groth16
+verify_groth16_proof_internal
+	fun
+	0x2::groth16
 SUI
 	public struct
 	0x2::sui
@@ -4264,6 +4273,9 @@ insert
 swap_remove
 	public fun
 	0x1::vector
+flatten
+	public fun
+	0x1::vector
 Option
 	public struct
 	0x1::option
@@ -4498,6 +4510,9 @@ get_module
 into_string
 	public fun
 	0x1::type_name
+bitwise_not
+	public fun
+	0x1::u128
 max
 	public fun
 	0x1::u128
@@ -4516,9 +4531,24 @@ pow
 sqrt
 	public fun
 	0x1::u128
+try_as_u8
+	public fun
+	0x1::u128
+try_as_u16
+	public fun
+	0x1::u128
+try_as_u32
+	public fun
+	0x1::u128
+try_as_u64
+	public fun
+	0x1::u128
 to_string
 	public fun
 	0x1::u128
+bitwise_not
+	public fun
+	0x1::u16
 max
 	public fun
 	0x1::u16
@@ -4537,9 +4567,15 @@ pow
 sqrt
 	public fun
 	0x1::u16
+try_as_u8
+	public fun
+	0x1::u16
 to_string
 	public fun
 	0x1::u16
+bitwise_not
+	public fun
+	0x1::u256
 max
 	public fun
 	0x1::u256
@@ -4555,9 +4591,27 @@ divide_and_round_up
 pow
 	public fun
 	0x1::u256
+try_as_u8
+	public fun
+	0x1::u256
+try_as_u16
+	public fun
+	0x1::u256
+try_as_u32
+	public fun
+	0x1::u256
+try_as_u64
+	public fun
+	0x1::u256
+try_as_u128
+	public fun
+	0x1::u256
 to_string
 	public fun
 	0x1::u256
+bitwise_not
+	public fun
+	0x1::u32
 max
 	public fun
 	0x1::u32
@@ -4576,9 +4630,18 @@ pow
 sqrt
 	public fun
 	0x1::u32
+try_as_u8
+	public fun
+	0x1::u32
+try_as_u16
+	public fun
+	0x1::u32
 to_string
 	public fun
 	0x1::u32
+bitwise_not
+	public fun
+	0x1::u64
 max
 	public fun
 	0x1::u64
@@ -4597,9 +4660,21 @@ pow
 sqrt
 	public fun
 	0x1::u64
+try_as_u8
+	public fun
+	0x1::u64
+try_as_u16
+	public fun
+	0x1::u64
+try_as_u32
+	public fun
+	0x1::u64
 to_string
 	public fun
 	0x1::u64
+bitwise_not
+	public fun
+	0x1::u8
 max
 	public fun
 	0x1::u8

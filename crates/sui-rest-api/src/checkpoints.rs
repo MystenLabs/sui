@@ -151,7 +151,7 @@ async fn get_checkpoint(
     }?
     .ok_or(CheckpointNotFoundError(checkpoint_id))?
     .into_inner()
-    .into();
+    .try_into()?;
 
     match accept {
         AcceptFormat::Json => ResponseContent::Json(summary),
@@ -277,11 +277,15 @@ async fn list_checkpoints(
 
     let checkpoints = state
         .checkpoint_iter(direction, start)
-        .map(|result| {
-            result.map(|(checkpoint, _contents)| SignedCheckpointSummary::from(checkpoint))
-        })
         .take(limit)
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|result| {
+            result
+                .map_err(Into::into)
+                .and_then(|(checkpoint, _contents)| {
+                    SignedCheckpointSummary::try_from(checkpoint).map_err(Into::into)
+                })
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     let cursor = checkpoints.last().and_then(|checkpoint| match direction {
         Direction::Ascending => checkpoint.checkpoint.sequence_number.checked_add(1),

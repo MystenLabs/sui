@@ -13,12 +13,14 @@ pub mod metrics;
 pub mod models;
 pub mod postgres_manager;
 pub mod schema;
+pub mod storage;
 pub mod sui_transaction_handler;
 pub mod sui_transaction_queries;
 pub mod types;
 
 pub mod eth_bridge_indexer;
 pub mod sui_bridge_indexer;
+pub mod sui_datasource;
 
 #[derive(Clone)]
 pub enum ProcessedTxnData {
@@ -47,6 +49,7 @@ pub struct TokenTransfer {
     gas_usage: i64,
     data_source: BridgeDataSource,
     data: Option<TokenTransferData>,
+    is_finalized: bool,
 }
 
 #[derive(Clone)]
@@ -56,6 +59,7 @@ pub struct TokenTransferData {
     recipient_address: Vec<u8>,
     token_id: u8,
     amount: u64,
+    is_finalized: bool,
 }
 
 impl TokenTransfer {
@@ -70,6 +74,7 @@ impl TokenTransfer {
             status: self.status.to_string(),
             gas_usage: self.gas_usage,
             data_source: self.data_source.to_string(),
+            is_finalized: self.is_finalized,
         }
     }
 
@@ -85,6 +90,7 @@ impl TokenTransfer {
             recipient_address: data.recipient_address.clone(),
             token_id: data.token_id as i32,
             amount: data.amount as i64,
+            is_finalized: data.is_finalized,
         })
     }
 }

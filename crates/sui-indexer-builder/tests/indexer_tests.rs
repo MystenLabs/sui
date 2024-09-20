@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::indexer_test_utils::{InMemoryPersistent, NoopDataMapper, TestDatasource};
-use prometheus::Registry;
+use prometheus::{
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
+    IntGaugeVec, Registry,
+};
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
-use sui_indexer_builder::Task;
+use sui_indexer_builder::{Task, LIVE_TASK_TARGET_CHECKPOINT};
 
 mod indexer_test_utils;
 
@@ -19,6 +22,8 @@ async fn indexer_simple_backfill_task_test() {
         data: data.clone(),
         live_task_starting_checkpoint: 5,
         genesis_checkpoint: 0,
+        gauge_metric: new_gauge_vec(&registry),
+        counter_metric: new_counter_vec(&registry),
     };
     let persistent = InMemoryPersistent::new();
     let mut indexer = IndexerBuilder::new(
@@ -39,6 +44,7 @@ async fn indexer_simple_backfill_task_test() {
 
     // it should have 2 task created for the indexer - a live task and a backfill task
     let tasks = persistent.get_all_tasks("test_indexer").await.unwrap();
+    println!("{:?}", tasks);
     assert_ranges(&tasks, vec![(10, i64::MAX as u64), (4, 4)]);
     // the data recorded in storage should be the same as the datasource
     let mut recorded_data = persistent.data.lock().await.clone();
@@ -57,6 +63,8 @@ async fn indexer_partitioned_backfill_task_test() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 0,
+        gauge_metric: new_gauge_vec(&registry),
+        counter_metric: new_counter_vec(&registry),
     };
     let persistent = InMemoryPersistent::new();
     let mut indexer = IndexerBuilder::new(
@@ -102,6 +110,8 @@ async fn indexer_partitioned_task_with_data_already_in_db_test1() {
         data: data.clone(),
         live_task_starting_checkpoint: 31,
         genesis_checkpoint: 0,
+        gauge_metric: new_gauge_vec(&registry),
+        counter_metric: new_counter_vec(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.data.lock().await.append(&mut (0..=30).collect());
@@ -109,9 +119,10 @@ async fn indexer_partitioned_task_with_data_already_in_db_test1() {
         "test_indexer - backfill - 1".to_string(),
         Task {
             task_name: "test_indexer - backfill - 1".to_string(),
-            checkpoint: 30,
+            start_checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -151,6 +162,8 @@ async fn indexer_partitioned_task_with_data_already_in_db_test2() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 0,
+        gauge_metric: new_gauge_vec(&registry),
+        counter_metric: new_counter_vec(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.data.lock().await.append(&mut (0..=30).collect());
@@ -158,9 +171,10 @@ async fn indexer_partitioned_task_with_data_already_in_db_test2() {
         "test_indexer - backfill - 1".to_string(),
         Task {
             task_name: "test_indexer - backfill - 1".to_string(),
-            checkpoint: 30,
+            start_checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -202,24 +216,28 @@ async fn indexer_partitioned_task_with_data_already_in_db_test3() {
         data: data.clone(),
         live_task_starting_checkpoint: 28,
         genesis_checkpoint: 0,
+        gauge_metric: new_gauge_vec(&registry),
+        counter_metric: new_counter_vec(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
         "test_indexer - backfill - 20:30".to_string(),
         Task {
             task_name: "test_indexer - backfill - 20:30".to_string(),
-            checkpoint: 30,
+            start_checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     persistent.progress_store.lock().await.insert(
         "test_indexer - backfill - 10:19".to_string(),
         Task {
             task_name: "test_indexer - backfill - 10:19".to_string(),
-            checkpoint: 10,
+            start_checkpoint: 10,
             target_checkpoint: 19,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -256,24 +274,28 @@ async fn indexer_partitioned_task_with_data_already_in_db_test4() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 0,
+        gauge_metric: new_gauge_vec(&registry),
+        counter_metric: new_counter_vec(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
         "test_indexer - backfill - 20:30".to_string(),
         Task {
             task_name: "test_indexer - backfill - 20:30".to_string(),
-            checkpoint: 30,
+            start_checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     persistent.progress_store.lock().await.insert(
         "test_indexer - backfill - 10:19".to_string(),
         Task {
             task_name: "test_indexer - backfill - 10:19".to_string(),
-            checkpoint: 10,
+            start_checkpoint: 10,
             target_checkpoint: 19,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -314,15 +336,18 @@ async fn indexer_with_existing_live_task1() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 10,
+        gauge_metric: new_gauge_vec(&registry),
+        counter_metric: new_counter_vec(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
         "test_indexer - Live".to_string(),
         Task {
             task_name: "test_indexer - Live".to_string(),
-            checkpoint: 30,
-            target_checkpoint: i64::MAX as u64,
+            start_checkpoint: 30,
+            target_checkpoint: LIVE_TASK_TARGET_CHECKPOINT as u64,
             timestamp: 0,
+            is_live_task: true,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -357,15 +382,18 @@ async fn indexer_with_existing_live_task2() {
         data: data.clone(),
         live_task_starting_checkpoint: 25,
         genesis_checkpoint: 10,
+        gauge_metric: new_gauge_vec(&registry),
+        counter_metric: new_counter_vec(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
         "test_indexer - Live".to_string(),
         Task {
             task_name: "test_indexer - Live".to_string(),
-            checkpoint: 30,
-            target_checkpoint: i64::MAX as u64,
+            start_checkpoint: 30,
+            target_checkpoint: LIVE_TASK_TARGET_CHECKPOINT as u64,
             timestamp: 10,
+            is_live_task: true,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -394,7 +422,7 @@ fn assert_ranges(desc_ordered_tasks: &[Task], ranges: Vec<(u64, u64)>) {
     let mut iter = desc_ordered_tasks.iter();
     for (start, end) in ranges {
         let task = iter.next().unwrap();
-        assert_eq!(start, task.checkpoint);
+        assert_eq!(start, task.start_checkpoint);
         assert_eq!(end, task.target_checkpoint);
     }
 }
@@ -410,15 +438,18 @@ async fn resume_test() {
         data: data.clone(),
         live_task_starting_checkpoint: 31,
         genesis_checkpoint: 0,
+        gauge_metric: new_gauge_vec(&registry),
+        counter_metric: new_counter_vec(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
         "test_indexer - backfill - 30".to_string(),
         Task {
             task_name: "test_indexer - backfill - 30".to_string(),
-            checkpoint: 10,
+            start_checkpoint: 10,
             target_checkpoint: 30,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -445,4 +476,19 @@ async fn resume_test() {
     let mut recorded_data = persistent.data.lock().await.clone();
     recorded_data.sort();
     assert_eq!((10..=50u64).collect::<Vec<_>>(), recorded_data);
+}
+
+fn new_gauge_vec(registry: &Registry) -> IntGaugeVec {
+    register_int_gauge_vec_with_registry!("whatever_gauge", "whatever", &["whatever"], registry,)
+        .unwrap()
+}
+
+fn new_counter_vec(registry: &Registry) -> IntCounterVec {
+    register_int_counter_vec_with_registry!(
+        "whatever_counter",
+        "whatever",
+        &["whatever1", "whatever2"],
+        registry,
+    )
+    .unwrap()
 }

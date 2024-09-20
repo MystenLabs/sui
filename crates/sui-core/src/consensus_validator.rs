@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use consensus_core::{TransactionVerifier, ValidationError};
+use consensus_core::{TransactionIndex, TransactionVerifier, ValidationError};
 use eyre::WrapErr;
 use fastcrypto_tbls::dkg;
 use mysten_metrics::monitored_scope;
@@ -57,7 +57,7 @@ impl SuiTxValidator {
         let mut ckpt_batch = Vec::new();
         for tx in txs.into_iter() {
             match tx {
-                ConsensusTransactionKind::UserTransaction(certificate) => {
+                ConsensusTransactionKind::CertifiedTransaction(certificate) => {
                     cert_batch.push(*certificate);
 
                     // if !certificate.contains_shared_object() {
@@ -89,6 +89,10 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
                 | ConsensusTransactionKind::CapabilityNotificationV2(_)
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
+
+                ConsensusTransactionKind::UserTransaction(_tx) => {
+                    // TODO: implement verification for uncertified user transactions if needed
+                }
             }
         }
 
@@ -147,6 +151,10 @@ impl TransactionVerifier for SuiTxValidator {
 
         self.validate_transactions(txs)
             .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))
+    }
+
+    fn vote_batch(&self, _batch: &[&[u8]]) -> Vec<TransactionIndex> {
+        vec![]
     }
 }
 

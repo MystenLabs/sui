@@ -14,6 +14,7 @@ use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::path::PathBuf;
 use std::pin::Pin;
+use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::mpsc;
@@ -23,7 +24,7 @@ pub const MAX_CHECKPOINTS_IN_PROGRESS: usize = 10000;
 
 pub struct IndexerExecutor<P> {
     pools: Vec<Pin<Box<dyn Future<Output = ()> + Send>>>,
-    pool_senders: Vec<mpsc::Sender<CheckpointData>>,
+    pool_senders: Vec<mpsc::Sender<Arc<CheckpointData>>>,
     progress_store: ProgressStoreWrapper<P>,
     pool_progress_sender: mpsc::Sender<(String, CheckpointSequenceNumber)>,
     pool_progress_receiver: mpsc::Receiver<(String, CheckpointSequenceNumber)>,
@@ -67,6 +68,7 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         mut exit_receiver: oneshot::Receiver<()>,
     ) -> Result<ExecutorProgress> {
         let mut reader_checkpoint_number = self.progress_store.min_watermark()?;
+        let upper_limit = reader_options.upper_limit;
         let (checkpoint_reader, mut checkpoint_recv, gc_sender, _exit_sender) =
             CheckpointReader::initialize(
                 path,
@@ -93,6 +95,11 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                     self.metrics.data_ingestion_checkpoint.with_label_values(&[&task_name]).set(sequence_number as i64);
                 }
                 Some(checkpoint) = checkpoint_recv.recv() => {
+                    if let Some(limit) = upper_limit {
+                        if checkpoint.checkpoint_summary.sequence_number > limit {
+                            break;
+                        }
+                    }
                     for sender in &self.pool_senders {
                         sender.send(checkpoint.clone()).await?;
                     }

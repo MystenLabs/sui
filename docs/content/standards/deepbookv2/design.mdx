@@ -7,7 +7,7 @@ sidebar_label: Design
 
 ## Pools {#pools}
 
-At the center of DeepBook is a hyper-efficient per-current pair shared-object pool structure. This architecture maximally utilizes Sui's Narwhal and Bullshark engine to minimize contention and achieve high throughput.
+At the center of DeepBook is a hyper-efficient per-current pair shared-object pool structure. This architecture maximally utilizes Sui's Mysticeti consensus engine to minimize contention and achieve high throughput.
 
 For each base and quote asset trading pair, a globally shared pool is created to bookkeep open orders on the order book and handle placement, cancellation, and settlement of orders. Under this architecture, you can parallelize transactions involving different trading pairs to maximize throughput.
 

@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x1.m {
+module 0x6.m {
 entry foo() {
 label b0:
     // return;
@@ -8,7 +8,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x2.m {
+module 0x7.m {
 entry foo() {
 label b0:
     // return;
@@ -18,7 +18,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x3.m {
+module 0x8.m {
 entry foo() {
 label b0:
     return; // return;
@@ -26,7 +26,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x4.m {
+module 0x9.m {
 entry foo() {
 label b0:
     // return;
@@ -35,7 +35,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x5.m {
+module 0xa.m {
 // In Move, /* */ are block comment delimiters. Not so in Move IR, so the `/*` below
 // cannot be parsed.
 entry foo() {
@@ -46,7 +46,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x6.m {
+module 0xb.m {
 // Since /* */ are not block comment delimiters, they do not behave in any unique way when
 // they appear within comments.
 entry foo() {

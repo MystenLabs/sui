@@ -5,7 +5,7 @@
 // dep: ../move-stdlib/sources/string.move
 // dep: ../move-stdlib/sources/vector.move
 
-module 0x2::Collection {
+module 0x7::Collection {
     public struct Collection<T> has drop {
         items: vector<T>,
         owner: address,
@@ -23,8 +23,8 @@ module 0x2::Collection {
     }
 }
 
-module 0x2::Test {
-    use 0x2::Collection;
+module 0x8::Test {
+    use 0x7::Collection;
 
     public struct Token<phantom T> has drop { value: u64 }
 

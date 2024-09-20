@@ -15,6 +15,7 @@ import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten
 import type {
 	ObjectFilter,
 	QueryEventsQueryVariables,
+	QueryTransactionBlocksQueryVariables,
 	Rpc_Checkpoint_FieldsFragment,
 	Rpc_Transaction_FieldsFragment,
 } from './generated/queries.js';
@@ -580,7 +581,7 @@ export const RPC_METHODS: {
 		}));
 	},
 	async queryTransactionBlocks(transport, [{ filter, options }, cursor, limit = 20, descending]) {
-		const pagination = descending
+		const pagination: Partial<QueryTransactionBlocksQueryVariables> = descending
 			? {
 					last: limit,
 					before: cursor,

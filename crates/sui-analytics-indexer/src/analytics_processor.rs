@@ -53,7 +53,7 @@ const CHECK_FILE_SIZE_ITERATION_CYCLE: u64 = 50;
 
 #[async_trait::async_trait]
 impl<S: Serialize + ParquetSchema + 'static> Worker for AnalyticsProcessor<S> {
-    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         // get epoch id, checkpoint sequence number and timestamp, those are important
         // indexes when operating on data
         let epoch: u64 = checkpoint_data.checkpoint_summary.epoch();

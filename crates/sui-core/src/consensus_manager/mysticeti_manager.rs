@@ -106,7 +106,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         tx_validator: SuiTxValidator,
     ) {
         let system_state = epoch_store.epoch_start_state();
-        let committee: Committee = system_state.get_mysticeti_committee();
+        let committee: Committee = system_state.get_consensus_committee();
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
         let network_type = self.pick_network(&epoch_store);
@@ -178,8 +178,8 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let registry_id = self.registry_service.add(registry.clone());
 
-        self.authority
-            .swap(Some(Arc::new((authority, registry_id))));
+        let registered_authority = Arc::new((authority, registry_id));
+        self.authority.swap(Some(registered_authority.clone()));
 
         // Initialize the client to send transactions to this Mysticeti instance.
         self.client.set(client);
@@ -188,6 +188,9 @@ impl ConsensusManagerTrait for MysticetiManager {
         let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver, monitor);
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);
+
+        // Wait until all locally available commits have been processed
+        registered_authority.0.replay_complete().await;
     }
 
     async fn shutdown(&self) {

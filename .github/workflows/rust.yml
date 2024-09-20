@@ -123,6 +123,8 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
@@ -130,6 +132,9 @@ jobs:
       - name: cargo test
         run: |
           cargo nextest run --profile ci -E '!package(sui-bridge)'
+      - name: cargo test (sui-graphql staging)
+        run: |
+          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -154,6 +159,8 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
@@ -177,6 +184,14 @@ jobs:
       - name: sui-execution
         run: |
           ./scripts/execution_layer.py generate-lib
+      - name: Install diesel CLI, and cache the binary
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
+        with:
+          crate: diesel_cli
+          locked: true
+      - name: Indexer schema
+        run: |
+          ./scripts/generate_indexer_schema.sh
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -225,6 +240,8 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
@@ -399,47 +416,3 @@ jobs:
         run: ./scripts/execution_layer.py cut for_ci_test
       - name: Check execution builds
         run: cargo build -p sui-execution
-
-  graphql-rpc:
-    name: graphql-rpc
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 45
-    runs-on: [ ubuntu-ghcloud ]
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgrespw
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          --name postgres_container
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-        with:
-          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: taiki-e/install-action@nextest
-      - name: Setup db
-        run: |
-          PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer;' -c 'ALTER SYSTEM SET max_connections = 500;'
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgrespw
-      - run: docker restart --time 0 postgres_container
-      - run: sleep 5
-      - name: tests-requiring-postgres
-        run: |
-          cargo nextest run --test-threads 1 --package sui-graphql-rpc --test e2e_tests --test examples_validation_tests --test dot_move_e2e --features pg_integration
-          cargo nextest run --test-threads 1 --package sui-graphql-rpc --lib --features pg_integration -- test_query_cost
-          cargo nextest run --test-threads 4 --package sui-graphql-e2e-tests --features pg_integration
-          cargo nextest run --test-threads 1 --package sui-cluster-test --test local_cluster_test --features pg_integration
-          cargo nextest run --test-threads 1 --package sui-indexer --test ingestion_tests --features pg_integration
-
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432

@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/zklogin",
-	"version": "0.7.17",
+	"version": "0.7.19",
 	"description": "Utilities for interacting with zkLogin in Sui",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",

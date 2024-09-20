@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
+import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
+import "openzeppelin-foundry-upgrades/Options.sol";
 import "../contracts/BridgeCommittee.sol";
 import "../contracts/BridgeVault.sol";
 import "../contracts/BridgeLimiter.sol";
@@ -57,6 +59,8 @@ contract BridgeBaseTest is Test {
     BridgeLimiter public limiter;
     BridgeConfig public config;
 
+    Options opts;
+
     function setUpBridgeTest() public {
         vm.createSelectFork(
             string.concat("https://mainnet.infura.io/v3/", vm.envString("INFURA_API_KEY"))
@@ -80,24 +84,30 @@ contract BridgeBaseTest is Test {
         vm.startPrank(deployer);
 
         // deploy committee =====================================================================
-        committee = new BridgeCommittee();
-        address[] memory _committee = new address[](5);
+        address[] memory _committeeList = new address[](5);
         uint16[] memory _stake = new uint16[](5);
-        _committee[0] = committeeMemberA;
-        _committee[1] = committeeMemberB;
-        _committee[2] = committeeMemberC;
-        _committee[3] = committeeMemberD;
-        _committee[4] = committeeMemberE;
+        _committeeList[0] = committeeMemberA;
+        _committeeList[1] = committeeMemberB;
+        _committeeList[2] = committeeMemberC;
+        _committeeList[3] = committeeMemberD;
+        _committeeList[4] = committeeMemberE;
         _stake[0] = 1000;
         _stake[1] = 1000;
         _stake[2] = 1000;
         _stake[3] = 2002;
         _stake[4] = 4998;
 
-        committee.initialize(_committee, _stake, minStakeRequired);
+        opts.unsafeSkipAllChecks = true;
+
+        address _committee = Upgrades.deployUUPSProxy(
+            "BridgeCommittee.sol",
+            abi.encodeCall(BridgeCommittee.initialize, (_committeeList, _stake, minStakeRequired)),
+            opts
+        );
+
+        committee = BridgeCommittee(_committee);
 
         // deploy config =====================================================================
-        config = new BridgeConfig();
         supportedTokens = new address[](5);
         supportedTokens[0] = address(0);
         supportedTokens[1] = wBTC;
@@ -113,9 +123,16 @@ contract BridgeBaseTest is Test {
         tokenPrices[3] = USDC_PRICE;
         tokenPrices[4] = USDC_PRICE;
 
-        config.initialize(
-            address(committee), chainID, supportedTokens, tokenPrices, supportedChains
+        address _config = Upgrades.deployUUPSProxy(
+            "BridgeConfig.sol",
+            abi.encodeCall(
+                BridgeConfig.initialize,
+                (address(committee), chainID, supportedTokens, tokenPrices, supportedChains)
+            ),
+            opts
         );
+
+        config = BridgeConfig(_config);
 
         // initialize config in the bridge committee
         committee.initializeConfig(address(config));
@@ -126,15 +143,31 @@ contract BridgeBaseTest is Test {
 
         // deploy limiter =====================================================================
 
-        limiter = new BridgeLimiter();
         uint64[] memory chainLimits = new uint64[](1);
         chainLimits[0] = totalLimit;
-        limiter.initialize(address(committee), supportedChains, chainLimits);
+
+        address _limiter = Upgrades.deployUUPSProxy(
+            "BridgeLimiter.sol",
+            abi.encodeCall(
+                BridgeLimiter.initialize, (address(committee), supportedChains, chainLimits)
+            ),
+            opts
+        );
+
+        limiter = BridgeLimiter(_limiter);
 
         // deploy bridge =====================================================================
 
-        bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter));
+        address _suiBridge = Upgrades.deployUUPSProxy(
+            "SuiBridge.sol",
+            abi.encodeCall(
+                SuiBridge.initialize, (address(committee), address(vault), address(limiter))
+            ),
+            opts
+        );
+
+        bridge = SuiBridge(_suiBridge);
+
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
     }

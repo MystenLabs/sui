@@ -12,11 +12,12 @@ use std::{
 use json_comments::StripComments;
 use lsp_types::{InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
 use move_analyzer::{
-    completion::completion_items,
+    completions::compute_completions_with_symbols,
     inlay_hints::inlay_hints_internal,
     symbols::{
-        def_info_doc_string, get_symbols, maybe_convert_for_guard, PrecompiledPkgDeps, Symbols,
-        UseDefMap,
+        compute_symbols, compute_symbols_parsed_program, compute_symbols_pre_process,
+        def_info_doc_string, get_compiled_pkg, maybe_convert_for_guard, CompiledPkgInfo, Symbols,
+        SymbolsComputationData, UseDefMap,
     },
 };
 use move_command_line_common::testing::{
@@ -177,9 +178,8 @@ impl CompletionTest {
     fn test(
         &self,
         test_idx: usize,
-        ide_files_root: VfsPath,
-        pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
-        symbols: &Symbols,
+        compiled_pkg_info: CompiledPkgInfo,
+        symbols: &mut Symbols,
         output: &mut dyn std::io::Write,
         use_file_path: &Path,
     ) -> anyhow::Result<()> {
@@ -189,13 +189,27 @@ impl CompletionTest {
             line: lsp_use_line,
             character: lsp_use_col,
         };
-        let items = completion_items(
-            symbols,
-            ide_files_root,
-            pkg_dependencies,
-            use_file_path,
-            use_pos,
+
+        // symbols do not change for each test, so we can reuse the same symbols
+        // but we need to recompute the cursor each time
+        let cursor_path = use_file_path.to_path_buf();
+        let cursor_info = Some((&cursor_path, use_pos));
+        let mut symbols_computation_data = SymbolsComputationData::new();
+        // we only compute cursor context and tag it on the existing symbols to avoid spending time
+        // recomputing all symbols (saves quite a bit of time when running the test suite)
+        let mut cursor_context = compute_symbols_pre_process(
+            &mut symbols_computation_data,
+            &compiled_pkg_info,
+            cursor_info,
         );
+        cursor_context = compute_symbols_parsed_program(
+            &mut symbols_computation_data,
+            &compiled_pkg_info,
+            cursor_context,
+        );
+        symbols.cursor_context = cursor_context;
+
+        let items = compute_completions_with_symbols(symbols, &cursor_path, use_pos);
         writeln!(output, "-- test {test_idx} -------------------")?;
         writeln!(
             output,
@@ -225,8 +239,8 @@ impl CursorTest {
     fn test(
         &self,
         test_ndx: usize,
-        ide_files_root: VfsPath,
-        pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
+        compiled_pkg_info: CompiledPkgInfo,
+        symbols: &mut Symbols,
         output: &mut dyn std::io::Write,
         path: &Path,
     ) -> anyhow::Result<()> {
@@ -238,21 +252,29 @@ impl CursorTest {
         let line = line - 1; // 0th-based
         let character = character - 1; // 0th-based
 
-        let (symbols_opt, _) = get_symbols(
-            pkg_dependencies,
-            ide_files_root,
-            path,
-            LintLevel::None,
-            Some((&path.to_path_buf(), Position { line, character })),
-        )?;
-        let symbols = symbols_opt.unwrap();
+        // symbols do not change for each test, so we can reuse the same symbols
+        // but we need to recompute the cursor each time
+        let cursor_path = path.to_path_buf();
+        let cursor_info = Some((&cursor_path, Position { line, character }));
+        let mut symbols_computation_data = SymbolsComputationData::new();
+        let mut cursor_context = compute_symbols_pre_process(
+            &mut symbols_computation_data,
+            &compiled_pkg_info,
+            cursor_info,
+        );
+        cursor_context = compute_symbols_parsed_program(
+            &mut symbols_computation_data,
+            &compiled_pkg_info,
+            cursor_context,
+        );
+        symbols.cursor_context = cursor_context.clone();
 
         writeln!(
             output,
             "-- test {test_ndx} @ {line}:{character} ------------"
         )?;
         writeln!(output, "expected: {description}")?;
-        writeln!(output, "{}", symbols.cursor_context.unwrap())?;
+        writeln!(output, "{}", cursor_context.unwrap())?;
         Ok(())
     }
 }
@@ -341,34 +363,32 @@ fn check_expected(expected_path: &Path, result: &str) -> anyhow::Result<()> {
 
 fn initial_symbols(
     project: String,
-) -> datatest_stable::Result<(
-    PathBuf,
-    VfsPath,
-    Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
-    Symbols,
-)> {
+) -> datatest_stable::Result<(PathBuf, CompiledPkgInfo, Symbols)> {
     let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut project_path = base_path.clone();
     project_path.push(project);
 
     let ide_files_root: VfsPath = MemoryFS::new().into();
     let pkg_deps = Arc::new(Mutex::new(BTreeMap::new()));
-    let (symbols_opt, _) = get_symbols(
+
+    let (compiled_pkg_info_opt, _) = get_compiled_pkg(
         pkg_deps.clone(),
         ide_files_root.clone(),
         project_path.as_path(),
         LintLevel::None,
-        None,
     )?;
-    let symbols = symbols_opt.ok_or("DID NOT FIND SYMBOLS")?;
-    Ok((project_path, ide_files_root, pkg_deps, symbols))
+
+    let compiled_pkg_info = compiled_pkg_info_opt.ok_or("PACKAGE COMPILATION FAILED")?;
+    let symbols = compute_symbols(compiled_pkg_info.clone(), None);
+
+    Ok((project_path, compiled_pkg_info, symbols))
 }
 
 fn use_def_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<UseDefTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, _, _, symbols) = initial_symbols(project)?;
+    let (project_path, _, symbols) = initial_symbols(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -402,7 +422,7 @@ fn completion_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<CompletionTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, ide_files_root, pkg_deps, symbols) = initial_symbols(project)?;
+    let (project_path, compiled_pkg_info, mut symbols) = initial_symbols(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -419,14 +439,7 @@ fn completion_test_suite(
         let cpath = dunce::canonicalize(&fpath).unwrap();
 
         for (idx, test) in tests.iter().enumerate() {
-            test.test(
-                idx,
-                ide_files_root.clone(),
-                pkg_deps.clone(),
-                &symbols,
-                writer,
-                &cpath,
-            )?;
+            test.test(idx, compiled_pkg_info.clone(), &mut symbols, writer, &cpath)?;
         }
     }
 
@@ -438,7 +451,7 @@ fn cursor_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<CursorTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, ide_files_root, pkg_deps, _) = initial_symbols(project)?;
+    let (project_path, compiled_pkg_info, mut symbols) = initial_symbols(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -454,13 +467,7 @@ fn cursor_test_suite(
         fpath.push(format!("sources/{file}"));
         let cpath = dunce::canonicalize(&fpath).unwrap();
         for (idx, test) in tests.iter().enumerate() {
-            test.test(
-                idx,
-                ide_files_root.clone(),
-                pkg_deps.clone(),
-                writer,
-                &cpath,
-            )?;
+            test.test(idx, compiled_pkg_info.clone(), &mut symbols, writer, &cpath)?;
         }
     }
 
@@ -472,7 +479,7 @@ fn hint_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<HintTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, _, _, symbols) = initial_symbols(project)?;
+    let (project_path, _, symbols) = initial_symbols(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();

@@ -22,6 +22,7 @@ use async_graphql::connection::Connection;
 use async_graphql::dataloader::Loader;
 use async_graphql::*;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::models::epoch::QueryableEpochInfo;
 use sui_indexer::schema::epochs;
@@ -318,16 +319,20 @@ impl Epoch {
 
         let stored: Option<QueryableEpochInfo> = db
             .execute(move |conn| {
-                conn.first(move || {
-                    // Bound the query on `checkpoint_viewed_at` by filtering for the epoch
-                    // whose `first_checkpoint_id <= checkpoint_viewed_at`, selecting the epoch
-                    // with the largest `first_checkpoint_id` among the filtered set.
-                    dsl::epochs
-                        .select(QueryableEpochInfo::as_select())
-                        .filter(dsl::first_checkpoint_id.le(checkpoint_viewed_at as i64))
-                        .order_by(dsl::first_checkpoint_id.desc())
-                })
-                .optional()
+                async move {
+                    conn.first(move || {
+                        // Bound the query on `checkpoint_viewed_at` by filtering for the epoch
+                        // whose `first_checkpoint_id <= checkpoint_viewed_at`, selecting the epoch
+                        // with the largest `first_checkpoint_id` among the filtered set.
+                        dsl::epochs
+                            .select(QueryableEpochInfo::as_select())
+                            .filter(dsl::first_checkpoint_id.le(checkpoint_viewed_at as i64))
+                            .order_by(dsl::first_checkpoint_id.desc())
+                    })
+                    .await
+                    .optional()
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch epoch: {e}")))?;
@@ -350,11 +355,15 @@ impl Loader<EpochKey> for Db {
         let epoch_ids: BTreeSet<_> = keys.iter().map(|key| key.epoch_id as i64).collect();
         let epochs: Vec<QueryableEpochInfo> = self
             .execute_repeatable(move |conn| {
-                conn.results(move || {
-                    dsl::epochs
-                        .select(QueryableEpochInfo::as_select())
-                        .filter(dsl::epoch.eq_any(epoch_ids.iter().cloned()))
-                })
+                async move {
+                    conn.results(move || {
+                        dsl::epochs
+                            .select(QueryableEpochInfo::as_select())
+                            .filter(dsl::epoch.eq_any(epoch_ids.iter().cloned()))
+                    })
+                    .await
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch epochs: {e}")))?;

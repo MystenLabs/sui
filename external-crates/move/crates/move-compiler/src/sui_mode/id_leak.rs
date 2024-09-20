@@ -7,8 +7,10 @@ use move_symbol_pool::Symbol;
 use crate::{
     cfgir::{
         absint::JoinResult,
+        cfg::ImmForwardCFG,
         visitor::{
-            LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
+            cfg_satisfies, LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
+            SimpleExecutionContext,
         },
         CFGContext, MemberName,
     },
@@ -16,7 +18,7 @@ use crate::{
     diagnostics::{Diagnostic, Diagnostics},
     editions::Flavor,
     expansion::ast::{ModuleIdent, TargetKind},
-    hlir::ast::{Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
+    hlir::ast::{self as H, Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
     parser::ast::Ability_,
     shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
     sui_mode::{OBJECT_NEW, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT},
@@ -94,6 +96,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
     fn new<'a>(
         env: &CompilationEnv,
         context: &'a CFGContext<'a>,
+        cfg: &ImmForwardCFG,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         let module = &context.module;
@@ -122,6 +125,19 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
                 return None;
             }
         }
+
+        // skip any function that doesn't create an object
+        cfg_satisfies(
+            cfg,
+            |_| true,
+            |e| {
+                use H::UnannotatedExp_ as E;
+                matches!(
+                    &e.exp.value,
+                    E::Pack(s, _, _) if minfo.structs.get(s).is_some_and(|s| s.abilities.has_ability_(Ability_::Key)),
+                )
+            },
+        );
 
         Some(IDLeakVerifierAI {
             module,
@@ -155,7 +171,7 @@ impl<'a> SimpleAbsInt for IDLeakVerifierAI<'a> {
         state: &mut State,
         e: &Exp,
     ) -> Option<Vec<Value>> {
-        use crate::hlir::ast::UnannotatedExp_ as E;
+        use H::UnannotatedExp_ as E;
 
         let e__ = &e.exp.value;
         let E::Pack(s, _tys, fields) = e__ else {

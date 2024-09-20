@@ -234,119 +234,119 @@ module 0x42::m {
 // Run the tests separately so that we get all the results
 
 //# run
-module 0x42::test00 { public fun main() { assert!(0x42::m::test00() == 3, 0); } }
+module 0x43::test00 { public fun main() { assert!(0x42::m::test00() == 3, 0); } }
 
 //# run
-module 0x42::test01 { public fun main() { assert!(0x42::m::test01() == true, 1); } }
+module 0x44::test01 { public fun main() { assert!(0x42::m::test01() == true, 1); } }
 
 //# run
-module 0x42::test02 { public fun main() { assert!(0x42::m::test02() == 31, 2); } }
+module 0x45::test02 { public fun main() { assert!(0x42::m::test02() == 31, 2); } }
 
 //# run
-module 0x42::test03 { public fun main() { assert!(0x42::m::test03() == 27, 3); } }
+module 0x46::test03 { public fun main() { assert!(0x42::m::test03() == 27, 3); } }
 
 //# run
-module 0x42::test04 { public fun main() { assert!(0x42::m::test04() == 27, 4); } }
+module 0x47::test04 { public fun main() { assert!(0x42::m::test04() == 27, 4); } }
 
 //# run
-module 0x42::test05 { public fun main() { assert!(0x42::m::test05() == 14, 5); } }
+module 0x48::test05 { public fun main() { assert!(0x42::m::test05() == 14, 5); } }
 
 //# run
-module 0x42::test06 { public fun main() { assert!(0x42::m::test06() == 37, 6); } }
+module 0x49::test06 { public fun main() { assert!(0x42::m::test06() == 37, 6); } }
 
 //# run
-module 0x42::test07 { public fun main() { assert!(0x42::m::test07() == 20, 7); } }
+module 0x4a::test07 { public fun main() { assert!(0x42::m::test07() == 20, 7); } }
 
 //# run
-module 0x42::test08 { public fun main() { assert!(0x42::m::test08() == 962, 8); } }
+module 0x4b::test08 { public fun main() { assert!(0x42::m::test08() == 962, 8); } }
 
 //# run
-module 0x42::test09 { public fun main() { assert!(0x42::m::test09() == 890, 9); } }
+module 0x4c::test09 { public fun main() { assert!(0x42::m::test09() == 890, 9); } }
 
 //# run
-module 0x42::test10 { public fun main() { assert!(0x42::m::test10() == 746, 10); } }
+module 0x4d::test10 { public fun main() { assert!(0x42::m::test10() == 746, 10); } }
 
 //# run
-module 0x42::test11 { public fun main() { assert!(0x42::m::test11() == 1, 11); } }
+module 0x4e::test11 { public fun main() { assert!(0x42::m::test11() == 1, 11); } }
 
 //# run
-module 0x42::test12 { public fun main() { assert!(0x42::m::test12() == 4, 12); } }
+module 0x4f::test12 { public fun main() { assert!(0x42::m::test12() == 4, 12); } }
 
 //# run
-module 0x42::test13 { public fun main() { assert!(0x42::m::test13() == 29, 13); } }
+module 0x50::test13 { public fun main() { assert!(0x42::m::test13() == 29, 13); } }
 
 //# run
-module 0x42::test14 { public fun main() { assert!(0x42::m::test14() == 15, 14); } }
+module 0x51::test14 { public fun main() { assert!(0x42::m::test14() == 15, 14); } }
 
 //# run
-module 0x42::test15 { public fun main() { assert!(0x42::m::test15() == 19, 15); } }
+module 0x52::test15 { public fun main() { assert!(0x42::m::test15() == 19, 15); } }
 
 //# run
-module 0x42::test16 { public fun main() { assert!(0x42::m::test16() == 20, 16); } }
+module 0x53::test16 { public fun main() { assert!(0x42::m::test16() == 20, 16); } }
 
 //# run
-module 0x42::test17 { public fun main() { assert!(0x42::m::test17(54) == 168, 17); } }
+module 0x54::test17 { public fun main() { assert!(0x42::m::test17(54) == 168, 17); } }
 
 //# run
-module 0x42::test18 { public fun main() { assert!(0x42::m::test18(true) == 6, 18); } }
+module 0x55::test18 { public fun main() { assert!(0x42::m::test18(true) == 6, 18); } }
 
 //# run
-module 0x42::test19 { public fun main() { assert!(0x42::m::test18(false) == 6, 18); } }
+module 0x56::test19 { public fun main() { assert!(0x42::m::test18(false) == 6, 18); } }
 
 //# run
-module 0x42::test20 { public fun main() { assert!(0x42::m::test19() == 28, 18); } }
+module 0x57::test20 { public fun main() { assert!(0x42::m::test19() == 28, 18); } }
 
 //# run
-module 0x42::test21 { public fun main() { assert!(0x42::m::test20(true) == true, 20); } }
+module 0x58::test21 { public fun main() { assert!(0x42::m::test20(true) == true, 20); } }
 
 //# run
-module 0x42::test22 { public fun main() { assert!(0x42::m::test20(false) == false, 20); } }
+module 0x59::test22 { public fun main() { assert!(0x42::m::test20(false) == false, 20); } }
 
 //# run
-module 0x42::test23 { public fun main() { assert!(0x42::m::test21() == true, 21); } }
+module 0x5a::test23 { public fun main() { assert!(0x42::m::test21() == true, 21); } }
 
 //# run
-module 0x42::test24 { public fun main() { assert!(0x42::m::test22(3) == vector[3,4,5], 22); } }
+module 0x5b::test24 { public fun main() { assert!(0x42::m::test22(3) == vector[3,4,5], 22); } }
 
 //# run
-module 0x42::test25 { public fun main() { assert!(0x42::m::test23() == 6, 23); } }
+module 0x5c::test25 { public fun main() { assert!(0x42::m::test23() == 6, 23); } }
 
 //# run
-module 0x42::test26 { public fun main() { assert!(0x42::m::test24() == 39, 24); } }
+module 0x5d::test26 { public fun main() { assert!(0x42::m::test24() == 39, 24); } }
 
 //# run
-module 0x42::test27 { public fun main() { assert!(0x42::m::test25() == 99, 25); } }
+module 0x5e::test27 { public fun main() { assert!(0x42::m::test25() == 99, 25); } }
 
 //# run
-module 0x42::test28 { public fun main() { assert!(0x42::m::test26() == 9, 26); } }
+module 0x5f::test28 { public fun main() { assert!(0x42::m::test26() == 9, 26); } }
 
 //# run
-module 0x42::test29 { public fun main() { assert!(0x42::m::test27() == 6, 27); } }
+module 0x60::test29 { public fun main() { assert!(0x42::m::test27() == 6, 27); } }
 
 //# run
-module 0x42::test30 { public fun main() { assert!(0x42::m::test28() == 28, 28); } }
+module 0x61::test30 { public fun main() { assert!(0x42::m::test28() == 28, 28); } }
 
 //# run
-module 0x42::test31 { public fun main() { assert!(0x42::m::test29() == 11, 29); } }
+module 0x62::test31 { public fun main() { assert!(0x42::m::test29() == 11, 29); } }
 
 //# run
-module 0x42::test32 { public fun main() { assert!(0x42::m::test30() == 8, 30); } }
+module 0x63::test32 { public fun main() { assert!(0x42::m::test30() == 8, 30); } }
 
 //# run
-module 0x42::test33 { public fun main() { assert!(0x42::m::test31() == 6, 31); } }
+module 0x64::test33 { public fun main() { assert!(0x42::m::test31() == 6, 31); } }
 
 //# run
-module 0x42::test34 { public fun main() { assert!(0x42::m::test32() == 7, 32); } }
+module 0x65::test34 { public fun main() { assert!(0x42::m::test32() == 7, 32); } }
 
 //# run
-module 0x42::test35 { public fun main() { assert!(0x42::m::test33() == 6, 33); } }
+module 0x66::test35 { public fun main() { assert!(0x42::m::test33() == 6, 33); } }
 
 //# run
-module 0x42::test36 { public fun main() { assert!(0x42::m::test34() == 1, 34); } }
+module 0x67::test36 { public fun main() { assert!(0x42::m::test34() == 1, 34); } }
 
 //# run
-module 0x42::test37 { public fun main() { assert!(0x42::m::test35() == 6, 35); } }
+module 0x68::test37 { public fun main() { assert!(0x42::m::test35() == 6, 35); } }
 
 //# run
-module 0x42::test38 { public fun main() { assert!(0x42::m::test36(1) == 4, 36); } }
+module 0x69::test38 { public fun main() { assert!(0x42::m::test36(1) == 4, 36); } }
 

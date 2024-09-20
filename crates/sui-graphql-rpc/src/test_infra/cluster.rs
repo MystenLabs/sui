@@ -6,6 +6,9 @@ use crate::config::ServerConfig;
 use crate::config::ServiceConfig;
 use crate::config::Version;
 use crate::server::graphiql_server::start_graphiql_server;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+use simulacrum::Simulacrum;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,11 +18,14 @@ pub use sui_indexer::config::SnapshotLagConfig;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::store::PgIndexerStore;
-use sui_indexer::test_utils::force_delete_database;
+use sui_indexer::tempdb::get_available_port;
+use sui_indexer::tempdb::TempDb;
 use sui_indexer::test_utils::start_test_indexer_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_types::storage::RestStateReader;
+use tempfile::tempdir;
+use tempfile::TempDir;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::join;
@@ -27,13 +33,11 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-const VALIDATOR_COUNT: usize = 7;
-const EPOCH_DURATION_MS: u64 = 15000;
+const VALIDATOR_COUNT: usize = 4;
+const EPOCH_DURATION_MS: u64 = 10000;
 
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
-
-pub const DEFAULT_INTERNAL_DATA_SOURCE_PORT: u16 = 3000;
 
 pub struct ExecutorCluster {
     pub executor_server_handle: JoinHandle<()>,
@@ -44,6 +48,9 @@ pub struct ExecutorCluster {
     pub snapshot_config: SnapshotLagConfig,
     pub graphql_connection_config: ConnectionConfig,
     pub cancellation_token: CancellationToken,
+    #[allow(unused)]
+    database: TempDb,
+    tempdir: Option<TempDir>,
 }
 
 pub struct Cluster {
@@ -57,37 +64,35 @@ pub struct NetworkCluster {
     pub indexer_store: PgIndexerStore,
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
     pub cancellation_token: CancellationToken,
+    #[allow(unused)]
+    data_ingestion_path: TempDir,
+    #[allow(unused)]
+    database: TempDb,
+    pub graphql_connection_config: ConnectionConfig,
 }
 
 /// Starts a validator, fullnode, indexer, and graphql service for testing.
-pub async fn start_cluster(
-    graphql_connection_config: ConnectionConfig,
-    internal_data_source_rpc_port: Option<u16>,
-    service_config: ServiceConfig,
-) -> Cluster {
-    let network_cluster = start_network_cluster(
-        graphql_connection_config.clone(),
-        internal_data_source_rpc_port,
-    )
-    .await;
+pub async fn start_cluster(service_config: ServiceConfig) -> Cluster {
+    let network_cluster = start_network_cluster().await;
+    let graphql_connection_config = network_cluster.graphql_connection_config.clone();
 
     let fn_rpc_url: String = network_cluster
         .validator_fullnode_handle
         .rpc_url()
         .to_string();
 
+    let server_url = format!(
+        "http://{}:{}/",
+        graphql_connection_config.host, graphql_connection_config.port
+    );
+
     let graphql_server_handle = start_graphql_server_with_fn_rpc(
-        graphql_connection_config.clone(),
+        graphql_connection_config,
         Some(fn_rpc_url),
         Some(network_cluster.cancellation_token.clone()),
         service_config,
     )
     .await;
-
-    let server_url = format!(
-        "http://{}:{}/",
-        graphql_connection_config.host, graphql_connection_config.port
-    );
 
     // Starts graphql client
     let client = SimpleClient::new(server_url);
@@ -103,26 +108,29 @@ pub async fn start_cluster(
 /// Starts a validator, fullnode, indexer (using data ingestion). Re-using GraphQL's ConnectionConfig for convenience.
 /// This does not start any GraphQL services, only the network cluster. You can start a GraphQL service
 /// calling `start_graphql_server`.
-pub async fn start_network_cluster(
-    graphql_connection_config: ConnectionConfig,
-    internal_data_source_rpc_port: Option<u16>,
-) -> NetworkCluster {
-    let data_ingestion_path = tempfile::tempdir().unwrap().into_path();
+pub async fn start_network_cluster() -> NetworkCluster {
+    let database = TempDb::new().unwrap();
+    let graphql_connection_config = ConnectionConfig {
+        port: get_available_port(),
+        host: "127.0.0.1".to_owned(),
+        db_url: database.database().url().as_str().to_owned(),
+        db_pool_size: 5,
+        prom_url: "127.0.0.1".to_owned(),
+        prom_port: get_available_port(),
+    };
+    let data_ingestion_path = tempfile::tempdir().unwrap();
     let db_url = graphql_connection_config.db_url.clone();
     let cancellation_token = CancellationToken::new();
 
     // Starts validator+fullnode
-    let val_fn =
-        start_validator_with_fullnode(internal_data_source_rpc_port, data_ingestion_path.clone())
-            .await;
+    let val_fn = start_validator_with_fullnode(data_ingestion_path.path().to_path_buf()).await;
 
     // Starts indexer
     let (pg_store, pg_handle) = start_test_indexer_impl(
-        Some(db_url),
+        db_url,
         val_fn.rpc_url().to_string(),
         ReaderWriterConfig::writer_mode(None, None),
-        /* reset_database */ true,
-        Some(data_ingestion_path),
+        Some(data_ingestion_path.path().to_path_buf()),
         cancellation_token.clone(),
     )
     .await;
@@ -132,25 +140,35 @@ pub async fn start_network_cluster(
         indexer_store: pg_store,
         indexer_join_handle: pg_handle,
         cancellation_token,
+        data_ingestion_path,
+        database,
+        graphql_connection_config,
     }
 }
 
 /// Takes in a simulated instantiation of a Sui blockchain and builds a cluster around it. This
 /// cluster is typically used in e2e tests to emulate and test behaviors.
 pub async fn serve_executor(
-    graphql_connection_config: ConnectionConfig,
-    internal_data_source_rpc_port: u16,
     executor: Arc<dyn RestStateReader + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
     epochs_to_keep: Option<u64>,
     data_ingestion_path: PathBuf,
 ) -> ExecutorCluster {
+    let database = TempDb::new().unwrap();
+    let graphql_connection_config = ConnectionConfig {
+        port: get_available_port(),
+        host: "127.0.0.1".to_owned(),
+        db_url: database.database().url().as_str().to_owned(),
+        db_pool_size: 5,
+        prom_url: "127.0.0.1".to_owned(),
+        prom_port: get_available_port(),
+    };
     let db_url = graphql_connection_config.db_url.clone();
     // Creates a cancellation token and adds this to the ExecutorCluster, so that we can send a
     // cancellation token on cleanup
     let cancellation_token = CancellationToken::new();
 
-    let executor_server_url: SocketAddr = format!("127.0.0.1:{}", internal_data_source_rpc_port)
+    let executor_server_url: SocketAddr = format!("127.0.0.1:{}", get_available_port())
         .parse()
         .unwrap();
 
@@ -161,10 +179,9 @@ pub async fn serve_executor(
     });
 
     let (pg_store, pg_handle) = start_test_indexer_impl(
-        Some(db_url),
+        db_url,
         format!("http://{}", executor_server_url),
         ReaderWriterConfig::writer_mode(snapshot_config.clone(), epochs_to_keep),
-        /* reset_database */ true,
         Some(data_ingestion_path),
         cancellation_token.clone(),
     )
@@ -196,7 +213,43 @@ pub async fn serve_executor(
         snapshot_config: snapshot_config.unwrap_or_default(),
         graphql_connection_config,
         cancellation_token,
+        database,
+        tempdir: None,
     }
+}
+
+pub async fn prep_executor_cluster() -> ExecutorCluster {
+    let rng = StdRng::from_seed([12; 32]);
+    let data_ingestion_path = tempdir().unwrap();
+    let mut sim = Simulacrum::new_with_rng(rng);
+    sim.set_data_ingestion_path(data_ingestion_path.path().to_path_buf());
+
+    sim.create_checkpoint();
+    sim.create_checkpoint();
+    sim.create_checkpoint();
+    sim.advance_epoch(true);
+    sim.create_checkpoint();
+    sim.advance_clock(
+        std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap(),
+    );
+    sim.create_checkpoint();
+
+    let mut cluster = serve_executor(
+        Arc::new(sim),
+        None,
+        None,
+        data_ingestion_path.path().to_path_buf(),
+    )
+    .await;
+
+    cluster
+        .wait_for_checkpoint_catchup(6, Duration::from_secs(10))
+        .await;
+
+    cluster.tempdir = Some(data_ingestion_path);
+    cluster
 }
 
 pub async fn start_graphql_server(
@@ -237,11 +290,8 @@ pub async fn start_graphql_server_with_fn_rpc(
     })
 }
 
-async fn start_validator_with_fullnode(
-    internal_data_source_rpc_port: Option<u16>,
-    data_ingestion_dir: PathBuf,
-) -> TestCluster {
-    let mut test_cluster_builder = TestClusterBuilder::new()
+async fn start_validator_with_fullnode(data_ingestion_dir: PathBuf) -> TestCluster {
+    TestClusterBuilder::new()
         .with_num_validators(VALIDATOR_COUNT)
         .with_epoch_duration_ms(EPOCH_DURATION_MS)
         .with_data_ingestion_dir(data_ingestion_dir)
@@ -251,18 +301,14 @@ async fn start_validator_with_fullnode(
                 gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
             };
             ACCOUNT_NUM
-        ]);
-
-    if let Some(internal_data_source_rpc_port) = internal_data_source_rpc_port {
-        test_cluster_builder =
-            test_cluster_builder.with_fullnode_rpc_port(internal_data_source_rpc_port);
-    };
-    test_cluster_builder.build().await
+        ])
+        .build()
+        .await
 }
 
-/// Repeatedly ping the GraphQL server for 10s, until it responds
+/// Repeatedly ping the GraphQL server for 60s, until it responds
 pub async fn wait_for_graphql_server(client: &SimpleClient) {
-    tokio::time::timeout(Duration::from_secs(10), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         while client.ping().await.is_err() {
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
@@ -378,20 +424,6 @@ impl Cluster {
     pub async fn wait_for_checkpoint_pruned(&self, checkpoint: u64, base_timeout: Duration) {
         wait_for_graphql_checkpoint_pruned(&self.graphql_client, checkpoint, base_timeout).await
     }
-
-    /// Sends a cancellation signal to the graphql and indexer services and waits for them to
-    /// shutdown.
-    pub async fn cleanup_resources(self) {
-        self.network.cleanup_resources().await;
-        let _ = self.graphql_server_join_handle.await;
-    }
-}
-
-impl NetworkCluster {
-    pub async fn cleanup_resources(self) {
-        self.cancellation_token.cancel();
-        let _ = self.indexer_join_handle.await;
-    }
 }
 
 impl ExecutorCluster {
@@ -420,7 +452,7 @@ impl ExecutorCluster {
             .unwrap();
 
         tokio::time::timeout(base_timeout, async {
-            while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_max_lag as u64 {
+            while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_min_lag as u64 {
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 latest_snapshot_cp = self
                     .indexer_store
@@ -440,38 +472,5 @@ impl ExecutorCluster {
     pub async fn cleanup_resources(self) {
         self.cancellation_token.cancel();
         let _ = join!(self.graphql_server_join_handle, self.indexer_join_handle);
-        let db_url = self.graphql_connection_config.db_url.clone();
-        force_delete_database(db_url).await;
-    }
-
-    pub async fn force_objects_snapshot_catchup(&self, start_cp: u64, end_cp: u64) {
-        self.indexer_store
-            .update_objects_snapshot(start_cp, end_cp)
-            .await
-            .unwrap();
-
-        let mut latest_snapshot_cp = self
-            .indexer_store
-            .get_latest_object_snapshot_checkpoint_sequence_number()
-            .await
-            .unwrap()
-            .unwrap_or_default();
-
-        tokio::time::timeout(Duration::from_secs(60), async {
-            while latest_snapshot_cp < end_cp - 1 {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                latest_snapshot_cp = self
-                    .indexer_store
-                    .get_latest_object_snapshot_checkpoint_sequence_number()
-                    .await
-                    .unwrap()
-                    .unwrap_or_default();
-            }
-        })
-        .await
-        .unwrap_or_else(|_| panic!("Timeout waiting for indexer to update objects snapshot - latest_snapshot_cp: {}, end_cp: {}",
-        latest_snapshot_cp, end_cp));
-
-        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }

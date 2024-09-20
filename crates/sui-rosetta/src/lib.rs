@@ -2,18 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
+use std::string::ToString;
 use std::sync::Arc;
 
 use axum::routing::post;
 use axum::{Extension, Router};
+use lru::LruCache;
+use move_core_types::language_storage::TypeTag;
 use once_cell::sync::Lazy;
+use tokio::sync::Mutex;
 use tracing::info;
 
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 
 use crate::errors::Error;
+use crate::errors::Error::MissingMetadata;
 use crate::state::{CheckpointBlockProvider, OnlineServerContext};
-use crate::types::{Currency, SuiEnv};
+use crate::types::{Currency, CurrencyMetadata, SuiEnv};
+
+#[cfg(test)]
+#[path = "unit_tests/lib_tests.rs"]
+mod lib_tests;
 
 /// This lib implements the Rosetta online and offline server defined by the [Rosetta API Spec](https://www.rosetta-api.org/docs/Reference.html)
 mod account;
@@ -28,6 +38,9 @@ pub mod types;
 pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
     symbol: "SUI".to_string(),
     decimals: 9,
+    metadata: CurrencyMetadata {
+        coin_type: SUI_COIN_TYPE.to_string(),
+    },
 });
 
 pub struct RosettaOnlineServer {
@@ -37,10 +50,14 @@ pub struct RosettaOnlineServer {
 
 impl RosettaOnlineServer {
     pub fn new(env: SuiEnv, client: SuiClient) -> Self {
-        let blocks = Arc::new(CheckpointBlockProvider::new(client.clone()));
+        let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(1000).unwrap());
+        let blocks = Arc::new(CheckpointBlockProvider::new(
+            client.clone(),
+            coin_cache.clone(),
+        ));
         Self {
             env,
-            context: OnlineServerContext::new(client, blocks),
+            context: OnlineServerContext::new(client, blocks, coin_cache),
         }
     }
 
@@ -97,5 +114,42 @@ impl RosettaOfflineServer {
             listener.local_addr().unwrap()
         );
         axum::serve(listener, app).await.unwrap();
+    }
+}
+
+#[derive(Clone)]
+pub struct CoinMetadataCache {
+    client: SuiClient,
+    metadata: Arc<Mutex<LruCache<TypeTag, Currency>>>,
+}
+
+impl CoinMetadataCache {
+    pub fn new(client: SuiClient, size: NonZeroUsize) -> Self {
+        Self {
+            client,
+            metadata: Arc::new(Mutex::new(LruCache::new(size))),
+        }
+    }
+
+    pub async fn get_currency(&self, type_tag: &TypeTag) -> Result<Currency, Error> {
+        let mut cache = self.metadata.lock().await;
+        if !cache.contains(type_tag) {
+            let metadata = self
+                .client
+                .coin_read_api()
+                .get_coin_metadata(type_tag.to_string())
+                .await?
+                .ok_or(MissingMetadata)?;
+
+            let ccy = Currency {
+                symbol: metadata.symbol,
+                decimals: metadata.decimals as u64,
+                metadata: CurrencyMetadata {
+                    coin_type: type_tag.to_string(),
+                },
+            };
+            cache.push(type_tag.clone(), ccy);
+        }
+        cache.get(type_tag).cloned().ok_or(MissingMetadata)
     }
 }

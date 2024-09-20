@@ -396,9 +396,9 @@ impl TypingAnalysisContext<'_> {
 
     fn add_variant_use_def(
         &mut self,
-        module_ident: &mut E::ModuleIdent,
-        enum_name: &mut P::DatatypeName,
-        variant_name: &mut P::VariantName,
+        module_ident: &E::ModuleIdent,
+        enum_name: &P::DatatypeName,
+        variant_name: &P::VariantName,
     ) {
         let use_name = variant_name.value();
         let use_loc = variant_name.loc();
@@ -519,15 +519,15 @@ impl TypingAnalysisContext<'_> {
         module: &ModuleIdent,
         name: &P::FunctionName,
         method_name: Option<Name>,
-        tyargs: &mut [N::Type],
-        args: Option<&mut Box<T::Exp>>,
+        tyargs: &[N::Type],
+        args: Option<&T::Exp>,
     ) {
         let fun_name = name.value();
         // a function name (same as fun_name) or method name (different from fun_name)
         let fun_use = method_name.unwrap_or_else(|| sp(name.loc(), name.value()));
         let call_use_def = self.add_fun_use_def(module, &fun_name, &fun_use.value, &fun_use.loc);
         // handle type parameters
-        for t in tyargs.iter_mut() {
+        for t in tyargs.iter() {
             self.visit_type(None, t);
         }
         if let Some(args) = args {
@@ -550,17 +550,17 @@ impl TypingAnalysisContext<'_> {
         }
     }
 
-    fn process_match_patterm(&mut self, match_pat: &mut T::MatchPattern) {
+    fn process_match_patterm(&mut self, match_pat: &T::MatchPattern) {
         use T::UnannotatedPat_ as UA;
 
-        self.visit_type(None, &mut match_pat.ty);
-        match &mut match_pat.pat.value {
+        self.visit_type(None, &match_pat.ty);
+        match &match_pat.pat.value {
             UA::Variant(mident, name, vname, tyargs, fields)
             | UA::BorrowVariant(_, mident, name, vname, tyargs, fields) => {
                 self.add_datatype_use_def(mident, name);
                 self.add_variant_use_def(mident, name, vname);
-                tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
-                for (fpos, fname, (_, (_, pat))) in fields.iter_mut() {
+                tyargs.iter().for_each(|t| self.visit_type(None, t));
+                for (fpos, fname, (_, (_, pat))) in fields.iter() {
                     if self.compiler_info.ellipsis_binders.get(&fpos).is_none() {
                         self.add_field_use_def(
                             &mident.value,
@@ -576,8 +576,8 @@ impl TypingAnalysisContext<'_> {
             UA::Struct(mident, name, tyargs, fields)
             | UA::BorrowStruct(_, mident, name, tyargs, fields) => {
                 self.add_datatype_use_def(mident, name);
-                tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
-                for (fpos, fname, (_, (_, pat))) in fields.iter_mut() {
+                tyargs.iter().for_each(|t| self.visit_type(None, t));
+                for (fpos, fname, (_, (_, pat))) in fields.iter() {
                     if self.compiler_info.ellipsis_binders.get(&fpos).is_none() {
                         self.add_field_use_def(&mident.value, &name.value(), None, fname, &fpos);
                     }
@@ -599,10 +599,10 @@ impl TypingAnalysisContext<'_> {
         }
     }
 
-    fn process_match_arm(&mut self, sp!(_, arm): &mut T::MatchArm) {
-        self.process_match_patterm(&mut arm.pattern);
+    fn process_match_arm(&mut self, sp!(_, arm): &T::MatchArm) {
+        self.process_match_patterm(&arm.pattern);
         let guard_loc = arm.guard.as_ref().map(|exp| exp.exp.loc);
-        arm.binders.iter_mut().for_each(|(var, ty)| {
+        arm.binders.iter().for_each(|(var, ty)| {
             self.add_local_def(
                 &var.loc,
                 &var.value.name,
@@ -613,7 +613,7 @@ impl TypingAnalysisContext<'_> {
             );
         });
 
-        if let Some(exp) = &mut arm.guard {
+        if let Some(exp) = &arm.guard {
             self.visit_exp(exp);
             // Enum guard variables have different type (immutable reference) than variables in
             // patterns and in the RHS of the match arm. However, at the AST level they share
@@ -634,7 +634,7 @@ impl TypingAnalysisContext<'_> {
                 .or_default()
                 .insert(guard_loc);
         }
-        self.visit_exp(&mut arm.rhs);
+        self.visit_exp(&arm.rhs);
     }
 }
 
@@ -658,7 +658,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         &mut self,
         module: move_compiler::expansion::ast::ModuleIdent,
         struct_name: P::DatatypeName,
-        sdef: &mut N::StructDefinition,
+        sdef: &N::StructDefinition,
     ) {
         self.reset_for_module_member();
         assert!(self.current_mod_ident_str.is_none());
@@ -683,7 +683,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         for stp in &sdef.type_parameters {
             self.add_type_param(&stp.param);
         }
-        if let N::StructFields::Defined(positional, fields) = &mut sdef.fields {
+        if let N::StructFields::Defined(positional, fields) = &sdef.fields {
             for (fpos, fname, (_, ty)) in fields {
                 self.visit_type(None, ty);
                 if !*positional {
@@ -719,7 +719,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         &mut self,
         module: move_compiler::expansion::ast::ModuleIdent,
         enum_name: P::DatatypeName,
-        edef: &mut N::EnumDefinition,
+        edef: &N::EnumDefinition,
     ) -> bool {
         self.reset_for_module_member();
         assert!(self.current_mod_ident_str.is_none());
@@ -745,7 +745,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
             self.add_type_param(&etp.param);
         }
 
-        for (vname, vdef) in edef.variants.key_cloned_iter_mut() {
+        for (vname, vdef) in edef.variants.key_cloned_iter() {
             self.visit_variant(&module, &enum_name, vname, vdef);
         }
         self.current_mod_ident_str = None;
@@ -757,7 +757,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         _module: &move_compiler::expansion::ast::ModuleIdent,
         _enum_name: &P::DatatypeName,
         variant_name: P::VariantName,
-        vdef: &mut N::VariantDefinition,
+        vdef: &N::VariantDefinition,
     ) -> bool {
         let file_hash = variant_name.loc().file_hash();
         // enter self-definition for variant name (unwrap safe - done when inserting def)
@@ -776,7 +776,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 vtype_def,
             ),
         );
-        if let N::VariantFields::Defined(positional, fields) = &mut vdef.fields {
+        if let N::VariantFields::Defined(positional, fields) = &vdef.fields {
             for (floc, fname, (_, ty)) in fields {
                 self.visit_type(None, ty);
                 if !*positional {
@@ -810,7 +810,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         &mut self,
         module: move_compiler::expansion::ast::ModuleIdent,
         constant_name: P::ConstantName,
-        cdef: &mut T::Constant,
+        cdef: &T::Constant,
     ) {
         self.reset_for_module_member();
         assert!(self.current_mod_ident_str.is_none());
@@ -832,7 +832,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 ident_type_def_loc,
             ),
         );
-        self.visit_exp(&mut cdef.value);
+        self.visit_exp(&cdef.value);
         self.current_mod_ident_str = None;
     }
 
@@ -840,7 +840,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         &mut self,
         module: move_compiler::expansion::ast::ModuleIdent,
         function_name: P::FunctionName,
-        fdef: &mut T::Function,
+        fdef: &T::Function,
     ) {
         self.reset_for_module_member();
         if ignored_function(function_name.value()) {
@@ -870,7 +870,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
             self.add_type_param(tp);
         }
 
-        for (mutability, pname, ptype) in &mut fdef.signature.parameters {
+        for (mutability, pname, ptype) in &fdef.signature.parameters {
             self.visit_type(None, ptype);
 
             // add definition of the parameter
@@ -884,27 +884,27 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
             );
         }
 
-        match &mut fdef.body.value {
+        match &fdef.body.value {
             T::FunctionBody_::Defined(seq) => {
                 self.visit_seq(seq);
             }
             T::FunctionBody_::Macro | T::FunctionBody_::Native => (),
         }
         // process return types
-        self.visit_type(None, &mut fdef.signature.return_type);
+        self.visit_type(None, &fdef.signature.return_type);
 
         // clear type params from the scope
         self.type_params.clear();
         self.current_mod_ident_str = None;
     }
 
-    fn visit_lvalue(&mut self, kind: &LValueKind, lvalue: &mut T::LValue) {
+    fn visit_lvalue(&mut self, kind: &LValueKind, lvalue: &T::LValue) {
         // Visit an lvalue. If it's just avariable, we add it as a local def. If it'x a field
         // access, we switch modes (`for_unpack` = true) and record them as field use defs instead.
         let mut for_unpack = false;
         let mut lvalue_queue = vec![lvalue];
         while let Some(next) = lvalue_queue.pop() {
-            match &mut next.value {
+            match &next.value {
                 T::LValue_::Ignore => (),
                 T::LValue_::Var {
                     mut_,
@@ -930,7 +930,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 | T::LValue_::BorrowUnpack(_, mident, name, tyargs, fields) => {
                     for_unpack = true;
                     self.add_datatype_use_def(mident, name);
-                    tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
+                    tyargs.iter().for_each(|t| self.visit_type(None, t));
                     for (fpos, fname, (_, (_, lvalue))) in fields {
                         self.add_field_use_def(&mident.value, &name.value(), None, fname, &fpos);
                         lvalue_queue.push(lvalue);
@@ -940,7 +940,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 | T::LValue_::BorrowUnpackVariant(_, mident, name, vname, tyargs, fields) => {
                     for_unpack = true;
                     self.add_datatype_use_def(mident, name);
-                    tyargs.iter_mut().for_each(|t| self.visit_type(None, t));
+                    tyargs.iter().for_each(|t| self.visit_type(None, t));
                     for (fpos, fname, (_, (_, lvalue))) in fields {
                         self.add_field_use_def(
                             &mident.value,
@@ -956,7 +956,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         }
     }
 
-    fn visit_seq(&mut self, (use_funs, seq): &mut T::Sequence) {
+    fn visit_seq(&mut self, (use_funs, seq): &T::Sequence) {
         let old_traverse_mode = self.traverse_only;
         // start adding new use-defs etc. when processing arguments
         if use_funs.color == 0 {
@@ -975,13 +975,13 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         }
     }
 
-    fn visit_exp_custom(&mut self, _exp: &mut T::Exp) -> bool {
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         use T::UnannotatedExp_ as TE;
 
-        fn visit_exp_inner(visitor: &mut TypingAnalysisContext<'_>, exp: &mut T::Exp) -> bool {
+        fn visit_exp_inner(visitor: &mut TypingAnalysisContext<'_>, exp: &T::Exp) -> bool {
             let exp_loc = exp.exp.loc;
-            visitor.visit_type(Some(exp_loc), &mut exp.ty);
-            match &mut exp.exp.value {
+            visitor.visit_type(Some(exp_loc), &exp.ty);
+            match &exp.exp.value {
                 TE::Move { from_user: _, var }
                 | TE::Copy { from_user: _, var }
                 | TE::Use(var)
@@ -994,24 +994,24 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     true
                 }
                 TE::ModuleCall(mod_call) => {
-                    let call = &mut **mod_call;
+                    let call = &**mod_call;
                     visitor.process_module_call(
                         &call.module,
                         &call.name,
                         call.method_name,
-                        &mut call.type_arguments,
-                        Some(&mut call.arguments),
+                        &call.type_arguments,
+                        Some(&call.arguments),
                     );
                     true
                 }
                 TE::Pack(mident, name, tyargs, fields) => {
                     visitor.add_datatype_use_def(mident, name);
-                    for (fpos, fname, (_, (_, init_exp))) in fields.iter_mut() {
+                    for (fpos, fname, (_, (_, init_exp))) in fields.iter() {
                         visitor.add_field_use_def(&mident.value, &name.value(), None, fname, &fpos);
                         visitor.visit_exp(init_exp);
                     }
                     tyargs
-                        .iter_mut()
+                        .iter()
                         .for_each(|t| visitor.visit_type(Some(exp_loc), t));
                     true
                 }
@@ -1022,7 +1022,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 }
                 TE::PackVariant(mident, name, vname, tyargs, fields) => {
                     visitor.add_datatype_use_def(mident, name);
-                    for (fpos, fname, (_, (_, init_exp))) in fields.iter_mut() {
+                    for (fpos, fname, (_, (_, init_exp))) in fields.iter() {
                         visitor.add_field_use_def(
                             &mident.value,
                             &name.value(),
@@ -1033,7 +1033,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                         visitor.visit_exp(init_exp);
                     }
                     tyargs
-                        .iter_mut()
+                        .iter()
                         .for_each(|t| visitor.visit_type(Some(exp_loc), t));
                     true
                 }
@@ -1044,7 +1044,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 }
                 TE::Match(exp, sp!(_, v)) => {
                     visitor.visit_exp(exp);
-                    v.iter_mut().for_each(|arm| visitor.process_match_arm(arm));
+                    v.iter().for_each(|arm| visitor.process_match_arm(arm));
                     true
                 }
                 TE::Unit { .. }
@@ -1074,44 +1074,42 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
             }
         }
 
-        let expanded_lambda = self.compiler_info.is_expanded_lambda(&_exp.exp.loc);
-        if let Some(macro_call_info) = self.compiler_info.get_macro_info(&_exp.exp.loc) {
+        let expanded_lambda = self.compiler_info.is_expanded_lambda(&exp.exp.loc);
+        if let Some(macro_call_info) = self.compiler_info.get_macro_info(&exp.exp.loc) {
             debug_assert!(!expanded_lambda, "Compiler info issue");
             let MacroCallInfo {
                 module,
                 name,
                 method_name,
-                mut type_arguments,
-                mut by_value_args,
+                type_arguments,
+                by_value_args,
             } = macro_call_info.clone();
-            self.process_module_call(&module, &name, method_name, &mut type_arguments, None);
-            by_value_args
-                .iter_mut()
-                .for_each(|a| self.visit_seq_item(a));
+            self.process_module_call(&module, &name, method_name, &type_arguments, None);
+            by_value_args.iter().for_each(|a| self.visit_seq_item(a));
             let old_traverse_mode = self.traverse_only;
             // stop adding new use-defs etc.
             self.traverse_only = true;
-            let result = visit_exp_inner(self, _exp);
+            let result = visit_exp_inner(self, exp);
             self.traverse_only = old_traverse_mode;
             result
         } else if expanded_lambda {
             let old_traverse_mode = self.traverse_only;
             // start adding new use-defs etc. when processing a lambda argument
             self.traverse_only = false;
-            let result = visit_exp_inner(self, _exp);
+            let result = visit_exp_inner(self, exp);
             self.traverse_only = old_traverse_mode;
             result
         } else {
-            visit_exp_inner(self, _exp)
+            visit_exp_inner(self, exp)
         }
     }
 
-    fn visit_type_custom(&mut self, exp_loc: Option<Loc>, ty: &mut N::Type) -> bool {
+    fn visit_type_custom(&mut self, exp_loc: Option<Loc>, ty: &N::Type) -> bool {
         if self.traverse_only {
             return true;
         }
         let loc = ty.loc;
-        match &mut ty.value {
+        match &ty.value {
             N::Type_::Param(tparam) => {
                 let sp!(use_pos, use_name) = tparam.user_specified_name;
                 let Some(name_start) = self.file_start_position_opt(&loc) else {
@@ -1145,7 +1143,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 if let N::TypeName_::ModuleType(mod_ident, struct_name) = type_name {
                     self.add_datatype_use_def(mod_ident, struct_name);
                 } // otherwise nothing to be done for other type names
-                for t in tyargs.iter_mut() {
+                for t in tyargs.iter() {
                     self.visit_type(exp_loc, t);
                 }
                 true
@@ -1160,7 +1158,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
         }
     }
 
-    fn visit_use_funs(&mut self, use_funs: &mut N::UseFuns) {
+    fn visit_use_funs(&mut self, use_funs: &N::UseFuns) {
         let N::UseFuns {
             resolved,
             implicit_candidates,

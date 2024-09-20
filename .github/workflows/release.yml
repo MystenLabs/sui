@@ -1,4 +1,5 @@
 name: Attach Sui binaries to a release
+run-name: Attach Sui binaries to a ${{ inputs.sui_tag }} release
 
 on:
   release:
@@ -9,6 +10,8 @@ on:
         description: 'Sui repo tag to build from'
         type: string
         required: true
+
+concurrency: ${{ github.workflow }}-${{ inputs.sui_tag || github.ref }}
 
 env:
   TAG_NAME: "${{ github.event.inputs.sui_tag || github.ref }}"
@@ -38,12 +41,13 @@ env:
 jobs:
   release-build:
     name: Build & Publish Binaries
-    timeout-minutes: 80
+    timeout-minutes: 120
     strategy:
       matrix:
         os:
           [
             ubuntu-ghcloud, # ubuntu-x86_64
+            ubuntu-arm64, # ubuntu-arm64
             windows-ghcloud, # windows-x86_64
             macos-latest-xl, # macos-x86_64
             macos-latest-xlarge # macos-arm64
@@ -123,8 +127,8 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Install postgres (Mac arm64)
-        if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
+      - name: Install postgres (MacOS arm64)
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_archive_exist == '' }}
         shell: bash
         env:
           PQ_LIB_DIR: "$(brew --prefix libpq)/lib"
@@ -134,11 +138,29 @@ jobs:
         run: |
           brew install postgresql
 
+      - name: Install postgres (Ubuntu arm64)
+        if: ${{ matrix.os == 'ubuntu-arm64' && env.s3_archive_exist == '' }}
+        shell: bash
+        run: |
+          sudo apt install libpq-dev
+
+      - name: Remove unused apps (MacOS arm64)
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_archive_exist == '' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          # MacOS arm64 runner only has 14GB avaialble, which is too small for our builds, so removing unused softwared.
+          df -h /
+          sudo rm -rf /Applications/Xcode*.app
+          sudo rm -rf ~/Library/Developer/Xcode/DerivedData
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
+          sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
+          df -h /
+
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_archive_exist == '' }}
         shell: bash
         run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --bin sui --release --features indexer && mv target/release/sui target/release/sui-pg
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --profile=dev --bin sui
 
       - name: Rename binaries for ${{ matrix.os }}
@@ -152,10 +174,6 @@ jobs:
             export binary=$(echo ${binary} | tr -d $'\r')
             mv ./target/release/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }}
           done
-
-          # sui-pg is a special binary that is built with the indexer feature for sui start cmd
-          export binary=$(echo "sui-pg" | tr -d $'\r')
-          mv ./target/release/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }}
 
           mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .

@@ -38,15 +38,18 @@ contract BridgeCommitteeTest is BridgeBaseTest {
     }
 
     function testBridgeCommitteeInitializationLength() public {
-        BridgeCommittee _committee = new BridgeCommittee();
         address[] memory _committeeMembers = new address[](256);
 
         for (uint160 i = 0; i < 256; i++) {
             _committeeMembers[i] = address(i);
         }
 
+        address _committee = Upgrades.deployUUPSProxy("BridgeCommittee.sol", "", opts);
+
         vm.expectRevert(bytes("BridgeCommittee: Committee length must be less than 256"));
-        _committee.initialize(_committeeMembers, new uint16[](256), minStakeRequired);
+        BridgeCommittee(_committee).initialize(
+            _committeeMembers, new uint16[](256), minStakeRequired
+        );
     }
 
     function testBridgeCommitteeInitializeConfig() public {
@@ -57,7 +60,6 @@ contract BridgeCommitteeTest is BridgeBaseTest {
 
     function testBridgeFailInitialization() public {
         // Test fail initialize: Committee Duplicate Committee Member
-        BridgeCommittee _committee = new BridgeCommittee();
         address[] memory _committeeDuplicateCommitteeMember = new address[](5);
         _committeeDuplicateCommitteeMember[0] = committeeMemberA;
         _committeeDuplicateCommitteeMember[1] = committeeMemberB;
@@ -72,8 +74,13 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         _stakeDuplicateCommitteeMember[3] = 2002;
         _stakeDuplicateCommitteeMember[4] = 1000;
 
+        address _committee = Upgrades.deployUUPSProxy("BridgeCommittee.sol", "", opts);
+
+        committee = BridgeCommittee(_committee);
+
         vm.expectRevert(bytes("BridgeCommittee: Duplicate committee member"));
-        _committee.initialize(
+
+        committee.initialize(
             _committeeDuplicateCommitteeMember, _stakeDuplicateCommitteeMember, minStakeRequired
         );
 
@@ -94,7 +101,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
             bytes("BridgeCommittee: Committee and stake arrays must be of the same length")
         );
 
-        _committee.initialize(_committeeNotSameLength, _stakeNotSameLength, minStakeRequired);
+        committee.initialize(_committeeNotSameLength, _stakeNotSameLength, minStakeRequired);
     }
 
     function testVerifySignaturesWithValidSignatures() public {
@@ -363,19 +370,6 @@ contract BridgeCommitteeTest is BridgeBaseTest {
 
     // An e2e update committee blocklist regression test covering message ser/de
     function testUpdateCommitteeBlocklistRegressionTest() public {
-        address[] memory _committee = new address[](4);
-        uint16[] memory _stake = new uint16[](4);
-        _committee[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
-        _committee[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
-        _committee[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
-        _committee[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
-        _stake[0] = 2500;
-        _stake[1] = 2500;
-        _stake[2] = 2500;
-        _stake[3] = 2500;
-        committee = new BridgeCommittee();
-        committee.initialize(_committee, _stake, minStakeRequired);
-
         bytes memory payload =
             hex"010268b43fd906c0b8f024a18c56e06744f7c6157c65acaef39832cb995c4e049437a3e2ec6a7bad1ab5";
         // Create blocklist message
@@ -395,25 +389,34 @@ contract BridgeCommitteeTest is BridgeBaseTest {
 
     // An e2e update committee blocklist regression test covering message ser/de and signature verification
     function testUpdateCommitteeBlocklistRegressionTestWithSignatures() public {
-        address[] memory _committee = new address[](4);
+        address[] memory _committeeList = new address[](4);
         uint16[] memory _stake = new uint16[](4);
         uint8 chainID = 11;
-        _committee[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
-        _committee[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
-        _committee[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
-        _committee[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
+        _committeeList[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
+        _committeeList[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
+        _committeeList[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
+        _committeeList[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
         _stake[0] = 2500;
         _stake[1] = 2500;
         _stake[2] = 2500;
         _stake[3] = 2500;
-        committee = new BridgeCommittee();
-        committee.initialize(_committee, _stake, minStakeRequired);
-        config = new BridgeConfig();
-        config.initialize(
-            address(committee), chainID, supportedTokens, tokenPrices, supportedChains
+        address _committee = Upgrades.deployUUPSProxy(
+            "BridgeCommittee.sol",
+            abi.encodeCall(BridgeCommittee.initialize, (_committeeList, _stake, minStakeRequired)),
+            opts
+        );
+        committee = BridgeCommittee(_committee);
+
+        address _config = Upgrades.deployUUPSProxy(
+            "BridgeConfig.sol",
+            abi.encodeCall(
+                BridgeConfig.initialize,
+                (address(committee), chainID, supportedTokens, tokenPrices, supportedChains)
+            ),
+            opts
         );
 
-        committee.initializeConfig(address(config));
+        committee.initializeConfig(_config);
 
         assertEq(committee.blocklist(0x68B43fD906C0B8F024a18C56e06744F7c6157c65), false);
 

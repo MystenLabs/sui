@@ -21,6 +21,7 @@ use bincode::Options;
 use collectable::TryExtend;
 use itertools::Itertools;
 use prometheus::{Histogram, HistogramTimer};
+use rocksdb::properties::num_files_at_level;
 use rocksdb::{
     checkpoint::Checkpoint, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
     DBPinnableSlice, LiveFile, OptimisticTransactionDB, SnapshotWithThreadMode,
@@ -335,6 +336,15 @@ impl RocksDB {
 
     pub fn drop_cf(&self, name: &str) -> Result<(), rocksdb::Error> {
         delegate_call!(self.drop_cf(name))
+    }
+
+    pub fn delete_file_in_range<K: AsRef<[u8]>>(
+        &self,
+        cf: &impl AsColumnFamilyRef,
+        from: K,
+        to: K,
+    ) -> Result<(), rocksdb::Error> {
+        delegate_call!(self.delete_file_in_range_cf(cf, from, to))
     }
 
     pub fn delete_cf<K: AsRef<[u8]>>(
@@ -902,7 +912,7 @@ impl<K, V> DBMap<K, V> {
     fn get_int_property(
         rocksdb: &RocksDB,
         cf: &impl AsColumnFamilyRef,
-        property_name: &'static std::ffi::CStr,
+        property_name: &std::ffi::CStr,
     ) -> Result<i64, TypedStoreError> {
         match rocksdb.property_int_value_cf(cf, property_name) {
             Ok(Some(value)) => Ok(value.try_into().unwrap()),
@@ -981,6 +991,27 @@ impl<K, V> DBMap<K, V> {
             .with_label_values(&[cf_name])
             .set(
                 Self::get_int_property(rocksdb, &cf, ROCKSDB_PROPERTY_TOTAL_BLOB_FILES_SIZE)
+                    .unwrap_or(METRICS_ERROR),
+            );
+        // 7 is the default number of levels in RocksDB. If we ever change the number of levels using `set_num_levels`,
+        // we need to update here as well. Note that there isn't an API to query the DB to get the number of levels (yet).
+        let total_num_files: i64 = (0..=6)
+            .map(|level| {
+                Self::get_int_property(rocksdb, &cf, &num_files_at_level(level))
+                    .unwrap_or(METRICS_ERROR)
+            })
+            .sum();
+        db_metrics
+            .cf_metrics
+            .rocksdb_total_num_files
+            .with_label_values(&[cf_name])
+            .set(total_num_files);
+        db_metrics
+            .cf_metrics
+            .rocksdb_num_level0_files
+            .with_label_values(&[cf_name])
+            .set(
+                Self::get_int_property(rocksdb, &cf, &num_files_at_level(0))
                     .unwrap_or(METRICS_ERROR),
             );
         db_metrics
@@ -1986,6 +2017,23 @@ where
                 .write_perf_ctx_metrics
                 .report_metrics(&self.cf);
         }
+        Ok(())
+    }
+
+    /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
+    /// by immediately deleting any sst files whose key range overlaps with the range.
+    /// Files whose range only partially overlaps with the range are not deleted.
+    /// This can be useful for quickly removing a large amount of data without having
+    /// to delete individual keys. Only files at level 1 or higher are considered (
+    /// Level 0 files are skipped). It doesn't guarantee that all keys in the range are
+    /// deleted, as there might be keys in files that weren't entirely within the range.
+    #[instrument(level = "trace", skip_all, err)]
+    fn delete_file_in_range(&self, from: &K, to: &K) -> Result<(), TypedStoreError> {
+        let from_buf = be_fix_int_ser(from.borrow())?;
+        let to_buf = be_fix_int_ser(to.borrow())?;
+        self.rocksdb
+            .delete_file_in_range(&self.cf(), from_buf, to_buf)
+            .map_err(typed_store_err_from_rocks_err)?;
         Ok(())
     }
 

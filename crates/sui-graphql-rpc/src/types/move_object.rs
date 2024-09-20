@@ -431,9 +431,9 @@ impl MoveObjectImpl<'_> {
     }
 
     pub(crate) async fn has_public_transfer(&self, ctx: &Context<'_>) -> Result<bool> {
-        let type_ = MoveType::new(TypeTag::from(self.0.native.type_().clone()));
+        let type_: MoveType = self.0.native.type_().clone().into();
         let set = type_.abilities_impl(ctx.data_unchecked()).await.extend()?;
-        Ok(set.has_key() && set.has_store())
+        Ok(set.is_some_and(|s| s.has_key() && s.has_store()))
     }
 }
 

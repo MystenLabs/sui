@@ -54,6 +54,7 @@ export class ZkSendLinkBuilder {
 	}[] = [];
 	balances = new Map<string, bigint>();
 	sender: string;
+	network: 'mainnet' | 'testnet';
 	#host: string;
 	#path: string;
 	keypair: Keypair;
@@ -78,6 +79,7 @@ export class ZkSendLinkBuilder {
 		this.keypair = keypair;
 		this.#client = client;
 		this.sender = normalizeSuiAddress(sender);
+		this.network = network;
 
 		if (contract) {
 			this.#contract = new ZkBag(contract.packageId, contract);
@@ -108,6 +110,10 @@ export class ZkSendLinkBuilder {
 			decodeSuiPrivateKey(this.keypair.getSecretKey()).secretKey,
 		)}`;
 
+		if (this.network !== 'mainnet') {
+			link.searchParams.set('network', this.network);
+		}
+
 		if (this.#redirect) {
 			link.searchParams.set('redirect_url', this.#redirect.url);
 			if (this.#redirect.name) {
@@ -130,7 +136,14 @@ export class ZkSendLinkBuilder {
 		const result = await this.#client.signAndExecuteTransaction({
 			transaction: await tx.build({ client: this.#client }),
 			signer,
+			options: {
+				showEffects: true,
+			},
 		});
+
+		if (result.effects?.status.status !== 'success') {
+			throw new Error(`Transaction failed: ${result.effects?.status.error ?? 'Unknown error'}`);
+		}
 
 		if (options.waitForTransaction) {
 			await this.#client.waitForTransaction({ digest: result.digest });

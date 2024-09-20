@@ -130,6 +130,7 @@ export class ZkSendLink {
 			link = new ZkSendLink({
 				...options,
 				keypair,
+				network: parsed.searchParams.get('network') === 'testnet' ? 'testnet' : 'mainnet',
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: true,
@@ -142,6 +143,7 @@ export class ZkSendLink {
 			link = new ZkSendLink({
 				...options,
 				keypair,
+				network: parsed.searchParams.get('network') === 'testnet' ? 'testnet' : 'mainnet',
 				host: `${parsed.protocol}//${parsed.host}`,
 				path: parsed.pathname,
 				isContractLink: false,
@@ -238,7 +240,18 @@ export class ZkSendLink {
 
 		const { digest } = await this.#executeSponsoredTransaction(sponsored, signature);
 
-		return this.#client.waitForTransaction({ digest });
+		const result = await this.#client.waitForTransaction({
+			digest,
+			options: { showEffects: true },
+		});
+
+		if (result.effects?.status.status !== 'success') {
+			throw new Error(
+				`Claim transaction failed: ${result.effects?.status.error ?? 'Unknown error'}`,
+			);
+		}
+
+		return result;
 	}
 
 	createClaimTransaction(

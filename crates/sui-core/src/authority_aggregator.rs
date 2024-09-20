@@ -8,7 +8,6 @@ use crate::authority_client::{
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
-use mysten_metrics::histogram::Histogram;
 use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard, MonitorCancellation};
 use mysten_network::config::Config;
 use std::convert::AsRef;
@@ -40,8 +39,9 @@ use tracing::{debug, error, info, instrument, trace, trace_span, warn, Instrumen
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, Registry,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
@@ -104,6 +104,7 @@ pub struct AuthAggMetrics {
     pub cert_broadcasting_post_quorum_timeout: IntCounter,
     pub remaining_tasks_when_reaching_cert_quorum: Histogram,
     pub remaining_tasks_when_cert_broadcasting_post_quorum_timeout: Histogram,
+    pub quorum_reached_without_requested_objects: IntCounter,
 }
 
 impl AuthAggMetrics {
@@ -179,16 +180,22 @@ impl AuthAggMetrics {
                 registry,
             )
             .unwrap(),
-            remaining_tasks_when_reaching_cert_quorum: mysten_metrics::histogram::Histogram::new_in_registry(
+            remaining_tasks_when_reaching_cert_quorum: register_histogram_with_registry!(
                 "auth_agg_remaining_tasks_when_reaching_cert_quorum",
                 "Number of remaining tasks when reaching certificate quorum",
                 registry,
-            ),
-            remaining_tasks_when_cert_broadcasting_post_quorum_timeout: mysten_metrics::histogram::Histogram::new_in_registry(
+            ).unwrap(),
+            remaining_tasks_when_cert_broadcasting_post_quorum_timeout: register_histogram_with_registry!(
                 "auth_agg_remaining_tasks_when_cert_broadcasting_post_quorum_timeout",
                 "Number of remaining tasks when post quorum certificate broadcasting times out",
                 registry,
+            ).unwrap(),
+            quorum_reached_without_requested_objects: register_int_counter_with_registry!(
+                "auth_agg_quorum_reached_without_requested_objects",
+                "Number of times quorum was reached without getting the requested objects back from at least 1 validator",
+                registry,
             )
+            .unwrap(),
         }
     }
 
@@ -454,6 +461,7 @@ struct ProcessCertificateState {
     input_objects: Option<Vec<Object>>,
     output_objects: Option<Vec<Object>>,
     auxiliary_data: Option<Vec<u8>>,
+    request: HandleCertificateRequestV3,
 }
 
 #[derive(Debug)]
@@ -1497,13 +1505,14 @@ where
             input_objects: None,
             output_objects: None,
             auxiliary_data: None,
+            request: request.clone(),
         };
 
         // create a set of validators that we should sample to request input/output objects from
         let validators_to_sample =
             if request.include_input_objects || request.include_output_objects {
                 // Number of validators to request input/output objects from
-                const NUMBER_TO_SAMPLE: usize = 5;
+                const NUMBER_TO_SAMPLE: usize = 10;
 
                 self.committee
                     .choose_multiple_weighted_iter(NUMBER_TO_SAMPLE)
@@ -1547,7 +1556,6 @@ where
                             request_ref
                         } else {
                             HandleCertificateRequestV3 {
-                                include_events: false,
                                 include_input_objects: false,
                                 include_output_objects: false,
                                 include_auxiliary_data: false,
@@ -1583,6 +1591,7 @@ where
                     // and return.
                     match AuthorityAggregator::<A>::handle_process_certificate_response(
                         committee_clone,
+                        &metrics,
                         &tx_digest, &mut state, response, name)
                     {
                         Ok(Some(effects)) => ReduceOutput::Success(effects),
@@ -1668,7 +1677,7 @@ where
         let metrics = self.metrics.clone();
         metrics
             .remaining_tasks_when_reaching_cert_quorum
-            .report(remaining_tasks.len() as u64);
+            .observe(remaining_tasks.len() as f64);
         if !remaining_tasks.is_empty() {
             // Use best efforts to send the cert to remaining validators.
             spawn_monitored_task!(async move {
@@ -1678,7 +1687,7 @@ where
                         _ = &mut timeout => {
                             debug!(?tx_digest, "Timed out in post quorum cert broadcasting: {:?}. Remaining tasks: {:?}", timeout_after_quorum, remaining_tasks.len());
                             metrics.cert_broadcasting_post_quorum_timeout.inc();
-                            metrics.remaining_tasks_when_cert_broadcasting_post_quorum_timeout.report(remaining_tasks.len() as u64);
+                            metrics.remaining_tasks_when_cert_broadcasting_post_quorum_timeout.observe(remaining_tasks.len() as f64);
                             break;
                         }
                         res = remaining_tasks.next() => {
@@ -1695,6 +1704,7 @@ where
 
     fn handle_process_certificate_response(
         committee: Arc<Committee>,
+        metrics: &AuthAggMetrics,
         tx_digest: &TransactionDigest,
         state: &mut ProcessCertificateState,
         response: SuiResult<HandleCertificateResponseV3>,
@@ -1758,6 +1768,15 @@ where
                             signed_effects.into_data(),
                             cert_sig,
                         );
+
+                        if (state.request.include_input_objects && state.input_objects.is_none())
+                            || (state.request.include_output_objects
+                                && state.output_objects.is_none())
+                        {
+                            metrics.quorum_reached_without_requested_objects.inc();
+                            debug!(?tx_digest, "Quorum Reached but requested input/output objects were not returned");
+                        }
+
                         ct.verify(&committee).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
                             Some(QuorumDriverResponse {

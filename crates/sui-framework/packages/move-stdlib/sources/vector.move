@@ -263,6 +263,13 @@ module std::vector {
         acc
     }
 
+    /// Concatenate the vectors of `v` into a single vector, keeping the order of the elements.
+    public fun flatten<T>(v: vector<vector<T>>): vector<T> {
+        let mut r = vector[];
+        v.do!(|u| r.append(u));
+        r
+    }
+
     /// Whether any element in the vector `v` satisfies the predicate `f`.
     /// If the vector is empty, returns `false`.
     public macro fun any<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {

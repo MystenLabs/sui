@@ -1,5 +1,5 @@
 //# publish
-module 0x1.Test {
+module 0x6.Test {
     struct T { b: bool }
 
     public new(): Self.T {
@@ -22,7 +22,7 @@ module 0x1.Test {
 
 //# run
 module 0x42.m {
-import 0x1.Test;
+import 0x6.Test;
 entry foo() {
     let i: u64;
     let t: Test.T;

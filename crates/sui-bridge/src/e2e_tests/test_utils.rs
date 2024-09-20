@@ -7,6 +7,7 @@ use crate::config::default_ed25519_key_pair;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::*;
+use crate::metrics::BridgeMetrics;
 use crate::server::BridgeNodePublicMetadata;
 use crate::types::BridgeAction;
 use crate::utils::get_eth_signer_client;
@@ -152,6 +153,7 @@ impl BridgeTestClusterBuilder {
     pub async fn build(self) -> BridgeTestCluster {
         init_all_struct_tags();
         std::env::set_var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY", "1");
+        let metrics = Arc::new(BridgeMetrics::new_for_testing());
         let mut bridge_keys = vec![];
         let mut bridge_keys_copy = vec![];
         for _ in 0..self.num_validators {
@@ -177,7 +179,7 @@ impl BridgeTestClusterBuilder {
                     .await,
             );
         }
-        let bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url)
+        let bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url, metrics)
             .await
             .unwrap();
         info!(
@@ -777,6 +779,7 @@ pub(crate) async fn start_bridge_cluster(
                 sui_bridge_module_last_processed_event_id_override: None,
             },
             metrics_key_pair: default_ed25519_key_pair(),
+            metrics: None,
         };
         // Spawn bridge node in memory
         handles.push(
@@ -835,6 +838,9 @@ impl TempDir {
 
 impl Drop for TempDir {
     fn drop(&mut self) {
-        fs::remove_dir_all(&self.path).unwrap();
+        // Use eprintln! here in case logging is not initialized
+        if let Err(e) = fs::remove_dir_all(&self.path) {
+            eprintln!("Failed to remove temp dir: {:?}", e);
+        }
     }
 }

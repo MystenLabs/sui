@@ -1,6 +1,6 @@
 [package]
 name = "sui-graphql-rpc"
-version = "2024.7.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -20,6 +20,7 @@ chrono.workspace = true
 clap.workspace = true
 const-str.workspace = true
 diesel = { workspace = true, features = ["i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
+diesel-async = { workspace = true, features = ["postgres"] }
 either.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 fastcrypto-zkp.workspace = true
@@ -40,7 +41,6 @@ prometheus.workspace = true
 rand.workspace = true # todo: cleanup test only deps
 regex.workspace = true
 reqwest.workspace = true
-serial_test.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
@@ -93,5 +93,4 @@ sui-test-transaction-builder.workspace = true
 sui-move-build.workspace = true
 
 [features]
-default = []
-pg_integration = []
+staging = []

@@ -653,7 +653,6 @@ fn function_body(
                     &mut cfg,
                 );
             }
-
             let block_info = block_info
                 .into_iter()
                 .filter(|(lbl, _info)| blocks.contains_key(lbl))
@@ -1005,7 +1004,7 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_module_custom(&mut self, _ident: ModuleIdent, mdef: &mut G::ModuleDefinition) -> bool {
+    fn visit_module_custom(&mut self, _ident: ModuleIdent, mdef: &G::ModuleDefinition) -> bool {
         self.current_package = mdef.package_name;
         false
     }
@@ -1014,7 +1013,7 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
         &mut self,
         mident: ModuleIdent,
         name: FunctionName,
-        fdef: &mut G::Function,
+        fdef: &G::Function,
     ) -> bool {
         let G::Function {
             warning_filter: _,

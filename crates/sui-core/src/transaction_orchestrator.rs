@@ -16,13 +16,13 @@ use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, Quor
 use futures::future::{select, Either, Future};
 use futures::FutureExt;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_metrics::histogram::{Histogram, HistogramVec};
 use mysten_metrics::{add_server_timing, spawn_logged_monitored_task, spawn_monitored_task};
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, Registry,
 };
 use std::net::SocketAddr;
 use std::ops::Deref;
@@ -625,24 +625,30 @@ impl TransactionOrchestratorMetrics {
             req_in_flight.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
         let req_in_flight_shared_object = req_in_flight.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
 
-        let request_latency = HistogramVec::new_in_registry(
+        let request_latency = register_histogram_vec_with_registry!(
             "tx_orchestrator_request_latency",
             "Time spent in processing one Transaction Orchestrator request",
             &["tx_type"],
+            mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
             registry,
-        );
-        let wait_for_finality_latency = HistogramVec::new_in_registry(
+        )
+        .unwrap();
+        let wait_for_finality_latency = register_histogram_vec_with_registry!(
             "tx_orchestrator_wait_for_finality_latency",
             "Time spent in waiting for one Transaction Orchestrator request gets finalized",
             &["tx_type"],
+            mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
             registry,
-        );
-        let local_execution_latency = HistogramVec::new_in_registry(
+        )
+        .unwrap();
+        let local_execution_latency = register_histogram_vec_with_registry!(
             "tx_orchestrator_local_execution_latency",
             "Time spent in waiting for one Transaction Orchestrator gets locally executed",
             &["tx_type"],
+            mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
             registry,
-        );
+        )
+        .unwrap();
 
         Self {
             total_req_received_single_writer,

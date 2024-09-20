@@ -20,8 +20,15 @@ abstract contract CommitteeUpgradeable is
     /* ========== STATE VARIABLES ========== */
 
     bool private _upgradeAuthorized;
+    // upgradeablity storage gap
+    uint256[50] private __gap;
 
     /* ========== INITIALIZER ========== */
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
     function __CommitteeUpgradeable_init(address _committee) internal onlyInitializing {
         __ReentrancyGuard_init();

@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
-import "openzeppelin-foundry-upgrades/Options.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import "./mocks/MockSuiBridgeV2.sol";
 import "../contracts/BridgeCommittee.sol";
 import "../contracts/SuiBridge.sol";
 import "./BridgeBaseTest.t.sol";
-import "forge-std/Test.sol";
 
 contract CommitteeUpgradeableTest is BridgeBaseTest {
     MockSuiBridgeV2 bridgeV2;
@@ -32,9 +29,6 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
 
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 0;
-
-        Options memory opts;
-        opts.unsafeSkipAllChecks = true;
 
         // deploy bridge committee
         address _committee = Upgrades.deployUUPSProxy(
@@ -202,6 +196,30 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         signatures[3] = getSignature(messageHash, committeeMemberPkD);
         vm.expectRevert(bytes("CommitteeUpgradeable: Invalid proxy address"));
         bridge.upgradeWithSignatures(signatures, message);
+    }
+
+    function testInitializeImplementationDisabled() public {
+        // Deploy the implementation contract without proxy
+        address implementation = address(new BridgeCommittee());
+
+        // Prepare initialization data
+        address[] memory _committeeMembers = new address[](5);
+        _committeeMembers[0] = committeeMemberA;
+        _committeeMembers[1] = committeeMemberB;
+        _committeeMembers[2] = committeeMemberC;
+        _committeeMembers[3] = committeeMemberD;
+        _committeeMembers[4] = committeeMemberE;
+        uint16[] memory _stake = new uint16[](5);
+        _stake[0] = 1000;
+        _stake[1] = 1000;
+        _stake[2] = 1000;
+        _stake[3] = 2002;
+        _stake[4] = 4998;
+
+        // Try to call the initializer directly on the implementation contract
+        // Expect it to revert because initializers should be disabled
+        vm.expectRevert();
+        BridgeCommittee(implementation).initialize(_committeeMembers, _stake, 100);
     }
 
     // An e2e upgrade regression test covering message ser/de and signature verification

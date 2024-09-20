@@ -11,12 +11,14 @@ use clap::*;
 use move_vm_config::verifier::VerifierConfig;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
+use sui_protocol_config_macros::{
+    ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters, ProtocolConfigOverride,
+};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 56;
+const MAX_PROTOCOL_VERSION: u64 = 60;
 
 // Record history of protocol version allocations here:
 //
@@ -169,7 +171,15 @@ const MAX_PROTOCOL_VERSION: u64 = 56;
 //             Enable soft bundle on mainnet.
 // Version 55: Enable enums on mainnet.
 //             Rethrow serialization type layout errors instead of converting them.
-// Version 56: Reduce minimum number of random beacon shares.
+// Version 56: Enable bridge on mainnet.
+//             Note: do not use version 56 for any new features.
+// Version 57: Reduce minimum number of random beacon shares.
+// Version 58: Optimize boolean binops
+//             Finalize bridge committee on mainnet.
+//             Switch to distributed vote scoring in consensus in devnet
+// Version 59: Enable round prober in consensus.
+// Version 60: Validation of public inputs for Groth16 verification.
+//             Enable configuration of maximum number of type nodes in a type layout.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -252,7 +262,7 @@ pub struct Error(pub String);
 
 // TODO: There are quite a few non boolean values in the feature flags. We should move them out.
 /// Records on/off feature flags that may vary at each protocol version.
-#[derive(Default, Clone, Serialize, Debug, ProtocolConfigFeatureFlagsGetters)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug, ProtocolConfigFeatureFlagsGetters)]
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
@@ -512,6 +522,18 @@ struct FeatureFlags {
     // Rethrow type layout errors during serialization instead of trying to convert them.
     #[serde(skip_serializing_if = "is_false")]
     rethrow_serialization_type_layout_errors: bool,
+
+    // Use distributed vote leader scoring strategy in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_distributed_vote_scoring_strategy: bool,
+
+    // Probe rounds received by peers from every authority.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_round_prober: bool,
+
+    // Validate identifier inputs separately
+    #[serde(skip_serializing_if = "is_false")]
+    validate_identifier_inputs: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -523,7 +545,7 @@ fn is_empty(b: &BTreeSet<String>) -> bool {
 }
 
 /// Ordering mechanism for transactions in one Narwhal consensus output.
-#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum ConsensusTransactionOrdering {
     /// No ordering. Transactions are processed in the order they appear in the consensus output.
     #[default]
@@ -539,7 +561,7 @@ impl ConsensusTransactionOrdering {
 }
 
 // The config for per object congestion control in consensus handler.
-#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum PerObjectCongestionControlMode {
     #[default]
     None, // No congestion control.
@@ -554,7 +576,7 @@ impl PerObjectCongestionControlMode {
 }
 
 // Configuration options for consensus algorithm.
-#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum ConsensusChoice {
     #[default]
     Narwhal,
@@ -569,7 +591,7 @@ impl ConsensusChoice {
 }
 
 // Configuration options for consensus network.
-#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum ConsensusNetwork {
     #[default]
     Anemo,
@@ -614,7 +636,7 @@ impl ConsensusNetwork {
 /// return `None` if the field is not defined at that version.
 /// - If you want a customized getter, you can add a method in the impl.
 #[skip_serializing_none]
-#[derive(Clone, Serialize, Debug, ProtocolConfigAccessors)]
+#[derive(Clone, Serialize, Debug, ProtocolConfigAccessors, ProtocolConfigOverride)]
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 
@@ -848,6 +870,9 @@ pub struct ProtocolConfig {
     // than a per-byte cost. checking an object lock should not require loading an
     // entire object, just consulting an ID -> tx digest map
     obj_access_cost_verify_per_byte: Option<u64>,
+
+    // Maximal nodes which are allowed when converting to a type layout.
+    max_type_to_layout_nodes: Option<u64>,
 
     /// === Gas version. gas model ===
 
@@ -1224,6 +1249,10 @@ pub struct ProtocolConfig {
     /// This config plays the same role as `max_accumulated_txn_cost_per_object_in_narwhal_commit`
     /// but for mysticeti commits due to that mysticeti has higher commit rate.
     max_accumulated_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
+
+    /// Configures the garbage collection depth for consensus. When is unset or `0` then the garbage collection
+    /// is disabled.
+    consensus_gc_depth: Option<u32>,
 }
 
 // feature flags
@@ -1558,6 +1587,22 @@ impl ProtocolConfig {
     pub fn rethrow_serialization_type_layout_errors(&self) -> bool {
         self.feature_flags.rethrow_serialization_type_layout_errors
     }
+
+    pub fn consensus_distributed_vote_scoring_strategy(&self) -> bool {
+        self.feature_flags
+            .consensus_distributed_vote_scoring_strategy
+    }
+
+    pub fn consensus_round_prober(&self) -> bool {
+        self.feature_flags.consensus_round_prober
+    }
+
+    pub fn validate_identifier_inputs(&self) -> bool {
+        self.feature_flags.validate_identifier_inputs
+    }
+    pub fn gc_depth(&self) -> u32 {
+        self.consensus_gc_depth.unwrap_or(0)
+    }
 }
 
 #[cfg(not(msim))]
@@ -1590,7 +1635,7 @@ impl ProtocolConfig {
         let mut ret = Self::get_for_version_impl(version, chain);
         ret.version = version;
 
-        CONFIG_OVERRIDE.with(|ovr| {
+        ret = CONFIG_OVERRIDE.with(|ovr| {
             if let Some(override_fn) = &*ovr.borrow() {
                 warn!(
                     "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
@@ -1599,7 +1644,17 @@ impl ProtocolConfig {
             } else {
                 ret
             }
-        })
+        });
+
+        if std::env::var("SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE").is_ok() {
+            warn!("overriding ProtocolConfig settings with custom settings; this may break non-local networks");
+            let overrides: ProtocolConfigOptional =
+                serde_env::from_env_with_prefix("SUI_PROTOCOL_CONFIG_OVERRIDE")
+                    .expect("failed to parse ProtocolConfig override env variables");
+            overrides.apply_to(&mut ret);
+        }
+
+        ret
     }
 
     /// Get the value ProtocolConfig that are in effect during the given protocol version.
@@ -1739,6 +1794,7 @@ impl ProtocolConfig {
             max_num_transferred_move_object_ids_system_tx: Some(2048 * 16),
             max_event_emit_size: Some(250 * 1024),
             max_move_vector_len: Some(256 * 1024),
+            max_type_to_layout_nodes: None,
 
             max_back_edges_per_function: Some(10_000),
             max_back_edges_per_module: Some(10_000),
@@ -2060,6 +2116,8 @@ impl ProtocolConfig {
             bridge_should_try_to_finalize_committee: None,
 
             max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
+
+            consensus_gc_depth: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2697,8 +2755,32 @@ impl ProtocolConfig {
                     cfg.feature_flags.rethrow_serialization_type_layout_errors = true;
                 }
                 56 => {
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.bridge = true;
+                    }
+                }
+                57 => {
                     // Reduce minimum number of random beacon shares.
                     cfg.random_beacon_reduction_lower_bound = Some(800);
+                }
+                58 => {
+                    if chain == Chain::Mainnet {
+                        cfg.bridge_should_try_to_finalize_committee = Some(true);
+                    }
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Enable distributed vote scoring for devnet
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = true;
+                    }
+                }
+                59 => {
+                    // Enable round prober in consensus.
+                    cfg.feature_flags.consensus_round_prober = true;
+                }
+                60 => {
+                    cfg.max_type_to_layout_nodes = Some(512);
+                    cfg.feature_flags.validate_identifier_inputs = true;
                 }
                 // Use this template when making changes:
                 //
@@ -2855,6 +2937,19 @@ impl ProtocolConfig {
     pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.passkey_auth = val
     }
+
+    pub fn set_consensus_distributed_vote_scoring_strategy_for_testing(&mut self, val: bool) {
+        self.feature_flags
+            .consensus_distributed_vote_scoring_strategy = val;
+    }
+
+    pub fn set_consensus_round_prober_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_round_prober = val;
+    }
+
+    pub fn set_gc_depth_for_testing(&mut self, val: u32) {
+        self.consensus_gc_depth = Some(val);
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
@@ -3001,6 +3096,17 @@ mod test {
 
         prot.set_attr_for_testing("max_arguments".to_string(), "456".to_string());
         assert_eq!(prot.max_arguments(), 456);
+    }
+
+    #[test]
+    #[should_panic(expected = "unsupported version")]
+    fn max_version_test() {
+        // When this does not panic, version higher than MAX_PROTOCOL_VERSION exists.
+        // To fix, bump MAX_PROTOCOL_VERSION or disable this check for the version.
+        let _ = ProtocolConfig::get_for_version_impl(
+            ProtocolVersion::new(MAX_PROTOCOL_VERSION + 1),
+            Chain::Unknown,
+        );
     }
 
     #[test]

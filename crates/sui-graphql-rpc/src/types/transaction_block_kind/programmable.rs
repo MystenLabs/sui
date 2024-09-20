@@ -299,7 +299,8 @@ impl MoveCallTransaction {
         self.native
             .type_arguments
             .iter()
-            .map(|tag| MoveType::new(tag.clone()))
+            .cloned()
+            .map(Into::into)
             .collect()
     }
 
@@ -382,7 +383,7 @@ impl ProgrammableTransaction {
             }),
 
             N::MakeMoveVec(type_, elements) => P::MakeMoveVec(MakeMoveVecTransaction {
-                type_: type_.map(MoveType::new),
+                type_: type_.map(Into::into),
                 elements: elements
                     .into_iter()
                     .map(TransactionArgument::from)

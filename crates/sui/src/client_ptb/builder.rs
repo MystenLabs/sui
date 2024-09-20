@@ -845,7 +845,7 @@ impl<'a> PTBBuilder<'a> {
                 }
                 let res = self
                     .ptb
-                    .command(Tx::Command::MakeMoveVec(Some(ty_arg), vec_args));
+                    .command(Tx::Command::make_move_vec(Some(ty_arg), vec_args));
                 self.last_command = Some(res);
             }
             ParsedPTBCommand::SplitCoins(pre_coin, sp!(_, amounts)) => {
@@ -916,14 +916,13 @@ impl<'a> PTBBuilder<'a> {
                         mod_access_loc,
                     )
                     .await?;
-                let move_call = Tx::ProgrammableMoveCall {
-                    package: package_id,
-                    module: module_name.value,
-                    function: function_name.value,
-                    type_arguments: ty_args,
-                    arguments: args,
-                };
-                let res = self.ptb.command(Tx::Command::MoveCall(Box::new(move_call)));
+                let res = self.ptb.command(Tx::Command::move_call(
+                    package_id,
+                    module_name.value,
+                    function_name.value,
+                    ty_args,
+                    args,
+                ));
                 self.last_command = Some(res);
             }
             ParsedPTBCommand::Publish(sp!(pkg_loc, package_path)) => {
@@ -1041,30 +1040,26 @@ impl<'a> PTBBuilder<'a> {
                     .ptb
                     .pure(package_digest)
                     .map_err(|e| err!(cmd_span, "{e}"))?;
-                let upgrade_ticket =
-                    self.ptb
-                        .command(Tx::Command::MoveCall(Box::new(Tx::ProgrammableMoveCall {
-                            package: SUI_FRAMEWORK_PACKAGE_ID,
-                            module: ident_str!("package").to_owned(),
-                            function: ident_str!("authorize_upgrade").to_owned(),
-                            type_arguments: vec![],
-                            arguments: vec![upgrade_cap_arg, upgrade_arg, digest_arg],
-                        })));
+                let upgrade_ticket = self.ptb.command(Tx::Command::move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    ident_str!("package").to_owned(),
+                    ident_str!("authorize_upgrade").to_owned(),
+                    vec![],
+                    vec![upgrade_cap_arg, upgrade_arg, digest_arg],
+                ));
                 let upgrade_receipt = self.ptb.upgrade(
                     package_id,
                     upgrade_ticket,
                     dependencies.published.into_values().collect(),
                     compiled_modules,
                 );
-                let res =
-                    self.ptb
-                        .command(Tx::Command::MoveCall(Box::new(Tx::ProgrammableMoveCall {
-                            package: SUI_FRAMEWORK_PACKAGE_ID,
-                            module: ident_str!("package").to_owned(),
-                            function: ident_str!("commit_upgrade").to_owned(),
-                            type_arguments: vec![],
-                            arguments: vec![upgrade_cap_arg, upgrade_receipt],
-                        })));
+                let res = self.ptb.command(Tx::Command::move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    ident_str!("package").to_owned(),
+                    ident_str!("commit_upgrade").to_owned(),
+                    vec![],
+                    vec![upgrade_cap_arg, upgrade_receipt],
+                ));
                 self.last_command = Some(res);
             }
             ParsedPTBCommand::WarnShadows => {}

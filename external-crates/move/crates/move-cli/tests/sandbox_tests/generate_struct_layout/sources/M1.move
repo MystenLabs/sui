@@ -1,6 +1,6 @@
 #[allow(unused_field)]
-module 0x1::M1 {
-    use 0x1::M2::C;
+module 0x6::M1 {
+    use 0x6::M2::C;
 
     public struct A<T> { f: u64, v: vector<u8>, b: B<T> }
 

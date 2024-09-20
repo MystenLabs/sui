@@ -1,1 +1,1 @@
-module 0x2::m { }
+module 0x7::m { }

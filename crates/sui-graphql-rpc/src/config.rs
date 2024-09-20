@@ -13,7 +13,7 @@ use sui_graphql_config::GraphQLConfig;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 
-pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
+pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(30_000);
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 
 // Move Registry constants
@@ -45,13 +45,13 @@ pub struct ServerConfig {
 #[derive(Clone, Eq, PartialEq)]
 pub struct ConnectionConfig {
     /// Port to bind the server to
-    pub(crate) port: u16,
+    pub port: u16,
     /// Host to bind the server to
-    pub(crate) host: String,
-    pub(crate) db_url: String,
-    pub(crate) db_pool_size: u32,
-    pub(crate) prom_url: String,
-    pub(crate) prom_port: u16,
+    pub host: String,
+    pub db_url: String,
+    pub db_pool_size: u32,
+    pub prom_url: String,
+    pub prom_port: u16,
 }
 
 /// Configuration on features supported by the GraphQL service, passed in a TOML-based file. These
@@ -60,7 +60,6 @@ pub struct ConnectionConfig {
 #[GraphQLConfig]
 #[derive(Default)]
 pub struct ServiceConfig {
-    pub versions: Versions,
     pub limits: Limits,
     pub disabled_features: BTreeSet<FunctionalGroup>,
     pub experiments: Experiments,
@@ -68,11 +67,6 @@ pub struct ServiceConfig {
     pub background_tasks: BackgroundTasksConfig,
     pub zklogin: ZkLoginConfig,
     pub move_registry: MoveRegistryConfig,
-}
-
-#[GraphQLConfig]
-pub struct Versions {
-    versions: Vec<String>,
 }
 
 #[GraphQLConfig]
@@ -148,17 +142,18 @@ pub(crate) enum ResolutionType {
 /// The `full` version is `year.month.patch-sha`.
 #[derive(Copy, Clone, Debug)]
 pub struct Version {
-    /// The year of this release.
-    pub year: &'static str,
-    /// The month of this release.
-    pub month: &'static str,
-    /// The patch is a positive number incremented for every compatible release on top of the major.month release.
+    /// The major version for the release
+    pub major: &'static str,
+    /// The minor version of the release
+    pub minor: &'static str,
+    /// The patch version of the release
     pub patch: &'static str,
-    /// The commit sha for this release.
+    /// The full commit SHA that the release was built from
     pub sha: &'static str,
-    /// The full version string.
-    /// Note that this extra field is used only for the uptime_metric function which requries a
-    /// &'static str.
+    /// The full version string: {MAJOR}.{MINOR}.{PATCH}-{SHA}
+    ///
+    /// The full version is pre-computed as a &'static str because that is what is required for
+    /// `uptime_metric`.
     pub full: &'static str,
 }
 
@@ -166,19 +161,12 @@ impl Version {
     /// Use for testing when you need the Version obj and a year.month &str
     pub fn for_testing() -> Self {
         Self {
-            year: env!("CARGO_PKG_VERSION_MAJOR"),
-            month: env!("CARGO_PKG_VERSION_MINOR"),
-            patch: env!("CARGO_PKG_VERSION_PATCH"),
+            major: "42",
+            minor: "43",
+            patch: "44",
             sha: "testing-no-sha",
             // note that this full field is needed for metrics but not for testing
-            full: const_str::concat!(
-                env!("CARGO_PKG_VERSION_MAJOR"),
-                ".",
-                env!("CARGO_PKG_VERSION_MINOR"),
-                ".",
-                env!("CARGO_PKG_VERSION_PATCH"),
-                "-testing-no-sha"
-            ),
+            full: "42.43.44-testing-no-sha",
         }
     }
 }
@@ -228,11 +216,6 @@ impl ServiceConfig {
     /// Check whether `feature` is enabled on this GraphQL service.
     async fn is_enabled(&self, feature: FunctionalGroup) -> bool {
         !self.disabled_features.contains(&feature)
-    }
-
-    /// List the available versions for this GraphQL service.
-    async fn available_versions(&self) -> Vec<String> {
-        self.versions.versions.clone()
     }
 
     /// List of all features that are enabled on this GraphQL service.
@@ -373,27 +356,6 @@ impl ConnectionConfig {
         }
     }
 
-    pub fn ci_integration_test_cfg() -> Self {
-        Self {
-            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_graphql_rpc_e2e_tests"
-                .to_string(),
-            ..Default::default()
-        }
-    }
-
-    pub fn ci_integration_test_cfg_with_db_name(
-        db_name: String,
-        port: u16,
-        prom_port: u16,
-    ) -> Self {
-        Self {
-            db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
-            port,
-            prom_port,
-            ..Default::default()
-        }
-    }
-
     pub fn db_name(&self) -> String {
         self.db_url.split('/').last().unwrap().to_string()
     }
@@ -434,7 +396,7 @@ impl ServiceConfig {
         }
     }
 
-    pub fn dot_move_test_defaults(
+    pub fn move_registry_test_defaults(
         external: bool,
         endpoint: Option<String>,
         pkg_address: Option<SuiAddress>,
@@ -500,18 +462,6 @@ impl MoveRegistryConfig {
             page_limit,
             package_address,
             registry_id,
-        }
-    }
-}
-
-impl Default for Versions {
-    fn default() -> Self {
-        Self {
-            versions: vec![format!(
-                "{}.{}",
-                env!("CARGO_PKG_VERSION_MAJOR"),
-                env!("CARGO_PKG_VERSION_MINOR")
-            )],
         }
     }
 }

@@ -123,6 +123,9 @@ contract DeployBridge is Script {
 
         // initialize config in the bridge committee
         BridgeCommittee(bridgeCommittee).initializeConfig(address(bridgeConfig));
+        BridgeCommittee committeeImplementation =
+            BridgeCommittee(Upgrades.getImplementationAddress(bridgeCommittee));
+        committeeImplementation.initializeConfig(address(bridgeConfig));
 
         // deploy vault =============================================================================
 

@@ -87,7 +87,7 @@ impl MoveFieldLayout {
 pub struct MoveStructLayout {
     /// An decorated representation with both types and human-readable field names
     pub type_: StructTag,
-    pub fields: Vec<MoveFieldLayout>,
+    pub fields: Box<Vec<MoveFieldLayout>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,8 +98,8 @@ pub struct MoveEnumLayout {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MoveDatatypeLayout {
-    Struct(MoveStructLayout),
-    Enum(MoveEnumLayout),
+    Struct(Box<MoveStructLayout>),
+    Enum(Box<MoveEnumLayout>),
 }
 
 impl MoveDatatypeLayout {
@@ -126,7 +126,7 @@ pub enum MoveTypeLayout {
     #[serde(rename(serialize = "vector", deserialize = "vector"))]
     Vector(Box<MoveTypeLayout>),
     #[serde(rename(serialize = "struct", deserialize = "struct"))]
-    Struct(MoveStructLayout),
+    Struct(Box<MoveStructLayout>),
     #[serde(rename(serialize = "signer", deserialize = "signer"))]
     Signer,
 
@@ -138,7 +138,7 @@ pub enum MoveTypeLayout {
     #[serde(rename(serialize = "u256", deserialize = "u256"))]
     U256,
     #[serde(rename(serialize = "enum", deserialize = "enum"))]
-    Enum(MoveEnumLayout),
+    Enum(Box<MoveEnumLayout>),
 }
 
 impl MoveValue {
@@ -298,7 +298,10 @@ impl MoveVariant {
 
 impl MoveStructLayout {
     pub fn new(type_: StructTag, fields: Vec<MoveFieldLayout>) -> Self {
-        Self { type_, fields }
+        Self {
+            type_,
+            fields: Box::new(fields),
+        }
     }
 
     pub fn into_fields(self) -> Vec<MoveTypeLayout> {
@@ -585,7 +588,7 @@ impl fmt::Display for MoveStructLayout {
         write!(f, "struct ")?;
         write!(f, "{} ", self.type_)?;
         let mut map = f.debug_map();
-        for field in &self.fields {
+        for field in &*self.fields {
             map.entry(&DD(&field.name), &DD(&field.layout));
         }
         map.finish()
@@ -633,8 +636,8 @@ impl From<&MoveTypeLayout> for TypeTag {
                 let inner_type = &**v;
                 TypeTag::Vector(Box::new(inner_type.into()))
             }
-            MoveTypeLayout::Struct(v) => TypeTag::Struct(Box::new(v.into())),
-            MoveTypeLayout::Enum(e) => TypeTag::Struct(Box::new(e.into())),
+            MoveTypeLayout::Struct(v) => TypeTag::Struct(Box::new(v.as_ref().into())),
+            MoveTypeLayout::Enum(e) => TypeTag::Struct(Box::new(e.as_ref().into())),
         }
     }
 }

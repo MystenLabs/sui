@@ -48,6 +48,9 @@ where
     /// Removes every key-value pair from the map.
     fn unsafe_clear(&self) -> Result<(), Self::Error>;
 
+    /// Removes every key-value pair from the map by deleting the underlying file.
+    fn delete_file_in_range(&self, from: &K, to: &K) -> Result<(), TypedStoreError>;
+
     /// Uses delete range on the entire key range
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError>;
 

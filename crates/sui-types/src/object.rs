@@ -314,7 +314,7 @@ impl MoveObject {
             }
         })?;
         match layout {
-            MoveTypeLayout::Struct(l) => Ok(l),
+            MoveTypeLayout::Struct(l) => Ok(*l),
             _ => unreachable!(
                 "We called build_with_types on Struct type, should get a struct layout"
             ),
@@ -1204,73 +1204,83 @@ impl Display for PastObjectRead {
     }
 }
 
-// Ensure that object digest computation and bcs serialized format are not inadvertently changed.
-#[test]
-fn test_object_digest_and_serialized_format() {
-    let g = GasCoin::new_for_testing_with_id(ObjectID::ZERO, 123).to_object(OBJECT_START_VERSION);
-    let o = Object::new_move(
-        g,
-        Owner::AddressOwner(SuiAddress::ZERO),
-        TransactionDigest::ZERO,
-    );
-    let bytes = bcs::to_bytes(&o).unwrap();
+#[cfg(test)]
+mod tests {
+    use crate::object::{Object, Owner, OBJECT_START_VERSION};
+    use crate::{
+        base_types::{ObjectID, SuiAddress, TransactionDigest},
+        gas_coin::GasCoin,
+    };
 
-    assert_eq!(
-        bytes,
-        [
-            0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-        ]
-    );
+    // Ensure that object digest computation and bcs serialized format are not inadvertently changed.
+    #[test]
+    fn test_object_digest_and_serialized_format() {
+        let g =
+            GasCoin::new_for_testing_with_id(ObjectID::ZERO, 123).to_object(OBJECT_START_VERSION);
+        let o = Object::new_move(
+            g,
+            Owner::AddressOwner(SuiAddress::ZERO),
+            TransactionDigest::ZERO,
+        );
+        let bytes = bcs::to_bytes(&o).unwrap();
 
-    let objref = format!("{:?}", o.compute_object_reference());
-    assert_eq!(objref, "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)");
-}
+        assert_eq!(
+            bytes,
+            [
+                0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ]
+        );
 
-#[test]
-fn test_get_coin_value_unsafe() {
-    fn test_for_value(v: u64) {
-        let g = GasCoin::new_for_testing(v).to_object(OBJECT_START_VERSION);
-        assert_eq!(g.get_coin_value_unsafe(), v);
-        assert_eq!(GasCoin::try_from(&g).unwrap().value(), v);
+        let objref = format!("{:?}", o.compute_object_reference());
+        assert_eq!(objref, "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)");
     }
 
-    test_for_value(0);
-    test_for_value(1);
-    test_for_value(8);
-    test_for_value(9);
-    test_for_value(u8::MAX as u64);
-    test_for_value(u8::MAX as u64 + 1);
-    test_for_value(u16::MAX as u64);
-    test_for_value(u16::MAX as u64 + 1);
-    test_for_value(u32::MAX as u64);
-    test_for_value(u32::MAX as u64 + 1);
-    test_for_value(u64::MAX);
-}
+    #[test]
+    fn test_get_coin_value_unsafe() {
+        fn test_for_value(v: u64) {
+            let g = GasCoin::new_for_testing(v).to_object(OBJECT_START_VERSION);
+            assert_eq!(g.get_coin_value_unsafe(), v);
+            assert_eq!(GasCoin::try_from(&g).unwrap().value(), v);
+        }
 
-#[test]
-fn test_set_coin_value_unsafe() {
-    fn test_for_value(v: u64) {
-        let mut g = GasCoin::new_for_testing(u64::MAX).to_object(OBJECT_START_VERSION);
-        g.set_coin_value_unsafe(v);
-        assert_eq!(g.get_coin_value_unsafe(), v);
-        assert_eq!(GasCoin::try_from(&g).unwrap().value(), v);
-        assert_eq!(g.version(), OBJECT_START_VERSION);
-        assert_eq!(g.contents().len(), 40);
+        test_for_value(0);
+        test_for_value(1);
+        test_for_value(8);
+        test_for_value(9);
+        test_for_value(u8::MAX as u64);
+        test_for_value(u8::MAX as u64 + 1);
+        test_for_value(u16::MAX as u64);
+        test_for_value(u16::MAX as u64 + 1);
+        test_for_value(u32::MAX as u64);
+        test_for_value(u32::MAX as u64 + 1);
+        test_for_value(u64::MAX);
     }
 
-    test_for_value(0);
-    test_for_value(1);
-    test_for_value(8);
-    test_for_value(9);
-    test_for_value(u8::MAX as u64);
-    test_for_value(u8::MAX as u64 + 1);
-    test_for_value(u16::MAX as u64);
-    test_for_value(u16::MAX as u64 + 1);
-    test_for_value(u32::MAX as u64);
-    test_for_value(u32::MAX as u64 + 1);
-    test_for_value(u64::MAX);
+    #[test]
+    fn test_set_coin_value_unsafe() {
+        fn test_for_value(v: u64) {
+            let mut g = GasCoin::new_for_testing(u64::MAX).to_object(OBJECT_START_VERSION);
+            g.set_coin_value_unsafe(v);
+            assert_eq!(g.get_coin_value_unsafe(), v);
+            assert_eq!(GasCoin::try_from(&g).unwrap().value(), v);
+            assert_eq!(g.version(), OBJECT_START_VERSION);
+            assert_eq!(g.contents().len(), 40);
+        }
+
+        test_for_value(0);
+        test_for_value(1);
+        test_for_value(8);
+        test_for_value(9);
+        test_for_value(u8::MAX as u64);
+        test_for_value(u8::MAX as u64 + 1);
+        test_for_value(u16::MAX as u64);
+        test_for_value(u16::MAX as u64 + 1);
+        test_for_value(u32::MAX as u64);
+        test_for_value(u32::MAX as u64 + 1);
+        test_for_value(u64::MAX);
+    }
 }

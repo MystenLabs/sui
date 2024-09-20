@@ -10,6 +10,7 @@ pub mod test_runner;
 use crate::test_runner::TestRunner;
 use anyhow::{bail, Result};
 use clap::*;
+use move_binary_format::CompiledModule;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     self,
@@ -66,6 +67,15 @@ pub struct UnitTestingConfig {
         action = clap::ArgAction::Append,
     )]
     pub dep_files: Vec<String>,
+
+    /// Bytecode dependency files
+    #[clap(
+        name = "bytecode-depencencies",
+        long = "bytecode-dependencies",
+        num_args(1..),
+        action = clap::ArgAction::Append,
+    )]
+    pub bytecode_deps_files: Vec<String>,
 
     /// Report test statistics at the end of testing. CSV report generated if 'csv' passed
     #[clap(name = "report-statistics", short = 's', long = "statistics")]
@@ -135,6 +145,7 @@ impl UnitTestingConfig {
             report_stacktrace_on_abort: false,
             source_files: vec![],
             dep_files: vec![],
+            bytecode_deps_files: vec![],
             verbose: false,
             list: false,
             named_address_values: vec![],
@@ -157,6 +168,7 @@ impl UnitTestingConfig {
         &self,
         source_files: Vec<String>,
         deps: Vec<String>,
+        bytecode_deps_files: Vec<String>,
     ) -> Option<TestPlan> {
         let addresses =
             verify_and_create_named_address_mapping(self.named_address_values.clone()).ok()?;
@@ -179,16 +191,30 @@ impl UnitTestingConfig {
             diagnostics::unwrap_or_report_pass_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings);
         let units: Vec<_> = units.into_iter().map(|unit| unit.named_module).collect();
-        test_plan.map(|tests| TestPlan::new(tests, mapped_files, units))
+
+        let bytecode_deps_modules = bytecode_deps_files
+            .iter()
+            .map(|path| {
+                let bytes = std::fs::read(path).unwrap();
+                CompiledModule::deserialize_with_defaults(&bytes).unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        test_plan.map(|tests| TestPlan::new(tests, mapped_files, units, bytecode_deps_modules))
     }
 
     /// Build a test plan from a unit test config
     pub fn build_test_plan(&self) -> Option<TestPlan> {
         let deps = self.dep_files.clone();
 
-        let TestPlan { module_info, .. } = self.compile_to_test_plan(deps.clone(), vec![])?;
+        let TestPlan { module_info, .. } =
+            self.compile_to_test_plan(deps.clone(), vec![], vec![])?;
 
-        let mut test_plan = self.compile_to_test_plan(self.source_files.clone(), deps)?;
+        let mut test_plan = self.compile_to_test_plan(
+            self.source_files.clone(),
+            deps,
+            self.bytecode_deps_files.clone(),
+        )?;
         test_plan.module_info.extend(module_info);
         Some(test_plan)
     }

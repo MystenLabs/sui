@@ -9,10 +9,10 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
+use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::CommitConsumerMonitor;
 use lru::LruCache;
 use mysten_metrics::{monitored_mpsc::UnboundedReceiver, monitored_scope, spawn_monitored_task};
-use narwhal_config::Committee;
 use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point_async, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
@@ -38,9 +38,7 @@ use crate::{
     },
     checkpoints::{CheckpointService, CheckpointServiceNotify},
     consensus_throughput_calculator::ConsensusThroughputCalculator,
-    consensus_types::{
-        committee_api::CommitteeAPI, consensus_output_api::ConsensusOutputAPI, AuthorityIndex,
-    },
+    consensus_types::{consensus_output_api::ConsensusOutputAPI, AuthorityIndex},
     execution_cache::ObjectCacheRead,
     scoring_decision::update_low_scoring_authorities,
     transaction_manager::TransactionManager,
@@ -86,9 +84,10 @@ impl ConsensusHandlerInitializer {
             )),
         }
     }
+
     pub fn new_consensus_handler(&self) -> ConsensusHandler<CheckpointService> {
         let new_epoch_start_state = self.epoch_store.epoch_start_state();
-        let committee = new_epoch_start_state.get_narwhal_committee();
+        let consensus_committee = new_epoch_start_state.get_consensus_committee();
 
         ConsensusHandler::new(
             self.epoch_store.clone(),
@@ -96,7 +95,7 @@ impl ConsensusHandlerInitializer {
             self.state.transaction_manager().clone(),
             self.state.get_object_cache_reader().clone(),
             self.low_scoring_authorities.clone(),
-            committee,
+            consensus_committee,
             self.state.metrics.clone(),
             self.throughput_calculator.clone(),
         )
@@ -116,8 +115,8 @@ pub struct ConsensusHandler<C> {
     cache_reader: Arc<dyn ObjectCacheRead>,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-    /// The narwhal committee used to do stake computations for deciding set of low scoring authorities
-    committee: Committee,
+    /// The consensus committee used to do stake computations for deciding set of low scoring authorities
+    committee: ConsensusCommittee,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
@@ -137,7 +136,7 @@ impl<C> ConsensusHandler<C> {
         transaction_manager: Arc<TransactionManager>,
         cache_reader: Arc<dyn ObjectCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-        committee: Committee,
+        committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
     ) -> Self {
@@ -299,6 +298,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         update_low_scoring_authorities(
             self.low_scoring_authorities.clone(),
+            self.epoch_store.committee(),
             &self.committee,
             consensus_output.reputation_score_sorted_desc(),
             &self.metrics,
@@ -332,7 +332,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .observe(serialized_transaction.len() as f64);
                     if matches!(
                         &transaction.kind,
-                        ConsensusTransactionKind::UserTransaction(_)
+                        ConsensusTransactionKind::CertifiedTransaction(_)
                     ) {
                         self.last_consensus_stats
                             .stats
@@ -351,19 +351,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        for i in 0..self.committee.size() {
-            let hostname = self
-                .committee
-                .authority_hostname_by_index(i as AuthorityIndex)
-                .unwrap_or_default();
+        for (i, authority) in self.committee.authorities() {
+            let hostname = &authority.hostname;
             self.metrics
                 .consensus_committed_messages
                 .with_label_values(&[hostname])
-                .set(self.last_consensus_stats.stats.get_num_messages(i) as i64);
+                .set(self.last_consensus_stats.stats.get_num_messages(i.value()) as i64);
             self.metrics
                 .consensus_committed_user_transactions
                 .with_label_values(&[hostname])
-                .set(self.last_consensus_stats.stats.get_num_user_transactions(i) as i64);
+                .set(
+                    self.last_consensus_stats
+                        .stats
+                        .get_num_user_transactions(i.value()) as i64,
+                );
         }
 
         let mut all_transactions = Vec::new();
@@ -386,9 +387,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                 self.update_index_and_hash(current_tx_index, serialized);
 
-                let certificate_author = self
-                    .committee
-                    .authority_pubkey_by_index(cert_origin)
+                let certificate_author = *self
+                    .epoch_store
+                    .committee()
+                    .authority_by_index(cert_origin)
                     .unwrap();
 
                 let sequenced_transaction = SequencedConsensusTransaction {
@@ -550,7 +552,7 @@ impl<C> ConsensusHandler<C> {
 
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     match &transaction.kind {
-        ConsensusTransactionKind::UserTransaction(certificate) => {
+        ConsensusTransactionKind::CertifiedTransaction(certificate) => {
             if certificate.contains_shared_object() {
                 "shared_certificate"
             } else {
@@ -565,6 +567,13 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::RandomnessStateUpdate(_, _) => "randomness_state_update",
         ConsensusTransactionKind::RandomnessDkgMessage(_, _) => "randomness_dkg_message",
         ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => "randomness_dkg_confirmation",
+        ConsensusTransactionKind::UserTransaction(tx) => {
+            if tx.contains_shared_object() {
+                "shared_user_transaction"
+            } else {
+                "owned_user_transaction"
+            }
+        }
     }
 }
 
@@ -667,7 +676,7 @@ impl SequencedConsensusTransactionKind {
     pub fn executable_transaction_digest(&self) -> Option<TransactionDigest> {
         match self {
             SequencedConsensusTransactionKind::External(ext) => {
-                if let ConsensusTransactionKind::UserTransaction(txn) = &ext.kind {
+                if let ConsensusTransactionKind::CertifiedTransaction(txn) = &ext.kind {
                     Some(*txn.digest())
                 } else {
                     None
@@ -718,7 +727,7 @@ impl SequencedConsensusTransaction {
             return false;
         }
         let SequencedConsensusTransactionKind::External(ConsensusTransaction {
-            kind: ConsensusTransactionKind::UserTransaction(certificate),
+            kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
             ..
         }) = &self.transaction
         else {
@@ -730,7 +739,7 @@ impl SequencedConsensusTransaction {
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
         match &self.transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(certificate),
+                kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
                 ..
             }) if certificate.contains_shared_object() => Some(certificate.data()),
             SequencedConsensusTransactionKind::System(txn) if txn.contains_shared_object() => {
@@ -867,7 +876,6 @@ mod tests {
             AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKind,
         },
         object::Object,
-        sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
         supported_protocol_versions::SupportedProtocolVersions,
         transaction::{
             CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
@@ -904,7 +912,7 @@ mod tests {
 
         let epoch_store = state.epoch_store_for_testing().clone();
         let new_epoch_start_state = epoch_store.epoch_start_state();
-        let committee = new_epoch_start_state.get_narwhal_committee();
+        let consensus_committee = new_epoch_start_state.get_consensus_committee();
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
 
@@ -916,7 +924,7 @@ mod tests {
             state.transaction_manager().clone(),
             state.get_object_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
-            committee.clone(),
+            consensus_committee.clone(),
             metrics,
             Arc::new(throughput_calculator),
         );
@@ -934,7 +942,7 @@ mod tests {
 
             // AND create block for each transaction
             let block = VerifiedBlock::new_for_test(
-                TestBlock::new(100 + i as u32, (i % committee.size()) as u32)
+                TestBlock::new(100 + i as u32, (i % consensus_committee.size()) as u32)
                     .set_transactions(vec![Transaction::new(transaction_bytes)])
                     .build(),
             );
@@ -1086,7 +1094,7 @@ mod tests {
                 ConsensusTransactionKind::CapabilityNotification(cap) => {
                     format!("cap({})", cap.generation)
                 }
-                ConsensusTransactionKind::UserTransaction(txn) => {
+                ConsensusTransactionKind::CertifiedTransaction(txn) => {
                     format!("user({})", txn.transaction_data().gas_price())
                 }
                 _ => unreachable!(),
@@ -1125,7 +1133,7 @@ mod tests {
             ),
             vec![],
         );
-        txn(ConsensusTransactionKind::UserTransaction(Box::new(
+        txn(ConsensusTransactionKind::CertifiedTransaction(Box::new(
             CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
         )))
     }

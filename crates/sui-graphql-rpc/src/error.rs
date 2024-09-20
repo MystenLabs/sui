@@ -1,33 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{ErrorExtensionValues, ErrorExtensions, Pos, Response, ServerError};
-use async_graphql_axum::GraphQLResponse;
+use async_graphql::{ErrorExtensionValues, ErrorExtensions, Pos, ServerError};
 use sui_indexer::errors::IndexerError;
 use sui_json_rpc::name_service::NameServiceError;
 
-use crate::types::dot_move::error::MoveRegistryError;
+use crate::types::move_registry::error::MoveRegistryError;
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
 /// `<https://www.apollographql.com/docs/apollo-server/data/errors/#built-in-error-codes>`
 pub(crate) mod code {
-    pub const BAD_REQUEST: &str = "BAD_REQUEST";
     pub const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
     pub const REQUEST_TIMEOUT: &str = "REQUEST_TIMEOUT";
     pub const UNKNOWN: &str = "UNKNOWN";
-}
-
-/// Create a GraphQL Response containing an Error.
-///
-/// Most errors produced by the service will automatically be wrapped in a `GraphQLResponse`,
-/// because they will originate from within the GraphQL implementation.  This function is intended
-/// for errors that originated from outside of GraphQL (such as in middleware), but that need to be
-/// ingested by GraphQL clients.
-pub(crate) fn graphql_error_response(code: &str, message: impl Into<String>) -> GraphQLResponse {
-    let error = graphql_error(code, message);
-    Response::from_errors(error.into()).into()
 }
 
 /// Create a generic GraphQL Server Error.

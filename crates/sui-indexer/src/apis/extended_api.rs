@@ -32,13 +32,11 @@ impl ExtendedApiServer for ExtendedApi {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
         let mut epochs = self
             .inner
-            .spawn_blocking(move |this| {
-                this.get_epochs(
-                    cursor.map(|x| *x),
-                    limit + 1,
-                    descending_order.unwrap_or(false),
-                )
-            })
+            .get_epochs(
+                cursor.map(|x| *x),
+                limit + 1,
+                descending_order.unwrap_or(false),
+            )
             .await?;
 
         let has_next_page = epochs.len() > limit;
@@ -52,10 +50,7 @@ impl ExtendedApiServer for ExtendedApi {
     }
 
     async fn get_current_epoch(&self) -> RpcResult<EpochInfo> {
-        let stored_epoch = self
-            .inner
-            .spawn_blocking(|this| this.get_latest_epoch_info_from_db())
-            .await?;
+        let stored_epoch = self.inner.get_latest_epoch_info_from_db().await?;
         EpochInfo::try_from(stored_epoch).map_err(Into::into)
     }
 
@@ -72,10 +67,7 @@ impl ExtendedApiServer for ExtendedApi {
     }
 
     async fn get_total_transactions(&self) -> RpcResult<BigInt<u64>> {
-        let latest_checkpoint = self
-            .inner
-            .spawn_blocking(|this| this.get_latest_checkpoint())
-            .await?;
+        let latest_checkpoint = self.inner.get_latest_checkpoint().await?;
         Ok(latest_checkpoint.network_total_transactions.into())
     }
 }

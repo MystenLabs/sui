@@ -571,13 +571,13 @@ async fn test_dev_inspect_dynamic_field() {
             CallArg::Pure(test_object1_bytes.clone()),
             CallArg::Pure(test_object1_bytes.clone()),
         ],
-        commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
-            package: object_basics.0,
-            module: Identifier::new("object_basics").unwrap(),
-            function: Identifier::new("add_ofield").unwrap(),
-            type_arguments: vec![],
-            arguments: vec![Argument::Input(0), Argument::Input(1)],
-        }))],
+        commands: vec![Command::move_call(
+            object_basics.0,
+            Identifier::new("object_basics").unwrap(),
+            Identifier::new("add_ofield").unwrap(),
+            vec![],
+            vec![Argument::Input(0), Argument::Input(1)],
+        )],
     };
     let kind = TransactionKind::programmable(pt);
     let DevInspectResults { error, .. } = fullnode
@@ -1078,13 +1078,13 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     // no child to delete since we are using the old version of the parent
     let pt = ProgrammableTransaction {
         inputs: vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(parent))],
-        commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
-            package: object_basics.0,
-            module: Identifier::new("object_basics").unwrap(),
-            function: Identifier::new("remove_field").unwrap(),
-            type_arguments: vec![],
-            arguments: vec![Argument::Input(0)],
-        }))],
+        commands: vec![Command::move_call(
+            object_basics.0,
+            Identifier::new("object_basics").unwrap(),
+            Identifier::new("remove_field").unwrap(),
+            vec![],
+            vec![Argument::Input(0)],
+        )],
     };
     let kind = TransactionKind::programmable(pt.clone());
     let rgp = fullnode.reference_gas_price_for_testing().unwrap();
@@ -1132,13 +1132,13 @@ async fn test_dry_run_dev_inspect_max_gas_version() {
             CallArg::Pure(bcs::to_bytes(&(32_u64)).unwrap()),
             CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
-        commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
-            package: object_basics.0,
-            module: Identifier::new("object_basics").unwrap(),
-            function: Identifier::new("create").unwrap(),
-            type_arguments: vec![],
-            arguments: vec![Argument::Input(0), Argument::Input(1)],
-        }))],
+        commands: vec![Command::move_call(
+            object_basics.0,
+            Identifier::new("object_basics").unwrap(),
+            Identifier::new("create").unwrap(),
+            vec![],
+            vec![Argument::Input(0), Argument::Input(1)],
+        )],
     };
     let kind = TransactionKind::programmable(pt.clone());
     // dev inspect

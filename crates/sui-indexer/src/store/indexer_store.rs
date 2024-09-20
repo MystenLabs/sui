@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::any::Any;
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
@@ -9,19 +8,21 @@ use async_trait::async_trait;
 use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
+use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
+use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use crate::types::{
     EventIndex, IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
 };
 
 #[allow(clippy::large_enum_variant)]
-pub enum ObjectChangeToCommit {
+pub enum ObjectsToCommit {
     MutatedObject(StoredObject),
     DeletedObject(StoredDeletedObject),
 }
 
 #[async_trait]
-pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
+pub trait IndexerStore: Clone + Sync + Send + 'static {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError>;
 
     async fn get_available_epoch_range(&self) -> Result<(u64, u64), IndexerError>;
@@ -34,7 +35,7 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
 
     async fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError>;
 
-    fn persist_protocol_configs_and_feature_flags(
+    async fn persist_protocol_configs_and_feature_flags(
         &self,
         chain_id: Vec<u8>,
     ) -> Result<(), IndexerError>;
@@ -49,19 +50,29 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError>;
 
-    // persist objects snapshot with object changes during backfill
-    async fn backfill_objects_snapshot(
+    async fn persist_full_objects_history(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError>;
 
-    // update objects snapshot after backfill is done
-    async fn update_objects_snapshot(&self, start_cp: u64, end_cp: u64)
-        -> Result<(), IndexerError>;
+    async fn persist_object_versions(
+        &self,
+        object_versions: Vec<StoredObjectVersion>,
+    ) -> Result<(), IndexerError>;
+
+    async fn persist_objects_snapshot(
+        &self,
+        object_changes: Vec<TransactionObjectChangesToCommit>,
+    ) -> Result<(), IndexerError>;
 
     async fn persist_checkpoints(
         &self,
         checkpoints: Vec<IndexedCheckpoint>,
+    ) -> Result<(), IndexerError>;
+
+    async fn persist_chain_identifier(
+        &self,
+        checkpoint_digest: Vec<u8>,
     ) -> Result<(), IndexerError>;
 
     async fn persist_transactions(
@@ -95,5 +106,12 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
         epoch: u64,
     ) -> Result<u64, IndexerError>;
 
-    fn as_any(&self) -> &dyn Any;
+    async fn upload_display(&self, epoch: u64) -> Result<(), IndexerError>;
+
+    async fn restore_display(&self, bytes: bytes::Bytes) -> Result<(), IndexerError>;
+
+    async fn persist_raw_checkpoints(
+        &self,
+        checkpoints: Vec<StoredRawCheckpoint>,
+    ) -> Result<(), IndexerError>;
 }

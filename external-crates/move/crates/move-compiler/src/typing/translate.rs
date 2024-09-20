@@ -10,7 +10,7 @@ use crate::{
         AbilitySet, Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend,
         ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, TargetKind, Value_, Visibility,
     },
-    ice,
+    ice, ice_assert,
     naming::ast::{
         self as N, BlockLabel, DatatypeTypeParameter, IndexSyntaxMethods, TParam, TParamID, Type,
         TypeName, TypeName_, Type_,
@@ -81,14 +81,15 @@ pub fn program(
         .into_iter()
         .map(|(mident, minfo)| (mident, minfo.use_funs))
         .collect();
-    let module_info = TypingProgramInfo::new(pre_compiled_lib, &modules, module_use_funs);
-    let mut prog = T::Program {
+    let module_info =
+        TypingProgramInfo::new(compilation_env, pre_compiled_lib, &modules, module_use_funs);
+    let prog = T::Program {
         modules,
         info: Arc::new(module_info),
     };
     for v in &compilation_env.visitors().typing {
         let mut v = v.borrow_mut();
-        v.visit(compilation_env, &mut prog);
+        v.visit(compilation_env, &prog);
     }
     prog
 }
@@ -2916,14 +2917,12 @@ fn add_variant_field_types<T>(
         N::VariantFields::Defined(_, m) => m,
         N::VariantFields::Empty => {
             if !fields.is_empty() {
-                let msg = format!(
-                    "Invalid usage for empty variant '{}::{}::{}'. Empty variants do not take \
-                     any arguments.",
-                    m, n, v
+                ice_assert!(
+                    context.env,
+                    context.env.has_errors(),
+                    loc,
+                    "Empty variant with fields but no error from naming"
                 );
-                context
-                    .env
-                    .add_diag(diag!(TypeSafety::TooManyArguments, (loc, msg),));
                 return fields.map(|f, (idx, x)| (idx, (context.error_type(f.loc()), x)));
             } else {
                 return Fields::new();

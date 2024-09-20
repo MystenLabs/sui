@@ -8,7 +8,8 @@ use std::env;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IndexerConfig {
     pub remote_store_url: String,
-    pub checkpoints_path: String,
+    /// Only provide this if you use a colocated FN
+    pub checkpoints_path: Option<String>,
 
     pub sui_rpc_url: String,
     pub eth_rpc_url: String,
@@ -24,6 +25,9 @@ pub struct IndexerConfig {
     pub eth_sui_bridge_contract_address: String,
 
     pub metric_port: u16,
+
+    /// A temporary flag to disable the eth indexer to test mainnet before eth contracts are deployed.
+    pub disable_eth: Option<bool>,
 }
 
 impl sui_config::Config for IndexerConfig {}

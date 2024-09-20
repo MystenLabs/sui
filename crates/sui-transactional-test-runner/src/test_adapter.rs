@@ -40,9 +40,6 @@ use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::{self, Write};
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -52,7 +49,6 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
 use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
@@ -75,6 +71,7 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
@@ -229,7 +226,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 Self::ExtraInitArgs,
             )>,
         >,
-        path: &Path,
+        _path: &Path,
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
         assert!(
@@ -341,7 +338,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 custom_validator_account,
                 reference_gas_price,
                 snapshot_config,
-                path.to_path_buf(),
                 epochs_to_keep,
             )
             .await
@@ -567,30 +563,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             }};
         }
         match command {
-            SuiSubcommand::ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup {
-                start_cp,
-                end_cp,
-            }) => {
-                let cluster = self.cluster.as_ref().unwrap();
-                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
-
-                if end_cp > highest_checkpoint {
-                    bail!(
-                        "end_cp {} is greater than highest checkpoint {}",
-                        end_cp,
-                        highest_checkpoint,
-                    );
-                }
-
-                cluster
-                    .force_objects_snapshot_catchup(start_cp, end_cp)
-                    .await;
-
-                Ok(Some(format!(
-                    "Objects snapshot updated to [{} to {})",
-                    start_cp, end_cp
-                )))
-            }
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
                 show_headers,
@@ -607,7 +579,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .await;
 
                 cluster
-                    .wait_for_objects_snapshot_catchup(Duration::from_secs(60))
+                    .wait_for_objects_snapshot_catchup(Duration::from_secs(180))
                     .await;
 
                 if let Some(wait_for_checkpoint_pruned) = wait_for_checkpoint_pruned {
@@ -764,8 +736,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             }
             SuiSubcommand::ProgrammableTransaction(ProgrammableTransactionCommand {
                 sender,
+                sponsor,
                 gas_budget,
                 gas_price,
+                gas_payment,
                 dev_inspect,
                 inputs,
             }) => {
@@ -811,15 +785,21 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 let summary = if !dev_inspect {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
-                    let transaction = self.sign_txn(sender, |sender, gas| {
-                        TransactionData::new_programmable(
-                            sender,
-                            vec![gas],
-                            ProgrammableTransaction { inputs, commands },
-                            gas_budget,
-                            gas_price,
-                        )
-                    });
+                    let transaction = self.sign_sponsor_txn(
+                        sender,
+                        sponsor,
+                        gas_payment,
+                        |sender, sponsor, gas| {
+                            TransactionData::new_programmable_allow_sponsor(
+                                sender,
+                                vec![gas],
+                                ProgrammableTransaction { inputs, commands },
+                                gas_budget,
+                                gas_price,
+                                sponsor,
+                            )
+                        },
+                    );
                     self.execute_txn(transaction).await?
                 } else {
                     assert!(
@@ -1389,13 +1369,46 @@ impl<'a> SuiTestAdapter {
         sender: Option<String>,
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
     ) -> Transaction {
-        let test_account = self.get_sender(sender);
-        let gas_payment = self
-            .get_object(&test_account.gas, None)
+        self.sign_sponsor_txn(sender, None, None, move |sender, _, gas| {
+            txn_data(sender, gas)
+        })
+    }
+
+    fn sign_sponsor_txn(
+        &self,
+        sender: Option<String>,
+        sponsor: Option<String>,
+        payment: Option<FakeID>,
+        txn_data: impl FnOnce(
+            /* sender */ SuiAddress,
+            /* sponsor */ SuiAddress,
+            /* gas */ ObjectRef,
+        ) -> TransactionData,
+    ) -> Transaction {
+        let sender = self.get_sender(sender);
+        let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
+
+        let payment = if let Some(payment) = payment {
+            self.fake_to_real_object_id(payment)
+                .expect("Could not find specified payment object")
+        } else {
+            sponsor.gas
+        };
+
+        let payment_ref = self
+            .get_object(&payment, None)
             .unwrap()
             .compute_object_reference();
-        let data = txn_data(test_account.address, gas_payment);
-        to_sender_signed_transaction(data, &test_account.key_pair)
+
+        let data = txn_data(sender.address, sponsor.address, payment_ref);
+        if sender.address == sponsor.address {
+            to_sender_signed_transaction(data, &sender.key_pair)
+        } else {
+            to_sender_signed_transaction_with_multi_signers(
+                data,
+                vec![&sender.key_pair, &sponsor.key_pair],
+            )
+        }
     }
 
     fn get_sender(&self, sender: Option<String>) -> &TestAccount {
@@ -2103,7 +2116,6 @@ async fn init_sim_executor(
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
     snapshot_config: SnapshotLagConfig,
-    test_file_path: PathBuf,
     epochs_to_keep: Option<u64>,
 ) -> (
     Box<dyn TransactionalAdapter>,
@@ -2173,26 +2185,7 @@ async fn init_sim_executor(
     let data_ingestion_path = tempdir().unwrap().into_path();
     sim.set_data_ingestion_path(data_ingestion_path.clone());
 
-    // Hash the file path to create custom unique DB name
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    test_file_path.hash(&mut hasher);
-    let hash = hasher.finish();
-    let db_name = format!("sui_graphql_test_{}", hash);
-
-    // Use the hash as a seed to generate a random port number
-    let base_port = hash as u16 % 8192;
-
-    let graphql_port = 20000 + base_port;
-    let graphql_prom_port = graphql_port + 1;
-    let internal_data_port = graphql_prom_port + 1;
-
     let cluster = serve_executor(
-        ConnectionConfig::ci_integration_test_cfg_with_db_name(
-            db_name,
-            graphql_port,
-            graphql_prom_port,
-        ),
-        internal_data_port,
         Arc::new(read_replica),
         Some(snapshot_config),
         epochs_to_keep,

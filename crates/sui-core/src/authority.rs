@@ -961,7 +961,7 @@ impl AuthorityState {
                         let cache_reader = self.get_transaction_cache_reader().clone();
                         let epoch_store = epoch_store.clone();
                         spawn_monitored_task!(epoch_store.within_alive_epoch(
-                            validator_tx_finalizer.track_signed_tx(cache_reader, tx)
+                            validator_tx_finalizer.track_signed_tx(cache_reader, &epoch_store, tx)
                         ));
                     }
                 }
@@ -4379,7 +4379,7 @@ impl AuthorityState {
         desired_upgrades.sort();
         desired_upgrades
             .into_iter()
-            .group_by(|(packages, _authority)| packages.clone())
+            .chunk_by(|(packages, _authority)| packages.clone())
             .into_iter()
             .find_map(|(packages, group)| {
                 // should have been filtered out earlier.
@@ -4466,7 +4466,7 @@ impl AuthorityState {
         desired_upgrades.sort();
         desired_upgrades
             .into_iter()
-            .group_by(|(digest, packages, _authority)| (*digest, packages.clone()))
+            .chunk_by(|(digest, packages, _authority)| (*digest, packages.clone()))
             .into_iter()
             .find_map(|((digest, packages), group)| {
                 // should have been filtered out earlier.

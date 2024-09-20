@@ -1,5 +1,38 @@
 # @mysten/zksend
 
+## 0.11.3
+
+### Patch Changes
+
+- 0db770a: Check transaction status when creating and claiming transactions
+
+## 0.11.2
+
+### Patch Changes
+
+- Updated dependencies [2c96b06]
+- Updated dependencies [1fd22cc]
+  - @mysten/sui@1.9.0
+  - @mysten/wallet-standard@0.13.4
+
+## 0.11.1
+
+### Patch Changes
+
+- 22844ae: Add network param to zksend links
+
+## 0.11.0
+
+### Minor Changes
+
+- 4bdef4a: Add support for testnet in Stashed and zkSend SDKs.
+
+### Patch Changes
+
+- Updated dependencies [569511a]
+  - @mysten/sui@1.8.0
+  - @mysten/wallet-standard@0.13.3
+
 ## 0.10.6
 
 ### Patch Changes

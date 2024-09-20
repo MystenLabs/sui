@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority_state::StateReadError;
+use crate::name_service::NameServiceError;
 use fastcrypto::error::FastCryptoError;
 use hyper::header::InvalidHeaderValue;
 use itertools::Itertools;
@@ -9,13 +11,11 @@ use jsonrpsee::types::error::{CallError, INTERNAL_ERROR_CODE};
 use jsonrpsee::types::ErrorObject;
 use std::collections::BTreeMap;
 use sui_json_rpc_api::{TRANSACTION_EXECUTION_CLIENT_ERROR_CODE, TRANSIENT_ERROR_CODE};
+use sui_types::committee::{QUORUM_THRESHOLD, TOTAL_VOTING_POWER};
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
 use tokio::task::JoinError;
-
-use crate::authority_state::StateReadError;
-use crate::name_service::NameServiceError;
 
 pub type RpcInterimResult<T = ()> = Result<T, Error>;
 
@@ -133,17 +133,9 @@ impl From<Error> for RpcError {
             Error::QuorumDriverError(err) => {
                 match err {
                     QuorumDriverError::InvalidUserSignature(err) => {
-                        let inner_error_str = match err {
-                            // TODO(wlmyng): update SuiError display trait to render UserInputError with display
-                            SuiError::UserInputError { error } => error.to_string(),
-                            _ => err.to_string(),
-                        };
-
-                        let error_message = format!("Invalid user signature: {inner_error_str}");
-
                         let error_object = ErrorObject::owned(
                             TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
-                            error_message,
+                            format!("Invalid user signature: {err}"),
                             None::<()>,
                         );
                         RpcError::Call(CallError::Custom(error_object))
@@ -164,14 +156,44 @@ impl From<Error> for RpcError {
                     }
                     QuorumDriverError::ObjectsDoubleUsed {
                         conflicting_txes,
-                        retried_tx,
-                        retried_tx_success,
+                        retried_tx_status,
                     } => {
+                        let weights: Vec<u64> =
+                            conflicting_txes.values().map(|(_, stake)| *stake).collect();
+                        let remaining: u64 = TOTAL_VOTING_POWER - weights.iter().sum::<u64>();
+
+                        // better version of above
+                        let reason = if weights.iter().all(|w| remaining + w < QUORUM_THRESHOLD) {
+                            "equivocated until the next epoch"
+                        } else {
+                            "reserved for another transaction"
+                        };
+
+                        let retried_info = match retried_tx_status {
+                            Some((digest, success)) => {
+                                format!(
+                                    "Retried transaction {} ({}) because it was able to gather the necessary votes.",
+                                    digest, if success { "succeeded" } else { "failed" }
+                                )
+                            }
+                            None => "".to_string(),
+                        };
+
                         let error_message = format!(
-                        "Failed to sign transaction by a quorum of validators because of locked objects. Retried a conflicting transaction {:?}, success: {:?}",
-                        retried_tx,
-                        retried_tx_success
-                    );
+                            "Failed to sign transaction by a quorum of validators because one or more of its objects is {}. {} Other transactions locking these objects:\n{}",
+                            reason,
+                            retried_info,
+                            conflicting_txes
+                                .iter()
+                                .sorted_by(|(_, (_, a)), (_, (_, b))| b.cmp(a))
+                                .map(|(digest, (_, stake))| format!(
+                                    "- {} (stake {}.{})",
+                                    digest,
+                                    stake / 100,
+                                    stake % 100,
+                                ))
+                                .join("\n"),
+                        );
 
                         let new_map = conflicting_txes
                             .into_iter()
@@ -224,8 +246,13 @@ impl From<Error> for RpcError {
                             "NonRecoverableTransactionError should have at least one non-retryable error"
                         );
 
-                        let error_list = new_errors.join(", ");
-                        let error_msg = format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.", error_list);
+                        let mut error_list = vec![];
+
+                        for err in new_errors.iter() {
+                            error_list.push(format!("- {}", err));
+                        }
+
+                        let error_msg = format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again:\n{}", error_list.join("\n"));
 
                         let error_object = ErrorObject::owned(
                             TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
@@ -382,16 +409,23 @@ mod tests {
                 TransactionDigest,
                 (Vec<(AuthorityName, ObjectRef)>, StakeUnit),
             > = BTreeMap::new();
-            let tx_digest = TransactionDigest::default();
+            let tx_digest = TransactionDigest::from([1; 32]);
             let object_ref = test_object_ref();
-            let stake_unit: StakeUnit = 10;
+
+            // 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi has enough stake to escape equivocation
+            let stake_unit: StakeUnit = 8000;
             let authority_name = AuthorityPublicKeyBytes([0; AuthorityPublicKey::LENGTH]);
+            conflicting_txes.insert(tx_digest, (vec![(authority_name, object_ref)], stake_unit));
+
+            // 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR stake below quorum threshold
+            let tx_digest = TransactionDigest::from([2; 32]);
+            let stake_unit: StakeUnit = 500;
+            let authority_name = AuthorityPublicKeyBytes([1; AuthorityPublicKey::LENGTH]);
             conflicting_txes.insert(tx_digest, (vec![(authority_name, object_ref)], stake_unit));
 
             let quorum_driver_error = QuorumDriverError::ObjectsDoubleUsed {
                 conflicting_txes,
-                retried_tx: Some(TransactionDigest::default()),
-                retried_tx_success: Some(true),
+                retried_tx_status: Some((TransactionDigest::from([1; 32]), true)),
             };
 
             let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
@@ -399,10 +433,51 @@ mod tests {
             let error_object: ErrorObjectOwned = rpc_error.into();
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
-            let expected_message = expect!["Failed to sign transaction by a quorum of validators because of locked objects. Retried a conflicting transaction Some(TransactionDigest(11111111111111111111111111111111)), success: Some(true)"];
+            let expected_message = expect!["Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction. Retried transaction 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi (succeeded) because it was able to gather the necessary votes. Other transactions locking these objects:\n- 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi (stake 80.0)\n- 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR (stake 5.0)"];
             expected_message.assert_eq(error_object.message());
             let expected_data = expect![[
-                r#"{"11111111111111111111111111111111":[["0x0000000000000000000000000000000000000000000000000000000000000000",0,"11111111111111111111111111111111"]]}"#
+                r#"{"4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi":[["0x0000000000000000000000000000000000000000000000000000000000000000",0,"11111111111111111111111111111111"]],"8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR":[["0x0000000000000000000000000000000000000000000000000000000000000000",0,"11111111111111111111111111111111"]]}"#
+            ]];
+            let actual_data = error_object.data().unwrap().to_string();
+            expected_data.assert_eq(&actual_data);
+        }
+
+        #[test]
+        fn test_objects_double_used_equivocated() {
+            use sui_types::crypto::VerifyingKey;
+            let mut conflicting_txes: BTreeMap<
+                TransactionDigest,
+                (Vec<(AuthorityName, ObjectRef)>, StakeUnit),
+            > = BTreeMap::new();
+            let tx_digest = TransactionDigest::from([1; 32]);
+            let object_ref = test_object_ref();
+
+            // 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi has lower stake at 10
+            let stake_unit: StakeUnit = 4000;
+            let authority_name = AuthorityPublicKeyBytes([0; AuthorityPublicKey::LENGTH]);
+            conflicting_txes.insert(tx_digest, (vec![(authority_name, object_ref)], stake_unit));
+
+            // 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR is a higher stake and should be first in the list
+            let tx_digest = TransactionDigest::from([2; 32]);
+            let stake_unit: StakeUnit = 5000;
+            let authority_name = AuthorityPublicKeyBytes([1; AuthorityPublicKey::LENGTH]);
+            conflicting_txes.insert(tx_digest, (vec![(authority_name, object_ref)], stake_unit));
+
+            let quorum_driver_error = QuorumDriverError::ObjectsDoubleUsed {
+                conflicting_txes,
+                // below threshold
+                retried_tx_status: None,
+            };
+
+            let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
+
+            let error_object: ErrorObjectOwned = rpc_error.into();
+            let expected_code = expect!["-32002"];
+            expected_code.assert_eq(&error_object.code().to_string());
+            let expected_message = expect!["Failed to sign transaction by a quorum of validators because one or more of its objects is equivocated until the next epoch.  Other transactions locking these objects:\n- 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR (stake 50.0)\n- 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi (stake 40.0)"];
+            expected_message.assert_eq(error_object.message());
+            let expected_data = expect![[
+                r#"{"4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi":[["0x0000000000000000000000000000000000000000000000000000000000000000",0,"11111111111111111111111111111111"]],"8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR":[["0x0000000000000000000000000000000000000000000000000000000000000000",0,"11111111111111111111111111111111"]]}"#
             ]];
             let actual_data = error_object.data().unwrap().to_string();
             expected_data.assert_eq(&actual_data);
@@ -441,7 +516,7 @@ mod tests {
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message =
-                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again: Balance of gas object 10 is lower than the needed amount: 100, Object (0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(0), o#11111111111111111111111111111111) is not available for consumption, its current version: SequenceNumber(10)."];
+                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again:\n- Balance of gas object 10 is lower than the needed amount: 100\n- Object ID 0x0000000000000000000000000000000000000000000000000000000000000000 Version 0x0 Digest 11111111111111111111111111111111 is not available for consumption, current version: 0xa"];
             expected_message.assert_eq(error_object.message());
         }
 
@@ -473,7 +548,7 @@ mod tests {
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message =
-                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again: Could not find the referenced object 0x0000000000000000000000000000000000000000000000000000000000000000 at version None."];
+                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again:\n- Could not find the referenced object 0x0000000000000000000000000000000000000000000000000000000000000000 at version None"];
             expected_message.assert_eq(error_object.message());
         }
 

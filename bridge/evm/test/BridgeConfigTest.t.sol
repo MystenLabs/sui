@@ -283,18 +283,23 @@ contract BridgeConfigTest is BridgeBaseTest {
 
     // An e2e update token price regression test covering message ser/de
     function testUpdateTokenPricesRegressionTest() public {
-        address[] memory _committee = new address[](4);
+        address[] memory _committeeList = new address[](4);
         uint16[] memory _stake = new uint16[](4);
-        _committee[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
-        _committee[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
-        _committee[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
-        _committee[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
+        _committeeList[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
+        _committeeList[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
+        _committeeList[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
+        _committeeList[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
         _stake[0] = 2500;
         _stake[1] = 2500;
         _stake[2] = 2500;
         _stake[3] = 2500;
-        committee = new BridgeCommittee();
-        committee.initialize(_committee, _stake, minStakeRequired);
+
+        address _committee = Upgrades.deployUUPSProxy(
+            "BridgeCommittee.sol",
+            abi.encodeCall(BridgeCommittee.initialize, (_committeeList, _stake, minStakeRequired)),
+            opts
+        );
+        committee = BridgeCommittee(_committee);
         committee.initializeConfig(address(config));
         vault = new BridgeVault(wETH);
 
@@ -303,10 +308,23 @@ contract BridgeConfigTest is BridgeBaseTest {
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 0;
         skip(2 days);
-        limiter = new BridgeLimiter();
-        limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
-        bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter));
+        address _limiter = Upgrades.deployUUPSProxy(
+            "BridgeLimiter.sol",
+            abi.encodeCall(
+                BridgeLimiter.initialize,
+                (address(committee), _supportedDestinationChains, totalLimits)
+            ),
+            opts
+        );
+        limiter = BridgeLimiter(_limiter);
+        address _suiBridge = Upgrades.deployUUPSProxy(
+            "SuiBridge.sol",
+            abi.encodeCall(
+                SuiBridge.initialize, (address(committee), address(vault), address(limiter))
+            ),
+            opts
+        );
+        bridge = SuiBridge(_suiBridge);
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 
@@ -329,11 +347,11 @@ contract BridgeConfigTest is BridgeBaseTest {
 
     // An e2e update token price regression test covering message ser/de and signature verification
     function testUpdateTokenPriceRegressionTestWithSigVerficiation() public {
-        address[] memory _committee = new address[](4);
-        _committee[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
-        _committee[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
-        _committee[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
-        _committee[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
+        address[] memory _committeeList = new address[](4);
+        _committeeList[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
+        _committeeList[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
+        _committeeList[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
+        _committeeList[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
         uint8 sendingChainID = 1;
         uint8[] memory _supportedChains = new uint8[](1);
         _supportedChains[0] = sendingChainID;
@@ -343,17 +361,26 @@ contract BridgeConfigTest is BridgeBaseTest {
         _stake[1] = 2500;
         _stake[2] = 2500;
         _stake[3] = 2500;
-        committee = new BridgeCommittee();
-        committee.initialize(_committee, _stake, minStakeRequired);
+        address _committee = Upgrades.deployUUPSProxy(
+            "BridgeCommittee.sol",
+            abi.encodeCall(BridgeCommittee.initialize, (_committeeList, _stake, minStakeRequired)),
+            opts
+        );
+        committee = BridgeCommittee(_committee);
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = sendingChainID;
 
-        config = new BridgeConfig();
-        config.initialize(
-            address(committee), chainID, supportedTokens, tokenPrices, _supportedChains
+        address _config = Upgrades.deployUUPSProxy(
+            "BridgeConfig.sol",
+            abi.encodeCall(
+                BridgeConfig.initialize,
+                (address(committee), chainID, supportedTokens, tokenPrices, _supportedChains)
+            ),
+            opts
         );
+        config = BridgeConfig(_config);
 
-        committee.initializeConfig(address(config));
+        committee.initializeConfig(_config);
 
         vault = new BridgeVault(wETH);
         skip(2 days);
@@ -361,10 +388,23 @@ contract BridgeConfigTest is BridgeBaseTest {
         uint64[] memory totalLimits = new uint64[](1);
         totalLimits[0] = 1000000;
 
-        limiter = new BridgeLimiter();
-        limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
-        bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter));
+        address _limiter = Upgrades.deployUUPSProxy(
+            "BridgeLimiter.sol",
+            abi.encodeCall(
+                BridgeLimiter.initialize,
+                (address(committee), _supportedDestinationChains, totalLimits)
+            ),
+            opts
+        );
+        limiter = BridgeLimiter(_limiter);
+        address _suiBridge = Upgrades.deployUUPSProxy(
+            "SuiBridge.sol",
+            abi.encodeCall(
+                SuiBridge.initialize, (address(committee), address(vault), address(limiter))
+            ),
+            opts
+        );
+        bridge = SuiBridge(_suiBridge);
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 
@@ -401,24 +441,34 @@ contract BridgeConfigTest is BridgeBaseTest {
     }
 
     function testAddTokensRegressionTest() public {
-        address[] memory _committee = new address[](4);
+        address[] memory _committeeList = new address[](4);
         uint16[] memory _stake = new uint16[](4);
-        _committee[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
-        _committee[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
-        _committee[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
-        _committee[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
+        _committeeList[0] = 0x68B43fD906C0B8F024a18C56e06744F7c6157c65;
+        _committeeList[1] = 0xaCAEf39832CB995c4E049437A3E2eC6a7bad1Ab5;
+        _committeeList[2] = 0x8061f127910e8eF56F16a2C411220BaD25D61444;
+        _committeeList[3] = 0x508F3F1ff45F4ca3D8e86CDCC91445F00aCC59fC;
         _stake[0] = 2500;
         _stake[1] = 2500;
         _stake[2] = 2500;
         _stake[3] = 2500;
-        committee = new BridgeCommittee();
-        committee.initialize(_committee, _stake, minStakeRequired);
+        address _committee = Upgrades.deployUUPSProxy(
+            "BridgeCommittee.sol",
+            abi.encodeCall(BridgeCommittee.initialize, (_committeeList, _stake, minStakeRequired)),
+            opts
+        );
+        committee = BridgeCommittee(_committee);
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 0;
-        config = new BridgeConfig();
-        config.initialize(
-            address(committee), 12, supportedTokens, tokenPrices, _supportedDestinationChains
+        address _config = Upgrades.deployUUPSProxy(
+            "BridgeConfig.sol",
+            abi.encodeCall(
+                BridgeConfig.initialize,
+                (address(committee), 12, supportedTokens, tokenPrices, _supportedDestinationChains)
+            ),
+            opts
         );
+        config = BridgeConfig(_config);
+
         committee.initializeConfig(address(config));
         vault = new BridgeVault(wETH);
 
@@ -426,10 +476,23 @@ contract BridgeConfigTest is BridgeBaseTest {
         totalLimits[0] = 1000000;
 
         skip(2 days);
-        limiter = new BridgeLimiter();
-        limiter.initialize(address(committee), _supportedDestinationChains, totalLimits);
-        bridge = new SuiBridge();
-        bridge.initialize(address(committee), address(vault), address(limiter));
+        address _limiter = Upgrades.deployUUPSProxy(
+            "BridgeLimiter.sol",
+            abi.encodeCall(
+                BridgeLimiter.initialize,
+                (address(committee), _supportedDestinationChains, totalLimits)
+            ),
+            opts
+        );
+        limiter = BridgeLimiter(_limiter);
+        address _suiBridge = Upgrades.deployUUPSProxy(
+            "SuiBridge.sol",
+            abi.encodeCall(
+                SuiBridge.initialize, (address(committee), address(vault), address(limiter))
+            ),
+            opts
+        );
+        bridge = SuiBridge(_suiBridge);
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 
