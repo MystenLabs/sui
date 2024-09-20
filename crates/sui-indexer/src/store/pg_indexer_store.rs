@@ -456,6 +456,8 @@ impl PgIndexerStore {
                             objects_snapshot::coin_balance
                                 .eq(excluded(objects_snapshot::coin_balance)),
                             objects_snapshot::df_kind.eq(excluded(objects_snapshot::df_kind)),
+                            objects_snapshot::checkpoint_sequence_number
+                                .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
                         ))
                         .execute(conn)
                         .await?;
