@@ -129,9 +129,9 @@ public fun remove<Element>(v: &mut vector<Element>, mut i: u64): Element {
 
     len = len - 1;
     while (i < len) v.swap(i, {
-            i = i + 1;
-            i
-        });
+        i = i + 1;
+        i
+    });
     v.pop_back()
 }
 

@@ -4,7 +4,8 @@
 /// Functionality for converting Move types into values. Use with care!
 module std::type_name;
 
-use std::{address, ascii::{Self, String}};
+use std::address;
+use std::ascii::{Self, String};
 
 /// ASCII Character code for the `:` (colon) symbol.
 const ASCII_COLON: u8 = 58;
