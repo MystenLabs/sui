@@ -31,6 +31,13 @@ pub(crate) struct TransactionBlockFilter {
     #[cfg(feature = "staging")]
     pub affected_address: Option<SuiAddress>,
 
+    /// Limit to transactions that interacted with the given object. The object could have been
+    /// created, read, modified, deleted, wrapped, or unwrapped by the transaction. Objects that
+    /// were passed as a `Receiving` input are not considered to have interacted with the object
+    /// unless they were actually received.
+    #[cfg(feature = "staging")]
+    pub affected_object: Option<SuiAddress>,
+
     /// Limit to transactions that were sent by the given address. NOTE: this input filter has been
     /// deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
     /// Both filters restrict transactions by their sender, only, not signers in general.
@@ -89,6 +96,8 @@ impl TransactionBlockFilter {
 
             #[cfg(feature = "staging")]
             affected_address: intersect!(affected_address, intersect::by_eq)?,
+            #[cfg(feature = "staging")]
+            affected_object: intersect!(affected_object, intersect::by_eq)?,
             sign_address: intersect!(sign_address, intersect::by_eq)?,
             sent_address: intersect!(sent_address, intersect::by_eq)?,
             recv_address: intersect!(recv_address, intersect::by_eq)?,
@@ -112,6 +121,8 @@ impl TransactionBlockFilter {
             self.kind.is_some(),
             #[cfg(feature = "staging")]
             self.affected_address.is_some(),
+            #[cfg(feature = "staging")]
+            self.affected_object.is_some(),
             self.recv_address.is_some(),
             self.input_object.is_some(),
             self.changed_object.is_some(),
@@ -134,7 +145,9 @@ impl TransactionBlockFilter {
             && self.changed_object.is_none();
 
         #[cfg(feature = "staging")]
-        let missing_implicit_sender = missing_implicit_sender && self.affected_address.is_none();
+        let missing_implicit_sender = missing_implicit_sender
+            && self.affected_address.is_none()
+            && self.affected_object.is_none();
 
         missing_implicit_sender
             .then_some(self.sent_address.or(self.sign_address))
@@ -154,7 +167,8 @@ impl TransactionBlockFilter {
             || self.transaction_ids.is_some();
 
         #[cfg(feature = "staging")]
-        let has_filters = has_filters || self.affected_address.is_some();
+        let has_filters =
+            has_filters || self.affected_address.is_some() || self.affected_object.is_some();
 
         has_filters
     }

@@ -4340,6 +4340,13 @@ input TransactionBlockFilter {
 	"""
 	affectedAddress: SuiAddress
 	"""
+	Limit to transactions that interacted with the given object. The object could have been
+	created, read, modified, deleted, wrapped, or unwrapped by the transaction. Objects that
+	were passed as a `Receiving` input are not considered to have interacted with the object
+	unless they were actually received.
+	"""
+	affectedObject: SuiAddress
+	"""
 	Limit to transactions that were sent by the given address. NOTE: this input filter has been
 	deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
 	Both filters restrict transactions by their sender, only, not signers in general.
