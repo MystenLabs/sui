@@ -48,6 +48,14 @@ error[E07002]: mutable ownership violated
    │     ^^^^^^^^^^^^^^ Invalid mutable borrow at field 'value'.
 
 warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/move_2024/ref_deref_conditional.move:37:17
+   │
+37 │     let _ref = &*(&*&resource);  // Should be flagged
+   │                 ^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:37:20
    │
 37 │     let _ref = &*(&*&resource);  // Should be flagged
