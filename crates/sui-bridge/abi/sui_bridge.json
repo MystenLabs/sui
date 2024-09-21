@@ -14,6 +14,42 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "AddressInsufficientBalance",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "nonce",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "proxy",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "implementation",
+        "type": "address"
+      }
+    ],
+    "name": "ContractUpgraded",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
         "name": "implementation",
         "type": "address"
       }
@@ -25,6 +61,25 @@
     "inputs": [],
     "name": "ERC1967NonPayable",
     "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "nonce",
+        "type": "uint64"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "paused",
+        "type": "bool"
+      }
+    ],
+    "name": "EmergencyOperation",
+    "type": "event"
   },
   {
     "inputs": [],
@@ -80,6 +135,17 @@
   {
     "inputs": [],
     "name": "ReentrancyGuardReentrantCall",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "SafeERC20FailedOperation",
     "type": "error"
   },
   {
@@ -355,11 +421,6 @@
         "internalType": "address",
         "name": "_limiter",
         "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_wETH",
-        "type": "address"
       }
     ],
     "name": "initialize",
@@ -558,19 +619,6 @@
     "outputs": [
       {
         "internalType": "contract IBridgeVault",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "wETH",
-    "outputs": [
-      {
-        "internalType": "contract IWETH9",
         "name": "",
         "type": "address"
       }
