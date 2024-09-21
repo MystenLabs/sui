@@ -5,7 +5,7 @@ use anyhow::bail;
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
-    annotated_visitor::{self, StructDriver, VecDriver, Visitor},
+    annotated_visitor::{self, StructDriver, ValueDriver, VecDriver, Visitor},
     language_storage::TypeTag,
     u256::U256,
 };
@@ -150,39 +150,75 @@ impl Visitor for BoundedVisitor {
     type Value = A::MoveValue;
     type Error = Error;
 
-    fn visit_u8(&mut self, value: u8) -> Result<Self::Value, Self::Error> {
+    fn visit_u8(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        value: u8,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U8(value))
     }
 
-    fn visit_u16(&mut self, value: u16) -> Result<Self::Value, Self::Error> {
+    fn visit_u16(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        value: u16,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U16(value))
     }
 
-    fn visit_u32(&mut self, value: u32) -> Result<Self::Value, Self::Error> {
+    fn visit_u32(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        value: u32,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U32(value))
     }
 
-    fn visit_u64(&mut self, value: u64) -> Result<Self::Value, Self::Error> {
+    fn visit_u64(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        value: u64,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U64(value))
     }
 
-    fn visit_u128(&mut self, value: u128) -> Result<Self::Value, Self::Error> {
+    fn visit_u128(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        value: u128,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U128(value))
     }
 
-    fn visit_u256(&mut self, value: U256) -> Result<Self::Value, Self::Error> {
+    fn visit_u256(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        value: U256,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U256(value))
     }
 
-    fn visit_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error> {
+    fn visit_bool(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        value: bool,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Bool(value))
     }
 
-    fn visit_address(&mut self, value: AccountAddress) -> Result<Self::Value, Self::Error> {
+    fn visit_address(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        value: AccountAddress,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Address(value))
     }
 
-    fn visit_signer(&mut self, value: AccountAddress) -> Result<Self::Value, Self::Error> {
+    fn visit_signer(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        value: AccountAddress,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Signer(value))
     }
 
