@@ -57,7 +57,9 @@ abstract contract CommitteeUpgradeable is
         // authorize upgrade
         _upgradeAuthorized = true;
         // upgrade contract
-        upgradeToAndCall(implementation, callData); // Upgraded event emitted with new implementation address
+        upgradeToAndCall(implementation, callData);
+
+        emit ContractUpgraded(message.nonce, proxy, implementation);
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */
@@ -69,4 +71,10 @@ abstract contract CommitteeUpgradeable is
         require(_upgradeAuthorized, "CommitteeUpgradeable: Unauthorized upgrade");
         _upgradeAuthorized = false;
     }
+
+    /// @notice Event emitted when the contract is upgraded
+    /// @param nonce The nonce of the upgrade message.
+    /// @param proxy The address of the proxy contract.
+    /// @param implementation The address of the new implementation.
+    event ContractUpgraded(uint256 nonce, address proxy, address implementation);
 }
