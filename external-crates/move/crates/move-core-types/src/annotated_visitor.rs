@@ -29,15 +29,59 @@ pub trait Visitor {
     /// ```
     type Error: From<Error>;
 
-    fn visit_u8(&mut self, value: u8) -> Result<Self::Value, Self::Error>;
-    fn visit_u16(&mut self, value: u16) -> Result<Self::Value, Self::Error>;
-    fn visit_u32(&mut self, value: u32) -> Result<Self::Value, Self::Error>;
-    fn visit_u64(&mut self, value: u64) -> Result<Self::Value, Self::Error>;
-    fn visit_u128(&mut self, value: u128) -> Result<Self::Value, Self::Error>;
-    fn visit_u256(&mut self, value: U256) -> Result<Self::Value, Self::Error>;
-    fn visit_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error>;
-    fn visit_address(&mut self, value: AccountAddress) -> Result<Self::Value, Self::Error>;
-    fn visit_signer(&mut self, value: AccountAddress) -> Result<Self::Value, Self::Error>;
+    fn visit_u8(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: u8,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_u16(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: u16,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_u32(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: u32,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_u64(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: u64,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_u128(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: u128,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_u256(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: U256,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_bool(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: bool,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_address(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: AccountAddress,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_signer(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: AccountAddress,
+    ) -> Result<Self::Value, Self::Error>;
 
     fn visit_vector(
         &mut self,
@@ -71,39 +115,75 @@ pub trait Visitor {
 pub trait Traversal {
     type Error: From<Error>;
 
-    fn traverse_u8(&mut self, _value: u8) -> Result<(), Self::Error> {
+    fn traverse_u8(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        _value: u8,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn traverse_u16(&mut self, _value: u16) -> Result<(), Self::Error> {
+    fn traverse_u16(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        _value: u16,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn traverse_u32(&mut self, _value: u32) -> Result<(), Self::Error> {
+    fn traverse_u32(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        _value: u32,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn traverse_u64(&mut self, _value: u64) -> Result<(), Self::Error> {
+    fn traverse_u64(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        _value: u64,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn traverse_u128(&mut self, _value: u128) -> Result<(), Self::Error> {
+    fn traverse_u128(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        _value: u128,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn traverse_u256(&mut self, _value: U256) -> Result<(), Self::Error> {
+    fn traverse_u256(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        _value: U256,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn traverse_bool(&mut self, _value: bool) -> Result<(), Self::Error> {
+    fn traverse_bool(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        _value: bool,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn traverse_address(&mut self, _value: AccountAddress) -> Result<(), Self::Error> {
+    fn traverse_address(
+        &mut self,
+        _: &ValueDriver<'_, '_>,
+        _: AccountAddress,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn traverse_signer(&mut self, _value: AccountAddress) -> Result<(), Self::Error> {
+    fn traverse_signer(
+        &mut self,
+        _: &ValueDriver<'_, '_>,
+        _: AccountAddress,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -134,40 +214,76 @@ impl<T: Traversal + ?Sized> Visitor for T {
     type Value = ();
     type Error = T::Error;
 
-    fn visit_u8(&mut self, value: u8) -> Result<Self::Value, Self::Error> {
-        self.traverse_u8(value)
+    fn visit_u8(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: u8,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_u8(driver, value)
     }
 
-    fn visit_u16(&mut self, value: u16) -> Result<Self::Value, Self::Error> {
-        self.traverse_u16(value)
+    fn visit_u16(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: u16,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_u16(driver, value)
     }
 
-    fn visit_u32(&mut self, value: u32) -> Result<Self::Value, Self::Error> {
-        self.traverse_u32(value)
+    fn visit_u32(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: u32,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_u32(driver, value)
     }
 
-    fn visit_u64(&mut self, value: u64) -> Result<Self::Value, Self::Error> {
-        self.traverse_u64(value)
+    fn visit_u64(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: u64,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_u64(driver, value)
     }
 
-    fn visit_u128(&mut self, value: u128) -> Result<Self::Value, Self::Error> {
-        self.traverse_u128(value)
+    fn visit_u128(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: u128,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_u128(driver, value)
     }
 
-    fn visit_u256(&mut self, value: U256) -> Result<Self::Value, Self::Error> {
-        self.traverse_u256(value)
+    fn visit_u256(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: U256,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_u256(driver, value)
     }
 
-    fn visit_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error> {
-        self.traverse_bool(value)
+    fn visit_bool(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: bool,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_bool(driver, value)
     }
 
-    fn visit_address(&mut self, value: AccountAddress) -> Result<Self::Value, Self::Error> {
-        self.traverse_address(value)
+    fn visit_address(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: AccountAddress,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_address(driver, value)
     }
 
-    fn visit_signer(&mut self, value: AccountAddress) -> Result<Self::Value, Self::Error> {
-        self.traverse_signer(value)
+    fn visit_signer(
+        &mut self,
+        driver: &ValueDriver<'_, '_>,
+        value: AccountAddress,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_signer(driver, value)
     }
 
     fn visit_vector(
@@ -260,6 +376,26 @@ impl<'c, 'b> ValueDriver<'c, 'b> {
         Self { bytes, start }
     }
 
+    /// The offset at which the value being visited starts in the byte stream.
+    pub fn start(&self) -> usize {
+        self.start
+    }
+
+    /// The current position in the byte stream.
+    pub fn position(&self) -> usize {
+        self.bytes.position() as usize
+    }
+
+    /// All the bytes in the byte stream (including the ones that have been read).
+    pub fn bytes(&self) -> &'b [u8] {
+        self.bytes.get_ref()
+    }
+    ///
+    /// The bytes that haven't been consumed by the visitor yet.
+    pub fn remaining_bytes(&self) -> &'b [u8] {
+        &self.bytes.get_ref()[self.position()..]
+    }
+
     fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], Error> {
         let mut buf = [0u8; N];
         self.bytes
@@ -282,6 +418,26 @@ impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
             len,
             off: 0,
         }
+    }
+
+    /// The offset at which the value being visited starts in the byte stream.
+    pub fn start(&self) -> usize {
+        self.inner.start()
+    }
+
+    /// The current position in the byte stream.
+    pub fn position(&self) -> usize {
+        self.inner.position()
+    }
+
+    /// All the bytes in the byte stream (including the ones that have been read).
+    pub fn bytes(&self) -> &'b [u8] {
+        self.inner.bytes()
+    }
+
+    /// The bytes that haven't been consumed by the visitor yet.
+    pub fn remaining_bytes(&self) -> &'b [u8] {
+        self.inner.remaining_bytes()
     }
 
     /// Type layout for the vector's inner type.
@@ -333,6 +489,26 @@ impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
             layout,
             off: 0,
         }
+    }
+
+    /// The offset at which the value being visited starts in the byte stream.
+    pub fn start(&self) -> usize {
+        self.inner.start()
+    }
+
+    /// The current position in the byte stream.
+    pub fn position(&self) -> usize {
+        self.inner.position()
+    }
+
+    /// All the bytes in the byte stream (including the ones that have been read).
+    pub fn bytes(&self) -> &'b [u8] {
+        self.inner.bytes()
+    }
+
+    /// The bytes that haven't been consumed by the visitor yet.
+    pub fn remaining_bytes(&self) -> &'b [u8] {
+        self.inner.remaining_bytes()
     }
 
     /// The layout of the struct being visited.
@@ -390,6 +566,26 @@ impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
             variant_layout,
             off: 0,
         }
+    }
+
+    /// The offset at which the value being visited starts in the byte stream.
+    pub fn start(&self) -> usize {
+        self.inner.start()
+    }
+
+    /// The current position in the byte stream.
+    pub fn position(&self) -> usize {
+        self.inner.position()
+    }
+
+    /// All the bytes in the byte stream (including the ones that have been read).
+    pub fn bytes(&self) -> &'b [u8] {
+        self.inner.bytes()
+    }
+
+    /// The bytes that haven't been consumed by the visitor yet.
+    pub fn remaining_bytes(&self) -> &'b [u8] {
+        self.inner.remaining_bytes()
     }
 
     /// The layout of the enum being visited.
@@ -458,20 +654,51 @@ pub(crate) fn visit_value<V: Visitor + ?Sized>(
 
     let mut driver = ValueDriver::new(bytes);
     match layout {
-        L::Bool => match read_exact::<1>(bytes)? {
-            [0] => visitor.visit_bool(false),
-            [1] => visitor.visit_bool(true),
+        L::Bool => match driver.read_exact()? {
+            [0] => visitor.visit_bool(&driver, false),
+            [1] => visitor.visit_bool(&driver, true),
             [b] => Err(Error::UnexpectedByte(b).into()),
         },
 
-        L::U8 => visitor.visit_u8(u8::from_le_bytes(driver.read_exact()?)),
-        L::U16 => visitor.visit_u16(u16::from_le_bytes(driver.read_exact()?)),
-        L::U32 => visitor.visit_u32(u32::from_le_bytes(driver.read_exact()?)),
-        L::U64 => visitor.visit_u64(u64::from_le_bytes(driver.read_exact()?)),
-        L::U128 => visitor.visit_u128(u128::from_le_bytes(driver.read_exact()?)),
-        L::U256 => visitor.visit_u256(U256::from_le_bytes(&driver.read_exact()?)),
-        L::Address => visitor.visit_address(AccountAddress::new(driver.read_exact()?)),
-        L::Signer => visitor.visit_signer(AccountAddress::new(driver.read_exact()?)),
+        L::U8 => {
+            let v = u8::from_le_bytes(driver.read_exact()?);
+            visitor.visit_u8(&driver, v)
+        }
+
+        L::U16 => {
+            let v = u16::from_le_bytes(driver.read_exact()?);
+            visitor.visit_u16(&driver, v)
+        }
+
+        L::U32 => {
+            let v = u32::from_le_bytes(driver.read_exact()?);
+            visitor.visit_u32(&driver, v)
+        }
+
+        L::U64 => {
+            let v = u64::from_le_bytes(driver.read_exact()?);
+            visitor.visit_u64(&driver, v)
+        }
+
+        L::U128 => {
+            let v = u128::from_le_bytes(driver.read_exact()?);
+            visitor.visit_u128(&driver, v)
+        }
+
+        L::U256 => {
+            let v = U256::from_le_bytes(&driver.read_exact()?);
+            visitor.visit_u256(&driver, v)
+        }
+
+        L::Address => {
+            let v = AccountAddress::new(driver.read_exact()?);
+            visitor.visit_address(&driver, v)
+        }
+
+        L::Signer => {
+            let v = AccountAddress::new(driver.read_exact()?);
+            visitor.visit_signer(&driver, v)
+        }
 
         L::Vector(l) => visit_vector(driver, l.as_ref(), visitor),
         L::Struct(l) => visit_struct(driver, l, visitor),
@@ -536,12 +763,4 @@ fn visit_variant<V: Visitor + ?Sized>(
     let res = visitor.visit_variant(&mut driver)?;
     while driver.skip_field()?.is_some() {}
     Ok(res)
-}
-
-fn read_exact<const N: usize>(bytes: &mut Cursor<&[u8]>) -> Result<[u8; N], Error> {
-    let mut buf = [0u8; N];
-    bytes
-        .read_exact(&mut buf)
-        .map_err(|_| Error::UnexpectedEof)?;
-    Ok(buf)
 }

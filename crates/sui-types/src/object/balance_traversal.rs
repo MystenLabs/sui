@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use move_core_types::{
-    annotated_visitor::{self, StructDriver, Traversal},
+    annotated_visitor::{self, StructDriver, Traversal, ValueDriver},
     language_storage::{StructTag, TypeTag},
 };
 
@@ -52,7 +52,11 @@ impl Traversal for BalanceTraversal {
 
 impl Traversal for Accumulator {
     type Error = annotated_visitor::Error;
-    fn traverse_u64(&mut self, value: u64) -> Result<(), Self::Error> {
+    fn traverse_u64(
+        &mut self,
+        _driver: &ValueDriver<'_, '_>,
+        value: u64,
+    ) -> Result<(), Self::Error> {
         self.total += value;
         Ok(())
     }
