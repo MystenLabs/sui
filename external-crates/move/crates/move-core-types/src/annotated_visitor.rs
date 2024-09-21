@@ -192,11 +192,18 @@ impl<T: Traversal + ?Sized> Visitor for T {
     }
 }
 
+/// Exposes information about the byte stream that the value being visited came from, namely the
+/// bytes themselves, and the offset at which the value starts.
+pub struct ValueDriver<'c, 'b> {
+    bytes: &'c mut Cursor<&'b [u8]>,
+    start: usize,
+}
+
 /// Exposes information about a vector being visited (the element layout) to a visitor
 /// implementation, and allows that visitor to progress the traversal (by visiting or skipping
 /// elements).
 pub struct VecDriver<'c, 'b, 'l> {
-    bytes: &'c mut Cursor<&'b [u8]>,
+    inner: ValueDriver<'c, 'b>,
     layout: &'l MoveTypeLayout,
     len: u64,
     off: u64,
@@ -206,7 +213,7 @@ pub struct VecDriver<'c, 'b, 'l> {
 /// visited) to a visitor implementation, and allows that visitor to progress the traversal (by
 /// visiting or skipping fields).
 pub struct StructDriver<'c, 'b, 'l> {
-    bytes: &'c mut Cursor<&'b [u8]>,
+    inner: ValueDriver<'c, 'b>,
     layout: &'l MoveStructLayout,
     off: usize,
 }
@@ -215,7 +222,7 @@ pub struct StructDriver<'c, 'b, 'l> {
 /// be visited, the variant's tag, and name) to a visitor implementation, and allows that visitor
 /// to progress the traversal (by visiting or skipping fields).
 pub struct VariantDriver<'c, 'b, 'l> {
-    bytes: &'c mut Cursor<&'b [u8]>,
+    inner: ValueDriver<'c, 'b>,
     layout: &'l MoveEnumLayout,
     tag: u16,
     variant_name: &'l IdentStr,
@@ -247,11 +254,30 @@ impl Traversal for NullTraversal {
     type Error = Error;
 }
 
+impl<'c, 'b> ValueDriver<'c, 'b> {
+    pub(crate) fn new(bytes: &'c mut Cursor<&'b [u8]>) -> Self {
+        let start = bytes.position() as usize;
+        Self { bytes, start }
+    }
+
+    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], Error> {
+        let mut buf = [0u8; N];
+        self.bytes
+            .read_exact(&mut buf)
+            .map_err(|_| Error::UnexpectedEof)?;
+        Ok(buf)
+    }
+
+    fn read_leb128(&mut self) -> Result<u64, Error> {
+        leb128::read::unsigned(self.bytes).map_err(|_| Error::UnexpectedEof)
+    }
+}
+
 #[allow(clippy::len_without_is_empty)]
 impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
-    fn new(bytes: &'c mut Cursor<&'b [u8]>, layout: &'l MoveTypeLayout, len: u64) -> Self {
+    fn new(inner: ValueDriver<'c, 'b>, layout: &'l MoveTypeLayout, len: u64) -> Self {
         Self {
-            bytes,
+            inner,
             layout,
             len,
             off: 0,
@@ -287,7 +313,7 @@ impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
         Ok(if self.off >= self.len {
             None
         } else {
-            let res = visit_value(self.bytes, self.layout, visitor)?;
+            let res = visit_value(self.inner.bytes, self.layout, visitor)?;
             self.off += 1;
             Some(res)
         })
@@ -301,9 +327,9 @@ impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
 }
 
 impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
-    fn new(bytes: &'c mut Cursor<&'b [u8]>, layout: &'l MoveStructLayout) -> Self {
+    fn new(inner: ValueDriver<'c, 'b>, layout: &'l MoveStructLayout) -> Self {
         Self {
-            bytes,
+            inner,
             layout,
             off: 0,
         }
@@ -335,7 +361,7 @@ impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
             return Ok(None);
         };
 
-        let res = visit_value(self.bytes, &field.layout, visitor)?;
+        let res = visit_value(self.inner.bytes, &field.layout, visitor)?;
         self.off += 1;
         Ok(Some((field, res)))
     }
@@ -350,14 +376,14 @@ impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
 
 impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
     fn new(
-        bytes: &'c mut Cursor<&'b [u8]>,
+        inner: ValueDriver<'c, 'b>,
         layout: &'l MoveEnumLayout,
         variant_layout: &'l [MoveFieldLayout],
         variant_name: &'l IdentStr,
         tag: u16,
     ) -> Self {
         Self {
-            bytes,
+            inner,
             layout,
             tag,
             variant_name,
@@ -407,7 +433,7 @@ impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
             return Ok(None);
         };
 
-        let res = visit_value(self.bytes, &field.layout, visitor)?;
+        let res = visit_value(self.inner.bytes, &field.layout, visitor)?;
         self.off += 1;
         Ok(Some((field, res)))
     }
@@ -430,6 +456,7 @@ pub(crate) fn visit_value<V: Visitor + ?Sized>(
 ) -> Result<V::Value, V::Error> {
     use MoveTypeLayout as L;
 
+    let mut driver = ValueDriver::new(bytes);
     match layout {
         L::Bool => match read_exact::<1>(bytes)? {
             [0] => visitor.visit_bool(false),
@@ -437,30 +464,30 @@ pub(crate) fn visit_value<V: Visitor + ?Sized>(
             [b] => Err(Error::UnexpectedByte(b).into()),
         },
 
-        L::U8 => visitor.visit_u8(u8::from_le_bytes(read_exact::<1>(bytes)?)),
-        L::U16 => visitor.visit_u16(u16::from_le_bytes(read_exact::<2>(bytes)?)),
-        L::U32 => visitor.visit_u32(u32::from_le_bytes(read_exact::<4>(bytes)?)),
-        L::U64 => visitor.visit_u64(u64::from_le_bytes(read_exact::<8>(bytes)?)),
-        L::U128 => visitor.visit_u128(u128::from_le_bytes(read_exact::<16>(bytes)?)),
-        L::U256 => visitor.visit_u256(U256::from_le_bytes(&read_exact::<32>(bytes)?)),
-        L::Address => visitor.visit_address(AccountAddress::new(read_exact::<32>(bytes)?)),
-        L::Signer => visitor.visit_signer(AccountAddress::new(read_exact::<32>(bytes)?)),
+        L::U8 => visitor.visit_u8(u8::from_le_bytes(driver.read_exact()?)),
+        L::U16 => visitor.visit_u16(u16::from_le_bytes(driver.read_exact()?)),
+        L::U32 => visitor.visit_u32(u32::from_le_bytes(driver.read_exact()?)),
+        L::U64 => visitor.visit_u64(u64::from_le_bytes(driver.read_exact()?)),
+        L::U128 => visitor.visit_u128(u128::from_le_bytes(driver.read_exact()?)),
+        L::U256 => visitor.visit_u256(U256::from_le_bytes(&driver.read_exact()?)),
+        L::Address => visitor.visit_address(AccountAddress::new(driver.read_exact()?)),
+        L::Signer => visitor.visit_signer(AccountAddress::new(driver.read_exact()?)),
 
-        L::Vector(l) => visit_vector(bytes, l.as_ref(), visitor),
-        L::Struct(l) => visit_struct(bytes, l, visitor),
-        L::Enum(e) => visit_variant(bytes, e, visitor),
+        L::Vector(l) => visit_vector(driver, l.as_ref(), visitor),
+        L::Struct(l) => visit_struct(driver, l, visitor),
+        L::Enum(e) => visit_variant(driver, e, visitor),
     }
 }
 
 /// Like `visit_value` but specialized to visiting a vector (where the `bytes` is known to be a
 /// serialized move vector), and the layout is the vector's element's layout.
 fn visit_vector<V: Visitor + ?Sized>(
-    bytes: &mut Cursor<&[u8]>,
+    mut inner: ValueDriver,
     layout: &MoveTypeLayout,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
-    let len = leb128::read::unsigned(bytes).map_err(|_| Error::UnexpectedEof)?;
-    let mut driver = VecDriver::new(bytes, layout, len);
+    let len = inner.read_leb128()?;
+    let mut driver = VecDriver::new(inner, layout, len);
     let res = visitor.visit_vector(&mut driver)?;
     while driver.skip_element()? {}
     Ok(res)
@@ -469,11 +496,11 @@ fn visit_vector<V: Visitor + ?Sized>(
 /// Like `visit_value` but specialized to visiting a struct (where the `bytes` is known to be a
 /// serialized move struct), and the layout is a struct layout.
 pub(crate) fn visit_struct<V: Visitor + ?Sized>(
-    bytes: &mut Cursor<&[u8]>,
+    inner: ValueDriver,
     layout: &MoveStructLayout,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
-    let mut driver = StructDriver::new(bytes, layout);
+    let mut driver = StructDriver::new(inner, layout);
     let res = visitor.visit_struct(&mut driver)?;
     while driver.skip_field()?.is_some() {}
     Ok(res)
@@ -482,14 +509,14 @@ pub(crate) fn visit_struct<V: Visitor + ?Sized>(
 /// Like `visit_struct` but specialized to visiting a variant (where the `bytes` is known to be a
 /// serialized move variant), and the layout is an enum layout.
 fn visit_variant<V: Visitor + ?Sized>(
-    bytes: &mut Cursor<&[u8]>,
+    mut inner: ValueDriver,
     layout: &MoveEnumLayout,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
     // Since variants are bounded at 127, we can read the tag as a single byte.
     // When we add true ULEB encoding for enum variants switch to this:
-    // let tag = leb128::read::unsigned(bytes).map_err(|_| Error::UnexpectedEof)?;
-    let [tag] = read_exact::<1>(bytes)?;
+    // let tag = inner.read_leb128()?;
+    let [tag] = inner.read_exact()?;
     if tag >= VARIANT_COUNT_MAX as u8 {
         return Err(Error::UnexpectedVariantTag(tag as usize).into());
     }
@@ -500,7 +527,7 @@ fn visit_variant<V: Visitor + ?Sized>(
         .ok_or(Error::UnexpectedVariantTag(tag as usize))?;
 
     let mut driver = VariantDriver::new(
-        bytes,
+        inner,
         layout,
         variant_layout.1,
         &variant_layout.0 .0,
