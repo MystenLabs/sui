@@ -446,16 +446,24 @@ pub(crate) fn visit_value<V: Visitor + ?Sized>(
         L::Address => visitor.visit_address(AccountAddress::new(read_exact::<32>(bytes)?)),
         L::Signer => visitor.visit_signer(AccountAddress::new(read_exact::<32>(bytes)?)),
 
-        L::Vector(l) => {
-            let len = leb128::read::unsigned(bytes).map_err(|_| Error::UnexpectedEof)?;
-            let mut driver = VecDriver::new(bytes, l.as_ref(), len);
-            let res = visitor.visit_vector(&mut driver)?;
-            while driver.skip_element()? {}
-            Ok(res)
-        }
-        L::Enum(e) => visit_variant(bytes, e, visitor),
+        L::Vector(l) => visit_vector(bytes, l.as_ref(), visitor),
         L::Struct(l) => visit_struct(bytes, l, visitor),
+        L::Enum(e) => visit_variant(bytes, e, visitor),
     }
+}
+
+/// Like `visit_value` but specialized to visiting a vector (where the `bytes` is known to be a
+/// serialized move vector), and the layout is the vector's element's layout.
+fn visit_vector<V: Visitor + ?Sized>(
+    bytes: &mut &[u8],
+    layout: &MoveTypeLayout,
+    visitor: &mut V,
+) -> Result<V::Value, V::Error> {
+    let len = leb128::read::unsigned(bytes).map_err(|_| Error::UnexpectedEof)?;
+    let mut driver = VecDriver::new(bytes, layout, len);
+    let res = visitor.visit_vector(&mut driver)?;
+    while driver.skip_element()? {}
+    Ok(res)
 }
 
 /// Like `visit_value` but specialized to visiting a struct (where the `bytes` is known to be a
@@ -473,7 +481,7 @@ pub(crate) fn visit_struct<V: Visitor + ?Sized>(
 
 /// Like `visit_struct` but specialized to visiting a variant (where the `bytes` is known to be a
 /// serialized move variant), and the layout is an enum layout.
-pub(crate) fn visit_variant<V: Visitor + ?Sized>(
+fn visit_variant<V: Visitor + ?Sized>(
     bytes: &mut &[u8],
     layout: &MoveEnumLayout,
     visitor: &mut V,
