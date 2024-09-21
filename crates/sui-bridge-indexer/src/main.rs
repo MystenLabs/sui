@@ -114,15 +114,13 @@ async fn main() -> Result<()> {
             Provider::<Http>::try_from(&config.eth_rpc_url)?
                 .interval(std::time::Duration::from_millis(2000)),
         );
-        let _bridge_addresses = get_eth_contract_addresses(bridge_address, &provider).await?;
+        let bridge_addresses = get_eth_contract_addresses(bridge_address, &provider).await?;
         let bridge_addresses: Vec<EthAddress> = vec![
-            _bridge_addresses.0,
-            _bridge_addresses.1,
-            _bridge_addresses.2,
-            _bridge_addresses.3,
+            bridge_addresses.0,
+            bridge_addresses.1,
+            bridge_addresses.2,
+            bridge_addresses.3,
         ];
-
-        println!("Bridge addresses: {:?}", bridge_addresses);
 
         // Start the eth subscription indexer
         let eth_subscription_datasource = EthSubscriptionDatasource::new(
