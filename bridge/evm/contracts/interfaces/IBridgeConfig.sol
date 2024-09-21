@@ -47,7 +47,7 @@ interface IBridgeConfig {
     /// @param nonce The governance action nonce.
     /// @param tokenIDs The IDs of the tokens added.
     /// @param tokenAddresses The addresses of the tokens added.
-    /// @param suiDecimals The decimal places of the tokens added.
+    /// @param suiDecimals The added token's decimal places on Sui.
     /// @param tokenPrices The prices of the tokens added in USD.
     event TokensAddedV2(
         uint64 nonce,
