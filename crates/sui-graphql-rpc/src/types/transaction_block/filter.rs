@@ -33,8 +33,8 @@ pub(crate) struct TransactionBlockFilter {
 
     /// Limit to transactions that interacted with the given object. The object could have been
     /// created, read, modified, deleted, wrapped, or unwrapped by the transaction. Objects that
-    /// were passed as a `Receiving` input are not considered to have interacted with the object
-    /// unless they were actually received.
+    /// were passed as a `Receiving` input are not considered to have been affected by a
+    /// transaction unless they were actually received.
     #[cfg(feature = "staging")]
     pub affected_object: Option<SuiAddress>,
 
