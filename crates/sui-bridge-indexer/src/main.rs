@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use clap::*;
+use ethers::providers::{Http, Provider};
 use ethers::types::Address as EthAddress;
 use std::collections::HashSet;
 use std::env;
@@ -13,6 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
+use sui_bridge::utils::get_eth_contract_addresses;
 use sui_bridge_indexer::eth_bridge_indexer::EthFinalizedSyncDatasource;
 use sui_bridge_indexer::eth_bridge_indexer::EthSubscriptionDatasource;
 use tokio::task::JoinHandle;
@@ -107,9 +109,20 @@ async fn main() -> Result<()> {
         info!("Eth indexer is disabled");
     } else {
         // Start the eth subscription indexer
-        let bridge_addresses = vec![EthAddress::from_str(
-            &config.eth_sui_bridge_contract_address,
-        )?];
+        let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
+        let provider = Arc::new(
+            Provider::<Http>::try_from(&config.eth_rpc_url)?
+                .interval(std::time::Duration::from_millis(2000)),
+        );
+        let _bridge_addresses = get_eth_contract_addresses(bridge_address, &provider).await?;
+        let bridge_addresses: Vec<EthAddress> = vec![
+            _bridge_addresses.0,
+            _bridge_addresses.1,
+            _bridge_addresses.2,
+            _bridge_addresses.3,
+        ];
+
+        println!("Bridge addresses: {:?}", bridge_addresses);
 
         // Start the eth subscription indexer
         let eth_subscription_datasource = EthSubscriptionDatasource::new(

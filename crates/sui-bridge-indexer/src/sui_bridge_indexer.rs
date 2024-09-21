@@ -153,6 +153,8 @@ fn process_sui_event(
                 let event: UpdateRouteLimitEvent = bcs::from_bytes(&ev.contents)?;
 
                 Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
                     tx_digest: tx.transaction.digest().inner().to_vec(),
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
@@ -165,6 +167,8 @@ fn process_sui_event(
                 let event: EmergencyOpEvent = bcs::from_bytes(&ev.contents)?;
 
                 Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
                     tx_digest: tx.transaction.digest().inner().to_vec(),
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
@@ -177,6 +181,8 @@ fn process_sui_event(
                 let event: MoveBlocklistValidatorEvent = bcs::from_bytes(&ev.contents)?;
 
                 Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
                     tx_digest: tx.transaction.digest().inner().to_vec(),
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
@@ -189,6 +195,8 @@ fn process_sui_event(
                 let event: MoveTokenRegistrationEvent = bcs::from_bytes(&ev.contents)?;
 
                 Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
                     tx_digest: tx.transaction.digest().inner().to_vec(),
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
@@ -201,6 +209,8 @@ fn process_sui_event(
                 let event: UpdateTokenPriceEvent = bcs::from_bytes(&ev.contents)?;
 
                 Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
                     tx_digest: tx.transaction.digest().inner().to_vec(),
                     sender: ev.sender.to_vec(),
                     timestamp_ms,

@@ -57,6 +57,8 @@ pub struct TokenTransfer {
 
 #[derive(Clone)]
 pub struct GovernanceAction {
+    nonce: Option<u64>,
+    data_source: BridgeDataSource,
     tx_digest: Vec<u8>,
     sender: Vec<u8>,
     timestamp_ms: u64,
@@ -122,6 +124,8 @@ impl SuiTxnError {
 impl GovernanceAction {
     fn to_db(&self) -> DBGovernanceAction {
         DBGovernanceAction {
+            nonce: self.nonce.map(|nonce| nonce as i64),
+            data_source: self.data_source.to_string(),
             txn_digest: self.tx_digest.clone(),
             sender_address: self.sender.to_vec(),
             timestamp_ms: self.timestamp_ms as i64,

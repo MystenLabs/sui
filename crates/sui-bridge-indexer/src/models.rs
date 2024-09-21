@@ -84,6 +84,8 @@ pub struct SuiErrorTransactions {
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
 #[diesel(table_name = governance_actions, primary_key(txn_digest))]
 pub struct GovernanceAction {
+    pub nonce: Option<i64>,
+    pub data_source: String,
     pub txn_digest: Vec<u8>,
     pub sender_address: Vec<u8>,
     pub timestamp_ms: i64,

@@ -62,6 +62,8 @@ diesel::table! {
 diesel::table! {
     governance_actions (txn_digest) {
         id -> Int8,
+        nonce -> Nullable<Int8>,
+        data_source -> Text,
         txn_digest -> Bytea,
         sender_address -> Bytea,
         timestamp_ms -> Int8,
