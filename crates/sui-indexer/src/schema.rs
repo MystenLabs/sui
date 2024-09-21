@@ -268,6 +268,7 @@ diesel::table! {
         tx_sequence_number -> Int8,
         transaction_digest -> Bytea,
         raw_transaction -> Bytea,
+        raw_transaction_sigs -> Bytea,
         raw_effects -> Bytea,
         checkpoint_sequence_number -> Int8,
         timestamp_ms -> Int8,

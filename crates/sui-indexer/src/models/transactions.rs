@@ -29,7 +29,10 @@ use crate::types::IndexerResult;
 pub struct StoredTransaction {
     pub tx_sequence_number: i64,
     pub transaction_digest: Vec<u8>,
+    /// BCS serialized TransactionData
     pub raw_transaction: Vec<u8>,
+    /// BCS serialized Vec<GenericSignature>
+    pub raw_transaction_sigs: Vec<u8>,
     pub raw_effects: Vec<u8>,
     pub checkpoint_sequence_number: i64,
     pub timestamp_ms: i64,
@@ -78,7 +81,10 @@ impl From<&IndexedTransaction> for StoredTransaction {
         StoredTransaction {
             tx_sequence_number: tx.tx_sequence_number as i64,
             transaction_digest: tx.tx_digest.into_inner().to_vec(),
-            raw_transaction: bcs::to_bytes(&tx.sender_signed_data).unwrap(),
+            raw_transaction: bcs::to_bytes(&tx.sender_signed_data.inner().intent_message.value)
+                .unwrap(),
+            raw_transaction_sigs: bcs::to_bytes(&tx.sender_signed_data.inner().tx_signatures)
+                .unwrap(),
             raw_effects: bcs::to_bytes(&tx.effects).unwrap(),
             checkpoint_sequence_number: tx.checkpoint_sequence_number as i64,
             object_changes: tx
