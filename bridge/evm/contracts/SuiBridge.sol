@@ -121,7 +121,8 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
 
         if (isFreezing) _pause();
         else _unpause();
-        // pausing event emitted in 'PausableUpgradeable.sol'
+
+        emit EmergencyOperation(message.nonce, isFreezing);
     }
 
     /// @notice Enables the caller to deposit supported tokens to be bridged to a given

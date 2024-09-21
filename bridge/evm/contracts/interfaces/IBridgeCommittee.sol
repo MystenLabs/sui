@@ -23,7 +23,9 @@ interface IBridgeCommittee {
     /* ========== EVENTS ========== */
 
     /// @notice Emitted when the blocklist is updated.
+    /// @param nonce The governance action nonce.
     /// @param updatedMembers The addresses of the updated committee members.
     /// @param isBlocklisted A boolean indicating whether the committee members are blocklisted or not.
+    event BlocklistUpdated(uint64 nonce, address[] updatedMembers, bool isBlocklisted);
     event BlocklistUpdated(address[] updatedMembers, bool isBlocklisted);
 }

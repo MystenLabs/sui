@@ -122,6 +122,8 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
 
         // update the blocklist
         _updateBlocklist(_blocklist, isBlocklisted);
+
+        emit BlocklistUpdated(message.nonce, _blocklist, isBlocklisted);
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */

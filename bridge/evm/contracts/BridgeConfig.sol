@@ -117,6 +117,8 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         (uint8 tokenID, uint64 price) = BridgeUtils.decodeUpdateTokenPricePayload(message.payload);
 
         _updateTokenPrice(tokenID, price);
+
+        emit TokenPriceUpdated(message.nonce, tokenID, price);
     }
 
     function addTokensWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
@@ -137,6 +139,8 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         for (uint8 i; i < tokenIDs.length; i++) {
             _addToken(tokenIDs[i], tokenAddresses[i], suiDecimals[i], _tokenPrices[i], native);
         }
+
+        emit TokensAdded(message.nonce, tokenIDs, tokenAddresses, suiDecimals, _tokenPrices);
     }
 
     /* ========== PRIVATE FUNCTIONS ========== */
@@ -175,8 +179,6 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
 
         supportedTokens[tokenID] = Token(tokenAddress, suiDecimal, native);
         tokenPrices[tokenID] = tokenPrice;
-
-        emit TokenAdded(tokenID, tokenAddress, suiDecimal, tokenPrice);
     }
 
     /* ========== MODIFIERS ========== */

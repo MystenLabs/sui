@@ -30,7 +30,9 @@ interface IBridgeLimiter {
     event HourlyTransferAmountUpdated(uint32 hourUpdated, uint256 amount);
 
     /// @dev Emitted when the total limit is updated.
+    /// @param nonce The governance action nonce.
     /// @param sourceChainID The ID of the source chain.
     /// @param newLimit The new limit in USD with 4 decimal places (e.g. 10000 -> $1)
+    event LimitUpdated(uint64 nonce, uint8 sourceChainID, uint64 newLimit);
     event LimitUpdated(uint8 sourceChainID, uint64 newLimit);
 }

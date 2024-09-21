@@ -179,5 +179,6 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
         chainLimits[sourceChainID] = newLimit;
 
         emit LimitUpdated(sourceChainID, newLimit);
+        emit LimitUpdated(message.nonce, sourceChainID, newLimit);
     }
 }
