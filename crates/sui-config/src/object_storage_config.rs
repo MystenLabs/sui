@@ -105,6 +105,13 @@ fn default_object_store_connection_limit() -> usize {
     20
 }
 
+fn no_timeout_options() -> ClientOptions {
+    ClientOptions::new()
+        .with_timeout_disabled()
+        .with_connect_timeout_disabled()
+        .with_pool_idle_timeout(std::time::Duration::from_secs(300))
+}
+
 impl ObjectStoreConfig {
     fn new_local_fs(&self) -> Result<Arc<DynObjectStore>, anyhow::Error> {
         info!(directory=?self.directory, object_store_type="File", "Object Store");
@@ -125,7 +132,9 @@ impl ObjectStoreConfig {
 
         info!(bucket=?self.bucket, object_store_type="S3", "Object Store");
 
-        let mut builder = AmazonS3Builder::new().with_imdsv1_fallback();
+        let mut builder = AmazonS3Builder::new()
+            .with_client_options(no_timeout_options())
+            .with_imdsv1_fallback();
 
         if self.aws_virtual_hosted_style_request {
             builder = builder.with_virtual_hosted_style_request(true);
@@ -183,10 +192,7 @@ impl ObjectStoreConfig {
             builder = builder.with_service_account_path(account);
         }
 
-        let mut client_options = ClientOptions::new()
-            .with_timeout_disabled()
-            .with_connect_timeout_disabled()
-            .with_pool_idle_timeout(std::time::Duration::from_secs(300));
+        let mut client_options = no_timeout_options();
         if let Some(google_project_id) = &self.google_project_id {
             let x_project_header = HeaderName::from_static("x-goog-user-project");
             let iam_req_header = HeaderName::from_static("userproject");
@@ -210,7 +216,7 @@ impl ObjectStoreConfig {
         info!(bucket=?self.bucket, account=?self.azure_storage_account,
           object_store_type="Azure", "Object Store");
 
-        let mut builder = MicrosoftAzureBuilder::new();
+        let mut builder = MicrosoftAzureBuilder::new().with_client_options(no_timeout_options());
 
         if let Some(bucket) = &self.bucket {
             builder = builder.with_container_name(bucket);
