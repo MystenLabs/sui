@@ -33,9 +33,7 @@ impl New {
             w,
             r#"/*
 /// Module: {name}
-module {name}::{name} {{
-
-}}
+module {name}::{name};
 */"#,
             name = name
         )?;
@@ -64,7 +62,7 @@ module {name}::{name}_tests {{
     fun test_{name}_fail() {{
         abort ENotImplemented
     }}
-}}
+
 */"#,
             name = name
         )?;
