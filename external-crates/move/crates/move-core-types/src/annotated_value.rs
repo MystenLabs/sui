@@ -4,7 +4,7 @@
 
 use crate::{
     account_address::AccountAddress,
-    annotated_visitor::{visit_struct, visit_value, Error as VError, Visitor},
+    annotated_visitor::{visit_struct, visit_value, Error as VError, ValueDriver, Visitor},
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     runtime_value::{self as R, MOVE_STRUCT_FIELDS, MOVE_STRUCT_TYPE},
@@ -243,7 +243,8 @@ impl MoveStruct {
         V::Error: std::error::Error + Send + Sync + 'static,
     {
         let mut bytes = Cursor::new(blob);
-        let res = visit_struct(&mut bytes, ty, visitor)?;
+        let driver = ValueDriver::new(&mut bytes);
+        let res = visit_struct(driver, ty, visitor)?;
         if bytes.position() as usize == blob.len() {
             Ok(res)
         } else {
