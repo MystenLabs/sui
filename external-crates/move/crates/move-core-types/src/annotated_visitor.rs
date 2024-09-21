@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::Read;
+use std::io::{Cursor, Read};
 
 use crate::{
     account_address::AccountAddress,
@@ -195,8 +195,8 @@ impl<T: Traversal + ?Sized> Visitor for T {
 /// Exposes information about a vector being visited (the element layout) to a visitor
 /// implementation, and allows that visitor to progress the traversal (by visiting or skipping
 /// elements).
-pub struct VecDriver<'r, 'b, 'l> {
-    bytes: &'r mut &'b [u8],
+pub struct VecDriver<'c, 'b, 'l> {
+    bytes: &'c mut Cursor<&'b [u8]>,
     layout: &'l MoveTypeLayout,
     len: u64,
     off: u64,
@@ -205,8 +205,8 @@ pub struct VecDriver<'r, 'b, 'l> {
 /// Exposes information about a struct being visited (its layout, details about the next field to be
 /// visited) to a visitor implementation, and allows that visitor to progress the traversal (by
 /// visiting or skipping fields).
-pub struct StructDriver<'r, 'b, 'l> {
-    bytes: &'r mut &'b [u8],
+pub struct StructDriver<'c, 'b, 'l> {
+    bytes: &'c mut Cursor<&'b [u8]>,
     layout: &'l MoveStructLayout,
     off: usize,
 }
@@ -214,8 +214,8 @@ pub struct StructDriver<'r, 'b, 'l> {
 /// Exposes information about a variant being visited (its layout, details about the next field to
 /// be visited, the variant's tag, and name) to a visitor implementation, and allows that visitor
 /// to progress the traversal (by visiting or skipping fields).
-pub struct VariantDriver<'r, 'b, 'l> {
-    bytes: &'r mut &'b [u8],
+pub struct VariantDriver<'c, 'b, 'l> {
+    bytes: &'c mut Cursor<&'b [u8]>,
     layout: &'l MoveEnumLayout,
     tag: u16,
     variant_name: &'l IdentStr,
@@ -248,8 +248,8 @@ impl Traversal for NullTraversal {
 }
 
 #[allow(clippy::len_without_is_empty)]
-impl<'r, 'b, 'l> VecDriver<'r, 'b, 'l> {
-    fn new(bytes: &'r mut &'b [u8], layout: &'l MoveTypeLayout, len: u64) -> Self {
+impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
+    fn new(bytes: &'c mut Cursor<&'b [u8]>, layout: &'l MoveTypeLayout, len: u64) -> Self {
         Self {
             bytes,
             layout,
@@ -300,8 +300,8 @@ impl<'r, 'b, 'l> VecDriver<'r, 'b, 'l> {
     }
 }
 
-impl<'r, 'b, 'l> StructDriver<'r, 'b, 'l> {
-    fn new(bytes: &'r mut &'b [u8], layout: &'l MoveStructLayout) -> Self {
+impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
+    fn new(bytes: &'c mut Cursor<&'b [u8]>, layout: &'l MoveStructLayout) -> Self {
         Self {
             bytes,
             layout,
@@ -348,9 +348,9 @@ impl<'r, 'b, 'l> StructDriver<'r, 'b, 'l> {
     }
 }
 
-impl<'r, 'b, 'l> VariantDriver<'r, 'b, 'l> {
+impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
     fn new(
-        bytes: &'r mut &'b [u8],
+        bytes: &'c mut Cursor<&'b [u8]>,
         layout: &'l MoveEnumLayout,
         variant_layout: &'l [MoveFieldLayout],
         variant_name: &'l IdentStr,
@@ -424,7 +424,7 @@ impl<'r, 'b, 'l> VariantDriver<'r, 'b, 'l> {
 /// visitor to build a value out of it. See `annoted_value::MoveValue::visit_deserialize` for
 /// details.
 pub(crate) fn visit_value<V: Visitor + ?Sized>(
-    bytes: &mut &[u8],
+    bytes: &mut Cursor<&[u8]>,
     layout: &MoveTypeLayout,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
@@ -455,7 +455,7 @@ pub(crate) fn visit_value<V: Visitor + ?Sized>(
 /// Like `visit_value` but specialized to visiting a vector (where the `bytes` is known to be a
 /// serialized move vector), and the layout is the vector's element's layout.
 fn visit_vector<V: Visitor + ?Sized>(
-    bytes: &mut &[u8],
+    bytes: &mut Cursor<&[u8]>,
     layout: &MoveTypeLayout,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
@@ -469,7 +469,7 @@ fn visit_vector<V: Visitor + ?Sized>(
 /// Like `visit_value` but specialized to visiting a struct (where the `bytes` is known to be a
 /// serialized move struct), and the layout is a struct layout.
 pub(crate) fn visit_struct<V: Visitor + ?Sized>(
-    bytes: &mut &[u8],
+    bytes: &mut Cursor<&[u8]>,
     layout: &MoveStructLayout,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
@@ -482,7 +482,7 @@ pub(crate) fn visit_struct<V: Visitor + ?Sized>(
 /// Like `visit_struct` but specialized to visiting a variant (where the `bytes` is known to be a
 /// serialized move variant), and the layout is an enum layout.
 fn visit_variant<V: Visitor + ?Sized>(
-    bytes: &mut &[u8],
+    bytes: &mut Cursor<&[u8]>,
     layout: &MoveEnumLayout,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
@@ -511,7 +511,7 @@ fn visit_variant<V: Visitor + ?Sized>(
     Ok(res)
 }
 
-fn read_exact<const N: usize>(bytes: &mut &[u8]) -> Result<[u8; N], Error> {
+fn read_exact<const N: usize>(bytes: &mut Cursor<&[u8]>) -> Result<[u8; N], Error> {
     let mut buf = [0u8; N];
     bytes
         .read_exact(&mut buf)
