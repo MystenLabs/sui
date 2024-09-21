@@ -118,7 +118,7 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
 
         _updateTokenPrice(tokenID, price);
 
-        emit TokenPriceUpdated(message.nonce, tokenID, price);
+        emit TokenPriceUpdatedV2(message.nonce, tokenID, price);
     }
 
     function addTokensWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
@@ -140,7 +140,7 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
             _addToken(tokenIDs[i], tokenAddresses[i], suiDecimals[i], _tokenPrices[i], native);
         }
 
-        emit TokensAdded(message.nonce, tokenIDs, tokenAddresses, suiDecimals, _tokenPrices);
+        emit TokensAddedV2(message.nonce, tokenIDs, tokenAddresses, suiDecimals, _tokenPrices);
     }
 
     /* ========== PRIVATE FUNCTIONS ========== */
@@ -153,8 +153,6 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         require(tokenPrice > 0, "BridgeConfig: Invalid token price");
 
         tokenPrices[tokenID] = tokenPrice;
-
-        emit TokenPriceUpdated(tokenID, tokenPrice);
     }
 
     /// @notice Updates the token with the provided ID.

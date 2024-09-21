@@ -33,6 +33,8 @@ interface IBridgeLimiter {
     /// @param nonce The governance action nonce.
     /// @param sourceChainID The ID of the source chain.
     /// @param newLimit The new limit in USD with 4 decimal places (e.g. 10000 -> $1)
-    event LimitUpdated(uint64 nonce, uint8 sourceChainID, uint64 newLimit);
+    event LimitUpdatedV2(uint64 nonce, uint8 sourceChainID, uint64 newLimit);
+
+    /// @dev (deprecated in favor of LimitUpdatedV2)
     event LimitUpdated(uint8 sourceChainID, uint64 newLimit);
 }

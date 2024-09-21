@@ -59,7 +59,7 @@ abstract contract CommitteeUpgradeable is
         // upgrade contract
         upgradeToAndCall(implementation, callData);
 
-        emit Upgraded(message.nonce, proxy, implementation);
+        emit ContractUpgraded(message.nonce, proxy, implementation);
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */
@@ -76,5 +76,5 @@ abstract contract CommitteeUpgradeable is
     /// @param nonce The nonce of the upgrade message.
     /// @param proxy The address of the proxy contract.
     /// @param implementation The address of the new implementation.
-    event Upgraded(uint256 nonce, address proxy, address implementation);
+    event ContractUpgraded(uint256 nonce, address proxy, address implementation);
 }
