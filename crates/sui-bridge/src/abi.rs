@@ -134,12 +134,16 @@ impl EthBridgeEvent {
                     EthSuiBridgeEvents::UnpausedFilter(_event) => None,
                     EthSuiBridgeEvents::UpgradedFilter(_event) => None,
                     EthSuiBridgeEvents::InitializedFilter(_event) => None,
+                    EthSuiBridgeEvents::ContractUpgradedFilter(_event) => None,
+                    EthSuiBridgeEvents::EmergencyOperationFilter(_event) => None,
                 }
             }
             EthBridgeEvent::EthBridgeCommitteeEvents(event) => match event {
                 EthBridgeCommitteeEvents::BlocklistUpdatedFilter(_event) => None,
                 EthBridgeCommitteeEvents::InitializedFilter(_event) => None,
                 EthBridgeCommitteeEvents::UpgradedFilter(_event) => None,
+                EthBridgeCommitteeEvents::BlocklistUpdatedV2Filter(_event) => None,
+                EthBridgeCommitteeEvents::ContractUpgradedFilter(_event) => None,
             },
             EthBridgeEvent::EthBridgeLimiterEvents(event) => match event {
                 EthBridgeLimiterEvents::LimitUpdatedFilter(_event) => None,
@@ -147,12 +151,17 @@ impl EthBridgeEvent {
                 EthBridgeLimiterEvents::UpgradedFilter(_event) => None,
                 EthBridgeLimiterEvents::HourlyTransferAmountUpdatedFilter(_event) => None,
                 EthBridgeLimiterEvents::OwnershipTransferredFilter(_event) => None,
+                EthBridgeLimiterEvents::ContractUpgradedFilter(_event) => None,
+                EthBridgeLimiterEvents::LimitUpdatedV2Filter(_event) => None,
             },
             EthBridgeEvent::EthBridgeConfigEvents(event) => match event {
                 EthBridgeConfigEvents::InitializedFilter(_event) => None,
                 EthBridgeConfigEvents::UpgradedFilter(_event) => None,
                 EthBridgeConfigEvents::TokenAddedFilter(_event) => None,
                 EthBridgeConfigEvents::TokenPriceUpdatedFilter(_event) => None,
+                EthBridgeConfigEvents::ContractUpgradedFilter(_event) => None,
+                EthBridgeConfigEvents::TokenPriceUpdatedV2Filter(_event) => None,
+                EthBridgeConfigEvents::TokensAddedV2Filter(_event) => None,
             },
             EthBridgeEvent::EthCommitteeUpgradeableContractEvents(event) => match event {
                 EthCommitteeUpgradeableContractEvents::InitializedFilter(_event) => None,

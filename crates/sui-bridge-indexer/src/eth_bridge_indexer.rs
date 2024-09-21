@@ -456,6 +456,8 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                     })
                 }
                 EthSuiBridgeEvents::PausedFilter(_)
+                | EthSuiBridgeEvents::ContractUpgradedFilter(_)
+                | EthSuiBridgeEvents::EmergencyOperationFilter(_)
                 | EthSuiBridgeEvents::UnpausedFilter(_)
                 | EthSuiBridgeEvents::UpgradedFilter(_)
                 | EthSuiBridgeEvents::InitializedFilter(_) => {
