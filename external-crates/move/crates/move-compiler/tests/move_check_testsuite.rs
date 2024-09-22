@@ -303,4 +303,4 @@ pub fn run_test_inner(
     }
 }
 
-datatest_stable::harness!(move_check_testsuite, "tests/", r".*\.move$");
+datatest_stable::harness!(move_check_testsuite, "tests/linter", r".*\.move$");

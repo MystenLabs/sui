@@ -1,0 +1,8 @@
+warning[Lint W01008]: excessive nesting
+   ┌─ tests/linter/true_negative_unnecessary_conditional.move:14:67
+   │
+14 │         let _ = if (*condition) { *condition = false; true } else { *condition = true; false };
+   │                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Detected excessive block nesting. Consider refactoring to simplify the code.
+   │
+   = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

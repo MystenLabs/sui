@@ -1,0 +1,8 @@
+warning[Lint W01008]: excessive nesting
+  ┌─ tests/linter/false_negative_unnecessary_while_loop.move:9:23
+  │
+9 │         while (1 > 0) {};
+  │                       ^^ Detected excessive block nesting. Consider refactoring to simplify the code.
+  │
+  = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

@@ -1,5 +1,6 @@
-module 0x42::M {
+module 0x42::excessive_nesting {
 
+    #[allow(lint(excessive_nesting))]
     fun func1() {
         let x = 10;
         let y = 20;
