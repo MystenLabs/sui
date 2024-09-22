@@ -601,17 +601,11 @@ fn top_level_address_(
     suggest_declaration: bool,
     ln: P::LeadingNameAccess,
 ) -> Address {
-    let name_res_ok = match check_valid_address_name(&ln) {
-        Ok(_) => true,
-        Err(diag) => {
-            context.env.add_diag(*diag);
-            false
-        }
-    };
+    let name_res = check_valid_address_name(&mut context.env, &ln);
     let sp!(loc, ln_) = ln;
     match ln_ {
         P::LeadingNameAccess_::AnonymousAddress(bytes) => {
-            debug_assert!(name_res_ok);
+            debug_assert!(name_res.is_ok());
             Address::anonymous(loc, bytes)
         }
         // This should have been handled elsewhere in alias resolution for user-provided paths, and
@@ -627,7 +621,7 @@ fn top_level_address_(
             match named_address_mapping.get(&name.value).copied() {
                 Some(addr) => make_address(context, name, loc, addr),
                 None => {
-                    if name_res_ok {
+                    if name_res.is_ok() {
                         context.env.add_diag(address_without_value_error(
                             suggest_declaration,
                             loc,
@@ -645,18 +639,12 @@ pub(super) fn top_level_address_opt(
     context: &mut DefnContext,
     ln: P::LeadingNameAccess,
 ) -> Option<Address> {
-    let name_res_ok = match check_valid_address_name(&ln) {
-        Ok(_) => true,
-        Err(diag) => {
-            context.env.add_diag(*diag);
-            false
-        }
-    };
+    let name_res = check_valid_address_name(&mut context.env, &ln);
     let named_address_mapping = context.named_address_mapping.as_ref().unwrap();
     let sp!(loc, ln_) = ln;
     match ln_ {
         P::LeadingNameAccess_::AnonymousAddress(bytes) => {
-            debug_assert!(name_res_ok);
+            debug_assert!(name_res.is_ok());
             Some(Address::anonymous(loc, bytes))
         }
         // This should have been handled elsewhere in alias resolution for user-provided paths, and
@@ -837,9 +825,8 @@ fn module_(
     assert!(context.address.is_none());
     assert!(address.is_none());
     set_module_address(context, &name, module_address);
-    if let Err(diag) = check_restricted_name_all_cases(NameCase::Module, &name.0) {
-        context.env().add_diag(*diag);
-    }
+    let _ =
+        check_restricted_name_all_cases(&mut context.defn_context.env, NameCase::Module, &name.0);
     if name.value().starts_with(|c| c == '_') {
         let msg = format!(
             "Invalid module name '{}'. Module names cannot start with '_'",
@@ -1453,18 +1440,15 @@ fn aliases_from_member(
 ) -> Option<P::ModuleMember> {
     macro_rules! check_name_and_add_implicit_alias {
         ($kind:expr, $name:expr) => {{
-            match check_valid_module_member_name($kind, $name) {
-                Ok(n) => {
-                    if let Err(loc) = acc.add_implicit_member_alias(
-                        n.clone(),
-                        current_module.clone(),
-                        n.clone(),
-                        $kind,
-                    ) {
-                        duplicate_module_member(context, loc, n)
-                    }
+            if let Some(n) = check_valid_module_member_name(&mut context.env(), $kind, $name) {
+                if let Err(loc) = acc.add_implicit_member_alias(
+                    n.clone(),
+                    current_module.clone(),
+                    n.clone(),
+                    $kind,
+                ) {
+                    duplicate_module_member(context, loc, n)
                 }
-                Err(diag) => context.env().add_diag(*diag),
             }
         }};
     }
@@ -1592,8 +1576,11 @@ fn module_use(
     };
     macro_rules! add_module_alias {
         ($ident:expr, $alias:expr) => {{
-            if let Err(diag) = check_restricted_name_all_cases(NameCase::ModuleAlias, &$alias) {
-                context.env().add_diag(*diag);
+            if let Err(()) = check_restricted_name_all_cases(
+                &mut context.defn_context.env,
+                NameCase::ModuleAlias,
+                &$alias,
+            ) {
                 return;
             }
 
@@ -1670,13 +1657,11 @@ fn module_use(
 
                 let alias = alias_opt.unwrap_or(member);
 
-                let alias = match check_valid_module_member_alias(member_kind, alias) {
-                    Err(diag) => {
-                        context.env().add_diag(*diag);
-                        continue;
-                    }
-                    Ok(alias) => alias,
-                };
+                let alias =
+                    match check_valid_module_member_alias(&mut context.env(), member_kind, alias) {
+                        None => continue,
+                        Some(alias) => alias,
+                    };
                 if let Err(old_loc) = acc.add_member_alias(alias, mident, member, member_kind) {
                     duplicate_module_member(context, old_loc, alias)
                 }
@@ -2254,9 +2239,7 @@ fn function_signature(
         .map(|(pmut, v, t)| (mutability(context, v.loc(), pmut), v, type_(context, t)))
         .collect::<Vec<_>>();
     for (_, v, _) in &parameters {
-        if let Err(diag) = check_valid_function_parameter_name(is_macro, v) {
-            context.env().add_diag(*diag);
-        }
+        check_valid_function_parameter_name(&mut context.env(), is_macro, v)
     }
     let return_type = type_(context, pret_ty);
     E::FunctionSignature {
@@ -2304,9 +2287,7 @@ fn function_type_parameters(
         .into_iter()
         .map(|(name, constraints_vec)| {
             let constraints = ability_set(context, "constraint", constraints_vec);
-            if let Err(diag) = check_valid_type_parameter_name(is_macro, &name) {
-                context.env().add_diag(*diag);
-            }
+            let _ = check_valid_type_parameter_name(&mut context.env(), is_macro, &name);
             (name, constraints)
         })
         .collect()
@@ -2319,9 +2300,7 @@ fn datatype_type_parameters(
     pty_params
         .into_iter()
         .map(|param| {
-            if let Err(diag) = check_valid_type_parameter_name(None, &param.name) {
-                context.env().add_diag(*diag);
-            }
+            let _ = check_valid_type_parameter_name(&mut context.env(), None, &param.name);
             E::DatatypeTypeParameter {
                 is_phantom: param.is_phantom,
                 name: param.name,
@@ -3332,9 +3311,7 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
     let b_ = match pb_ {
         PB::Var(pmut, v) => {
             let emut = mutability(context, v.loc(), pmut);
-            if let Err(diag) = check_valid_local_name(&v) {
-                context.env().add_diag(*diag);
-            }
+            check_valid_local_name(&mut context.env(), &v);
             EL::Var(Some(emut), sp(loc, E::ModuleAccess_::Name(v.0)), None)
         }
         PB::Unpack(ptn, pfields) => {

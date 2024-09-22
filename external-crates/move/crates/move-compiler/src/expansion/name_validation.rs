@@ -101,11 +101,16 @@ impl NameCase {
 // Valid names
 //**************************************************************************************************
 
-pub fn check_valid_address_name(sp!(_, ln_): &P::LeadingNameAccess) -> Result<(), Box<Diagnostic>> {
+pub fn check_valid_address_name(
+    env: &mut CompilationEnv,
+    sp!(_, ln_): &P::LeadingNameAccess,
+) -> Result<(), ()> {
     use P::LeadingNameAccess_ as LN;
     match ln_ {
         LN::AnonymousAddress(_) => Ok(()),
-        LN::GlobalAddress(n) | LN::Name(n) => check_restricted_name_all_cases(NameCase::Address, n),
+        LN::GlobalAddress(n) | LN::Name(n) => {
+            check_restricted_name_all_cases(env, NameCase::Address, n)
+        }
     }
 }
 
@@ -114,9 +119,10 @@ pub fn valid_local_variable_name(s: Symbol) -> bool {
 }
 
 pub fn check_valid_function_parameter_name(
+    env: &mut CompilationEnv,
     is_macro: Option<Loc>,
     v: &Var,
-) -> Result<(), Box<Diagnostic>> {
+) {
     const SYNTAX_IDENTIFIER_NOTE: &str =
         "'macro' parameters start with '$' to indicate that their arguments are not evaluated \
         before the macro is expanded, meaning the entire expression is substituted. \
@@ -136,7 +142,7 @@ pub fn check_valid_function_parameter_name(
                 (macro_loc, macro_msg),
             );
             diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-            return Err(Box::new(diag));
+            env.add_diag(diag);
         }
     } else if is_syntax_identifier {
         let msg = format!(
@@ -145,28 +151,28 @@ pub fn check_valid_function_parameter_name(
         );
         let mut diag = diag!(Declarations::InvalidName, (v.loc(), msg));
         diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-        return Err(Box::new(diag));
+        env.add_diag(diag);
     } else if !is_valid_local_variable_name(v.value()) {
         let msg = format!(
             "Invalid parameter name '{}'. Local variable names must start with 'a'..'z', '_', \
             or be a valid name quoted with backticks (`name`)",
             v,
         );
-        return Err(Box::new(diag!(Declarations::InvalidName, (v.loc(), msg))));
+        env.add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
     }
-    check_restricted_name_all_cases(NameCase::Variable, &v.0)
+    let _ = check_restricted_name_all_cases(env, NameCase::Variable, &v.0);
 }
 
-pub fn check_valid_local_name(v: &Var) -> Result<(), Box<Diagnostic>> {
+pub fn check_valid_local_name(env: &mut CompilationEnv, v: &Var) {
     if !is_valid_local_variable_name(v.value()) {
         let msg = format!(
             "Invalid local name '{}'. Local variable names must start with 'a'..'z', '_', \
             or be a valid name quoted with backticks (`name`)",
             v,
         );
-        return Err(Box::new(diag!(Declarations::InvalidName, (v.loc(), msg))));
+        env.add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
     }
-    check_restricted_name_all_cases(NameCase::Variable, &v.0)
+    let _ = check_restricted_name_all_cases(env, NameCase::Variable, &v.0);
 }
 
 fn is_valid_local_variable_name(s: Symbol) -> bool {
@@ -174,26 +180,38 @@ fn is_valid_local_variable_name(s: Symbol) -> bool {
 }
 
 pub fn check_valid_module_member_name(
+    env: &mut CompilationEnv,
     member: ModuleMemberKind,
     name: Name,
-) -> Result<Name, Box<Diagnostic>> {
-    check_valid_module_member_name_impl(member, &name, member.case())?;
-    Ok(name)
+) -> Option<Name> {
+    match check_valid_module_member_name_impl(env, member, &name, member.case()) {
+        Err(()) => None,
+        Ok(()) => Some(name),
+    }
 }
 
 pub fn check_valid_module_member_alias(
+    env: &mut CompilationEnv,
     member: ModuleMemberKind,
     alias: Name,
-) -> Result<Name, Box<Diagnostic>> {
-    check_valid_module_member_name_impl(member, &alias, NameCase::ModuleMemberAlias(member))?;
-    Ok(alias)
+) -> Option<Name> {
+    match check_valid_module_member_name_impl(
+        env,
+        member,
+        &alias,
+        NameCase::ModuleMemberAlias(member),
+    ) {
+        Err(()) => None,
+        Ok(()) => Some(alias),
+    }
 }
 
 fn check_valid_module_member_name_impl(
+    env: &mut CompilationEnv,
     member: ModuleMemberKind,
     n: &Name,
     case: NameCase,
-) -> Result<(), Box<Diagnostic>> {
+) -> Result<(), ()> {
     use ModuleMemberKind as M;
     fn upper_first_letter(s: &str) -> String {
         let mut chars = s.chars();
@@ -211,7 +229,8 @@ fn check_valid_module_member_name_impl(
                     n,
                     upper_first_letter(case.name()),
                 );
-                return Err(Box::new(diag!(Declarations::InvalidName, (n.loc, msg))));
+                env.add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
+                return Err(());
             }
         }
         M::Constant | M::Struct | M::Enum => {
@@ -222,30 +241,43 @@ fn check_valid_module_member_name_impl(
                     n,
                     upper_first_letter(case.name()),
                 );
-                return Err(Box::new(diag!(Declarations::InvalidName, (n.loc, msg))));
+                env.add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
+                return Err(());
             }
         }
     }
 
     // TODO move these names to a more central place?
-    check_restricted_names(case, n, crate::naming::ast::BuiltinFunction_::all_names())?;
-    check_restricted_names(case, n, crate::naming::ast::BuiltinTypeName_::all_names())?;
+    check_restricted_names(
+        env,
+        case,
+        n,
+        crate::naming::ast::BuiltinFunction_::all_names(),
+    )?;
+    check_restricted_names(
+        env,
+        case,
+        n,
+        crate::naming::ast::BuiltinTypeName_::all_names(),
+    )?;
 
     // Restricting Self for now in the case where we ever have impls
     // Otherwise, we could allow it
-    check_restricted_name_all_cases(case, n)?;
+    check_restricted_name_all_cases(env, case, n)?;
 
     Ok(())
 }
 
 pub fn check_valid_type_parameter_name(
+    env: &mut CompilationEnv,
     is_macro: Option<Loc>,
     n: &Name,
-) -> Result<(), Box<Diagnostic>> {
+) -> Result<(), ()> {
     // TODO move these names to a more central place?
     if n.value == symbol!("_") {
         let diag = restricted_name_error(NameCase::TypeParameter, n.loc, "_");
-        return Err(Box::new(diag));
+        env.add_diag(diag);
+        return Err(());
     }
 
     const SYNTAX_IDENTIFIER_NOTE: &str = "Type parameter names starting with '$' indicate that \
@@ -267,7 +299,7 @@ pub fn check_valid_type_parameter_name(
                 (macro_loc, macro_msg),
             );
             diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-            return Err(Box::new(diag));
+            env.add_diag(diag);
         } else {
             let next_char = n.value.chars().nth(1).unwrap();
             if !next_char.is_ascii_alphabetic() {
@@ -279,7 +311,7 @@ pub fn check_valid_type_parameter_name(
                 );
                 let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
                 diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-                return Err(Box::new(diag));
+                env.add_diag(diag);
             }
         }
     } else if is_syntax_ident {
@@ -290,22 +322,24 @@ pub fn check_valid_type_parameter_name(
         );
         let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
         diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-        return Err(Box::new(diag));
+        env.add_diag(diag);
     }
 
     // TODO move these names to a more central place?
     check_restricted_names(
+        env,
         NameCase::TypeParameter,
         n,
         crate::naming::ast::BuiltinFunction_::all_names(),
     )?;
     check_restricted_names(
+        env,
         NameCase::TypeParameter,
         n,
         crate::naming::ast::BuiltinTypeName_::all_names(),
     )?;
 
-    check_restricted_name_all_cases(NameCase::TypeParameter, n)
+    check_restricted_name_all_cases(env, NameCase::TypeParameter, n)
 }
 
 pub fn is_valid_datatype_or_constant_name(s: &str) -> bool {
@@ -314,7 +348,11 @@ pub fn is_valid_datatype_or_constant_name(s: &str) -> bool {
 
 // Checks for a restricted name in any decl case
 // Self and vector are not allowed
-pub fn check_restricted_name_all_cases(case: NameCase, n: &Name) -> Result<(), Box<Diagnostic>> {
+pub fn check_restricted_name_all_cases(
+    env: &mut CompilationEnv,
+    case: NameCase,
+    n: &Name,
+) -> Result<(), ()> {
     match case {
         NameCase::Constant
         | NameCase::Function
@@ -331,7 +369,8 @@ pub fn check_restricted_name_all_cases(case: NameCase, n: &Name) -> Result<(), B
                     case.name(),
                     n,
                 );
-                return Err(Box::new(diag!(Declarations::InvalidName, (n.loc, msg))));
+                env.add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
+                return Err(());
             }
         }
         NameCase::Variable | NameCase::TypeParameter => (),
@@ -342,19 +381,22 @@ pub fn check_restricted_name_all_cases(case: NameCase, n: &Name) -> Result<(), B
     if n_str == ModuleName::SELF_NAME
         || (!can_be_vector && n_str == crate::naming::ast::BuiltinTypeName_::VECTOR)
     {
-        Err(Box::new(restricted_name_error(case, n.loc, n_str)))
+        env.add_diag(restricted_name_error(case, n.loc, n_str));
+        Err(())
     } else {
         Ok(())
     }
 }
 
 fn check_restricted_names(
+    env: &mut CompilationEnv,
     case: NameCase,
     sp!(loc, n_): &Name,
     all_names: &BTreeSet<Symbol>,
-) -> Result<(), Box<Diagnostic>> {
+) -> Result<(), ()> {
     if all_names.contains(n_) {
-        Err(Box::new(restricted_name_error(case, *loc, n_)))
+        env.add_diag(restricted_name_error(case, *loc, n_));
+        Err(())
     } else {
         Ok(())
     }
