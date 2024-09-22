@@ -243,7 +243,7 @@ impl MoveStruct {
         V::Error: std::error::Error + Send + Sync + 'static,
     {
         let mut bytes = Cursor::new(blob);
-        let driver = ValueDriver::new(&mut bytes);
+        let driver = ValueDriver::new(&mut bytes, None);
         let res = visit_struct(driver, ty, visitor)?;
         if bytes.position() as usize == blob.len() {
             Ok(res)
