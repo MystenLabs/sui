@@ -3,10 +3,8 @@
 //! Encourages developers to either complete the conditional logic or remove the unnecessary `if`.
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::WarningFilters,
+    linters::StyleCodes,
     shared::CompilationEnv,
     typing::{
         ast::{self as T, SequenceItem_, UnannotatedExp_},
@@ -14,16 +12,6 @@ use crate::{
     },
 };
 use move_ir_types::location::Loc;
-
-use super::{LinterDiagnosticCategory, EMPTY_IF_NO_ELSE_DIAG_CODE, LINT_WARNING_PREFIX};
-
-const EMPTY_IF_NO_ELSE_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Complexity as u8,
-    EMPTY_IF_NO_ELSE_DIAG_CODE,
-    "",
-);
 
 pub struct EmptyIfNoElse;
 
@@ -40,7 +28,15 @@ impl TypingVisitorConstructor for EmptyIfNoElse {
 }
 
 impl TypingVisitorContext for Context<'_> {
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
+        self.env.add_warning_filter_scope(filter)
+    }
+
+    fn pop_warning_filter_scope(&mut self) {
+        self.env.pop_warning_filter_scope()
+    }
+
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         if let UnannotatedExp_::IfElse(_, if_block, else_block) = &exp.exp.value {
             let mut if_block_is_empty = false;
             if let UnannotatedExp_::Block(seq) = &if_block.exp.value {
@@ -57,24 +53,12 @@ impl TypingVisitorContext for Context<'_> {
                 UnannotatedExp_::Unit { trailing: false }
             );
             if if_block_is_empty && no_else_block {
-                report_empty_if_no_else(self.env, exp.exp.loc);
+                self.env.add_diag(diag!(
+                    StyleCodes::EmptyIfNoElse.diag_info(),
+                    (exp.exp.loc, "Detected an empty `if` branch without an `else` branch. Consider removing or completing the conditional."),
+                ));
             }
         }
         false
     }
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-}
-
-fn report_empty_if_no_else(env: &mut CompilationEnv, loc: Loc) {
-    let diag = diag!(
-        EMPTY_IF_NO_ELSE_DIAG,
-        (loc, "Detected an empty `if` branch without an `else` branch. Consider removing or completing the conditional.")
-    );
-    env.add_diag(diag);
 }

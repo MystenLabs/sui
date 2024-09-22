@@ -1,0 +1,11 @@
+warning[Lint W04008]: Empty 'if' statement with no 'else' branch
+   ┌─ tests/linter/true_negative_empty_if_no_else.move:22:16
+   │  
+22 │           } else if (x > 5) {
+   │ ╭────────────────^
+23 │ │             // Do something else
+24 │ │         };
+   │ ╰─────────^ Detected an empty `if` branch without an `else` branch. Consider removing or completing the conditional.
+   │  
+   = This warning can be suppressed with '#[allow(lint(empty_if_no_else))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
