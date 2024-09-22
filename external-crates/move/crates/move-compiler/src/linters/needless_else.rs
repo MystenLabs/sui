@@ -7,6 +7,7 @@ use crate::{
         codes::{custom, DiagnosticInfo, Severity},
         WarningFilters,
     },
+    linters::StyleCodes,
     shared::CompilationEnv,
     typing::{
         ast::{self as T, SequenceItem_, UnannotatedExp_},
@@ -14,16 +15,6 @@ use crate::{
     },
 };
 use move_ir_types::location::Loc;
-
-use super::{LinterDiagnosticCategory, EMPTY_ELSE_BRANCH_DIAG_CODE, LINT_WARNING_PREFIX};
-
-const EMPTY_ELSE_BRANCH_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Complexity as u8,
-    EMPTY_ELSE_BRANCH_DIAG_CODE,
-    "",
-);
 
 pub struct EmptyElseBranch;
 
@@ -40,7 +31,15 @@ impl TypingVisitorConstructor for EmptyElseBranch {
 }
 
 impl TypingVisitorContext for Context<'_> {
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
+        self.env.add_warning_filter_scope(filter)
+    }
+
+    fn pop_warning_filter_scope(&mut self) {
+        self.env.pop_warning_filter_scope()
+    }
+
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         if let UnannotatedExp_::IfElse(_, _, else_block) = &exp.exp.value {
             // Determine if the else block is empty
             let mut else_block_is_empty = false;
@@ -55,27 +54,15 @@ impl TypingVisitorContext for Context<'_> {
             }
 
             if else_block_is_empty {
-                report_empty_else_branch(self.env, else_block.exp.loc);
+                self.env.add_diag(diag!(
+                    StyleCodes::NeedlessElse.diag_info(),
+                    (
+                        exp.exp.loc,
+                        "Detected an empty `else` branch, which may be unnecessary."
+                    ),
+                ));
             }
         }
         false
     }
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-}
-
-fn report_empty_else_branch(env: &mut CompilationEnv, loc: Loc) {
-    let diag = diag!(
-        EMPTY_ELSE_BRANCH_DIAG,
-        (
-            loc,
-            "Detected an empty `else` branch, which may be unnecessary."
-        )
-    );
-    env.add_diag(diag);
 }
