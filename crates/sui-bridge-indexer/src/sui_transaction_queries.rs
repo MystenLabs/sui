@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
@@ -10,7 +9,7 @@ use sui_sdk::SuiClient;
 use sui_types::digests::TransactionDigest;
 use sui_types::SUI_BRIDGE_OBJECT_ID;
 
-use sui_bridge::{metrics::BridgeMetrics, retry_with_max_elapsed_time};
+use sui_bridge::retry_with_max_elapsed_time;
 use tracing::{error, info};
 
 use crate::types::RetrievedTransaction;
@@ -25,7 +24,6 @@ pub async fn start_sui_tx_polling_task(
         Vec<RetrievedTransaction>,
         Option<TransactionDigest>,
     )>,
-    metrics: Arc<BridgeMetrics>,
 ) {
     info!("Starting SUI transaction polling task from {:?}", cursor);
     loop {
@@ -68,12 +66,9 @@ pub async fn start_sui_tx_polling_task(
             tokio::time::sleep(QUERY_DURATION).await;
             continue;
         }
-        // Unwrap: txes is not empty
-        let ckp = txes.last().unwrap().checkpoint;
         tx.send((txes, results.next_cursor))
             .await
             .expect("Failed to send transaction block to process");
-        metrics.last_synced_sui_checkpoint.set(ckp as i64);
         cursor = results.next_cursor;
     }
 }

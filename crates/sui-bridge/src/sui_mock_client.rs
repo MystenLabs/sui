@@ -32,7 +32,7 @@ use crate::types::{BridgeAction, BridgeActionStatus, IsBridgePaused};
 pub struct SuiMockClient {
     // the top two fields do not change during tests so we don't need them to be Arc<Mutex>>
     chain_identifier: String,
-    latest_checkpoint_sequence_number: u64,
+    latest_checkpoint_sequence_number: Arc<Mutex<u64>>,
     events: Arc<Mutex<HashMap<(ObjectID, Identifier, Option<EventID>), EventPage>>>,
     past_event_query_params: Arc<Mutex<VecDeque<(ObjectID, Identifier, Option<EventID>)>>>,
     events_by_tx_digest:
@@ -51,7 +51,7 @@ impl SuiMockClient {
     pub fn default() -> Self {
         Self {
             chain_identifier: "".to_string(),
-            latest_checkpoint_sequence_number: 0,
+            latest_checkpoint_sequence_number: Arc::new(Mutex::new(0)),
             events: Default::default(),
             past_event_query_params: Default::default(),
             events_by_tx_digest: Default::default(),
@@ -128,6 +128,10 @@ impl SuiMockClient {
         *self.wildcard_transaction_response.lock().unwrap() = Some(response);
     }
 
+    pub fn set_latest_checkpoint_sequence_number(&self, value: u64) {
+        *self.latest_checkpoint_sequence_number.lock().unwrap() = value;
+    }
+
     pub fn add_gas_object_info(&self, gas_coin: GasCoin, object_ref: ObjectRef, owner: Owner) {
         self.get_object_info
             .lock()
@@ -196,7 +200,7 @@ impl SuiClientInner for SuiMockClient {
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error> {
-        Ok(self.latest_checkpoint_sequence_number)
+        Ok(*self.latest_checkpoint_sequence_number.lock().unwrap())
     }
 
     async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, Self::Error> {
