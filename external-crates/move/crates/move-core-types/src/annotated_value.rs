@@ -167,9 +167,9 @@ impl MoveValue {
     ///
     /// Deserialization can fail because of an issue in the serialized format (data doesn't match
     /// layout, unexpected bytes or trailing bytes), or a custom error expressed by the visitor.
-    pub fn visit_deserialize<V: Visitor>(
-        blob: &[u8],
-        ty: &MoveTypeLayout,
+    pub fn visit_deserialize<'b, 'l, V: Visitor<'b, 'l>>(
+        blob: &'b [u8],
+        ty: &'l MoveTypeLayout,
         visitor: &mut V,
     ) -> AResult<V::Value>
     where
@@ -234,9 +234,9 @@ impl MoveStruct {
     /// Like `MoveValue::visit_deserialize` (see for details), but specialized to visiting a struct
     /// (the `blob` is known to be a serialized Move struct, and the layout is a
     /// `MoveStructLayout`).
-    pub fn visit_deserialize<V: Visitor>(
-        blob: &[u8],
-        ty: &MoveStructLayout,
+    pub fn visit_deserialize<'b, 'l, V: Visitor<'b, 'l>>(
+        blob: &'b [u8],
+        ty: &'l MoveStructLayout,
         visitor: &mut V,
     ) -> AResult<V::Value>
     where

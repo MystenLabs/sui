@@ -146,13 +146,13 @@ impl BoundedVisitor {
     }
 }
 
-impl Visitor for BoundedVisitor {
+impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
     type Value = A::MoveValue;
     type Error = Error;
 
     fn visit_u8(
         &mut self,
-        _driver: &ValueDriver<'_, '_>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u8,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U8(value))
@@ -160,7 +160,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_u16(
         &mut self,
-        _driver: &ValueDriver<'_, '_>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u16,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U16(value))
@@ -168,7 +168,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_u32(
         &mut self,
-        _driver: &ValueDriver<'_, '_>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u32,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U32(value))
@@ -176,7 +176,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_u64(
         &mut self,
-        _driver: &ValueDriver<'_, '_>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u64,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U64(value))
@@ -184,7 +184,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_u128(
         &mut self,
-        _driver: &ValueDriver<'_, '_>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u128,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U128(value))
@@ -192,7 +192,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_u256(
         &mut self,
-        _driver: &ValueDriver<'_, '_>,
+        _driver: &ValueDriver<'_, 'b>,
         value: U256,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U256(value))
@@ -200,7 +200,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_bool(
         &mut self,
-        _driver: &ValueDriver<'_, '_>,
+        _driver: &ValueDriver<'_, 'b>,
         value: bool,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Bool(value))
@@ -208,7 +208,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_address(
         &mut self,
-        _driver: &ValueDriver<'_, '_>,
+        _driver: &ValueDriver<'_, 'b>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Address(value))
@@ -216,7 +216,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_signer(
         &mut self,
-        _driver: &ValueDriver<'_, '_>,
+        _driver: &ValueDriver<'_, 'b>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Signer(value))
@@ -224,7 +224,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_vector(
         &mut self,
-        driver: &mut VecDriver<'_, '_, '_>,
+        driver: &mut VecDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         let mut elems = vec![];
         while let Some(elem) = driver.next_element(self)? {
@@ -236,7 +236,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_struct(
         &mut self,
-        driver: &mut StructDriver<'_, '_, '_>,
+        driver: &mut StructDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         let tag = driver.struct_layout().type_.clone().into();
 
@@ -262,7 +262,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_variant(
         &mut self,
-        driver: &mut annotated_visitor::VariantDriver<'_, '_, '_>,
+        driver: &mut annotated_visitor::VariantDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         let type_ = driver.enum_layout().type_.clone().into();
 
