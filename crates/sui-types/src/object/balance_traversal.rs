@@ -54,7 +54,7 @@ impl<'b, 'l> Traversal<'b, 'l> for Accumulator {
     type Error = annotated_visitor::Error;
     fn traverse_u64(
         &mut self,
-        _driver: &ValueDriver<'_, 'b>,
+        _driver: &ValueDriver<'_, 'b, 'l>,
         value: u64,
     ) -> Result<(), Self::Error> {
         self.total += value;

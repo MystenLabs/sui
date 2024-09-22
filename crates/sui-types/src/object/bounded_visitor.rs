@@ -152,7 +152,7 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
 
     fn visit_u8(
         &mut self,
-        _driver: &ValueDriver<'_, 'b>,
+        _driver: &ValueDriver<'_, 'b, 'l>,
         value: u8,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U8(value))
@@ -160,7 +160,7 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
 
     fn visit_u16(
         &mut self,
-        _driver: &ValueDriver<'_, 'b>,
+        _driver: &ValueDriver<'_, 'b, 'l>,
         value: u16,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U16(value))
@@ -168,7 +168,7 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
 
     fn visit_u32(
         &mut self,
-        _driver: &ValueDriver<'_, 'b>,
+        _driver: &ValueDriver<'_, 'b, 'l>,
         value: u32,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U32(value))
@@ -176,7 +176,7 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
 
     fn visit_u64(
         &mut self,
-        _driver: &ValueDriver<'_, 'b>,
+        _driver: &ValueDriver<'_, 'b, 'l>,
         value: u64,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U64(value))
@@ -184,7 +184,7 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
 
     fn visit_u128(
         &mut self,
-        _driver: &ValueDriver<'_, 'b>,
+        _driver: &ValueDriver<'_, 'b, 'l>,
         value: u128,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U128(value))
@@ -192,7 +192,7 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
 
     fn visit_u256(
         &mut self,
-        _driver: &ValueDriver<'_, 'b>,
+        _driver: &ValueDriver<'_, 'b, 'l>,
         value: U256,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U256(value))
@@ -200,7 +200,7 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
 
     fn visit_bool(
         &mut self,
-        _driver: &ValueDriver<'_, 'b>,
+        _driver: &ValueDriver<'_, 'b, 'l>,
         value: bool,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Bool(value))
@@ -208,7 +208,7 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
 
     fn visit_address(
         &mut self,
-        _driver: &ValueDriver<'_, 'b>,
+        _driver: &ValueDriver<'_, 'b, 'l>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Address(value))
@@ -216,7 +216,7 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
 
     fn visit_signer(
         &mut self,
-        _driver: &ValueDriver<'_, 'b>,
+        _driver: &ValueDriver<'_, 'b, 'l>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Signer(value))
