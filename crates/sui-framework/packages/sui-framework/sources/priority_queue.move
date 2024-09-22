@@ -69,7 +69,14 @@ module sui::priority_queue {
         };
         res
     }
-
+    /// Return the length of queue
+    public fun length<T: drop>(pq: &PriorityQueue<T>): u64 {
+        pq.entries.length()
+    }
+    /// Return `true` if the entries has no elements and `false` otherwise.
+    public fun is_empty<T: drop>(pq: &PriorityQueue<T>): bool {
+        pq.entries.is_empty()
+    } 
     // TODO: implement iterative version too and see performance difference.
     fun restore_heap_recursive<T: drop>(v: &mut vector<Entry<T>>, i: u64) {
         if (i == 0) {
@@ -125,7 +132,19 @@ module sui::priority_queue {
         };
         res
     }
+    #[test]
+    fun test_length() {
+        let h = new(create_entries(vector[1,2,3,4,5], vector[10, 20, 30, 40, 50]));
+        assert!(length(&h) == 5, 0);
+    }
+    #[test]
+    fun test_is_empty() {
+        let mut h = new(create_entries(vector[1], vector[10]));
+        assert!(!is_empty(&h), 0);
 
+        let (_, _) = pop_max(&mut h);
+        assert!(is_empty(&h), 0);
+    }
     #[test]
     fun test_pq() {
         let mut h = new(create_entries(vector[3,1,4,2,5,2], vector[10, 20, 30, 40, 50, 60]));
