@@ -27,12 +27,12 @@ fn traversal() {
     #[derive(Default)]
     struct CountingTraversal(usize);
 
-    impl Traversal for CountingTraversal {
+    impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
         type Error = annotated_visitor::Error;
 
         fn traverse_u8(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             _value: u8,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
@@ -41,7 +41,7 @@ fn traversal() {
 
         fn traverse_u16(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             _value: u16,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
@@ -50,7 +50,7 @@ fn traversal() {
 
         fn traverse_u32(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             _value: u32,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
@@ -59,7 +59,7 @@ fn traversal() {
 
         fn traverse_u64(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             _value: u64,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
@@ -68,7 +68,7 @@ fn traversal() {
 
         fn traverse_u128(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             _value: u128,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
@@ -77,7 +77,7 @@ fn traversal() {
 
         fn traverse_u256(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             _value: U256,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
@@ -86,7 +86,7 @@ fn traversal() {
 
         fn traverse_bool(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             _value: bool,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
@@ -95,7 +95,7 @@ fn traversal() {
 
         fn traverse_address(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             _value: AccountAddress,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
@@ -104,7 +104,7 @@ fn traversal() {
 
         fn traverse_signer(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             _value: AccountAddress,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
@@ -113,7 +113,7 @@ fn traversal() {
 
         fn traverse_vector(
             &mut self,
-            driver: &mut VecDriver<'_, '_, '_>,
+            driver: &mut VecDriver<'_, 'b, 'l>,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
             while driver.next_element(self)?.is_some() {}
@@ -122,7 +122,7 @@ fn traversal() {
 
         fn traverse_struct(
             &mut self,
-            driver: &mut StructDriver<'_, '_, '_>,
+            driver: &mut StructDriver<'_, 'b, 'l>,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
             while driver.next_field(self)?.is_some() {}
@@ -131,7 +131,7 @@ fn traversal() {
 
         fn traverse_variant(
             &mut self,
-            driver: &mut VariantDriver<'_, '_, '_>,
+            driver: &mut VariantDriver<'_, 'b, 'l>,
         ) -> Result<(), Self::Error> {
             self.0 += 1;
             while driver.next_field(self)?.is_some() {}
@@ -340,13 +340,13 @@ fn nested_datatype_visit() {
         output: String,
     }
 
-    impl Visitor for PrintVisitor {
+    impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
         type Value = MoveValue;
         type Error = annotated_visitor::Error;
 
         fn visit_u8(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             value: u8,
         ) -> Result<Self::Value, Self::Error> {
             write!(self.output, "\n[{}] {value}: u8", self.depth).unwrap();
@@ -355,7 +355,7 @@ fn nested_datatype_visit() {
 
         fn visit_u16(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             value: u16,
         ) -> Result<Self::Value, Self::Error> {
             write!(self.output, "\n[{}] {value}: u16", self.depth).unwrap();
@@ -364,7 +364,7 @@ fn nested_datatype_visit() {
 
         fn visit_u32(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             value: u32,
         ) -> Result<Self::Value, Self::Error> {
             write!(self.output, "\n[{}] {value}: u32", self.depth).unwrap();
@@ -373,7 +373,7 @@ fn nested_datatype_visit() {
 
         fn visit_u64(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             value: u64,
         ) -> Result<Self::Value, Self::Error> {
             write!(self.output, "\n[{}] {value}: u64", self.depth).unwrap();
@@ -382,7 +382,7 @@ fn nested_datatype_visit() {
 
         fn visit_u128(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             value: u128,
         ) -> Result<Self::Value, Self::Error> {
             write!(self.output, "\n[{}] {value}: u128", self.depth).unwrap();
@@ -391,7 +391,7 @@ fn nested_datatype_visit() {
 
         fn visit_u256(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             value: U256,
         ) -> Result<Self::Value, Self::Error> {
             write!(self.output, "\n[{}] {value}: u256", self.depth).unwrap();
@@ -400,7 +400,7 @@ fn nested_datatype_visit() {
 
         fn visit_bool(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             value: bool,
         ) -> Result<Self::Value, Self::Error> {
             write!(self.output, "\n[{}] {value}: bool", self.depth).unwrap();
@@ -409,7 +409,7 @@ fn nested_datatype_visit() {
 
         fn visit_address(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             value: AccountAddress,
         ) -> Result<Self::Value, Self::Error> {
             write!(self.output, "\n[{}] {value}: address", self.depth).unwrap();
@@ -418,7 +418,7 @@ fn nested_datatype_visit() {
 
         fn visit_signer(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             value: AccountAddress,
         ) -> Result<Self::Value, Self::Error> {
             write!(self.output, "\n[{}] {value}: signer", self.depth).unwrap();
@@ -427,7 +427,7 @@ fn nested_datatype_visit() {
 
         fn visit_vector(
             &mut self,
-            driver: &mut VecDriver<'_, '_, '_>,
+            driver: &mut VecDriver<'_, 'b, 'l>,
         ) -> Result<Self::Value, Self::Error> {
             let layout = driver.element_layout();
             write!(self.output, "\n[{}] vector<{layout:#}>", self.depth).unwrap();
@@ -448,7 +448,7 @@ fn nested_datatype_visit() {
 
         fn visit_struct(
             &mut self,
-            driver: &mut StructDriver<'_, '_, '_>,
+            driver: &mut StructDriver<'_, 'b, 'l>,
         ) -> Result<Self::Value, Self::Error> {
             let layout = driver.struct_layout();
             write!(self.output, "\n[{}] {layout:#}", self.depth).unwrap();
@@ -470,7 +470,7 @@ fn nested_datatype_visit() {
 
         fn visit_variant(
             &mut self,
-            driver: &mut VariantDriver<'_, '_, '_>,
+            driver: &mut VariantDriver<'_, 'b, 'l>,
         ) -> Result<Self::Value, Self::Error> {
             let layout = driver.enum_layout();
             write!(self.output, "\n[{}] {layout:#}", self.depth).unwrap();
@@ -593,13 +593,13 @@ fn peek_field_test() {
         fields: &'f [&'f str],
     }
 
-    impl<'f> Visitor for PeekU64Visitor<'f> {
+    impl<'b, 'l, 'f> Visitor<'b, 'l> for PeekU64Visitor<'f> {
         type Value = Option<u64>;
         type Error = annotated_visitor::Error;
 
         fn visit_u64(
             &mut self,
-            _driver: &ValueDriver<'_, '_>,
+            _driver: &ValueDriver<'_, 'b>,
             value: u64,
         ) -> Result<Self::Value, Self::Error> {
             Ok(self.fields.is_empty().then_some(value))
@@ -607,7 +607,7 @@ fn peek_field_test() {
 
         fn visit_struct(
             &mut self,
-            driver: &mut StructDriver<'_, '_, '_>,
+            driver: &mut StructDriver<'_, 'b, 'l>,
         ) -> Result<Self::Value, Self::Error> {
             let [field, fields @ ..] = self.fields else {
                 return Ok(None);
@@ -628,7 +628,7 @@ fn peek_field_test() {
 
         fn visit_variant(
             &mut self,
-            driver: &mut VariantDriver<'_, '_, '_>,
+            driver: &mut VariantDriver<'_, 'b, 'l>,
         ) -> Result<Self::Value, Self::Error> {
             let [field, fields @ ..] = self.fields else {
                 return Ok(None);
@@ -649,13 +649,13 @@ fn peek_field_test() {
 
         // === Empty/default cases ===
 
-        fn visit_u8(&mut self, _: &ValueDriver<'_, '_>, _: u8) -> Result<Self::Value, Self::Error> {
+        fn visit_u8(&mut self, _: &ValueDriver<'_, 'b>, _: u8) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
 
         fn visit_u16(
             &mut self,
-            _: &ValueDriver<'_, '_>,
+            _: &ValueDriver<'_, 'b>,
             _: u16,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -663,7 +663,7 @@ fn peek_field_test() {
 
         fn visit_u32(
             &mut self,
-            _: &ValueDriver<'_, '_>,
+            _: &ValueDriver<'_, 'b>,
             _: u32,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -671,7 +671,7 @@ fn peek_field_test() {
 
         fn visit_u128(
             &mut self,
-            _: &ValueDriver<'_, '_>,
+            _: &ValueDriver<'_, 'b>,
             _: u128,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -679,7 +679,7 @@ fn peek_field_test() {
 
         fn visit_u256(
             &mut self,
-            _: &ValueDriver<'_, '_>,
+            _: &ValueDriver<'_, 'b>,
             _: U256,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -687,7 +687,7 @@ fn peek_field_test() {
 
         fn visit_bool(
             &mut self,
-            _: &ValueDriver<'_, '_>,
+            _: &ValueDriver<'_, 'b>,
             _: bool,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -695,7 +695,7 @@ fn peek_field_test() {
 
         fn visit_address(
             &mut self,
-            _: &ValueDriver<'_, '_>,
+            _: &ValueDriver<'_, 'b>,
             _: AccountAddress,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -703,7 +703,7 @@ fn peek_field_test() {
 
         fn visit_signer(
             &mut self,
-            _: &ValueDriver<'_, '_>,
+            _: &ValueDriver<'_, 'b>,
             _: AccountAddress,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -713,7 +713,7 @@ fn peek_field_test() {
         /// under here.
         fn visit_vector(
             &mut self,
-            _: &mut VecDriver<'_, '_, '_>,
+            _: &mut VecDriver<'_, 'b, 'l>,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
@@ -783,12 +783,12 @@ fn byte_offset_test() {
     #[derive(Default)]
     struct ByteOffsetVisitor(String);
 
-    impl Traversal for ByteOffsetVisitor {
+    impl<'b, 'l> Traversal<'b, 'l> for ByteOffsetVisitor {
         type Error = annotated_visitor::Error;
 
         fn traverse_u8(
             &mut self,
-            driver: &ValueDriver<'_, '_>,
+            driver: &ValueDriver<'_, 'b>,
             value: u8,
         ) -> Result<(), Self::Error> {
             write!(
@@ -803,7 +803,7 @@ fn byte_offset_test() {
 
         fn traverse_u16(
             &mut self,
-            driver: &ValueDriver<'_, '_>,
+            driver: &ValueDriver<'_, 'b>,
             value: u16,
         ) -> Result<(), Self::Error> {
             write!(
@@ -818,7 +818,7 @@ fn byte_offset_test() {
 
         fn traverse_u32(
             &mut self,
-            driver: &ValueDriver<'_, '_>,
+            driver: &ValueDriver<'_, 'b>,
             value: u32,
         ) -> Result<(), Self::Error> {
             write!(
@@ -833,7 +833,7 @@ fn byte_offset_test() {
 
         fn traverse_u64(
             &mut self,
-            driver: &ValueDriver<'_, '_>,
+            driver: &ValueDriver<'_, 'b>,
             value: u64,
         ) -> Result<(), Self::Error> {
             write!(
@@ -848,7 +848,7 @@ fn byte_offset_test() {
 
         fn traverse_u128(
             &mut self,
-            driver: &ValueDriver<'_, '_>,
+            driver: &ValueDriver<'_, 'b>,
             value: u128,
         ) -> Result<(), Self::Error> {
             write!(
@@ -863,7 +863,7 @@ fn byte_offset_test() {
 
         fn traverse_u256(
             &mut self,
-            driver: &ValueDriver<'_, '_>,
+            driver: &ValueDriver<'_, 'b>,
             value: U256,
         ) -> Result<(), Self::Error> {
             write!(
@@ -878,7 +878,7 @@ fn byte_offset_test() {
 
         fn traverse_bool(
             &mut self,
-            driver: &ValueDriver<'_, '_>,
+            driver: &ValueDriver<'_, 'b>,
             value: bool,
         ) -> Result<(), Self::Error> {
             write!(
@@ -893,7 +893,7 @@ fn byte_offset_test() {
 
         fn traverse_address(
             &mut self,
-            driver: &ValueDriver<'_, '_>,
+            driver: &ValueDriver<'_, 'b>,
             value: AccountAddress,
         ) -> Result<(), Self::Error> {
             write!(
@@ -909,7 +909,7 @@ fn byte_offset_test() {
 
         fn traverse_signer(
             &mut self,
-            driver: &ValueDriver<'_, '_>,
+            driver: &ValueDriver<'_, 'b>,
             value: AccountAddress,
         ) -> Result<(), Self::Error> {
             write!(
@@ -925,7 +925,7 @@ fn byte_offset_test() {
 
         fn traverse_vector(
             &mut self,
-            driver: &mut VecDriver<'_, '_, '_>,
+            driver: &mut VecDriver<'_, 'b, 'l>,
         ) -> Result<(), Self::Error> {
             write!(
                 &mut self.0,
@@ -941,7 +941,7 @@ fn byte_offset_test() {
 
         fn traverse_struct(
             &mut self,
-            driver: &mut StructDriver<'_, '_, '_>,
+            driver: &mut StructDriver<'_, 'b, 'l>,
         ) -> Result<(), Self::Error> {
             write!(
                 &mut self.0,
@@ -958,7 +958,7 @@ fn byte_offset_test() {
 
         fn traverse_variant(
             &mut self,
-            driver: &mut VariantDriver<'_, '_, '_>,
+            driver: &mut VariantDriver<'_, 'b, 'l>,
         ) -> Result<(), Self::Error> {
             write!(
                 &mut self.0,

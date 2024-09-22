@@ -30,12 +30,12 @@ impl BalanceTraversal {
     }
 }
 
-impl Traversal for BalanceTraversal {
+impl<'b, 'l> Traversal<'b, 'l> for BalanceTraversal {
     type Error = annotated_visitor::Error;
 
     fn traverse_struct(
         &mut self,
-        driver: &mut StructDriver<'_, '_, '_>,
+        driver: &mut StructDriver<'_, 'b, 'l>,
     ) -> Result<(), Self::Error> {
         let Some(coin_type) = is_balance(&driver.struct_layout().type_) else {
             // Not a balance, search recursively for balances among fields.
@@ -50,11 +50,11 @@ impl Traversal for BalanceTraversal {
     }
 }
 
-impl Traversal for Accumulator {
+impl<'b, 'l> Traversal<'b, 'l> for Accumulator {
     type Error = annotated_visitor::Error;
     fn traverse_u64(
         &mut self,
-        _driver: &ValueDriver<'_, '_>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u64,
     ) -> Result<(), Self::Error> {
         self.total += value;
