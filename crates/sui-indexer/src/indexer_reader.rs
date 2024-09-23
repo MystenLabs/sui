@@ -1,5 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use anyhow::anyhow;
 use anyhow::Result;
 use diesel::{
     dsl::sql, sql_types::Bool, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
@@ -7,12 +9,14 @@ use diesel::{
 };
 use itertools::Itertools;
 use std::sync::Arc;
+use sui_types::dynamic_field::visitor as DFV;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use tap::{Pipe, TapFallible};
 use tracing::{debug, error, warn};
 
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
-use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
+use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_json_rpc_types::DisplayFieldsResponse;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin, SuiCoinMetadata, SuiMoveValue};
@@ -29,7 +33,7 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress, VersionNumber},
     committee::EpochId,
     digests::TransactionDigest,
-    dynamic_field::{DynamicFieldInfo, DynamicFieldType},
+    dynamic_field::DynamicFieldInfo,
     object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
@@ -1166,49 +1170,57 @@ impl IndexerReader {
                 ));
             }
         };
-        let struct_tag: StructTag = move_object.type_().clone().into();
-        let move_type_layout = self
+        let type_tag: TypeTag = move_object.type_().clone().into();
+        let layout = self
             .package_resolver
-            .type_layout(TypeTag::Struct(Box::new(struct_tag.clone())))
+            .type_layout(type_tag.clone())
             .await
             .map_err(|e| {
                 IndexerError::ResolveMoveStructError(format!(
-                    "Failed to get type layout for type {}: {}",
-                    struct_tag, e
+                    "Failed to get type layout for type {}: {e}",
+                    type_tag.to_canonical_display(/* with_prefix */ true),
                 ))
             })?;
-        let MoveTypeLayout::Struct(move_struct_layout) = move_type_layout else {
-            return Err(IndexerError::ResolveMoveStructError(
-                "MoveTypeLayout is not Struct".to_string(),
-            ));
-        };
 
-        let move_struct = move_object.to_move_struct(&move_struct_layout)?;
-        let (move_value, type_, object_id) =
-            DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
-        let name_type = move_object.type_().try_extract_field_name(&type_)?;
-        let bcs_name = bcs::to_bytes(&move_value.clone().undecorate()).map_err(|e| {
-            IndexerError::SerdeError(format!(
-                "Failed to serialize dynamic field name {:?}: {e}",
-                move_value
-            ))
-        })?;
+        let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)
+            .tap_err(|e| warn!("{e}"))?;
+
+        let type_ = field.kind;
+        let name_type: TypeTag = field.name_layout.into();
+        let bcs_name = field.name_bytes.to_owned();
+
+        let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout)
+            .tap_err(|e| warn!("{e}"))?;
+
         let name = DynamicFieldName {
             type_: name_type,
-            value: SuiMoveValue::from(move_value).to_json_value(),
+            value: SuiMoveValue::from(name_value).to_json_value(),
         };
 
-        Ok(Some(match type_ {
-            DynamicFieldType::DynamicObject => {
-                let object = self.get_object(&object_id, None).await?.ok_or(
-                    IndexerError::UncategorizedError(anyhow::anyhow!(
-                        "Failed to find object_id {:?} when trying to create dynamic field info",
-                        object_id
-                    )),
-                )?;
+        let value_metadata = field.value_metadata().map_err(|e| {
+            warn!("{e}");
+            IndexerError::UncategorizedError(anyhow!(e))
+        })?;
 
-                let version = object.version();
-                let digest = object.digest();
+        Ok(Some(match value_metadata {
+            DFV::ValueMetadata::DynamicField(object_type) => DynamicFieldInfo {
+                name,
+                bcs_name,
+                type_,
+                object_type: object_type.to_canonical_string(/* with_prefix */ true),
+                object_id: object.id(),
+                version: object.version(),
+                digest: object.digest(),
+            },
+
+            DFV::ValueMetadata::DynamicObjectField(object_id) => {
+                let object = self.get_object(&object_id, None).await?.ok_or_else(|| {
+                    IndexerError::UncategorizedError(anyhow!(
+                        "Failed to find object_id {} when trying to create dynamic field info",
+                        object_id.to_canonical_display(/* with_prefix */ true),
+                    ))
+                })?;
+
                 let object_type = object.data.type_().unwrap().clone();
                 DynamicFieldInfo {
                     name,
@@ -1216,20 +1228,10 @@ impl IndexerReader {
                     type_,
                     object_type: object_type.to_canonical_string(/* with_prefix */ true),
                     object_id,
-                    version,
-                    digest,
+                    version: object.version(),
+                    digest: object.digest(),
                 }
             }
-            DynamicFieldType::DynamicField => DynamicFieldInfo {
-                name,
-                bcs_name,
-                type_,
-                object_type: move_object.into_type().into_type_params()[1]
-                    .to_canonical_string(/* with_prefix */ true),
-                object_id: object.id(),
-                version: object.version(),
-                digest: object.digest(),
-            },
         }))
     }
 
