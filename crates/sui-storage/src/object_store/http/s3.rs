@@ -23,7 +23,9 @@ pub(crate) struct S3Client {
 impl S3Client {
     pub fn new(endpoint: &str) -> Result<Self> {
         let mut builder = ClientBuilder::new();
-        builder = builder.user_agent(DEFAULT_USER_AGENT);
+        builder = builder
+            .user_agent(DEFAULT_USER_AGENT)
+            .pool_idle_timeout(None);
         let client = builder.https_only(false).build()?;
 
         Ok(Self {
