@@ -35,13 +35,15 @@ impl Discovery for Server {
         let known_peers = if state.known_peers.len() < MAX_PEERS_TO_SEND {
             state.known_peers.values().cloned().collect()
         } else {
+            let mut rng = rand::thread_rng();
             // prefer returning peers that we are connected to as they are known-good
             let mut known_peers = state
                 .connected_peers
                 .keys()
                 .filter_map(|peer_id| state.known_peers.get(peer_id))
                 .map(|info| (info.peer_id, info))
-                .take(MAX_PEERS_TO_SEND)
+                .choose_multiple(&mut rng, MAX_PEERS_TO_SEND)
+                .into_iter()
                 .collect::<HashMap<_, _>>();
 
             if known_peers.len() <= MAX_PEERS_TO_SEND {
@@ -49,7 +51,10 @@ impl Discovery for Server {
                 for info in state
                     .known_peers
                     .values()
-                    .choose_multiple(&mut rand::thread_rng(), MAX_PEERS_TO_SEND)
+                    // This randomly samples the iterator stream but the order of elements after
+                    // sampling may not be random, this is ok though since we're just trying to do
+                    // best-effort on sharing info of peers we haven't connected with ourselves.
+                    .choose_multiple(&mut rng, MAX_PEERS_TO_SEND)
                 {
                     if known_peers.len() >= MAX_PEERS_TO_SEND {
                         break;
