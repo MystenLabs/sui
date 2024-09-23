@@ -12,7 +12,7 @@ use std::{
 
 use consensus_config::AuthorityIndex;
 use itertools::Itertools as _;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::{
     block::{
@@ -205,15 +205,22 @@ impl DagState {
                     .map(|b| b.round())
                     .unwrap_or(GENESIS_ROUND);
 
+                let gc_eviction_round = Self::gc_eviction_round(
+                    last_block_round,
+                    state.gc_round(),
+                    state.cached_rounds,
+                ) + 1;
+
+                info!(
+                    "Recovering blocks for authority {} from round {}, gc eviction {}",
+                    authority_index, last_block_round, gc_eviction_round
+                );
+
                 state
                     .store
                     .scan_blocks_by_author(
                         authority_index,
-                        Self::gc_eviction_round(
-                            last_block_round,
-                            state.gc_round(),
-                            state.cached_rounds,
-                        ) + 1,
+                        gc_eviction_round,
                     )
                     .expect("Database error")
             } else {
@@ -227,9 +234,11 @@ impl DagState {
             };
 
             // Update the block metadata for the authority.
-            for block in blocks {
-                state.update_block_metadata(&block);
+            for block in &blocks {
+                state.update_block_metadata(block);
             }
+
+            info!("Recoved blocks {}: {:?}", authority_index, blocks.iter().map(|b| b.reference()).collect::<Vec<BlockRef>>());
 
             // Update the evicted rounds for the authority now that all the blocks have been restored.
             if state.gc_enabled() {
@@ -1729,19 +1738,11 @@ mod test {
         assert_eq!(dag_state.unscored_committed_subdags_count(), 5);
     }
 
-    #[rstest]
     #[tokio::test]
-    async fn test_flush_and_recovery(#[values(0, 5)] gc_depth: u32) {
+    async fn test_flush_and_recovery() {
         telemetry_subscribers::init_for_testing();
         let num_authorities: u32 = 4;
-        let (mut context, _) = Context::new_for_test(num_authorities as usize);
-
-        if gc_depth > 0 {
-            context
-                .protocol_config
-                .set_consensus_gc_depth_for_testing(gc_depth);
-        }
-
+        let (context, _) = Context::new_for_test(num_authorities as usize);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());
@@ -1848,6 +1849,155 @@ mod test {
         );
         // Unscored subdags will be recoverd based on the flushed commits and no commit info
         assert_eq!(dag_state.scoring_subdags_count(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_flush_and_recovery_gc_enabled() {
+        telemetry_subscribers::init_for_testing();
+
+        const GC_DEPTH: u32 = 3;
+        const CACHED_ROUNDS: u32 = 4;
+
+        let num_authorities: u32 = 4;
+        let (mut context, _) = Context::new_for_test(num_authorities as usize);
+        context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        let num_rounds: u32 = 10;
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=5).build();
+        dag_builder
+            .layers(6..=8)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+        dag_builder
+            .layers(9..=num_rounds)
+            .build();
+
+        let mut commits = vec![];
+        let mut last_committed_rounds = vec![0; 4];
+        for (idx, leader) in dag_builder
+            .leader_blocks(1..=num_rounds)
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            let commit_index = idx as u32 + 1;
+            let (subdag, commit) = dag_builder.get_sub_dag_and_commit(
+                leader.clone(),
+                last_committed_rounds.clone(),
+                commit_index,
+            );
+            for block in subdag.blocks.iter() {
+                last_committed_rounds[block.author().value()] =
+                    max(block.round(), last_committed_rounds[block.author().value()]);
+            }
+            commits.push(commit);
+        }
+
+        // Add the blocks from first 8 rounds and first 7 commits to the dag state
+        // It's 7 commits because we missing the commit of round 8 where authority 0 is the leader, but produced no block
+        let temp_commits = commits.split_off(7);
+        dag_state.accept_blocks(dag_builder.blocks(1..=8));
+        for commit in commits.clone() {
+            dag_state.add_commit(commit);
+        }
+
+        // Flush the dag state
+        dag_state.flush();
+
+        // Add the rest of the blocks and commits to the dag state
+        dag_state.accept_blocks(dag_builder.blocks(9..=num_rounds));
+        for commit in temp_commits.clone() {
+            dag_state.add_commit(commit);
+        }
+
+        // All blocks should be found in DagState.
+        let all_blocks = dag_builder.blocks(1..=num_rounds);
+        let block_refs = all_blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+        let result = dag_state
+            .get_blocks(&block_refs)
+            .into_iter()
+            .map(|b| b.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(result, all_blocks);
+
+        // Last commit index should be 9
+        assert_eq!(dag_state.last_commit_index(), 9);
+        assert_eq!(dag_state.last_committed_rounds(), last_committed_rounds);
+
+        // Destroy the dag state.
+        drop(dag_state);
+
+        // Recover the state from the store
+        let dag_state = DagState::new(context.clone(), store.clone());
+
+        // Blocks of first 5 rounds should be found in DagState.
+        let blocks = dag_builder.blocks(1..=5);
+        let block_refs = blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+        let result = dag_state
+            .get_blocks(&block_refs)
+            .into_iter()
+            .map(|b| b.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(result, blocks);
+
+        // Blocks above round 9 should not be in DagState, because they are not flushed.
+        let missing_blocks = dag_builder.blocks(9..=num_rounds);
+        let block_refs = missing_blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+        let retrieved_blocks = dag_state
+            .get_blocks(&block_refs)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        assert!(retrieved_blocks.is_empty());
+
+        // Last commit index should be 7.
+        assert_eq!(dag_state.last_commit_index(), 7);
+
+        // This is the last_commmit_rounds of the first 7 commits that were flushed
+        let expected_last_committed_rounds = vec![5, 6, 6, 7];
+        assert_eq!(
+            dag_state.last_committed_rounds(),
+            expected_last_committed_rounds
+        );
+        // Unscored subdags will be recoverd based on the flushed commits and no commit info
+        assert_eq!(dag_state.scoring_subdags_count(), 7);
+
+        // Ensure that cached blocks exist only for specific rounds per authority
+        for (authority_index, _) in context.committee.authorities() {
+            let blocks = dag_state.get_cached_blocks(authority_index, 1);
+
+            // Ensure that eviction rounds have been properly recovered
+            // DagState should hold cached blocks for authority 0 for rounds [2..=5] as no higher blocks exist and due to CACHED_ROUNDS = 4
+            // we want at max to hold blocks for 4 rounds in cache.
+            if authority_index == AuthorityIndex::new_for_test(0) {
+                assert_eq!(blocks.len(), 4);
+                assert_eq!(dag_state.evicted_rounds[authority_index.value()], 1);
+                assert!(blocks.into_iter().all(|block|block.round() >= 2 && block.round() <= 5));
+            } else {
+                assert_eq!(blocks.len(), 4);
+                assert_eq!(dag_state.evicted_rounds[authority_index.value()], 4);
+                assert!(blocks.into_iter().all(|block|block.round() >= 5 && block.round() <= 8));
+            }
+        }
     }
 
     #[tokio::test]
