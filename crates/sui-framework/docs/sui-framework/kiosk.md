@@ -760,12 +760,12 @@ Creates a new <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> with a m
         profits: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
         owner: ctx.sender(),
         item_count: 0,
-        allow_extensions: <b>false</b>
+        allow_extensions: <b>false</b>,
     };
 
     <b>let</b> cap = <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        `for`: <a href="object.md#0x2_object_id">object::id</a>(&<a href="kiosk.md#0x2_kiosk">kiosk</a>)
+        `for`: <a href="object.md#0x2_object_id">object::id</a>(&<a href="kiosk.md#0x2_kiosk">kiosk</a>),
     };
 
     (<a href="kiosk.md#0x2_kiosk">kiosk</a>, cap)
@@ -794,9 +794,7 @@ case where there's no items inside and a <code><a href="kiosk.md#0x2_kiosk_Kiosk
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_close_and_withdraw">close_and_withdraw</a>(
-    self: <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, ctx: &<b>mut</b> TxContext
-): Coin&lt;SUI&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_close_and_withdraw">close_and_withdraw</a>(self: <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, ctx: &<b>mut</b> TxContext): Coin&lt;SUI&gt; {
     <b>let</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a> { id, profits, owner: _, item_count, allow_extensions: _ } = self;
     <b>let</b> <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a> { id: cap_id, `for` } = cap;
 
@@ -833,9 +831,7 @@ in a third party module.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_owner">set_owner</a>(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, ctx: &TxContext
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_owner">set_owner</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, ctx: &TxContext) {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.owner = ctx.sender();
 }
@@ -862,9 +858,7 @@ implementing a custom logic that relies on the <code><a href="kiosk.md#0x2_kiosk
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_owner_custom">set_owner_custom</a>(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, owner: <b>address</b>
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_owner_custom">set_owner_custom</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, owner: <b>address</b>) {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.owner = owner
 }
@@ -891,9 +885,7 @@ Performs an authorization check to make sure only owner can do that.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T) {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.<a href="kiosk.md#0x2_kiosk_place_internal">place_internal</a>(item)
 }
@@ -925,7 +917,10 @@ and the item can be sold, otherwise the asset might be locked forever.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_lock">lock</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, _policy: &TransferPolicy&lt;T&gt;, item: T
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
+    cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
+    _policy: &TransferPolicy&lt;T&gt;,
+    item: T,
 ) {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.<a href="kiosk.md#0x2_kiosk_lock_internal">lock_internal</a>(item)
@@ -953,9 +948,7 @@ Performs an authorization check to make sure only owner can do that.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
-): T {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID): T {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(!self.<a href="kiosk.md#0x2_kiosk_is_locked">is_locked</a>(id), <a href="kiosk.md#0x2_kiosk_EItemLocked">EItemLocked</a>);
     <b>assert</b>!(!self.<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(id), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
@@ -988,9 +981,7 @@ Performs an authorization check to make sure only owner can sell.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!self.<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(id), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
@@ -1021,7 +1012,10 @@ Calls <code>place</code> and <code>list</code> together - simplifies the flow.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T, price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
+    cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
+    item: T,
+    price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
 ) {
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&item);
     self.<a href="kiosk.md#0x2_kiosk_place">place</a>(cap, item);
@@ -1050,9 +1044,7 @@ user Kiosk. Can only be performed by the owner of the <code><a href="kiosk.md#0x
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_delist">delist</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_delist">delist</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID) {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!self.<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(id), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
@@ -1090,7 +1082,9 @@ finalized.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase">purchase</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID, payment: Coin&lt;SUI&gt;
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
+    id: ID,
+    payment: Coin&lt;SUI&gt;,
 ): (T, TransferRequest&lt;T&gt;) {
     <b>let</b> price = df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
     <b>let</b> inner = dof::remove&lt;<a href="kiosk.md#0x2_kiosk_Item">Item</a>, T&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id });
@@ -1128,7 +1122,11 @@ for any price equal or higher than the <code>min_price</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list_with_purchase_cap">list_with_purchase_cap</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, min_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> TxContext
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
+    cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
+    id: ID,
+    min_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    ctx: &<b>mut</b> TxContext,
 ): <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt; {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_item_with_type">has_item_with_type</a>&lt;T&gt;(id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
@@ -1167,7 +1165,9 @@ as the price for the listing making sure it's no less than <code>min_amount</cod
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase_with_cap">purchase_with_cap</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;, payment: Coin&lt;SUI&gt;
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
+    purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;,
+    payment: Coin&lt;SUI&gt;,
 ): (T, TransferRequest&lt;T&gt;) {
     <b>let</b> <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a> { id, item_id, kiosk_id, min_price } = purchase_cap;
     id.delete();
@@ -1209,9 +1209,7 @@ allow the item for taking. Can only be returned to its <code><a href="kiosk.md#0
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_purchase_cap">return_purchase_cap</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_purchase_cap">return_purchase_cap</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;) {
     <b>let</b> <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a> { id, item_id, kiosk_id, min_price: _ } = purchase_cap;
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == kiosk_id, <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>);
@@ -1241,7 +1239,10 @@ Withdraw profits from the Kiosk.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_withdraw">withdraw</a>(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, amount: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, ctx: &<b>mut</b> TxContext
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>,
+    cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>,
+    amount: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    ctx: &<b>mut</b> TxContext,
 ): Coin&lt;SUI&gt; {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
 
@@ -1433,7 +1434,7 @@ Check whether an <code>item</code> is listed (exclusively or non exclusively).
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID): bool {
     df::exists_(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> })
-    || self.<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(id)
+        || self.<a href="kiosk.md#0x2_kiosk_is_listed_exclusively">is_listed_exclusively</a>(id)
 }
 </code></pre>
 
@@ -1507,9 +1508,7 @@ Access the <code>UID</code> using the <code><a href="kiosk.md#0x2_kiosk_KioskOwn
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut_as_owner">uid_mut_as_owner</a>(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>
-): &<b>mut</b> UID {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut_as_owner">uid_mut_as_owner</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): &<b>mut</b> UID {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     &<b>mut</b> self.id
 }
@@ -1537,9 +1536,7 @@ setting.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_allow_extensions">set_allow_extensions</a>(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, allow_extensions: bool
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_allow_extensions">set_allow_extensions</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, allow_extensions: bool) {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.allow_extensions = allow_extensions;
 }
@@ -1723,9 +1720,7 @@ at any time.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;T: key + store&gt;(
-    self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
-): &T {
+<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;T: key + store&gt;(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID): &T {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
 
@@ -1754,9 +1749,7 @@ Item can be <code>borrow_mut</code>ed only if it's not <code>is_listed</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_borrow_mut">borrow_mut</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
-): &<b>mut</b> T {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_borrow_mut">borrow_mut</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID): &<b>mut</b> T {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!self.<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(id), <a href="kiosk.md#0x2_kiosk_EItemIsListed">EItemIsListed</a>);
@@ -1786,17 +1779,12 @@ Item can be <code>borrow_val</code>-ed only if it's not <code>is_listed</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_borrow_val">borrow_val</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
-): (T, <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_borrow_val">borrow_val</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID): (T, <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a>) {
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(cap), <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(self.<a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(id), <a href="kiosk.md#0x2_kiosk_EItemNotFound">EItemNotFound</a>);
     <b>assert</b>!(!self.<a href="kiosk.md#0x2_kiosk_is_listed">is_listed</a>(id), <a href="kiosk.md#0x2_kiosk_EItemIsListed">EItemIsListed</a>);
 
-    (
-        dof::remove(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id }),
-        <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a> { kiosk_id: <a href="object.md#0x2_object_id">object::id</a>(self), item_id: id }
-    )
+    (dof::remove(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id }), <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a> { kiosk_id: <a href="object.md#0x2_object_id">object::id</a>(self), item_id: id })
 }
 </code></pre>
 
@@ -1821,9 +1809,7 @@ if <code>borrow_val</code> is used.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_val">return_val</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T, <a href="borrow.md#0x2_borrow">borrow</a>: <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a>
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_val">return_val</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item: T, <a href="borrow.md#0x2_borrow">borrow</a>: <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a>) {
     <b>let</b> <a href="kiosk.md#0x2_kiosk_Borrow">Borrow</a> { kiosk_id, item_id } = <a href="borrow.md#0x2_borrow">borrow</a>;
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == kiosk_id, <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>);

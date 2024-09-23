@@ -82,7 +82,11 @@ applied to Secp256r1 signatures. May fail with <code><a href="ecdsa_r1.md#0x2_ec
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_ecrecover">secp256r1_ecrecover</a>(signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_ecrecover">secp256r1_ecrecover</a>(
+    signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    <a href="hash.md#0x2_hash">hash</a>: u8,
+): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
 </code></pre>
 
 
@@ -113,7 +117,12 @@ If the signature is valid to the pubkey and hashed message, return true. Else fa
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_verify">secp256r1_verify</a>(signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): bool;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_r1.md#0x2_ecdsa_r1_secp256r1_verify">secp256r1_verify</a>(
+    signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    public_key: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    <a href="hash.md#0x2_hash">hash</a>: u8,
+): bool;
 </code></pre>
 
 
