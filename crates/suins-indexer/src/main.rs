@@ -18,7 +18,7 @@ use tokio::sync::oneshot;
 use tracing::info;
 
 use suins_indexer::{
-    get_connection_pool,
+    get_connection_pool_w_tls,
     indexer::{format_update_field_query, format_update_subdomain_wrapper_query, SuinsIndexer},
     models::VerifiedDomain,
     schema::domains,
@@ -125,35 +125,41 @@ impl Worker for SuinsIndexerWorker {
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
-    let (remote_storage, registry_id, subdomain_wrapper_type, name_record_type) = (
-        env::var("REMOTE_STORAGE").ok(),
-        env::var("REGISTRY_ID").ok(),
-        env::var("SUBDOMAIN_WRAPPER_TYPE").ok(),
-        env::var("NAME_RECORD_TYPE").ok(),
-    );
-    let backfill_progress_file_path =
-        env::var("BACKFILL_PROGRESS_FILE_PATH").unwrap_or("/tmp/backfill_progress".to_string());
-    let checkpoints_dir = env::var("CHECKPOINTS_DIR").unwrap_or("/tmp/checkpoints".to_string());
+    /*
+        let (remote_storage, registry_id, subdomain_wrapper_type, name_record_type) = (
+            env::var("REMOTE_STORAGE").ok(),
+            env::var("REGISTRY_ID").ok(),
+            env::var("SUBDOMAIN_WRAPPER_TYPE").ok(),
+            env::var("NAME_RECORD_TYPE").ok(),
+        );
+        let backfill_progress_file_path =
+            env::var("BACKFILL_PROGRESS_FILE_PATH").unwrap_or("/tmp/backfill_progress".to_string());
+        let checkpoints_dir = env::var("CHECKPOINTS_DIR").unwrap_or("/tmp/checkpoints".to_string());
 
-    println!("Starting indexer with checkpoints dir: {}", checkpoints_dir);
-
-    let (_exit_sender, exit_receiver) = oneshot::channel();
-    let progress_store = FileProgressStore::new(PathBuf::from(backfill_progress_file_path));
+        println!("Starting indexer with checkpoints dir: {}", checkpoints_dir);
+    */
+    // let (_exit_sender, exit_receiver) = oneshot::channel();
+    //let progress_store = FileProgressStore::new(PathBuf::from(backfill_progress_file_path));
 
     let registry: Registry = start_basic_prometheus_server();
     mysten_metrics::init_metrics(&registry);
     let metrics = DataIngestionMetrics::new(&registry);
-    let mut executor = IndexerExecutor::new(progress_store, 1, metrics);
+    //    let mut executor = IndexerExecutor::new(progress_store, 1, metrics);
+    /*
+        let indexer_setup =
+            if let (Some(registry_id), Some(subdomain_wrapper_type), Some(name_record_type)) =
+                (registry_id, subdomain_wrapper_type, name_record_type)
+            {
+                SuinsIndexer::new(registry_id, subdomain_wrapper_type, name_record_type)
+            } else {
+                SuinsIndexer::default()
+            };
+    */
+    println!("try to get_connection_pool_w_tls");
+    get_connection_pool_w_tls().await;
 
-    let indexer_setup =
-        if let (Some(registry_id), Some(subdomain_wrapper_type), Some(name_record_type)) =
-            (registry_id, subdomain_wrapper_type, name_record_type)
-        {
-            SuinsIndexer::new(registry_id, subdomain_wrapper_type, name_record_type)
-        } else {
-            SuinsIndexer::default()
-        };
-
+    println!("get_connetion_pool done? exiting");
+    /*
     let worker_pool = WorkerPool::new(
         SuinsIndexerWorker {
             pg_pool: get_connection_pool().await,
@@ -173,5 +179,6 @@ async fn main() -> Result<()> {
             exit_receiver,
         )
         .await?;
+    */
     Ok(())
 }
