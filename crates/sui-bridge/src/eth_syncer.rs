@@ -196,12 +196,10 @@ where
                     "Observed {len} new Eth events",
                 );
             }
-            if let Some(last_block) = last_block {
-                metrics
-                    .last_synced_eth_blocks
-                    .with_label_values(&[&contract_address_str])
-                    .set(last_block as i64);
-            }
+            metrics
+                .last_synced_eth_blocks
+                .with_label_values(&[&contract_address_str])
+                .set(last_block.unwrap_or(end_block) as i64);
             start_block = end_block + 1;
         }
     }

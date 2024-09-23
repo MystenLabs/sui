@@ -131,7 +131,7 @@ To enable `bridge_client` feature on a `BridgeNode`, set the following parameter
 run-client: true
 db-path: <PATH_TO_DB>
 sui:
-    bridge-client-key-path: <PATH_TO_BRIDGE_CLIENT_KEY>  # optional, when absent, use bridge-authority-key-path as the keypair for BridgeClient
+    bridge-client-key-path: <PATH_TO_BRIDGE_CLIENT_KEY>
 ```
 
 
@@ -184,3 +184,35 @@ Test ingress with curl on a remote machine and expect a `200` response:
 ```bash
 $ curl -v {YOUR_BRIDGE_URL}
 ```
+
+### Bridge Node Monitoring
+(This section is still WIP)
+
+* Use `uptime` to check if the node is running.
+
+* A full list of Bridge Node metrics can be found [here](../../crates/sui-bridge/src/metrics.rs). Find descriptions of each metric [here](../../crates/sui-bridge/src/metrics.rs) and we skip them below.
+
+#### When `run-client: false`
+In this case Bridge Node runs as a passive observer and does not proactively poll onchain activities. Important metrics to monitor in this case are the request handling metrics such as
+* `bridge_requests_received`
+* `bridge_requests_ok`
+* `bridge_err_requests`
+* `bridge_requests_inflight`
+* `bridge_eth_rpc_queries`
+* `bridge_eth_rpc_queries_latency`
+* `bridge_signer_with_cache_hit`
+* `bridge_signer_with_cache_miss`
+* `bridge_sui_rpc_errors`
+
+#### When `run-client: true`
+In this case Bridge Client is toggled on and syncs with Blockchains proactively. The best ones to track progress are:
+* `bridge_last_synced_sui_checkpoints`
+* `bridge_last_synced_eth_blocks`
+* `bridge_last_finalized_eth_block`
+* `bridge_sui_watcher_received_events`
+* `bridge_eth_watcher_received_events`
+* `bridge_sui_watcher_received_actions`
+* `bridge_eth_watcher_received_actions`
+
+It's also critical to track the balance of your client gas coin, and top up once it dips below a certain threshold:
+* `bridge_gas_coin_balance`
