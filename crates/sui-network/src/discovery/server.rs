@@ -32,31 +32,35 @@ impl Discovery for Server {
             .clone()
             .ok_or_else(|| anemo::rpc::Status::internal("own_info has not been initialized yet"))?;
 
-        // prefer returning peers that we are connected to as they are known-good
-        let mut known_peers = state
-            .connected_peers
-            .keys()
-            .filter_map(|peer_id| state.known_peers.get(peer_id))
-            .map(|info| (info.peer_id, info))
-            .take(MAX_PEERS_TO_SEND)
-            .collect::<HashMap<_, _>>();
+        let known_peers = if state.known_peers.len() < MAX_PEERS_TO_SEND {
+            state.known_peers.values().cloned().collect()
+        } else {
+            // prefer returning peers that we are connected to as they are known-good
+            let mut known_peers = state
+                .connected_peers
+                .keys()
+                .filter_map(|peer_id| state.known_peers.get(peer_id))
+                .map(|info| (info.peer_id, info))
+                .take(MAX_PEERS_TO_SEND)
+                .collect::<HashMap<_, _>>();
 
-        if known_peers.len() <= MAX_PEERS_TO_SEND {
-            // Fill the remaining space with other peers, randomly sampling at most MAX_PEERS_TO_SEND
-            for info in state
-                .known_peers
-                .values()
-                .choose_multiple(&mut rand::thread_rng(), MAX_PEERS_TO_SEND)
-            {
-                if known_peers.len() >= MAX_PEERS_TO_SEND {
-                    break;
+            if known_peers.len() <= MAX_PEERS_TO_SEND {
+                // Fill the remaining space with other peers, randomly sampling at most MAX_PEERS_TO_SEND
+                for info in state
+                    .known_peers
+                    .values()
+                    .choose_multiple(&mut rand::thread_rng(), MAX_PEERS_TO_SEND)
+                {
+                    if known_peers.len() >= MAX_PEERS_TO_SEND {
+                        break;
+                    }
+
+                    known_peers.insert(info.peer_id, info);
                 }
-
-                known_peers.insert(info.peer_id, info);
             }
-        }
 
-        let known_peers = known_peers.into_values().cloned().collect();
+            known_peers.into_values().cloned().collect()
+        };
 
         Ok(Response::new(GetKnownPeersResponse {
             own_info,
