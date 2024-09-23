@@ -491,7 +491,11 @@ fn update_known_peers(
         }
 
         // verify that all addresses provided are valid anemo addresses
-        if !peer.addresses.iter().all(|addr| addr.len() < MAX_ADDRESS_LENGTH && addr.to_anemo_address().is_ok()) {
+        if !peer
+            .addresses
+            .iter()
+            .all(|addr| addr.len() < MAX_ADDRESS_LENGTH && addr.to_anemo_address().is_ok())
+        {
             continue;
         }
 
