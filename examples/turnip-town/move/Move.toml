@@ -3,7 +3,7 @@ name = "turnip-town"
 edition = "2024.beta"
 
 [dependencies]
-Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+Sui = { override = true, local = "../../../crates/sui-framework/packages/sui-framework" }
 
 [addresses]
 turnip_town = "0x0"

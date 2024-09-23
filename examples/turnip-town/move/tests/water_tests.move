@@ -1,76 +1,76 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module turnip_town::water_tests {
-    use sui::test_scenario as ts;
-    use turnip_town::water;
+module turnip_town::water_tests;
 
-    const ALICE: address = @0xA;
+use sui::test_scenario as ts;
+use turnip_town::water;
 
-    #[test]
-    fun zero() {
-        assert!(water::zero().value() == 0);
-    }
+const ALICE: address = @0xA;
 
-    #[test]
-    fun fetch_water() {
-        let mut ts = ts::begin(ALICE);
+#[test]
+fun zero() {
+    assert!(water::zero().value() == 0);
+}
 
-        let mut well = water::well(ts.ctx());
-        let water = well.fetch(water::per_epoch(), ts.ctx());
-        assert!(water.value() == water::per_epoch());
+#[test]
+fun fetch_water() {
+    let mut ts = ts::begin(ALICE);
 
-        ts.end();
-    }
+    let mut well = water::well(ts.ctx());
+    let water = well.fetch(water::per_epoch(), ts.ctx());
+    assert!(water.value() == water::per_epoch());
 
-    #[test]
-    #[expected_failure(abort_code = water::ENotEnough)]
-    fun fetch_too_much_water() {
-        let mut ts = ts::begin(ALICE);
+    ts.end();
+}
 
-        let mut well = water::well(ts.ctx());
-        let _ = well.fetch(water::per_epoch(), ts.ctx());
-        let _ = well.fetch(1, ts.ctx());
+#[test]
+#[expected_failure(abort_code = water::ENotEnough)]
+fun fetch_too_much_water() {
+    let mut ts = ts::begin(ALICE);
 
-        abort 0
-    }
+    let mut well = water::well(ts.ctx());
+    let _ = well.fetch(water::per_epoch(), ts.ctx());
+    let _ = well.fetch(1, ts.ctx());
 
-    #[test]
-    fun well_replenish() {
-        let mut ts = ts::begin(ALICE);
+    abort 0
+}
 
-        let mut well = water::well(ts.ctx());
-        let water = well.fetch(water::per_epoch(), ts.ctx());
-        assert!(water.value() == water::per_epoch());
+#[test]
+fun well_replenish() {
+    let mut ts = ts::begin(ALICE);
 
-        ts.next_epoch(ALICE);
-        let water = well.fetch(1, ts.ctx());
-        assert!(water.value() == 1);
+    let mut well = water::well(ts.ctx());
+    let water = well.fetch(water::per_epoch(), ts.ctx());
+    assert!(water.value() == water::per_epoch());
 
-        ts.end();
-    }
+    ts.next_epoch(ALICE);
+    let water = well.fetch(1, ts.ctx());
+    assert!(water.value() == 1);
 
-    #[test]
-    fun water_split() {
-        let mut water = water::for_test(42);
-        let drop = water.split(5);
+    ts.end();
+}
 
-        assert!(water.value() == 37);
-        assert!(drop.value() == 5);
-    }
+#[test]
+fun water_split() {
+    let mut water = water::for_test(42);
+    let drop = water.split(5);
 
-    #[test]
-    #[expected_failure(abort_code = water::ENotEnough)]
-    fun water_split_too_much() {
-        let mut water = water::for_test(42);
-        let _ = water.split(43);
-    }
+    assert!(water.value() == 37);
+    assert!(drop.value() == 5);
+}
 
-    #[test]
-    fun water_join() {
-        let mut water = water::for_test(42);
-        let drop = water.split(5);
-        water.join(drop);
-        assert!(water.value() == 42);
-    }
+#[test]
+#[expected_failure(abort_code = water::ENotEnough)]
+fun water_split_too_much() {
+    let mut water = water::for_test(42);
+    let _ = water.split(43);
+}
+
+#[test]
+fun water_join() {
+    let mut water = water::for_test(42);
+    let drop = water.split(5);
+    water.join(drop);
+    assert!(water.value() == 42);
 }

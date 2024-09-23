@@ -40,7 +40,7 @@ module turnip_town::royalty_policy {
         ctx: &mut TxContext,
     ) {
         let amount = (request.paid() as u128) * (COMMISSION_BP as u128) / 10_000;
-        let amount = math::max(amount as u64, MIN_ROYALTY);
+        let amount = (amount as u64).max(MIN_ROYALTY);
 
         assert!(payment.value() >= amount, EInsufficientAmount);
         let fee = payment.split(amount, ctx);
