@@ -116,6 +116,7 @@ async fn main() -> Result<()> {
         );
         let bridge_addresses = get_eth_contract_addresses(bridge_address, &provider).await?;
         let bridge_addresses: Vec<EthAddress> = vec![
+            bridge_address,
             bridge_addresses.0,
             bridge_addresses.1,
             bridge_addresses.2,
