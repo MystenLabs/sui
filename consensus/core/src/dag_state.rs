@@ -1637,24 +1637,8 @@ mod test {
         let mut dag_builder = DagBuilder::new(context.clone());
         dag_builder.layers(1..=num_rounds).build();
         let mut commits = vec![];
-        let leaders = dag_builder
-            .leader_blocks(1..=num_rounds)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
 
-        let mut last_committed_rounds = vec![0; 4];
-        for (idx, leader) in leaders.into_iter().enumerate() {
-            let commit_index = idx as u32 + 1;
-            let (subdag, commit) = dag_builder.get_sub_dag_and_commit(
-                leader.clone(),
-                last_committed_rounds.clone(),
-                commit_index,
-            );
-            for block in subdag.blocks.iter() {
-                last_committed_rounds[block.author().value()] =
-                    max(block.round(), last_committed_rounds[block.author().value()]);
-            }
+        for (_subdag, commit) in dag_builder.get_sub_dag_and_commits(1..=num_rounds) {
             commits.push(commit);
         }
 
@@ -1689,7 +1673,10 @@ mod test {
 
         // Last commit index should be 10.
         assert_eq!(dag_state.last_commit_index(), 10);
-        assert_eq!(dag_state.last_committed_rounds(), last_committed_rounds);
+        assert_eq!(
+            dag_state.last_committed_rounds(),
+            dag_builder.last_committed_rounds.clone()
+        );
 
         // Destroy the dag state.
         drop(dag_state);
@@ -1750,24 +1737,7 @@ mod test {
         let mut dag_builder = DagBuilder::new(context.clone());
         dag_builder.layers(1..=num_rounds).build();
         let mut commits = vec![];
-        let leaders = dag_builder
-            .leader_blocks(1..=num_rounds)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-
-        let mut last_committed_rounds = vec![0; 4];
-        for (idx, leader) in leaders.into_iter().enumerate() {
-            let commit_index = idx as u32 + 1;
-            let (subdag, commit) = dag_builder.get_sub_dag_and_commit(
-                leader.clone(),
-                last_committed_rounds.clone(),
-                commit_index,
-            );
-            for block in subdag.blocks.iter() {
-                last_committed_rounds[block.author().value()] =
-                    max(block.round(), last_committed_rounds[block.author().value()]);
-            }
+        for (_subdag, commit) in dag_builder.get_sub_dag_and_commits(1..=num_rounds) {
             commits.push(commit);
         }
 
@@ -1802,7 +1772,10 @@ mod test {
 
         // Last commit index should be 10.
         assert_eq!(dag_state.last_commit_index(), 10);
-        assert_eq!(dag_state.last_committed_rounds(), last_committed_rounds);
+        assert_eq!(
+            dag_state.last_committed_rounds(),
+            dag_builder.last_committed_rounds.clone()
+        );
 
         // Destroy the dag state.
         drop(dag_state);
@@ -1879,23 +1852,7 @@ mod test {
         dag_builder.layers(9..=num_rounds).build();
 
         let mut commits = vec![];
-        let mut last_committed_rounds = vec![0; 4];
-        for (idx, leader) in dag_builder
-            .leader_blocks(1..=num_rounds)
-            .into_iter()
-            .flatten()
-            .enumerate()
-        {
-            let commit_index = idx as u32 + 1;
-            let (subdag, commit) = dag_builder.get_sub_dag_and_commit(
-                leader.clone(),
-                last_committed_rounds.clone(),
-                commit_index,
-            );
-            for block in subdag.blocks.iter() {
-                last_committed_rounds[block.author().value()] =
-                    max(block.round(), last_committed_rounds[block.author().value()]);
-            }
+        for (_subdag, commit) in dag_builder.get_sub_dag_and_commits(1..=num_rounds) {
             commits.push(commit);
         }
 
@@ -1931,7 +1888,10 @@ mod test {
 
         // Last commit index should be 9
         assert_eq!(dag_state.last_commit_index(), 9);
-        assert_eq!(dag_state.last_committed_rounds(), last_committed_rounds);
+        assert_eq!(
+            dag_state.last_committed_rounds(),
+            dag_builder.last_committed_rounds.clone()
+        );
 
         // Destroy the dag state.
         drop(dag_state);
