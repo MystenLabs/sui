@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::Result;
-use diesel::dsl::sql;
-use diesel::sql_types::Bool;
-use diesel::TextExpressionMethods;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, OptionalExtension, QueryDsl,
-    SelectableHelper,
+    dsl::sql, sql_types::Bool, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
+    OptionalExtension, QueryDsl, SelectableHelper, TextExpressionMethods,
 };
 use itertools::Itertools;
 use std::sync::Arc;
@@ -950,62 +947,78 @@ impl IndexerReader {
         Ok(sui_tx_events.map_or(vec![], |ste| ste.data))
     }
 
-    fn query_events_by_tx_digest_query(
+    async fn query_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
         cursor: Option<EventID>,
         cursor_tx_seq: i64,
         limit: usize,
         descending_order: bool,
-    ) -> IndexerResult<String> {
-        let cursor_clause = if let Some(cursor) = cursor {
+    ) -> IndexerResult<Vec<SuiEvent>> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let mut query = events::table.into_boxed();
+
+        if let Some(cursor) = cursor {
             if cursor.tx_digest != tx_digest {
                 return Err(IndexerError::InvalidArgumentError(
                     "Cursor tx_digest does not match the tx_digest in the query.".into(),
                 ));
             }
             if descending_order {
-                format!("e.{EVENT_SEQUENCE_NUMBER_STR} < {}", cursor.event_seq)
+                query = query.filter(events::event_sequence_number.lt(cursor.event_seq as i64));
             } else {
-                format!("e.{EVENT_SEQUENCE_NUMBER_STR} > {}", cursor.event_seq)
+                query = query.filter(events::event_sequence_number.gt(cursor.event_seq as i64));
             }
         } else if descending_order {
-            format!("e.{EVENT_SEQUENCE_NUMBER_STR} <= {}", i64::MAX)
+            query = query.filter(events::event_sequence_number.le(i64::MAX));
         } else {
-            format!("e.{EVENT_SEQUENCE_NUMBER_STR} >= {}", 0)
+            query = query.filter(events::event_sequence_number.ge(0));
         };
 
-        let order_clause = if descending_order { "DESC" } else { "ASC" };
+        if descending_order {
+            query = query.order(events::event_sequence_number.desc());
+        } else {
+            query = query.order(events::event_sequence_number.asc());
+        }
 
         // If the cursor is provided and matches tx_digest, we've already fetched the
         // tx_sequence_number and can query events table directly. Otherwise, we can just consult
         // the tx_digests table for the tx_sequence_number to key into events table.
         if cursor.is_some() {
-            Ok(format!(
-                "SELECT * \
-            FROM EVENTS \
-            WHERE tx_sequence_number = {cursor_tx_seq} \
-            AND {cursor_clause} \
-            ORDER BY e.{EVENT_SEQUENCE_NUMBER_STR} {order_clause} \
-            LIMIT {limit}
-            "
-            ))
+            query = query.filter(events::tx_sequence_number.eq(cursor_tx_seq));
         } else {
-            Ok(format!(
-                "SELECT * \
-            FROM EVENTS \
-            WHERE tx_sequence_number = ( \
-                SELECT tx_sequence_number \
-                FROM tx_digests \
-                WHERE tx_digest = '\\x{}'::bytea \
-            ) \
-            AND {cursor_clause} \
-            ORDER BY e.{EVENT_SEQUENCE_NUMBER_STR} {order_clause} \
-            LIMIT {limit}
-            ",
-                Hex::encode(tx_digest.into_inner()),
-            ))
+            query = query.filter(
+                events::tx_sequence_number.nullable().eq(tx_digests::table
+                    .select(tx_digests::tx_sequence_number)
+                    .filter(tx_digests::tx_digest.eq(tx_digest.into_inner().to_vec()))
+                    .single_value()),
+            );
         }
+
+        let stored_events = query
+            .limit(limit as i64)
+            .load::<StoredEvent>(&mut connection)
+            .await?;
+
+        let mut sui_event_futures = vec![];
+        for stored_event in stored_events {
+            sui_event_futures.push(tokio::task::spawn(
+                stored_event.try_into_sui_event(self.package_resolver.clone()),
+            ));
+        }
+
+        let sui_events = futures::future::join_all(sui_event_futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| error!("Failed to join sui event futures: {}", e))?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| error!("Failed to collect sui event futures: {}", e))?;
+        Ok(sui_events)
     }
 
     pub async fn query_events(
@@ -1038,11 +1051,7 @@ impl IndexerReader {
                 .await?;
             (tx_seq, event_seq)
         } else if descending_order {
-            let max_tx_seq = events::table
-                .select(events::tx_sequence_number)
-                .order(events::tx_sequence_number.desc())
-                .first::<i64>(&mut connection)
-                .await?;
+            let max_tx_seq = u64::MAX as i64;
             (max_tx_seq + 1, 0)
         } else {
             (-1, 0)
@@ -1077,13 +1086,9 @@ impl IndexerReader {
                 limit,
             )
         } else if let EventFilter::Transaction(tx_digest) = filter {
-            self.query_events_by_tx_digest_query(
-                tx_digest,
-                cursor,
-                tx_seq,
-                limit,
-                descending_order,
-            )?
+            return self
+                .query_events_by_tx_digest(tx_digest, cursor, tx_seq, limit, descending_order)
+                .await;
         } else {
             let main_where_clause = match filter {
                 EventFilter::Package(package_id) => {
