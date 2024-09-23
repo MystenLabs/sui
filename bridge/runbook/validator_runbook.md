@@ -214,5 +214,5 @@ In this case Bridge Client is toggled on and syncs with Blockchains proactively.
 * `bridge_sui_watcher_received_actions`
 * `bridge_eth_watcher_received_actions`
 
-It's also critical to track the balance of your client gas coin, and top up once it dips below a certain threshold.
-* `gas_coin_balance`
+It's also critical to track the balance of your client gas coin, and top up once it dips below a certain threshold:
+* `bridge_gas_coin_balance`
