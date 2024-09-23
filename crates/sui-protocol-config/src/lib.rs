@@ -180,6 +180,7 @@ const MAX_PROTOCOL_VERSION: u64 = 60;
 // Version 59: Enable round prober in consensus.
 // Version 60: Validation of public inputs for Groth16 verification.
 //             Enable configuration of maximum number of type nodes in a type layout.
+//             Switch to distributed vote scoring in consensus in testnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2781,6 +2782,12 @@ impl ProtocolConfig {
                 60 => {
                     cfg.max_type_to_layout_nodes = Some(512);
                     cfg.feature_flags.validate_identifier_inputs = true;
+
+                    if chain != Chain::Mainnet {
+                        // Enable distributed vote scoring for testnet
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
