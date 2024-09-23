@@ -300,9 +300,7 @@ Can only be called by genesis or change_epoch transactions.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_load_inner_mut">load_inner_mut</a>(
-    self: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_Random">Random</a>,
-): &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> {
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_Random">Random</a>): &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> {
     <b>let</b> version = <a href="../sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
 
     // Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="../sui-framework/object.md#0x2_object">object</a>.
@@ -332,9 +330,7 @@ Can only be called by genesis or change_epoch transactions.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_load_inner">load_inner</a>(
-    self: &<a href="../sui-framework/random.md#0x2_random_Random">Random</a>,
-): &<a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> {
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_load_inner">load_inner</a>(self: &<a href="../sui-framework/random.md#0x2_random_Random">Random</a>): &<a href="../sui-framework/random.md#0x2_random_RandomInner">RandomInner</a> {
     <b>let</b> version = <a href="../sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
 
     // Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="../sui-framework/object.md#0x2_object">object</a>.
@@ -387,8 +383,8 @@ transaction.
         // randomness ever being generated in that epoch.
         <b>assert</b>!(
             (epoch &gt; inner.epoch && new_round == 0) ||
-                (new_round == inner.randomness_round + 1),
-            <a href="../sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>
+                    (new_round == inner.randomness_round + 1),
+            <a href="../sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>,
         );
     };
 
@@ -422,7 +418,7 @@ Create a generator. Can be used to derive up to MAX_U16 * 32 random bytes.
     <b>let</b> inner = <a href="../sui-framework/random.md#0x2_random_load_inner">load_inner</a>(r);
     <b>let</b> seed = hmac_sha3_256(
         &inner.random_bytes,
-        &ctx.fresh_object_address().to_bytes()
+        &ctx.fresh_object_address().to_bytes(),
     );
     <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a> { seed, counter: 0, buffer: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[] }
 }
