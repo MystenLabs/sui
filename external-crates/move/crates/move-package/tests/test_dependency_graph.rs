@@ -124,7 +124,11 @@ fn lock_file_missing_dependency() {
     .expect("Creating new lock file");
 
     // Write a reference to a dependency that there isn't package information for.
-    writeln!(&*lock, r#"dependencies = [{{ name = "OtherDep" }}]"#).unwrap();
+    writeln!(
+        &*lock,
+        r#"dependencies = [{{ id = "OtherDep", name = "OtherDep" }}]"#
+    )
+    .unwrap();
     lock.commit(&commit).expect("Writing partial lock file");
 
     let Err(err) = DependencyGraph::read_from_lock(
@@ -619,61 +623,61 @@ fn dev_dep_test_package() -> PathBuf {
 
 const EMPTY_LOCK: &str = r#"
 [move]
-version = 0
+version = 3
 manifest_digest = "42"
 deps_digest = ""
 "#;
 
 const A_LOCK: &str = r#"
 [move]
-version = 0
+version = 3
 manifest_digest = "42"
 deps_digest = "7"
 dependencies = [
-    { name = "A" },
+    { id = "A", name = "A" },
 ]
 
 [[move.package]]
-name = "A"
+id = "A"
 source = { local = "./A" }
 "#;
 
 const AB_LOCK: &str = r#"
 [move]
-version = 0
+version = 3
 manifest_digest = "42"
 deps_digest = "7"
 dependencies = [
-    { name = "A" },
-    { name = "B" },
+    { id = "A", name = "A" },
+    { id = "B", name = "A" },
 ]
 
 [[move.package]]
-name = "A"
+id = "A"
 source = { local = "./A" }
 
 [[move.package]]
-name = "B"
+id = "B"
 source = { local = "./B" }
 "#;
 
 const A_DEP_B_LOCK: &str = r#"
 [move]
-version = 0
+version = 3
 manifest_digest = "42"
 deps_digest = "7"
 dependencies = [
-    { name = "A" },
+    { id = "A", name = "A" },
 ]
 
 [[move.package]]
-name = "A"
+id = "A"
 source = { local = "./A" }
 dependencies = [
-    { name = "B" },
+    { id = "B", name = "A" },
 ]
 
 [[move.package]]
-name = "B"
+id = "B"
 source = { local = "./B" }
 "#;
