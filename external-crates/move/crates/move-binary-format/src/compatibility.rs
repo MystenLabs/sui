@@ -4,12 +4,11 @@
 
 use std::collections::BTreeSet;
 
-use crate::normalized::{Enum, Function, Struct};
 use crate::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{AbilitySet, DatatypeTyParameter, Visibility},
     file_format_common::VERSION_5,
-    normalized::Module,
+    normalized::{Module, Enum, Function, Struct},
 };
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{
@@ -275,11 +274,11 @@ impl Compatibility {
 
     /// Check compatibility for `new_module` relative to old module `old_module`.
     pub fn check(&self, old_module: &Module, new_module: &Module) -> PartialVMResult<()> {
-        self.check_::<ExecutionCompatibilityMode>(old_module, new_module)
+        self.check_with_mode::<ExecutionCompatibilityMode>(old_module, new_module)
             .map_err(|_| PartialVMError::new(StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE))
     }
 
-    pub fn check_<M: CompatibilityMode>(
+    pub fn check_with_mode<M: CompatibilityMode>(
         &self,
         old_module: &Module,
         new_module: &Module,
@@ -306,7 +305,6 @@ impl Compatibility {
                 continue;
             };
 
-            // ability mismatch, store old new
             if !datatype_abilities_compatible(
                 self.disallowed_new_abilities,
                 old_struct.abilities,
@@ -316,14 +314,12 @@ impl Compatibility {
             }
 
             if !datatype_type_parameters_compatible(
-                // type param mismatch
                 self.disallow_change_datatype_type_params,
                 &old_struct.type_parameters,
                 &new_struct.type_parameters,
             ) {
                 context.struct_type_param_mismatch(old_struct, new_struct);
             }
-            // create a diff of the fields?
             if new_struct.fields != old_struct.fields {
                 // Fields changed. Code in this module will fail at runtime if it tries to
                 // read a previously published struct value
@@ -332,14 +328,10 @@ impl Compatibility {
                 // compatible. The VM does not care about the name of a field
                 // (it's purely informational), but clients presumably do.
 
-                // field layout mismatch
                 context.struct_field_mismatch(old_struct, new_struct);
             }
         }
 
-        // enums relatively similar but has a variant check
-        // variants have fields which need checking
-        // store
         for (name, old_enum) in &old_module.enums {
             let Some(new_enum) = new_module.enums.get(name) else {
                 // Enum not present in new. Existing modules that depend on this enum will fail to link with the new version of the module.
@@ -412,13 +404,14 @@ impl Compatibility {
         // friend list. But for simplicity, we decided to go to the more restrictive form now and
         // we may revisit this in the future.
         for (name, old_func) in &old_module.functions {
-            // if we don't find a function in the new module
             let Some(new_func) = new_module.functions.get(name) else {
                 if old_func.visibility == Visibility::Friend {
                     context.function_missing_friend(old_func);
                 } else if old_func.visibility != Visibility::Private {
                     context.function_missing_public(old_func);
                 } else if old_func.is_entry && self.check_private_entry_linking {
+                    // This must be a private entry function. So set the link breakage if we're
+                    // checking for that.
                     context.function_missing_entry(old_func);
                 }
                 continue;
