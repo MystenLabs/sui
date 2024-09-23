@@ -43,19 +43,19 @@ module sui::hex_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = EInvalidHexLength)]
+    #[expected_failure(abort_code = hex::EInvalidHexLength)]
     fun test_hex_decode__invalid_length() {
         hex::decode(b"0");
     }
 
     #[test]
-    #[expected_failure(abort_code = ENotValidHexCharacter)]
+    #[expected_failure(abort_code = hex::ENotValidHexCharacter)]
     fun test_hex_decode__hex_literal() {
         hex::decode(x"ffff");
     }
 
     #[test]
-    #[expected_failure(abort_code = ENotValidHexCharacter)]
+    #[expected_failure(abort_code = hex::ENotValidHexCharacter)]
     fun test_hex_decode__invalid_string_literal() {
         hex::decode(b"0g");
     }
