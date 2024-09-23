@@ -211,17 +211,9 @@ impl DagState {
                     state.cached_rounds,
                 ) + 1;
 
-                info!(
-                    "Recovering blocks for authority {} from round {}, gc eviction {}",
-                    authority_index, last_block_round, gc_eviction_round
-                );
-
                 state
                     .store
-                    .scan_blocks_by_author(
-                        authority_index,
-                        gc_eviction_round,
-                    )
+                    .scan_blocks_by_author(authority_index, gc_eviction_round)
                     .expect("Database error")
             } else {
                 state
@@ -238,7 +230,14 @@ impl DagState {
                 state.update_block_metadata(block);
             }
 
-            info!("Recoved blocks {}: {:?}", authority_index, blocks.iter().map(|b| b.reference()).collect::<Vec<BlockRef>>());
+            info!(
+                "Recoved blocks {}: {:?}",
+                authority_index,
+                blocks
+                    .iter()
+                    .map(|b| b.reference())
+                    .collect::<Vec<BlockRef>>()
+            );
 
             // Update the evicted rounds for the authority now that all the blocks have been restored.
             if state.gc_enabled() {
@@ -1878,9 +1877,7 @@ mod test {
             .authorities(vec![AuthorityIndex::new_for_test(0)])
             .skip_block()
             .build();
-        dag_builder
-            .layers(9..=num_rounds)
-            .build();
+        dag_builder.layers(9..=num_rounds).build();
 
         let mut commits = vec![];
         let mut last_committed_rounds = vec![0; 4];
@@ -1991,11 +1988,15 @@ mod test {
             if authority_index == AuthorityIndex::new_for_test(0) {
                 assert_eq!(blocks.len(), 4);
                 assert_eq!(dag_state.evicted_rounds[authority_index.value()], 1);
-                assert!(blocks.into_iter().all(|block|block.round() >= 2 && block.round() <= 5));
+                assert!(blocks
+                    .into_iter()
+                    .all(|block| block.round() >= 2 && block.round() <= 5));
             } else {
                 assert_eq!(blocks.len(), 4);
                 assert_eq!(dag_state.evicted_rounds[authority_index.value()], 4);
-                assert!(blocks.into_iter().all(|block|block.round() >= 5 && block.round() <= 8));
+                assert!(blocks
+                    .into_iter()
+                    .all(|block| block.round() >= 5 && block.round() <= 8));
             }
         }
     }
