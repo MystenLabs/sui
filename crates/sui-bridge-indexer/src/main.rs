@@ -196,7 +196,6 @@ async fn start_processing_sui_checkpoints_by_querying_txns(
     sui_rpc_url: String,
     db_url: String,
     indexer_metrics: BridgeIndexerMetrics,
-    bridge_metrics: Arc<BridgeMetrics>,
 ) -> Result<Vec<JoinHandle<()>>> {
     let pg_pool = get_connection_pool(db_url.clone()).await;
     let (tx, rx) = channel(
@@ -212,7 +211,7 @@ async fn start_processing_sui_checkpoints_by_querying_txns(
         .expect("Failed to read cursor from sui progress store");
     let sui_client = SuiClientBuilder::default().build(sui_rpc_url).await?;
     handles.push(spawn_logged_monitored_task!(
-        start_sui_tx_polling_task(sui_client, cursor, tx, bridge_metrics),
+        start_sui_tx_polling_task(sui_client, cursor, tx),
         "start_sui_tx_polling_task"
     ));
     handles.push(spawn_logged_monitored_task!(

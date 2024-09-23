@@ -284,6 +284,10 @@ where
         }
     }
 
+    pub async fn get_latest_checkpoint_sequence_number(&self) -> BridgeResult<u64> {
+        Ok(self.inner.get_latest_checkpoint_sequence_number().await?)
+    }
+
     pub async fn execute_transaction_block_with_effects(
         &self,
         tx: sui_types::transaction::Transaction,

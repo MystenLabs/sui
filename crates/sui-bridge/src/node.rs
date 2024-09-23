@@ -116,11 +116,14 @@ async fn start_client_components(
             .expect("Failed to start eth syncer");
     all_handles.extend(task_handles);
 
-    let (task_handles, sui_events_rx) =
-        SuiSyncer::new(client_config.sui_client, sui_modules_to_watch)
-            .run(Duration::from_secs(2))
-            .await
-            .expect("Failed to start sui syncer");
+    let (task_handles, sui_events_rx) = SuiSyncer::new(
+        client_config.sui_client,
+        sui_modules_to_watch,
+        metrics.clone(),
+    )
+    .run(Duration::from_secs(2))
+    .await
+    .expect("Failed to start sui syncer");
     all_handles.extend(task_handles);
 
     let committee = Arc::new(

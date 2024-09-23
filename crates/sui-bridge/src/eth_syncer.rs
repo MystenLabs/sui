@@ -113,8 +113,6 @@ where
             tracing::debug!("Last finalized block: {}", new_value);
             metrics.last_finalized_eth_block.set(new_value as i64);
 
-            // TODO add a metrics for the last finalized block
-
             if new_value > last_block_number {
                 last_finalized_block_sender
                     .send(new_value)
@@ -136,6 +134,7 @@ where
         metrics: Arc<BridgeMetrics>,
     ) {
         tracing::info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
+        let contract_address_str = contract_address.to_string();
         let mut more_blocks = false;
         loop {
             // If no more known blocks, wait for the next finalized block.
@@ -198,7 +197,10 @@ where
                 );
             }
             if let Some(last_block) = last_block {
-                metrics.last_synced_eth_block.set(last_block as i64);
+                metrics
+                    .last_synced_eth_blocks
+                    .with_label_values(&[&contract_address_str])
+                    .set(last_block as i64);
             }
             start_block = end_block + 1;
         }

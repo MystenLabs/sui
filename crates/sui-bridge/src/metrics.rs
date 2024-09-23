@@ -86,9 +86,9 @@ pub struct BridgeMetrics {
     pub(crate) err_requests: IntCounterVec,
     pub(crate) requests_inflight: IntGaugeVec,
 
-    pub last_synced_sui_checkpoint: IntGauge,
+    pub(crate) last_synced_sui_checkpoints: IntGaugeVec,
     pub(crate) last_finalized_eth_block: IntGauge,
-    pub(crate) last_synced_eth_block: IntGauge,
+    pub(crate) last_synced_eth_blocks: IntGaugeVec,
 
     pub(crate) sui_watcher_received_events: IntCounter,
     pub(crate) sui_watcher_received_actions: IntCounter,
@@ -262,21 +262,23 @@ impl BridgeMetrics {
                 registry,
             )
             .unwrap(),
-            last_synced_sui_checkpoint: register_int_gauge_with_registry!(
-                "last_synced_sui_checkpoint",
-                "The latest sui checkpoint that indexer synced",
+            last_synced_sui_checkpoints: register_int_gauge_vec_with_registry!(
+                "bridge_last_synced_sui_checkpoints",
+                "The latest sui checkpoints synced for each module",
+                &["module_name"],
                 registry,
             )
             .unwrap(),
-            last_synced_eth_block: register_int_gauge_with_registry!(
-                "bridge_last_synced_eth_block",
-                "The latest finalized eth block that indexer synced",
+            last_synced_eth_blocks: register_int_gauge_vec_with_registry!(
+                "bridge_last_synced_eth_blocks",
+                "The latest synced eth blocks synced for each contract",
+                &["contract_address"],
                 registry,
             )
             .unwrap(),
             last_finalized_eth_block: register_int_gauge_with_registry!(
                 "bridge_last_finalized_eth_block",
-                "The latest finalized eth block that indexer observed",
+                "The latest finalized eth block observed",
                 registry,
             )
             .unwrap(),
