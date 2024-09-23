@@ -58,7 +58,7 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         }
 
         for (uint8 i; i < _tokenPrices.length; i++) {
-            tokenPrices[i] = _tokenPrices[i];
+            tokenPrices[_tokenIds[i]] = _tokenPrices[i];
         }
 
         chainID = _chainID;
