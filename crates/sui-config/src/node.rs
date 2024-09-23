@@ -717,6 +717,10 @@ impl Default for AuthorityStorePruningConfig {
 }
 
 impl AuthorityStorePruningConfig {
+    pub fn set_num_epochs_to_retain(&mut self, num_epochs_to_retain: u64) {
+        self.num_epochs_to_retain = num_epochs_to_retain;
+    }
+
     pub fn set_num_epochs_to_retain_for_checkpoints(&mut self, num_epochs_to_retain: Option<u64>) {
         self.num_epochs_to_retain_for_checkpoints = num_epochs_to_retain;
     }
