@@ -8,7 +8,7 @@ use crate::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{AbilitySet, DatatypeTyParameter, Visibility},
     file_format_common::VERSION_5,
-    normalized::{Module, Enum, Function, Struct},
+    normalized::{Enum, Function, Module, Struct},
 };
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{
@@ -98,10 +98,9 @@ pub trait CompatibilityMode: Default {
     fn function_missing_public(&mut self, old_func: &Function);
     fn function_missing_friend(&mut self, old_funcs: &Function);
     fn function_missing_entry(&mut self, old_func: &Function);
+    fn function_signature_mismatch(&mut self, old_func: &Function, new_func: &Function);
     fn function_lost_public_visibility(&mut self, old_func: &Function);
     fn function_lost_friend_visibility(&mut self, old_func: &Function);
-    fn function_previously_friend(&mut self, old_func: &Function);
-    fn function_visibility_mismatch(&mut self, old_func: &Function, new_func: &Function);
     fn function_entry_compatibility(&mut self, old_func: &Function, new_func: &Function);
 
     fn friend_module_missing(
@@ -200,8 +199,20 @@ impl CompatibilityMode for ExecutionCompatibilityMode {
         self.entry_linking = false;
     }
 
-    fn function_previously_friend(&mut self, _old_func: &Function) {
-        self.friend_linking = false;
+    fn function_signature_mismatch(&mut self, old_func: &Function, _new_func: &Function) {
+        match old_func.visibility {
+            Visibility::Friend => {
+                self.friend_linking = false;
+            }
+            Visibility::Public => {
+                self.datatype_and_function_linking = false;
+            }
+            Visibility::Private => (),
+        }
+
+        if old_func.is_entry {
+            self.entry_linking = false;
+        }
     }
 
     fn function_lost_public_visibility(&mut self, _old_func: &Function) {
@@ -210,10 +221,6 @@ impl CompatibilityMode for ExecutionCompatibilityMode {
 
     fn function_lost_friend_visibility(&mut self, _old_func: &Function) {
         self.friend_linking = false;
-    }
-
-    fn function_visibility_mismatch(&mut self, _old_func: &Function, _new_func: &Function) {
-        self.datatype_and_function_linking = false;
     }
 
     fn function_entry_compatibility(&mut self, _old_func: &Function, _new_func: &Function) {
@@ -429,12 +436,14 @@ impl Compatibility {
             }
 
             // Check entry compatibility
-            if (old_module.file_format_version < VERSION_5
+            #[allow(clippy::if_same_then_else)]
+            if old_module.file_format_version < VERSION_5
                 && new_module.file_format_version < VERSION_5
+                && old_func.visibility != Visibility::Private
                 && old_func.is_entry != new_func.is_entry
-                && old_func.visibility != Visibility::Private)
-                || old_func.is_entry && !new_func.is_entry
             {
+                context.function_entry_compatibility(old_func, new_func);
+            } else if old_func.is_entry && !new_func.is_entry {
                 context.function_entry_compatibility(old_func, new_func);
             }
 
@@ -446,19 +455,7 @@ impl Compatibility {
                     &new_func.type_parameters,
                 )
             {
-                match old_func.visibility {
-                    Visibility::Friend => {
-                        context.function_previously_friend(old_func);
-                    }
-                    Visibility::Public => {
-                        context.function_visibility_mismatch(old_func, new_func);
-                    }
-                    Visibility::Private => (),
-                }
-
-                if old_func.is_entry {
-                    context.function_entry_compatibility(old_func, new_func);
-                }
+                context.function_signature_mismatch(old_func, new_func);
             }
         }
 
