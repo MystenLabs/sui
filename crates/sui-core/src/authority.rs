@@ -847,6 +847,9 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
+        // Ensure that validator cannot reconfigure while we are signing the tx
+        let _execution_lock = self.execution_lock_for_signing().await;
+
         let tx_digest = transaction.digest();
         let tx_data = transaction.data().transaction_data();
 
@@ -940,16 +943,6 @@ impl AuthorityState {
             .authority_state_handle_transaction_latency
             .start_timer();
         self.metrics.tx_orders.inc();
-
-        // The should_accept_user_certs check here is best effort, because
-        // between a validator signs a tx and a cert is formed, the validator
-        // could close the window.
-        if !epoch_store
-            .get_reconfig_state_read_lock_guard()
-            .should_accept_user_certs()
-        {
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
 
         let signed = self.handle_transaction_impl(transaction, epoch_store).await;
         match signed {
@@ -2883,6 +2876,14 @@ impl AuthorityState {
                 actual_epoch: transaction.auth_sig().epoch(),
             })
         }
+    }
+
+    /// Acquires the execution lock for the duration of a transaction signing request.
+    /// This prevents reconfiguration from starting until we are finished handling the signing request.
+    /// Otherwise, in-memory lock state could be cleared (by `ObjectLocks::clear_cached_locks`)
+    /// while we are attempting to acquire locks for the transaction.
+    pub async fn execution_lock_for_signing(&self) -> ExecutionLockReadGuard {
+        self.execution_lock.read().await
     }
 
     pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
