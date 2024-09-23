@@ -242,6 +242,8 @@ export class MoveDebugSession extends LoggingDebugSession {
                 scopes.push(shadowedScope);
             }
         }
+        // don't have to check if scope 0 exists as it's created whenever a new frame is created
+        // and it's never disposed of
         const localScopeReference = this.variableHandles.create({ locals: frame.locals[0] });
         const localScope = new Scope(`locals: ${frame.name}`, localScopeReference, false);
         scopes.push(localScope);

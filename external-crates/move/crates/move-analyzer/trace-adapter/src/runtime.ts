@@ -442,14 +442,12 @@ export class Runtime extends EventEmitter {
                 }
             }
             // trim shadowed scopes that have no live variables in them
-            if (localsLength > 1) {
-                for (let i = localsLength - 1; i > 0; i--) {
-                    const existingVar = currentFrame.locals[i].find(runtimeVar => {
-                        return runtimeVar !== undefined;
-                    });
-                    if (!existingVar) {
-                        currentFrame.locals.pop();
-                    }
+            for (let i = localsLength - 1; i > 0; i--) {
+                const liveVar = currentFrame.locals[i].find(runtimeVar => {
+                    return runtimeVar !== undefined;
+                });
+                if (!liveVar) {
+                    currentFrame.locals.pop();
                 }
             }
         }
