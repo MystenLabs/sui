@@ -847,6 +847,9 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
+        // Ensure that validator cannot reconfigure while we are signing the tx
+        let _execution_lock = self.execution_lock_for_signing().await;
+
         let tx_digest = transaction.digest();
         let tx_data = transaction.data().transaction_data();
 
@@ -940,9 +943,6 @@ impl AuthorityState {
             .authority_state_handle_transaction_latency
             .start_timer();
         self.metrics.tx_orders.inc();
-
-        // Ensure that validator cannot reconfigure while we are signing the tx
-        let _execution_lock = self.execution_lock_for_signing().await;
 
         let signed = self.handle_transaction_impl(transaction, epoch_store).await;
         match signed {
@@ -2878,8 +2878,11 @@ impl AuthorityState {
         }
     }
 
+    /// Acquires the execution lock for the duration of a transaction signing request.
+    /// This prevents reconfiguration from starting until we are finished handling the signing request.
+    /// Otherwise, in-memory lock state could be cleared (by `ObjectLocks::clear_cached_locks`)
+    /// while we are attempting to acquire locks for the transaction.
     pub async fn execution_lock_for_signing(&self) -> ExecutionLockReadGuard {
-        // No need to check epoch here - current epoch is always correct for signing
         self.execution_lock.read().await
     }
 
