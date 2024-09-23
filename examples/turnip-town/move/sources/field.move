@@ -9,219 +9,183 @@
 /// their field (which can be used anywhere, including other players' fields).
 /// Any player can visit a field to water turnips and harvest them, but
 /// harvested turnips always go to the field owner's kiosk.
-module turnip_town::field {
-    use turnip_town::turnip::{Self, Turnip};
-    use turnip_town::water::Water;
+module turnip_town::field;
 
-    // === Types ===
+use turnip_town::turnip::{Self, Turnip};
+use turnip_town::water::Water;
 
-    public struct Field has store {
-        slots: vector<Slot>,
-    }
+// === Types ===
 
-    /// A slot is a single position in the field.
-    public struct Slot has store {
-        /// The turnip growing at this position in the field.
-        turnip: Option<Turnip>,
+public struct Field has store {
+    slots: vector<Slot>,
+}
 
-        /// The water left over at this position, this is consumed over time.
-        water: u64,
+/// A slot is a single position in the field.
+public struct Slot has store {
+    /// The turnip growing at this position in the field.
+    turnip: Option<Turnip>,
+    /// The water left over at this position, this is consumed over time.
+    water: u64,
+    /// The last epoch this slot was simulated at.
+    last_updated: u64,
+}
 
-        /// The last epoch this slot was simulated at.
-        last_updated: u64,
-    }
+// === Constants ===
 
-    // === Constants ===
+/// Field width (number of slots)
+const WIDTH: u64 = 4;
 
-    /// Field width (number of slots)
-    const WIDTH: u64 = 4;
+/// Field height (number of slots)
+const HEIGHT: u64 = 4;
 
-    /// Field height (number of slots)
-    const HEIGHT: u64 = 4;
+// === Errors ===
 
-    // === Errors ===
+/// Trying to plant in a non-existent slot.
+const EOutOfBounds: u64 = 0;
 
-    /// Trying to plant in a non-existent slot.
-    const EOutOfBounds: u64 = 0;
+/// Slot is already occupied.
+const EAlreadyFilled: u64 = 1;
 
-    /// Slot is already occupied.
-    const EAlreadyFilled: u64 = 1;
+/// Slot does not contain a turnip.
+const ENotFilled: u64 = 2;
 
-    /// Slot does not contain a turnip.
-    const ENotFilled: u64 = 2;
+/// Field being destroyed contains a turnip.
+const ENotEmpty: u64 = 3;
 
-    /// Field being destroyed contains a turnip.
-    const ENotEmpty: u64 = 3;
+/// Turnip is too small to harvest
+const ETooSmall: u64 = 4;
 
-    /// Turnip is too small to harvest
-    const ETooSmall: u64 = 4;
+// === Protected Functions ===
 
-    // === Protected Functions ===
+/// Create a brand new field.
+public(package) fun new(ctx: &TxContext): Field {
+    let slots = vector::tabulate!(
+        WIDTH * HEIGHT,
+        |_| Slot {
+            turnip: option::none(),
+            water: 0,
+            last_updated: ctx.epoch(),
+        },
+    );
 
-    /// Create a brand new field.
-    public(package) fun new(ctx: &TxContext): Field {
-        let mut slots = vector[];
-        let total = WIDTH * HEIGHT;
-        while (slots.length() < total) {
-            slots.push_back(Slot {
-                turnip: option::none(),
-                water: 0,
-                last_updated: ctx.epoch(),
-            });
-        };
+    Field { slots }
+}
 
-        Field { slots }
-    }
+/// Destroy a field with turnips potentially in it, as long as they could
+/// not be harvested.
+public(package) fun burn(mut field: Field, ctx: &TxContext) {
+    field.simulate(ctx);
 
-    /// Destroy a field with turnips potentially in it, as long as they could
-    /// not be harvested.
-    public(package) fun burn(mut field: Field, ctx: &TxContext) {
-        field.simulate(ctx);
+    let Field { slots } = field;
 
-        let Field { mut slots } = field;
+    slots.destroy!(|slot| {
+        let Slot { turnip, .. } = slot;
+        turnip.do!(|turnip| {
+            assert!(!turnip.can_harvest(), ENotEmpty);
+            turnip.consume();
+        });
+    });
+}
 
-        while (!vector::is_empty(&slots)) {
-            let Slot { turnip, water: _, last_updated: _ } = slots.pop_back();
-            if (turnip.is_some()) {
-                let turnip = turnip.destroy_some();
-                assert!(!turnip.can_harvest(), ENotEmpty);
-                turnip.consume();
-            } else {
-                turnip.destroy_none();
-            }
-        };
+/// Plant a fresh turnip at position (i, j) in `field`.
+///
+/// Fails if the position is out of bounds or there is already a turnip
+/// there.
+public(package) fun sow(field: &mut Field, i: u64, j: u64, ctx: &mut TxContext) {
+    let slot = field.slot_mut(i, j, ctx);
 
-        vector::destroy_empty(slots)
-    }
+    assert!(slot.turnip.is_none(), EAlreadyFilled);
+    slot.turnip.fill(turnip::fresh(ctx));
+    slot.last_updated = ctx.epoch();
+}
 
-    /// Plant a fresh turnip at position (i, j) in `field`.
-    ///
-    /// Fails if the position is out of bounds or there is already a turnip
-    /// there.
-    public(package) fun sow(
-        field: &mut Field,
-        i: u64,
-        j: u64,
-        ctx: &mut TxContext,
-    ) {
-        let slot = field.slot_mut(i, j, ctx);
+/// Add water at position (i, j) in `field`.
+///
+/// Fails if the postion is out-of-bounds. It is valid to water a slot
+/// without a turnip.
+public(package) fun water(field: &mut Field, i: u64, j: u64, water: Water, ctx: &TxContext) {
+    let slot = field.slot_mut(i, j, ctx);
+    slot.water = slot.water + water.value();
+}
 
-        assert!(slot.turnip.is_none(), EAlreadyFilled);
-        slot.turnip.fill(turnip::fresh(ctx));
-        slot.last_updated = ctx.epoch();
-    }
+/// Harvest the turnip at position (i, j).
+///
+/// Fails if the position is out of bounds, if no turnip exists there or the
+/// turnip was too small to harvest.
+public(package) fun harvest(field: &mut Field, i: u64, j: u64, ctx: &TxContext): Turnip {
+    let slot = field.slot_mut(i, j, ctx);
 
-    /// Add water at position (i, j) in `field`.
-    ///
-    /// Fails if the postion is out-of-bounds. It is valid to water a slot
-    /// without a turnip.
-    public(package) fun water(
-        field: &mut Field,
-        i: u64,
-        j: u64,
-        water: Water,
-        ctx: &TxContext,
-    ) {
-        let slot = field.slot_mut(i, j, ctx);
-        slot.water = slot.water + water.value();
-    }
+    assert!(slot.turnip.is_some(), ENotFilled);
+    let turnip = slot.turnip.extract();
 
-    /// Harvest the turnip at position (i, j).
-    ///
-    /// Fails if the position is out of bounds, if no turnip exists there or the
-    /// turnip was too small to harvest.
-    public(package) fun harvest(
-        field: &mut Field,
-        i: u64,
-        j: u64,
-        ctx: &TxContext,
-    ): Turnip {
-        let slot = field.slot_mut(i, j, ctx);
+    assert!(turnip.can_harvest(), ETooSmall);
+    turnip
+}
 
-        assert!(slot.turnip.is_some(), ENotFilled);
-        let turnip = slot.turnip.extract();
+/// Bring all the slots in the field up-to-date with the current epoch.
+public fun simulate(field: &mut Field, ctx: &TxContext) {
+    HEIGHT.do!(|j| {
+        WIDTH.do!(|i| {
+            // Calling slot_mut has the effect of bringing the slot
+            // up-to-date before returning a reference to it (which is
+            // immediately discarded).
+            let _ = field.slot_mut(i, j, ctx);
+        });
+    });
+}
 
-        assert!(turnip.can_harvest(), ETooSmall);
-        turnip
-    }
+// === Private Functions ===
 
-    /// Bring all the slots in the field up-to-date with the current epoch.
-    public fun simulate(field: &mut Field, ctx: &TxContext) {
-        let mut j = 0;
-        while (j < HEIGHT) {
-            let mut i = 0;
-            while (i < WIDTH) {
-                // Calling slot_mut has the effect of bringing the slot
-                // up-to-date before returning a reference to it (which is
-                // immediately discarded).
-                let _ = field.slot_mut(i, j, ctx);
-                i = i + 1;
-            };
-            j = j + 1;
+/// Return the slot at position (i, j), up-to-date as of the epoch in `ctx`.
+///
+///  Fails if (i, j) is out-of-bounds.
+fun slot_mut(field: &mut Field, i: u64, j: u64, ctx: &TxContext): &mut Slot {
+    assert!(i < WIDTH && j < HEIGHT, EOutOfBounds);
+
+    let epoch = ctx.epoch();
+    let ix = i + j * WIDTH;
+    let slot = &mut field.slots[ix];
+    let days = epoch - slot.last_updated;
+    slot.last_updated = epoch;
+
+    slot.turnip.do_mut!(|turnip| {
+        turnip.simulate(&mut slot.water, days);
+        if (!turnip.is_fresh()) {
+            slot.turnip.extract().consume();
         }
-    }
+    });
 
-    // === Private Functions ===
+    slot
+}
 
-    /// Return the slot at position (i, j), up-to-date as of the epoch in `ctx`.
-    ///
-    ///  Fails if (i, j) is out-of-bounds.
-    fun slot_mut(field: &mut Field, i: u64, j: u64, ctx: &TxContext): &mut Slot {
-        assert!(i < WIDTH && j < HEIGHT, EOutOfBounds);
+// === Test Helpers ===
 
-        let epoch = ctx.epoch();
-        let ix = i + j * WIDTH;
-        let slot = &mut field.slots[ix];
-        let days = epoch - slot.last_updated;
-        slot.last_updated = epoch;
+#[test_only]
+#[syntax(index)]
+/// General access to slots in the field, but only exposed for tests.
+public fun borrow(field: &Field, i: u64, j: u64): &Turnip {
+    field.slots[i + j *  WIDTH].turnip.borrow()
+}
 
-        if (slot.turnip.is_some()) {
-            let turnip = slot.turnip.borrow_mut();
-            turnip.simulate(&mut slot.water, days);
-            if (!turnip.is_fresh()) {
-                slot.turnip.extract().consume();
-            }
-        };
+#[test_only]
+#[syntax(index)]
+/// General access to slots in the field, but only exposed for tests.
+public fun borrow_mut(field: &mut Field, i: u64, j: u64): &mut Turnip {
+    field.slots[i + j *  WIDTH].turnip.borrow_mut()
+}
 
-        slot
-    }
+#[test_only]
+public fun is_empty(field: &mut Field, i: u64, j: u64): bool {
+    field.slots[i + j *  WIDTH].turnip.is_none()
+}
 
-    // === Test Helpers ===
+#[test_only]
+/// Clean-up the field even if it contains turnips in it.
+public fun destroy_for_test(field: Field) {
+    let Field { slots } = field;
 
-    #[test_only]
-    #[syntax(index)]
-    /// General access to slots in the field, but only exposed for tests.
-    public fun borrow(field: &Field, i: u64, j: u64): &Turnip {
-        field.slots[i + j *  WIDTH].turnip.borrow()
-    }
-
-    #[test_only]
-    #[syntax(index)]
-    /// General access to slots in the field, but only exposed for tests.
-    public fun borrow_mut(field: &mut Field, i: u64, j: u64): &mut Turnip {
-        field.slots[i + j *  WIDTH].turnip.borrow_mut()
-    }
-
-    #[test_only]
-    public fun is_empty(field: &mut Field, i: u64, j: u64): bool {
-        field.slots[i + j *  WIDTH].turnip.is_none()
-    }
-
-    #[test_only]
-    /// Clean-up the field even if it contains turnips in it.
-    public fun destroy_for_test(field: Field) {
-        let Field { mut slots } = field;
-
-        while (!vector::is_empty(&slots)) {
-            let Slot { turnip, water: _, last_updated: _ } = slots.pop_back();
-            if (turnip.is_some()) {
-                let turnip = turnip.destroy_some();
-                turnip.consume();
-            } else {
-                turnip.destroy_none();
-            }
-        };
-
-        vector::destroy_empty(slots)
-    }
+    slots.destroy!(|slot| {
+        let Slot { turnip, .. } = slot;
+        turnip.do!(|turnip| turnip.consume());
+    })
 }
