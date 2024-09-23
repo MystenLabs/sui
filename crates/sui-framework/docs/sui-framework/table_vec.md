@@ -95,7 +95,7 @@ Create an empty TableVec.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_empty">empty</a>&lt;Element: store&gt;(ctx: &<b>mut</b> TxContext): <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt; {
     <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a> {
-        contents: <a href="../sui-framework/table.md#0x2_table_new">table::new</a>(ctx)
+        contents: <a href="../sui-framework/table.md#0x2_table_new">table::new</a>(ctx),
     }
 }
 </code></pre>
@@ -364,7 +364,9 @@ Aborts if <code>i</code> or <code>j</code> is out of bounds.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap">swap</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, j: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
     <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; j, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
-    <b>if</b> (i == j) { <b>return</b> };
+    <b>if</b> (i == j) {
+        <b>return</b>
+    };
     <b>let</b> element_i = t.contents.remove(i);
     <b>let</b> element_j = t.contents.remove(j);
     t.contents.add(j, element_i);

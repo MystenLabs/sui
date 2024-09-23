@@ -107,10 +107,7 @@ specified type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_borrow">borrow</a>&lt;Name: <b>copy</b> + drop + store, Value: key + store&gt;(
-    <a href="../sui-framework/object.md#0x2_object">object</a>: &UID,
-    name: Name,
-): &Value {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_borrow">borrow</a>&lt;Name: <b>copy</b> + drop + store, Value: key + store&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &UID, name: Name): &Value {
     borrow_impl!(<a href="../sui-framework/object.md#0x2_object">object</a>, name)
 }
 </code></pre>
@@ -199,10 +196,7 @@ Returns true if and only if the <code><a href="../sui-framework/object.md#0x2_ob
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_exists_">exists_</a>&lt;Name: <b>copy</b> + drop + store&gt;(
-    <a href="../sui-framework/object.md#0x2_object">object</a>: &UID,
-    name: Name,
-): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_exists_">exists_</a>&lt;Name: <b>copy</b> + drop + store&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &UID, name: Name): bool {
     <b>let</b> key = <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
     field::exists_with_type&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key)
 }
@@ -258,10 +252,7 @@ Returns none otherwise
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_id">id</a>&lt;Name: <b>copy</b> + drop + store&gt;(
-    <a href="../sui-framework/object.md#0x2_object">object</a>: &UID,
-    name: Name,
-): Option&lt;ID&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_id">id</a>&lt;Name: <b>copy</b> + drop + store&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &UID, name: Name): Option&lt;ID&gt; {
     <b>let</b> key = <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
     <b>if</b> (!field::exists_with_type&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     <b>let</b> (_field, value_addr) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
