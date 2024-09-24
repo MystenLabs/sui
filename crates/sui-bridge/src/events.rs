@@ -377,7 +377,7 @@ macro_rules! declare_events {
 
         $(pub static $variant: OnceCell<StructTag> = OnceCell::new();)*
 
-        pub(crate) fn init_all_struct_tags() {
+        pub fn init_all_struct_tags() {
             $($variant.get_or_init(|| {
                 StructTag::from_str(&format!("0x{}::{}", BRIDGE_PACKAGE_ID.to_hex(), $event_tag)).unwrap()
             });)*
@@ -439,10 +439,10 @@ pub mod tests {
 
     use super::*;
     use crate::crypto::BridgeAuthorityKeyPair;
-    use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
     use crate::types::BridgeAction;
     use crate::types::SuiToEthBridgeAction;
     use ethers::types::Address as EthAddress;
+    use sui_bridge_test_utils::test_utils::BridgeTestClusterBuilder;
     use sui_json_rpc_types::SuiEvent;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;

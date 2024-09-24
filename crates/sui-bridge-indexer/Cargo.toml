@@ -43,6 +43,8 @@ sui-types = { workspace = true, features = ["test-utils"] }
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 hex-literal = "0.3.4"
+sui-indexer.workspace = true
+sui-bridge-test-utils.workspace = true
 
 [[bin]]
 name = "bridge-indexer"

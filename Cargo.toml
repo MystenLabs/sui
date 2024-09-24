@@ -617,6 +617,7 @@ sui-authority-aggregation = { path = "crates/sui-authority-aggregation" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-bridge = { path = "crates/sui-bridge" }
 sui-bridge-watchdog = { path = "crates/sui-bridge-watchdog" }
+sui-bridge-test-utils = { path = "crates/sui-bridge-test-utils" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }

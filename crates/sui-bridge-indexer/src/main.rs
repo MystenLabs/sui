@@ -3,23 +3,14 @@
 
 use anyhow::Result;
 use clap::*;
-use ethers::providers::{Http, Provider};
-use ethers::types::Address as EthAddress;
-use prometheus::Registry;
 use std::collections::HashSet;
 use std::env;
 use std::net::IpAddr;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::eth_client::EthClient;
-use sui_bridge::metered_eth_provider::{new_metered_eth_provider, MeteredEthHttpProvier};
-use sui_bridge::sui_client::SuiBridgeClient;
-use sui_bridge::utils::get_eth_contract_addresses;
-use sui_bridge_indexer::eth_bridge_indexer::EthFinalizedSyncDatasource;
-use sui_bridge_indexer::eth_bridge_indexer::EthSubscriptionDatasource;
-use sui_config::Config;
+use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -29,23 +20,18 @@ use mysten_metrics::start_prometheus_server;
 
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::config::IndexerConfig;
-use sui_bridge_indexer::eth_bridge_indexer::EthDataMapper;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
-use sui_bridge_indexer::storage::PgBridgePersistent;
-use sui_bridge_indexer::sui_bridge_indexer::SuiBridgeDataMapper;
-use sui_bridge_indexer::sui_datasource::SuiCheckpointDatasource;
 use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
+use sui_bridge_indexer::{
+    create_eth_subscription_indexer, create_eth_sync_indexer, create_sui_indexer,
+};
 use sui_bridge_watchdog::{
     eth_bridge_status::EthBridgeStatus, eth_vault_balance::EthVaultBalance,
     metrics::WatchdogMetrics, sui_bridge_status::SuiBridgeStatus, BridgeWatchDog,
 };
 use sui_data_ingestion_core::DataIngestionMetrics;
-use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
-use sui_indexer_builder::progress::{
-    OutOfOrderSaveAfterDurationPolicy, ProgressSavingPolicy, SaveAfterDurationPolicy,
-};
 use sui_sdk::SuiClientBuilder;
 
 #[derive(Parser, Clone, Debug)]
@@ -99,7 +85,7 @@ async fn main() -> Result<()> {
         )),
     );
 
-    let eth_client: Arc<EthClient<MeteredEthHttpProvier>> = Arc::new(
+    let eth_client = Arc::new(
         EthClient::<MeteredEthHttpProvier>::new(
             &config.eth_rpc_url,
             HashSet::from_iter(vec![]), // dummy
@@ -133,44 +119,22 @@ async fn main() -> Result<()> {
             eth_client.clone(),
             config.eth_ws_url.clone(),
             indexer_meterics.clone(),
-            config.eth_bridge_genesis_block,
+            &config,
+            eth_client.clone(),
         )
         .await?;
-        let eth_subscription_indexer = IndexerBuilder::new(
-            "EthBridgeSubscriptionIndexer",
-            eth_subscription_datasource,
-            EthDataMapper {
-                metrics: indexer_meterics.clone(),
-            },
-            datastore.clone(),
-        )
-        .with_backfill_strategy(BackfillStrategy::Disabled)
-        .build();
         tasks.push(spawn_logged_monitored_task!(
             eth_subscription_indexer.start()
         ));
 
-        // Start the eth sync data source
-        let eth_sync_datasource = EthFinalizedSyncDatasource::new(
-            bridge_addresses.clone(),
-            eth_client.clone(),
-            config.eth_rpc_url.clone(),
+        let eth_sync_indexer = create_eth_sync_indexer(
+            connection_pool.clone(),
             indexer_meterics.clone(),
-            bridge_metrics.clone(),
-            config.eth_bridge_genesis_block,
+            bridge_metrics,
+            &config,
+            eth_client.clone(),
         )
         .await?;
-
-        let eth_sync_indexer = IndexerBuilder::new(
-            "EthBridgeFinalizedSyncIndexer",
-            eth_sync_datasource,
-            EthDataMapper {
-                metrics: indexer_meterics.clone(),
-            },
-            datastore,
-        )
-        .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 1000 })
-        .build();
         tasks.push(spawn_logged_monitored_task!(eth_sync_indexer.start()));
     }
 
@@ -190,17 +154,9 @@ async fn main() -> Result<()> {
             .unwrap_or(tempfile::tempdir()?.into_path()),
         config.sui_bridge_genesis_checkpoint,
         ingestion_metrics.clone(),
-        indexer_meterics.clone(),
-    );
-    let indexer = IndexerBuilder::new(
-        "SuiBridgeIndexer",
-        sui_checkpoint_datasource,
-        SuiBridgeDataMapper {
-            metrics: indexer_meterics.clone(),
-        },
-        datastore_with_out_of_order_source,
+        &config,
     )
-    .build();
+    .await?;
     tasks.push(spawn_logged_monitored_task!(indexer.start()));
 
     let sui_bridge_client =
