@@ -339,10 +339,9 @@ pub fn parse_dependency(dep_id: &str, mut tval: TV) -> Result<PM::Dependency> {
             bail!("Resolver name is not a string")
         };
 
-        // Fields not relevant except for the external resolver, but remove it to mark it as a
+        // Not relevant except for the external resolver, but remove it to mark it as a
         // recognised part of the manifest.
         let _ = table.remove("packages");
-        let _ = table.remove("network");
 
         // Any fields that are left are unknown
         warn_if_unknown_field_names(table, &[]);
