@@ -4,6 +4,8 @@ description: An app that performs atomic swaps on Sui. Atomic swaps are similar 
 effort: large
 ---
 
+{@include: ../../../snippets/app-examples-swap-source.mdx}
+
 This guide demonstrates how to make an app that performs atomic swaps on Sui. Atomic swaps are similar to escrows but without requiring a trusted third party.
 
 There are three main sections to this guide:
@@ -25,8 +27,6 @@ The guide also shows how to build an app that:
 
 ## What you need
 
-{@include: ../../../snippets/app-examples-swap-source.mdx}
-
 Before getting started, make sure you have:
 
 - [Installed the latest version of Sui](../getting-started/sui-install.mdx).
@@ -34,11 +34,51 @@ Before getting started, make sure you have:
 - [Acquired Devnet or Testnet](../getting-started/get-coins.mdx) tokens for development purposes.
 - Read the basics of [shared versus owned objects](../sui-101/shared-owned.mdx).
 
+## Directory structure
+
+To begin, create a new folder on your system titled `trading` that holds all your files. Inside that folder, create three more folders: `api`, `contracts`, and `frontend`. It's important to keep this directory structure as some helper scripts in this example target these directories by name. Different projects have their own directory structure, but it's common to split code into functional groups to help with maintenance.
+
+:::checkpoint
+
+- You have the latest version of Sui installed. If you run `sui --version` in your terminal or console, it responds with the currently installed version.
+- Your active environment is pointing to the expected network. Run `sui client active-env` to make sure. If you receive a warning about a client and server API version mismatch, update Sui using the version in the relevant branch (`mainnet`, `testnet`, `devent`) of the Sui repo.
+- Your active address has SUI. Run `sui client balance` in your terminal or console. If there is no balance, [acquire SUI](../getting-started/get-coins.mdx) from the faucet (not available in Mainnet).
+- You have a directory to place the files you create in. The name of the directories doesn't matter, but the guide references the suggested names.
+
+:::
+
 ## Smart contracts {#smart-contracts}
 
-In this part of the guide, you write the Move contracts that perform the trustless swaps. The first step is to [set up a Move package](../first-app/write-package.mdx) for storing your Move modules.
+In this part of the guide, you write the Move contracts that perform the trustless swaps. The first step is to [set up a Move package](../first-app/write-package.mdx) for storing your Move modules. The guide describes how to create the package from scratch, but you can use a fork or copy of the example code in the Sui repo to follow along instead.
+
+### Move.toml
+
+To begin writing your smart contracts, create an `escrow` folder in your `contracts` folder (if using recommended directory names). Create a file inside the folder named `Move.toml` and copy the following code into it. This is the package manifest file. If you want to learn more about the structure of the file, see [Package Manifest](https://move-book.com/concepts/manifest.html) in The Move Book.
+
+:::info
+
+If you are targeting a network other than Testnet, be sure to update the `rev` value for the Sui dependency.
+
+:::
+
+{@inject: examples/trading/contracts/escrow/Move.toml}
 
 ### Locked and Key
+
+With your manifest file in place, it's time to start creating the Move assets for this project. In your `escrow` folder, at the same level as your `Move.toml` file, create a `sources` folder. This is the common file structure of a package in Move. Create a new file inside `sources` titled `lock.move`. This file contains the logic that locks the object involved in a trade. The complete source code for this file follows and the sections that come after detail its components.
+
+:::tip
+
+Click the titles at the top of codeblocks to open the relevant source file in GitHub.
+
+:::
+
+<details>
+<summary>
+`lock.move`
+</summary>
+{@inject: examples/trading/contracts/escrow/sources/lock.move noComments}
+</details>
 
 After a trade is initiated, you don't want the trading party to modify the object they agreed to trade. Imagine you're trading in-game items and you agree to trade a weapon with all its attachments, and its owner strips all its attachments just before the trade.
 
@@ -80,7 +120,7 @@ Together, they ensure that a lock and key cannot have existed before the lock op
 
 :::tip Additional resources
 
-- [Full source code](https://github.com/MystenLabs/sui/blob/705ee1ed3ce8cfadc4597c6facb6769d7dfb5896/examples/trading/contracts/escrow/sources/lock.move)
+- [Move Package](https://move-book.com/concepts/packages.html) defined in The Move Book.
 - Concepts: [Wrapped Objects](../../../concepts/versioning.mdx#wrapped-objects)
 
 :::
@@ -106,24 +146,55 @@ The last two lines exist to keep the Move compiler happy by cleaning up the test
 
 The other test is testing a failure scenario – that an abort happens. It creates two locked objects (this time the values are just `u64`s), and use the key from one to try and unlock the other, which should fail (specified using the `expected_failure` attribute).
 
-Unlike the previous test, the same clean-up is not needed, because the code is expected to abort. Instead, add another abort after the code that you expect to abort (making sure to use a different code for this second abort).
+Unlike the previous test, the same clean up is not needed, because the code is expected to terminate. Instead, add another abort after the code that you expect to abort (making sure to use a different code for this second abort).
 
 {@inject: examples/trading/contracts/escrow/sources/lock.move#fun=test_lock_key_mismatch noComments}
 
 :::tip Additional resources
 
-- [Full source code](https://github.com/MystenLabs/sui/blob/705ee1ed3ce8cfadc4597c6facb6769d7dfb5896/examples/trading/contracts/escrow/sources/lock.move)
 - Concepts: [Test Scenario](../first-app/build-test.mdx#testing-a-package)
 - [Drop ability](https://move-book.com/move-basics/drop-ability.html) defined in The Move Book.
+- [Testing] Move code discussion in The Move Book.
+
+:::
+
+:::checkpoint
+
+At this point, you have 
+- A Move package consisting of a manifest file (`Move.toml`)
+- A `lock.move` file in your `sources` folder. 
+
+From your `escrow` folder, run `sui move test` in your terminal or console. If successful, you get a response similar to the following that confirms the package builds and your tests pass:
+
+```
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING escrow
+Running Move unit tests
+[ PASS    ] escrow::lock::test_lock_key_mismatch
+[ PASS    ] escrow::lock::test_lock_unlock
+Test result: OK. Total tests: 2; passed: 2; failed: 0
+```
+
+You might notice that the Move compiler creates a `build` subfolder inside `escrow` upon a successful build. This folder contains your package's compiled bytecode, code from your package's dependencies, and various other files necessary for the build. At this point, it's enough to just be aware of these files. You don't need to fully understand the contents in `build`.
 
 :::
 
 ### The Escrow protocol {#escrow}
 
+Create a new file in your `escrow` folder titled `shared.move`. The code in this file creates the shared `Escrow` object and completes the trading logic. The complete source code for this file follows and the sections that come after detail its components.
+
+<details>
+<summary>
+`shared.move`
+</summary>
+{@inject: examples/trading/contracts/escrow/sources/shared.move noComments}
+</details>
+
 Trading proceeds in three steps:
 
 1. The first party locks the object they want to trade – this is already handled by the `lock` module you wrote earlier.
-1. The second party puts their object up for escrow and registers their interest in the first party's object. This will be handled by a new module – `escrow`.
+1. The second party puts their object up for escrow and registers their interest in the first party's object. This is handled by a new module – `escrow`.
 1. The first party completes the trade by providing their locked object and the key to unlock it. Assuming all checks pass, this transfers their object to the second party and makes the second party's object available to them.
 
 You can start by implementing steps two and three, by defining a new type to hold the escrowed object. It holds the `escrowed` object and an `id: UID` (because it's an object in its own right), but it also records the `sender` and intended `recipient` (to confirm they match when the trade happens), and it registers interest in the first party's object by recording the `ID` of the key that unlocks the `Locked<U>` that contains the object.
@@ -139,11 +210,10 @@ You also need to create a function for creating the `Escrow` object. The object 
 {@inject: examples/trading/contracts/escrow/sources/shared.move#noemit noComments}
 </details>
 
-
 If the second party stops responding, the first party can unlock their object. You need to create a function so the second party can recover their object in the symmetric case as well.
 
 - It needs to check that the caller matches `sender`, because `Escrow` objects are shared and anybody can access them.
-- It accepts the `Escrow` by value so that it can clean it up after extracting the `escrowed` object, reclaiming the storage rebate for the sender and cleaning up an unused object on chain.
+- It accepts the `Escrow` by value so that it can clean it up after extracting the escrowed object, reclaiming the storage rebate for the sender and cleaning up an unused object on chain.
 
 <details>
 <summary>
@@ -154,7 +224,7 @@ If the second party stops responding, the first party can unlock their object. Y
 
 Finally, you need to add a function to allow the first party to complete the trade.
 
-- This function also accepts the `Escrow` by value because it will consume it after the swap is complete.
+- This function also accepts the `Escrow` by value because it consumes it after the swap is complete.
 - It checks that the sender of the transaction is the intended recipient (the first party), and that the ID of the key that they provided matches the key specified when the object was escrowed. This ensures no tampering occurs, because this key can be provided only if it had not been used to unlock the object, which proves the object has not left its `Locked<U>` between the call to `create` and to `swap`. You can inspect the `lock` module to see that it cannot be modified while in there.
 - The call to `unlock` further checks that the key matches the locked object that was provided.
 - Instead of transferring the escrowed object to the recipient address, it is returned by the `swap` function. You can do this because you checked that the transaction sender is the recipient, and it makes this API more composable. Programmable transaction blocks (PTBs) provide the flexibility to decide whether to transfer the object as it is received or do something else with it.
@@ -187,7 +257,7 @@ As with the lock test, start by creating a function to mint a test coin. You als
 
 {@inject: examples/trading/contracts/escrow/sources/shared.move#fun=test_coin noComments}
 
-The test body starts with a call to `test_scenario::begin` and ends with a call to `test_scenario::end`. It doesn't matter which address you pass to `begin`, because you will pick one of `ALICE` or `BOB` at the start of each new transaction you write, so set it to `@0x0`:
+The test body starts with a call to `test_scenario::begin` and ends with a call to `test_scenario::end`. It doesn't matter which address you pass to `begin`, because you pick one of `ALICE` or `BOB` at the start of each new transaction you write, so set it to `@0x0`:
 
 {@inject: examples/trading/contracts/escrow/sources/shared.move#test}
 
@@ -211,7 +281,6 @@ The rest of the test is designed to check that `ALICE` has `BOB`'s coin and vice
 
 :::tip Additional resources
 
-- [Full source code](https://github.com/MystenLabs/sui/blob/705ee1ed3ce8cfadc4597c6facb6769d7dfb5896/examples/trading/contracts/escrow/sources/shared.move)
 - Guides: [Test Scenario](../../../guides/developer/first-app/build-test#testing-a-package)
 
 :::
@@ -222,7 +291,7 @@ The `escrow` Move package is now functional: You could publish it on chain and p
 
 `Locked` and `Key` objects are typically owned by the transaction sender, and so can be queried through the Sui RPC, but `Escrow` objects are shared, and it is useful to be able to query them by their sender and recipient (so that users can see the trades they have offered and received).
 
-Querying `Escrow` objects by their sender or recipient will require custom indexing, and to make it easy for the indexer to spot relevant transactions you will add the following **events** to `escrow.move`:
+Querying `Escrow` objects by their sender or recipient requires custom indexing, and to make it easy for the indexer to spot relevant transactions, add the following **events** to `escrow.move`:
 
 {@inject: examples/trading/contracts/escrow/sources/shared.move#struct=EscrowCreated,EscrowSwapped,EscrowCancelled noComments}
 
@@ -242,6 +311,27 @@ Functions responsible for various aspects of the escrow's lifecycle emit these e
 
 :::
 
+:::checkpoint
+
+You now have `shared.move` and `locked.move` files in your `sources` folder. From the parent `escrow` folder, run `sui move test` in your terminal or console. If successful, you get a response similar to the following that confirms the package builds and your tests pass: 
+
+```
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING escrow
+Running Move unit tests
+[ PASS    ] escrow::lock::test_lock_key_mismatch
+[ PASS    ] escrow::shared::test_mismatch_object
+[ PASS    ] escrow::lock::test_lock_unlock
+[ PASS    ] escrow::shared::test_mismatch_sender
+[ PASS    ] escrow::shared::test_object_tamper
+[ PASS    ] escrow::shared::test_return_to_sender
+[ PASS    ] escrow::shared::test_return_to_sender_failed_swap
+[ PASS    ] escrow::shared::test_successful_swap
+Test result: OK. Total tests: 8; passed: 8; failed: 0
+```
+
+:::
 
 ### Next steps
 
@@ -390,17 +480,17 @@ Now that you have an indexer and an API service, you can deploy your move packag
 
   Now that you have an account with some Testnet SUI, you can deploy your contracts. 
 
-  There are some helper functions to publish the smart contract so you can create some demo data (for Testnet).
+  There are some helper functions to publish the smart contracts so you can create some demo data (for Testnet). The helper function to publish the smart contrqcts expects built smart contracts in both the `escrow` and `demo` directories. Run `sui move build` in both directories, if necessary. Be sure to update the Sui dependency in the manifest to point to the correct source based on your environment. 
 
-  To publish the smart contract and produce demo data: 
+  To publish the smart contracts and produce demo data: 
 
-  1. Publish the smart contract by running: 
+  1. Publish the smart contracts by running the following command from your `api` folder: 
 
       ```
       npx ts-node helpers/publish-contracts.ts
       ```
 
-      If successful, `demo-contract.json` and `escrow-contract.json` will be created in the backend's root directory. These files contain the contract addresses and are used by the backend and frontend to interact with the contracts.
+      If successful, `demo-contract.json` and `escrow-contract.json` are created in the backend root directory. These files contain the contract addresses and are used by the backend and frontend to interact with the contracts.
 
   2. Produce demo non-locked and locked objects
 
@@ -414,12 +504,21 @@ Now that you have an indexer and an API service, you can deploy your move packag
       npx ts-node helpers/create-demo-escrows.ts
       ```
 
-  If you want to reset the database (for a clean demo, etc.), run `pnpm db:reset:dev && pnpm db:setup:dev` or `yarn db:reset:dev && yarn db:setup:dev`.
+  If you want to reset the database (for a clean demo, for example), run `pnpm db:reset:dev && pnpm db:setup:dev` or `yarn db:reset:dev && yarn db:setup:dev`.
 </details>
 
 4. Run both the API and the indexer by running `pnpm dev` or `yarn dev`.
 
 5. Visit [http://localhost:3000/escrows](http://localhost:3000/escrows) or [http://localhost:3000/locked](http://localhost:3000/locked)
+
+:::checkpoint
+
+You should now have an indexer running. 
+- If you visit `localhost:3000`, you get a message that the service is running: `{"message":"🚀 API is functional 🚀"}`.
+- If you visit `localhost:3000/escrows`, you see the demo escrow data the helper scripts created for you. Likewise, visiting `http://localhost:3000/locked` displays the raw JSON the script created for demo objects.
+
+:::
+
 
 ### Next steps
 
@@ -458,7 +557,7 @@ The UI design consists of three parts:
 
 ### Scaffold a new app
 
-The first step is to set up the client app. Run the following command to scaffold a new app.
+The first step is to set up the client app. Run the following command to scaffold a new app from your `frontend` folder.
 
 <Tabs groupId="packagemanager">
   <TabItem label="PNPM" value="pnpm">
@@ -473,6 +572,8 @@ The first step is to set up the client app. Run the following command to scaffol
   </TabItem>
 </Tabs>
 
+When asked for a name for your dApp, provide one of your liking. The dApp scaffold gets created in a new directory with the name you provide. This is convenient to keep your working code separate from the example source code that might already populate this folder. The codeblocks that follow point to the code in the default example location. Be aware the path to your own code includes the dApp name you provide.
+
 ### Setting up import aliases
 
 First, set up import aliases to make the code more readable and maintainable. This allows you to import files using `@/` instead of relative paths.
@@ -484,7 +585,7 @@ First, set up import aliases to make the code more readable and maintainable. Th
   {@inject: examples/trading/frontend/tsconfig.json}
 </details>
 
-The paths option under `compilerOptions` is what defines the aliasing for TypeScript. Here, the alias `@/*` is mapped to the `./src/*` directory, meaning that any time you use `@/`, TypeScript will resolve it as a reference to the src folder. This setup reduces the need for lengthy relative paths when importing files in your project.
+The paths option under `compilerOptions` is what defines the aliasing for TypeScript. Here, the alias `@/*` is mapped to the `./src/*` directory, meaning that any time you use `@/`, TypeScript resolves it as a reference to the `src` folder. This setup reduces the need for lengthy relative paths when importing files in your project.
 
 <details>
   <summary>
@@ -497,7 +598,7 @@ Vite also needs to be aware of the aliasing to resolve imports correctly during 
 
 ### Adding Tailwind CSS
 
-To streamline the styling process and keep the codebase clean and maintainable, we’ll be using Tailwind CSS, which provides utility-first CSS classes to rapidly build custom designs. Run the following command to add Tailwind CSS and its dependencies:
+To streamline the styling process and keep the codebase clean and maintainable, this guide uses Tailwind CSS, which provides utility-first CSS classes to rapidly build custom designs. Run the following command from the base of your dApp project to add Tailwind CSS and its dependencies:
 
 <Tabs groupId="packagemanager">
   <TabItem label="PNPM" value="pnpm">
@@ -512,7 +613,7 @@ To streamline the styling process and keep the codebase clean and maintainable, 
   </TabItem>
 </Tabs>
 
-Next, generate the Tailwind CSS configuration file by running:
+Next, generate the Tailwind CSS configuration file by running the following:
 
 ```bash
 npx tailwindcss init -p
@@ -542,6 +643,12 @@ First, deploy your package via the [scripts in the api directory](#deployment).
   </summary>
   {@inject: examples/trading/frontend/src/constants.ts}
 </details>
+
+:::warning
+
+If you create a dApp using a project name so that your `src` files are in a subfolder of `frontend`, be sure to add another nesting level (`../`) to the import statements.
+
+:::
 
 ### Add helper functions and UI components
 
@@ -890,7 +997,9 @@ Run your app and ensure you can:
 
 - View the owned objects of the connected wallet account.
 
-Note, if you don't see any objects, you may need to create some demo data. You'll be able to mint objects after completing the next steps.
+If you don't see any objects, you might need to create some demo data or connect your wallet. You can mint objects after completing the next steps.
+
+![Owned objects](./images/trustless-objects.png)
 
 :::
 
@@ -949,6 +1058,8 @@ Now the logic to create a dummy bear object exists. You just need to attach it i
 Run your app and ensure you can:
 
 - Mint a demo bear object and view it in the `Manage Objects` tab.
+
+![New bear](./images/trustless-new-bear.png)
 
 :::
 
@@ -1012,7 +1123,9 @@ Run your app and ensure you can:
 
 - Lock an owned object. 
 
-Note, the object should disappear from the list of owned objects. You will be able to view and unlock locked objects in later steps.
+The object should disappear from the list of owned objects. You view and unlock locked objects in later steps.
+
+![Lock bear](./images/trustless-lock-bear.png)
 
 :::
 
@@ -1040,7 +1153,7 @@ The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is m
   {@inject: examples/trading/frontend/src/components/locked/LockedObject.tsx}
 </details>
 
-The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. Later on, it will also consists of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
+The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. Later on, it will also consist of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
 
 <details>
   <summary>
@@ -1136,6 +1249,8 @@ Update `src/routes/LockedDashboard.tsx` to include the `OwnedLockedList` compone
 Run your app and ensure you can:
 
 - View the locked objects of the connected wallet account.
+
+![My locked bears](./images/trustless-my-locked.png)
 
 :::
 
@@ -1269,6 +1384,8 @@ Run your app and ensure you can:
 
 - Unlock a locked object.
 
+![Unlock my locked bears](./images/trustless-unlock-bear.png)
+
 :::
 
 ### Display locked objects to escrow
@@ -1360,6 +1477,8 @@ Run your app and ensure you can:
 
 - View the locked objects in the `Browse Locked Objects` tab in the `Escrows` page.
 
+![Browse locked bears](./images/trustless-escrow-locked.png)
+
 :::
 
 ### Create escrows
@@ -1435,7 +1554,9 @@ Run your app and ensure you can:
 
 - Create an escrow.
 
-Note, the object should disappear from the list of locked objects in the `Browse Locked Objects` tab in the `Escrows` page. You will be able to view and accept/cancel escrows in later steps.
+The object should disappear from the list of locked objects in the `Browse Locked Objects` tab in the `Escrows` page. You view and accept or cancel escrows in later steps.
+
+![Start escrow](./images/trustless-start-escrow.png)
 
 :::
 
@@ -1657,8 +1778,8 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
               escrow.recipient === account?.address && (
                 <div className="text-right mt-5">
                   <p className="text-xs pb-3">
-                    When accepting the exchange, the escrowed item will be
-                    transferred to you and your locked item will be transferred
+                    When accepting the exchange, the escrowed item is
+                    transferred to you and your locked item is transferred
                     to the sender.
                   </p>
                 </div>
@@ -1773,6 +1894,8 @@ Run your app and ensure you can:
 
 - View the escrows in the `My Pending Requests` tab in the `Escrows` page.
 - Cancel an escrow that you requested.
+
+![Cancel escrow](./images/trustless-cancel-escrow.png)
 
 :::
 
@@ -1950,6 +2073,8 @@ export function useAcceptEscrowMutation() {
 Run your app and ensure you can:
 
 - Accept an escrow that someone else requested.
+
+![Accept escrow](./images/trustless-accept-escrow.png)
 
 :::
 

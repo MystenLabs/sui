@@ -8,6 +8,7 @@ import TabItem from "@theme/TabItem";
 import { Card, Cards } from "@site/src/components/Cards";
 import EffortBox from "@site/src/components/EffortBox";
 import BetaTag from "@site/src/components/BetaTag";
+import { GlobalDataProvider } from "@site/src/components/GlobalDataProvider";
 export default function MDXContent({ children }) {
   const suiComponents = {
     ...MDXComponents,
@@ -17,6 +18,7 @@ export default function MDXContent({ children }) {
     TabItem,
     EffortBox,
     BetaTag,
+    GlobalDataProvider,
   };
   return <MDXProvider components={suiComponents}>{children}</MDXProvider>;
 }
