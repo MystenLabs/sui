@@ -11,8 +11,7 @@ use move_core_types::{
     language_storage::{ModuleId, CORE_CODE_ADDRESS},
 };
 
-use move_vm_runtime::{natives::move_stdlib::stdlib_native_functions, vm::vm::VirtualMachine};
-use move_vm_test_utils::InMemoryStorage;
+use move_vm_runtime::{natives::move_stdlib::stdlib_native_functions, vm::vm::VirtualMachine, test_utils::InMemoryStorage};
 use move_vm_types::gas::UnmeteredGasMeter;
 use once_cell::sync::Lazy;
 use std::{path::PathBuf, sync::Arc};

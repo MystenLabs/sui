@@ -15,7 +15,7 @@ use move_core_types::{
     language_storage::TypeTag, parser, transaction_argument::TransactionArgument,
 };
 use move_package::compilation::package_layout::CompiledPackageLayout;
-use move_vm_test_utils::gas_schedule::CostTable;
+use move_vm_runtime::test_utils::gas_schedule::CostTable;
 use std::{
     fs,
     path::{Path, PathBuf},

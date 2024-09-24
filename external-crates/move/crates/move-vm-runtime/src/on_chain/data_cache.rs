@@ -6,13 +6,13 @@ use move_binary_format::errors::*;
 use move_core_types::{
     account_address::AccountAddress,
     effects::{AccountChangeSet, ChangeSet, Op},
-    identifier::{IdentStr, Identifier},
+    identifier::Identifier,
     language_storage::ModuleId,
     resolver::MoveResolver,
     vm_status::StatusCode,
 };
 use move_vm_types::data_store::DataStore;
-use std::collections::{btree_map::BTreeMap, BTreeSet};
+use std::collections::btree_map::BTreeMap;
 
 use super::ast::PackageStorageId;
 
@@ -35,7 +35,7 @@ impl AccountDataCache {
 /// for a data store related to a transaction. Clients should create an instance of this type
 /// and pass it to the Move VM.
 pub struct TransactionDataCache<S> {
-    remote: S,
+    pub remote: S,
     module_map: BTreeMap<AccountAddress, AccountDataCache>,
 }
 
@@ -105,31 +105,6 @@ impl<S: MoveResolver> TransactionDataCache<S> {
 
 // `DataStore` implementation for the `TransactionDataCache`
 impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
-    fn link_context(&self) -> AccountAddress {
-        self.remote.link_context()
-    }
-
-    fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {
-        self.remote.relocate(module_id).map_err(|err| {
-            PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Error relocating {module_id}: {err:?}"))
-        })
-    }
-
-    fn defining_module(
-        &self,
-        module_id: &ModuleId,
-        struct_: &IdentStr,
-    ) -> PartialVMResult<ModuleId> {
-        self.remote
-            .defining_module(module_id, struct_)
-            .map_err(|err| {
-                PartialVMError::new(StatusCode::LINKER_ERROR).with_message(format!(
-                    "Error finding defining module for {module_id}::{struct_}: {err:?}"
-                ))
-            })
-    }
-
     fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
         if let Some(account_cache) = self.module_map.get(module_id.address()) {
             if let Some(blob) = account_cache.module_map.get(module_id.name()) {
@@ -139,7 +114,7 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
         match self.remote.get_module(module_id) {
             Ok(Some(bytes)) => Ok(bytes),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Cannot find {:?} in data cache", module_id))
+                .with_message(format!("Cannot find module {:?} in data cache", module_id))
                 .finish(Location::Undefined)),
             Err(err) => {
                 let msg = format!("Unexpected storage error: {:?}", err);
@@ -159,7 +134,7 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
         match self.remote.get_package(package_id) {
             Ok(Some(bytes)) => Ok(bytes),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Cannot find {:?} in data cache", package_id))
+                .with_message(format!("Cannot find package {:?} in data cache", package_id))
                 .finish(Location::Undefined)),
             Err(err) => {
                 let msg = format!("Unexpected storage error: {:?}", err);
@@ -183,19 +158,5 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
             .insert(module_id.name().to_owned(), blob);
 
         Ok(())
-    }
-
-    fn all_package_dependencies(&self) -> VMResult<BTreeSet<AccountAddress>> {
-        match self.remote.all_package_dependencies() {
-            Ok(addrs) => Ok(addrs),
-            Err(err) => {
-                let msg = format!("Unexpected storage error: {:?}", err);
-                Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(msg)
-                        .finish(Location::Undefined),
-                )
-            }
-        }
     }
 }

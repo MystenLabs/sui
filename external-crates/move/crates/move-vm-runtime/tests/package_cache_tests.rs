@@ -1,8 +1,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-mod relinking_store;
-
 use anyhow::Result;
 use move_binary_format::errors::VMResult;
 use move_binary_format::file_format::CompiledModule;
@@ -17,13 +15,12 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_vm_config::runtime::VMConfig;
-use move_vm_runtime::on_chain::ast::{PackageStorageId, RuntimePackageId};
+use move_vm_runtime::{on_chain::ast::{PackageStorageId, RuntimePackageId}, cache::linkage_context::LinkageContext};
 use move_vm_runtime::{
     cache::vm_cache::VMCache, natives::functions::NativeFunctions,
     on_chain::data_cache::TransactionDataCache,
+    test_utils::{storage::InMemoryStorage, relinking_store::RelinkingStore},
 };
-use move_vm_test_utils::InMemoryStorage;
-use relinking_store::RelinkingStore;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -93,15 +90,10 @@ impl Adapter {
                 .unwrap();
             self.storage
                 .get_remote_resolver_mut()
-                .linkage
-                .insert(module_id.clone(), module_id.clone());
-            self.storage
-                .get_remote_resolver_mut()
                 .store
                 .publish_or_overwrite_module(module_id, module_bytes);
         }
 
-        self.storage.get_remote_resolver_mut().context = root_address;
     }
 
     fn compile_packages(
@@ -133,26 +125,30 @@ impl Adapter {
         packages
     }
 
-    fn publish_package(
+    fn publish_package_to_store_with_linkage(
         &mut self,
         runtime_package_id: RuntimePackageId,
         storage_id: PackageStorageId,
         modules: Vec<CompiledModule>,
-        type_origin: BTreeMap<(ModuleId, Identifier), ModuleId>,
+        _type_origin: BTreeMap<(ModuleId, Identifier), ModuleId>,
         dependencies: BTreeSet<PackageStorageId>,
     ) -> VMResult<()> {
-        let remote_resolver = self.storage.get_remote_resolver_mut();
-        let linkage = modules
-            .iter()
-            .map(|module| {
-                (
-                    module.self_id(),
-                    ModuleId::new(storage_id, module.self_id().name().to_owned()),
-                )
-            })
-            .collect();
-        remote_resolver.relink(storage_id, linkage, type_origin);
-        remote_resolver.set_dependent_packages(dependencies);
+        // let remote_resolver = self.storage.get_remote_resolver_mut();
+        let link_context = LinkageContext::new(
+            storage_id,
+            dependencies.into_iter().map(|id| (id, id)).chain(vec![(runtime_package_id, storage_id)].into_iter()).collect()
+        );
+        // let linkage = modules
+        //     .iter()
+        //     .map(|module| {
+        //         (
+        //             module.self_id(),
+        //             ModuleId::new(storage_id, module.self_id().name().to_owned()),
+        //         )
+        //     })
+        //     .collect();
+        // remote_resolver.relink(storage_id, linkage, type_origin);
+        // remote_resolver.set_dependent_packages(dependencies);
         let modules = modules
             .into_iter()
             .map(|module| {
@@ -160,11 +156,20 @@ impl Adapter {
                 module
                     .serialize_with_version(module.version, &mut module_bytes)
                     .unwrap();
-                module_bytes
+                (module.self_id(), module_bytes)
             })
-            .collect();
+            .collect::<Vec<_>>();
+        // let link_context = &self.storage.remote.generate_linkage_context(&storage_id)?;
         self.cache
-            .verify_package_for_publication(modules, &self.storage, runtime_package_id)
+            .verify_package_for_publication(&self.storage, &link_context, runtime_package_id, modules.clone().into_iter().map(|(_, bytes)| bytes).collect())?;
+
+        for (module_id, module_bytes) in modules {
+            self.storage
+                .get_remote_resolver_mut()
+                .store
+                .publish_or_overwrite_module(module_id, module_bytes);
+        }
+        Ok(())
     }
 }
 
@@ -174,7 +179,8 @@ fn cache_package_internal_package_calls_only_no_types() {
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package1.move", package_address);
 
-    let result = adapter.cache.resolve_link_context(&adapter.storage);
+    let link_context = &adapter.storage.remote.generate_linkage_context(&package_address).unwrap();
+    let result = adapter.cache.load_link_context_dependencies(&adapter.storage, &&link_context);
 
     // Verify that we've loaded the package correctly
     let result = result.unwrap();
@@ -190,7 +196,8 @@ fn cache_package_internal_package_calls_only_with_types() {
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package2.move", package_address);
 
-    let result = adapter.cache.resolve_link_context(&adapter.storage);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package_address).unwrap();
+    let result = adapter.cache.load_link_context_dependencies(&adapter.storage, &link_context);
 
     // Verify that we've loaded the package correctly
     let result = result.unwrap();
@@ -210,7 +217,8 @@ fn cache_package_external_package_calls_no_types() {
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package3.move", package2_address);
-    let result = adapter.cache.resolve_link_context(&adapter.storage);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package2_address).unwrap();
+    let result = adapter.cache.load_link_context_dependencies(&adapter.storage, &link_context);
 
     // Verify that we've loaded the packages correctly
     let results = result.unwrap();
@@ -237,9 +245,10 @@ fn load_package_internal_package_calls_only_no_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package1.move", package_address);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package_address).unwrap();
 
     let cache = dummy_cache_for_testing();
-    let result = cache.resolve_link_context(&adapter.storage);
+    let result = cache.load_link_context_dependencies(&adapter.storage, &link_context);
 
     // Verify that we've loaded the package correctly
     let l_pkg = result.unwrap();
@@ -255,9 +264,10 @@ fn load_package_internal_package_calls_only_with_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package1.move", package_address);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package_address).unwrap();
 
     let cache = dummy_cache_for_testing();
-    let result = cache.resolve_link_context(&adapter.storage);
+    let result = cache.load_link_context_dependencies(&adapter.storage, &link_context);
 
     // Verify that we've loaded the package correctly
     let l_pkg = result.unwrap();
@@ -274,10 +284,11 @@ fn load_package_external_package_calls_no_types() {
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package3.move", package2_address);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package2_address).unwrap();
 
     let cache = dummy_cache_for_testing();
 
-    let result = cache.resolve_link_context(&adapter.storage);
+    let result = cache.load_link_context_dependencies(&adapter.storage, &link_context);
 
     // Verify that we've loaded the package correctly
     let l_pkg = result.unwrap();
@@ -297,10 +308,11 @@ fn cache_package_external_package_type_references() {
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package4.move", package2_address);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package2_address).unwrap();
 
     let cache = dummy_cache_for_testing();
 
-    let result1 = cache.resolve_link_context(&adapter.storage);
+    let result1 = cache.load_link_context_dependencies(&adapter.storage, &link_context);
 
     assert!(result1.is_ok());
     assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 7);
@@ -319,7 +331,7 @@ fn cache_package_external_generic_call_type_references() {
 
     // publish a
     adapter
-        .publish_package(
+        .publish_package_to_store_with_linkage(
             package1_address,
             package1_address,
             a_pkg,
@@ -328,9 +340,11 @@ fn cache_package_external_generic_call_type_references() {
         )
         .unwrap();
 
+    println!("store: {:#?}", adapter.storage.remote);
+
     // publish b
     adapter
-        .publish_package(
+        .publish_package_to_store_with_linkage(
             package2_address,
             package2_address,
             b_pkg,
@@ -354,15 +368,16 @@ fn cache_package_external_package_type_references_cache_reload() {
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package4.move", package1_address);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package1_address).unwrap();
 
     let cache = dummy_cache_for_testing();
-
-    let result1 = cache.resolve_link_context(&adapter.storage);
+    println!("link context: {link_context:#?}");
+    let result1 = cache.load_link_context_dependencies(&adapter.storage, &link_context);
     assert!(result1.is_ok());
     assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 4);
 
-    adapter.storage.get_remote_resolver_mut().context = package2_address;
-    let result2 = cache.resolve_link_context(&adapter.storage);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package2_address).unwrap();
+    let result2 = cache.load_link_context_dependencies(&adapter.storage, &link_context);
     assert!(result2.is_ok());
     assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 7);
 }
@@ -372,9 +387,10 @@ fn cache_package_external_package_type_references_with_shared_dep() {
     let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package5.move", package3_address);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package3_address).unwrap();
 
     let cache = dummy_cache_for_testing();
-    let result = cache.resolve_link_context(&adapter.storage);
+    let result = cache.load_link_context_dependencies(&adapter.storage, &link_context);
 
     assert!(result.is_ok());
     assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 10);
@@ -387,38 +403,39 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package5.move", package1_address);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package1_address).unwrap();
 
     // Load from the bottom up
     let cache = dummy_cache_for_testing();
-    let result1 = cache.resolve_link_context(&adapter.storage);
+    let result1 = cache.load_link_context_dependencies(&adapter.storage, &link_context);
     assert!(result1.is_ok());
     assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 4);
 
-    adapter.storage.get_remote_resolver_mut().context = package2_address;
-    let result2 = cache.resolve_link_context(&adapter.storage);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package2_address).unwrap();
+    let result2 = cache.load_link_context_dependencies(&adapter.storage, &link_context);
     assert!(result2.is_ok());
     assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 7);
 
-    adapter.storage.get_remote_resolver_mut().context = package3_address;
-    let result3 = cache.resolve_link_context(&adapter.storage);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package3_address).unwrap();
+    let result3 = cache.load_link_context_dependencies(&adapter.storage, &link_context);
     assert!(result3.is_ok());
     assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 10);
 
     // Now load it the other way -- from the top down
     let cache = dummy_cache_for_testing();
 
-    adapter.storage.get_remote_resolver_mut().context = package3_address;
-    let result3 = cache.resolve_link_context(&adapter.storage);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package3_address).unwrap();
+    let result3 = cache.load_link_context_dependencies(&adapter.storage, &link_context);
     assert!(result3.is_ok());
     assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 10);
 
-    adapter.storage.get_remote_resolver_mut().context = package1_address;
-    let result1 = cache.resolve_link_context(&adapter.storage);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package1_address).unwrap();
+    let result1 = cache.load_link_context_dependencies(&adapter.storage, &link_context);
     assert!(result1.is_ok());
     assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 10);
 
-    adapter.storage.get_remote_resolver_mut().context = package2_address;
-    let result2 = cache.resolve_link_context(&adapter.storage);
+    let link_context = adapter.storage.remote.generate_linkage_context(&package2_address).unwrap();
+    let result2 = cache.load_link_context_dependencies(&adapter.storage, &link_context);
     assert!(result2.is_ok());
     assert_eq!(cache.type_cache().read().cached_types.id_map.len(), 10);
 }
@@ -430,7 +447,7 @@ fn publish_missing_dependency() {
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter
-        .publish_package(
+        .publish_package_to_store_with_linkage(
             runtime_package_id,
             runtime_package_id,
             modules,
@@ -448,7 +465,7 @@ fn publish_unpublished_dependency() {
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter
-        .publish_package(
+        .publish_package_to_store_with_linkage(
             runtime_package_id,
             runtime_package_id,
             modules,
@@ -475,7 +492,7 @@ fn relink() {
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter
-        .publish_package(
+        .publish_package_to_store_with_linkage(
             runtime_package_id,
             runtime_package_id,
             modules,
@@ -491,7 +508,7 @@ fn relink() {
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter
-        .publish_package(
+        .publish_package_to_store_with_linkage(
             runtime_package_id,
             st_c_v1_addr,
             modules,
@@ -515,7 +532,7 @@ fn relink() {
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter
-        .publish_package(
+        .publish_package_to_store_with_linkage(
             runtime_package_id,
             runtime_package_id,
             modules,
@@ -531,7 +548,7 @@ fn relink() {
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter
-        .publish_package(
+        .publish_package_to_store_with_linkage(
             runtime_package_id,
             st_b_v1_addr,
             modules,
@@ -564,7 +581,7 @@ fn relink() {
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter
-        .publish_package(
+        .publish_package_to_store_with_linkage(
             runtime_package_id,
             runtime_package_id,
             modules,
@@ -597,7 +614,7 @@ fn relink() {
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter
-        .publish_package(
+        .publish_package_to_store_with_linkage(
             runtime_package_id,
             runtime_package_id,
             modules,

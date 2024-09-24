@@ -7,7 +7,7 @@ use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::natives::move_stdlib::{stdlib_native_function_table, GasParameters};
 
 fn main() -> Result<()> {
-    let cost_table = &move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE;
+    let cost_table = &move_vm_runtime::test_utils::gas_schedule::INITIAL_COST_SCHEDULE;
     let addr = AccountAddress::from_hex_literal("0x1").unwrap();
     let natives =
         stdlib_native_function_table(addr, GasParameters::zeros(), /* silent */ false);

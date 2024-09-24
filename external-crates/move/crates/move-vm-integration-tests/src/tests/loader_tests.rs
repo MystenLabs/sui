@@ -23,8 +23,8 @@ use move_core_types::{
     runtime_value::MoveValue,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
-use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
-use move_vm_test_utils::InMemoryStorage;
+use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues,
+test_utils::InMemoryStorage};
 use move_vm_types::{
     gas::UnmeteredGasMeter,
     loaded_data::runtime_types::{CachedDatatype, DepthFormula, Type},

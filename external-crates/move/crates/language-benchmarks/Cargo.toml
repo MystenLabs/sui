@@ -17,7 +17,6 @@ criterion-cpu-time.workspace = true
 move-core-types.workspace = true
 move-compiler.workspace = true
 move-vm-runtime.workspace = true
-move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
 move-binary-format.workspace = true
 move-stdlib.workspace = true

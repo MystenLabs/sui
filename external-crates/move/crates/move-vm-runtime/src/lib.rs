@@ -16,6 +16,7 @@ pub mod shared;
 pub mod cache;
 pub mod natives;
 pub mod on_chain;
+pub mod test_utils;
 pub mod vm;
 
 // #[macro_use]

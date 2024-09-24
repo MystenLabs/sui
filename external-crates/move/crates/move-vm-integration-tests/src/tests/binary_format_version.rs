@@ -4,8 +4,8 @@
 use move_binary_format::{file_format::basic_test_module, file_format_common::VERSION_MAX};
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
-use move_vm_runtime::{natives::move_stdlib::stdlib_native_functions, vm::vm::VirtualMachine};
-use move_vm_test_utils::InMemoryStorage;
+use move_vm_runtime::{natives::move_stdlib::stdlib_native_functions, vm::vm::VirtualMachine,
+test_utils::InMemoryStorage};
 use move_vm_types::gas::UnmeteredGasMeter;
 
 #[test]

@@ -4,39 +4,11 @@
 
 use crate::{
     account_address::AccountAddress,
-    identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
 };
-use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 
 /// Traits for resolving Move modules and resources from persistent storage
-
-/// An execution context that remaps the modules referred to at runtime according to a linkage
-/// table, allowing the same module in storage to be run against different dependencies.
-///
-/// Default implementation does no re-linking (Module IDs are unchanged by relocation and the
-/// link context is a constant value).
-pub trait LinkageResolver {
-    type Error: Debug;
-
-    /// The link context identifies the mapping from runtime `ModuleId`s to the `ModuleId`s in
-    /// storage that they are loaded from as returned by `relocate`.
-    fn link_context(&self) -> AccountAddress;
-
-    /// Translate the runtime `module_id` to the on-chain `ModuleId` that it should be loaded from.
-    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error>;
-
-    /// Translate the runtime fully-qualified struct name to the on-chain `ModuleId` that originally
-    /// defined that type.
-    fn defining_module(
-        &self,
-        module_id: &ModuleId,
-        _struct: &IdentStr,
-    ) -> Result<ModuleId, Self::Error>;
-
-    /// Return the transitive closure of all package dependencies of the current linkage context.
-    fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error>;
-}
 
 /// A persistent storage backend that can resolve modules by address + name.
 /// Storage backends should return
@@ -76,8 +48,7 @@ pub trait ResourceResolver {
 
 /// A persistent storage implementation that can resolve both resources and modules
 pub trait MoveResolver:
-    LinkageResolver<Error = Self::Err>
-    + ModuleResolver<Error = Self::Err>
+    ModuleResolver<Error = Self::Err>
     + ResourceResolver<Error = Self::Err>
 {
     type Err: Debug;
@@ -85,8 +56,7 @@ pub trait MoveResolver:
 
 impl<
         E: Debug,
-        T: LinkageResolver<Error = E>
-            + ModuleResolver<Error = E>
+        T: ModuleResolver<Error = E>
             + ResourceResolver<Error = E>
             + ?Sized,
     > MoveResolver for T
@@ -125,29 +95,5 @@ impl<T: ModuleResolver + ?Sized> ModuleResolver for Arc<T> {
 
     fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
         (**self).get_package(id)
-    }
-}
-
-impl<T: LinkageResolver + ?Sized> LinkageResolver for &T {
-    type Error = T::Error;
-
-    fn link_context(&self) -> AccountAddress {
-        (**self).link_context()
-    }
-
-    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-        (**self).relocate(module_id)
-    }
-
-    fn defining_module(
-        &self,
-        module_id: &ModuleId,
-        struct_: &IdentStr,
-    ) -> Result<ModuleId, Self::Error> {
-        (**self).defining_module(module_id, struct_)
-    }
-
-    fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error> {
-        (**self).all_package_dependencies()
     }
 }

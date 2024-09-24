@@ -34,8 +34,7 @@ use move_core_types::{
     runtime_value::MoveValue,
     vm_status::StatusCode,
 };
-use move_vm_runtime::vm::vm::VirtualMachine;
-use move_vm_test_utils::{DeltaStorage, InMemoryStorage};
+use move_vm_runtime::{vm::vm::VirtualMachine, test_utils::{DeltaStorage, InMemoryStorage}};
 use move_vm_types::gas::UnmeteredGasMeter;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -139,8 +138,7 @@ fn execute_function_in_module(
                 /* silent debug */ true,
             )
             .unwrap(),
-        )
-        .unwrap();
+        );
 
         let mut changeset = ChangeSet::new();
         let mut blob = vec![];

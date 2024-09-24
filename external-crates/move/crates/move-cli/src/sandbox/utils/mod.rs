@@ -26,7 +26,7 @@ use move_core_types::{
 };
 use move_ir_types::location::Loc;
 use move_package::compilation::compiled_package::CompiledUnitWithSource;
-use move_vm_test_utils::gas_schedule::Gas;
+use move_vm_runtime::test_utils::gas_schedule::Gas;
 use std::{
     collections::{BTreeMap, HashMap},
     fs,
@@ -38,7 +38,7 @@ pub mod on_disk_state_view;
 pub mod package_context;
 
 use move_bytecode_utils::module_cache::GetModule;
-use move_vm_test_utils::gas_schedule::{CostTable, GasStatus};
+use move_vm_runtime::test_utils::gas_schedule::{CostTable, GasStatus};
 pub use on_disk_state_view::*;
 pub use package_context::*;
 

@@ -28,11 +28,10 @@ use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{
     move_vm::MoveVM,
     session::{SerializedReturnValues, Session},
-};
-use move_vm_test_utils::{
+    test_utils::{
     gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
     InMemoryStorage,
-};
+}};
 #[cfg(feature = "gas-profiler")]
 use move_vm_types::gas::GasMeter;
 use std::time::Instant;

@@ -16,7 +16,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
-use move_vm_test_utils::InMemoryStorage;
+use move_vm_runtime::test_utils::InMemoryStorage;
 use move_vm_types::gas::UnmeteredGasMeter;
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);

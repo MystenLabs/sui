@@ -30,6 +30,8 @@ use std::{
     sync::Arc,
 };
 
+use super::linkage_context::LinkageContext;
+
 pub type DatatypeCacheIndex = u64;
 pub type DatatypeKey = (DefiningTypeId, Identifier, Identifier);
 pub type DatatypeCache = BinaryCache<DatatypeKey, CachedDatatype>;
@@ -118,6 +120,7 @@ impl TypeCache {
         module: &CompiledModule,
         tok: &SignatureToken,
         data_store: &dyn DataStore,
+        link_context: &LinkageContext,
     ) -> PartialVMResult<Type> {
         let res = match tok {
             SignatureToken::Bool => Type::Bool,
@@ -131,13 +134,13 @@ impl TypeCache {
             SignatureToken::Signer => Type::Signer,
             SignatureToken::TypeParameter(idx) => Type::TyParam(*idx),
             SignatureToken::Vector(inner_tok) => {
-                Type::Vector(Box::new(self.make_type(module, inner_tok, data_store)?))
+                Type::Vector(Box::new(self.make_type(module, inner_tok, data_store, link_context)?))
             }
             SignatureToken::Reference(inner_tok) => {
-                Type::Reference(Box::new(self.make_type(module, inner_tok, data_store)?))
+                Type::Reference(Box::new(self.make_type(module, inner_tok, data_store, link_context)?))
             }
             SignatureToken::MutableReference(inner_tok) => {
-                Type::MutableReference(Box::new(self.make_type(module, inner_tok, data_store)?))
+                Type::MutableReference(Box::new(self.make_type(module, inner_tok, data_store, link_context)?))
             }
             SignatureToken::Datatype(sh_idx) => {
                 let datatype_handle = module.datatype_handle_at(*sh_idx);
@@ -145,7 +148,7 @@ impl TypeCache {
                 let module_handle = module.module_handle_at(datatype_handle.module);
                 let runtime_address = module.address_identifier_at(module_handle.address);
                 let module_name = module.identifier_at(module_handle.name).to_owned();
-                let defining_type_id = data_store.defining_module(
+                let defining_type_id = link_context.defining_module(
                     &ModuleId::new(*runtime_address, module_name.clone()),
                     &datatype_name,
                 )?;
@@ -162,14 +165,14 @@ impl TypeCache {
                 let (sh_idx, tys) = &**inst;
                 let type_parameters: Vec<_> = tys
                     .iter()
-                    .map(|tok| self.make_type(module, tok, data_store))
+                    .map(|tok| self.make_type(module, tok, data_store, link_context))
                     .collect::<PartialVMResult<_>>()?;
                 let datatype_handle = module.datatype_handle_at(*sh_idx);
                 let datatype_name = module.identifier_at(datatype_handle.name);
                 let module_handle = module.module_handle_at(datatype_handle.module);
                 let runtime_address = module.address_identifier_at(module_handle.address);
                 let module_name = module.identifier_at(module_handle.name).to_owned();
-                let defining_type_id = data_store.defining_module(
+                let defining_type_id = link_context.defining_module(
                     &ModuleId::new(*runtime_address, module_name.clone()),
                     &datatype_name,
                 )?;
@@ -190,9 +193,9 @@ impl TypeCache {
         &self,
         datatype_name: &IdentStr,
         runtime_id: &ModuleId,
-        data_store: &dyn DataStore,
+        link_context: &LinkageContext,
     ) -> PartialVMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
-        let defining_id = data_store.defining_module(runtime_id, datatype_name)?;
+        let defining_id = link_context.defining_module(runtime_id, datatype_name)?;
         self.resolve_type_by_name(&(
             *defining_id.address(),
             runtime_id.name().to_owned(),
@@ -204,6 +207,7 @@ impl TypeCache {
         &self,
         type_tag: &TypeTag,
         data_store: &dyn DataStore,
+        link_context: &LinkageContext,
     ) -> VMResult<Type> {
         Ok(match type_tag {
             TypeTag::Bool => Type::Bool,
@@ -215,18 +219,18 @@ impl TypeCache {
             TypeTag::U256 => Type::U256,
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
-            TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt, data_store)?)),
+            TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt, data_store, link_context)?)),
             TypeTag::Struct(struct_tag) => {
                 let runtime_id = ModuleId::new(struct_tag.address, struct_tag.module.clone());
                 let (idx, struct_type) = self
-                    .load_type_by_name(&struct_tag.name, &runtime_id, data_store)
+                    .load_type_by_name(&struct_tag.name, &runtime_id, link_context)
                     .map_err(|e| e.finish(Location::Undefined))?;
                 if struct_type.type_parameters.is_empty() && struct_tag.type_params.is_empty() {
                     Type::Datatype(idx)
                 } else {
                     let mut type_params = vec![];
                     for ty_param in &struct_tag.type_params {
-                        type_params.push(self.load_type(ty_param, data_store)?);
+                        type_params.push(self.load_type(ty_param, data_store, link_context)?);
                     }
                     self.verify_ty_args(struct_type.type_param_constraints(), &type_params)
                         .map_err(|e| e.finish(Location::Undefined))?;
@@ -786,8 +790,9 @@ impl TypeCache {
         &mut self,
         type_tag: &TypeTag,
         move_storage: &dyn DataStore,
+        link_context: &LinkageContext,
     ) -> VMResult<runtime_value::MoveTypeLayout> {
-        let ty = self.load_type(type_tag, move_storage)?;
+        let ty = self.load_type(type_tag, move_storage, link_context)?;
         self.type_to_type_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
     }
@@ -796,8 +801,9 @@ impl TypeCache {
         &mut self,
         type_tag: &TypeTag,
         move_storage: &dyn DataStore,
+        link_context: &LinkageContext,
     ) -> VMResult<annotated_value::MoveTypeLayout> {
-        let ty = self.load_type(type_tag, move_storage)?;
+        let ty = self.load_type(type_tag, move_storage, link_context)?;
         self.type_to_fully_annotated_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
     }

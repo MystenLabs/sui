@@ -12,6 +12,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow.workspace = true
 better_any.workspace = true
 bumpalo.workspace = true
 fail.workspace = true
@@ -22,6 +23,7 @@ smallvec.workspace = true
 hex.workspace = true
 sha2.workspace = true
 sha3.workspace = true
+serde.workspace = true
 
 # referred to via path for execution versioning
 move-bytecode-verifier = { path = "../move-bytecode-verifier" }
@@ -38,7 +40,6 @@ hex.workspace = true
 proptest.workspace = true
 move-ir-compiler.workspace = true
 move-compiler.workspace = true
-move-vm-test-utils.workspace = true
 
 [features]
 default = []
@@ -48,6 +49,7 @@ failpoints = ["fail/failpoints"]
 debugging = []
 testing = []
 lazy_natives = []
+tiered-gas = []
 gas-profiler = [
     "move-vm-config/gas-profiler",
     "move-vm-types/gas-profiler",

@@ -5,7 +5,7 @@
 use crate::{
     cache::{
         arena::{self, Arena, ArenaPointer},
-        type_cache::TypeCache,
+        type_cache::TypeCache, linkage_context::LinkageContext,
     },
     jit::runtime::ast::*,
     natives::functions::NativeFunctions,
@@ -36,8 +36,9 @@ use std::{
 };
 use tracing::error;
 
-struct ModuleContext<'a, 'b> {
-    link_context: AccountAddress,
+struct ModuleContext<'a, 'b, 'linkage, 'data> {
+    link_context: &'linkage LinkageContext,
+    data_store: &'data dyn DataStore,
     cache: &'a PackageContext<'b>,
     module: &'a CompiledModule,
     single_signature_token_map: BTreeMap<SignatureIndex, Type>,
@@ -131,12 +132,11 @@ fn alloc_function(
 
 fn code(
     context: &mut ModuleContext,
-    data_store: &impl DataStore,
     code: &[FF::Bytecode],
 ) -> PartialVMResult<*const [Bytecode]> {
     let result: *mut [Bytecode] = context.cache.package_arena.alloc_slice(
         code.iter()
-            .map(|bc| bytecode(context, data_store, bc))
+            .map(|bc| bytecode(context, bc))
             .collect::<PartialVMResult<Vec<Bytecode>>>()?
             .into_iter(),
     );
@@ -145,7 +145,6 @@ fn code(
 
 fn bytecode(
     context: &mut ModuleContext,
-    data_store: &impl DataStore,
     bytecode: &FF::Bytecode,
 ) -> PartialVMResult<Bytecode> {
     let bytecode = match bytecode {
@@ -227,35 +226,35 @@ fn bytecode(
 
         // Vectors
         FF::Bytecode::VecPack(si, size) => {
-            check_vector_type(context, data_store, si)?;
+            check_vector_type(context, si)?;
             Bytecode::VecPack(*si, *size)
         }
         FF::Bytecode::VecLen(si) => {
-            check_vector_type(context, data_store, si)?;
+            check_vector_type(context, si)?;
             Bytecode::VecLen(*si)
         }
         FF::Bytecode::VecImmBorrow(si) => {
-            check_vector_type(context, data_store, si)?;
+            check_vector_type(context, si)?;
             Bytecode::VecImmBorrow(*si)
         }
         FF::Bytecode::VecMutBorrow(si) => {
-            check_vector_type(context, data_store, si)?;
+            check_vector_type(context, si)?;
             Bytecode::VecMutBorrow(*si)
         }
         FF::Bytecode::VecPushBack(si) => {
-            check_vector_type(context, data_store, si)?;
+            check_vector_type(context, si)?;
             Bytecode::VecPushBack(*si)
         }
         FF::Bytecode::VecPopBack(si) => {
-            check_vector_type(context, data_store, si)?;
+            check_vector_type(context, si)?;
             Bytecode::VecPopBack(*si)
         }
         FF::Bytecode::VecUnpack(si, size) => {
-            check_vector_type(context, data_store, si)?;
+            check_vector_type(context, si)?;
             Bytecode::VecUnpack(*si, *size)
         }
         FF::Bytecode::VecSwap(si) => {
-            check_vector_type(context, data_store, si)?;
+            check_vector_type(context, si)?;
             Bytecode::VecSwap(*si)
         }
         // Structs and Fields
@@ -312,7 +311,6 @@ fn call(
 
 fn check_vector_type(
     context: &mut ModuleContext,
-    data_store: &impl DataStore,
     signature_index: &SignatureIndex,
 ) -> PartialVMResult<()> {
     if !context
@@ -336,40 +334,42 @@ fn check_vector_type(
             context
                 .type_cache
                 .read()
-                .make_type(context.module, ty, data_store)?,
+                .make_type(context.module, ty, context.data_store, context.link_context)?,
         );
     }
     Ok(())
 }
 
 fn module(
+    type_cache: &RwLock<TypeCache>,
     natives: &NativeFunctions,
+    package_context: &mut PackageContext,
+    data_store: &impl DataStore,
+    link_context: &LinkageContext,
     package_id: AccountAddress,
     module: &CompiledModule,
-    package_context: &mut PackageContext,
-    type_cache: &RwLock<TypeCache>,
-    data_store: &impl DataStore,
 ) -> Result<Module, PartialVMError> {
     let self_id = module.self_id();
     println!("Loading module: {}", self_id);
 
-    load_module_types(package_id, module, data_store, type_cache)?;
+    load_module_types(type_cache, data_store, link_context, package_id, module)?;
 
     let mut instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>> = BTreeMap::new();
     // helper to build the sparse signature vector
     fn cache_signatures(
+        type_cache: &RwLock<TypeCache>,
+        data_store: &impl DataStore,
+        link_context: &LinkageContext,
         instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
         module: &CompiledModule,
         instantiation_idx: SignatureIndex,
-        type_cache: &RwLock<TypeCache>,
-        data_store: &impl DataStore,
     ) -> Result<(), PartialVMError> {
         if let btree_map::Entry::Vacant(e) = instantiation_signatures.entry(instantiation_idx) {
             let instantiation = module
                 .signature_at(instantiation_idx)
                 .0
                 .iter()
-                .map(|ty| type_cache.read().make_type(module, ty, data_store))
+                .map(|ty| type_cache.read().make_type(module, ty, data_store, link_context))
                 .collect::<Result<Vec<_>, _>>()?;
             e.insert(instantiation);
         }
@@ -417,11 +417,12 @@ fn module(
 
         let instantiation_idx = struct_inst.type_parameters;
         cache_signatures(
+            type_cache,
+            data_store,
+            link_context,
             &mut instantiation_signatures,
             module,
             instantiation_idx,
-            type_cache,
-            data_store,
         )?;
         struct_instantiations.push(StructInstantiation {
             field_count,
@@ -458,11 +459,12 @@ fn module(
         let variant_count_map = enum_def.variants.iter().map(|v| v.field_count).collect();
         let instantiation_idx = enum_inst.type_parameters;
         cache_signatures(
+            type_cache,
+            data_store,
+            link_context,
             &mut instantiation_signatures,
             module,
             instantiation_idx,
-            type_cache,
-            data_store,
         )?;
 
         enum_instantiations.push(EnumInstantiation {
@@ -501,7 +503,8 @@ fn module(
 
     let single_signature_token_map = BTreeMap::new();
     let mut context = ModuleContext {
-        link_context: package_id,
+        link_context,
+        data_store,
         cache: package_context,
         module,
         single_signature_token_map,
@@ -513,7 +516,7 @@ fn module(
         .zip(module.function_defs())
     {
         if let Some(code_unit) = &fun.code {
-            alloc.code = code(&mut context, data_store, &code_unit.code)?;
+            alloc.code = code(&mut context, &code_unit.code)?;
         }
     }
 
@@ -522,11 +525,12 @@ fn module(
 
         let instantiation_idx = func_inst.type_parameters;
         cache_signatures(
+            type_cache,
+            data_store,
+            link_context,
             &mut instantiation_signatures,
             module,
             instantiation_idx,
-            type_cache,
-            data_store,
         )?;
 
         function_instantiations.push(FunctionInstantiation {
@@ -552,6 +556,7 @@ fn module(
 
     let ModuleContext {
         link_context: _,
+        data_store: _,
         cache: _,
         module,
         single_signature_token_map,
@@ -578,10 +583,11 @@ fn module(
 }
 
 fn load_module_types(
+    type_cache: &RwLock<TypeCache>,
+    data_store: &impl DataStore,
+    link_context: &LinkageContext,
     _package_id: PackageStorageId,
     module: &CompiledModule,
-    data_store: &impl DataStore,
-    type_cache: &RwLock<TypeCache>,
 ) -> PartialVMResult<()> {
     let module_id = module.self_id();
 
@@ -592,7 +598,7 @@ fn load_module_types(
     for (idx, struct_def) in module.struct_defs().iter().enumerate() {
         let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
         let name = module.identifier_at(struct_handle.name);
-        let defining_id = data_store.defining_module(&module_id, name)?;
+        let defining_id = link_context.defining_module(&module_id, name)?;
         let struct_key = (
             *defining_id.address(),
             module_id.name().to_owned(),
@@ -642,7 +648,7 @@ fn load_module_types(
     for (idx, enum_def) in module.enum_defs().iter().enumerate() {
         let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
         let name = module.identifier_at(enum_handle.name);
-        let defining_id = data_store.defining_module(&module_id, name)?;
+        let defining_id = link_context.defining_module(&module_id, name)?;
         let enum_key = (
             *defining_id.address(),
             module_id.name().to_owned(),
@@ -688,7 +694,7 @@ fn load_module_types(
     for signature in field_signatures {
         let tys: Vec<_> = signature
             .iter()
-            .map(|tok| type_cache.read().make_type(&module, tok, data_store))
+            .map(|tok| type_cache.read().make_type(&module, tok, data_store, link_context))
             .collect::<PartialVMResult<_>>()?;
         field_types.push(FieldTypeInfo::Struct(tys));
     }
@@ -703,6 +709,7 @@ fn load_module_types(
                     &module,
                     &field.signature.0,
                     data_store,
+                    link_context
                 )?);
                 field_names.push(module.identifier_at(field.name).to_owned());
             }
@@ -802,12 +809,13 @@ impl<'a> PackageContext<'a> {
 }
 
 pub fn package(
+    type_cache: &RwLock<TypeCache>,
+    natives: &NativeFunctions,
+    data_store: &impl DataStore,
+    link_context: &LinkageContext,
     storage_id: PackageStorageId,
     runtime_id: RuntimePackageId,
     mut package_modules: Vec<CompiledModule>,
-    natives: &NativeFunctions,
-    type_cache: &RwLock<TypeCache>,
-    data_store: &impl DataStore,
 ) -> PartialVMResult<Package> {
     let module_ids_in_pkg = package_modules
         .iter()
@@ -844,12 +852,13 @@ pub fn package(
         }
 
         let loaded_module = self::module(
+            type_cache,
             natives,
+            &mut package_context,
+            data_store,
+            link_context,
             storage_id,
             &module,
-            &mut package_context,
-            type_cache,
-            data_store,
         )?;
 
         package_context

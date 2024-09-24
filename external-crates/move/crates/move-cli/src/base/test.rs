@@ -15,7 +15,7 @@ use move_compiler::{
 use move_coverage::coverage_map::{output_map_to_file, CoverageMap};
 use move_package::{compilation::build_plan::BuildPlan, BuildConfig};
 use move_unit_test::UnitTestingConfig;
-use move_vm_test_utils::gas_schedule::CostTable;
+use move_vm_runtime::test_utils::gas_schedule::CostTable;
 use std::{io::Write, path::Path, process::ExitStatus};
 // if windows
 #[cfg(target_family = "windows")]

@@ -30,7 +30,6 @@ move-symbol-pool.workspace = true
 move-vm-types.workspace = true
 move-vm-runtime = { workspace = true, features = ["testing"] }
 move-vm-profiler.workspace = true
-move-vm-test-utils.workspace = true
 move-binary-format.workspace = true
 move-model.workspace = true
 move-bytecode-utils.workspace = true

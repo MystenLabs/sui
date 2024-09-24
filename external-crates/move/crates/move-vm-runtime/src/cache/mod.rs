@@ -3,5 +3,6 @@
 
 pub mod arena;
 pub mod linkage_checker;
+pub mod linkage_context;
 pub mod type_cache;
 pub mod vm_cache;

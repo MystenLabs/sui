@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, vm_cache::VMCache},
+    cache::{arena::ArenaPointer, vm_cache::VMCache, linkage_context::LinkageContext},
     jit::runtime::ast::{Function, VTableKey},
     natives::extensions::NativeContextExtensions,
     on_chain::{ast::PackageStorageId, data_cache::TransactionDataCache},
@@ -43,6 +43,8 @@ pub struct VirtualMachineExecutionInstance<'extensions, S: MoveResolver> {
     pub(crate) virtual_tables: RuntimeVTables,
     /// The data store used to create this VM instance
     pub(crate) data_cache: TransactionDataCache<S>,
+    /// The linkage context used to create this VM instance
+    pub(crate) link_context: LinkageContext,
     /// Native context extensions for the interpreter
     pub(crate) native_extensions: NativeContextExtensions<'extensions>,
     /// An arc-lock reference to the VM's cache
@@ -145,7 +147,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
         self.vm_cache
             .type_cache
             .read()
-            .load_type(tag, &self.data_cache)
+            .load_type(tag, &self.data_cache, &self.link_context)
     }
 
     // -------------------------------------------
@@ -251,7 +253,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
                 self.vm_cache
                     .type_cache
                     .read()
-                    .make_type(&compiled_module, tok, &self.data_cache)
+                    .make_type(&compiled_module, tok, &self.data_cache, &self.link_context)
             })
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
@@ -264,7 +266,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
                 self.vm_cache
                     .type_cache
                     .read()
-                    .make_type(&compiled_module, tok, &self.data_cache)
+                    .make_type(&compiled_module, tok, &self.data_cache, &self.link_context)
             })
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::vm_cache::VMCache,
+    cache::{vm_cache::VMCache, linkage_context::LinkageContext},
     natives::extensions::NativeContextExtensions,
     natives::functions::NativeFunctions,
     on_chain::{ast::PackageStorageId, data_cache::TransactionDataCache},
@@ -60,15 +60,17 @@ impl VirtualMachine {
     pub fn make_instance<'extensions, DataCache: MoveResolver>(
         &mut self,
         remote: DataCache,
+        link_context: LinkageContext,
     ) -> VMResult<VirtualMachineExecutionInstance<'extensions, DataCache>> {
         let data_cache = TransactionDataCache::new(remote);
-        let virtual_tables = self.cache.generate_runtime_vtables(&data_cache)?;
+        let virtual_tables = self.cache.generate_runtime_vtables(&data_cache, &link_context)?;
         // Called and checked linkage, etc.
         let instance = VirtualMachineExecutionInstance {
             virtual_tables,
             vm_cache: self.cache.clone(),
             vm_config: self.vm_config.clone(),
             data_cache,
+            link_context,
             native_extensions: NativeContextExtensions::default(),
         };
         Ok(instance)
@@ -92,6 +94,7 @@ impl VirtualMachine {
     pub fn publish_package<DataCache: MoveResolver>(
         &mut self,
         data_cache: DataCache,
+        link_context: &LinkageContext,
         package_id: PackageStorageId,
         package: Vec<Vec<u8>>,
         _gas_meter: &mut impl GasMeter,
@@ -117,7 +120,7 @@ impl VirtualMachine {
         let _package =
             match self
                 .cache
-                .verify_package_for_publication(package, &data_cache, package_id)
+                .verify_package_for_publication(&data_cache, link_context, package_id, package)
             {
                 Ok(package) => package,
                 Err(err) => {

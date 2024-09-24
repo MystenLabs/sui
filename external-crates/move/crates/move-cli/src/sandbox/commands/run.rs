@@ -20,7 +20,7 @@ use move_core_types::{
     transaction_argument::{convert_txn_args, TransactionArgument},
 };
 use move_package::compilation::compiled_package::CompiledPackage;
-use move_vm_test_utils::gas_schedule::CostTable;
+use move_vm_runtime::test_utils::gas_schedule::CostTable;
 use std::{fs, path::Path};
 
 pub fn run(

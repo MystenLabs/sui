@@ -25,7 +25,6 @@ move-vm-config.workspace = true
 move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true
 move-vm-types.workspace = true
-move-vm-test-utils.workspace = true
 move-stdlib.workspace = true
 move-ir-to-bytecode.workspace = true
 
@@ -36,7 +35,6 @@ gas-profiler = [
     "move-vm-runtime/gas-profiler",
     "move-vm-profiler/gas-profiler",
     "move-vm-types/gas-profiler",
-    "move-vm-test-utils/gas-profiler",
 ]
 
 [[bin]]

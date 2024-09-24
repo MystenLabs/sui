@@ -20,8 +20,8 @@ use move_compiler::{
     Compiler, Flags, PASS_CFGIR,
 };
 use move_core_types::language_storage::ModuleId;
-use move_vm_runtime::natives::functions::NativeFunctionTable;
-use move_vm_test_utils::gas_schedule::CostTable;
+use move_vm_runtime::{natives::functions::NativeFunctionTable,
+            test_utils::gas_schedule::CostTable};
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex};
 
 /// The default value bounding the amount of gas consumed in a test.

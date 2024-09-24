@@ -6,7 +6,7 @@
 // and publishing packages to the VM.
 
 use crate::{
-    cache::{arena::ArenaPointer, linkage_checker, type_cache::TypeCache},
+    cache::{linkage_context::LinkageContext, arena::ArenaPointer, linkage_checker, type_cache::TypeCache},
     jit::{
         self,
         runtime::ast::{Function, Module, Package},
@@ -23,7 +23,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     identifier::IdentStr,
-    language_storage::{ModuleId, TypeTag},
+    language_storage::ModuleId,
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
@@ -98,12 +98,13 @@ impl VMCache {
     pub fn generate_runtime_vtables<'cache, D: DataStore>(
         &'cache self,
         data_store: &D,
+        link_context: &LinkageContext,
     ) -> VMResult<RuntimeVTables> {
         let mut loaded_packages = HashMap::new();
 
         // Make sure the root package and all of its dependencies (under the current linkage
         // context) are loaded.
-        let cached_packages = self.resolve_link_context(data_store)?;
+        let cached_packages = self.load_link_context_dependencies(data_store, link_context)?;
 
         // Verify that the linkage and cyclic checks pass for all packages under the current
         // linkage context.
@@ -121,9 +122,10 @@ impl VMCache {
     /// package in the case an `init` function or similar will need to run.
     pub fn verify_package_for_publication(
         &self,
-        modules: Vec<Vec<u8>>,
         data_store: &impl DataStore,
+        link_context: &LinkageContext,
         runtime_package_id: RuntimePackageId,
+        modules: Vec<Vec<u8>>,
     ) -> VMResult<Package> {
         let loading_package = self.deserialize_and_verify_package(modules)?;
 
@@ -146,7 +148,7 @@ impl VMCache {
                 .next()
                 .expect("non-empty package")
                 .self_id();
-            *data_store
+            *link_context
                 .relocate(&module_id)
                 .map_err(|e| e.finish(Location::Undefined))?
                 .address()
@@ -154,7 +156,7 @@ impl VMCache {
 
         // Cache the package's dependencies without the package.
         let cached_packages =
-            self.load_and_cache_packages(data_store, data_store.all_package_dependencies()?)?;
+            self.load_and_cache_packages(data_store, link_context, link_context.all_package_dependencies()?)?;
 
         // Now verify linking on-the-spot to make sure that the current package links correctly in
         // the supplied linking context.
@@ -165,7 +167,7 @@ impl VMCache {
 
         // Load the package, but don't insert it into the cache yet.
         // FIXME: This will insert it into the type cache currently, see TODO on type cache.
-        self.jit_package(data_store, storage_id, loading_package)
+        self.jit_package(data_store, link_context, storage_id, loading_package)
     }
 
     // -------------------------------------------
@@ -179,15 +181,16 @@ impl VMCache {
     pub fn get_module(
         &self,
         data_store: &impl DataStore,
+        link_context: &LinkageContext,
         module_id: &ModuleId,
     ) -> VMResult<(Arc<CompiledModule>, Arc<Module>)> {
-        let module_id = data_store.relocate(module_id).map_err(|err| {
+        let module_id = link_context.relocate(module_id).map_err(|err| {
             err.with_message("Could not relocate module in data store".to_string())
                 .finish(Location::Undefined)
         })?;
         let (package, ident) = module_id.into();
         let packages =
-            self.load_and_cache_packages(data_store, BTreeSet::from([package.clone()]))?;
+            self.load_and_cache_packages(data_store, link_context, BTreeSet::from([package.clone()]))?;
         let Some(package) = packages.get(&package) else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -220,12 +223,13 @@ impl VMCache {
     pub fn get_function(
         &self,
         data_store: &impl DataStore,
+        link_context: &LinkageContext,
         module_id: &ModuleId,
         function_name: &IdentStr,
         ty_args: &[Type],
     ) -> VMResult<LoadedFunction> {
-        let (compiled_module, loaded_module) = self.get_module(data_store, module_id)?;
-        let module_id = data_store.relocate(module_id).map_err(|err| {
+        let (compiled_module, loaded_module) = self.get_module(data_store, link_context, module_id)?;
+        let module_id = link_context.relocate(module_id).map_err(|err| {
             err.with_message("Could not relocate module in data store".to_string())
                 .finish(Location::Undefined)
         })?;
@@ -250,7 +254,7 @@ impl VMCache {
             .map(|tok| {
                 self.type_cache()
                     .read()
-                    .make_type(&compiled_module, tok, data_store)
+                    .make_type(&compiled_module, tok, data_store, link_context)
             })
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
@@ -262,7 +266,7 @@ impl VMCache {
             .map(|tok| {
                 self.type_cache()
                     .read()
-                    .make_type(&compiled_module, tok, data_store)
+                    .make_type(&compiled_module, tok, data_store, link_context)
             })
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
@@ -285,14 +289,15 @@ impl VMCache {
 
     /// Load the transitive closure of packages for the current linkage context. NOTE: this does
     /// _not_ perform cyclic dependency verification or linkage checking.
-    pub fn resolve_link_context(
+    pub fn load_link_context_dependencies(
         &self,
         data_store: &impl DataStore,
+        link_context: &LinkageContext,
     ) -> VMResult<BTreeMap<PackageStorageId, Arc<Package>>> {
-        let root_package = data_store.link_context();
-        let mut all_packages = data_store.all_package_dependencies()?;
+        let root_package = link_context.root_package();
+        let mut all_packages = link_context.all_package_dependencies()?;
         all_packages.insert(root_package);
-        self.load_and_cache_packages(data_store, all_packages)
+        self.load_and_cache_packages(data_store, link_context, all_packages)
     }
 
     // -------------------------------------------
@@ -303,8 +308,10 @@ impl VMCache {
     fn load_and_cache_packages(
         &self,
         data_store: &impl DataStore,
+        link_context: &LinkageContext,
         packages_to_read: BTreeSet<PackageStorageId>,
     ) -> VMResult<BTreeMap<PackageStorageId, Arc<Package>>> {
+        println!("loading {packages_to_read:#?} in linkage context {link_context:#?}");
         let allow_loading_failure = true;
 
         let mut seen_packages = BTreeSet::new();
@@ -330,11 +337,11 @@ impl VMCache {
                 cached_packages.insert(dep, pkg);
             } else {
                 let pkg =
-                    self.read_package_modules_from_store(&dep, data_store, allow_loading_failure)?;
+                    self.read_package_modules_from_store(data_store, allow_loading_failure, &dep)?;
                 let package_deps = compute_immediate_package_dependencies(
+                    link_context,
                     &dep,
                     pkg.modules.values().collect::<Vec<_>>(),
-                    data_store,
                 )?;
                 pkgs_to_cache.insert(dep, (pkg, package_deps));
             };
@@ -347,7 +354,7 @@ impl VMCache {
         // NB: the packages must be cached in reverse dependency order otherwise types may not be cached
         // correctly.
         for (package_id, deserialized_package) in pkgs_in_dependency_order.into_iter().rev() {
-            let pkg = self.fetch_or_jit_package(data_store, package_id, deserialized_package)?;
+            let pkg = self.fetch_or_jit_package(data_store, link_context, package_id, deserialized_package)?;
             cached_packages.insert(package_id, pkg);
         }
 
@@ -364,9 +371,9 @@ impl VMCache {
     // NB: Does not perform cyclic dependency verification or linkage checking.
     fn read_package_modules_from_store(
         &self,
-        package_id: &PackageStorageId,
         data_store: &impl DataStore,
         allow_loading_failure: bool,
+        package_id: &PackageStorageId,
     ) -> VMResult<DeserializedPackage> {
         // Load the package bytes
         let bytes = match data_store.load_package(package_id) {
@@ -433,6 +440,7 @@ impl VMCache {
     fn fetch_or_jit_package(
         &self,
         data_store: &impl DataStore,
+        link_context: &LinkageContext,
         package_key: PackageStorageId,
         loading_package: DeserializedPackage,
     ) -> VMResult<Arc<Package>> {
@@ -440,7 +448,7 @@ impl VMCache {
             return Ok(loaded_package);
         }
 
-        let loaded_package = self.jit_package(data_store, package_key, loading_package)?;
+        let loaded_package = self.jit_package(data_store, link_context, package_key, loading_package)?;
 
         self.package_cache
             .write()
@@ -462,6 +470,7 @@ impl VMCache {
     fn jit_package(
         &self,
         data_store: &impl DataStore,
+        link_context: &LinkageContext,
         package_key: PackageStorageId,
         loading_package: DeserializedPackage,
     ) -> VMResult<Package> {
@@ -473,9 +482,10 @@ impl VMCache {
             );
         }
         jit::translate_package(
-            &self.natives,
             &self.type_cache,
+            &self.natives,
             data_store,
+            link_context,
             package_key,
             loading_package,
         )
@@ -489,14 +499,14 @@ impl VMCache {
 
 // Compute the immediate dependencies of a package in terms of their storage IDs.
 fn compute_immediate_package_dependencies<'a>(
+    link_context: &LinkageContext,
     package_id: &PackageStorageId,
     modules: impl IntoIterator<Item = &'a CompiledModule>,
-    data_store: &impl DataStore,
 ) -> VMResult<BTreeSet<PackageStorageId>> {
     modules
         .into_iter()
         .flat_map(|m| m.immediate_dependencies())
-        .map(|m| Ok(*data_store.relocate(&m)?.address()))
+        .map(|m| Ok(*link_context.relocate(&m)?.address()))
         .filter(|m| m.as_ref().is_ok_and(|m| m != package_id))
         .collect::<PartialVMResult<BTreeSet<_>>>()
         .map_err(|e| {
