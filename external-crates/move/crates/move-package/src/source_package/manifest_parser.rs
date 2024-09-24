@@ -338,14 +338,6 @@ pub fn parse_dependency(dep_id: &str, mut tval: TV) -> Result<PM::Dependency> {
         let Some(resolver) = resolver.as_str().map(Symbol::from) else {
             bail!("Resolver name is not a string")
         };
-
-        // Not relevant except for the external resolver, but remove it to mark it as a
-        // recognised part of the manifest.
-        let _ = table.remove("packages");
-
-        // Any fields that are left are unknown
-        warn_if_unknown_field_names(table, &[]);
-
         return Ok(PM::Dependency::External(resolver));
     }
 
