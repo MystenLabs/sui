@@ -79,7 +79,7 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
       label={getLabel()}
       labelClasses={getLabelClasses()}
     >
-      <div className="flex gap-3 flex-wrap">
+      <div className="p-4 flex gap-3 flex-wrap">
         {
           <p className="text-sm flex-shrink-0 flex items-center gap-2">
             <ExplorerLink id={escrow.objectId} isAddress={false} />
