@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::SqlBackFillConfig;
+use crate::config::BackFillConfig;
 use crate::database::ConnectionPool;
 use diesel_async::RunQueryDsl;
 use futures::{stream, StreamExt};
@@ -16,7 +16,7 @@ pub async fn run_sql_backfill(
     first_checkpoint: u64,
     last_checkpoint: u64,
     pool: ConnectionPool,
-    backfill_config: SqlBackFillConfig,
+    backfill_config: BackFillConfig,
 ) {
     let cur_time = Instant::now();
     // Keeps track of the checkpoint ranges (using starting checkpoint number)

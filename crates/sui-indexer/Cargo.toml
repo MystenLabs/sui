@@ -66,6 +66,7 @@ move-binary-format.workspace = true
 
 diesel_migrations.workspace = true
 cached.workspace = true
+tokio-stream = "0.1.14"
 
 [dev-dependencies]
 sui-keys.workspace = true

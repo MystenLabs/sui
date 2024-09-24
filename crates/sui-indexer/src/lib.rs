@@ -26,6 +26,7 @@ use crate::indexer_reader::IndexerReader;
 use errors::IndexerError;
 
 pub mod apis;
+pub mod backfill;
 pub mod config;
 pub mod database;
 pub mod db;

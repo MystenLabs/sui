@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::backfill::BackfillTaskKind;
+use crate::db::ConnectionPoolConfig;
 use clap::{Args, Parser, Subcommand};
 use std::{net::SocketAddr, path::PathBuf};
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use url::Url;
-
-use crate::db::ConnectionPoolConfig;
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -144,7 +144,7 @@ impl Default for IngestionConfig {
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct SqlBackFillConfig {
+pub struct BackFillConfig {
     /// Maximum number of concurrent tasks to run.
     #[arg(
         long,
@@ -159,7 +159,7 @@ pub struct SqlBackFillConfig {
     pub chunk_size: usize,
 }
 
-impl SqlBackFillConfig {
+impl BackFillConfig {
     const DEFAULT_MAX_CONCURRENCY: usize = 10;
     const DEFAULT_CHUNK_SIZE: usize = 1000;
 }
@@ -199,7 +199,16 @@ pub enum Command {
         first_checkpoint: u64,
         last_checkpoint: u64,
         #[command(flatten)]
-        backfill_config: SqlBackFillConfig,
+        backfill_config: BackFillConfig,
+    },
+    RunBackFill {
+        /// Start of the range to backfill, inclusive.
+        start: usize,
+        /// End of the range to backfill, inclusive.
+        end: usize,
+        runner_kind: BackfillTaskKind,
+        #[command(flatten)]
+        backfill_config: BackFillConfig,
     },
     /// Restore the database from formal snaphots.
     Restore(RestoreConfig),
