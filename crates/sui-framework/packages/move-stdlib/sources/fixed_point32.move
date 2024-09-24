@@ -110,7 +110,7 @@ public fun create_from_rational(numerator: u64, denominator: u64): FixedPoint32 
 
 /// Create a fixed-point value from a rational number specified by its
 /// numerator and denominator. Calling this function should be preferred
-/// for using `Self::create_from_raw_value` which is also available.
+/// for using `Self::from_raw` which is also available.
 /// This will abort if the denominator is zero. It will also
 /// abort if the numerator is nonzero and the ratio is not in the range
 /// 2^-32 .. 2^32-1. When specifying decimal fractions, be careful about
