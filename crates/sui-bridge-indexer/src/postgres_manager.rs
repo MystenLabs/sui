@@ -17,7 +17,8 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use sui_types::digests::TransactionDigest;
 
-pub type PgPool = Pool<AsyncPgConnection>;
+pub(crate) type PgPool =
+    diesel_async::pooled_connection::bb8::Pool<diesel_async::AsyncPgConnection>;
 
 const SUI_PROGRESS_STORE_DUMMY_KEY: i32 = 1;
 
