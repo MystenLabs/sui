@@ -73,22 +73,6 @@ public fun divide_u64(val: u64, divisor: FixedPoint32): u64 {
     // with an arithmetic error.
     quotient as u64
 }
-/// Divide a u64 integer by a fixed-point number, truncating any
-/// fractional part of the quotient. This will abort if the divisor
-/// is zero or if the quotient overflows.
-public fun divide_u64(val: u64, divisor: FixedPoint32): u64 {
-    // Check for division by zero.
-    assert!(divisor.value != 0, EDIVISION_BY_ZERO);
-    // First convert to 128 bits and then shift left to
-    // add 32 fractional zero bits to the dividend.
-    let scaled_value = val as u128 << 32;
-    let quotient = scaled_value / (divisor.value as u128);
-    // Check whether the value is too large.
-    assert!(quotient <= MAX_U64, EDIVISION);
-    // the value may be too large, which will cause the cast to fail
-    // with an arithmetic error.
-    quotient as u64
-}
 
 /// Divide two fixed-point numbers, truncating any fractional part of
 /// the quotient. This will abort if the divisor is zero or if the
@@ -152,11 +136,11 @@ public fun from_rational(numerator: u64, denominator: u64): FixedPoint32 {
 
 /// Create a fixed-point value from an integer.
 public fun from_integer(integer: u32): FixedPoint32 {
-    create_from_raw_value((integer as u64) << 32)
+    from_raw((integer as u64) << 32)
 }
 
 /// Create a fixedpoint value from a raw value.
-public fun create_from_raw_value(value: u64): FixedPoint32 {
+public fun from_raw(value: u64): FixedPoint32 {
     FixedPoint32 { value }
 }
 
@@ -229,24 +213,5 @@ public fun one(): FixedPoint32 {
 
 /// Return a fixed-point representation of 0.
 public fun zero(): FixedPoint32 {
-    create_from_raw_value(0)
-}
-
-/// Compute `a^x` where `x` is an integer.
-public fun int_pow(a: &FixedPoint32, x: u64): FixedPoint32 {
-    if (x == 0) {
-        return one()
-    };
-
-    let mut result = create_from_raw_value(a.value);
-    let mut exponent = x;
-    exponent = exponent >> 1;
-    while (exponent > 0) {
-        result = result.mul(&result);
-        if (exponent % 2 == 1) {
-            result = result.mul(a);
-        };
-        exponent = exponent >> 1;
-    };
-    result
+    from_raw(0)
 }
