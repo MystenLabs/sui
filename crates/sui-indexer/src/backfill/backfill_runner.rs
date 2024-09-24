@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::backfill::backfill_instances::full_objects_history::FullObjectsHistoryBackfill;
+use crate::backfill::backfill_instances::system_state_summary_json::SystemStateSummaryJsonBackfill;
 use crate::backfill::backfill_task::{BackfillTask, ProcessedResult};
+use crate::backfill::BackfillTaskKind;
 use crate::config::BackFillConfig;
 use crate::database::ConnectionPool;
 use futures::StreamExt;
@@ -15,8 +18,30 @@ use tokio_stream::wrappers::ReceiverStream;
 pub struct BackfillRunner {}
 
 impl BackfillRunner {
+    pub async fn run(
+        runner_kind: BackfillTaskKind,
+        pool: ConnectionPool,
+        backfill_config: BackFillConfig,
+        total_range: RangeInclusive<usize>,
+    ) {
+        match runner_kind {
+            BackfillTaskKind::FullObjectsHistory => {
+                Self::run_impl::<FullObjectsHistoryBackfill, _>(pool, backfill_config, total_range)
+                    .await;
+            }
+            BackfillTaskKind::SystemStateSummaryJson => {
+                Self::run_impl::<SystemStateSummaryJsonBackfill, _>(
+                    pool,
+                    backfill_config,
+                    total_range,
+                )
+                .await;
+            }
+        }
+    }
+
     /// Main function to run the parallel queries and batch processing.
-    pub async fn run<T: BackfillTask<O>, O: Send + 'static>(
+    async fn run_impl<T: BackfillTask<O>, O: Send + 'static>(
         pool: ConnectionPool,
         config: BackFillConfig,
         total_range: RangeInclusive<usize>,

@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use sui_indexer::backfill::backfill_instances::full_objects_history::FullObjectsHistoryBackfill;
 use sui_indexer::backfill::backfill_runner::BackfillRunner;
-use sui_indexer::backfill::BackfillTaskKind;
 use sui_indexer::config::{Command, UploadOptions};
 use sui_indexer::database::ConnectionPool;
 use sui_indexer::db::{check_db_migration_consistency, reset_database, run_migrations};
@@ -101,16 +99,7 @@ async fn main() -> anyhow::Result<()> {
             backfill_config,
         } => {
             let total_range = start..=end;
-            match runner_kind {
-                BackfillTaskKind::FullObjectsHistory => {
-                    BackfillRunner::run::<FullObjectsHistoryBackfill, _>(
-                        pool,
-                        backfill_config,
-                        total_range,
-                    )
-                    .await;
-                }
-            }
+            BackfillRunner::run(runner_kind, pool, backfill_config, total_range).await;
         }
         Command::Restore(restore_config) => {
             let store =

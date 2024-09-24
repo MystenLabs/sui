@@ -10,4 +10,5 @@ pub mod backfill_task;
 #[derive(ValueEnum, Clone, Debug)]
 pub enum BackfillTaskKind {
     FullObjectsHistory,
+    SystemStateSummaryJson,
 }
