@@ -56,7 +56,7 @@ pub fn sui_verify_module_unmetered(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
 ) -> Result<(), ExecutionError> {
-    sui_verify_module_metered(config, module, fn_info_map, &mut DummyMeter).map_err(|err| {
+    sui_verify_module_metered(config, module, fn_info_map, &mut DummyMeter).inspect_err(|err| {
         // We must never see timeout error in execution
         debug_assert!(
             !matches!(
@@ -65,6 +65,5 @@ pub fn sui_verify_module_unmetered(
             ),
             "Unexpected timeout error in execution"
         );
-        err
     })
 }

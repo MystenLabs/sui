@@ -384,7 +384,7 @@ impl Scenario {
             };
             let id = o.id();
             // genesis objects are not managed by Scenario, ignore them
-            if reverse_id_map.get(&id).is_some() {
+            if reverse_id_map.contains_key(&id) {
                 self.objects.insert(id, o);
             }
         });
