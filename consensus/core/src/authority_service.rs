@@ -94,7 +94,11 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "handle_send_block"])
+                .with_label_values(&[
+                    peer_hostname,
+                    "handle_send_block",
+                    "BlockSignatureMissmatchSender",
+                ])
                 .inc();
             let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
             info!("Block with wrong authority from {}: {}", peer, e);
@@ -104,11 +108,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         // Reject blocks failing validations.
         if let Err(e) = self.block_verifier.verify(&signed_block) {
+            let error: &'static str = e.clone().into();
             self.context
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "handle_send_block"])
+                .with_label_values(&[peer_hostname, "handle_send_block", error])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);

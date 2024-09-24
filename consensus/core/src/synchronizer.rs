@@ -611,11 +611,25 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             if let Err(e) = block_verifier.verify(&signed_block) {
                 // TODO: we might want to use a different metric to track the invalid "served" blocks
                 // from the invalid "proposed" ones.
+
+                // It's important to check the validity of the index, otherwise the method will panic.
+                let hostname = if context.committee.is_valid_index(signed_block.author()) {
+                    context
+                        .committee
+                        .authority(signed_block.author())
+                        .hostname
+                        .clone()
+                } else {
+                    signed_block.author().to_string()
+                };
+
+                let error: &'static str = e.clone().into();
+
                 context
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[&signed_block.author().to_string(), "synchronizer"])
+                    .with_label_values(&[&hostname, "synchronizer", error])
                     .inc();
                 warn!("Invalid block received from {}: {}", peer_index, e);
                 return Err(e);
@@ -720,11 +734,17 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                     for serialized_block in blocks {
                                         let signed_block = bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
                                         block_verifier.verify(&signed_block).tap_err(|err|{
+                                            let hostname = if context.committee.is_valid_index(signed_block.author()) {
+                                                context.committee.authority(signed_block.author()).hostname.clone()
+                                            } else {
+                                                signed_block.author().to_string()
+                                            };
+                                            let error: &'static str = err.clone().into();
                                             context
                                                 .metrics
                                                 .node_metrics
                                                 .invalid_blocks
-                                                .with_label_values(&[&signed_block.author().to_string(), "synchronizer_own_block"])
+                                                .with_label_values(&[&hostname, "synchronizer_own_block", error])
                                                 .inc();
                                             warn!("Invalid block received from {}: {}", authority_index, err);
                                         })?;
