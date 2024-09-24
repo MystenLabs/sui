@@ -336,9 +336,10 @@ impl ReadApi {
             let mut events_digest_to_events = if events_digests_list.is_empty() {
                 HashMap::new()
             } else {
-                // fetch events from the DB with retry
+                // fetch events from the DB with retry, retry each 0.5s for 3s
                 let backoff = ExponentialBackoff {
-                    max_elapsed_time: Some(Duration::from_secs(30)),
+                    max_elapsed_time: Some(Duration::from_secs(3)),
+                    multiplier: 1.0,
                     ..ExponentialBackoff::default()
                 };
                 let events = retry(backoff, || async {
@@ -347,11 +348,11 @@ impl ReadApi {
                         .multi_get_events(&events_digests_list)
                         .await
                     {
-                        // Only return Ok when all the queried transaction events are found, assuming that
-                        // all transactions can be executed within the timeout in most cases.
+                        // Only return Ok when all the queried transaction events are found, otherwise retry
+                        // until timeout, then return Err.
                         Ok(events) if !events.contains(&None) => Ok(events),
                         Ok(_) => Err(backoff::Error::transient(Error::UnexpectedError(
-                            "Events list contains None, retry if not timeout.".into(),
+                            "Events not found, transaction execution may be incomplete.".into(),
                         ))),
                         Err(e) => Err(backoff::Error::permanent(Error::UnexpectedError(format!(
                             "Failed to call multi_get_events: {e:?}"
