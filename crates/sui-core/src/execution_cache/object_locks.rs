@@ -9,9 +9,11 @@ use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::VerifiedSignedTransaction;
-use tracing::{debug, info, instrument, trace};
+use tracing::{debug, error, info, instrument, trace};
 
 use super::writeback_cache::WritebackCache;
+
+type RefCount = usize;
 
 pub(super) struct ObjectLocks {
     // When acquire transaction locks, lock entries are briefly inserted into this map. The map
@@ -23,7 +25,7 @@ pub(super) struct ObjectLocks {
     // those objects. Therefore we do a db read for each object we are locking.
     //
     // TODO: find a strategy to allow us to avoid db reads for each object.
-    locked_transactions: DashMap<ObjectRef, LockDetails>,
+    locked_transactions: DashMap<ObjectRef, (RefCount, LockDetails)>,
 }
 
 impl ObjectLocks {
@@ -38,29 +40,10 @@ impl ObjectLocks {
         obj_ref: &ObjectRef,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<LockDetails>> {
-        match self.locked_transactions.entry(*obj_ref) {
-            DashMapEntry::Vacant(vacant) => {
-                let tables = epoch_store.tables()?;
-                let lock = tables.get_locked_transaction(obj_ref)?;
-                if let Some(lock_details) = lock {
-                    vacant.insert(lock_details);
-                }
-                Ok(lock)
-            }
-            DashMapEntry::Occupied(occupied) => {
-                if cfg!(debug_assertions) {
-                    if let Some(lock_details) = epoch_store
-                        .tables()
-                        .unwrap()
-                        .get_locked_transaction(obj_ref)
-                        .unwrap()
-                    {
-                        assert_eq!(*occupied.get(), lock_details);
-                    }
-                }
-                Ok(Some(*occupied.get()))
-            }
-        }
+        // We don't consult the in-memory state here. We are only interested in state that
+        // has been committed to the db. This is because in memory state is reverted
+        // if the transaction is not successfully locked.
+        epoch_store.tables()?.get_locked_transaction(obj_ref)
     }
 
     /// Attempts to atomically test-and-set a transaction lock on an object.
@@ -96,15 +79,18 @@ impl ObjectLocks {
                 let tables = epoch_store.tables()?;
                 if let Some(lock_details) = tables.get_locked_transaction(obj_ref)? {
                     trace!("read lock from db: {:?}", lock_details);
-                    vacant.insert(lock_details);
+                    vacant.insert((1, lock_details));
                     lock_details
                 } else {
                     trace!("set lock: {:?}", new_lock);
-                    vacant.insert(new_lock);
+                    vacant.insert((1, new_lock));
                     new_lock
                 }
             }
-            DashMapEntry::Occupied(occupied) => *occupied.get(),
+            DashMapEntry::Occupied(mut occupied) => {
+                occupied.get_mut().0 += 1;
+                occupied.get().1
+            }
         };
 
         if prev_lock != new_lock {
@@ -156,14 +142,24 @@ impl ObjectLocks {
     fn clear_cached_locks(&self, locks: &[(ObjectRef, LockDetails)]) {
         for (obj_ref, lock) in locks {
             let entry = self.locked_transactions.entry(*obj_ref);
-            let occupied = match entry {
-                DashMapEntry::Vacant(_) => panic!("lock must exist"),
+            let mut occupied = match entry {
+                DashMapEntry::Vacant(_) => {
+                    if cfg!(debug_assertions) {
+                        panic!("lock must exist");
+                    } else {
+                        error!(?obj_ref, "lock should exist");
+                    }
+                    continue;
+                }
                 DashMapEntry::Occupied(occupied) => occupied,
             };
 
-            if occupied.get() == lock {
-                trace!("clearing lock: {:?}", lock);
-                occupied.remove();
+            if occupied.get().1 == *lock {
+                occupied.get_mut().0 -= 1;
+                if occupied.get().0 == 0 {
+                    trace!("clearing lock: {:?}", lock);
+                    occupied.remove();
+                }
             } else {
                 // this is impossible because the only case in which we overwrite a
                 // lock is when the lock is from a previous epoch. but we are holding
