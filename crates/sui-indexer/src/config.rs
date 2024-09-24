@@ -192,6 +192,8 @@ pub enum Command {
     /// system_state_summary_json.rs provides an example to do SQL + processing backfills.
     RunBackFill {
         /// Start of the range to backfill, inclusive.
+        /// It can be a checkpoint number or an epoch or any other identifier that can be used to
+        /// slice the backfill range.
         start: usize,
         /// End of the range to backfill, inclusive.
         end: usize,

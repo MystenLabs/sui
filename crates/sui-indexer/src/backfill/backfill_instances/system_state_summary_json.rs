@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::backfill::backfill_task::{BackfillTask, ProcessedResult};
+use crate::backfill::backfill_task::BackfillTask;
 use crate::database::ConnectionPool;
 use crate::schema::epochs;
 use async_trait::async_trait;
@@ -13,23 +13,19 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 pub struct SystemStateSummaryJsonBackfill {}
 
 #[async_trait]
-impl BackfillTask<Vec<Vec<u8>>> for SystemStateSummaryJsonBackfill {
-    async fn query_db(pool: ConnectionPool, range: &RangeInclusive<usize>) -> Vec<Vec<u8>> {
+impl BackfillTask for SystemStateSummaryJsonBackfill {
+    async fn backfill_range(pool: ConnectionPool, range: &RangeInclusive<usize>) {
         let mut conn = pool.get().await.unwrap();
 
-        epochs::table
+        let results: Vec<Vec<u8>> = epochs::table
             .select(epochs::system_state)
             .filter(epochs::epoch.between(*range.start() as i64, *range.end() as i64))
-            .load::<Vec<u8>>(&mut conn)
+            .load(&mut conn)
             .await
-            .unwrap()
-    }
+            .unwrap();
 
-    async fn commit_db(pool: ConnectionPool, results: ProcessedResult<Vec<Vec<u8>>>) {
-        let mut conn = pool.get().await.unwrap();
-
-        let system_states = results.output.iter().map(|bytes| {
-            let system_state_summary: SuiSystemStateSummary = bcs::from_bytes(bytes).unwrap();
+        let system_states = results.into_iter().map(|bytes| {
+            let system_state_summary: SuiSystemStateSummary = bcs::from_bytes(&bytes).unwrap();
             let json_ser = serde_json::to_value(&system_state_summary).unwrap();
             (system_state_summary.epoch, json_ser)
         });

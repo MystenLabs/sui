@@ -1,30 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::backfill::backfill_task::{BackfillTask, ProcessedResult};
+use crate::backfill::backfill_task::BackfillTask;
 use crate::database::ConnectionPool;
+use crate::schema::full_objects_history::dsl::full_objects_history;
+use crate::schema::objects_history::dsl::*;
 use async_trait::async_trait;
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use std::ops::RangeInclusive;
 
 pub struct FullObjectsHistoryBackfill {}
 
 #[async_trait]
-impl BackfillTask<()> for FullObjectsHistoryBackfill {
-    async fn query_db(_pool: ConnectionPool, _range: &RangeInclusive<usize>) {}
-
-    async fn commit_db(pool: ConnectionPool, results: ProcessedResult<()>) {
+impl BackfillTask for FullObjectsHistoryBackfill {
+    async fn backfill_range(pool: ConnectionPool, range: &RangeInclusive<usize>) {
         let mut conn = pool.get().await.unwrap();
 
-        let query = format!(
-            "INSERT INTO full_objects_history (object_id, object_version, serialized_object) \
-             SELECT object_id, object_version, serialized_object FROM objects_history \
-             WHERE checkpoint_sequence_number BETWEEN {} AND {} ON CONFLICT DO NOTHING",
-            *results.range.start(),
-            *results.range.end(),
-        );
+        let selected_rows = objects_history
+            .filter(checkpoint_sequence_number.between(*range.start() as i64, *range.end() as i64))
+            .select((object_id, object_version, serialized_object));
 
-        // Execute the SQL query using Diesel's async connection
-        diesel::sql_query(query).execute(&mut conn).await.unwrap();
+        diesel::insert_into(full_objects_history)
+            .values(selected_rows)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await
+            .unwrap();
     }
 }
