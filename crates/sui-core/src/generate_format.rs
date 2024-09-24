@@ -10,16 +10,27 @@ use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use pretty_assertions::assert_str_eq;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use roaring::RoaringBitmap;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::str::FromStr;
 use std::{fs::File, io::Write};
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::{
+    AggregateAuthoritySignature, AuthorityQuorumSignInfo, AuthorityStrongQuorumSignInfo,
+};
+use sui_types::effects::TransactionEvents;
+use sui_types::event::Event;
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
     TypeArgumentError,
 };
+use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
 use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::move_package::TypeOrigin;
+use sui_types::object::Object;
+use sui_types::transaction::{SenderSignedData, TransactionData};
 use sui_types::type_input::{StructInput, TypeInput};
 use sui_types::{
     base_types::MoveObjectType_,
@@ -66,6 +77,9 @@ fn get_registry() -> Result<Registry> {
 
     let m = ModuleId::new(AccountAddress::ZERO, Identifier::new("foo").unwrap());
     tracer.trace_value(&mut samples, &m).unwrap();
+    tracer
+        .trace_value(&mut samples, &Identifier::new("foo").unwrap())
+        .unwrap();
 
     let (addr, kp): (_, AuthorityKeyPair) = get_key_pair();
     let (s_addr, s_kp): (_, AccountKeyPair) = get_key_pair();
@@ -220,6 +234,47 @@ fn get_registry() -> Result<Registry> {
         .unwrap();
     tracer.trace_type::<CheckpointContents>(&samples).unwrap();
     tracer.trace_type::<CheckpointSummary>(&samples).unwrap();
+
+    let sender_data = SenderSignedData::new(
+        TransactionData::new_with_gas_coins(
+            TransactionKind::EndOfEpochTransaction(Vec::new()),
+            SuiAddress::ZERO,
+            Vec::new(),
+            0,
+            0,
+        ),
+        Vec::new(),
+    );
+    tracer.trace_value(&mut samples, &sender_data).unwrap();
+
+    let quorum_sig: AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo {
+        epoch: 0,
+        signature: AggregateAuthoritySignature::default(),
+        signers_map: RoaringBitmap::default(),
+    };
+    tracer.trace_value(&mut samples, &quorum_sig).unwrap();
+
+    tracer
+        .trace_type::<CertifiedCheckpointSummary>(&samples)
+        .unwrap();
+
+    let event = Event {
+        package_id: ObjectID::random(),
+        transaction_module: Identifier::new("foo").unwrap(),
+        sender: SuiAddress::ZERO,
+        type_: struct_tag.clone(),
+        contents: vec![0],
+    };
+    tracer.trace_value(&mut samples, &event).unwrap();
+
+    tracer.trace_type::<Object>(&samples).unwrap();
+
+    tracer.trace_type::<TransactionEvents>(&samples).unwrap();
+    tracer
+        .trace_type::<CheckpointTransaction>(&samples)
+        .unwrap();
+
+    tracer.trace_type::<CheckpointData>(&samples).unwrap();
 
     tracer.registry()
 }
