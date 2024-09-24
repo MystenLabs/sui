@@ -30,6 +30,7 @@ pub struct StoredEpochInfo {
     pub total_stake_rewards_distributed: Option<i64>,
     pub leftover_storage_fund_inflow: Option<i64>,
     pub epoch_commitments: Option<Vec<u8>>,
+    /// This is the system state summary at the beginning of the epoch, serialized as JSON.
     pub system_state_summary_json: Option<serde_json::Value>,
 }
 
