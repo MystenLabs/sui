@@ -43,7 +43,7 @@ impl ObjectLocks {
         // We don't consult the in-memory state here. We are only interested in state that
         // has been committed to the db. This is because in memory state is reverted
         // if the transaction is not successfully locked.
-        Ok(epoch_store.tables()?.get_locked_transaction(obj_ref)?)
+        epoch_store.tables()?.get_locked_transaction(obj_ref)
     }
 
     /// Attempts to atomically test-and-set a transaction lock on an object.
