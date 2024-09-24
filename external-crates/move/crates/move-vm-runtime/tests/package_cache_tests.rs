@@ -501,7 +501,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache().read().len(), 1);
+    assert_eq!(adapter.cache.package_cache().read().len(), 0);
 
     // publish c v1
     let packages = adapter.compile_packages("rt_c_v1.move", &[]);
@@ -525,7 +525,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache().read().len(), 2);
+    assert_eq!(adapter.cache.package_cache().read().len(), 1);
 
     // publish b_v0 <- c_v0
     let packages = adapter.compile_packages("rt_b_v0.move", &["rt_c_v0.move"]);
@@ -541,7 +541,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache().read().len(), 3);
+    assert_eq!(adapter.cache.package_cache().read().len(), 2);
 
     // publish b_v0 <- c_v1
     let packages = adapter.compile_packages("rt_b_v0.move", &["rt_c_v1.move"]);
