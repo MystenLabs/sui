@@ -1,0 +1,9 @@
+[package]
+name = "Root"
+
+[dependencies.literally_whatever_you_want]
+resolver = "../resolvers/successful_package_group.sh"
+packages = [ { foo = "foo" } ]
+
+[addresses]
+root = "0x0"

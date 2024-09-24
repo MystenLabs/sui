@@ -1,0 +1,6 @@
+RESOLVING DEPENDENCIES IN literally_whatever_you_want FROM Root WITH ../resolvers/successful_package_group.sh
+../resolvers/successful_package_group.sh stderr:
+Successful External Resolver
+PWD:     $ROOT/external-crates/move/crates/move-package/tests/test_sources/external_package_group
+Type:    dependencies
+Package: literally_whatever_you_want
