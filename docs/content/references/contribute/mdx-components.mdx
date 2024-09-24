@@ -3,10 +3,59 @@ title: MDX Components
 draft: true
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+Sui Docs uses the MDX format for its network documentation, which allows [JSX in markdown content](https://mdxjs.com/). Sui uses features provided by Docusaurus, plugins from its community, and custom plugins in an effort to improve reader experience. None of these features are required in your markdown contributions to the Sui documentation, but the Sui community might include them if it improves experience.
 
-Sui Docs uses the MDX format for its network documentation, which allows [JSX in markdown content](https://mdxjs.com/). Sui uses features provided by Docusaurus, plugins from its community, and custom plugins in an effort to improve reader experience. None of these features are required in your markdown contributions to the Sui documentation, but the Sui community might include them if it improves experience.       
+## Custom frontmatter
+
+The frontmatter at the top of MDX pages provides context for the current topic. The only frontmatter entry required at the time of riting is `title`. In addition to the standard frontmatter entries available, the following custom items are useful for certain topic types.
+
+### beta
+
+Including the `beta` entry applies a box to the top of the topic that informa the reader of the beta status of the feature or service described. Possible values include `true` for a standard box, or a list of environments the feature or service is available in (`devnet`, `testnet`, `mainnet`) to include that information in the note.
+
+**Example:**
+
+```
+---
+title: Page title
+description: A page of info describing a beta feature.
+beta: devnet, testnet
+---
+```
+
+### effort
+
+The `effort` option is used for end-to-end guides. Including this entry places a box at the top of the guide to let the reader know what kind of effort is required to complete the guide. Available values are `small`, `medium`, `large`.
+
+**Example:**
+```
+---
+title: A Guides
+description: A guide on how to do this thing in Sui.
+effort: medium
+---
+```
+
+## Custom admonition boxes
+
+Beyond the default admonition boxes that Docusaurus offers (info, note, warning, danger), the following are also available.
+
+### Checkpoint
+
+The `:::checkpoint` admonition box is used in end-to-end guides to provide the status of the project that the current guide is walking through. The idea is that if their own work fails the checkpoint, then they know where things went wrong rather than getting to the end of the guide with a broken example.
+
+**Example:**
+
+```
+:::checkpoint
+
+Run your app and make sure you can:
+
+- Create an NFT.
+- Initiate a trade.
+
+:::
+```
 
 ## Tabs
 
@@ -153,10 +202,15 @@ This approach is a work in progress and there are certain formatting situations 
 
 :::
 
-You can include specific sections of Move code using the following constructs appended to the end of the code directory. You can uses a comma delimited list for functions and structs to include each in the same codeblock:
+You can include specific sections of Move code using the following constructs appended to the end of the code directory. You can uses a comma delimited list for functions, structs, and variables to include each in the same codeblock:
 - Module: #module=MODULE::NAME
 - Function: #fun=FUNCTION_NAME,ANOTHER_FUNCTION
 - Struct: #struct=STRUCT_NAME,ANOTHER_STRUCT
+- Variables: #var=variableName, anotherVariable
+- Move import: #use=LIBRARY::NAME
+- React component: #component=ComponentName
+- Type declaration: #type=TypeName
+- Enum declaration: #enum=EnumName
 
 For example, `{@inject: examples/move/example.source#fun=buy_sword}`
 
@@ -280,8 +334,10 @@ return book;
 You can include a space-limited list of options after the @inject call. The following options are supported:
 - `noComments`: Remove comments from Move code.
 - `noTests`: Remove tests from captured section of code.
+- `noTitle`: Don't place a hyperlinked title at the top of the code block.
+- `singleSpace`: If the code source has spurious whitespace, use this option to display code without extra spaces between lines. Useful when the code uses extra blank lines for readability. 
 
-For example, `{@inject: examples/move/example.source#module=example::example noComments noTests}`
+For example, `{@inject: examples/move/example.source#module=example::example noComments noTests noTitle singleSpace}`
 
 
 ## Mermaid graphs

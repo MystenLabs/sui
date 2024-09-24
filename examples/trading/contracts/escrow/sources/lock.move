@@ -112,7 +112,7 @@ module escrow::lock {
         let (lock, key) = lock(coin, ts.ctx());
         let coin = lock.unlock(key);
 
-        coin::burn_for_testing(coin);
+        coin.burn_for_testing();
         ts.end();
     }
 
