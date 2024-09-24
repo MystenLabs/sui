@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 60
+version: 61
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -320,7 +320,7 @@ consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
 random_beacon_reduction_allowed_delta: 800
-random_beacon_reduction_lower_bound: 800
+random_beacon_reduction_lower_bound: 700
 random_beacon_dkg_timeout_round: 3000
 random_beacon_min_round_interval_ms: 500
 random_beacon_dkg_version: 1
