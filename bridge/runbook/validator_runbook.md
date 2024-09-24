@@ -115,7 +115,7 @@ In the generated config:
 * `eth:eth-bridge-proxy-address`: The proxy address for Bridge Solidity contracts on Ethereum.
 * `eth:eth-bridge-chain-id`: 10 for Ethereum Mainnet, 11 for Sepolia Testnet
 * `eth:eth-contracts-start-block-fallback`: The starting block BridgeNodes queries for from Ethereum FullNode. This number should be the block where Solidity contracts are deployed or slightly before.
-* `metrics:push-url`: The url of the remote Sui metrics pipeline: `https://metrics-proxy.[testnet|mainnet].sui.io:8443/publish/metrics`
+* `metrics:push-url`: The url of the remote Sui metrics pipeline: `https://metrics-proxy.[testnet|mainnet].sui.io:8443/publish/metrics`. See the [metrics push section](#metrics-push) below for more details.
 
 With `run-client: true`, these additional fields can be found in the generated config:
 * `db-path`: path of BridgeClient DB, for BridgeClient
@@ -216,3 +216,28 @@ In this case Bridge Client is toggled on and syncs with Blockchains proactively.
 
 It's also critical to track the balance of your client gas coin, and top up once it dips below a certain threshold:
 * `bridge_gas_coin_balance`
+
+
+### Metrics Push
+
+The bridge nodes can push metrics to the remote proxy for network-level observability.
+
+To enable metrics push, set the following parameters in `BridgeNodeConfig`:
+```yaml
+metrics:
+    push-url: https://metrics-proxy.[testnet|mainnet].sui.io:8443/publish/metrics
+```
+
+The proxy authenticates pushed metrics by using the metrics key pair. It is similar to sui-node pushing metrics with NetworkKey. Unlike NetworkKey, Bridge Node's metrics key is not recorded on chain and can be ephemeral. The metrics key is loaded from `metrics-key-pair` field in `BridgeNodeConfig` if provided, otherwise a new key pair is generated on the fly. The proxy queries nodes's public keys periodically by hitting the metrics pub key api of each node.
+
+When Bridge Node starts, it may log this line once:
+```
+unable to push metrics: error sending request for url (xyz); new client will be created
+```
+This is ok to ignore as long as it does not persist. Otherwise, try:
+
+```bash
+$ curl -i  {your-bridge-node-url-onchain}/metrics_pub_key
+```
+
+and make sure the pub key is correctly returned.
