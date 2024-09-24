@@ -1,8 +1,8 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 use std::sync::Arc;
 
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+use mysten_common::sync::notify_read::{NotifyRead, RegistrationOwned};
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
 use tap::tap::TapFallible;
 use thiserror::Error;
@@ -26,7 +26,7 @@ pub(crate) struct TransactionsGuard {
     // A TransactionsGuard may be partially consumed by `TransactionConsumer`, in which case, this holds the remaining transactions.
     transactions: Vec<Transaction>,
 
-    included_in_block_ack: oneshot::Sender<BlockRef>,
+    included_in_block_ack: oneshot::Sender<(BlockRef, RegistrationOwned<BlockRef, Status>)>,
 }
 
 /// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
@@ -37,6 +37,18 @@ pub(crate) struct TransactionConsumer {
     max_consumed_bytes_per_request: u64,
     max_consumed_transactions_per_request: u64,
     pending_transactions: Option<TransactionsGuard>,
+    status_notifier: Arc<NotifyRead<BlockRef, Status>>,
+}
+
+#[derive(Debug, Clone)]
+#[allow(unused)]
+pub enum Status {
+    /// The block has been sequenced as part of a committed sub dag. That means that any transaction that has been included in the block
+    /// has been committed as well.
+    Sequenced,
+    /// The block has been garbage collected and will never be committed. Any transactions that have been included in the block should also
+    /// be considered as impossible to be committed as part of this block and might need to be retried
+    GarbageCollected,
 }
 
 impl TransactionConsumer {
@@ -50,6 +62,7 @@ impl TransactionConsumer {
                 .protocol_config
                 .max_num_transactions_in_block(),
             pending_transactions: None,
+            status_notifier: Arc::new(NotifyRead::new()),
         }
     }
 
@@ -112,11 +125,16 @@ impl TransactionConsumer {
             }
         }
 
+        let status_notifier = self.status_notifier.clone();
+
         (
             transactions,
             Box::new(move |block_ref: BlockRef| {
                 for ack in acks {
-                    let _ = ack.send(block_ref);
+                    // create a one-shot to get notfied on the block ref status
+                    let registration = status_notifier.register_one_owned(&block_ref);
+
+                    let _ = ack.send((block_ref, registration));
                 }
             }),
         )
@@ -165,7 +183,10 @@ impl TransactionClient {
 
     /// Submits a list of transactions to be sequenced. The method returns when all the transactions have been successfully included
     /// to next proposed blocks.
-    pub async fn submit(&self, transactions: Vec<Vec<u8>>) -> Result<BlockRef, ClientError> {
+    pub async fn submit(
+        &self,
+        transactions: Vec<Vec<u8>>,
+    ) -> Result<(BlockRef, RegistrationOwned<BlockRef, Status>), ClientError> {
         // TODO: Support returning the block refs for transactions that span multiple blocks
         let included_in_block = self.submit_no_wait(transactions).await?;
         included_in_block
@@ -184,7 +205,8 @@ impl TransactionClient {
     pub(crate) async fn submit_no_wait(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<oneshot::Receiver<BlockRef>, ClientError> {
+    ) -> Result<oneshot::Receiver<(BlockRef, RegistrationOwned<BlockRef, Status>)>, ClientError>
+    {
         let (included_in_block_ack_send, included_in_block_ack_receive) = oneshot::channel();
         for transaction in &transactions {
             if transaction.len() as u64 > self.max_transaction_size {
@@ -448,7 +470,8 @@ mod tests {
 
         // expect all receivers to be resolved.
         for w in all_receivers {
-            assert!(w.await.is_ok());
+            let r = w.await;
+            assert!(r.is_ok());
         }
     }
 }
