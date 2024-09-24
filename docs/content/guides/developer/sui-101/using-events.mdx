@@ -188,22 +188,37 @@ subscribeEvent {
 
 #### Rust SDK
 
+The [Sui by Example](https://github.com/gdanezis/sui-by-example/blob/main/src/05_reading_events/bin/main.rs) repo on GitHub contains a code sample that demonstrates how to subscribe to events using the `query_events` function. The package that `PACKAGE_ID_CONST` points to exists on Mainnet, so you can test this code using Cargo. To do so, clone the `sui-by-example` repo locally and follow the [Example 05 directions](https://github.com/gdanezis/sui-by-example/tree/main/src/05_reading_events). 
+
 ```rust
-use futures::StreamExt;
-use sui_sdk::rpc_types::EventFilter;
-use sui_sdk::SuiClientBuilder;
-use anyhow::Result;
+use sui_sdk::{rpc_types::EventFilter, types::Identifier, SuiClientBuilder};
+
+const PACKAGE_ID_CONST: &str = "0x279525274aa623ef31a25ad90e3b99f27c8dbbad636a6454918855c81d625abc";
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    let sui = SuiClientBuilder::default()
-        .ws_url("wss://fullnode.mainnet.sui.io:443")
+async fn main() -> Result<(), anyhow::Error> {
+    let sui_mainnet = SuiClientBuilder::default()
         .build("https://fullnode.mainnet.sui.io:443")
-        .await.unwrap();
-    let mut subscribe_all = sui.event_api().subscribe_event(EventFilter::All(vec![])).await?;
-    loop {
-        println!("{:?}", subscribe_all.next().await);
+        .await?;
+
+    let events = sui_mainnet
+        .event_api()
+        .query_events(
+            EventFilter::MoveModule {
+                package: PACKAGE_ID_CONST.parse()?,
+                module: Identifier::new("dev_trophy")?,
+            },
+            None,
+            None,
+            false,
+        )
+        .await?;
+
+    for event in events.data {
+        println!("Event: {:?}", event.parsed_json);
     }
+
+    Ok(())
 }
 ```
 
