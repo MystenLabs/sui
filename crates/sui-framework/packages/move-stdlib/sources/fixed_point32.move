@@ -53,8 +53,8 @@ public fun multiply_u64(val: u64, multiplier: FixedPoint32): u64 {
 
 /// Multiply two fixed-point number s, truncating any fractional part of
 /// the product. This will abort if the product overflows.
-public fun mul(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
-    create_from_raw_value(multiply_u64(a.value, *b))
+public fun mul(a: FixedPoint32, b: FixedPoint32): FixedPoint32 {
+    from_raw(multiply_u64(a.value, b))
 }
 
 /// Divide a u64 integer by a fixed-point number, truncating any
@@ -93,8 +93,8 @@ public fun divide_u64(val: u64, divisor: FixedPoint32): u64 {
 /// Divide two fixed-point numbers, truncating any fractional part of
 /// the quotient. This will abort if the divisor is zero or if the
 /// quotient overflows.
-public fun div(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
-    create_from_raw_value(divide_u64(a.value, *b))
+public fun div(a: FixedPoint32, b: FixedPoint32): FixedPoint32 {
+    from_raw(divide_u64(a.value, b))
 }
 
 /// Create a fixed-point value from a rational number specified by its
@@ -184,32 +184,42 @@ public fun is_zero(num: FixedPoint32): bool {
     num.value == 0
 }
 
-/// Add two fixed-point numbers.
-public fun add(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
+/// Add two fixed-point numbers, `a + b`.
+public fun add(a: FixedPoint32, b: FixedPoint32): FixedPoint32 {
     let sum = (a.value as u128) + (b.value as u128);
     assert!(sum <= MAX_U64, EADDITION);
-    create_from_raw_value(sum as u64)
+    from_raw(sum as u64)
 }
 
 /// Subtract two fixed-point numbers, `a - b`.
-public fun sub(a: &FixedPoint32, b: &FixedPoint32): FixedPoint32 {
+public fun sub(a: FixedPoint32, b: FixedPoint32): FixedPoint32 {
     assert!(a.value >= b.value, ESUBTRACTION);
-    create_from_raw_value(a.value - b.value)
+    from_raw(a.value - b.value)
 }
 
-/// Return `true` is and only if `x <= y`.
-public fun le(a: &FixedPoint32, b: &FixedPoint32): bool {
+/// Return `true` if and only if `x <= y`.
+public fun le(a: FixedPoint32, b: FixedPoint32): bool {
     a.value <= b.value
 }
 
-/// Return `true` is and only if `a < b`.
-public fun lt(a: &FixedPoint32, b: &FixedPoint32): bool {
+/// Return `true` if and only if `a < b`.
+public fun lt(a: FixedPoint32, b: FixedPoint32): bool {
     a.value < b.value
 }
 
-/// Return `true` is and only if `a == b`.
-public fun eq(a: &FixedPoint32, b: &FixedPoint32): bool {
+/// Return `true` if and only if `a == b`.
+public fun eq(a: FixedPoint32, b: FixedPoint32): bool {
     a.value == b.value
+}
+
+/// Return `true` if and only if `a >= b`.
+public fun ge(a: FixedPoint32, b: FixedPoint32): bool {
+    a.value >= b.value
+}
+
+/// Return `true` if and only if `a > b`.
+public fun gt(a: FixedPoint32, b: FixedPoint32): bool {
+    a.value > b.value
 }
 
 /// Return a fixed-point representation of 1.
