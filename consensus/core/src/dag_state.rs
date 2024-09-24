@@ -881,6 +881,7 @@ impl DagState {
         self.scoring_subdag.calculate_distributed_vote_scores()
     }
 
+    #[allow(unused)]
     pub(crate) fn calculate_scoring_subdag_certified_vote_scores(&self) -> ReputationScores {
         self.scoring_subdag.calculate_certified_vote_scores()
     }

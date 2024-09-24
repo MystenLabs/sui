@@ -328,6 +328,7 @@ impl ScoringSubdag {
 
     // Iterate through votes and calculate scores for each authority based on
     // certified vote scoring strategy.
+    #[allow(unused)]
     pub(crate) fn calculate_certified_vote_scores(&self) -> ReputationScores {
         let scores_per_authority = self.certified_votes_scores();
 
@@ -342,6 +343,7 @@ impl ScoringSubdag {
     /// This scoring strategy gives points equal to the amount of stake in blocks
     /// that include the authority's vote, if that amount of total_stake > 2f+1.
     /// We consider this a certified vote.
+    #[allow(unused)]
     pub fn certified_votes_scores(&self) -> Vec<u64> {
         let _s = self
             .context

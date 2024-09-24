@@ -374,6 +374,35 @@ impl Core {
             }
         }
 
+        // TODO: produce the block for the clock_round. As the threshold clock can advance many rounds at once (ex
+        // because we synchronized a bulk of blocks) we can decide here whether we want to produce blocks per round
+        // or just the latest one. From earlier experiments I saw only benefit on proposing for the penultimate round
+        // only when the validator was supposed to be the leader of the round - so we bring down the missed leaders.
+        // Probably proposing for all the intermediate rounds might not make much sense.
+
+        // Determine the ancestors to be included in proposal
+
+        // Smart ancestor selection requires distributed scoring to be enabled.
+        let ancestors = if self
+            .context
+            .protocol_config
+            .consensus_distributed_vote_scoring_strategy()
+        {
+            let ancestors = self.smart_ancestors_to_propose(clock_round, !force);
+
+            // If we did not find enough good ancestors to propose, continue to wait before proposing.
+            if ancestors.is_empty() {
+                assert!(
+                    !force,
+                    "Ancestors should have been returned if force is true!"
+                );
+                return None;
+            }
+            ancestors
+        } else {
+            self.ancestors_to_propose(clock_round)
+        };
+
         let leader_authority = &self
             .context
             .committee
@@ -395,24 +424,6 @@ impl Core {
             .block_proposal_leader_wait_count
             .with_label_values(&[leader_authority])
             .inc();
-
-        // TODO: produce the block for the clock_round. As the threshold clock can advance many rounds at once (ex
-        // because we synchronized a bulk of blocks) we can decide here whether we want to produce blocks per round
-        // or just the latest one. From earlier experiments I saw only benefit on proposing for the penultimate round
-        // only when the validator was supposed to be the leader of the round - so we bring down the missed leaders.
-        // Probably proposing for all the intermediate rounds might not make much sense.
-
-        // Determine the ancestors to be included in proposal
-        let ancestors = self.ancestors_to_propose(clock_round, !force);
-
-        // If we did not find enough good ancestors to propose, continue to wait before proposing.
-        if ancestors.is_empty() {
-            assert!(
-                !force,
-                "Ancestors should have been returned if force is true!"
-            );
-            return None;
-        }
 
         self.context
             .metrics
@@ -734,18 +745,74 @@ impl Core {
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
-    /// If smart selection is enabled then this will try to select the best ancestors
-    /// based on the propagation scores of the authorities.
-    fn ancestors_to_propose(
-        &mut self,
-        clock_round: Round,
-        smart_select: bool,
-    ) -> Vec<VerifiedBlock> {
+    fn ancestors_to_propose(&mut self, clock_round: Round) -> Vec<VerifiedBlock> {
         // Now take the ancestors before the clock_round (excluded) for each authority.
         let ancestors = self
             .dag_state
             .read()
             .get_last_cached_block_per_authority(clock_round);
+        assert_eq!(
+            ancestors.len(),
+            self.context.committee.size(),
+            "Fatal error, number of returned ancestors don't match committee size."
+        );
+
+        // Propose only ancestors of higher rounds than what has already been proposed.
+        // And always include own last proposed block first among ancestors.
+        let ancestors = iter::once(self.last_proposed_block.clone())
+            .chain(
+                ancestors
+                    .into_iter()
+                    .filter(|block| block.author() != self.context.own_index)
+                    .flat_map(|block| {
+                        if let Some(last_block_ref) = self.last_included_ancestors[block.author()] {
+                            return (last_block_ref.round < block.round()).then_some(block);
+                        }
+                        Some(block)
+                    }),
+            )
+            .collect::<Vec<_>>();
+
+        // Update the last included ancestor block refs
+        for ancestor in &ancestors {
+            self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
+        }
+
+        // TODO: this is for temporary sanity check - we might want to remove later on
+        let mut quorum = StakeAggregator::<QuorumThreshold>::new();
+        for ancestor in ancestors
+            .iter()
+            .filter(|block| block.round() == clock_round - 1)
+        {
+            quorum.add(ancestor.author(), &self.context.committee);
+        }
+        assert!(quorum.reached_threshold(&self.context.committee), "Fatal error, quorum not reached for parent round when proposing for round {}. Possible mismatch between DagState and Core.", clock_round);
+
+        ancestors
+    }
+
+    /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
+    /// If smart selection is enabled then this will try to select the best ancestors
+    /// based on the propagation scores of the authorities.
+    fn smart_ancestors_to_propose(
+        &mut self,
+        clock_round: Round,
+        smart_select: bool,
+    ) -> Vec<VerifiedBlock> {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::smart_ancestors_to_propose"])
+            .start_timer();
+
+        // Now take the ancestors before the clock_round (excluded) for each authority.
+        let ancestors = self
+            .dag_state
+            .read()
+            .get_last_cached_block_per_authority(clock_round);
+
         assert_eq!(
             ancestors.len(),
             self.context.committee.size(),
@@ -803,14 +870,15 @@ impl Core {
         let mut parent_round_quorum = StakeAggregator::<QuorumThreshold>::new();
 
         // Check total stake of high scoring parent round ancestors
-        for ancestor in high_score_ancestors.iter() {
-            if ancestor.round() == clock_round - 1 {
-                parent_round_quorum.add(ancestor.author(), &self.context.committee);
-            }
+        for ancestor in high_score_ancestors
+            .iter()
+            .filter(|a| a.round() == clock_round - 1)
+        {
+            parent_round_quorum.add(ancestor.author(), &self.context.committee);
         }
 
         if smart_select && !parent_round_quorum.reached_threshold(&self.context.committee) {
-            debug!("Not enough good ancestors to propose for round {clock_round}");
+            debug!("Not enough good ancestors yet to propose for round {clock_round}");
             return vec![];
         }
 
@@ -830,84 +898,73 @@ impl Core {
 
         let mut ancestors_to_propose = high_score_ancestors;
         let mut excluded_ancestors = Vec::new();
-        for (score, ancestor) in low_score_ancestors.into_iter() {
-            if parent_round_quorum.reached_threshold(&self.context.committee) {
-                excluded_ancestors.push((score, ancestor));
-                continue;
-            }
 
-            if ancestor.round() == clock_round - 1 {
+        for (score, ancestor) in low_score_ancestors.into_iter() {
+            if !parent_round_quorum.reached_threshold(&self.context.committee)
+                && ancestor.round() == clock_round - 1
+            {
+                debug!("Including low score strong link ancestor {ancestor} with score {score} to propose for round {clock_round}");
                 parent_round_quorum.add(ancestor.author(), &self.context.committee);
                 self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
-                debug!("Included low score strong link ancestor {ancestor} with score {score} to propose for round {clock_round}");
                 ancestors_to_propose.push(ancestor);
             } else {
                 excluded_ancestors.push((score, ancestor));
             }
         }
 
-        // inclusion of weak links for low score ancestors
+        // Inclusion of weak links for low score ancestors
         for (score, ancestor) in excluded_ancestors.iter() {
             let excluded_author = ancestor.author();
             let block_hostname = &self.context.committee.authority(excluded_author).hostname;
-            let network_quorum_round = self.propagation_delay_per_authority[excluded_author];
+            let mut network_quorum_round = self.propagation_delay_per_authority[excluded_author];
+
+            // If the network quourum round for this ancestor is greater than or equal
+            // to the clock round then we want to make sure to set it to clock_round - 1
+            // as that is the max round we can include as an ancestor.
+            network_quorum_round = network_quorum_round.min(clock_round - 1);
+
             if let Some(last_block_ref) = self.last_included_ancestors[excluded_author] {
                 if last_block_ref.round < network_quorum_round {
                     if ancestor.round() == network_quorum_round {
-                        // include this block
+                        // Include the ancestor block as it has been seen by a strong quorum
                         self.last_included_ancestors[excluded_author] = Some(ancestor.reference());
                         ancestors_to_propose.push(ancestor.clone());
-                        debug!("Included excluded ancestor {ancestor} with score {score} & propogation delay {} to propose for round {clock_round}", self.propagation_delay_per_authority[excluded_author]);
+                        debug!("Included low scoring ancestor {ancestor} with score {score} seen at network quorum round {network_quorum_round} to propose for round {clock_round}");
                         self.context
                             .metrics
                             .node_metrics
                             .included_excluded_proposal_ancestors_count_by_authority
                             .with_label_values(&[block_hostname])
                             .inc();
-                    } else {
-                        // get ancestor from store that is at network round
-                        let blocks =
-                            self.dag_state
-                                .read()
-                                .get_uncommitted_blocks_at_slot(Slot::new(
-                                    network_quorum_round,
-                                    excluded_author,
-                                ));
-                        if blocks.len() > 1 {
-                            warn!("Multiple potential ancestor blocks found {blocks:?}, will include the first.");
-                        }
-
-                        // include this block from store
-                        if let Some(block) = blocks.first() {
-                            self.last_included_ancestors[excluded_author] = Some(block.reference());
-                            ancestors_to_propose.push(block.clone());
-                            debug!("Included excluded ancestor authority with score {score} with weak link {block} to propose for round {clock_round}");
-                            self.context
-                                .metrics
-                                .node_metrics
-                                .included_excluded_proposal_ancestors_count_by_authority
-                                .with_label_values(&[block_hostname])
-                                .inc();
-                        } else {
-                            warn!("No earlier ancestor found for excluded ancestor {ancestor} with score {score} to propose for round {clock_round}");
-
-                            debug!("Excluded low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
-                            self.context
-                                .metrics
-                                .node_metrics
-                                .excluded_proposal_ancestors_count_by_authority
-                                .with_label_values(&[block_hostname])
-                                .inc();
-                            continue;
-                        }
+                        continue;
                     }
 
-                    // we have included the ancestor in either case so we can go to the next iteration
-                    continue;
+                    // Fetch ancestor block from the store for older round
+                    let blocks = self
+                        .dag_state
+                        .read()
+                        .get_uncommitted_blocks_at_slot(Slot::new(
+                            network_quorum_round,
+                            excluded_author,
+                        ));
+
+                    if let Some(block) = blocks.first() {
+                        self.last_included_ancestors[excluded_author] = Some(block.reference());
+                        ancestors_to_propose.push(block.clone());
+                        debug!("Included low scoring ancestor {ancestor} with score {score} seen at network quorum round {network_quorum_round} to propose for round {clock_round}");
+                        self.context
+                            .metrics
+                            .node_metrics
+                            .included_excluded_proposal_ancestors_count_by_authority
+                            .with_label_values(&[block_hostname])
+                            .inc();
+                        continue;
+                    } else {
+                        debug!("No earlier uncommitted block found for low scoring ancestor {ancestor} with score {score} seen at network quorum round {network_quorum_round} to propose for round {clock_round}");
+                    }
                 }
             }
 
-            // exclude
             debug!("Excluded low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
             self.context
                 .metrics
@@ -918,7 +975,7 @@ impl Core {
         }
 
         info!(
-            "Included {} ancestors & excluded {} ancestors",
+            "Included {} ancestors & excluded {} ancestors for proposal in round {clock_round}",
             ancestors_to_propose.len(),
             excluded_ancestors.len(),
         );
