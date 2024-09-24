@@ -25,7 +25,6 @@ impl BackfillTask<()> for FullObjectsHistoryBackfill {
         );
 
         // Execute the SQL query using Diesel's async connection
-        // TODO: Add retry support.
         diesel::sql_query(query).execute(&mut conn).await.unwrap();
     }
 }

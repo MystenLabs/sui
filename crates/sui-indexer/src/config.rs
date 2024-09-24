@@ -183,24 +183,13 @@ pub enum Command {
     },
     /// Run through the migration scripts.
     RunMigrations,
-    /// Backfill DB tables for checkpoint range [\first_checkpoint, \last_checkpoint].
-    /// by running a SQL query provided in \sql.
-    /// The tool will automatically slice it into smaller checkpoint ranges and for each range [start, end],
-    /// it augments the \sql query with:
-    ///   "WHERE {checkpoint_column_name} BETWEEN {start} AND {end}"
-    /// to avoid running out of memory.
-    /// Example:
-    ///  ./sui-indexer --database-url <...> sql-back-fill
-    ///   "INSERT INTO full_objects_history (object_id, object_version, serialized_object) SELECT object_id, object_version, serialized_object FROM objects_history"
-    ///   "checkpoint_sequence_number" 0 100000
-    SqlBackFill {
-        sql: String,
-        checkpoint_column_name: String,
-        first_checkpoint: u64,
-        last_checkpoint: u64,
-        #[command(flatten)]
-        backfill_config: BackFillConfig,
-    },
+    /// Backfill DB tables for some ID range [\start, \end].
+    /// The tool will automatically slice it into smaller ranges and for each range,
+    /// it first makes a read query to the DB to get data needed for backfil if needed,
+    /// which then can be processed and written back to the DB.
+    /// To add a new backfill, add a new module and implement the `BackfillTask` trait.
+    /// full_objects_history.rs provides an example to do SQL-only backfills.
+    /// system_state_summary_json.rs provides an example to do SQL + processing backfills.
     RunBackFill {
         /// Start of the range to backfill, inclusive.
         start: usize,

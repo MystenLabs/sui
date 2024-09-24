@@ -11,7 +11,6 @@ use sui_indexer::metrics::{
     spawn_connection_pool_metric_collector, start_prometheus_server, IndexerMetrics,
 };
 use sui_indexer::restorer::formal_snapshot::IndexerFormalSnapshotRestorer;
-use sui_indexer::sql_backfill::run_sql_backfill;
 use sui_indexer::store::PgIndexerStore;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -74,23 +73,6 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::RunMigrations => {
             run_migrations(pool.dedicated_connection().await?).await?;
-        }
-        Command::SqlBackFill {
-            sql,
-            checkpoint_column_name,
-            first_checkpoint,
-            last_checkpoint,
-            backfill_config,
-        } => {
-            run_sql_backfill(
-                &sql,
-                &checkpoint_column_name,
-                first_checkpoint,
-                last_checkpoint,
-                pool,
-                backfill_config,
-            )
-            .await;
         }
         Command::RunBackFill {
             start,
