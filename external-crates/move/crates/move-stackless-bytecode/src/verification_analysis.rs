@@ -376,6 +376,7 @@ impl VerificationAnalysisProcessor {
             .get_or_default_mut::<VerificationInfo>(true);
         if !info.verified {
             info.verified = true;
+            info.inlined = true;
             Self::mark_callees_inlined(fun_env, targets);
         }
     }

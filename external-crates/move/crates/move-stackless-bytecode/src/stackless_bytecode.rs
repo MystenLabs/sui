@@ -788,11 +788,24 @@ impl Bytecode {
         }
     }
 
-    pub fn set_abort_action(&mut self, aa: Option<AbortAction>) {
-        if let Bytecode::Call(_, _, _, _, aa_ref) = self {
-            *aa_ref = aa;
+    pub fn update_abort_action<F>(&self, f: F) -> Self
+    where
+        F: FnOnce(&Option<AbortAction>) -> Option<AbortAction>,
+    {
+        use Bytecode::*;
+        match self {
+            Call(attr_id, dests, op, srcs, aa) => {
+                Call(*attr_id, dests.clone(), op.clone(), srcs.clone(), f(aa))
+            }
+            _ => self.clone(),
         }
     }
+
+    // pub fn set_abort_action(&mut self, aa: Option<AbortAction>) {
+    //     if let Bytecode::Call(_, _, _, _, aa_ref) = self {
+    //         *aa_ref = aa;
+    //     }
+    // }
 }
 
 // =================================================================================================

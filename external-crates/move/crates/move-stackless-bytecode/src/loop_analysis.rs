@@ -81,7 +81,12 @@ impl FunctionTargetProcessor for LoopAnalysisProcessor {
             return data;
         }
         let loop_annotation = Self::build_loop_annotation(func_env, &data);
-        Self::transform(func_env, data, &loop_annotation)
+        println!("before {}:", self.name());
+        println!("{}", FunctionTarget::new(func_env, &data));
+        let result = Self::transform(func_env, data, &loop_annotation);
+        println!("after {}:", self.name());
+        println!("{}", FunctionTarget::new(func_env, &result));
+        result
     }
 
     fn name(&self) -> String {
@@ -217,6 +222,7 @@ impl LoopAnalysisProcessor {
                             });
                         }
 
+                        println!("Loop invariant\n{:?}", loop_info.loop_invariant.code);
                         let dup_code = builder
                             .dup_code(&loop_info.loop_invariant.code)
                             .iter()
@@ -450,19 +456,27 @@ impl LoopAnalysisProcessor {
 
             if let Some((begin, end)) = invariants_map.get(&label) {
                 // done with all information collection.
-                let mut code = code[(*begin)..=*end].to_vec();
-                for bc in code.iter_mut() {
-                    bc.set_abort_action(Some(AbortAction::Check));
-                }
+                let code0 = code[(*begin)..=*end]
+                    .iter()
+                    .map(|bc| {
+                        bc.update_abort_action(|aa| match aa {
+                            Some(AbortAction::Jump(_, _)) => Some(AbortAction::Check),
+                            Some(AbortAction::Check) => Some(AbortAction::Check),
+                            None => None,
+                        })
+                    })
+                    .collect();
+                // let mut code0 = code[(*begin)..=*end].to_vec();
+                // for bc in code.iter_mut() {
+                //     bc.set_abort_action(Some(AbortAction::Check));
+                // }
                 fat_loops.insert(
                     label,
                     FatLoop {
                         val_targets,
                         mut_targets,
                         back_edges,
-                        loop_invariant: LoopInvariant {
-                            code,
-                        },
+                        loop_invariant: LoopInvariant { code: code0 },
                     },
                 );
             }

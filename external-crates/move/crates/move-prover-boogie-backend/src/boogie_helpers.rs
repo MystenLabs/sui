@@ -86,13 +86,34 @@ pub fn boogie_field_update(field_env: &FieldEnv<'_>, inst: &[Type]) -> String {
     )
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FunctionTranslationStyle {
+    Default,
+    Asserts,
+    Aborts,
+    SpecNoAbortCheck,
+    Opaque,
+}
+
 /// Return boogie name of given function.
-pub fn boogie_function_name(fun_env: &FunctionEnv<'_>, inst: &[Type]) -> String {
+pub fn boogie_function_name(
+    fun_env: &FunctionEnv<'_>,
+    inst: &[Type],
+    style: FunctionTranslationStyle,
+) -> String {
+    let style_suffix = match style {
+        FunctionTranslationStyle::Default => "",
+        FunctionTranslationStyle::Opaque => "",
+        FunctionTranslationStyle::Asserts => "$asserts",
+        FunctionTranslationStyle::Aborts => "$aborts",
+        FunctionTranslationStyle::SpecNoAbortCheck => "$spec_no_abort_check",
+    };
     format!(
-        "${}_{}{}",
+        "${}_{}{}{}",
         boogie_module_name(&fun_env.module_env),
         fun_env.get_name().display(fun_env.symbol_pool()),
-        boogie_inst_suffix(fun_env.module_env.env, inst)
+        boogie_inst_suffix(fun_env.module_env.env, inst),
+        style_suffix,
     )
 }
 
