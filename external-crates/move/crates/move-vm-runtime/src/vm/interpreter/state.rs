@@ -488,10 +488,6 @@ impl CallFrame {
         &self.ty_args
     }
 
-    pub(super) fn resolver(&self) -> &ModuleDefinitionResolver {
-        &self.resolver
-    }
-
     pub(super) fn location(&self) -> Location {
         Location::Module(self.function().module_id().clone())
     }

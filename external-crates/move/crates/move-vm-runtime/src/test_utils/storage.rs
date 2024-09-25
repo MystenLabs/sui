@@ -11,11 +11,9 @@ use move_core_types::{
     resolver::{ModuleResolver, MoveResolver, ResourceResolver},
 };
 use std::{
-    collections::{btree_map, BTreeMap, HashMap},
+    collections::{btree_map, BTreeMap},
     fmt::Debug,
 };
-
-use crate::cache::linkage_context::LinkageContext;
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -42,7 +40,6 @@ struct InMemoryAccountStorage {
 /// Simple in-memory storage that can be used as a Move VM storage backend for testing purposes.
 #[derive(Debug, Clone)]
 pub struct InMemoryStorage {
-    context: AccountAddress,
     accounts: BTreeMap<AccountAddress, InMemoryAccountStorage>,
 }
 
@@ -101,7 +98,6 @@ impl InMemoryStorage {
     pub fn new() -> Self {
         Self {
             accounts: BTreeMap::new(),
-            context: AccountAddress::ZERO,
         }
     }
 
@@ -219,32 +215,6 @@ impl ResourceResolver for InMemoryStorage {
         _tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
         unreachable!()
-    }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Impls for Into<LinkageContext>
-// -------------------------------------------------------------------------------------------------
-
-/// The LinkageContext for BlankStorage is Blank.
-impl Into<LinkageContext> for &BlankStorage {
-    fn into(self) -> LinkageContext {
-        LinkageContext::new(AccountAddress::ZERO, HashMap::new())
-    }
-}
-
-/// The LinkageContext for InMemoryStorage is reflexive: everything maps to itself.
-impl Into<LinkageContext> for &InMemoryStorage {
-    fn into(self) -> LinkageContext {
-        let InMemoryStorage {
-            context: root_package,
-            accounts,
-        } = self;
-        let link_table = accounts
-            .into_iter()
-            .map(|(account, _)| (*account, *account))
-            .collect();
-        LinkageContext::new(*root_package, link_table)
     }
 }
 

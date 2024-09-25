@@ -42,6 +42,7 @@ use tracing::error;
 type PackageCache = HashMap<PackageStorageId, Arc<Package>>;
 
 /// A Loaded Function for driving VM Calls
+#[allow(dead_code)]
 pub struct LoadedFunction {
     compiled_module: Arc<CompiledModule>,
     loaded_module: Arc<Module>,
@@ -94,8 +95,8 @@ impl VMCache {
     ///
     /// The resuling map of vtables _must_ be closed under the static dependency graph of the root
     /// package w.r.t, to the current linkage context in `data_store`.
-    pub fn generate_runtime_vtables<'cache, D: DataStore>(
-        &'cache self,
+    pub fn generate_runtime_vtables<D: DataStore>(
+        &self,
         data_store: &D,
         link_context: &LinkageContext,
     ) -> VMResult<RuntimeVTables> {
@@ -169,7 +170,7 @@ impl VMCache {
 
         // Load the package, but don't insert it into the cache yet.
         // FIXME: This will insert it into the type cache currently, see TODO on type cache.
-        self.jit_package(data_store, link_context, storage_id, loading_package)
+        self.jit_package(link_context, storage_id, loading_package)
     }
 
     // -------------------------------------------
@@ -191,11 +192,8 @@ impl VMCache {
                 .finish(Location::Undefined)
         })?;
         let (package, ident) = module_id.into();
-        let packages = self.load_and_cache_packages(
-            data_store,
-            link_context,
-            BTreeSet::from([package.clone()]),
-        )?;
+        let packages =
+            self.load_and_cache_packages(data_store, link_context, BTreeSet::from([package]))?;
         let Some(package) = packages.get(&package) else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -239,11 +237,7 @@ impl VMCache {
             err.with_message("Could not relocate module in data store".to_string())
                 .finish(Location::Undefined)
         })?;
-        let Some(function) = loaded_module
-            .function_map
-            .get(function_name)
-            .map(|fun| fun.clone())
-        else {
+        let Some(function) = loaded_module.function_map.get(function_name).copied() else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Module not found in package".to_string())
@@ -260,7 +254,7 @@ impl VMCache {
             .map(|tok| {
                 self.type_cache()
                     .read()
-                    .make_type(&compiled_module, tok, data_store, link_context)
+                    .make_type(&compiled_module, tok, link_context)
             })
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
@@ -272,7 +266,7 @@ impl VMCache {
             .map(|tok| {
                 self.type_cache()
                     .read()
-                    .make_type(&compiled_module, tok, data_store, link_context)
+                    .make_type(&compiled_module, tok, link_context)
             })
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
@@ -360,12 +354,7 @@ impl VMCache {
         // NB: the packages must be cached in reverse dependency order otherwise types may not be cached
         // correctly.
         for (package_id, deserialized_package) in pkgs_in_dependency_order.into_iter().rev() {
-            let pkg = self.fetch_or_jit_package(
-                data_store,
-                link_context,
-                package_id,
-                deserialized_package,
-            )?;
+            let pkg = self.fetch_or_jit_package(link_context, package_id, deserialized_package)?;
             cached_packages.insert(package_id, pkg);
         }
 
@@ -435,7 +424,7 @@ impl VMCache {
         // further packages.
 
         let runtime_id = *modules
-            .get(0)
+            .first()
             .expect("non-empty package")
             .self_id()
             .address();
@@ -450,7 +439,6 @@ impl VMCache {
     /// Retrieve a JIT-compiled package from the cache, or compile and add it to the cache.
     fn fetch_or_jit_package(
         &self,
-        data_store: &impl DataStore,
         link_context: &LinkageContext,
         package_key: PackageStorageId,
         loading_package: DeserializedPackage,
@@ -459,8 +447,7 @@ impl VMCache {
             return Ok(loaded_package);
         }
 
-        let loaded_package =
-            self.jit_package(data_store, link_context, package_key, loading_package)?;
+        let loaded_package = self.jit_package(link_context, package_key, loading_package)?;
 
         self.package_cache
             .write()
@@ -481,7 +468,6 @@ impl VMCache {
     /// INVARIANT: If the package is  already in the cache, this will produce an Invariant Violation.
     fn jit_package(
         &self,
-        data_store: &impl DataStore,
         link_context: &LinkageContext,
         package_key: PackageStorageId,
         loading_package: DeserializedPackage,
@@ -496,7 +482,6 @@ impl VMCache {
         jit::translate_package(
             &self.type_cache,
             &self.natives,
-            data_store,
             link_context,
             package_key,
             loading_package,

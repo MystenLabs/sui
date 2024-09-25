@@ -15,8 +15,8 @@ use crate::{
 use move_binary_format::errors::VMResult;
 use move_binary_format::file_format::CompiledModule;
 
-use move_core_types::{account_address::AccountAddress, language_storage::ModuleId};
 use move_core_types::identifier::Identifier;
+use move_core_types::{account_address::AccountAddress, language_storage::ModuleId};
 use move_vm_config::runtime::VMConfig;
 
 use std::collections::BTreeSet;
@@ -83,7 +83,7 @@ impl InMemoryTestAdapter {
             all_dependencies
                 .into_iter()
                 .map(|id| (id, id))
-                .chain(vec![(runtime_package_id, storage_id)].into_iter())
+                .chain(vec![(runtime_package_id, storage_id)])
                 .collect(),
         );
         Ok(linkage_context)

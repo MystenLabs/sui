@@ -253,7 +253,7 @@ fn format_function_map(
         result.push_str(&format!("Account: {:?}\n", address));
         for (module_name, function_map) in module_map {
             result.push_str(&format!("  Module: {}\n", module_name));
-            for (function_name, _) in function_map {
+            for function_name in function_map.keys() {
                 result.push_str(&format!("    Function: {}\n", function_name));
             }
         }

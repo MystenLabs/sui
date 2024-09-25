@@ -24,11 +24,8 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
-use move_vm_types::{
-    data_store::DataStore,
-    loaded_data::runtime_types::{
-        CachedDatatype, Datatype, EnumType, StructType, Type, VariantType,
-    },
+use move_vm_types::loaded_data::runtime_types::{
+    CachedDatatype, Datatype, EnumType, StructType, Type, VariantType,
 };
 use parking_lot::RwLock;
 use std::{
@@ -36,32 +33,6 @@ use std::{
     sync::Arc,
 };
 use tracing::error;
-
-struct ModuleContext<'a, 'b, 'linkage, 'data> {
-    link_context: &'linkage LinkageContext,
-    data_store: &'data dyn DataStore,
-    cache: &'a PackageContext<'b>,
-    module: &'a CompiledModule,
-    single_signature_token_map: BTreeMap<SignatureIndex, Type>,
-    type_cache: &'a RwLock<TypeCache>,
-}
-
-struct PackageContext<'a> {
-    pub storage_id: PackageStorageId,
-    pub runtime_id: RuntimePackageId,
-    // NB: this is under the package's context so we don't need to further resolve by
-    // address in this table.
-    pub loaded_modules: BinaryCache<Identifier, Module>,
-
-    // NB: this is needed for the bytecode verifier. If we update the bytecode verifier we should
-    // be able to remove this.
-    pub compiled_modules: BinaryCache<Identifier, CompiledModule>,
-
-    // NB: All things except for types are allocated into this arena.
-    pub package_arena: Arena,
-    pub vtable: PackageVTable,
-    type_cache: &'a RwLock<TypeCache>,
-}
 
 #[derive(Debug)]
 enum FieldTypeInfo {
@@ -78,6 +49,566 @@ const DEBUG_FLAGS: DebugFlags = DebugFlags {
     function_list_sizes: true,
     function_resolution: true,
 };
+
+struct ModuleContext<'a, 'linkage> {
+    link_context: &'linkage LinkageContext,
+    cache: &'a PackageContext,
+    module: &'a CompiledModule,
+    single_signature_token_map: BTreeMap<SignatureIndex, Type>,
+    type_cache: &'a RwLock<TypeCache>,
+}
+
+struct PackageContext {
+    pub storage_id: PackageStorageId,
+    pub runtime_id: RuntimePackageId,
+    // NB: this is under the package's context so we don't need to further resolve by
+    // address in this table.
+    pub loaded_modules: BinaryCache<Identifier, Module>,
+
+    // NB: this is needed for the bytecode verifier. If we update the bytecode verifier we should
+    // be able to remove this.
+    pub compiled_modules: BinaryCache<Identifier, CompiledModule>,
+
+    // NB: All things except for types are allocated into this arena.
+    pub package_arena: Arena,
+    pub vtable: PackageVTable,
+}
+
+impl PackageContext {
+    fn insert_and_make_module_vtable(
+        &mut self,
+        module_name: Identifier,
+        vtable: impl IntoIterator<Item = (Identifier, ArenaPointer<Function>)>,
+    ) -> PartialVMResult<()> {
+        for (name, func) in vtable {
+            self.vtable.insert((module_name.clone(), name), func)?;
+        }
+        Ok(())
+    }
+
+    fn try_resolve_function(&self, vtable_entry: &VTableKey) -> Option<ArenaPointer<Function>> {
+        self.vtable
+            .get(&(
+                vtable_entry.module_name.clone(),
+                vtable_entry.function_name.clone(),
+            ))
+            .map(|f| ArenaPointer::new(f.to_ref()))
+    }
+}
+
+pub fn package(
+    type_cache: &RwLock<TypeCache>,
+    natives: &NativeFunctions,
+    link_context: &LinkageContext,
+    storage_id: PackageStorageId,
+    runtime_id: RuntimePackageId,
+    mut package_modules: Vec<CompiledModule>,
+) -> PartialVMResult<Package> {
+    let module_ids_in_pkg = package_modules
+        .iter()
+        .map(|m| m.self_id())
+        .collect::<BTreeSet<_>>();
+
+    let mut package_context = PackageContext {
+        storage_id,
+        runtime_id,
+        loaded_modules: BinaryCache::new(),
+        compiled_modules: BinaryCache::new(),
+        package_arena: Arena::new(),
+        vtable: PackageVTable::new(),
+    };
+
+    // Load modules in dependency order within the package. Needed for both static call
+    // resolution and type caching.
+    while let Some(input_module) = package_modules.pop() {
+        let mut immediate_dependencies = input_module
+            .immediate_dependencies()
+            .into_iter()
+            .filter(|dep| module_ids_in_pkg.contains(dep) && dep != &input_module.self_id());
+
+        // If we haven't processed the immediate dependencies yet, push the module back onto
+        // the front and process other modules first.
+        if !immediate_dependencies.all(|dep| {
+            package_context
+                .loaded_modules
+                .contains(&dep.name().to_owned())
+        }) {
+            package_modules.insert(0, input_module);
+            continue;
+        }
+
+        let loaded_module = module(
+            type_cache,
+            natives,
+            &mut package_context,
+            link_context,
+            storage_id,
+            &input_module,
+        )?;
+
+        package_context
+            .loaded_modules
+            .insert(loaded_module.id.name().to_owned(), loaded_module)?;
+        package_context
+            .compiled_modules
+            .insert(input_module.self_id().name().to_owned(), input_module)?;
+    }
+
+    let PackageContext {
+        storage_id,
+        runtime_id,
+        loaded_modules,
+        compiled_modules,
+        package_arena,
+        vtable,
+    } = package_context;
+
+    Ok(Package {
+        storage_id,
+        runtime_id,
+        loaded_modules,
+        compiled_modules,
+        package_arena,
+        vtable,
+    })
+}
+
+fn module(
+    type_cache: &RwLock<TypeCache>,
+    natives: &NativeFunctions,
+    package_context: &mut PackageContext,
+    link_context: &LinkageContext,
+    package_id: AccountAddress,
+    module: &CompiledModule,
+) -> Result<Module, PartialVMError> {
+    let self_id = module.self_id();
+    println!("Loading module: {}", self_id);
+
+    load_module_types(type_cache, link_context, package_id, module)?;
+
+    let mut instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>> = BTreeMap::new();
+    // helper to build the sparse signature vector
+    fn cache_signatures(
+        type_cache: &RwLock<TypeCache>,
+        link_context: &LinkageContext,
+        instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
+        module: &CompiledModule,
+        instantiation_idx: SignatureIndex,
+    ) -> Result<(), PartialVMError> {
+        if let btree_map::Entry::Vacant(e) = instantiation_signatures.entry(instantiation_idx) {
+            let instantiation = module
+                .signature_at(instantiation_idx)
+                .0
+                .iter()
+                .map(|ty| type_cache.read().make_type(module, ty, link_context))
+                .collect::<Result<Vec<_>, _>>()?;
+            e.insert(instantiation);
+        }
+        Ok(())
+    }
+
+    let mut type_refs = vec![];
+    let mut structs = vec![];
+    let mut struct_instantiations = vec![];
+    let mut enums = vec![];
+    let mut enum_instantiations = vec![];
+    let mut function_instantiations = vec![];
+    let mut field_handles = vec![];
+    let mut field_instantiations: Vec<FieldInstantiation> = vec![];
+
+    for datatype_handle in module.datatype_handles() {
+        let struct_name = module.identifier_at(datatype_handle.name);
+        let module_handle = module.module_handle_at(datatype_handle.module);
+        let runtime_id = module.module_id_for_handle(module_handle);
+        type_refs.push(
+            type_cache
+                .read()
+                .resolve_type_by_name(&(
+                    *runtime_id.address(),
+                    runtime_id.name().to_owned(),
+                    struct_name.to_owned(),
+                ))?
+                .0,
+        );
+    }
+
+    for struct_def in module.struct_defs() {
+        let idx = type_refs[struct_def.struct_handle.0 as usize];
+        let field_count = type_cache.read().cached_types.binaries[idx.0]
+            .get_struct()?
+            .fields
+            .len() as u16;
+        structs.push(StructDef { field_count, idx });
+    }
+
+    for struct_inst in module.struct_instantiations() {
+        let def = struct_inst.def.0 as usize;
+        let struct_def = &structs[def];
+        let field_count = struct_def.field_count;
+
+        let instantiation_idx = struct_inst.type_parameters;
+        cache_signatures(
+            type_cache,
+            link_context,
+            &mut instantiation_signatures,
+            module,
+            instantiation_idx,
+        )?;
+        struct_instantiations.push(StructInstantiation {
+            field_count,
+            def: struct_def.idx,
+            instantiation_idx,
+        });
+    }
+
+    for enum_def in module.enum_defs() {
+        let idx = type_refs[enum_def.enum_handle.0 as usize];
+        let datatype = &type_cache.read().cached_types.binaries[idx.0];
+        let enum_type = datatype.get_enum()?;
+        let variant_count = enum_type.variants.len() as u16;
+        let variants = enum_type
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(tag, variant_type)| VariantDef {
+                tag: tag as u16,
+                field_count: variant_type.fields.len() as u16,
+                field_types: variant_type.fields.clone(),
+            })
+            .collect();
+        enums.push(EnumDef {
+            variant_count,
+            variants,
+            idx,
+        });
+    }
+
+    for enum_inst in module.enum_instantiations() {
+        let def = enum_inst.def.0 as usize;
+        let enum_def = &enums[def];
+        let variant_count_map = enum_def.variants.iter().map(|v| v.field_count).collect();
+        let instantiation_idx = enum_inst.type_parameters;
+        cache_signatures(
+            type_cache,
+            link_context,
+            &mut instantiation_signatures,
+            module,
+            instantiation_idx,
+        )?;
+
+        enum_instantiations.push(EnumInstantiation {
+            variant_count_map,
+            def: enum_def.idx,
+            instantiation_idx,
+        });
+    }
+
+    if DEBUG_FLAGS.function_list_sizes {
+        println!("pushing {} functions", module.function_defs().len());
+    }
+    let loaded_functions =
+        package_context
+            .package_arena
+            .alloc_slice(module.function_defs().iter().enumerate().map(|(ndx, fun)| {
+                let findex = FunctionDefinitionIndex(ndx as TableIndex);
+                alloc_function(natives, findex, fun, module)
+            }));
+
+    package_context.insert_and_make_module_vtable(
+        self_id.name().to_owned(),
+        arena::mut_to_ref_slice(loaded_functions)
+            .iter()
+            .map(|function| {
+                (
+                    function.name.clone(),
+                    ArenaPointer::new(function as *const Function),
+                )
+            }),
+    )?;
+
+    if DEBUG_FLAGS.function_list_sizes {
+        println!("handle size: {}", module.function_handles().len());
+    }
+
+    let single_signature_token_map = BTreeMap::new();
+    let mut context = ModuleContext {
+        link_context,
+        cache: package_context,
+        module,
+        single_signature_token_map,
+        type_cache,
+    };
+
+    for (alloc, fun) in arena::to_mut_ref_slice(loaded_functions)
+        .iter_mut()
+        .zip(module.function_defs())
+    {
+        if let Some(code_unit) = &fun.code {
+            alloc.code = code(&mut context, &code_unit.code)?;
+        }
+    }
+
+    for func_inst in context.module.function_instantiations() {
+        let handle = call(&mut context, func_inst.handle)?;
+
+        let instantiation_idx = func_inst.type_parameters;
+        cache_signatures(
+            type_cache,
+            link_context,
+            &mut instantiation_signatures,
+            module,
+            instantiation_idx,
+        )?;
+
+        function_instantiations.push(FunctionInstantiation {
+            handle,
+            instantiation_idx,
+        });
+    }
+
+    for f_handle in module.field_handles() {
+        let def_idx = f_handle.owner;
+        let owner = structs[def_idx.0 as usize].idx;
+        let offset = f_handle.field as usize;
+        field_handles.push(FieldHandle { offset, owner });
+    }
+
+    for f_inst in module.field_instantiations() {
+        let fh_idx = f_inst.handle;
+        let owner = field_handles[fh_idx.0 as usize].owner;
+        let offset = field_handles[fh_idx.0 as usize].offset;
+
+        field_instantiations.push(FieldInstantiation { offset, owner });
+    }
+
+    let ModuleContext {
+        link_context: _,
+        cache: _,
+        module,
+        single_signature_token_map,
+        type_cache: _,
+    } = context;
+
+    Ok(Module {
+        id: self_id,
+        type_refs,
+        structs,
+        struct_instantiations,
+        enums,
+        enum_instantiations,
+        function_instantiations,
+        field_handles,
+        field_instantiations,
+        // TODO: Remove this field
+        function_map: HashMap::new(),
+        single_signature_token_map,
+        instantiation_signatures,
+        variant_handles: module.variant_handles().to_vec(),
+        variant_instantiation_handles: module.variant_instantiation_handles().to_vec(),
+    })
+}
+
+fn load_module_types(
+    type_cache: &RwLock<TypeCache>,
+    link_context: &LinkageContext,
+    _package_id: PackageStorageId,
+    module: &CompiledModule,
+) -> PartialVMResult<()> {
+    let module_id = module.self_id();
+
+    let mut cached_types = vec![];
+
+    // Add new structs and collect their field signatures
+    let mut field_signatures = vec![];
+    for (idx, struct_def) in module.struct_defs().iter().enumerate() {
+        let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
+        let name = module.identifier_at(struct_handle.name);
+        let defining_id = link_context.defining_module(&module_id, name)?;
+        let struct_key = (
+            *defining_id.address(),
+            module_id.name().to_owned(),
+            name.to_owned(),
+        );
+
+        if type_cache.read().cached_types.contains(&struct_key) {
+            continue;
+        }
+
+        let field_names = match &struct_def.field_information {
+            StructFieldInformation::Native => vec![],
+            StructFieldInformation::Declared(field_info) => field_info
+                .iter()
+                .map(|f| module.identifier_at(f.name).to_owned())
+                .collect(),
+        };
+
+        type_cache.write().cache_datatype(
+            struct_key.clone(),
+            CachedDatatype {
+                abilities: struct_handle.abilities,
+                type_parameters: struct_handle.type_parameters.clone(),
+                name: name.to_owned(),
+                defining_id,
+                runtime_id: module_id.clone(),
+                depth: None,
+                datatype_info: Datatype::Struct(StructType {
+                    fields: vec![],
+                    field_names,
+                    struct_def: StructDefinitionIndex(idx as u16),
+                }),
+            },
+        )?;
+
+        cached_types.push(struct_key);
+
+        let StructFieldInformation::Declared(fields) = &struct_def.field_information else {
+            unreachable!("native structs have been removed");
+        };
+
+        let signatures: Vec<_> = fields.iter().map(|f| &f.signature.0).collect();
+        field_signatures.push(signatures)
+    }
+
+    let mut variant_defs = vec![];
+    for (idx, enum_def) in module.enum_defs().iter().enumerate() {
+        let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
+        let name = module.identifier_at(enum_handle.name);
+        let defining_id = link_context.defining_module(&module_id, name)?;
+        let enum_key = (
+            *defining_id.address(),
+            module_id.name().to_owned(),
+            name.to_owned(),
+        );
+
+        if type_cache.read().cached_types.contains(&enum_key) {
+            continue;
+        }
+
+        let variant_info: Vec<_> = enum_def
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(variant_tag, variant_def)| {
+                (variant_tag, &variant_def.variant_name, &variant_def.fields)
+            })
+            .collect();
+
+        variant_defs.push((idx, variant_info));
+
+        type_cache.write().cache_datatype(
+            enum_key.clone(),
+            CachedDatatype {
+                abilities: enum_handle.abilities,
+                type_parameters: enum_handle.type_parameters.clone(),
+                name: name.to_owned(),
+                defining_id,
+                runtime_id: module_id.clone(),
+                depth: None,
+                datatype_info: Datatype::Enum(EnumType {
+                    variants: vec![],
+                    enum_def: EnumDefinitionIndex(idx as u16),
+                }),
+            },
+        )?;
+        cached_types.push(enum_key);
+    }
+
+    // Convert field signatures into types after adding all structs because field types might
+    // refer to other datatypes in the same module.
+    let mut field_types = vec![];
+    for signature in field_signatures {
+        let tys: Vec<_> = signature
+            .iter()
+            .map(|tok| type_cache.read().make_type(module, tok, link_context))
+            .collect::<PartialVMResult<_>>()?;
+        field_types.push(FieldTypeInfo::Struct(tys));
+    }
+
+    for (enum_def_idx, infos) in variant_defs.into_iter() {
+        let mut variant_fields = vec![];
+        for (tag, name_idx, field_defs) in infos.iter() {
+            let mut fields = vec![];
+            let mut field_names = vec![];
+            for field in field_defs.iter() {
+                fields.push(type_cache.read().make_type(
+                    module,
+                    &field.signature.0,
+                    link_context,
+                )?);
+                field_names.push(module.identifier_at(field.name).to_owned());
+            }
+            variant_fields.push(VariantType {
+                fields,
+                field_names,
+                enum_def: EnumDefinitionIndex(enum_def_idx as u16),
+                variant_tag: *tag as u16,
+                variant_name: module.identifier_at(**name_idx).to_owned(),
+            })
+        }
+
+        field_types.push(FieldTypeInfo::Enum(variant_fields));
+    }
+
+    // Add the field types to the newly added structs and enums, processing them in reverse, to line them
+    // up with the structs and enums we added at the end of the global cache.
+    for (field_info, cached_type) in field_types
+        .into_iter()
+        .rev()
+        .zip(type_cache.write().cached_types.binaries.iter_mut().rev())
+    {
+        match Arc::get_mut(cached_type) {
+            Some(ref mut x) => match (&mut x.datatype_info, field_info) {
+                (Datatype::Enum(ref mut enum_type), FieldTypeInfo::Enum(field_info)) => {
+                    enum_type.variants = field_info;
+                }
+                (Datatype::Struct(ref mut struct_type), FieldTypeInfo::Struct(field_info)) => {
+                    struct_type.fields = field_info;
+                }
+                _ => {
+                    return Err(
+                            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                                .with_message(
+                                    "Type mismatch when loading type into module cache -- enum and structs out of synch".to_owned()
+                                ),
+                        );
+                }
+            },
+            None => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Unable to populate cached type in module cache".to_owned()),
+                );
+            }
+        }
+    }
+
+    let cached_types_len = cached_types.len();
+    let mut depth_cache = BTreeMap::new();
+    for datatype_key in cached_types.iter().rev() {
+        let cached_type = type_cache.read().resolve_type_by_name(datatype_key)?.1;
+        type_cache
+            .read()
+            .calculate_depth_of_datatype(&cached_type, &mut depth_cache)?;
+    }
+
+    debug_assert!(depth_cache.len() == cached_types_len);
+
+    for (cache_idx, depth) in depth_cache {
+        match Arc::get_mut(type_cache.write().mut_type_at(cache_idx)) {
+            Some(datatype) => datatype.depth = Some(depth),
+            None => {
+                // we have pending references to the `Arc` which is impossible,
+                // given the code that adds the `Arc` is above and no reference to
+                // it should exist.
+                // So in the spirit of not crashing we log the issue and move on leaving the
+                // datatypes depth as `None` -- if we try to access it later we will treat this
+                // as too deep.
+                error!("Arc<Datatype> cannot have any live reference while publishing");
+            }
+        }
+    }
+    Ok(())
+}
 
 fn alloc_function(
     natives: &NativeFunctions,
@@ -326,570 +857,11 @@ fn check_vector_type(
         };
         context.single_signature_token_map.insert(
             *signature_index,
-            context.type_cache.read().make_type(
-                context.module,
-                ty,
-                context.data_store,
-                context.link_context,
-            )?,
-        );
-    }
-    Ok(())
-}
-
-fn module(
-    type_cache: &RwLock<TypeCache>,
-    natives: &NativeFunctions,
-    package_context: &mut PackageContext,
-    data_store: &impl DataStore,
-    link_context: &LinkageContext,
-    package_id: AccountAddress,
-    module: &CompiledModule,
-) -> Result<Module, PartialVMError> {
-    let self_id = module.self_id();
-    println!("Loading module: {}", self_id);
-
-    load_module_types(type_cache, data_store, link_context, package_id, module)?;
-
-    let mut instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>> = BTreeMap::new();
-    // helper to build the sparse signature vector
-    fn cache_signatures(
-        type_cache: &RwLock<TypeCache>,
-        data_store: &impl DataStore,
-        link_context: &LinkageContext,
-        instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
-        module: &CompiledModule,
-        instantiation_idx: SignatureIndex,
-    ) -> Result<(), PartialVMError> {
-        if let btree_map::Entry::Vacant(e) = instantiation_signatures.entry(instantiation_idx) {
-            let instantiation = module
-                .signature_at(instantiation_idx)
-                .0
-                .iter()
-                .map(|ty| {
-                    type_cache
-                        .read()
-                        .make_type(module, ty, data_store, link_context)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            e.insert(instantiation);
-        }
-        Ok(())
-    }
-
-    let mut type_refs = vec![];
-    let mut structs = vec![];
-    let mut struct_instantiations = vec![];
-    let mut enums = vec![];
-    let mut enum_instantiations = vec![];
-    let mut function_instantiations = vec![];
-    let mut field_handles = vec![];
-    let mut field_instantiations: Vec<FieldInstantiation> = vec![];
-
-    for datatype_handle in module.datatype_handles() {
-        let struct_name = module.identifier_at(datatype_handle.name);
-        let module_handle = module.module_handle_at(datatype_handle.module);
-        let runtime_id = module.module_id_for_handle(module_handle);
-        type_refs.push(
-            type_cache
+            context
+                .type_cache
                 .read()
-                .resolve_type_by_name(&(
-                    *runtime_id.address(),
-                    runtime_id.name().to_owned(),
-                    struct_name.to_owned(),
-                ))?
-                .0,
+                .make_type(context.module, ty, context.link_context)?,
         );
-    }
-
-    for struct_def in module.struct_defs() {
-        let idx = type_refs[struct_def.struct_handle.0 as usize];
-        let field_count = type_cache.read().cached_types.binaries[idx.0]
-            .get_struct()?
-            .fields
-            .len() as u16;
-        structs.push(StructDef { field_count, idx });
-    }
-
-    for struct_inst in module.struct_instantiations() {
-        let def = struct_inst.def.0 as usize;
-        let struct_def = &structs[def];
-        let field_count = struct_def.field_count;
-
-        let instantiation_idx = struct_inst.type_parameters;
-        cache_signatures(
-            type_cache,
-            data_store,
-            link_context,
-            &mut instantiation_signatures,
-            module,
-            instantiation_idx,
-        )?;
-        struct_instantiations.push(StructInstantiation {
-            field_count,
-            def: struct_def.idx,
-            instantiation_idx,
-        });
-    }
-
-    for enum_def in module.enum_defs() {
-        let idx = type_refs[enum_def.enum_handle.0 as usize];
-        let datatype = &type_cache.read().cached_types.binaries[idx.0];
-        let enum_type = datatype.get_enum()?;
-        let variant_count = enum_type.variants.len() as u16;
-        let variants = enum_type
-            .variants
-            .iter()
-            .enumerate()
-            .map(|(tag, variant_type)| VariantDef {
-                tag: tag as u16,
-                field_count: variant_type.fields.len() as u16,
-                field_types: variant_type.fields.clone(),
-            })
-            .collect();
-        enums.push(EnumDef {
-            variant_count,
-            variants,
-            idx,
-        });
-    }
-
-    for enum_inst in module.enum_instantiations() {
-        let def = enum_inst.def.0 as usize;
-        let enum_def = &enums[def];
-        let variant_count_map = enum_def.variants.iter().map(|v| v.field_count).collect();
-        let instantiation_idx = enum_inst.type_parameters;
-        cache_signatures(
-            type_cache,
-            data_store,
-            link_context,
-            &mut instantiation_signatures,
-            module,
-            instantiation_idx,
-        )?;
-
-        enum_instantiations.push(EnumInstantiation {
-            variant_count_map,
-            def: enum_def.idx,
-            instantiation_idx,
-        });
-    }
-
-    if DEBUG_FLAGS.function_list_sizes {
-        println!("pushing {} functions", module.function_defs().len());
-    }
-    let loaded_functions =
-        package_context
-            .package_arena
-            .alloc_slice(module.function_defs().iter().enumerate().map(|(ndx, fun)| {
-                let findex = FunctionDefinitionIndex(ndx as TableIndex);
-                alloc_function(natives, findex, fun, module)
-            }));
-
-    package_context.insert_and_make_module_vtable(
-        self_id.name().to_owned(),
-        arena::mut_to_ref_slice(loaded_functions)
-            .iter()
-            .map(|function| {
-                (
-                    function.name.clone(),
-                    ArenaPointer::new(function as *const Function),
-                )
-            }),
-    )?;
-
-    if DEBUG_FLAGS.function_list_sizes {
-        println!("handle size: {}", module.function_handles().len());
-    }
-
-    let single_signature_token_map = BTreeMap::new();
-    let mut context = ModuleContext {
-        link_context,
-        data_store,
-        cache: package_context,
-        module,
-        single_signature_token_map,
-        type_cache,
-    };
-
-    for (alloc, fun) in arena::to_mut_ref_slice(loaded_functions)
-        .iter_mut()
-        .zip(module.function_defs())
-    {
-        if let Some(code_unit) = &fun.code {
-            alloc.code = code(&mut context, &code_unit.code)?;
-        }
-    }
-
-    for func_inst in context.module.function_instantiations() {
-        let handle = call(&mut context, func_inst.handle)?;
-
-        let instantiation_idx = func_inst.type_parameters;
-        cache_signatures(
-            type_cache,
-            data_store,
-            link_context,
-            &mut instantiation_signatures,
-            module,
-            instantiation_idx,
-        )?;
-
-        function_instantiations.push(FunctionInstantiation {
-            handle,
-            instantiation_idx,
-        });
-    }
-
-    for f_handle in module.field_handles() {
-        let def_idx = f_handle.owner;
-        let owner = structs[def_idx.0 as usize].idx;
-        let offset = f_handle.field as usize;
-        field_handles.push(FieldHandle { offset, owner });
-    }
-
-    for f_inst in module.field_instantiations() {
-        let fh_idx = f_inst.handle;
-        let owner = field_handles[fh_idx.0 as usize].owner;
-        let offset = field_handles[fh_idx.0 as usize].offset;
-
-        field_instantiations.push(FieldInstantiation { offset, owner });
-    }
-
-    let ModuleContext {
-        link_context: _,
-        data_store: _,
-        cache: _,
-        module,
-        single_signature_token_map,
-        type_cache: _,
-    } = context;
-
-    Ok(Module {
-        id: self_id,
-        type_refs,
-        structs,
-        struct_instantiations,
-        enums,
-        enum_instantiations,
-        function_instantiations,
-        field_handles,
-        field_instantiations,
-        // TODO: Remove this field
-        function_map: HashMap::new(),
-        single_signature_token_map,
-        instantiation_signatures,
-        variant_handles: module.variant_handles().to_vec(),
-        variant_instantiation_handles: module.variant_instantiation_handles().to_vec(),
-    })
-}
-
-fn load_module_types(
-    type_cache: &RwLock<TypeCache>,
-    data_store: &impl DataStore,
-    link_context: &LinkageContext,
-    _package_id: PackageStorageId,
-    module: &CompiledModule,
-) -> PartialVMResult<()> {
-    let module_id = module.self_id();
-
-    let mut cached_types = vec![];
-
-    // Add new structs and collect their field signatures
-    let mut field_signatures = vec![];
-    for (idx, struct_def) in module.struct_defs().iter().enumerate() {
-        let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
-        let name = module.identifier_at(struct_handle.name);
-        let defining_id = link_context.defining_module(&module_id, name)?;
-        let struct_key = (
-            *defining_id.address(),
-            module_id.name().to_owned(),
-            name.to_owned(),
-        );
-
-        if type_cache.read().cached_types.contains(&struct_key) {
-            continue;
-        }
-
-        let field_names = match &struct_def.field_information {
-            StructFieldInformation::Native => vec![],
-            StructFieldInformation::Declared(field_info) => field_info
-                .iter()
-                .map(|f| module.identifier_at(f.name).to_owned())
-                .collect(),
-        };
-
-        type_cache.write().cache_datatype(
-            struct_key.clone(),
-            CachedDatatype {
-                abilities: struct_handle.abilities,
-                type_parameters: struct_handle.type_parameters.clone(),
-                name: name.to_owned(),
-                defining_id,
-                runtime_id: module_id.clone(),
-                depth: None,
-                datatype_info: Datatype::Struct(StructType {
-                    fields: vec![],
-                    field_names,
-                    struct_def: StructDefinitionIndex(idx as u16),
-                }),
-            },
-        )?;
-
-        cached_types.push(struct_key);
-
-        let StructFieldInformation::Declared(fields) = &struct_def.field_information else {
-            unreachable!("native structs have been removed");
-        };
-
-        let signatures: Vec<_> = fields.iter().map(|f| &f.signature.0).collect();
-        field_signatures.push(signatures)
-    }
-
-    let mut variant_defs = vec![];
-    for (idx, enum_def) in module.enum_defs().iter().enumerate() {
-        let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
-        let name = module.identifier_at(enum_handle.name);
-        let defining_id = link_context.defining_module(&module_id, name)?;
-        let enum_key = (
-            *defining_id.address(),
-            module_id.name().to_owned(),
-            name.to_owned(),
-        );
-
-        if type_cache.read().cached_types.contains(&enum_key) {
-            continue;
-        }
-
-        let variant_info: Vec<_> = enum_def
-            .variants
-            .iter()
-            .enumerate()
-            .map(|(variant_tag, variant_def)| {
-                (variant_tag, &variant_def.variant_name, &variant_def.fields)
-            })
-            .collect();
-
-        variant_defs.push((idx, variant_info));
-
-        type_cache.write().cache_datatype(
-            enum_key.clone(),
-            CachedDatatype {
-                abilities: enum_handle.abilities,
-                type_parameters: enum_handle.type_parameters.clone(),
-                name: name.to_owned(),
-                defining_id,
-                runtime_id: module_id.clone(),
-                depth: None,
-                datatype_info: Datatype::Enum(EnumType {
-                    variants: vec![],
-                    enum_def: EnumDefinitionIndex(idx as u16),
-                }),
-            },
-        )?;
-        cached_types.push(enum_key);
-    }
-
-    // Convert field signatures into types after adding all structs because field types might
-    // refer to other datatypes in the same module.
-    let mut field_types = vec![];
-    for signature in field_signatures {
-        let tys: Vec<_> = signature
-            .iter()
-            .map(|tok| {
-                type_cache
-                    .read()
-                    .make_type(&module, tok, data_store, link_context)
-            })
-            .collect::<PartialVMResult<_>>()?;
-        field_types.push(FieldTypeInfo::Struct(tys));
-    }
-
-    for (enum_def_idx, infos) in variant_defs.into_iter() {
-        let mut variant_fields = vec![];
-        for (tag, name_idx, field_defs) in infos.iter() {
-            let mut fields = vec![];
-            let mut field_names = vec![];
-            for field in field_defs.iter() {
-                fields.push(type_cache.read().make_type(
-                    &module,
-                    &field.signature.0,
-                    data_store,
-                    link_context,
-                )?);
-                field_names.push(module.identifier_at(field.name).to_owned());
-            }
-            variant_fields.push(VariantType {
-                fields,
-                field_names,
-                enum_def: EnumDefinitionIndex(enum_def_idx as u16),
-                variant_tag: *tag as u16,
-                variant_name: module.identifier_at(**name_idx).to_owned(),
-            })
-        }
-
-        field_types.push(FieldTypeInfo::Enum(variant_fields));
-    }
-
-    // Add the field types to the newly added structs and enums, processing them in reverse, to line them
-    // up with the structs and enums we added at the end of the global cache.
-    for (field_info, cached_type) in field_types
-        .into_iter()
-        .rev()
-        .zip(type_cache.write().cached_types.binaries.iter_mut().rev())
-    {
-        match Arc::get_mut(cached_type) {
-            Some(ref mut x) => match (&mut x.datatype_info, field_info) {
-                (Datatype::Enum(ref mut enum_type), FieldTypeInfo::Enum(field_info)) => {
-                    enum_type.variants = field_info;
-                }
-                (Datatype::Struct(ref mut struct_type), FieldTypeInfo::Struct(field_info)) => {
-                    struct_type.fields = field_info;
-                }
-                _ => {
-                    return Err(
-                            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                                .with_message(
-                                    "Type mismatch when loading type into module cache -- enum and structs out of synch".to_owned()
-                                ),
-                        );
-                }
-            },
-            None => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Unable to populate cached type in module cache".to_owned()),
-                );
-            }
-        }
-    }
-
-    let cached_types_len = cached_types.len();
-    let mut depth_cache = BTreeMap::new();
-    for datatype_key in cached_types.iter().rev() {
-        let cached_type = type_cache.read().resolve_type_by_name(datatype_key)?.1;
-        type_cache
-            .read()
-            .calculate_depth_of_datatype(&cached_type, &mut depth_cache)?;
-    }
-
-    debug_assert!(depth_cache.len() == cached_types_len);
-
-    for (cache_idx, depth) in depth_cache {
-        match Arc::get_mut(type_cache.write().mut_type_at(cache_idx)) {
-            Some(datatype) => datatype.depth = Some(depth),
-            None => {
-                // we have pending references to the `Arc` which is impossible,
-                // given the code that adds the `Arc` is above and no reference to
-                // it should exist.
-                // So in the spirit of not crashing we log the issue and move on leaving the
-                // datatypes depth as `None` -- if we try to access it later we will treat this
-                // as too deep.
-                error!("Arc<Datatype> cannot have any live reference while publishing");
-            }
-        }
     }
     Ok(())
-}
-
-impl<'a> PackageContext<'a> {
-    fn insert_and_make_module_vtable(
-        &mut self,
-        module_name: Identifier,
-        vtable: impl IntoIterator<Item = (Identifier, ArenaPointer<Function>)>,
-    ) -> PartialVMResult<()> {
-        for (name, func) in vtable {
-            self.vtable.insert((module_name.clone(), name), func)?;
-        }
-        Ok(())
-    }
-
-    fn try_resolve_function(&self, vtable_entry: &VTableKey) -> Option<ArenaPointer<Function>> {
-        self.vtable
-            .get(&(
-                vtable_entry.module_name.clone(),
-                vtable_entry.function_name.clone(),
-            ))
-            .map(|f| ArenaPointer::new(f.to_ref()))
-    }
-}
-
-pub fn package(
-    type_cache: &RwLock<TypeCache>,
-    natives: &NativeFunctions,
-    data_store: &impl DataStore,
-    link_context: &LinkageContext,
-    storage_id: PackageStorageId,
-    runtime_id: RuntimePackageId,
-    mut package_modules: Vec<CompiledModule>,
-) -> PartialVMResult<Package> {
-    let module_ids_in_pkg = package_modules
-        .iter()
-        .map(|m| m.self_id())
-        .collect::<BTreeSet<_>>();
-
-    let mut package_context = PackageContext {
-        storage_id,
-        runtime_id,
-        loaded_modules: BinaryCache::new(),
-        compiled_modules: BinaryCache::new(),
-        package_arena: Arena::new(),
-        vtable: PackageVTable::new(),
-        type_cache,
-    };
-
-    // Load modules in dependency order within the package. Needed for both static call
-    // resolution and type caching.
-    while let Some(module) = package_modules.pop() {
-        let mut immediate_dependencies = module
-            .immediate_dependencies()
-            .into_iter()
-            .filter(|dep| module_ids_in_pkg.contains(dep) && dep != &module.self_id());
-
-        // If we haven't processed the immediate dependencies yet, push the module back onto
-        // the front and process other modules first.
-        if !immediate_dependencies.all(|dep| {
-            package_context
-                .loaded_modules
-                .contains(&dep.name().to_owned())
-        }) {
-            package_modules.insert(0, module);
-            continue;
-        }
-
-        let loaded_module = self::module(
-            type_cache,
-            natives,
-            &mut package_context,
-            data_store,
-            link_context,
-            storage_id,
-            &module,
-        )?;
-
-        package_context
-            .loaded_modules
-            .insert(loaded_module.id.name().to_owned(), loaded_module)?;
-        package_context
-            .compiled_modules
-            .insert(module.self_id().name().to_owned(), module)?;
-    }
-
-    let PackageContext {
-        storage_id,
-        runtime_id,
-        loaded_modules,
-        compiled_modules,
-        package_arena,
-        vtable,
-        type_cache: _,
-    } = package_context;
-
-    Ok(Package {
-        storage_id,
-        runtime_id,
-        loaded_modules,
-        compiled_modules,
-        package_arena,
-        vtable,
-    })
 }

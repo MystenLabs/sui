@@ -87,7 +87,7 @@ pub(super) fn run(
 
     if DEBUG_STEP_PRINT {
         let mut buf = String::new();
-        let _ = state.debug_print_stack_trace(&mut buf, &run_context.type_cache);
+        let _ = state.debug_print_stack_trace(&mut buf, run_context.type_cache);
         println!("Call Frame:\n{:?}", state.current_frame);
         println!("{buf}");
     }
@@ -98,7 +98,7 @@ pub(super) fn run(
             let mut buf = String::new();
             println!("-------------------------------------");
             println!("Call Frame:\n{:?}", state.current_frame);
-            let _ = state.debug_print_stack_trace(&mut buf, &run_context.type_cache);
+            let _ = state.debug_print_stack_trace(&mut buf, run_context.type_cache);
             println!("{buf}");
         }
         continue;
@@ -467,7 +467,7 @@ fn op_step_impl(
         Bytecode::Pack(sd_idx) => {
             let field_count = state.current_frame.resolver.field_count(*sd_idx);
             let struct_type = state.current_frame.resolver.get_struct_type(*sd_idx);
-            check_depth_of_type(&run_context, &struct_type)?;
+            check_depth_of_type(run_context, &struct_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
             state.push_operand(Value::struct_(Struct::pack(args)))?;
@@ -481,7 +481,7 @@ fn op_step_impl(
                 .current_frame
                 .resolver
                 .instantiate_struct_type(*si_idx, state.current_frame.ty_args())?;
-            check_depth_of_type(&run_context, &ty)?;
+            check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
             state.push_operand(Value::struct_(Struct::pack(args)))?;
@@ -660,7 +660,7 @@ fn op_step_impl(
                 .current_frame
                 .resolver
                 .instantiate_single_type(*si, state.current_frame.ty_args())?;
-            check_depth_of_type(&run_context, &ty)?;
+            check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_vec_pack(make_ty!(&ty), state.last_n_operands(*num as usize)?)?;
             let elements = state.pop_n_operands(*num as u16)?;
             let value = Vector::pack(&ty, elements)?;
@@ -754,7 +754,7 @@ fn op_step_impl(
                 .resolver
                 .variant_field_count_and_tag(*vidx);
             let enum_type = state.current_frame.resolver.get_enum_type(*vidx);
-            check_depth_of_type(&run_context, &enum_type)?;
+            check_depth_of_type(run_context, &enum_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
             state.push_operand(Value::variant(Variant::pack(variant_tag, args)))?;
@@ -768,7 +768,7 @@ fn op_step_impl(
                 .current_frame
                 .resolver
                 .instantiate_enum_type(*vidx, state.current_frame.ty_args())?;
-            check_depth_of_type(&run_context, &ty)?;
+            check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
             state.push_operand(Value::variant(Variant::pack(variant_tag, args)))?;
@@ -838,7 +838,7 @@ fn call_type_to_function(
 ) -> PartialVMResult<ArenaPointer<Function>> {
     match call_type {
         CallType::Direct(ptr) => Ok(*ptr),
-        CallType::Virtual(vtable_key) => run_context.vtables.resolve_function(&vtable_key),
+        CallType::Virtual(vtable_key) => run_context.vtables.resolve_function(vtable_key),
     }
 }
 

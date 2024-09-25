@@ -20,6 +20,7 @@ use tracing::warn;
 
 use std::sync::Arc;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct VirtualMachine {
     /// The VM package cache for the VM, holding currently-loaded packages.

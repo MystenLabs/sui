@@ -16,10 +16,7 @@ use move_vm_runtime::{
     natives::functions::NativeFunctions,
     on_chain::ast::RuntimePackageId,
     on_chain::data_cache::TransactionDataCache,
-    test_utils::{
-        in_memory_test_adapter::InMemoryTestAdapter,
-        vm_test_adapter::VMTestAdapter,
-    },
+    test_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
 };
 
 use std::collections::{BTreeMap, HashMap};
@@ -67,8 +64,7 @@ fn compile_modules_in_file(filename: &str, dependencies: &[&str]) -> Vec<Compile
     .build_and_report()
     .expect("Failed module compilation");
 
-    expect_modules(units)
-        .collect::<Vec<_>>()
+    expect_modules(units).collect::<Vec<_>>()
 }
 
 fn compile_packages(
@@ -248,7 +244,17 @@ fn cache_package_external_package_type_references() {
     );
 
     assert!(result.is_ok());
-    assert_eq!(adapter.vm().cache().type_cache().read().cached_types.id_map.len(), 7);
+    assert_eq!(
+        adapter
+            .vm()
+            .cache()
+            .type_cache()
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        7
+    );
 }
 
 #[test]
@@ -346,7 +352,6 @@ fn cache_package_external_package_type_references_with_shared_dep() {
     adapter.insert_packages_into_storage(compile_modules_in_file("package5.move", &[]));
     let link_context = adapter.generate_default_linkage(package3_address).unwrap();
 
-    let cache = dummy_cache_for_testing();
     let result = adapter.vm().cache().load_link_context_dependencies(
         &TransactionDataCache::new(adapter.storage()),
         &link_context,
@@ -521,7 +526,10 @@ fn publish_missing_dependency() {
     let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
 
     let mut adapter = InMemoryTestAdapter::new();
-    let packages = compile_packages("rt_b_v0.move" /* 0x3::b */ , &["rt_c_v0.move" /* 0x2::c */ ]);
+    let packages = compile_packages(
+        "rt_b_v0.move", /* 0x3::b */
+        &["rt_c_v0.move" /* 0x2::c */],
+    );
 
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
@@ -543,14 +551,20 @@ fn publish_unpublished_dependency() {
     let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
 
     let mut adapter = InMemoryTestAdapter::new();
-    let packages = compile_packages("rt_b_v0.move" /* 0x3::b */ , &["rt_c_v0.move" /* 0x2::c */ ]);
+    let packages = compile_packages(
+        "rt_b_v0.move", /* 0x3::b */
+        &["rt_c_v0.move" /* 0x2::c */],
+    );
 
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter.insert_packages_into_storage(modules.clone());
 
     // Custom linkage including `0x2 => 0x2`, which will cause publication to fail `0x3::b`.
-    let linkage_table = HashMap::from([(runtime_package_id, runtime_package_id), (package2_address, package2_address)]);
+    let linkage_table = HashMap::from([
+        (runtime_package_id, runtime_package_id),
+        (package2_address, package2_address),
+    ]);
     let linkage_context = LinkageContext::new(package3_address, linkage_table);
 
     // Publication fails because `0x2` is not in the data cache.

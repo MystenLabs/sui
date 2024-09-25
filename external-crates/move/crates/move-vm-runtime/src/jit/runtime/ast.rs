@@ -925,6 +925,12 @@ impl Function {
     }
 }
 
+impl Default for DatatypeInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DatatypeInfo {
     pub fn new() -> Self {
         Self {

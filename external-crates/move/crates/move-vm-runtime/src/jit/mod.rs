@@ -11,14 +11,12 @@ use crate::{
 };
 
 use move_binary_format::errors::PartialVMResult;
-use move_vm_types::data_store::DataStore;
 
 use parking_lot::RwLock;
 
 pub fn translate_package(
     type_cache: &RwLock<TypeCache>,
     natives: &NativeFunctions,
-    data_store: &impl DataStore,
     link_context: &LinkageContext,
     package_key: PackageStorageId,
     loaded_package: DeserializedPackage,
@@ -28,7 +26,6 @@ pub fn translate_package(
     runtime::translate::package(
         type_cache,
         natives,
-        data_store,
         link_context,
         package_key,
         runtime_id,

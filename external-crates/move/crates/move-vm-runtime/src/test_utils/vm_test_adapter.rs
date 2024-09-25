@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::linkage_context::LinkageContext,
-    on_chain::ast::PackageStorageId,
-    vm::vm::VirtualMachine,
+    cache::linkage_context::LinkageContext, on_chain::ast::PackageStorageId, vm::vm::VirtualMachine,
 };
 
 use move_binary_format::errors::VMResult;

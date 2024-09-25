@@ -72,7 +72,7 @@ impl RuntimeVTables {
         package
             .compiled_modules
             .get(module_id)
-            .map(|value| value.clone())
+            .cloned()
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
                     .with_message(format!("Module {} not found", module_id))
@@ -88,7 +88,7 @@ impl RuntimeVTables {
         package
             .loaded_modules
             .get(module_id)
-            .map(|value| value.clone())
+            .cloned()
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
                     .with_message(format!("Module {} not found", module_id))
@@ -108,7 +108,7 @@ impl RuntimeVTables {
                     vtable_key.function_name.to_owned(),
                 ))
             })
-            .map(|f| f.as_ref().clone())
+            .map(|f| *f.as_ref())
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY).with_message(format!(
                     "Function {}::{} not found in package {}",

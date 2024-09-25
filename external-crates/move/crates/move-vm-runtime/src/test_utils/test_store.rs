@@ -1,10 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    cache::linkage_context::LinkageContext, on_chain::ast::PackageStorageId,
-    test_utils::storage::InMemoryStorage,
-};
+use crate::test_utils::storage::InMemoryStorage;
 
 use move_binary_format::{
     errors::{Location, PartialVMError, VMResult},
@@ -16,7 +13,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
     vm_status::StatusCode,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone)]
 pub struct TestStore {
@@ -69,17 +66,17 @@ impl TestStore {
                     .finish(Location::Undefined));
             };
             for module in &modules {
-                let module = CompiledModule::deserialize_with_defaults(&module).unwrap();
+                let module = CompiledModule::deserialize_with_defaults(module).unwrap();
                 let deps = module
                     .immediate_dependencies()
                     .into_iter()
-                    .map(|module| module.address().clone())
+                    .map(|module| *module.address())
                     .collect::<Vec<_>>();
                 for dep in &deps {
                     generate_dependencies(store, seen, dep)?;
                 }
             }
-            return Ok(());
+            Ok(())
         }
 
         let mut deps = BTreeSet::new();

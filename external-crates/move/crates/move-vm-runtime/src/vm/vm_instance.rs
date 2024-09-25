@@ -5,7 +5,7 @@ use crate::{
     cache::{arena::ArenaPointer, linkage_context::LinkageContext, vm_cache::VMCache},
     jit::runtime::ast::{Function, VTableKey},
     natives::extensions::NativeContextExtensions,
-    on_chain::{ast::PackageStorageId, data_cache::TransactionDataCache},
+    on_chain::data_cache::TransactionDataCache,
     shared::serialization::{SerializedReturnValues, *},
     vm::{interpreter, runtime_vtables::RuntimeVTables},
 };
@@ -16,8 +16,6 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::script_signature;
 use move_core_types::{
-    account_address::AccountAddress,
-    effects::ChangeSet,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
@@ -26,7 +24,6 @@ use move_core_types::{
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{gas::GasMeter, loaded_data::runtime_types::Type};
 use std::{borrow::Borrow, sync::Arc};
-use tracing::warn;
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -37,7 +34,8 @@ use tracing::warn;
 /// instance is the main "execution" context for a virtual machine, allowing calls to
 /// `execute_function` to run Move code located in the VM Cache.
 ///
-/// Note this is NOT for publication. See `vm.rs` for publication.
+/// Note this does NOT support publication. See `vm.rs` for publication.
+#[allow(dead_code)]
 pub struct VirtualMachineExecutionInstance<'extensions, S: MoveResolver> {
     /// The VM cache
     pub(crate) virtual_tables: RuntimeVTables,
@@ -147,7 +145,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
         self.vm_cache
             .type_cache
             .read()
-            .load_type(tag, &self.data_cache, &self.link_context)
+            .load_type(tag, &self.link_context)
     }
 
     // -------------------------------------------
@@ -250,12 +248,10 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
             .0
             .iter()
             .map(|tok| {
-                self.vm_cache.type_cache.read().make_type(
-                    &compiled_module,
-                    tok,
-                    &self.data_cache,
-                    &self.link_context,
-                )
+                self.vm_cache
+                    .type_cache
+                    .read()
+                    .make_type(&compiled_module, tok, &self.link_context)
             })
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
@@ -265,12 +261,10 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
             .0
             .iter()
             .map(|tok| {
-                self.vm_cache.type_cache.read().make_type(
-                    &compiled_module,
-                    tok,
-                    &self.data_cache,
-                    &self.link_context,
-                )
+                self.vm_cache
+                    .type_cache
+                    .read()
+                    .make_type(&compiled_module, tok, &self.link_context)
             })
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
