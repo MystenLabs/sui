@@ -64,6 +64,7 @@ pub async fn run_bridge_node(
         ))
         .unwrap();
     let traffic_controller = server_config.traffic_policy_config.map(|policy_config| {
+        tracing::error!("TESTING -- spawning traffic controller in bridge node");
         Arc::new(TrafficController::spawn(
             policy_config.clone(),
             tc_metrics,

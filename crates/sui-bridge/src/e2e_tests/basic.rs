@@ -21,6 +21,7 @@ use ethers::prelude::*;
 use ethers::types::Address as EthAddress;
 use move_core_types::ident_str;
 use std::collections::{HashMap, HashSet};
+use sui_types::traffic_control::{PolicyConfig, PolicyType, Weight};
 
 use std::path::Path;
 
@@ -52,6 +53,10 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         .with_num_validators(3)
         .build()
         .await;
+    tracing::error!(
+        "TESTING -- traffic policy config: {:?}",
+        bridge_test_cluster.policy_config()
+    );
     info!(
         "[Timer] Bridge test cluster started in {:?}",
         timer.elapsed()
@@ -325,6 +330,155 @@ async fn test_add_new_coins_on_sui_and_eth() {
     )
     .await
     .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn test_bridge_from_eth_to_sui_rate_limited() {
+    telemetry_subscribers::init_for_testing();
+
+    let eth_chain_id = BridgeChainId::EthCustom as u8;
+    let sui_chain_id = BridgeChainId::SuiCustom as u8;
+    let timer = std::time::Instant::now();
+    let txn_count = 5;
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 5,
+        spam_policy_type: PolicyType::TestNConnIP(txn_count - 1),
+        spam_sample_rate: Weight::one(),
+        // This should never be invoked when set as an error policy
+        // as we are not sending requests that error
+        error_policy_type: PolicyType::TestPanicOnInvocation,
+        dry_run: true,
+        ..Default::default()
+    };
+    let mut bridge_test_cluster = BridgeTestClusterBuilder::new()
+        .with_eth_env(true)
+        .with_bridge_cluster(true)
+        .with_num_validators(3)
+        .with_policy_config(policy_config)
+        .build()
+        .await;
+    info!(
+        "[Timer] Bridge test cluster started in {:?}",
+        timer.elapsed()
+    );
+    let timer = std::time::Instant::now();
+    let (eth_signer, _) = bridge_test_cluster
+        .get_eth_signer_and_address()
+        .await
+        .unwrap();
+
+    let sui_address = bridge_test_cluster.sui_user_address();
+    let amount = 42;
+    let sui_amount = amount * 100_000_000;
+
+    for _ in 0..txn_count {
+        initiate_bridge_eth_to_sui(&bridge_test_cluster, amount, 0)
+            .await
+            .unwrap();
+        let events = bridge_test_cluster
+            .new_bridge_events(
+                HashSet::from_iter([
+                    TokenTransferApproved.get().unwrap().clone(),
+                    TokenTransferClaimed.get().unwrap().clone(),
+                ]),
+                true,
+            )
+            .await;
+        // There are exactly 1 approved and 1 claimed event
+        assert_eq!(events.len(), 2);
+
+        let eth_coin = bridge_test_cluster
+            .sui_client()
+            .coin_read_api()
+            .get_all_coins(sui_address, None, None)
+            .await
+            .unwrap()
+            .data
+            .iter()
+            .find(|c| c.coin_type.contains("ETH"))
+            .expect("Recipient should have received ETH coin now")
+            .clone();
+        assert_eq!(eth_coin.balance, sui_amount);
+        info!(
+            "[Timer] Eth to Sui bridge transfer finished in {:?}",
+            timer.elapsed()
+        );
+        let timer = std::time::Instant::now();
+
+        // Now let the recipient send the coin back to ETH
+        let eth_address_1 = EthAddress::random();
+        let nonce = 0;
+
+        let sui_to_eth_bridge_action = initiate_bridge_sui_to_eth(
+            &bridge_test_cluster,
+            eth_address_1,
+            eth_coin.object_ref(),
+            nonce,
+            sui_amount,
+        )
+        .await
+        .unwrap();
+        let events = bridge_test_cluster
+            .new_bridge_events(
+                HashSet::from_iter([
+                    SuiToEthTokenBridgeV1.get().unwrap().clone(),
+                    TokenTransferApproved.get().unwrap().clone(),
+                    TokenTransferClaimed.get().unwrap().clone(),
+                ]),
+                true,
+            )
+            .await;
+        // There are exactly 1 deposit and 1 approved event
+        assert_eq!(events.len(), 2);
+        info!(
+            "[Timer] Sui to Eth bridge transfer approved in {:?}",
+            timer.elapsed()
+        );
+        let timer = std::time::Instant::now();
+
+        // Test `get_parsed_token_transfer_message`
+        let parsed_msg = bridge_test_cluster
+            .bridge_client()
+            .get_parsed_token_transfer_message(sui_chain_id, nonce)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(parsed_msg.source_chain as u8, sui_chain_id);
+        assert_eq!(parsed_msg.seq_num, nonce);
+        assert_eq!(
+            parsed_msg.parsed_payload.sender_address,
+            sui_address.to_vec()
+        );
+        assert_eq!(
+            &parsed_msg.parsed_payload.target_address,
+            eth_address_1.as_bytes()
+        );
+        assert_eq!(parsed_msg.parsed_payload.target_chain, eth_chain_id);
+        assert_eq!(parsed_msg.parsed_payload.token_type, TOKEN_ID_ETH);
+        assert_eq!(parsed_msg.parsed_payload.amount, sui_amount);
+
+        let message = eth_sui_bridge::Message::from(sui_to_eth_bridge_action);
+        let signatures =
+            get_signatures(bridge_test_cluster.bridge_client(), nonce, sui_chain_id).await;
+
+        let eth_sui_bridge = EthSuiBridge::new(
+            bridge_test_cluster.contracts().sui_bridge,
+            eth_signer.clone().into(),
+        );
+        let call = eth_sui_bridge.transfer_bridged_tokens_with_signatures(signatures, message);
+        let eth_claim_tx_receipt = send_eth_tx_and_get_tx_receipt(call).await;
+        assert_eq!(eth_claim_tx_receipt.status.unwrap().as_u64(), 1);
+        info!(
+            "[Timer] Sui to Eth bridge transfer claimed in {:?}",
+            timer.elapsed()
+        );
+        // Assert eth_address_1 has received ETH
+        assert_eq!(
+            eth_signer.get_balance(eth_address_1, None).await.unwrap(),
+            U256::from(amount) * U256::exp10(18)
+        );
+    }
 }
 
 pub(crate) async fn deposit_native_eth_to_sol_contract(

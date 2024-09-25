@@ -19,6 +19,7 @@ use crate::types::SignedBridgeAction;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use axum::Json;
+use sui_core::traffic_controller::TrafficController;
 use sui_types::digests::TransactionDigest;
 
 use super::handler::BridgeRequestHandlerTrait;
@@ -125,6 +126,10 @@ impl BridgeRequestHandlerTrait for BridgeRequestMockHandler {
             BridgeAuthoritySignInfo::new(&action, self.signer.load().as_ref().as_ref().unwrap());
         let signed_action = SignedBridgeAction::new_from_data_and_sig(action, sig);
         Ok(Json(signed_action))
+    }
+
+    fn traffic_controller(&self) -> Option<Arc<TrafficController>> {
+        None
     }
 }
 

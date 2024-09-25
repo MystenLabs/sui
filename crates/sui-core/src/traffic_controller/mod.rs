@@ -124,6 +124,7 @@ impl TrafficController {
     }
 
     pub fn tally(&self, tally: TrafficTally) {
+        tracing::error!("TESTING -- running tally");
         // Use try_send rather than send mainly to avoid creating backpressure
         // on the caller if the channel is full, which may slow down the critical
         // path. Dropping the tally on the floor should be ok, as in this case
@@ -146,6 +147,7 @@ impl TrafficController {
 
     /// Handle check with dry-run mode considered
     pub async fn check(&self, client: &Option<IpAddr>, proxied_client: &Option<IpAddr>) -> bool {
+        tracing::error!("TESTING -- Running check");
         match (
             self.check_impl(client, proxied_client).await,
             self.dry_run_mode(),

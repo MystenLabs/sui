@@ -39,6 +39,7 @@ use sui_types::bridge::BridgeChainId;
 use sui_types::committee::TOTAL_VOTING_POWER;
 use sui_types::crypto::get_key_pair;
 use sui_types::digests::TransactionDigest;
+use sui_types::traffic_control::PolicyConfig;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::SUI_BRIDGE_OBJECT_ID;
 use tokio::join;
@@ -87,6 +88,7 @@ pub struct BridgeTestCluster {
     bridge_tx_cursor: Option<TransactionDigest>,
     eth_chain_id: BridgeChainId,
     sui_chain_id: BridgeChainId,
+    traffic_policy_config: Option<PolicyConfig>,
 }
 
 pub struct BridgeTestClusterBuilder {
@@ -96,6 +98,7 @@ pub struct BridgeTestClusterBuilder {
     approved_governance_actions: Option<Vec<Vec<BridgeAction>>>,
     eth_chain_id: BridgeChainId,
     sui_chain_id: BridgeChainId,
+    traffic_policy_config: Option<PolicyConfig>,
 }
 
 impl Default for BridgeTestClusterBuilder {
@@ -113,6 +116,7 @@ impl BridgeTestClusterBuilder {
             approved_governance_actions: None,
             eth_chain_id: BridgeChainId::EthCustom,
             sui_chain_id: BridgeChainId::SuiCustom,
+            traffic_policy_config: None,
         }
     }
 
@@ -150,6 +154,11 @@ impl BridgeTestClusterBuilder {
         self
     }
 
+    pub fn with_policy_config(mut self, policy_config: PolicyConfig) -> Self {
+        self.traffic_policy_config = Some(policy_config);
+        self
+    }
+
     pub async fn build(self) -> BridgeTestCluster {
         init_all_struct_tags();
         std::env::set_var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY", "1");
@@ -175,8 +184,18 @@ impl BridgeTestClusterBuilder {
                 .clone()
                 .unwrap_or(vec![vec![]; self.num_validators]);
             bridge_node_handles = Some(
-                start_bridge_cluster(&test_cluster, &eth_environment, approved_governace_actions)
-                    .await,
+                start_bridge_cluster(
+                    &test_cluster,
+                    &eth_environment,
+                    approved_governace_actions,
+                    self.traffic_policy_config.clone(),
+                )
+                .await,
+            );
+        } else {
+            assert_eq!(
+                self.traffic_policy_config, None,
+                "Traffic Controller policy config is only used with bridge cluster (with_bridge_cluster=true)"
             );
         }
         let bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url, metrics)
@@ -200,6 +219,7 @@ impl BridgeTestClusterBuilder {
             bridge_tx_cursor: None,
             sui_chain_id: self.sui_chain_id,
             eth_chain_id: self.eth_chain_id,
+            traffic_policy_config: self.traffic_policy_config.clone(),
         }
     }
 
@@ -254,6 +274,10 @@ impl BridgeTestCluster {
     pub async fn get_eth_signer(&self) -> EthSigner {
         let (eth_signer, _) = self.get_eth_signer_and_private_key().await.unwrap();
         eth_signer
+    }
+
+    pub fn policy_config(&self) -> Option<PolicyConfig> {
+        self.traffic_policy_config.clone()
     }
 
     pub fn bridge_client(&self) -> &SuiBridgeClient {
@@ -355,12 +379,13 @@ impl BridgeTestCluster {
                 &self.test_cluster,
                 &self.eth_environment,
                 approved_governace_actions,
+                self.traffic_policy_config.clone(),
             )
             .await,
         );
     }
 
-    /// Returns new bridge transaction. It advanaces the stored tx digest cursor.
+    /// Returns new bridge transaction. It advances the stored tx digest cursor.
     /// When `assert_success` is true, it asserts all transactions are successful.
     pub async fn new_bridge_transactions(
         &mut self,
@@ -720,6 +745,7 @@ pub(crate) async fn start_bridge_cluster(
     test_cluster: &TestCluster,
     eth_environment: &EthBridgeEnvironment,
     approved_governance_actions: Vec<Vec<BridgeAction>>,
+    traffic_policy_config: Option<PolicyConfig>,
 ) -> Vec<JoinHandle<()>> {
     let bridge_authority_keys = test_cluster
         .bridge_authority_keys
@@ -780,7 +806,7 @@ pub(crate) async fn start_bridge_cluster(
             },
             metrics_key_pair: default_ed25519_key_pair(),
             metrics: None,
-            traffic_policy_config: None,
+            traffic_policy_config: traffic_policy_config.clone(),
         };
         // Spawn bridge node in memory
         handles.push(

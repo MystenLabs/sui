@@ -684,13 +684,11 @@ fn handle_traffic_resp(
     });
 }
 
-fn normalize(error_code: BridgeError) -> Weight {
-    match error_code {
-        // TODO: for now, we weight all error types equally.
-        // Later we may want to provide a weight distribution
-        // based on the error type.
-        _ => Weight::one(),
-    }
+fn normalize(_error_code: BridgeError) -> Weight {
+    // TODO: for now, we weight all error types equally.
+    // Later we may want to provide a weight distribution
+    // based on the error type.
+    Weight::one()
 }
 
 async fn handle_with_decoration<F, Fut>(
@@ -703,12 +701,8 @@ where
     Fut: std::future::Future<Output = Result<Json<SignedBridgeAction>, BridgeError>>,
 {
     if let Some(traffic_controller) = bridge_req_handler.traffic_controller() {
-        if let Err(blocked_response) = handle_traffic_req(traffic_controller.clone(), &client).await
-        {
-            return Err(blocked_response);
-        }
+        handle_traffic_req(traffic_controller.clone(), &client).await?
     }
-
     let response = fn_handler().await;
     if let Some(traffic_controller) = bridge_req_handler.traffic_controller() {
         handle_traffic_resp(traffic_controller.clone(), client, response.clone());

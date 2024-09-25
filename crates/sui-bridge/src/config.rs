@@ -197,6 +197,10 @@ impl BridgeNodeConfig {
             }
         }
         let approved_governance_actions = self.approved_governance_actions.clone();
+        tracing::error!(
+            "TESTING -- traffic_policy_config before creating bridge server config: {:?}",
+            self.traffic_policy_config
+        );
 
         let bridge_server_config = BridgeServerConfig {
             key: bridge_authority_key,

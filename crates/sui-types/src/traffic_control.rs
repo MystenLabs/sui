@@ -63,7 +63,7 @@ const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 ///     [<known client IP>] <--- number of hops is 1
 ///     ["1.2.3.4", <known client IP>, "5.6.7.8", "9.10.11.12"] <--- number of hops is 3
 /// ```
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ClientIdSource {
     #[default]
@@ -135,7 +135,7 @@ fn default_drain_timeout() -> u64 {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct FreqThresholdConfig {
     #[serde(default = "default_client_threshold")]
@@ -204,7 +204,7 @@ fn default_sketch_tolerance() -> f64 {
 
 // Serializable representation of policy types, used in config
 // in order to easily change in tests or to killswitch
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq)]
 pub enum PolicyType {
     /// Does nothing
     #[default]
@@ -227,7 +227,7 @@ pub enum PolicyType {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct PolicyConfig {
     #[serde(default = "default_client_id_source")]
