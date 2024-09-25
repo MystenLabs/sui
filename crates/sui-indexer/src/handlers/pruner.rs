@@ -58,14 +58,16 @@ impl Pruner {
                 })
                 .collect();
 
+            let prune_to_epoch = last_seen_max_epoch.saturating_sub(self.epochs_to_keep - 1);
+
             for (table_name, (min_partition, max_partition)) in &table_partitions {
-                if max_epoch != *max_partition {
+                if last_seen_max_epoch != *max_partition {
                     error!(
                         "Epochs are out of sync for table {}: max_epoch={}, max_partition={}",
-                        table_name, max_epoch, max_partition
+                        table_name, last_seen_max_epoch, max_partition
                     );
                 }
-                for epoch in *min_partition..max_epoch.saturating_sub(self.epochs_to_keep - 1) {
+                for epoch in *min_partition..prune_to_epoch {
                     if cancel.is_cancelled() {
                         info!("Pruner task cancelled.");
                         return Ok(());
@@ -81,7 +83,7 @@ impl Pruner {
             }
 
             let prune_start_epoch = next_prune_epoch.unwrap_or(min_epoch);
-            for epoch in prune_start_epoch..max_epoch.saturating_sub(self.epochs_to_keep - 1) {
+            for epoch in prune_start_epoch..prune_to_epoch {
                 if cancel.is_cancelled() {
                     info!("Pruner task cancelled.");
                     return Ok(());
