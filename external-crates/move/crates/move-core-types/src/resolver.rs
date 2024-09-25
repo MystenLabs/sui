@@ -48,18 +48,13 @@ pub trait ResourceResolver {
 
 /// A persistent storage implementation that can resolve both resources and modules
 pub trait MoveResolver:
-    ModuleResolver<Error = Self::Err>
-    + ResourceResolver<Error = Self::Err>
+    ModuleResolver<Error = Self::Err> + ResourceResolver<Error = Self::Err>
 {
     type Err: Debug;
 }
 
-impl<
-        E: Debug,
-        T: ModuleResolver<Error = E>
-            + ResourceResolver<Error = E>
-            + ?Sized,
-    > MoveResolver for T
+impl<E: Debug, T: ModuleResolver<Error = E> + ResourceResolver<Error = E> + ?Sized> MoveResolver
+    for T
 {
     type Err = E;
 }

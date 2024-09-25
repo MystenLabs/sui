@@ -5,7 +5,8 @@
 use crate::{
     cache::{
         arena::{self, Arena, ArenaPointer},
-        type_cache::TypeCache, linkage_context::LinkageContext,
+        linkage_context::LinkageContext,
+        type_cache::TypeCache,
     },
     jit::runtime::ast::*,
     natives::functions::NativeFunctions,
@@ -130,10 +131,7 @@ fn alloc_function(
     }
 }
 
-fn code(
-    context: &mut ModuleContext,
-    code: &[FF::Bytecode],
-) -> PartialVMResult<*const [Bytecode]> {
+fn code(context: &mut ModuleContext, code: &[FF::Bytecode]) -> PartialVMResult<*const [Bytecode]> {
     let result: *mut [Bytecode] = context.cache.package_arena.alloc_slice(
         code.iter()
             .map(|bc| bytecode(context, bc))
@@ -143,10 +141,7 @@ fn code(
     Ok(result as *const [Bytecode])
 }
 
-fn bytecode(
-    context: &mut ModuleContext,
-    bytecode: &FF::Bytecode,
-) -> PartialVMResult<Bytecode> {
+fn bytecode(context: &mut ModuleContext, bytecode: &FF::Bytecode) -> PartialVMResult<Bytecode> {
     let bytecode = match bytecode {
         // Calls -- these get compiled to something more-direct here
         FF::Bytecode::Call(ndx) => {
@@ -331,10 +326,12 @@ fn check_vector_type(
         };
         context.single_signature_token_map.insert(
             *signature_index,
-            context
-                .type_cache
-                .read()
-                .make_type(context.module, ty, context.data_store, context.link_context)?,
+            context.type_cache.read().make_type(
+                context.module,
+                ty,
+                context.data_store,
+                context.link_context,
+            )?,
         );
     }
     Ok(())
@@ -369,7 +366,11 @@ fn module(
                 .signature_at(instantiation_idx)
                 .0
                 .iter()
-                .map(|ty| type_cache.read().make_type(module, ty, data_store, link_context))
+                .map(|ty| {
+                    type_cache
+                        .read()
+                        .make_type(module, ty, data_store, link_context)
+                })
                 .collect::<Result<Vec<_>, _>>()?;
             e.insert(instantiation);
         }
@@ -694,7 +695,11 @@ fn load_module_types(
     for signature in field_signatures {
         let tys: Vec<_> = signature
             .iter()
-            .map(|tok| type_cache.read().make_type(&module, tok, data_store, link_context))
+            .map(|tok| {
+                type_cache
+                    .read()
+                    .make_type(&module, tok, data_store, link_context)
+            })
             .collect::<PartialVMResult<_>>()?;
         field_types.push(FieldTypeInfo::Struct(tys));
     }
@@ -709,7 +714,7 @@ fn load_module_types(
                     &module,
                     &field.signature.0,
                     data_store,
-                    link_context
+                    link_context,
                 )?);
                 field_names.push(module.identifier_at(field.name).to_owned());
             }

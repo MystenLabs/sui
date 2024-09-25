@@ -134,7 +134,10 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
         match self.remote.get_package(package_id) {
             Ok(Some(bytes)) => Ok(bytes),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Cannot find package {:?} in data cache", package_id))
+                .with_message(format!(
+                    "Cannot find package {:?} in data cache",
+                    package_id
+                ))
                 .finish(Location::Undefined)),
             Err(err) => {
                 let msg = format!("Unexpected storage error: {:?}", err);

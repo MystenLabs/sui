@@ -4,7 +4,7 @@
 pub mod runtime;
 
 use crate::{
-    cache::{type_cache::TypeCache, linkage_context::LinkageContext},
+    cache::{linkage_context::LinkageContext, type_cache::TypeCache},
     jit::runtime::ast::Package,
     natives::functions::NativeFunctions,
     on_chain::ast::{DeserializedPackage, PackageStorageId},

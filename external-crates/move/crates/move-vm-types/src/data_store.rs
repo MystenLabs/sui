@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::VMResult;
-use move_core_types::{
-    account_address::AccountAddress, language_storage::ModuleId,
-};
+use move_core_types::{account_address::AccountAddress, language_storage::ModuleId};
 
 /// Provide an implementation for bytecodes related to data with a given data store.
 ///

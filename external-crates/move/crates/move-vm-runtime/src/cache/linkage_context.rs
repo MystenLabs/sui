@@ -23,8 +23,6 @@ pub struct LinkageContext {
     // and JIT compilation we need to rewrite these. The linkage table here will redirect 0xCAFE to
     // 0xDEAD for this purpose.
     pub linkage_table: HashMap<AccountAddress, AccountAddress>,
-    // Types
-    // TODO: Cry about these
 }
 
 impl LinkageContext {

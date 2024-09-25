@@ -30,11 +30,14 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
-use move_vm_runtime::{natives::functions::NativeFunctionTable, vm::vm::VirtualMachine,
-            test_utils::{
-    gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
-    InMemoryStorage,
-}};
+use move_vm_runtime::{
+    natives::functions::NativeFunctionTable,
+    test_utils::{
+        gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
+        InMemoryStorage,
+    },
+    vm::vm::VirtualMachine,
+};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{vm_cache::VMCache, linkage_context::LinkageContext},
+    cache::{linkage_context::LinkageContext, vm_cache::VMCache},
     natives::extensions::NativeContextExtensions,
     natives::functions::NativeFunctions,
     on_chain::{ast::PackageStorageId, data_cache::TransactionDataCache},
@@ -53,6 +53,10 @@ impl VirtualMachine {
         }
     }
 
+    pub fn cache(&self) -> Arc<VMCache> {
+        self.cache.clone()
+    }
+
     /// Makes an Execution Instance for running a Move function invocation.
     /// Note this will hit the VM Cache to construct VTables for that execution, which may block on
     /// cache loading efforts.
@@ -63,7 +67,9 @@ impl VirtualMachine {
         link_context: LinkageContext,
     ) -> VMResult<VirtualMachineExecutionInstance<'extensions, DataCache>> {
         let data_cache = TransactionDataCache::new(remote);
-        let virtual_tables = self.cache.generate_runtime_vtables(&data_cache, &link_context)?;
+        let virtual_tables = self
+            .cache
+            .generate_runtime_vtables(&data_cache, &link_context)?;
         // Called and checked linkage, etc.
         let instance = VirtualMachineExecutionInstance {
             virtual_tables,
@@ -117,17 +123,18 @@ impl VirtualMachine {
         println!("\n\nGrabbed modules\n\n");
 
         let mut data_cache = TransactionDataCache::new(data_cache);
-        let _package =
-            match self
-                .cache
-                .verify_package_for_publication(&data_cache, link_context, package_id, package)
-            {
-                Ok(package) => package,
-                Err(err) => {
-                    let data_cache = data_cache.into_remote();
-                    return (Err(err), data_cache);
-                }
-            };
+        let _package = match self.cache.verify_package_for_publication(
+            &data_cache,
+            link_context,
+            package_id,
+            package,
+        ) {
+            Ok(package) => package,
+            Err(err) => {
+                let data_cache = data_cache.into_remote();
+                return (Err(err), data_cache);
+            }
+        };
         println!("\n\nVerified package\n\n");
 
         data_cache.publish_package(package_id, compiled_modules);

@@ -133,15 +133,21 @@ impl TypeCache {
             SignatureToken::Address => Type::Address,
             SignatureToken::Signer => Type::Signer,
             SignatureToken::TypeParameter(idx) => Type::TyParam(*idx),
-            SignatureToken::Vector(inner_tok) => {
-                Type::Vector(Box::new(self.make_type(module, inner_tok, data_store, link_context)?))
-            }
-            SignatureToken::Reference(inner_tok) => {
-                Type::Reference(Box::new(self.make_type(module, inner_tok, data_store, link_context)?))
-            }
-            SignatureToken::MutableReference(inner_tok) => {
-                Type::MutableReference(Box::new(self.make_type(module, inner_tok, data_store, link_context)?))
-            }
+            SignatureToken::Vector(inner_tok) => Type::Vector(Box::new(self.make_type(
+                module,
+                inner_tok,
+                data_store,
+                link_context,
+            )?)),
+            SignatureToken::Reference(inner_tok) => Type::Reference(Box::new(self.make_type(
+                module,
+                inner_tok,
+                data_store,
+                link_context,
+            )?)),
+            SignatureToken::MutableReference(inner_tok) => Type::MutableReference(Box::new(
+                self.make_type(module, inner_tok, data_store, link_context)?,
+            )),
             SignatureToken::Datatype(sh_idx) => {
                 let datatype_handle = module.datatype_handle_at(*sh_idx);
                 let datatype_name = module.identifier_at(datatype_handle.name);
@@ -219,7 +225,9 @@ impl TypeCache {
             TypeTag::U256 => Type::U256,
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
-            TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt, data_store, link_context)?)),
+            TypeTag::Vector(tt) => {
+                Type::Vector(Box::new(self.load_type(tt, data_store, link_context)?))
+            }
             TypeTag::Struct(struct_tag) => {
                 let runtime_id = ModuleId::new(struct_tag.address, struct_tag.module.clone());
                 let (idx, struct_type) = self

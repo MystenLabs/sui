@@ -6,7 +6,10 @@
 // and publishing packages to the VM.
 
 use crate::{
-    cache::{linkage_context::LinkageContext, arena::ArenaPointer, linkage_checker, type_cache::TypeCache},
+    cache::{
+        arena::ArenaPointer, linkage_checker, linkage_context::LinkageContext,
+        type_cache::TypeCache,
+    },
     jit::{
         self,
         runtime::ast::{Function, Module, Package},
@@ -21,11 +24,7 @@ use move_binary_format::{
     file_format::{StructFieldInformation, TableIndex},
     CompiledModule, IndexKind,
 };
-use move_core_types::{
-    identifier::IdentStr,
-    language_storage::ModuleId,
-    vm_status::StatusCode,
-};
+use move_core_types::{identifier::IdentStr, language_storage::ModuleId, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{data_store::DataStore, loaded_data::runtime_types::Type};
 use parking_lot::RwLock;
@@ -155,8 +154,11 @@ impl VMCache {
         };
 
         // Cache the package's dependencies without the package.
-        let cached_packages =
-            self.load_and_cache_packages(data_store, link_context, link_context.all_package_dependencies()?)?;
+        let cached_packages = self.load_and_cache_packages(
+            data_store,
+            link_context,
+            link_context.all_package_dependencies()?,
+        )?;
 
         // Now verify linking on-the-spot to make sure that the current package links correctly in
         // the supplied linking context.
@@ -189,8 +191,11 @@ impl VMCache {
                 .finish(Location::Undefined)
         })?;
         let (package, ident) = module_id.into();
-        let packages =
-            self.load_and_cache_packages(data_store, link_context, BTreeSet::from([package.clone()]))?;
+        let packages = self.load_and_cache_packages(
+            data_store,
+            link_context,
+            BTreeSet::from([package.clone()]),
+        )?;
         let Some(package) = packages.get(&package) else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -228,7 +233,8 @@ impl VMCache {
         function_name: &IdentStr,
         ty_args: &[Type],
     ) -> VMResult<LoadedFunction> {
-        let (compiled_module, loaded_module) = self.get_module(data_store, link_context, module_id)?;
+        let (compiled_module, loaded_module) =
+            self.get_module(data_store, link_context, module_id)?;
         let module_id = link_context.relocate(module_id).map_err(|err| {
             err.with_message("Could not relocate module in data store".to_string())
                 .finish(Location::Undefined)
@@ -354,7 +360,12 @@ impl VMCache {
         // NB: the packages must be cached in reverse dependency order otherwise types may not be cached
         // correctly.
         for (package_id, deserialized_package) in pkgs_in_dependency_order.into_iter().rev() {
-            let pkg = self.fetch_or_jit_package(data_store, link_context, package_id, deserialized_package)?;
+            let pkg = self.fetch_or_jit_package(
+                data_store,
+                link_context,
+                package_id,
+                deserialized_package,
+            )?;
             cached_packages.insert(package_id, pkg);
         }
 
@@ -448,7 +459,8 @@ impl VMCache {
             return Ok(loaded_package);
         }
 
-        let loaded_package = self.jit_package(data_store, link_context, package_key, loading_package)?;
+        let loaded_package =
+            self.jit_package(data_store, link_context, package_key, loading_package)?;
 
         self.package_cache
             .write()

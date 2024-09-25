@@ -33,8 +33,8 @@ use move_vm_runtime::{
 };
 use move_vm_runtime::{
     natives::move_stdlib::{stdlib_native_functions, GasParameters},
-    vm::vm::VirtualMachine,
     test_utils::{gas_schedule::GasStatus, InMemoryStorage},
+    vm::vm::VirtualMachine,
 };
 use once_cell::sync::Lazy;
 use std::sync::Arc;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, vm_cache::VMCache, linkage_context::LinkageContext},
+    cache::{arena::ArenaPointer, linkage_context::LinkageContext, vm_cache::VMCache},
     jit::runtime::ast::{Function, VTableKey},
     natives::extensions::NativeContextExtensions,
     on_chain::{ast::PackageStorageId, data_cache::TransactionDataCache},
@@ -250,10 +250,12 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
             .0
             .iter()
             .map(|tok| {
-                self.vm_cache
-                    .type_cache
-                    .read()
-                    .make_type(&compiled_module, tok, &self.data_cache, &self.link_context)
+                self.vm_cache.type_cache.read().make_type(
+                    &compiled_module,
+                    tok,
+                    &self.data_cache,
+                    &self.link_context,
+                )
             })
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
@@ -263,10 +265,12 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
             .0
             .iter()
             .map(|tok| {
-                self.vm_cache
-                    .type_cache
-                    .read()
-                    .make_type(&compiled_module, tok, &self.data_cache, &self.link_context)
+                self.vm_cache.type_cache.read().make_type(
+                    &compiled_module,
+                    tok,
+                    &self.data_cache,
+                    &self.link_context,
+                )
             })
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;

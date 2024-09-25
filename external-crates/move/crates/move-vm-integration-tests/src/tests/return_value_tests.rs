@@ -10,7 +10,9 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     runtime_value::{MoveTypeLayout, MoveValue},
 };
-use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues, test_utils::InMemoryStorage};
+use move_vm_runtime::{
+    move_vm::MoveVM, session::SerializedReturnValues, test_utils::InMemoryStorage,
+};
 use move_vm_types::gas::UnmeteredGasMeter;
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
