@@ -6,8 +6,9 @@ use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::ModuleId;
 use std::collections::BTreeSet;
 
-/// A trait which will allow the both execution and sui client upgrade CLI to gather the necessary information for checking upgrade compatibility.
-/// Gathers the errors that occur during the compatibility check and accumulates them into a single error.
+/// A trait which will allow accumulating the information necessary for checking upgrade compatibility between two modules,
+/// while allowing flexibility in the error type that is returned.
+/// Gathers the errors and accumulates them into a single error.
 /// The [`Compatibility`] struct's flags are used to determine the compatibility checks that are needed.
 pub trait CompatibilityMode: Default {
     /// The error type that will be returned when [`CompatibilityMode::finish`] is called, returning the accumulated result.
