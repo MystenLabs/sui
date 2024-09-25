@@ -10,22 +10,20 @@ use move_compiler::{
     Compiler as MoveCompiler,
 };
 use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::ModuleId;
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::{
     cache::{linkage_context::LinkageContext, vm_cache::VMCache},
     natives::functions::NativeFunctions,
-    on_chain::ast::{PackageStorageId, RuntimePackageId},
+    on_chain::ast::RuntimePackageId,
     on_chain::data_cache::TransactionDataCache,
     test_utils::{
-        in_memory_test_adapter::InMemoryTestAdapter, storage::InMemoryStorage,
+        in_memory_test_adapter::InMemoryTestAdapter,
         vm_test_adapter::VMTestAdapter,
     },
 };
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 fn make_base_path() -> PathBuf {
@@ -62,7 +60,7 @@ fn compile_modules_in_file(filename: &str, dependencies: &[&str]) -> Vec<Compile
     )
     .set_default_config(PackageConfig {
         is_dependency: false,
-        warning_filter: WarningFilters::new_for_source(),
+        warning_filter: WarningFilters::unused_warnings_filter_for_test(),
         flavor: Flavor::Sui,
         edition: Edition::E2024_ALPHA,
     })
@@ -175,7 +173,6 @@ fn load_package_internal_package_calls_only_no_types() {
     adapter.insert_packages_into_storage(compile_modules_in_file("package1.move", &[]));
     let link_context = adapter.generate_default_linkage(package_address).unwrap();
 
-    let cache = dummy_cache_for_testing();
     let result = adapter.vm().cache().load_link_context_dependencies(
         &TransactionDataCache::new(adapter.storage()),
         &link_context,
@@ -219,8 +216,6 @@ fn load_package_external_package_calls_no_types() {
     let mut adapter = InMemoryTestAdapter::new();
     adapter.insert_packages_into_storage(compile_modules_in_file("package3.move", &[]));
     let link_context = adapter.generate_default_linkage(package2_address).unwrap();
-
-    let cache = dummy_cache_for_testing();
 
     let result = adapter.vm().cache().load_link_context_dependencies(
         &TransactionDataCache::new(adapter.storage()),
@@ -496,37 +491,72 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
 }
 
 #[test]
-fn publish_missing_dependency() {
+fn linkage_missing_dependency() {
     let mut adapter = InMemoryTestAdapter::new();
     let packages = compile_packages("rt_b_v0.move", &["rt_c_v0.move"]);
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter.insert_packages_into_storage(modules.clone());
-    let linkage_context = adapter
+    // Linkage generation fails because we can't find the dependency.
+    adapter
         .generate_linkage_context(runtime_package_id, runtime_package_id, &modules)
         .unwrap_err();
-    // TODO: Make linage work and write a test to fail publish.
-    // adapter
-    //     .publish_package(linkage_context, runtime_package_id, modules)
-    //     .unwrap_err();
+}
+
+#[test]
+fn linkage_unpublished_dependency() {
+    let mut adapter = InMemoryTestAdapter::new();
+    let packages = compile_packages("rt_b_v0.move", &["rt_c_v0.move"]);
+    assert!(packages.len() == 1);
+    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
+    adapter.insert_packages_into_storage(modules.clone());
+    // Linkage generation fails because we can't find the dependency.
+    adapter
+        .generate_linkage_context(runtime_package_id, runtime_package_id, &modules)
+        .unwrap_err();
+}
+
+#[test]
+fn publish_missing_dependency() {
+    let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
+
+    let mut adapter = InMemoryTestAdapter::new();
+    let packages = compile_packages("rt_b_v0.move" /* 0x3::b */ , &["rt_c_v0.move" /* 0x2::c */ ]);
+
+    assert!(packages.len() == 1);
+    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
+    adapter.insert_packages_into_storage(modules.clone());
+
+    // Custom linkage because 0x2 is missing from the store and linkage generation would fail.
+    let linkage_table = HashMap::from([(runtime_package_id, runtime_package_id)]);
+    let linkage_context = LinkageContext::new(package3_address, linkage_table);
+
+    // Publication fails because `0x2` is not in the linkage context.
+    adapter
+        .publish_package(linkage_context, runtime_package_id, modules)
+        .unwrap_err();
 }
 
 #[test]
 fn publish_unpublished_dependency() {
+    let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
+    let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
+
     let mut adapter = InMemoryTestAdapter::new();
-    let packages = compile_packages("rt_b_v0.move", &["rt_c_v0.move"]);
-    let c_runtime_addr = AccountAddress::from_hex_literal("0x2").unwrap();
+    let packages = compile_packages("rt_b_v0.move" /* 0x3::b */ , &["rt_c_v0.move" /* 0x2::c */ ]);
+
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
     adapter.insert_packages_into_storage(modules.clone());
-    // Linkage fails because we can't find the dependency.
-    let linkage_context = adapter
-        .generate_linkage_context(runtime_package_id, runtime_package_id, &modules)
+
+    // Custom linkage including `0x2 => 0x2`, which will cause publication to fail `0x3::b`.
+    let linkage_table = HashMap::from([(runtime_package_id, runtime_package_id), (package2_address, package2_address)]);
+    let linkage_context = LinkageContext::new(package3_address, linkage_table);
+
+    // Publication fails because `0x2` is not in the data cache.
+    adapter
+        .publish_package(linkage_context, runtime_package_id, modules)
         .unwrap_err();
-    // TODO: Make linage work and write a test to fail publish.
-    // adapter
-    //     .publish_package(linkage_context, runtime_package_id, modules)
-    //     .unwrap_err();
 }
 
 // Test that we properly publish and relink (and reuse) packages.

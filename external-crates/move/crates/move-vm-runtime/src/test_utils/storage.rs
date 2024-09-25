@@ -42,8 +42,8 @@ struct InMemoryAccountStorage {
 /// Simple in-memory storage that can be used as a Move VM storage backend for testing purposes.
 #[derive(Debug, Clone)]
 pub struct InMemoryStorage {
-    pub context: AccountAddress,
-    pub accounts: BTreeMap<AccountAddress, InMemoryAccountStorage>,
+    context: AccountAddress,
+    accounts: BTreeMap<AccountAddress, InMemoryAccountStorage>,
 }
 
 // -------------------------------------------------------------------------------------------------

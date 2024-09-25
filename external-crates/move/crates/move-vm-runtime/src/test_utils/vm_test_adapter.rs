@@ -3,7 +3,7 @@
 
 use crate::{
     cache::linkage_context::LinkageContext,
-    on_chain::ast::{PackageStorageId, RuntimePackageId},
+    on_chain::ast::PackageStorageId,
     vm::vm::VirtualMachine,
 };
 
@@ -13,8 +13,8 @@ use move_binary_format::file_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{identifier::Identifier, resolver::MoveResolver};
 
-use std::collections::BTreeSet;
-
+/// A VM Test Adaptor holds storage and a VM, and can handle publishing packages and executing
+/// functions. Based on its needs, it may also provide ways to generate linkage contexts.
 pub trait VMTestAdapter<Storage: MoveResolver> {
     /// Perform a publication, including package verification and updating the relevant storage in
     /// the test adapter.

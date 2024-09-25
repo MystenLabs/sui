@@ -16,7 +16,7 @@ use move_binary_format::errors::VMResult;
 use move_binary_format::file_format::CompiledModule;
 
 use move_core_types::{account_address::AccountAddress, language_storage::ModuleId};
-use move_core_types::{identifier::Identifier, resolver::ModuleResolver};
+use move_core_types::identifier::Identifier;
 use move_vm_config::runtime::VMConfig;
 
 use std::collections::BTreeSet;
@@ -51,6 +51,10 @@ impl InMemoryTestAdapter {
         }
     }
 
+    /// Generate a linkage context for a given runtime ID, storage ID, and list of compiled modules.
+    /// This will generate the linkage context based on the transitive dependencies of the
+    /// provided package modules if the package's dependencies are in the data cache, or error
+    /// otherwise.
     pub fn generate_linkage_context(
         &self,
         runtime_package_id: RuntimePackageId,
@@ -87,7 +91,9 @@ impl InMemoryTestAdapter {
 
     /// Generate a "default" linkage for an account address. This assumes its publication and
     /// runtime ID are the same, and computes dependencies by retrieving the definition from the
-    /// cache.
+    /// data cache. This will generate the linkage context based on the transitive dependencies of
+    /// the provided package modules if the package's dependencies are in the store, or error
+    /// otherwise.
     pub fn generate_default_linkage(&self, package_id: AccountAddress) -> VMResult<LinkageContext> {
         let modules = self.storage.get_compiled_modules(&package_id)?;
         self.generate_linkage_context(package_id, package_id, &modules)
@@ -97,7 +103,7 @@ impl InMemoryTestAdapter {
 impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
     fn execute_function(
         &mut self,
-        linkage_context: LinkageContext,
+        _linkage_context: LinkageContext,
         _module: ModuleId,
         _function: Identifier,
     ) {
