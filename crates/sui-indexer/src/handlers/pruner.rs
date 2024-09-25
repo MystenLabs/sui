@@ -11,6 +11,10 @@ use crate::store::pg_partition_manager::PgPartitionManager;
 use crate::store::PgIndexerStore;
 use crate::{metrics::IndexerMetrics, store::IndexerStore, types::IndexerResult};
 
+/// The primary purpose of objects_history is to serve consistency query.
+/// A short retention is sufficient.
+const OBJECTS_HISTORY_EPOCHS_TO_KEEP: u64 = 2;
+
 pub struct Pruner {
     pub store: PgIndexerStore,
     pub partition_manager: PgPartitionManager,
@@ -58,8 +62,6 @@ impl Pruner {
                 })
                 .collect();
 
-            let prune_to_epoch = last_seen_max_epoch.saturating_sub(self.epochs_to_keep - 1);
-
             for (table_name, (min_partition, max_partition)) in &table_partitions {
                 if last_seen_max_epoch != *max_partition {
                     error!(
@@ -67,7 +69,14 @@ impl Pruner {
                         table_name, last_seen_max_epoch, max_partition
                     );
                 }
-                for epoch in *min_partition..prune_to_epoch {
+
+                let epochs_to_keep = if table_name == "objects_history" {
+                    OBJECTS_HISTORY_EPOCHS_TO_KEEP
+                } else {
+                    self.epochs_to_keep
+                };
+                for epoch in *min_partition..last_seen_max_epoch.saturating_sub(epochs_to_keep - 1)
+                {
                     if cancel.is_cancelled() {
                         info!("Pruner task cancelled.");
                         return Ok(());
@@ -82,6 +91,7 @@ impl Pruner {
                 }
             }
 
+            let prune_to_epoch = last_seen_max_epoch.saturating_sub(self.epochs_to_keep - 1);
             let prune_start_epoch = next_prune_epoch.unwrap_or(min_epoch);
             for epoch in prune_start_epoch..prune_to_epoch {
                 if cancel.is_cancelled() {
