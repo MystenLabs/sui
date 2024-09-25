@@ -5,7 +5,13 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { StackFrame } from '@vscode/debugadapter';
-import { WorkspaceFolder, DebugConfiguration, CancellationToken } from 'vscode';
+import {
+    WorkspaceFolder,
+    DebugConfiguration,
+    CancellationToken,
+    TextDocument,
+    Position
+} from 'vscode';
 
 /**
  * Log level for the debug adapter.
@@ -16,6 +22,19 @@ const LOG_LEVEL = 'log';
  * Describes debugger configuration name defined in package.json
  */
 const DEBUGGER_TYPE = 'move-debug';
+
+/**
+ * Provider of on-hover information during debug session.
+ */
+class MoveEvaluatableExpressionProvider {
+    // TODO: implement a more sophisticated provider that actually provides correct on-hover information,
+    // at least for variable definitions whose locations are readily available in the source map
+    // (user can always use go-to-def to see the definition and the value)
+    provideEvaluatableExpression(_document: TextDocument, _position: Position, _token: CancellationToken) {
+        // suppress debug-time on hover information for now
+        return null;
+    }
+}
 
 /**
  * Called when the extension is activated.
@@ -82,20 +101,29 @@ export function activate(context: vscode.ExtensionContext) {
 
                             editor.setDecorations(decorationType, decorationsArray);
                         }
-
                     }
                 }
             }
-        }),
-        vscode.debug.onDidTerminateDebugSession(() => {
-            // reset all decorations when the debug session is terminated
-            // to avoid showing lines for code that was optimized away
-            const editor = vscode.window.activeTextEditor;
-            if (editor) {
-                editor.setDecorations(decorationType, []);
-            }
         })
     );
+
+    // register a provider of on-hover information during debug session
+    const langSelector = { scheme: 'file', language: 'move' };
+    context.subscriptions.push(
+        vscode.languages.registerEvaluatableExpressionProvider(
+            langSelector,
+            new MoveEvaluatableExpressionProvider()
+        )
+    );
+
+    context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(() => {
+        // reset all decorations when the debug session is terminated
+        // to avoid showing lines for code that was optimized away
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            editor.setDecorations(decorationType, []);
+        }
+    }));
 }
 
 /**

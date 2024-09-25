@@ -433,11 +433,21 @@ export class Runtime extends EventEmitter {
         // local variable array
         const frameLocalLifetimeEnds = this.trace.localLifetimeEnds.get(currentFrame.id);
         if (frameLocalLifetimeEnds) {
-            for (let i = 0; i < currentFrame.locals.length; i++) {
+            const localsLength = currentFrame.locals.length;
+            for (let i = 0; i < localsLength; i++) {
                 for (let j = 0; j < currentFrame.locals[i].length; j++) {
                     if (frameLocalLifetimeEnds[j] === instructionEvent.pc) {
                         currentFrame.locals[i][j] = undefined;
                     }
+                }
+            }
+            // trim shadowed scopes that have no live variables in them
+            for (let i = localsLength - 1; i > 0; i--) {
+                const liveVar = currentFrame.locals[i].find(runtimeVar => {
+                    return runtimeVar !== undefined;
+                });
+                if (!liveVar) {
+                    currentFrame.locals.pop();
                 }
             }
         }
@@ -555,9 +565,36 @@ function localWrite(
             + ' in function: '
             + currentFrame.name);
     }
-    // TODO: if a variable has the same name but a different index (it is shadowed)
-    // it has to be put in a different scope (e.g., locals[1], locals[2], etc.)
-    currentFrame.locals[0][localIndex] = { name, value, type };
+
+    const scopesCount = currentFrame.locals.length;
+    if (scopesCount <= 0) {
+        throw new Error("There should be at least one variable scope in functon"
+            + currentFrame.name);
+    }
+    // If a variable has the same name but a different index (it is shadowed)
+    // it has to be put in a different scope (e.g., locals[1], locals[2], etc.).
+    // Find scope already containing variable name, if any, starting from
+    // the outermost one
+    let existingVarScope = -1;
+    for (let i = scopesCount - 1; i >= 0; i--) {
+        const existingVarIndex = currentFrame.locals[i].findIndex(runtimeVar => {
+            return runtimeVar && runtimeVar.name === name;
+        });
+        if (existingVarIndex !== -1 && existingVarIndex !== localIndex) {
+            existingVarScope = i;
+            break;
+        }
+    }
+    if (existingVarScope >= 0) {
+        const shadowedScope = currentFrame.locals[existingVarScope + 1];
+        if (!shadowedScope) {
+            currentFrame.locals.push([]);
+        }
+        currentFrame.locals[existingVarScope + 1][localIndex] = { name, value, type };
+    } else {
+        // put variable in the "main" locals scope
+        currentFrame.locals[0][localIndex] = { name, value, type };
+    }
 }
 
 /**
