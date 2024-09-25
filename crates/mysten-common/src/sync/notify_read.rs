@@ -13,7 +13,6 @@ use std::mem;
 use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::sync::oneshot;
 
@@ -55,16 +54,6 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
         self.register(key, sender);
         Registration {
             this: self,
-            registration: Some((key.clone(), receiver)),
-        }
-    }
-
-    pub fn register_one_owned(self: &Arc<Self>, key: &K) -> RegistrationOwned<K, V> {
-        self.count_pending.fetch_add(1, Ordering::Relaxed);
-        let (sender, receiver) = oneshot::channel();
-        self.register(key, sender);
-        RegistrationOwned {
-            this: self.clone(),
             registration: Some((key.clone(), receiver)),
         }
     }
@@ -158,7 +147,6 @@ pub struct Registration<'a, K: Eq + Hash + Clone, V: Clone> {
     registration: Option<(K, oneshot::Receiver<V>)>,
 }
 
-
 impl<'a, K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> Future for Registration<'a, K, V> {
     type Output = V;
 
@@ -182,45 +170,10 @@ impl<'a, K: Eq + Hash + Clone, V: Clone> Drop for Registration<'a, K, V> {
         if let Some((key, receiver)) = self.registration.take() {
             mem::drop(receiver);
             // Receiver is dropped before cleanup
-            self.this.cleanup(&key);
+            self.this.cleanup(&key)
         }
     }
 }
-
-pub struct RegistrationOwned<K: Eq + Hash + Clone, V: Clone> {
-    this: Arc<NotifyRead<K, V>>,
-    registration: Option<(K, oneshot::Receiver<V>)>,
-}
-
-impl<K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> Future for RegistrationOwned<K, V> {
-    type Output = V;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let receiver = self
-            .registration
-            .as_mut()
-            .map(|(_key, receiver)| receiver)
-            .expect("poll can not be called after drop");
-        let poll = Pin::new(receiver).poll(cx);
-        if poll.is_ready() {
-            // When polling complete we no longer need to cancel
-            self.registration.take();
-        }
-        poll.map(|r| r.expect("Sender never drops when registration is pending"))
-    }
-}
-
-impl<K: Eq + Hash + Clone, V: Clone> Drop for RegistrationOwned<K, V> {
-    fn drop(&mut self) {
-        if let Some((key, receiver)) = self.registration.take() {
-            mem::drop(receiver);
-            // Receiver is dropped before cleanup
-            self.this.cleanup(&key);
-        }
-    }
-}
-
-
 impl<K: Eq + Hash + Clone, V: Clone> Default for NotifyRead<K, V> {
     fn default() -> Self {
         Self::new()

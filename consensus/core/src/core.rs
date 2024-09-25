@@ -505,7 +505,7 @@ impl Core {
             .with_label_values(&["Core::try_commit"])
             .start_timer();
 
-        if !self
+        let committed_sub_dags = if !self
             .context
             .protocol_config
             .mysticeti_leader_scoring_and_schedule()
@@ -635,7 +635,22 @@ impl Core {
             }
 
             Ok(committed_subdags)
+        };
+
+        // Notify about our own committed blocks
+        if let Ok(committed_sub_dags) = committed_sub_dags.as_ref() {
+            let committed_block_refs = committed_sub_dags
+                .iter()
+                .flat_map(|sub_dag| sub_dag.blocks.iter())
+                .filter_map(|block| {
+                    (block.author() == self.context.own_index).then_some(block.reference())
+                })
+                .collect::<Vec<_>>();
+            self.transaction_consumer
+                .notify_own_blocks_status(committed_block_refs, self.dag_state.read().gc_round());
         }
+
+        committed_sub_dags
     }
 
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
@@ -989,6 +1004,7 @@ mod test {
     use std::{collections::BTreeSet, time::Duration};
 
     use consensus_config::{AuthorityIndex, Parameters};
+    use futures::{stream::FuturesUnordered, StreamExt};
     use mysten_metrics::monitored_mpsc::unbounded_channel;
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::sleep;
@@ -1001,7 +1017,7 @@ mod test {
         leader_scoring::ReputationScores,
         storage::{mem_store::MemStore, Store, WriteBatch},
         test_dag_builder::DagBuilder,
-        transaction::TransactionClient,
+        transaction::{BlockStatus, TransactionClient},
         CommitConsumer, CommitIndex,
     };
 
@@ -1014,6 +1030,7 @@ mod test {
         let store = Arc::new(MemStore::new());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let mut block_status_subscriptions = FuturesUnordered::new();
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
         let mut last_round_blocks = genesis_blocks(context.clone());
@@ -1026,6 +1043,13 @@ mod test {
                         .set_ancestors(last_round_blocks.iter().map(|b| b.reference()).collect())
                         .build(),
                 );
+
+                // If it's round 1, that one will be committed later on, and it's our "own" block, then subscribe to listen for the block status.
+                if round == 1 && index == context.own_index {
+                    let subscription =
+                        transaction_consumer.subscribe_for_block_status_testing(block.reference());
+                    block_status_subscriptions.push(subscription);
+                }
 
                 this_round_blocks.push(block);
             }
@@ -1067,7 +1091,7 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
-        let mut core = Core::new(
+        let _core = Core::new(
             context.clone(),
             leader_schedule,
             transaction_consumer,
@@ -1098,8 +1122,6 @@ mod test {
             assert_eq!(ancestor.round, 4);
         }
 
-        // Run commit rule.
-        core.try_commit().ok();
         let last_commit = store
             .read_last_commit()
             .unwrap()
@@ -1112,6 +1134,12 @@ mod test {
         assert_eq!(dag_state.read().last_commit_index(), 2);
         let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
         assert_eq!(all_stored_commits.len(), 2);
+
+        // And ensure that our "own" block 1 sent to TransactionConsumer as notification alongside with gc_round
+        while let Some(result) = block_status_subscriptions.next().await {
+            let status = result.unwrap();
+            assert_eq!(status, BlockStatus::Sequenced);
+        }
     }
 
     /// Recover Core and continue proposing when having a partial last round which doesn't form a quorum and we haven't
