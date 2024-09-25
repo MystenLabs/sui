@@ -7,7 +7,6 @@ use clap::Args;
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
 use diesel::table;
-use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use std::collections::BTreeSet;
@@ -115,7 +114,6 @@ async fn check_db_migration_consistency_impl(
     let applied_migrations: BTreeSet<MigrationVersion<'_>> = BTreeSet::from_iter(
         __diesel_schema_migrations::table
             .select(__diesel_schema_migrations::version)
-            .order(__diesel_schema_migrations::version.asc())
             .load(conn)
             .await?,
     );
