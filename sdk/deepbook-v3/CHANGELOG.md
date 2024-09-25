@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.7.1
+
+### Patch Changes
+
+- 37d259a: Locked balance feature
+
 ## 0.7.0
 
 ### Minor Changes
