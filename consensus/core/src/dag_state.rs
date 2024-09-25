@@ -3,13 +3,13 @@
 
 use std::{
     cmp::max,
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
     ops::Bound::{Excluded, Included, Unbounded},
     panic,
     sync::Arc,
 };
 
-use consensus_config::AuthorityIndex;
+use consensus_config::{AuthorityIndex, Stake};
 use itertools::Itertools as _;
 use tracing::{debug, error};
 
@@ -29,16 +29,18 @@ use crate::{
     CommittedSubDag,
 };
 
+const VOTING_ROUNDS: Round = 3;
+
 struct BlockInfo {
     block: VerifiedBlock,
-    // certificates: BTreeMap<AuthorityIndex, BlockRef>,
+    certificates: Vec<Option<BlockRef>>,
 }
 
 impl BlockInfo {
-    fn new(block: VerifiedBlock) -> Self {
+    fn new(block: VerifiedBlock, num_authorities: usize) -> Self {
         Self {
             block,
-            // certificates: BTreeMap::new(),
+            certificates: vec![None; num_authorities],
         }
     }
 }
@@ -257,10 +259,32 @@ impl DagState {
 
     /// Updates internal metadata for a block.
     fn update_block_metadata(&mut self, block: &VerifiedBlock) {
+        // Insert to recent blocks.
         let block_ref = block.reference();
-        self.recent_blocks
-            .insert(block_ref, BlockInfo::new(block.clone()));
+        self.recent_blocks.insert(
+            block_ref,
+            BlockInfo::new(block.clone(), self.context.committee.size()),
+        );
+        // Update blocks which this block certifies.
+        let certifications =
+            find_certifications(&self.context, block, VOTING_ROUNDS, &self.recent_blocks);
+        for cert in certifications {
+            let certificate = &mut self
+                .recent_blocks
+                .get_mut(&cert)
+                .expect("Certified block should exist in recent blocks")
+                .certificates[cert.author];
+            if let Some(c) = certificate {
+                if c.round > cert.round {
+                    *c = cert;
+                }
+            } else {
+                *certificate = Some(cert);
+            }
+        }
+        // Update index of recent blocks by authority.
         self.recent_refs_by_authority[block_ref.author].insert(block_ref);
+
         self.highest_accepted_round = max(self.highest_accepted_round, block.round());
         self.context
             .metrics
@@ -949,6 +973,83 @@ impl DagState {
     pub(crate) fn set_last_commit(&mut self, commit: TrustedCommit) {
         self.last_commit = Some(commit);
     }
+}
+
+struct VoteInfo {
+    voted: Vec<bool>,
+    votes: Stake,
+}
+
+impl VoteInfo {
+    fn new(num_authorities: usize) -> Self {
+        Self {
+            voted: vec![false; num_authorities],
+            votes: 0,
+        }
+    }
+}
+
+/// Find the blocks which the certifier certifies with the voting rounds.
+fn find_certifications(
+    context: &Context,
+    certifier: &VerifiedBlock,
+    voting_rounds: Round,
+    blocks: &BTreeMap<BlockRef, BlockInfo>,
+) -> Vec<BlockRef> {
+    let min_voting_round = certifier.round().saturating_sub(voting_rounds);
+    let min_certification_round = min_voting_round.saturating_sub(1);
+    let mut votes = BTreeMap::new();
+    let mut visited = BTreeSet::new();
+    let mut to_visit = vec![certifier];
+    while let Some(block) = to_visit.pop() {
+        if block.round() < min_voting_round {
+            continue;
+        }
+        let stake = context.committee.authority(block.author()).stake;
+        for ancestor in block.ancestors() {
+            if ancestor.round == GENESIS_ROUND {
+                continue;
+            }
+            // TODO: skip if ancestor is GC'ed.
+            if ancestor.round < min_certification_round {
+                // If ancestor cannot be certified, it cannot vote either.
+                // So it is ok to skip both.
+                continue;
+            }
+            let ancestor_block = &blocks
+                .get(ancestor)
+                .unwrap_or_else(|| panic!("{:?} should exist in DagState", ancestor))
+                .block;
+            match votes.entry(ancestor) {
+                Entry::Occupied(mut entry) => {
+                    let vote_info: &mut VoteInfo = entry.get_mut();
+                    if !vote_info.voted[block.author()] {
+                        vote_info.voted[block.author()] = true;
+                        vote_info.votes += stake;
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    let mut vote_info = VoteInfo::new(context.committee.size());
+                    vote_info.voted[block.author()] = true;
+                    vote_info.votes = stake;
+                    entry.insert(vote_info);
+                }
+            }
+            if visited.insert(*ancestor) {
+                to_visit.push(ancestor_block);
+            }
+        }
+    }
+    votes
+        .into_iter()
+        .filter_map(|(block, vote_info)| {
+            if vote_info.votes >= context.committee.quorum_threshold() {
+                Some(*block)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
