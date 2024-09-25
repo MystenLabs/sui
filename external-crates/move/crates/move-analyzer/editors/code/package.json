@@ -79,7 +79,7 @@
           ],
           "scope": "machine-overridable",
           "default": null,
-          "markdownDescription": "Path to rust-analyzer executable (points to `~/.sui/bin/move-analyzer` by default)."
+          "markdownDescription": "Path to move-analyzer executable (points to `~/.sui/bin/move-analyzer` by default)."
         },
         "move.sui.path": {
           "type": [
