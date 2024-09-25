@@ -423,16 +423,21 @@ fn load_module_types(
     for (idx, struct_def) in module.struct_defs().iter().enumerate() {
         let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
         let name = module.identifier_at(struct_handle.name);
+
+
+        // TODO/FIXME(Tim): This is always the runtime address at the moment. It should not be. How
+        // do we get the _correct_ one?
         let struct_module_handle = module.module_handle_at(struct_handle.module);
         println!("Indexing type {:?} at {:?}", name, struct_module_handle);
         let defining_address = module.address_identifier_at(struct_module_handle.address);
         println!("Package ID: {:?}", package_id);
-        // TODO/FIXME(Tim): This is always the runtime address at the moment. It should not be. How
-        // do we get the _correct_ one?
         println!("Defining Address: {:?}", defining_address);
+        // ---------- THIS IS A HACK -----------
+        // DEFINING_ADDRESS should refer to originally-defining address
+        // ---------- THIS IS A HACK -----------
         let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
         let struct_key = (
-            package_id,
+            *defining_address,
             module_id.name().to_owned(),
             name.to_owned(),
         );
@@ -480,9 +485,21 @@ fn load_module_types(
     for (idx, enum_def) in module.enum_defs().iter().enumerate() {
         let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
         let name = module.identifier_at(enum_handle.name);
-        let defining_id = link_context.defining_module(&module_id, name)?;
+
+
+        // TODO/FIXME(Tim): This is always the runtime address at the moment. It should not be. How
+        // do we get the _correct_ one?
+        let enum_module_handle = module.module_handle_at(enum_handle.module);
+        println!("Indexing type {:?} at {:?}", name, enum_module_handle);
+        let defining_address = module.address_identifier_at(enum_module_handle.address);
+        println!("Package ID: {:?}", package_id);
+        println!("Defining Address: {:?}", defining_address);
+        // ---------- THIS IS A HACK -----------
+        // DEFINING_ADDRESS should refer to originally-defining address
+        // ---------- THIS IS A HACK -----------
+        let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
         let enum_key = (
-            *defining_id.address(),
+            *defining_address,
             module_id.name().to_owned(),
             name.to_owned(),
         );
