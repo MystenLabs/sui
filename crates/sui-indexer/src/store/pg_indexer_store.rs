@@ -2161,12 +2161,12 @@ fn retain_latest_indexed_objects(
             change
                 .changed_objects
                 .into_iter()
-                .map(|m| Either::Left((m.object.id(), m)))
+                .map(Either::Left)
                 .chain(
                     change
                         .deleted_objects
                         .into_iter()
-                        .map(|d| Either::Right((d.object_id, d))),
+                        .map(Either::Right),
                 )
         })
         .fold(
@@ -2176,7 +2176,8 @@ fn retain_latest_indexed_objects(
                     // Remove mutation / deletion with a following deletion / mutation,
                     // b/c following deletion / mutation always has a higher version.
                     // Technically, assertions below are not required, double check just in case.
-                    Either::Left((id, mutation)) => {
+                    Either::Left(mutation) => {
+                        let id = mutation.object.id();
                         let mutation_version = mutation.object.version();
                         if let Some(existing) = deletions.remove(&id) {
                             assert!(
@@ -2197,7 +2198,8 @@ fn retain_latest_indexed_objects(
                             );
                         }
                     }
-                    Either::Right((id, deletion)) => {
+                    Either::Right(deletion) => {
+                        let id = deletion.object_id;
                         let deletion_version = deletion.object_version;
                         if let Some(existing) = mutations.remove(&id) {
                             assert!(
