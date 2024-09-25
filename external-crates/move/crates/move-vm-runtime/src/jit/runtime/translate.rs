@@ -22,7 +22,7 @@ use move_binary_format::{
     },
 };
 use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
+    account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode, language_storage::ModuleId,
 };
 use move_vm_types::loaded_data::runtime_types::{
     CachedDatatype, Datatype, EnumType, StructType, Type, VariantType,
@@ -411,7 +411,7 @@ fn module(
 fn load_module_types(
     type_cache: &RwLock<TypeCache>,
     link_context: &LinkageContext,
-    _package_id: PackageStorageId,
+    package_id: PackageStorageId,
     module: &CompiledModule,
 ) -> PartialVMResult<()> {
     let module_id = module.self_id();
@@ -423,9 +423,16 @@ fn load_module_types(
     for (idx, struct_def) in module.struct_defs().iter().enumerate() {
         let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
         let name = module.identifier_at(struct_handle.name);
-        let defining_id = link_context.defining_module(&module_id, name)?;
+        let struct_module_handle = module.module_handle_at(struct_handle.module);
+        println!("Indexing type {:?} at {:?}", name, struct_module_handle);
+        let defining_address = module.address_identifier_at(struct_module_handle.address);
+        println!("Package ID: {:?}", package_id);
+        // TODO/FIXME(Tim): This is always the runtime address at the moment. It should not be. How
+        // do we get the _correct_ one?
+        println!("Defining Address: {:?}", defining_address);
+        let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
         let struct_key = (
-            *defining_id.address(),
+            package_id,
             module_id.name().to_owned(),
             name.to_owned(),
         );

@@ -102,11 +102,12 @@ impl VirtualMachine {
         &mut self,
         data_cache: DataCache,
         link_context: &LinkageContext,
-        package_id: PackageStorageId,
+        pkg_runtime_id: PackageStorageId,
+        pkg_storage_id: PackageStorageId,
         package: Vec<Vec<u8>>,
         _gas_meter: &mut impl GasMeter,
     ) -> (VMResult<ChangeSet>, DataCache) {
-        println!("\n\nPublishing module at {package_id}\n\n");
+        println!("\n\nPublishing module at {pkg_storage_id} (=> {pkg_runtime_id})\n\n");
         let compiled_modules = match package
             .iter()
             .map(|blob| {
@@ -127,7 +128,7 @@ impl VirtualMachine {
         let _package = match self.cache.verify_package_for_publication(
             &data_cache,
             link_context,
-            package_id,
+            pkg_runtime_id,
             package,
         ) {
             Ok(package) => package,
@@ -138,7 +139,7 @@ impl VirtualMachine {
         };
         println!("\n\nVerified package\n\n");
 
-        data_cache.publish_package(package_id, compiled_modules);
+        data_cache.publish_package(pkg_storage_id, compiled_modules);
         println!("\n\nUpdated data cache\n\n");
 
         let (result, remote) = data_cache.into_effects();

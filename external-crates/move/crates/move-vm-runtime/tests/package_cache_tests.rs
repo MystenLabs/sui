@@ -573,6 +573,41 @@ fn publish_unpublished_dependency() {
         .unwrap_err();
 }
 
+
+#[test]
+fn publish_upgrade() {
+    let v0_pkg_address = AccountAddress::from_hex_literal("0x2").unwrap();
+    let v1_pkg_address = AccountAddress::from_hex_literal("0x3").unwrap();
+
+    let mut adapter = InMemoryTestAdapter::new();
+
+    // First publish / linkage is the runtime package address to itself, because this is V0
+
+    let (runtime_pkg_address, modules) = {
+        let packages = compile_packages("rt_c_v0.move", &[]);
+        assert!(packages.len() == 1);
+        packages.into_iter().next().unwrap()
+    };
+    assert!(v0_pkg_address == runtime_pkg_address); // sanity
+
+    let linkage_table = HashMap::from([(v0_pkg_address, v0_pkg_address)]);
+    let linkage_context = LinkageContext::new(v0_pkg_address, linkage_table);
+    adapter.publish_package(linkage_context, /* runtime_id */ v0_pkg_address, modules).unwrap();
+
+    // First publish / linkage is `0x3 => 0x2` for V1
+
+    let (v0_pkg_address, modules) = {
+        let packages = compile_packages("rt_c_v1.move", &[]);
+        assert!(packages.len() == 1);
+        packages.into_iter().next().unwrap()
+    };
+
+    let linkage_table = HashMap::from([(v0_pkg_address, v1_pkg_address)]);
+    let linkage_context = LinkageContext::new(v1_pkg_address, linkage_table);
+    adapter.publish_package(linkage_context, /* runtime_id */ v0_pkg_address, modules).unwrap();
+}
+
+
 // Test that we properly publish and relink (and reuse) packages.
 #[test]
 fn relink() {

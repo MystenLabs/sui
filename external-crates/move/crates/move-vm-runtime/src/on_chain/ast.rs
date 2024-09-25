@@ -36,6 +36,7 @@ impl DeserializedPackage {
             modules: modules.into_iter().map(|m| (m.self_id(), m)).collect(),
         }
     }
+
     pub fn into_modules(self) -> Vec<CompiledModule> {
         self.modules.into_values().collect()
     }

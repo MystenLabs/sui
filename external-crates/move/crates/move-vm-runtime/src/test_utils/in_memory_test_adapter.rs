@@ -19,7 +19,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::{account_address::AccountAddress, language_storage::ModuleId};
 use move_vm_config::runtime::VMConfig;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, BTreeMap};
 
 pub struct InMemoryTestAdapter {
     vm: VirtualMachine,
@@ -135,6 +135,7 @@ impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
         let (changeset, _) = self.vm.publish_package(
             &self.storage,
             &linkage_context,
+            runtime_id,
             storage_id,
             modules,
             &mut gas_meter,

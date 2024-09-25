@@ -15,7 +15,7 @@ use move_core_types::{identifier::Identifier, resolver::MoveResolver};
 /// functions. Based on its needs, it may also provide ways to generate linkage contexts.
 pub trait VMTestAdapter<Storage: MoveResolver> {
     /// Perform a publication, including package verification and updating the relevant storage in
-    /// the test adapter.
+    /// the test adapter so that it is available for subsequent calls.
     fn publish_package(
         &mut self,
         linkage_context: LinkageContext,
