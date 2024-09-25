@@ -29,7 +29,7 @@ use crate::{
     CommittedSubDag,
 };
 
-const VOTING_ROUNDS: Round = 3;
+const VOTING_ROUNDS: Round = 1;
 
 struct BlockInfo {
     block: VerifiedBlock,
