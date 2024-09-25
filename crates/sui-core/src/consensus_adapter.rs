@@ -32,7 +32,7 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 
-use tokio::sync::{Semaphore, SemaphorePermit};
+use tokio::sync::{oneshot, Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
 use tokio::time::{self};
 
@@ -196,7 +196,34 @@ pub trait SubmitToConsensus: Sync + Send + 'static {
         &self,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult;
+    ) -> SuiResult<SubmitResponse>;
+}
+
+pub enum BlockStatus {
+    Sequenced,
+    GarbageCollected,
+}
+
+pub enum SubmitResponse {
+    NoStatusWaiter,
+    WithStatusWaiter(oneshot::Receiver<consensus_core::BlockStatus>),
+}
+
+impl SubmitResponse {
+    pub async fn wait_for_status(self) -> SuiResult<BlockStatus> {
+        match self {
+            SubmitResponse::NoStatusWaiter => Ok(BlockStatus::Sequenced), // When no status feedback mechanism is offered then we default to "sequenced". This is the case for Narwhal.
+            SubmitResponse::WithStatusWaiter(receiver) => match receiver.await {
+                Ok(status) => match status {
+                    consensus_core::BlockStatus::Sequenced(_) => Ok(BlockStatus::Sequenced),
+                    consensus_core::BlockStatus::GarbageCollected(_) => {
+                        Ok(BlockStatus::GarbageCollected)
+                    }
+                },
+                Err(e) => Err(SuiError::ConsensusConnectionBroken(format!("{:?}", e))),
+            },
+        }
+    }
 }
 
 /// Submit Sui certificates to the consensus.
@@ -1156,9 +1183,9 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         &self,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
+    ) -> SuiResult<SubmitResponse> {
         self.submit_batch(transactions, None, epoch_store)
-            .map(|_| ())
+            .map(|_| SubmitResponse::NoStatusWaiter)
     }
 }
 
