@@ -97,7 +97,7 @@ type Address implements IOwner {
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
 	"""
 	Similar behavior to the `transactionBlocks` in Query but supporting the additional
-	`AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+	`AddressTransactionBlockRelationship` filter, which defaults to `SENT`.
 	
 	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
 	results. It is required for queries that apply more than two complex filters (on function,
@@ -160,15 +160,27 @@ type AddressOwner {
 }
 
 """
-The possible relationship types for a transaction block: sign, sent, received, or paid.
+The possible relationship types for a transaction block: sent, or received.
 """
 enum AddressTransactionBlockRelationship {
 	"""
-	Transactions this address has signed either as a sender or as a sponsor.
+	Transactions this address has sent. NOTE: this input filter has been deprecated in favor of
+	`SENT` which behaves identically but is named more clearly. Both filters restrict
+	transactions by their sender, only, not signers in general.
+	
+	This filter will be removed with 1.36.0 (2024-10-14).
 	"""
 	SIGN
 	"""
-	Transactions that sent objects to this address.
+	Transactions this address has sent.
+	"""
+	SENT
+	"""
+	Transactions that sent objects to this address. NOTE: this input filter has been deprecated
+	in favor of `AFFECTED`, which offers an easier to understand behavior.
+	
+	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+	`AFFECTED` is introduced, whichever is later.
 	"""
 	RECV
 }
@@ -1264,7 +1276,13 @@ type EventEdge {
 }
 
 input EventFilter {
+	"""
+	Filter down to events from transactions sent by this address.
+	"""
 	sender: SuiAddress
+	"""
+	Filter down to the events from this transaction (given by its transaction digest).
+	"""
 	transactionDigest: String
 	"""
 	Events emitted by a particular module. An event is emitted by a
@@ -2479,13 +2497,14 @@ type MoveType {
 	"""
 	signature: MoveTypeSignature!
 	"""
-	Structured representation of the "shape" of values that match this type.
+	Structured representation of the "shape" of values that match this type. May return no
+	layout if the type is invalid.
 	"""
-	layout: MoveTypeLayout!
+	layout: MoveTypeLayout
 	"""
-	The abilities this concrete type has.
+	The abilities this concrete type has. Returns no abilities if the type is invalid.
 	"""
-	abilities: [MoveAbility!]!
+	abilities: [MoveAbility!]
 }
 
 """
@@ -2504,11 +2523,11 @@ type MoveTypeLayout =
     }
   | { enum: [{
           type: string,
-          variants: [{ 
+          variants: [{
               name: string,
               fields: [{ name: string, layout: MoveTypeLayout }],
           }]
-      }] 
+      }]
   }
 """
 scalar MoveTypeLayout
@@ -2836,11 +2855,8 @@ objects are ones whose
 """
 input ObjectFilter {
 	"""
-	This field is used to specify the type of objects that should be included in the query
-	results.
-	
-	Objects can be filtered by their type's package, package::module, or their fully qualified
-	type name.
+	Filter objects by their type's `package`, `package::module`, or their fully qualified type
+	name.
 	
 	Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
 	the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
@@ -4288,18 +4304,67 @@ type TransactionBlockEffects {
 }
 
 input TransactionBlockFilter {
+	"""
+	Filter transactions by move function called. Calls can be filtered by the `package`,
+	`package::module`, or the `package::module::name` of their function.
+	"""
 	function: String
 	"""
 	An input filter selecting for either system or programmable transactions.
 	"""
 	kind: TransactionBlockKindInput
+	"""
+	Limit to transactions that occured strictly after the given checkpoint.
+	"""
 	afterCheckpoint: UInt53
+	"""
+	Limit to transactions in the given checkpoint.
+	"""
 	atCheckpoint: UInt53
+	"""
+	Limit to transaction that occured strictly before the given checkpoint.
+	"""
 	beforeCheckpoint: UInt53
+	"""
+	Limit to transactions that were sent by the given address. NOTE: this input filter has been
+	deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
+	Both filters restrict transactions by their sender, only, not signers in general.
+	
+	This filter will be removed with 1.36.0 (2024-10-14).
+	"""
 	signAddress: SuiAddress
+	"""
+	Limit to transactions that were sent by the given address.
+	"""
+	sentAddress: SuiAddress
+	"""
+	Limit to transactions that sent an object to the given address. NOTE: this input filter has
+	been deprecated in favor of `affectedAddress` which offers an easier to understand
+	behavior.
+	
+	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+	`affectedAddress` is introduced, whichever is later.
+	"""
 	recvAddress: SuiAddress
+	"""
+	Limit to transactions that accepted the given object as an input. NOTE: this input filter
+	has been deprecated in favor of `affectedObject` which offers an easier to under behavior.
+	
+	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+	`affectedObject` is introduced, whichever is later.
+	"""
 	inputObject: SuiAddress
+	"""
+	Limit to transactions that output a versioon of this object. NOTE: this input filter has
+	been deprecated in favor of `affectedObject` which offers an easier to understand behavor.
+	
+	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
+	`affectedObject` is introduced, whichever is later.
+	"""
 	changedObject: SuiAddress
+	"""
+	Select transactions by their digest.
+	"""
 	transactionIds: [String!]
 }
 

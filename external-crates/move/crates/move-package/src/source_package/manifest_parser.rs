@@ -329,7 +329,7 @@ fn parse_address_literal(address_str: &str) -> Result<AccountAddress, AccountAdd
     AccountAddress::from_hex_literal(address_str)
 }
 
-pub fn parse_dependency(dep_name: &str, mut tval: TV) -> Result<PM::Dependency> {
+pub fn parse_dependency(dep_id: &str, mut tval: TV) -> Result<PM::Dependency> {
     let Some(table) = tval.as_table_mut() else {
         bail!("Malformed dependency {}", tval);
     };
@@ -432,7 +432,7 @@ pub fn parse_dependency(dep_name: &str, mut tval: TV) -> Result<PM::Dependency> 
                     .ok_or_else(|| anyhow!("'subdir' not a string"))?,
             };
 
-            let package_name = Symbol::from(dep_name);
+            let package_name = Symbol::from(dep_id);
 
             PM::DependencyKind::Custom(PM::CustomDepInfo {
                 node_url,

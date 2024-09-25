@@ -33,9 +33,7 @@ impl New {
             w,
             r#"/*
 /// Module: {name}
-module {name}::{name} {{
-
-}}
+module {name}::{name};
 */"#,
             name = name
         )?;
@@ -49,21 +47,20 @@ module {name}::{name} {{
             w,
             r#"/*
 #[test_only]
-module {name}::{name}_tests {{
-    // uncomment this line to import the module
-    // use {name}::{name};
+module {name}::{name}_tests;
+// uncomment this line to import the module
+// use {name}::{name};
 
-    const ENotImplemented: u64 = 0;
+const ENotImplemented: u64 = 0;
 
-    #[test]
-    fun test_{name}() {{
-        // pass
-    }}
+#[test]
+fun test_{name}() {{
+    // pass
+}}
 
-    #[test, expected_failure(abort_code = ::{name}::{name}_tests::ENotImplemented)]
-    fun test_{name}_fail() {{
-        abort ENotImplemented
-    }}
+#[test, expected_failure(abort_code = ::{name}::{name}_tests::ENotImplemented)]
+fun test_{name}_fail() {{
+    abort ENotImplemented
 }}
 */"#,
             name = name

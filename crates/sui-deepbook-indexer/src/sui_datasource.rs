@@ -105,7 +105,7 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     }
 
     fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.tasks_remaining_checkpoints
+        &self.indexer_metrics.backfill_tasks_remaining_checkpoints
     }
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
@@ -157,7 +157,7 @@ pub type CheckpointTxnData = (CheckpointTransaction, u64, u64);
 
 #[async_trait]
 impl Worker for IndexerWorker<CheckpointTxnData> {
-    async fn process_checkpoint(&self, checkpoint: SuiCheckpointData) -> anyhow::Result<()> {
+    async fn process_checkpoint(&self, checkpoint: &SuiCheckpointData) -> anyhow::Result<()> {
         tracing::trace!(
             "Received checkpoint [{}] {}: {}",
             checkpoint.checkpoint_summary.epoch,
@@ -169,6 +169,7 @@ impl Worker for IndexerWorker<CheckpointTxnData> {
 
         let transactions = checkpoint
             .transactions
+            .clone()
             .into_iter()
             .map(|tx| (tx, checkpoint_num, timestamp_ms))
             .collect();

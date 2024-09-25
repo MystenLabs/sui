@@ -12,8 +12,11 @@ use axum::extract::Query;
 use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
 use sui_sdk2::types::{Object, ObjectId, TypeTag, Version};
-use sui_types::storage::{DynamicFieldIndexInfo, DynamicFieldKey};
 use sui_types::sui_sdk2_conversions::type_tag_core_to_sdk;
+use sui_types::{
+    storage::{DynamicFieldIndexInfo, DynamicFieldKey},
+    sui_sdk2_conversions::SdkTypeConversionError,
+};
 use tap::Pipe;
 
 pub struct GetObject;
@@ -219,8 +222,8 @@ async fn list_dynamic_fields(
         .inner()
         .dynamic_field_iter(parent.into(), start)?
         .take(limit + 1)
-        .map(DynamicFieldInfo::from)
-        .collect::<Vec<_>>();
+        .map(DynamicFieldInfo::try_from)
+        .collect::<Result<Vec<_>, _>>()?;
 
     let cursor = if dynamic_fields.len() > limit {
         // SAFETY: We've already verified that object_keys is greater than limit, which is
@@ -271,8 +274,10 @@ pub struct DynamicFieldInfo {
     pub dynamic_object_id: Option<ObjectId>,
 }
 
-impl From<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
-    fn from(value: (DynamicFieldKey, DynamicFieldIndexInfo)) -> Self {
+impl TryFrom<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
+    type Error = SdkTypeConversionError;
+
+    fn try_from(value: (DynamicFieldKey, DynamicFieldIndexInfo)) -> Result<Self, Self::Error> {
         let DynamicFieldKey { parent, field_id } = value.0;
         let DynamicFieldIndexInfo {
             dynamic_field_type,
@@ -285,10 +290,11 @@ impl From<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
             parent: parent.into(),
             field_id: field_id.into(),
             dynamic_field_type: dynamic_field_type.into(),
-            name_type: type_tag_core_to_sdk(name_type),
+            name_type: type_tag_core_to_sdk(name_type)?,
             name_value,
             dynamic_object_id: dynamic_object_id.map(Into::into),
         }
+        .pipe(Ok)
     }
 }
 

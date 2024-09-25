@@ -1,5 +1,5 @@
 //# run
-module 0x1.m {
+module 0x5.m {
 
 entry foo() {
     let v1: vector<u64>;
@@ -16,7 +16,7 @@ label b0:
 
 }
 //# run
-module 0x2.m {
+module 0x6.m {
 
 entry foo() {
     let v1: vector<u64>;

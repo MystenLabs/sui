@@ -666,3 +666,9 @@ impl From<url::ParseError> for Error {
         Self::from_error(error)
     }
 }
+
+impl From<sui_types::sui_sdk2_conversions::SdkTypeConversionError> for Error {
+    fn from(value: sui_types::sui_sdk2_conversions::SdkTypeConversionError) -> Self {
+        Self::from_error(value)
+    }
+}

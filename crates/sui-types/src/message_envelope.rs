@@ -14,6 +14,7 @@ use crate::transaction::SenderSignedData;
 use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use shared_crypto::intent::{Intent, IntentScope};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
@@ -30,12 +31,45 @@ pub trait Message {
 }
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
+#[serde(remote = "Envelope")]
 pub struct Envelope<T: Message, S> {
     #[serde(skip)]
     digest: OnceCell<T::DigestType>,
 
     data: T,
     auth_signature: S,
+}
+
+impl<'de, T, S> Deserialize<'de> for Envelope<T, S>
+where
+    T: Message + Deserialize<'de>,
+    S: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        Envelope::deserialize(DeserializeNameAdapter::new(
+            deserializer,
+            std::any::type_name::<Self>(),
+        ))
+    }
+}
+
+impl<T, Sig> Serialize for Envelope<T, Sig>
+where
+    T: Message + Serialize,
+    Sig: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        Envelope::serialize(
+            self,
+            SerializeNameAdapter::new(serializer, std::any::type_name::<Self>()),
+        )
+    }
 }
 
 impl<T: Message, S> Envelope<T, S> {

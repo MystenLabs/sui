@@ -11,7 +11,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use itertools::Itertools;
-use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -42,7 +41,7 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::DBMapUtils;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
-pub type CoinIndexKey = (SuiAddress, String, ObjectID);
+type CoinIndexKey = (SuiAddress, String, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);
 type EventId = (TxSequenceNumber, usize);
 type EventIndex = (TransactionEventsDigest, TransactionDigest, u64);
@@ -129,7 +128,7 @@ impl IndexStoreMetrics {
 pub struct IndexStoreCaches {
     per_coin_type_balance: ShardedLruCache<(SuiAddress, TypeTag), SuiResult<TotalBalance>>,
     all_balances: ShardedLruCache<SuiAddress, SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>>,
-    pub locks: MutexTable<SuiAddress>,
+    locks: MutexTable<SuiAddress>,
 }
 
 #[derive(Default)]
@@ -229,7 +228,7 @@ impl IndexStoreTables {
 pub struct IndexStore {
     next_sequence_number: AtomicU64,
     tables: IndexStoreTables,
-    pub caches: IndexStoreCaches,
+    caches: IndexStoreCaches,
     metrics: Arc<IndexStoreMetrics>,
     max_type_length: u64,
     remove_deprecated_tables: bool,
@@ -461,7 +460,7 @@ impl IndexStore {
         sender: SuiAddress,
         active_inputs: impl Iterator<Item = ObjectID>,
         mutated_objects: impl Iterator<Item = (ObjectRef, Owner)> + Clone,
-        move_functions: impl Iterator<Item = (ObjectID, Identifier, Identifier)> + Clone,
+        move_functions: impl Iterator<Item = (ObjectID, String, String)> + Clone,
         events: &TransactionEvents,
         object_index_changes: ObjectIndexChanges,
         digest: &TransactionDigest,
@@ -503,12 +502,8 @@ impl IndexStore {
 
         batch.insert_batch(
             &self.tables.transactions_by_move_function,
-            move_functions.map(|(obj_id, module, function)| {
-                (
-                    (obj_id, module.to_string(), function.to_string(), sequence),
-                    *digest,
-                )
-            }),
+            move_functions
+                .map(|(obj_id, module, function)| ((obj_id, module, function, sequence), *digest)),
         )?;
 
         batch.insert_batch(
@@ -1461,7 +1456,7 @@ impl IndexStore {
         metrics.all_balance_lookup_from_db.inc();
         let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
         let coins = Self::get_owned_coins_iterator(&coin_index, owner, None)?
-            .group_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
+            .chunk_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
         for (coin_type, coins) in &coins {
             let mut total_balance = 0i128;
             let mut coin_object_count = 0;

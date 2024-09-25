@@ -12,7 +12,7 @@ module 0x42::m {
 // All of these should abort
 
 //# run
-module 0x42::test0 {
+module 0x43::test0 {
     // abort with 2
     public fun main(): u64 {
         if (false) {0x42::m::aborter(1)} else {abort 2} + {abort 3; 0}
@@ -20,7 +20,7 @@ module 0x42::test0 {
 }
 
 //# run
-module 0x42::test1 {
+module 0x44::test1 {
     // abort with 1
     public fun main(): u64 {
         let x = 1;
@@ -29,7 +29,7 @@ module 0x42::test1 {
 }
 
 //# run
-module 0x42::test2 {
+module 0x45::test2 {
     // aborts with bad math
     public fun main(): u8 {
         abort (1u64 - 10u64)
@@ -37,7 +37,7 @@ module 0x42::test2 {
 }
 
 //# run
-module 0x42::test3 {
+module 0x46::test3 {
     // aborts with bad math
     public fun main(): u8 {
         {250u8 + 50u8} + {abort 55; 5u8}
@@ -45,7 +45,7 @@ module 0x42::test3 {
 }
 
 //# run
-module 0x42::test4 {
+module 0x47::test4 {
     // aborts with 0
     public fun test(): u64 {
         0x42::m::add3(abort 0, {abort 14; 0}, 0)
@@ -53,7 +53,7 @@ module 0x42::test4 {
 }
 
 //# run
-module 0x42::test5 {
+module 0x48::test5 {
     //abort with 0
     public fun test(): u64 {
         (abort 0) + {(abort 14); 0} + 0
@@ -61,7 +61,7 @@ module 0x42::test5 {
 }
 
 //# run
-module 0x42::test37 {
+module 0x49::test37 {
     // aborts with bad math
     public fun main(): u8 {
         {250u8 + 50u8} + {return 55; 5u8}

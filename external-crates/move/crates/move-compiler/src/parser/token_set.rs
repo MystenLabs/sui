@@ -94,6 +94,7 @@ const EXP_STARTS: &[Tok] = &[
     Tok::Return,
     Tok::While,
     Tok::BlockLabel,
+    Tok::Match,
 ];
 
 pub static EXP_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(EXP_STARTS));

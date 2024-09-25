@@ -2,7 +2,7 @@
 title: Connect to a Local Network
 ---
 
-Use a Sui local network to test your dApps against the latest changes to Sui, and to prepare for the next Sui release to the Devnet or Testnet network. Sui CLI provides the `sui start` command to start a local network. There are several services that can be started when using `sui start`, such as an indexer, a faucet, or a local instance of the GraphQL service (including the online GraphiQL IDE). You can use the included faucet to get test SUI to use on the local network.
+Use a Sui local network to test your dApps against the latest changes to Sui, and to prepare for the next Sui release to the Devnet or Testnet network. Sui CLI provides the `sui start` command to start a local network. There are several services that can be started when using `sui start`, such as an indexer, a faucet, or a local instance of the GraphQL service (including the web-based GraphiQL IDE). You can use the included faucet to get test SUI to use on the local network.
 
 If you haven't already, you need to [install Sui CLI](./sui-install.mdx) on your system.
 
@@ -27,7 +27,7 @@ Each time you start the network by passing `--force-regenesis`, the local networ
 To customize your local Sui network, such as starting other services or changing default ports and hosts, include additional flags or options in the `sui start` command.
 
 :::info
-Options and flags like `with-indexer`,  `with-graphql`, and related require you to use the `sui-pg` binary from the [GitHub release archive](https://github.com/MystenLabs/sui/releases), or to build the `sui` binary with the indexer feature enabled: `cargo build --bin sui --features indexer`.
+Options and flags like `with-indexer`,  `with-graphql`, and related require you to have Postgresq/libpq installed. Check out the list of possible options below to find which is the default expected DB, or how to pass a different DB.
 :::
 
 The following is a list of possible options and flags to pass to `sui start`:

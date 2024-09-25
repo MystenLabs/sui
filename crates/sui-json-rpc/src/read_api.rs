@@ -1325,28 +1325,36 @@ fn convert_to_response(
     let mut response = SuiTransactionBlockResponse::new(cache.digest);
     response.errors = cache.errors;
 
-    if opts.show_raw_input && cache.transaction.is_some() {
-        let sender_signed_data = cache.transaction.as_ref().unwrap().data();
-        let raw_tx = bcs::to_bytes(sender_signed_data)
-            .map_err(|e| anyhow!("Failed to serialize raw transaction with error: {}", e))?; // TODO: is this a client or server error?
-        response.raw_transaction = raw_tx;
-    }
-
-    if opts.show_input && cache.transaction.is_some() {
-        let tx_block =
-            SuiTransactionBlock::try_from(cache.transaction.unwrap().into_data(), module_cache)?;
-        response.transaction = Some(tx_block);
-    }
-
-    if opts.show_effects && cache.effects.is_some() {
-        let effects = cache.effects.unwrap().try_into().map_err(|e| {
-            anyhow!(
+    if let Some(transaction) = cache.transaction {
+        if opts.show_raw_input {
+            response.raw_transaction = bcs::to_bytes(transaction.data()).map_err(|e| {
                 // TODO: is this a client or server error?
-                "Failed to convert transaction block effects with error: {}",
-                e
-            )
-        })?;
-        response.effects = Some(effects);
+                anyhow!("Failed to serialize raw transaction with error: {e}")
+            })?;
+        }
+
+        if opts.show_input {
+            response.transaction = Some(SuiTransactionBlock::try_from(
+                transaction.into_data(),
+                module_cache,
+            )?);
+        }
+    }
+
+    if let Some(effects) = cache.effects {
+        if opts.show_raw_effects {
+            response.raw_effects = bcs::to_bytes(&effects).map_err(|e| {
+                // TODO: is this a client or server error?
+                anyhow!("Failed to serialize transaction block effects with error: {e}")
+            })?;
+        }
+
+        if opts.show_effects {
+            response.effects = Some(effects.try_into().map_err(|e| {
+                // TODO: is this a client or server error?
+                anyhow!("Failed to convert transaction block effects with error: {e}")
+            })?);
+        }
     }
 
     response.checkpoint = cache.checkpoint_seq;
@@ -1363,6 +1371,7 @@ fn convert_to_response(
     if opts.show_object_changes {
         response.object_changes = cache.object_changes;
     }
+
     Ok(response)
 }
 

@@ -73,5 +73,5 @@ error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:12:12
    │
 12 │         G {{}} = G{};
-   │            ^ Expected a field expression
+   │            ^ Unexpected '{'. Expected a field expression
 

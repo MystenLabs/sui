@@ -4,6 +4,8 @@
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use diesel::dsl::now;
+use diesel::query_dsl::methods::FilterDsl;
+use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, TextExpressionMethods};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::scoped_futures::ScopedFutureExt;
@@ -57,14 +59,71 @@ impl Persistent<ProcessedTxnData> for PgBridgePersistent {
                             ProcessedTxnData::TokenTransfer(t) => {
                                 diesel::insert_into(token_transfer::table)
                                     .values(&t.to_db())
-                                    .on_conflict_do_nothing()
+                                    .on_conflict((
+                                        token_transfer::dsl::chain_id,
+                                        token_transfer::dsl::nonce,
+                                        token_transfer::dsl::status,
+                                    ))
+                                    .do_update()
+                                    .set((
+                                        token_transfer::chain_id
+                                            .eq(excluded(token_transfer::chain_id)),
+                                        token_transfer::nonce.eq(excluded(token_transfer::nonce)),
+                                        token_transfer::status.eq(excluded(token_transfer::status)),
+                                        token_transfer::block_height
+                                            .eq(excluded(token_transfer::block_height)),
+                                        token_transfer::timestamp_ms
+                                            .eq(excluded(token_transfer::timestamp_ms)),
+                                        token_transfer::txn_hash
+                                            .eq(excluded(token_transfer::txn_hash)),
+                                        token_transfer::txn_sender
+                                            .eq(excluded(token_transfer::txn_sender)),
+                                        token_transfer::gas_usage
+                                            .eq(excluded(token_transfer::gas_usage)),
+                                        token_transfer::data_source
+                                            .eq(excluded(token_transfer::data_source)),
+                                        token_transfer::is_finalized
+                                            .eq(excluded(token_transfer::is_finalized)),
+                                    ))
+                                    .filter(token_transfer::is_finalized.eq(false))
                                     .execute(conn)
                                     .await?;
 
                                 if let Some(d) = t.to_data_maybe() {
                                     diesel::insert_into(token_transfer_data::table)
                                         .values(&d)
-                                        .on_conflict_do_nothing()
+                                        .on_conflict((
+                                            token_transfer_data::dsl::chain_id,
+                                            token_transfer_data::dsl::nonce,
+                                        ))
+                                        .do_update()
+                                        .set((
+                                            token_transfer_data::chain_id
+                                                .eq(excluded(token_transfer_data::chain_id)),
+                                            token_transfer_data::nonce
+                                                .eq(excluded(token_transfer_data::nonce)),
+                                            token_transfer_data::block_height
+                                                .eq(excluded(token_transfer_data::block_height)),
+                                            token_transfer_data::timestamp_ms
+                                                .eq(excluded(token_transfer_data::timestamp_ms)),
+                                            token_transfer_data::txn_hash
+                                                .eq(excluded(token_transfer_data::txn_hash)),
+                                            token_transfer_data::sender_address
+                                                .eq(excluded(token_transfer_data::sender_address)),
+                                            token_transfer_data::destination_chain.eq(excluded(
+                                                token_transfer_data::destination_chain,
+                                            )),
+                                            token_transfer_data::recipient_address.eq(excluded(
+                                                token_transfer_data::recipient_address,
+                                            )),
+                                            token_transfer_data::token_id
+                                                .eq(excluded(token_transfer_data::token_id)),
+                                            token_transfer_data::amount
+                                                .eq(excluded(token_transfer_data::amount)),
+                                            token_transfer_data::is_finalized
+                                                .eq(excluded(token_transfer_data::is_finalized)),
+                                        ))
+                                        .filter(token_transfer_data::is_finalized.eq(false))
                                         .execute(conn)
                                         .await?;
                                 }
@@ -103,20 +162,19 @@ impl IndexerProgressStore for PgBridgePersistent {
 
     async fn save_progress(
         &mut self,
-        task_name: String,
+        task: &Task,
         checkpoint_numbers: &[u64],
-        start_checkpoint_number: u64,
-        target_checkpoint_number: u64,
     ) -> anyhow::Result<Option<u64>> {
         if checkpoint_numbers.is_empty() {
             return Ok(None);
         }
-        if let Some(checkpoint_to_save) = self.save_progress_policy.cache_progress(
-            task_name.clone(),
-            checkpoint_numbers,
-            start_checkpoint_number,
-            target_checkpoint_number,
-        ) {
+        let task_name = task.task_name.clone();
+        let task_name_prefix = task.name_prefix();
+        let task_type_label = task.type_str();
+        if let Some(checkpoint_to_save) = self
+            .save_progress_policy
+            .cache_progress(task, checkpoint_numbers)
+        {
             let mut conn = self.pool.get().await?;
             diesel::insert_into(schema::progress_store::table)
                 .values(&models::ProgressStore {
@@ -137,7 +195,7 @@ impl IndexerProgressStore for PgBridgePersistent {
                 .await?;
             self.indexer_metrics
                 .tasks_current_checkpoints
-                .with_label_values(&[&task_name])
+                .with_label_values(&[task_name_prefix, task_type_label])
                 .set(checkpoint_to_save as i64);
             return Ok(Some(checkpoint_to_save));
         }
@@ -147,10 +205,11 @@ impl IndexerProgressStore for PgBridgePersistent {
     async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Tasks, anyhow::Error> {
         let mut conn = self.pool.get().await?;
         // get all unfinished tasks
-        let cp: Vec<models::ProgressStore> = dsl::progress_store
+        let cp: Vec<models::ProgressStore> =
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
-            .filter(columns::task_name.like(format!("{prefix} - %")))
-            .filter(columns::checkpoint.lt(columns::target_checkpoint))
+            QueryDsl::filter(
+                QueryDsl::filter(dsl::progress_store, columns::task_name.like(format!("{prefix} - %"))), 
+                columns::checkpoint.lt(columns::target_checkpoint))
             .order_by(columns::target_checkpoint.desc())
             .load(&mut conn)
             .await?;
@@ -163,11 +222,11 @@ impl IndexerProgressStore for PgBridgePersistent {
         prefix: &str,
     ) -> Result<Option<u64>, Error> {
         let mut conn = self.pool.get().await?;
-        let cp: Option<i64> = dsl::progress_store
-            .select(columns::target_checkpoint)
+        let cp: Option<i64> =
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
-            .filter(columns::task_name.like(format!("{prefix} - %")))
-            .filter(columns::target_checkpoint.ne(i64::MAX))
+            QueryDsl::filter(QueryDsl::filter(dsl::progress_store
+                .select(columns::target_checkpoint), columns::task_name.like(format!("{prefix} - %"))), 
+                columns::target_checkpoint.ne(i64::MAX))
             .order_by(columns::target_checkpoint.desc())
             .first::<i64>(&mut conn)
             .await
@@ -219,14 +278,17 @@ impl IndexerProgressStore for PgBridgePersistent {
 
     async fn update_task(&mut self, task: Task) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get().await?;
-        diesel::update(dsl::progress_store.filter(columns::task_name.eq(task.task_name)))
-            .set((
-                columns::checkpoint.eq(task.start_checkpoint as i64),
-                columns::target_checkpoint.eq(task.target_checkpoint as i64),
-                columns::timestamp.eq(now),
-            ))
-            .execute(&mut conn)
-            .await?;
+        diesel::update(QueryDsl::filter(
+            dsl::progress_store,
+            columns::task_name.eq(task.task_name),
+        ))
+        .set((
+            columns::checkpoint.eq(task.start_checkpoint as i64),
+            columns::target_checkpoint.eq(task.target_checkpoint as i64),
+            columns::timestamp.eq(now),
+        ))
+        .execute(&mut conn)
+        .await?;
         Ok(())
     }
 }

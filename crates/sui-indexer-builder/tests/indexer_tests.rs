@@ -484,6 +484,11 @@ fn new_gauge_vec(registry: &Registry) -> IntGaugeVec {
 }
 
 fn new_counter_vec(registry: &Registry) -> IntCounterVec {
-    register_int_counter_vec_with_registry!("whatever_counter", "whatever", &["whatever"], registry,)
-        .unwrap()
+    register_int_counter_vec_with_registry!(
+        "whatever_counter",
+        "whatever",
+        &["whatever1", "whatever2"],
+        registry,
+    )
+    .unwrap()
 }

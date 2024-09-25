@@ -30,7 +30,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
     pub async fn run(
         self,
         mut current_checkpoint_number: CheckpointSequenceNumber,
-        mut checkpoint_receiver: mpsc::Receiver<CheckpointData>,
+        mut checkpoint_receiver: mpsc::Receiver<Arc<CheckpointData>>,
         executor_progress_sender: mpsc::Sender<(String, CheckpointSequenceNumber)>,
     ) {
         info!(
@@ -49,7 +49,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
         // spawn child workers
         for worker_id in 0..self.concurrency {
             let (worker_sender, mut worker_recv) =
-                mpsc::channel::<CheckpointData>(MAX_CHECKPOINTS_IN_PROGRESS);
+                mpsc::channel::<Arc<CheckpointData>>(MAX_CHECKPOINTS_IN_PROGRESS);
             let (term_sender, mut term_receiver) = oneshot::channel::<()>();
             let cloned_progress_sender = progress_sender.clone();
             let task_name = self.task_name.clone();
@@ -68,7 +68,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
                             backoff::future::retry(backoff, || async {
                                 worker
                                     .clone()
-                                    .process_checkpoint(checkpoint.clone())
+                                    .process_checkpoint(&checkpoint)
                                     .await
                                     .map_err(|err| {
                                         info!("transient worker execution error {:?} for checkpoint {}", err, sequence_number);
@@ -132,7 +132,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
                     if sequence_number < current_checkpoint_number {
                         continue;
                     }
-                    self.worker.preprocess_hook(checkpoint.clone()).expect("failed to preprocess task");
+                    self.worker.preprocess_hook(&checkpoint).expect("failed to preprocess task");
                     if idle.is_empty() {
                         checkpoints.push_back(checkpoint);
                     } else {

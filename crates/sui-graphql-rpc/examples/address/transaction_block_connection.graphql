@@ -7,7 +7,7 @@
 # and budget.
 query transaction_block_with_relation_filter {
   address(address: "0x2") {
-    transactionBlocks(relation: SIGN, filter: { function: "0x2" }) {
+    transactionBlocks(relation: SENT, filter: { function: "0x2" }) {
       nodes {
         sender {
           address

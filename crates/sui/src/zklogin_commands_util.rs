@@ -95,7 +95,7 @@ pub async fn perform_zk_login_test_tx(
     println!("ZkLogin inputs:");
     println!("{:?}", serde_json::to_string(&reader).unwrap());
 
-    let (sub, aud) = parse_and_validate_jwt(parsed_token)?;
+    let (sub, aud, _) = parse_and_validate_jwt(parsed_token)?;
     let address_seed = gen_address_seed(&user_salt, "sub", &sub, &aud)?;
     let zk_login_inputs = ZkLoginInputs::from_reader(reader, &address_seed)?;
 

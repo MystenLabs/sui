@@ -10,20 +10,54 @@
 
 use fastcrypto::traits::ToFromBytes;
 use sui_sdk2::types::*;
+use tap::Pipe;
+
+#[derive(Debug)]
+pub struct SdkTypeConversionError(String);
+
+impl std::fmt::Display for SdkTypeConversionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for SdkTypeConversionError {}
+
+impl From<TypeParseError> for SdkTypeConversionError {
+    fn from(value: TypeParseError) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<anyhow::Error> for SdkTypeConversionError {
+    fn from(value: anyhow::Error) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<bcs::Error> for SdkTypeConversionError {
+    fn from(value: bcs::Error) -> Self {
+        Self(value.to_string())
+    }
+}
 
 macro_rules! bcs_convert_impl {
     ($core:ty, $external:ty) => {
-        impl From<$core> for $external {
-            fn from(value: $core) -> Self {
-                let bytes = bcs::to_bytes(&value).unwrap();
-                bcs::from_bytes(&bytes).unwrap()
+        impl TryFrom<$core> for $external {
+            type Error = bcs::Error;
+
+            fn try_from(value: $core) -> Result<Self, Self::Error> {
+                let bytes = bcs::to_bytes(&value)?;
+                bcs::from_bytes(&bytes)
             }
         }
 
-        impl From<$external> for $core {
-            fn from(value: $external) -> Self {
-                let bytes = bcs::to_bytes(&value).unwrap();
-                bcs::from_bytes(&bytes).unwrap()
+        impl TryFrom<$external> for $core {
+            type Error = bcs::Error;
+
+            fn try_from(value: $external) -> Result<Self, Self::Error> {
+                let bytes = bcs::to_bytes(&value)?;
+                bcs::from_bytes(&bytes)
             }
         }
     };
@@ -151,47 +185,65 @@ impl From<ObjectId> for crate::base_types::SuiAddress {
     }
 }
 
-impl From<crate::transaction::SenderSignedData> for SignedTransaction {
-    fn from(value: crate::transaction::SenderSignedData) -> Self {
+impl TryFrom<crate::transaction::SenderSignedData> for SignedTransaction {
+    type Error = SdkTypeConversionError;
+
+    fn try_from(value: crate::transaction::SenderSignedData) -> Result<Self, Self::Error> {
         let crate::transaction::SenderSignedTransaction {
             intent_message,
             tx_signatures,
         } = value.into_inner();
 
         Self {
-            transaction: intent_message.value.into(),
-            signatures: tx_signatures.into_iter().map(Into::into).collect(),
+            transaction: intent_message.value.try_into()?,
+            signatures: tx_signatures
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
         }
+        .pipe(Ok)
     }
 }
 
-impl From<SignedTransaction> for crate::transaction::SenderSignedData {
-    fn from(value: SignedTransaction) -> Self {
+impl TryFrom<SignedTransaction> for crate::transaction::SenderSignedData {
+    type Error = SdkTypeConversionError;
+
+    fn try_from(value: SignedTransaction) -> Result<Self, Self::Error> {
         let SignedTransaction {
             transaction,
             signatures,
         } = value;
 
         Self::new(
-            transaction.into(),
-            signatures.into_iter().map(Into::into).collect(),
+            transaction.try_into()?,
+            signatures
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
         )
+        .pipe(Ok)
     }
 }
 
-impl From<crate::transaction::Transaction> for SignedTransaction {
-    fn from(value: crate::transaction::Transaction) -> Self {
-        value.into_data().into()
+impl TryFrom<crate::transaction::Transaction> for SignedTransaction {
+    type Error = SdkTypeConversionError;
+
+    fn try_from(value: crate::transaction::Transaction) -> Result<Self, Self::Error> {
+        value.into_data().try_into()
     }
 }
 
-impl From<SignedTransaction> for crate::transaction::Transaction {
-    fn from(value: SignedTransaction) -> Self {
-        Self::new(value.into())
+impl TryFrom<SignedTransaction> for crate::transaction::Transaction {
+    type Error = SdkTypeConversionError;
+
+    fn try_from(value: SignedTransaction) -> Result<Self, Self::Error> {
+        Ok(Self::new(value.try_into()?))
     }
 }
 
-pub fn type_tag_core_to_sdk(value: move_core_types::language_storage::TypeTag) -> TypeTag {
+pub fn type_tag_core_to_sdk(
+    value: move_core_types::language_storage::TypeTag,
+) -> Result<TypeTag, SdkTypeConversionError> {
     match value {
         move_core_types::language_storage::TypeTag::Bool => TypeTag::Bool,
         move_core_types::language_storage::TypeTag::U8 => TypeTag::U8,
@@ -200,18 +252,21 @@ pub fn type_tag_core_to_sdk(value: move_core_types::language_storage::TypeTag) -
         move_core_types::language_storage::TypeTag::Address => TypeTag::Address,
         move_core_types::language_storage::TypeTag::Signer => TypeTag::Signer,
         move_core_types::language_storage::TypeTag::Vector(type_tag) => {
-            TypeTag::Vector(Box::new(type_tag_core_to_sdk(*type_tag)))
+            TypeTag::Vector(Box::new(type_tag_core_to_sdk(*type_tag)?))
         }
         move_core_types::language_storage::TypeTag::Struct(struct_tag) => {
-            TypeTag::Struct(Box::new(struct_tag_core_to_sdk(*struct_tag)))
+            TypeTag::Struct(Box::new(struct_tag_core_to_sdk(*struct_tag)?))
         }
         move_core_types::language_storage::TypeTag::U16 => TypeTag::U16,
         move_core_types::language_storage::TypeTag::U32 => TypeTag::U32,
         move_core_types::language_storage::TypeTag::U256 => TypeTag::U256,
     }
+    .pipe(Ok)
 }
 
-pub fn struct_tag_core_to_sdk(value: move_core_types::language_storage::StructTag) -> StructTag {
+pub fn struct_tag_core_to_sdk(
+    value: move_core_types::language_storage::StructTag,
+) -> Result<StructTag, SdkTypeConversionError> {
     let move_core_types::language_storage::StructTag {
         address,
         module,
@@ -220,18 +275,24 @@ pub fn struct_tag_core_to_sdk(value: move_core_types::language_storage::StructTa
     } = value;
 
     let address = Address::new(address.into_bytes());
-    let module = Identifier::new(module.as_str()).unwrap();
-    let name = Identifier::new(name.as_str()).unwrap();
-    let type_params = type_params.into_iter().map(type_tag_core_to_sdk).collect();
+    let module = Identifier::new(module.as_str())?;
+    let name = Identifier::new(name.as_str())?;
+    let type_params = type_params
+        .into_iter()
+        .map(type_tag_core_to_sdk)
+        .collect::<Result<_, _>>()?;
     StructTag {
         address,
         module,
         name,
         type_params,
     }
+    .pipe(Ok)
 }
 
-pub fn type_tag_sdk_to_core(value: TypeTag) -> move_core_types::language_storage::TypeTag {
+pub fn type_tag_sdk_to_core(
+    value: TypeTag,
+) -> Result<move_core_types::language_storage::TypeTag, SdkTypeConversionError> {
     match value {
         TypeTag::Bool => move_core_types::language_storage::TypeTag::Bool,
         TypeTag::U8 => move_core_types::language_storage::TypeTag::U8,
@@ -240,18 +301,21 @@ pub fn type_tag_sdk_to_core(value: TypeTag) -> move_core_types::language_storage
         TypeTag::Address => move_core_types::language_storage::TypeTag::Address,
         TypeTag::Signer => move_core_types::language_storage::TypeTag::Signer,
         TypeTag::Vector(type_tag) => move_core_types::language_storage::TypeTag::Vector(Box::new(
-            type_tag_sdk_to_core(*type_tag),
+            type_tag_sdk_to_core(*type_tag)?,
         )),
         TypeTag::Struct(struct_tag) => move_core_types::language_storage::TypeTag::Struct(
-            Box::new(struct_tag_sdk_to_core(*struct_tag)),
+            Box::new(struct_tag_sdk_to_core(*struct_tag)?),
         ),
         TypeTag::U16 => move_core_types::language_storage::TypeTag::U16,
         TypeTag::U32 => move_core_types::language_storage::TypeTag::U32,
         TypeTag::U256 => move_core_types::language_storage::TypeTag::U256,
     }
+    .pipe(Ok)
 }
 
-pub fn struct_tag_sdk_to_core(value: StructTag) -> move_core_types::language_storage::StructTag {
+pub fn struct_tag_sdk_to_core(
+    value: StructTag,
+) -> Result<move_core_types::language_storage::StructTag, SdkTypeConversionError> {
     let StructTag {
         address,
         module,
@@ -260,15 +324,19 @@ pub fn struct_tag_sdk_to_core(value: StructTag) -> move_core_types::language_sto
     } = value;
 
     let address = move_core_types::account_address::AccountAddress::new(address.into_inner());
-    let module = move_core_types::identifier::Identifier::new(module.into_inner()).unwrap();
-    let name = move_core_types::identifier::Identifier::new(name.into_inner()).unwrap();
-    let type_params = type_params.into_iter().map(type_tag_sdk_to_core).collect();
+    let module = move_core_types::identifier::Identifier::new(module.into_inner())?;
+    let name = move_core_types::identifier::Identifier::new(name.into_inner())?;
+    let type_params = type_params
+        .into_iter()
+        .map(type_tag_sdk_to_core)
+        .collect::<Result<_, _>>()?;
     move_core_types::language_storage::StructTag {
         address,
         module,
         name,
         type_params,
     }
+    .pipe(Ok)
 }
 
 impl From<crate::messages_checkpoint::CheckpointDigest> for CheckpointDigest {

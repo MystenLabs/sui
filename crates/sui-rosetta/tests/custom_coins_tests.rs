@@ -7,6 +7,7 @@ mod rosetta_client;
 mod test_coin_utils;
 
 use serde_json::json;
+use std::num::NonZeroUsize;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
@@ -222,7 +223,7 @@ async fn test_custom_coin_transfer() {
         tx.effects.as_ref().unwrap().status()
     );
     println!("Sui TX: {tx:?}");
-    let coin_cache = CoinMetadataCache::new(client);
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
     let ops2 = Operations::try_from_response(tx, &coin_cache)
         .await
         .unwrap();

@@ -12,7 +12,7 @@ use crate::{
     error::Error,
     types::{
         base64::Base64,
-        dot_move::{
+        move_registry::{
             error::MoveRegistryError,
             on_chain::{AppRecord, Name},
         },

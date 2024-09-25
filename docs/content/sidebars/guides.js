@@ -138,10 +138,10 @@ const guides = [
 						},
 						items: ['guides/developer/advanced/min-gas-fees'],
 					},*/
-					'guides/developer/advanced/graphql-migration',
 					'guides/developer/advanced/move-2024-migration',
 					'guides/developer/advanced/custom-indexer',
 					'guides/developer/advanced/randomness-onchain',
+					'guides/developer/advanced/graphql-migration',
 				],
 			},
 			{
@@ -153,19 +153,7 @@ const guides = [
 				},
 				items: [
 					'guides/developer/app-examples/e2e-counter',
-					{
-						type: 'category',
-						label: 'Trustless Swap',
-						link: {
-							type: 'doc',
-							id: 'guides/developer/app-examples/trustless-swap',
-						},
-						items: [
-							'guides/developer/app-examples/trustless-swap/backend',
-							'guides/developer/app-examples/trustless-swap/indexer-api',
-							'guides/developer/app-examples/trustless-swap/frontend',
-						],
-					},
+					'guides/developer/app-examples/trustless-swap',
 					'guides/developer/app-examples/coin-flip',
 					'guides/developer/app-examples/reviews-rating',
 					'guides/developer/app-examples/blackjack',

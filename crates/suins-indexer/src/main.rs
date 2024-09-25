@@ -107,9 +107,9 @@ impl SuinsIndexerWorker {
 
 #[async_trait]
 impl Worker for SuinsIndexerWorker {
-    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()> {
         let checkpoint_seq_number = checkpoint.checkpoint_summary.sequence_number;
-        let (updates, removals) = self.indexer.process_checkpoint(&checkpoint);
+        let (updates, removals) = self.indexer.process_checkpoint(checkpoint);
 
         // every 1000 checkpoints, we will print the checkpoint sequence number
         // to the console to keep track of progress

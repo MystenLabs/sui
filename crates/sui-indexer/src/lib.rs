@@ -26,6 +26,7 @@ use crate::indexer_reader::IndexerReader;
 use errors::IndexerError;
 
 pub mod apis;
+pub mod config;
 pub mod database;
 pub mod db;
 pub mod errors;
@@ -34,14 +35,14 @@ pub mod indexer;
 pub mod indexer_reader;
 pub mod metrics;
 pub mod models;
+pub mod restorer;
 pub mod schema;
+pub mod sql_backfill;
 pub mod store;
 pub mod system_package_task;
 pub mod tempdb;
 pub mod test_utils;
 pub mod types;
-
-pub mod config;
 
 pub async fn build_json_rpc_server(
     prometheus_registry: &Registry,

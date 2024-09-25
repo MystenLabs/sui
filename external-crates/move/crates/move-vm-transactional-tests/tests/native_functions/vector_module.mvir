@@ -1,5 +1,5 @@
 //# publish
-module 0x1.Coin {
+module 0x5.Coin {
     struct Coin has store { value: u64 }
     public value(c: &Self.Coin): u64 {
     label b0:
@@ -19,7 +19,7 @@ module 0x1.Coin {
 
 //# publish
 module 0x42.M {
-    import 0x1.Coin;
+    import 0x5.Coin;
     import 0x1.vector;
 
     struct Coins has key { f: vector<Coin.Coin> }
@@ -56,9 +56,9 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.Test {
+module 0x43.Test {
     import 0x42.M;
-    import 0x1.Coin;
+    import 0x5.Coin;
     test() {
         let coins: M.Coins;
     label b0:
@@ -69,4 +69,4 @@ module 0x42.Test {
     }
 }
 
-//# run 0x42::Test::test
+//# run 0x43::Test::test

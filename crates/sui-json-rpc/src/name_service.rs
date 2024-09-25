@@ -60,7 +60,7 @@ pub struct Table<K, V> {
     _value: PhantomData<V>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
 pub struct Domain {
     labels: Vec<String>,
 }
@@ -256,7 +256,7 @@ fn convert_from_new_format(s: &str, separator: &char) -> Result<String, NameServ
     Ok(parts.join(&separator.to_string()))
 }
 
-fn validate_label(label: &str) -> Result<&str, NameServiceError> {
+pub fn validate_label(label: &str) -> Result<&str, NameServiceError> {
     const MIN_LABEL_LENGTH: usize = 1;
     const MAX_LABEL_LENGTH: usize = 63;
     let bytes = label.as_bytes();

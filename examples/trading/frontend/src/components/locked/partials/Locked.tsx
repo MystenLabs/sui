@@ -78,7 +78,7 @@ export function Locked({
       label={getLabel()}
       labelClasses={getLabelClasses()}
     >
-      <div className="text-right flex flex-wrap items-center justify-between">
+      <div className="p-4 pt-1 text-right flex flex-wrap items-center justify-between">
         {
           <p className="text-sm flex-shrink-0 flex items-center gap-2">
             <ExplorerLink id={locked.objectId} isAddress={false} />

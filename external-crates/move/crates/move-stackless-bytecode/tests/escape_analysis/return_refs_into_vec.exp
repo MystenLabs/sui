@@ -832,30 +832,6 @@ public fun vector::swap_remove<#0>($t0|v: &mut vector<#0>, $t1|i: u64): #0 {
 
 
 [variant baseline]
-fun ReturnRefsIntoVec::return_vec_index_immut($t0|v: &vector<u64>): &u64 {
-     var $t1: &vector<u64>
-     var $t2: u64
-     var $t3: &u64
-  0: $t1 := move($t0)
-  1: $t2 := 0
-  2: $t3 := vector::borrow<u64>($t1, $t2)
-  3: return $t3
-}
-
-
-[variant baseline]
-fun ReturnRefsIntoVec::return_vec_index_mut($t0|v: &mut vector<u64>): &mut u64 {
-     var $t1: &mut vector<u64>
-     var $t2: u64
-     var $t3: &mut u64
-  0: $t1 := move($t0)
-  1: $t2 := 0
-  2: $t3 := vector::borrow_mut<u64>($t1, $t2)
-  3: return $t3
-}
-
-
-[variant baseline]
 public fun option::borrow<#0>($t0|t: &option::Option<#0>): &#0 {
      var $t1: &option::Option<#0>
      var $t2: bool
@@ -2670,6 +2646,30 @@ public fun string::utf8($t0|bytes: vector<u8>): string::String {
   9: $t4 := move($t0)
  10: $t5 := pack string::String($t4)
  11: return $t5
+}
+
+
+[variant baseline]
+fun ReturnRefsIntoVec::return_vec_index_immut($t0|v: &vector<u64>): &u64 {
+     var $t1: &vector<u64>
+     var $t2: u64
+     var $t3: &u64
+  0: $t1 := move($t0)
+  1: $t2 := 0
+  2: $t3 := vector::borrow<u64>($t1, $t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+fun ReturnRefsIntoVec::return_vec_index_mut($t0|v: &mut vector<u64>): &mut u64 {
+     var $t1: &mut vector<u64>
+     var $t2: u64
+     var $t3: &mut u64
+  0: $t1 := move($t0)
+  1: $t2 := 0
+  2: $t3 := vector::borrow_mut<u64>($t1, $t2)
+  3: return $t3
 }
 
 ============ after pipeline `escape_analysis` ================
@@ -3506,30 +3506,6 @@ public fun vector::swap_remove<#0>($t0|v: &mut vector<#0>, $t1|i: u64): #0 {
 
 
 [variant baseline]
-fun ReturnRefsIntoVec::return_vec_index_immut($t0|v: &vector<u64>): &u64 {
-     var $t1: &vector<u64>
-     var $t2: u64
-     var $t3: &u64
-  0: $t1 := move($t0)
-  1: $t2 := 0
-  2: $t3 := vector::borrow<u64>($t1, $t2)
-  3: return $t3
-}
-
-
-[variant baseline]
-fun ReturnRefsIntoVec::return_vec_index_mut($t0|v: &mut vector<u64>): &mut u64 {
-     var $t1: &mut vector<u64>
-     var $t2: u64
-     var $t3: &mut u64
-  0: $t1 := move($t0)
-  1: $t2 := 0
-  2: $t3 := vector::borrow_mut<u64>($t1, $t2)
-  3: return $t3
-}
-
-
-[variant baseline]
 public fun option::borrow<#0>($t0|t: &option::Option<#0>): &#0 {
      var $t1: &option::Option<#0>
      var $t2: bool
@@ -5344,4 +5320,28 @@ public fun string::utf8($t0|bytes: vector<u8>): string::String {
   9: $t4 := move($t0)
  10: $t5 := pack string::String($t4)
  11: return $t5
+}
+
+
+[variant baseline]
+fun ReturnRefsIntoVec::return_vec_index_immut($t0|v: &vector<u64>): &u64 {
+     var $t1: &vector<u64>
+     var $t2: u64
+     var $t3: &u64
+  0: $t1 := move($t0)
+  1: $t2 := 0
+  2: $t3 := vector::borrow<u64>($t1, $t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+fun ReturnRefsIntoVec::return_vec_index_mut($t0|v: &mut vector<u64>): &mut u64 {
+     var $t1: &mut vector<u64>
+     var $t2: u64
+     var $t3: &mut u64
+  0: $t1 := move($t0)
+  1: $t2 := 0
+  2: $t3 := vector::borrow_mut<u64>($t1, $t2)
+  3: return $t3
 }

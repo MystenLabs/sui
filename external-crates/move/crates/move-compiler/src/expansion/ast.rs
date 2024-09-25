@@ -937,32 +937,6 @@ impl fmt::Display for Visibility {
     }
 }
 
-impl fmt::Display for Type_ {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        use Type_::*;
-        match self {
-            UnresolvedError => write!(f, "_"),
-            Apply(n, tys) => {
-                write!(f, "{}", n)?;
-                if !tys.is_empty() {
-                    write!(f, "<")?;
-                    write!(f, "{}", format_comma(tys))?;
-                    write!(f, ">")?;
-                }
-                Ok(())
-            }
-            Ref(mut_, ty) => write!(f, "&{}{}", if *mut_ { "mut " } else { "" }, ty),
-            Fun(args, result) => write!(f, "({}):{}", format_comma(args), result),
-            Unit => write!(f, "()"),
-            Multiple(tys) => {
-                write!(f, "(")?;
-                write!(f, "{}", format_comma(tys))?;
-                write!(f, ")")
-            }
-        }
-    }
-}
-
 impl std::fmt::Display for Value_ {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Value_ as V;
@@ -976,7 +950,17 @@ impl std::fmt::Display for Value_ {
             V::U128(u) => write!(f, "{}", u),
             V::U256(u) => write!(f, "{}", u),
             V::Bool(b) => write!(f, "{}", b),
-            V::Bytearray(v) => write!(f, "{:?}", v), // Good enough?
+            // TODO preserve the user's original string
+            V::Bytearray(v) => {
+                write!(f, "vector[")?;
+                for (idx, byte) in v.iter().enumerate() {
+                    if idx != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", byte)?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }

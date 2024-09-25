@@ -1,14 +1,14 @@
-module 0x2::A {
+module 0x7::A {
     public struct S has copy, drop {
-        f1: 0x2::B::S,
-        f2: 0x2::C::S,
+        f1: 0x7::B::S,
+        f2: 0x7::C::S,
     }
 
-    public fun new(f1: 0x2::B::S, f2: 0x2::C::S): S {
+    public fun new(f1: 0x7::B::S, f2: 0x7::C::S): S {
         Self::S { f1, f2 }
     }
 
-    public fun destroy(v: S): (0x2::B::S, 0x2::C::S) {
+    public fun destroy(v: S): (0x7::B::S, 0x7::C::S) {
         let S { f1: v1, f2: v2 } = v;
         (v1, v2)
     }
@@ -16,22 +16,22 @@ module 0x2::A {
     public fun entry_a() {
         let mut i = 0;
         while (i < 10) {
-            let b = 0x2::B::new(20, 100);
-            let c = 0x2::C::new(@0x42, true);
-            let another_b = 0x2::B::b_and_c(&b, c);
-            let (_, _) = 0x2::B::destroy(another_b);
-            let another_c = 0x2::C::new(@0x42, false);
-            0x2::C::destroy(another_c);
+            let b = 0x7::B::new(20, 100);
+            let c = 0x7::C::new(@0x42, true);
+            let another_b = 0x7::B::b_and_c(&b, c);
+            let (_, _) = 0x7::B::destroy(another_b);
+            let another_c = 0x7::C::new(@0x42, false);
+            0x7::C::destroy(another_c);
             i = i + 1;
         }
     }
 
-    public fun get_field_1(s: &S): 0x2::B::S {
+    public fun get_field_1(s: &S): 0x7::B::S {
         *&s.f1
     }
 }
 
-module 0x2::B {
+module 0x7::B {
     public struct S has copy, drop {
         f1: u64,
         f2: u128,
@@ -44,8 +44,8 @@ module 0x2::B {
         (val1, val2)
     }
 
-    public fun b_and_c(b: &S, c: 0x2::C::S): S {
-        let _ = 0x2::C::destroy(c);
+    public fun b_and_c(b: &S, c: 0x7::C::S): S {
+        let _ = 0x7::C::destroy(c);
         let another_b = S {
             f1: 0,
             f2: b.f2,
@@ -54,7 +54,7 @@ module 0x2::B {
     }
 }
 
-module 0x2::C {
+module 0x7::C {
     public struct S has copy, drop {
         f1: address,
         f2: bool,
@@ -83,65 +83,65 @@ module 0x2::C {
 }
 
 
-module 0x2::D {
+module 0x7::D {
     public struct S has copy, drop {
-        f1: 0x2::B::S,
+        f1: 0x7::B::S,
     }
 
-    public fun new(): 0x2::D::S {
+    public fun new(): 0x7::D::S {
         Self::S {
-            f1: 0x2::B::new(20, 100),
+            f1: 0x7::B::new(20, 100),
         }
     }
 
     public fun entry_d() {
         let mut i = 0;
         while (i < 10) {
-            let b = 0x2::B::new(20, 100);
-            let c = 0x2::C::new(@0x45, false);
-            let another_b = 0x2::B::b_and_c(&b, c);
-            let (_, _) = 0x2::B::destroy(another_b);
-            let another_c = 0x2::C::new(@0x46, true);
-            0x2::C::destroy(another_c);
+            let b = 0x7::B::new(20, 100);
+            let c = 0x7::C::new(@0x45, false);
+            let another_b = 0x7::B::b_and_c(&b, c);
+            let (_, _) = 0x7::B::destroy(another_b);
+            let another_c = 0x7::C::new(@0x46, true);
+            0x7::C::destroy(another_c);
             i = i + 1;
         }
     }
 }
 
-module 0x2::E {
+module 0x7::E {
     public struct S {
         f1: u64,
     }
 
-    public fun new(): 0x2::E::S { Self::S { f1: 20 } }
+    public fun new(): 0x7::E::S { Self::S { f1: 20 } }
 
     public fun entry_e() {
         let mut i = 0;
         while (i < 10) {
-            let b = 0x2::B::new(20, 100);
-            let c = 0x2::C::new(@0x100, false);
-            let another_b = 0x2::B::b_and_c(&b, c);
-            let (_, _) = 0x2::B::destroy(another_b);
-            let another_c = 0x2::C::new(@0x101, true);
-            0x2::C::destroy(another_c);
+            let b = 0x7::B::new(20, 100);
+            let c = 0x7::C::new(@0x100, false);
+            let another_b = 0x7::B::b_and_c(&b, c);
+            let (_, _) = 0x7::B::destroy(another_b);
+            let another_c = 0x7::C::new(@0x101, true);
+            0x7::C::destroy(another_c);
             i = i + 1;
         };
     }
 }
 
-module 0x2::F {
+module 0x7::F {
     public struct S {
         f1: u64,
     }
 
-    public fun new(): 0x2::F::S { Self::S { f1: 20 } }
+    public fun new(): 0x7::F::S { Self::S { f1: 20 } }
 
     public fun entry_f() {
-        0x2::A::entry_a();
+        0x7::A::entry_a();
     }
 }
 
-module 0x2::G {
+module 0x7::G {
     public struct S has copy, drop {
         f1: u64,
         f2: u128,
@@ -157,8 +157,8 @@ module 0x2::G {
         (val1, val2, val3, val4, val5)
     }
 
-    public fun b_and_c(b: &S, c: 0x2::C::S): S {
-        let _ = 0x2::C::destroy(c);
+    public fun b_and_c(b: &S, c: 0x7::C::S): S {
+        let _ = 0x7::C::destroy(c);
         let another_b = S {
             f1: 0,
             f2: b.f2,

@@ -155,7 +155,6 @@ module sui::token {
         (policy, cap)
     }
 
-    #[allow(lint(share_owned))]
     /// Share the `TokenPolicy`. Due to `key`-only restriction, it must be
     /// shared after initialization.
     public fun share_policy<T>(policy: TokenPolicy<T>) {

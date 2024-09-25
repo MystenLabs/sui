@@ -71,6 +71,7 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
@@ -578,7 +579,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .await;
 
                 cluster
-                    .wait_for_objects_snapshot_catchup(Duration::from_secs(60))
+                    .wait_for_objects_snapshot_catchup(Duration::from_secs(180))
                     .await;
 
                 if let Some(wait_for_checkpoint_pruned) = wait_for_checkpoint_pruned {
@@ -735,8 +736,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             }
             SuiSubcommand::ProgrammableTransaction(ProgrammableTransactionCommand {
                 sender,
+                sponsor,
                 gas_budget,
                 gas_price,
+                gas_payment,
                 dev_inspect,
                 inputs,
             }) => {
@@ -782,15 +785,21 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 let summary = if !dev_inspect {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
-                    let transaction = self.sign_txn(sender, |sender, gas| {
-                        TransactionData::new_programmable(
-                            sender,
-                            vec![gas],
-                            ProgrammableTransaction { inputs, commands },
-                            gas_budget,
-                            gas_price,
-                        )
-                    });
+                    let transaction = self.sign_sponsor_txn(
+                        sender,
+                        sponsor,
+                        gas_payment,
+                        |sender, sponsor, gas| {
+                            TransactionData::new_programmable_allow_sponsor(
+                                sender,
+                                vec![gas],
+                                ProgrammableTransaction { inputs, commands },
+                                gas_budget,
+                                gas_price,
+                                sponsor,
+                            )
+                        },
+                    );
                     self.execute_txn(transaction).await?
                 } else {
                     assert!(
@@ -1360,13 +1369,46 @@ impl<'a> SuiTestAdapter {
         sender: Option<String>,
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
     ) -> Transaction {
-        let test_account = self.get_sender(sender);
-        let gas_payment = self
-            .get_object(&test_account.gas, None)
+        self.sign_sponsor_txn(sender, None, None, move |sender, _, gas| {
+            txn_data(sender, gas)
+        })
+    }
+
+    fn sign_sponsor_txn(
+        &self,
+        sender: Option<String>,
+        sponsor: Option<String>,
+        payment: Option<FakeID>,
+        txn_data: impl FnOnce(
+            /* sender */ SuiAddress,
+            /* sponsor */ SuiAddress,
+            /* gas */ ObjectRef,
+        ) -> TransactionData,
+    ) -> Transaction {
+        let sender = self.get_sender(sender);
+        let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
+
+        let payment = if let Some(payment) = payment {
+            self.fake_to_real_object_id(payment)
+                .expect("Could not find specified payment object")
+        } else {
+            sponsor.gas
+        };
+
+        let payment_ref = self
+            .get_object(&payment, None)
             .unwrap()
             .compute_object_reference();
-        let data = txn_data(test_account.address, gas_payment);
-        to_sender_signed_transaction(data, &test_account.key_pair)
+
+        let data = txn_data(sender.address, sponsor.address, payment_ref);
+        if sender.address == sponsor.address {
+            to_sender_signed_transaction(data, &sender.key_pair)
+        } else {
+            to_sender_signed_transaction_with_multi_signers(
+                data,
+                vec![&sender.key_pair, &sponsor.key_pair],
+            )
+        }
     }
 
     fn get_sender(&self, sender: Option<String>) -> &TestAccount {

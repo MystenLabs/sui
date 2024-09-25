@@ -35,6 +35,7 @@ mod universal_committer;
 #[cfg(test)]
 #[path = "tests/randomized_tests.rs"]
 mod randomized_tests;
+mod round_prober;
 #[cfg(test)]
 mod test_dag;
 #[cfg(test)]
@@ -44,7 +45,7 @@ mod test_dag_parser;
 
 /// Exported consensus API.
 pub use authority_node::ConsensusAuthority;
-pub use block::{BlockAPI, Round};
+pub use block::{BlockAPI, Round, TransactionIndex};
 pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
 pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
 pub use transaction::{ClientError, TransactionClient, TransactionVerifier, ValidationError};

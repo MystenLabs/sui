@@ -28,7 +28,7 @@ pub(crate) struct State {
 
 #[async_trait::async_trait]
 impl Worker for TransactionHandler {
-    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
@@ -40,7 +40,7 @@ impl Worker for TransactionHandler {
                 checkpoint_summary.epoch,
                 checkpoint_summary.sequence_number,
                 checkpoint_summary.timestamp_ms,
-                &checkpoint_transaction,
+                checkpoint_transaction,
                 &checkpoint_transaction.effects,
                 &mut state,
             )?;
@@ -216,7 +216,7 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionHandler::new();
-        txn_handler.process_checkpoint(checkpoint_data).await?;
+        txn_handler.process_checkpoint(&checkpoint_data).await?;
         let transaction_entries = txn_handler.state.lock().await.transactions.clone();
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();

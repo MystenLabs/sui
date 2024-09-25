@@ -7,6 +7,7 @@ use crate::config::default_ed25519_key_pair;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::*;
+use crate::metrics::BridgeMetrics;
 use crate::server::BridgeNodePublicMetadata;
 use crate::types::BridgeAction;
 use crate::utils::get_eth_signer_client;
@@ -152,6 +153,7 @@ impl BridgeTestClusterBuilder {
     pub async fn build(self) -> BridgeTestCluster {
         init_all_struct_tags();
         std::env::set_var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY", "1");
+        let metrics = Arc::new(BridgeMetrics::new_for_testing());
         let mut bridge_keys = vec![];
         let mut bridge_keys_copy = vec![];
         for _ in 0..self.num_validators {
@@ -177,7 +179,7 @@ impl BridgeTestClusterBuilder {
                     .await,
             );
         }
-        let bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url)
+        let bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url, metrics)
             .await
             .unwrap();
         info!(
@@ -480,7 +482,10 @@ struct SolDeployConfig {
     supported_chain_ids: Vec<u64>,
     supported_chain_limits_in_dollars: Vec<u64>,
     supported_tokens: Vec<String>,
+    token_ids: Vec<u64>,
+    sui_decimals: Vec<u64>,
     token_prices: Vec<u64>,
+    weth: String,
 }
 
 pub(crate) async fn deploy_sol_contract(
@@ -522,7 +527,10 @@ pub(crate) async fn deploy_sol_contract(
             1000000000000000,
         ],
         supported_tokens: vec![], // this is set up in the deploy script
+        token_ids: vec![],        // this is set up in the deploy script
+        sui_decimals: vec![],     // this is set up in the deploy script
         token_prices: vec![12800, 432518900, 25969600, 10000, 10000],
+        weth: "".to_string(), // this is set up in the deploy script
     };
 
     let serialized_config = serde_json::to_string_pretty(&deploy_config).unwrap();
@@ -836,6 +844,9 @@ impl TempDir {
 
 impl Drop for TempDir {
     fn drop(&mut self) {
-        fs::remove_dir_all(&self.path).unwrap();
+        // Use eprintln! here in case logging is not initialized
+        if let Err(e) = fs::remove_dir_all(&self.path) {
+            eprintln!("Failed to remove temp dir: {:?}", e);
+        }
     }
 }

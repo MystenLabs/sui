@@ -12,11 +12,11 @@ use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
-use super::dot_move::named_move_package::NamedMovePackage;
-use super::dot_move::named_type::NamedType;
 use super::move_package::{
     self, MovePackage, MovePackageCheckpointFilter, MovePackageVersionFilter,
 };
+use super::move_registry::named_move_package::NamedMovePackage;
+use super::move_registry::named_type::NamedType;
 use super::suins_registration::NameService;
 use super::uint53::UInt53;
 use super::{
@@ -289,11 +289,10 @@ impl Query {
     /// Fetch a structured representation of a concrete type, including its layout information.
     /// Fails if the type is malformed.
     async fn type_(&self, type_: String) -> Result<MoveType> {
-        Ok(MoveType::new(
-            TypeTag::from_str(&type_)
-                .map_err(|e| Error::Client(format!("Bad type: {e}")))
-                .extend()?,
-        ))
+        Ok(TypeTag::from_str(&type_)
+            .map_err(|e| Error::Client(format!("Bad type: {e}")))
+            .extend()?
+            .into())
     }
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
@@ -562,7 +561,7 @@ impl Query {
         let Watermark { checkpoint, .. } = *ctx.data()?;
         let type_tag = NamedType::query(ctx, &name, checkpoint).await?;
 
-        Ok(MoveType::new(type_tag))
+        Ok(type_tag.into())
     }
 
     /// The coin metadata associated with the given coin type.

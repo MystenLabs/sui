@@ -32,6 +32,7 @@ telemetry-subscribers.workspace = true
 tracing.workspace = true
 backoff.workspace = true
 sui-config.workspace = true
+tempfile.workspace = true
 sui-indexer-builder.workspace = true
 
 [dev-dependencies]

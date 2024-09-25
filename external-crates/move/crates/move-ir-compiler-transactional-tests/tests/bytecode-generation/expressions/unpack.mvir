@@ -30,7 +30,7 @@ module 0x2d12.M {
 
 //# print-bytecode
 // An unpack expression cannot reference a struct type defined in a separate module.
-module 0x2d12.N {
+module 0x2d13.N {
     import 0x2d12.M;
 
     f() {

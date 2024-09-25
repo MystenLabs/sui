@@ -167,7 +167,7 @@ Return the epoch start time as a unix timestamp in milliseconds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>(self: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
-   self.epoch_timestamp_ms
+    self.epoch_timestamp_ms
 }
 </code></pre>
 

@@ -689,7 +689,10 @@ fn struct_layout_(rep: &str, fields: Vec<(&str, MoveTypeLayout)>) -> MoveTypeLay
         .map(|(name, layout)| MoveFieldLayout::new(Identifier::new(name).unwrap(), layout))
         .collect();
 
-    MoveTypeLayout::Struct(MoveStructLayout { type_, fields })
+    MoveTypeLayout::Struct(Box::new(MoveStructLayout {
+        type_,
+        fields: Box::new(fields),
+    }))
 }
 
 /// Create a variant value for test purposes.
@@ -723,7 +726,7 @@ fn enum_layout_(rep: &str, variants: Vec<(&str, Vec<(&str, MoveTypeLayout)>)>) -
         })
         .collect();
 
-    MoveTypeLayout::Enum(MoveEnumLayout { type_, variants })
+    MoveTypeLayout::Enum(Box::new(MoveEnumLayout { type_, variants }))
 }
 
 /// BCS encode Move value.

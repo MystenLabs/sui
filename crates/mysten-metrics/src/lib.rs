@@ -545,6 +545,47 @@ pub fn uptime_metric(
     Box::new(metric)
 }
 
+/// Similar to `uptime_metric`, but for the bridge node with different labels.
+/// Create a metric that measures the uptime from when this metric was constructed.
+/// The metric is labeled with:
+/// - 'process': the process type. We keep this label to be able to distinguish between different binaries.
+/// - 'version': binary version, generally be of the format: 'semver-gitrevision'
+/// - 'sui_chain_identifier': the identifier of sui network which this process is part of
+/// - 'eth_chain_identifier': the identifier of eth network which this process is part of
+/// - 'client_enabled': whether the bridge node is running as a client
+pub fn bridge_uptime_metric(
+    process: &str,
+    version: &'static str,
+    sui_chain_identifier: &str,
+    eth_chain_identifier: &str,
+    client_enabled: bool,
+) -> Box<dyn prometheus::core::Collector> {
+    let opts = prometheus::opts!("uptime", "uptime of the node service in seconds")
+        .variable_label("process")
+        .variable_label("version")
+        .variable_label("sui_chain_identifier")
+        .variable_label("eth_chain_identifier")
+        .variable_label("client_enabled");
+
+    let start_time = std::time::Instant::now();
+    let uptime = move || start_time.elapsed().as_secs();
+    let metric = prometheus_closure_metric::ClosureMetric::new(
+        opts,
+        prometheus_closure_metric::ValueType::Counter,
+        uptime,
+        &[
+            process,
+            version,
+            sui_chain_identifier,
+            eth_chain_identifier,
+            if client_enabled { "true" } else { "false" },
+        ],
+    )
+    .unwrap();
+
+    Box::new(metric)
+}
+
 pub const METRICS_ROUTE: &str = "/metrics";
 
 // Creates a new http server that has as a sole purpose to expose

@@ -1,4 +1,4 @@
-module 0x1::M {
+module 0x6::M {
     #[test_only]
     public fun this_aborts() {
         abort 0
@@ -8,10 +8,10 @@ module 0x1::M {
     fun dummy_test() { }
 }
 
-module 0x1::B {
+module 0x7::B {
 
     #[test_only]
-    use 0x1::M;
+    use 0x6::M;
 
     #[test]
     fun failing_test() {

@@ -19,7 +19,7 @@ use std::{
 };
 
 use crate::{
-    completion::on_completion_request, context::Context, inlay_hints, symbols,
+    completions::on_completion_request, context::Context, inlay_hints, symbols,
     vfs::on_text_document_sync_notification,
 };
 use url::Url;
