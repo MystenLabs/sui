@@ -251,6 +251,11 @@ pub struct PolicyConfig {
     pub spam_sample_rate: Weight,
     #[serde(default = "default_dry_run")]
     pub dry_run: bool,
+    /// List of String which should all parse to type IPAddr.
+    /// If set, only requests from provided IPs will be allowed,
+    /// and any blocklist related configuration will be ignored.
+    #[serde(default)]
+    pub allow_list: Option<Vec<String>>,
 }
 
 impl Default for PolicyConfig {
@@ -264,6 +269,7 @@ impl Default for PolicyConfig {
             channel_capacity: 100,
             spam_sample_rate: default_spam_sample_rate(),
             dry_run: default_dry_run(),
+            allow_list: None,
         }
     }
 }
