@@ -1,0 +1,302 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+use anyhow::{bail, Result};
+use move_core_types::{
+    account_address::AccountAddress,
+    effects::{AccountChangeSet, ChangeSet, Op},
+    identifier::Identifier,
+    language_storage::{ModuleId, StructTag},
+    resolver::{ModuleResolver, MoveResolver, ResourceResolver},
+};
+use std::{
+    collections::{btree_map, BTreeMap, HashMap},
+    fmt::Debug,
+};
+
+use crate::cache::linkage_context::LinkageContext;
+
+// -------------------------------------------------------------------------------------------------
+// Types
+// -------------------------------------------------------------------------------------------------
+
+/// A dummy storage containing no modules or resources.
+#[derive(Debug, Clone)]
+pub struct BlankStorage;
+
+/// A storage adapter created by stacking a change set on top of an existing storage backend.
+/// This can be used for additional computations without modifying the base.
+#[derive(Debug, Clone)]
+pub struct DeltaStorage<'a, 'b, S> {
+    base: &'a S,
+    delta: &'b ChangeSet,
+}
+
+/// Simple in-memory storage for modules and resources under an account.
+#[derive(Debug, Clone)]
+struct InMemoryAccountStorage {
+    modules: BTreeMap<Identifier, Vec<u8>>,
+}
+
+/// Simple in-memory storage that can be used as a Move VM storage backend for testing purposes.
+#[derive(Debug, Clone)]
+pub struct InMemoryStorage {
+    pub context: AccountAddress,
+    pub accounts: BTreeMap<AccountAddress, InMemoryAccountStorage>,
+}
+
+// -------------------------------------------------------------------------------------------------
+// Impls
+// -------------------------------------------------------------------------------------------------
+
+impl BlankStorage {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl<'a, 'b, S: MoveResolver> DeltaStorage<'a, 'b, S> {
+    pub fn new(base: &'a S, delta: &'b ChangeSet) -> Self {
+        Self { base, delta }
+    }
+}
+
+impl InMemoryAccountStorage {
+    fn apply(&mut self, account_changeset: AccountChangeSet) -> Result<()> {
+        let modules = account_changeset.into_inner();
+        apply_changes(&mut self.modules, modules)?;
+        Ok(())
+    }
+
+    fn new() -> Self {
+        Self {
+            modules: BTreeMap::new(),
+        }
+    }
+}
+
+impl InMemoryStorage {
+    pub fn apply_extended(&mut self, changeset: ChangeSet) -> Result<()> {
+        for (addr, account_changeset) in changeset.into_inner() {
+            match self.accounts.entry(addr) {
+                btree_map::Entry::Occupied(entry) => {
+                    entry.into_mut().apply(account_changeset)?;
+                }
+                btree_map::Entry::Vacant(entry) => {
+                    let mut account_storage = InMemoryAccountStorage::new();
+                    account_storage.apply(account_changeset)?;
+                    entry.insert(account_storage);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn apply(&mut self, changeset: ChangeSet) -> Result<()> {
+        self.apply_extended(changeset)
+    }
+
+    pub fn new() -> Self {
+        Self {
+            accounts: BTreeMap::new(),
+            context: AccountAddress::ZERO,
+        }
+    }
+
+    pub fn publish_or_overwrite_module(&mut self, module_id: ModuleId, blob: Vec<u8>) {
+        let account = get_or_insert(&mut self.accounts, *module_id.address(), || {
+            InMemoryAccountStorage::new()
+        });
+        account.modules.insert(module_id.name().to_owned(), blob);
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Resolver Impls
+// -------------------------------------------------------------------------------------------------
+
+// -----------------------------------------------
+// Module Resolvers
+// -----------------------------------------------
+
+impl ModuleResolver for BlankStorage {
+    type Error = ();
+
+    fn get_module(&self, _module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(None)
+    }
+
+    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        Ok(None)
+    }
+}
+
+impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
+    type Error = S::Error;
+
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        if let Some(account_storage) = self.delta.accounts().get(module_id.address()) {
+            if let Some(blob_opt) = account_storage.modules().get(module_id.name()) {
+                return Ok(blob_opt.clone().ok());
+            }
+        }
+
+        self.base.get_module(module_id)
+    }
+
+    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        if let Some(package) = self.delta.accounts().get(id) {
+            return Ok(package
+                .modules()
+                .values()
+                .map(|op| op.clone().ok())
+                .collect::<Option<_>>());
+        }
+        self.base.get_package(id)
+    }
+}
+
+impl ModuleResolver for InMemoryStorage {
+    type Error = ();
+
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        if let Some(account_storage) = self.accounts.get(module_id.address()) {
+            return Ok(account_storage.modules.get(module_id.name()).cloned());
+        }
+        Ok(None)
+    }
+
+    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        if let Some(account_storage) = self.accounts.get(id) {
+            return Ok(Some(
+                account_storage
+                    .modules
+                    .values()
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            ));
+        }
+        Ok(None)
+    }
+}
+
+// -----------------------------------------------
+// Resource Resolvers
+// -----------------------------------------------
+
+impl ResourceResolver for BlankStorage {
+    type Error = ();
+
+    fn get_resource(
+        &self,
+        _address: &AccountAddress,
+        _tag: &StructTag,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(None)
+    }
+}
+
+impl<'a, 'b, S: ResourceResolver> ResourceResolver for DeltaStorage<'a, 'b, S> {
+    type Error = S::Error;
+
+    fn get_resource(
+        &self,
+        _address: &AccountAddress,
+        _tag: &StructTag,
+    ) -> Result<Option<Vec<u8>>, S::Error> {
+        unreachable!()
+    }
+}
+
+impl ResourceResolver for InMemoryStorage {
+    type Error = ();
+
+    fn get_resource(
+        &self,
+        _address: &AccountAddress,
+        _tag: &StructTag,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        unreachable!()
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Impls for Into<LinkageContext>
+// -------------------------------------------------------------------------------------------------
+
+/// The LinkageContext for BlankStorage is Blank.
+impl Into<LinkageContext> for &BlankStorage {
+    fn into(self) -> LinkageContext {
+        LinkageContext::new(AccountAddress::ZERO, HashMap::new())
+    }
+}
+
+/// The LinkageContext for InMemoryStorage is reflexive: everything maps to itself.
+impl Into<LinkageContext> for &InMemoryStorage {
+    fn into(self) -> LinkageContext {
+        let InMemoryStorage {
+            context: root_package,
+            accounts,
+        } = self;
+        let link_table = accounts
+            .into_iter()
+            .map(|(account, _)| (*account, *account))
+            .collect();
+        LinkageContext::new(*root_package, link_table)
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Helper Functions
+// -------------------------------------------------------------------------------------------------
+
+fn apply_changes<K, V>(
+    map: &mut BTreeMap<K, V>,
+    changes: impl IntoIterator<Item = (K, Op<V>)>,
+) -> Result<()>
+where
+    K: Ord + Debug,
+{
+    use btree_map::Entry::*;
+    use Op::*;
+
+    for (k, op) in changes.into_iter() {
+        match (map.entry(k), op) {
+            (Occupied(entry), New(_)) => {
+                bail!(
+                    "Failed to apply changes -- key {:?} already exists",
+                    entry.key()
+                )
+            }
+            (Occupied(entry), Delete) => {
+                entry.remove();
+            }
+            (Occupied(entry), Modify(val)) => {
+                *entry.into_mut() = val;
+            }
+            (Vacant(entry), New(val)) => {
+                entry.insert(val);
+            }
+            (Vacant(entry), Delete | Modify(_)) => bail!(
+                "Failed to apply changes -- key {:?} does not exist",
+                entry.key()
+            ),
+        }
+    }
+    Ok(())
+}
+
+fn get_or_insert<K, V, F>(map: &mut BTreeMap<K, V>, key: K, make_val: F) -> &mut V
+where
+    K: Ord,
+    F: FnOnce() -> V,
+{
+    use btree_map::Entry::*;
+
+    match map.entry(key) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(entry) => entry.insert(make_val()),
+    }
+}
