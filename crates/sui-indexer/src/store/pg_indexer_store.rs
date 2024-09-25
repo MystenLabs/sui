@@ -16,6 +16,7 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use futures::future::Either;
 use itertools::Itertools;
 use object_store::path::Path;
+use sui_types::base_types::ObjectID;
 use tap::TapFallible;
 use tracing::{info, warn};
 
@@ -2169,18 +2170,53 @@ fn retain_latest_indexed_objects(
                 )
         })
         .fold(
-            (HashMap::new(), HashMap::new()),
+            (HashMap::<ObjectID, IndexedObject>::new(), HashMap::<ObjectID, IndexedDeletedObject>::new()),
             |(mut mutations, mut deletions), either_change| {
                 match either_change {
                     // Remove mutation / deletion with a following deletion / mutation,
                     // b/c following deletion / mutation always has a higher version.
+                    // Technically, assertions below are not required, double check just in case.
                     Either::Left((id, mutation)) => {
-                        deletions.remove(&id);
-                        mutations.insert(id, mutation);
+                        let mutation_version = mutation.object.version();
+                        if let Some(existing) = deletions.remove(&id) {
+                            assert!(
+                                existing.object_version < mutation_version.value(),
+                                "Mutation version ({:?}) should be greater than existing deletion version ({:?}) for object {:?}",
+                                mutation_version,
+                                existing.object_version,
+                                id
+                            );
+                        }
+                        if let Some(existing) = mutations.insert(id, mutation) {
+                            assert!(
+                                existing.object.version() < mutation_version,
+                                "Mutation version ({:?}) should be greater than existing mutation version ({:?}) for object {:?}",
+                                mutation_version,
+                                existing.object.version(),
+                                id
+                            );
+                        }
                     }
                     Either::Right((id, deletion)) => {
-                        mutations.remove(&id);
-                        deletions.insert(id, deletion);
+                        let deletion_version = deletion.object_version;
+                        if let Some(existing) = mutations.remove(&id) {
+                            assert!(
+                                existing.object.version().value() < deletion_version,
+                                "Deletion version ({:?}) should be greater than existing mutation version ({:?}) for object {:?}",
+                                deletion_version,
+                                existing.object.version(),
+                                id
+                            );
+                        }
+                        if let Some(existing) = deletions.insert(id, deletion) {
+                            assert!(
+                                existing.object_version < deletion_version,
+                                "Deletion version ({:?}) should be greater than existing deletion version ({:?}) for object {:?}",
+                                deletion_version,
+                                existing.object_version,
+                                id
+                            );
+                        }
                     }
                 }
                 (mutations, deletions)
