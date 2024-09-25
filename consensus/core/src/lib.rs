@@ -54,4 +54,6 @@ pub use network::{
     connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle, ConnectionStatus},
     metrics::{MetricsMakeCallbackHandler, NetworkRouteMetrics, QuinnConnectionMetrics},
 };
-pub use transaction::{ClientError, TransactionClient, TransactionVerifier, ValidationError};
+pub use transaction::{
+    BlockStatus, ClientError, TransactionClient, TransactionVerifier, ValidationError,
+};

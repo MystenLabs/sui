@@ -198,7 +198,7 @@ pub fn make_consensus_adapter_for_test(
             &self,
             transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,
-        ) -> SuiResult {
+        ) -> SuiResult<SubmitResponse> {
             let sequenced_transactions: Vec<SequencedConsensusTransaction> = transactions
                 .iter()
                 .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
@@ -259,7 +259,7 @@ pub fn make_consensus_adapter_for_test(
                     .transaction_manager()
                     .enqueue(transactions, epoch_store);
             }
-            Ok(())
+            Ok(SubmitResponse::NoStatusWaiter)
         }
     }
     let epoch_store = state.epoch_store_for_testing();
