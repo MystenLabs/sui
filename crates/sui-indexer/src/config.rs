@@ -251,24 +251,39 @@ pub struct UploadOptions {
 
 #[derive(Args, Debug, Clone)]
 pub struct RestoreConfig {
+    #[arg(long, env = "START_EPOCH", required = true)]
+    pub start_epoch: u64,
+    #[arg(long, env = "SNAPSHOT_ENDPOINT")]
+    pub snapshot_endpoint: String,
+    #[arg(long, env = "SNAPSHOT_BUCKET")]
+    pub snapshot_bucket: String,
+    #[arg(long, env = "SNAPSHOT_DOWNLOAD_DIR", required = true)]
+    pub snapshot_download_dir: String,
+
     #[arg(long, env = "GCS_ARCHIVE_BUCKET")]
     pub gcs_archive_bucket: String,
-    #[arg(long, env = "GCS_CRED_PATH")]
-    pub gcs_cred_path: String,
     #[arg(long, env = "GCS_DISPLAY_BUCKET")]
     pub gcs_display_bucket: String,
-    #[arg(long, env = "GCS_SNAPSHOT_DIR")]
-    pub gcs_snapshot_dir: String,
-    #[arg(long, env = "GCS_SNAPSHOT_BUCKET")]
-    pub gcs_snapshot_bucket: String,
-    #[arg(long, env = "START_EPOCH")]
-    pub start_epoch: u64,
-    #[arg(long, env = "S3_ENDPOINT")]
-    pub s3_endpoint: String,
+
     #[arg(env = "OBJECT_STORE_CONCURRENT_LIMIT")]
     pub object_store_concurrent_limit: usize,
     #[arg(env = "OBJECT_STORE_MAX_TIMEOUT_SECS")]
     pub object_store_max_timeout_secs: u64,
+}
+
+impl Default for RestoreConfig {
+    fn default() -> Self {
+        Self {
+            start_epoch: 0, // not used b/c it's required
+            snapshot_endpoint: "https://formal-snapshot.mainnet.sui.io".to_string(),
+            snapshot_bucket: "mysten-mainnet-formal".to_string(),
+            snapshot_download_dir: "".to_string(), // not used b/c it's required
+            gcs_archive_bucket: "mysten-mainnet-archives".to_string(),
+            gcs_display_bucket: "mysten-mainnet-display-table".to_string(),
+            object_store_concurrent_limit: 50,
+            object_store_max_timeout_secs: 512,
+        }
+    }
 }
 
 #[cfg(test)]

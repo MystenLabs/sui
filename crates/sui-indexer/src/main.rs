@@ -92,11 +92,8 @@ async fn main() -> anyhow::Result<()> {
             .await;
         }
         Command::Restore(restore_config) => {
-            let upload_options = UploadOptions {
-                gcs_display_bucket: Some(restore_config.gcs_display_bucket.clone()),
-                gcs_cred_path: Some(restore_config.gcs_snapshot_bucket.clone()),
-            };
-            let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
+            let store =
+                PgIndexerStore::new(pool, UploadOptions::default(), indexer_metrics.clone());
             let mut formal_restorer =
                 IndexerFormalSnapshotRestorer::new(store, restore_config).await?;
             formal_restorer.restore().await?;
