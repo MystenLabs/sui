@@ -5,12 +5,12 @@ Use: 'DocumentedStruct', start: 11, end: 27
 Def: 'DocumentedStruct', line: 4, def char: 11
 TypeDef: 'DocumentedStruct', line: 4, char: 11
 On Hover:
-struct Symbols::M6::DocumentedStruct has drop, store, key {
+struct Symbols::M6::DocumentedStruct has drop, store {
 	documented_field: u64
 }
 
-This is a documented struct
-With a multi-line docstring
+ This is a documented struct
+ With a multi-line docstring
 
 
 -- test 1 -------------------
@@ -21,7 +21,7 @@ TypeDef: no info
 On Hover:
 const Symbols::M6::DOCUMENTED_CONSTANT: u64 = 42
 
-Constant containing the answer to the universe
+ Constant containing the answer to the universe
 
 
 -- test 2 -------------------
@@ -30,9 +30,11 @@ Use: 'unpack', start: 8, end: 14
 Def: 'unpack', line: 14, def char: 8
 TypeDef: no info
 On Hover:
-fun Symbols::M6::unpack(s: Symbols::M6::DocumentedStruct): u64
+fun Symbols::M6::unpack(
+	s: Symbols::M6::DocumentedStruct
+): u64
 
-A documented function that unpacks a DocumentedStruct
+ A documented function that unpacks a DocumentedStruct
 
 
 -- test 3 -------------------
@@ -49,12 +51,12 @@ Use: 'DocumentedStruct', start: 18, end: 34
 Def: 'DocumentedStruct', line: 4, def char: 11
 TypeDef: 'DocumentedStruct', line: 4, char: 11
 On Hover:
-struct Symbols::M6::DocumentedStruct has drop, store, key {
+struct Symbols::M6::DocumentedStruct has drop, store {
 	documented_field: u64
 }
 
-This is a documented struct
-With a multi-line docstring
+ This is a documented struct
+ With a multi-line docstring
 
 
 -- test 5 -------------------
@@ -63,12 +65,12 @@ Use: 'DocumentedStruct', start: 12, end: 28
 Def: 'DocumentedStruct', line: 4, def char: 11
 TypeDef: 'DocumentedStruct', line: 4, char: 11
 On Hover:
-struct Symbols::M6::DocumentedStruct has drop, store, key {
+struct Symbols::M6::DocumentedStruct has drop, store {
 	documented_field: u64
 }
 
-This is a documented struct
-With a multi-line docstring
+ This is a documented struct
+ With a multi-line docstring
 
 
 -- test 6 -------------------
@@ -80,7 +82,7 @@ On Hover:
 Symbols::M6::DocumentedStruct
 documented_field: u64
 
-A documented field
+ A documented field
 
 
 -- test 7 -------------------
@@ -100,11 +102,11 @@ On Hover:
 fun Symbols::M6::other_doc_struct(): Symbols::M7::OtherDocStruct
 
 
-This is a multiline docstring
+   This is a multiline docstring
 
-This docstring has empty lines.
+   This docstring has empty lines.
 
-It uses the ** format instead of ///
+   It uses the ** format instead of ///
 
 
 
@@ -114,7 +116,9 @@ Use: 'acq', start: 8, end: 11
 Def: 'acq', line: 31, def char: 8
 TypeDef: no info
 On Hover:
-fun Symbols::M6::acq(uint: u64): u64
+fun Symbols::M6::acq(
+	uint: u64
+): u64
 
 Asterix based single-line docstring
 
@@ -129,7 +133,7 @@ struct Symbols::M7::OtherDocStruct has drop {
 	some_field: u64
 }
 
-Documented struct in another module
+ Documented struct in another module
 
 
 -- test 11 -------------------
@@ -138,9 +142,11 @@ Use: 'create_other_struct', start: 21, end: 40
 Def: 'create_other_struct', line: 9, def char: 15
 TypeDef: no info
 On Hover:
-public fun Symbols::M7::create_other_struct(v: u64): Symbols::M7::OtherDocStruct
+public fun Symbols::M7::create_other_struct(
+	v: u64
+): Symbols::M7::OtherDocStruct
 
-Documented initializer in another module
+ Documented initializer in another module
 
 
 -- test 12 -------------------
@@ -151,7 +157,7 @@ TypeDef: no info
 On Hover:
 const Symbols::M6::DOCUMENTED_CONSTANT: u64 = 42
 
-Constant containing the answer to the universe
+ Constant containing the answer to the universe
 
 
 -- test 13 -------------------
@@ -164,7 +170,7 @@ struct Symbols::M7::OtherDocStruct has drop {
 	some_field: u64
 }
 
-Documented struct in another module
+ Documented struct in another module
 
 
 -- test 14 -------------------
@@ -182,4 +188,62 @@ Def: 'param', line: 43, def char: 39
 TypeDef: no info
 On Hover:
 param: T
+
+-- test 16 -------------------
+use line: 56, use_ndx: 0
+Use: 'code_block_doc_slash', start: 8, end: 28
+Def: 'code_block_doc_slash', line: 55, def char: 8
+TypeDef: no info
+On Hover:
+fun Symbols::M6::code_block_doc_slash()
+
+ A documented function with code block
+ (should preserved indentation in the code block)
+
+ ```rust
+ fun foo() {
+     42
+ }
+ ```
+
+
+-- test 17 -------------------
+use line: 68, use_ndx: 0
+Use: 'code_block_doc_star', start: 8, end: 27
+Def: 'code_block_doc_star', line: 67, def char: 8
+TypeDef: no info
+On Hover:
+fun Symbols::M6::code_block_doc_star()
+
+
+   A documented function with code block
+   (should preserved indentation in the code block)
+
+   ```rust
+   fun foo() {
+       42
+   }
+   ```
+
+
+
+-- test 18 -------------------
+use line: 80, use_ndx: 0
+Use: 'misformatted_docstring', start: 8, end: 30
+Def: 'misformatted_docstring', line: 79, def char: 8
+TypeDef: no info
+On Hover:
+fun Symbols::M6::misformatted_docstring()
+
+
+  Misformatted docstring to have fewer whitespace in the body than
+  at the ending marker.
+
+
+Beginning of this string should not disappear.
+
+Beginning of this string should not disappear either.
+
+
+
 
