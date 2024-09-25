@@ -23,3 +23,5 @@ playwright-report/
 storybook-static/
 CHANGELOG.md
 
+# ignore biome-formatted files
+/sdk/create-dapp/templates/experimental-next-gen/
