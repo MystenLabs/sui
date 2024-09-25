@@ -366,7 +366,7 @@ meaningless to add them to the deny list.
 ) {
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.per_type_config_entry!(per_type_index, per_type_key, ctx);
     <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
-    <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_,<a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>, bool&gt;(
+    <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_, <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>, bool&gt;(
         &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(),
         setting_name,
         |_deny_list, _cap, _ctx| <b>true</b>,
@@ -638,9 +638,8 @@ meaningless to add them to the deny list.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> bag_entry: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a> = &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists[per_type_index];
-    <b>let</b> elements =
-        <b>if</b> (!bag_entry.denied_addresses.contains(per_type_key)) <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[]
-        <b>else</b> bag_entry.denied_addresses.remove(per_type_key).into_keys();
+    <b>let</b> elements = <b>if</b> (!bag_entry.denied_addresses.contains(per_type_key)) <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[]
+    <b>else</b> bag_entry.denied_addresses.remove(per_type_key).into_keys();
     elements.do_ref!(|addr| {
         <b>let</b> addr = *addr;
         <b>let</b> denied_count = &<b>mut</b> bag_entry.denied_count[addr];
@@ -650,9 +649,9 @@ meaningless to add them to the deny list.
         }
     });
     <b>let</b> per_type_config = <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.per_type_config_entry!(per_type_index, per_type_key, ctx);
-    elements.do!(|addr|  {
+    elements.do!(|addr| {
         <b>let</b> setting_name = <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>(addr);
-        <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_,<a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>, bool&gt;(
+        <b>let</b> next_epoch_entry = per_type_config.entry!&lt;_, <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a>, bool&gt;(
             &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a>(),
             setting_name,
             |_deny_list, _cap, _ctx| <b>true</b>,
@@ -773,11 +772,7 @@ meaningless to add them to the deny list.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>,
-    per_type_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
-): bool {
+<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_per_type_exists">per_type_exists</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a>, per_type_index: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, per_type_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): bool {
     <b>let</b> key = <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a> { per_type_index, per_type_key };
     ofield::exists_(&<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.id, key)
 }
@@ -838,11 +833,7 @@ the type specified is the type of the coin, not the coin type itself. For exampl
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v1_per_type_list_add">v1_per_type_list_add</a>(
-    list: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
-    `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
-    addr: <b>address</b>,
-) {
+<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v1_per_type_list_add">v1_per_type_list_add</a>(list: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>, `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>) {
     <b>if</b> (!list.denied_addresses.contains(`type`)) {
         list.denied_addresses.add(`type`, <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">vec_set::empty</a>());
     };
@@ -912,11 +903,7 @@ Aborts with <code><a href="../sui-framework/deny_list.md#0x2_deny_list_ENotDenie
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v1_per_type_list_remove">v1_per_type_list_remove</a>(
-    list: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
-    `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
-    addr: <b>address</b>,
-) {
+<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v1_per_type_list_remove">v1_per_type_list_remove</a>(list: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>, `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>) {
     <b>let</b> denied_addresses = &<b>mut</b> list.denied_addresses[`type`];
     <b>assert</b>!(denied_addresses.contains(&addr), <a href="../sui-framework/deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a>);
     denied_addresses.remove(&addr);
@@ -980,11 +967,7 @@ Returns true iff the given address is denied for the given type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v1_per_type_list_contains">v1_per_type_list_contains</a>(
-    list: &<a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
-    `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
-    addr: <b>address</b>,
-): bool {
+<pre><code><b>fun</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_v1_per_type_list_contains">v1_per_type_list_contains</a>(list: &<a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>, `type`: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>): bool {
     <b>if</b> (!list.denied_count.contains(addr)) <b>return</b> <b>false</b>;
 
     <b>let</b> denied_count = &list.denied_count[addr];
