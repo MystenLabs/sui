@@ -29,6 +29,20 @@ use crate::{
     CommittedSubDag,
 };
 
+struct BlockInfo {
+    block: VerifiedBlock,
+    // certificates: BTreeMap<AuthorityIndex, BlockRef>,
+}
+
+impl BlockInfo {
+    fn new(block: VerifiedBlock) -> Self {
+        Self {
+            block,
+            // certificates: BTreeMap::new(),
+        }
+    }
+}
+
 /// DagState provides the API to write and read accepted blocks from the DAG.
 /// Only uncommitted and last committed blocks are cached in memory.
 /// The rest of blocks are stored on disk.
@@ -44,7 +58,7 @@ pub(crate) struct DagState {
 
     // Contains recent blocks within CACHED_ROUNDS from the last committed round per authority.
     // Note: all uncommitted blocks are kept in memory.
-    recent_blocks: BTreeMap<BlockRef, VerifiedBlock>,
+    recent_blocks: BTreeMap<BlockRef, BlockInfo>,
 
     // Indexes recent block refs by their authorities.
     // Vec position corresponds to the authority index.
@@ -244,7 +258,8 @@ impl DagState {
     /// Updates internal metadata for a block.
     fn update_block_metadata(&mut self, block: &VerifiedBlock) {
         let block_ref = block.reference();
-        self.recent_blocks.insert(block_ref, block.clone());
+        self.recent_blocks
+            .insert(block_ref, BlockInfo::new(block.clone()));
         self.recent_refs_by_authority[block_ref.author].insert(block_ref);
         self.highest_accepted_round = max(self.highest_accepted_round, block.round());
         self.context
@@ -299,8 +314,8 @@ impl DagState {
                 }
                 continue;
             }
-            if let Some(block) = self.recent_blocks.get(block_ref) {
-                blocks[index] = Some(block.clone());
+            if let Some(block_info) = self.recent_blocks.get(block_ref) {
+                blocks[index] = Some(block_info.block.clone());
                 continue;
             }
             missing.push((index, block_ref));
@@ -339,11 +354,11 @@ impl DagState {
         // or support reading from storage while limiting storage reads to edge cases.
 
         let mut blocks = vec![];
-        for (_block_ref, block) in self.recent_blocks.range((
+        for (_block_ref, block_info) in self.recent_blocks.range((
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
         )) {
-            blocks.push(block.clone())
+            blocks.push(block_info.block.clone())
         }
         blocks
     }
@@ -356,7 +371,7 @@ impl DagState {
         }
 
         let mut blocks = vec![];
-        for (_block_ref, block) in self.recent_blocks.range((
+        for (_block_ref, block_info) in self.recent_blocks.range((
             Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
             Excluded(BlockRef::new(
                 round + 1,
@@ -364,7 +379,7 @@ impl DagState {
                 BlockDigest::MIN,
             )),
         )) {
-            blocks.push(block.clone())
+            blocks.push(block_info.block.clone())
         }
         blocks
     }
@@ -419,6 +434,7 @@ impl DagState {
                 .recent_blocks
                 .get(last)
                 .expect("Block should be found in recent blocks")
+                .block
                 .clone();
         }
 
@@ -449,8 +465,10 @@ impl DagState {
             let block = self
                 .recent_blocks
                 .get(block_ref)
-                .expect("Block should exist in recent blocks");
-            blocks.push(block.clone());
+                .expect("Block should exist in recent blocks")
+                .block
+                .clone();
+            blocks.push(block);
         }
         blocks
     }
@@ -503,9 +521,10 @@ impl DagState {
                 let block = self
                     .recent_blocks
                     .get(block_ref)
-                    .expect("Block should exist in recent blocks");
-
-                blocks[authority_index] = block.clone();
+                    .expect("Block should exist in recent blocks")
+                    .block
+                    .clone();
+                blocks[authority_index] = block;
             }
         }
 
