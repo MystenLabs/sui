@@ -232,7 +232,6 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
             .collect();
         let serialized_return_values = self
             .perform_action(gas_budget, |inner_adapter, gas_status| {
-                println!("current storage: {:#?}", inner_adapter.storage());
                 let runtime_id = *module.address();
                 // TODO: If there are linkage directives, respect them here.
                 println!("generating linkage");
