@@ -34,9 +34,8 @@ const KNOWN_NAMES: &[&str] = &[
     DEV_ADDRESSES_NAME,
     DEPENDENCY_NAME,
     DEV_DEPENDENCY_NAME,
+    EXTERNAL_RESOLVER_PREFIX,
 ];
-
-const KNOWN_PREFIXES: &[&str] = &[EXTERNAL_RESOLVER_PREFIX];
 
 const REQUIRED_FIELDS: &[&str] = &[PACKAGE_NAME];
 
@@ -64,7 +63,7 @@ pub fn parse_source_manifest(tval: TV) -> Result<PM::SourceManifest> {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, REQUIRED_FIELDS)
                 .context("Error parsing package manifest")?;
-            warn_if_unknown_field_names(&table, KNOWN_NAMES, KNOWN_PREFIXES);
+            warn_if_unknown_field_names(&table, KNOWN_NAMES);
             let addresses = table
                 .remove(ADDRESSES_NAME)
                 .map(parse_addresses)
@@ -128,7 +127,7 @@ pub fn parse_package_info(tval: TV) -> Result<PM::PackageInfo> {
                 .into_iter()
                 .chain(hook_names.iter().map(|s| s.as_str()))
                 .collect::<Vec<_>>();
-            warn_if_unknown_field_names(&table, known_names.as_slice(), &[]);
+            warn_if_unknown_field_names(&table, known_names.as_slice());
             let name = table
                 .remove("name")
                 .ok_or_else(|| format_err!("'name' is a required field but was not found",))?;
@@ -226,7 +225,7 @@ pub fn parse_dependencies(tval: TV) -> Result<PM::Dependencies> {
 pub fn parse_build_info(tval: TV) -> Result<PM::BuildInfo> {
     match tval {
         TV::Table(mut table) => {
-            warn_if_unknown_field_names(&table, &["language_version", "arch"], &[]);
+            warn_if_unknown_field_names(&table, &["language_version", "arch"]);
             Ok(PM::BuildInfo {
                 language_version: table
                     .remove("language_version")
@@ -453,7 +452,7 @@ pub fn parse_dependency(mut tval: TV) -> Result<PM::Dependency> {
     };
 
     // Any fields that are left are unknown
-    warn_if_unknown_field_names(table, &[], &[]);
+    warn_if_unknown_field_names(table, &[]);
 
     Ok(PM::Dependency::Internal(PM::InternalDependency {
         kind,
@@ -532,20 +531,11 @@ fn parse_dep_override(tval: TV) -> Result<PM::DepOverride> {
     Ok(tval.as_bool().unwrap())
 }
 
-// Check that only recognized names, or tables prefixed by a known prefix are provided at the
-// top-level.
-fn warn_if_unknown_field_names(
-    table: &toml::map::Map<String, TV>,
-    known_names: &[&str],
-    known_prefixes: &[&str],
-) {
+// Check that only recognized names are provided at the top-level.
+fn warn_if_unknown_field_names(table: &toml::map::Map<String, TV>, known_names: &[&str]) {
     let mut unknown_names = BTreeSet::new();
     for key in table.keys() {
-        if !known_names.contains(&key.as_str())
-            && !known_prefixes
-                .iter()
-                .any(|p| !key.starts_with(&format!("{p}.")))
-        {
+        if !known_names.contains(&key.as_str()) {
             unknown_names.insert(key.to_string());
         }
     }
