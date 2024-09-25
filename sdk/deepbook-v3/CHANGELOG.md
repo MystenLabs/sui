@@ -1,5 +1,16 @@
 # @mysten/deepbook-v3
 
+## 0.7.0
+
+### Minor Changes
+
+- 7923ed5: Newest deepbook package constants
+
+### Patch Changes
+
+- Updated dependencies [830b8d8]
+  - @mysten/sui@1.10.0
+
 ## 0.6.0
 
 ### Minor Changes

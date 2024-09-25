@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.10.0
+
+### Minor Changes
+
+- 830b8d8: Introduce new naming scheme for named packages plugin
+
 ## 1.9.0
 
 ### Minor Changes
