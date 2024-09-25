@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::natives::extensions::NativeContextExtensions;
 use crate::on_chain::ast::RuntimePackageId;
 use crate::vm::vm_instance::VirtualMachineExecutionInstance;
 use crate::{
@@ -16,7 +17,7 @@ use move_core_types::resolver::MoveResolver;
 
 /// A VM Test Adaptor holds storage and a VM, and can handle publishing packages and executing
 /// functions. Based on its needs, it may also provide ways to generate linkage contexts.
-pub trait VMTestAdapter<Storage: MoveResolver> {
+pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
     /// Perform a publication, including package verification and updating the relevant storage in
     /// the test adapter so that it is available for subsequent calls.
     fn publish_package(
@@ -26,9 +27,19 @@ pub trait VMTestAdapter<Storage: MoveResolver> {
         modules: Vec<CompiledModule>,
     ) -> VMResult<()>;
 
+    /// Generate a VM instance which holds the relevant virtual tables for the provided linkage
+    /// context.
     fn make_vm_instance<'extensions>(
-        &mut self,
+        &self,
         linkage_context: LinkageContext,
+    ) -> VMResult<VirtualMachineExecutionInstance<'extensions, &Storage>>;
+
+    /// Generate a VM instance which holds the relevant virtual tables for the provided linkage
+    /// context, and set that instance's native extensions to those provided.
+    fn make_vm_instance_with_native_extensions<'extensions>(
+        &self,
+        linkage_context: LinkageContext,
+        native_extensions: NativeContextExtensions<'extensions>
     ) -> VMResult<VirtualMachineExecutionInstance<'extensions, &Storage>>;
 
     /// Generate a linkage context for a given runtime ID, storage ID, and list of compiled modules.

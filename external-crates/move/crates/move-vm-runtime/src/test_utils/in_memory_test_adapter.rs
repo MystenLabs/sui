@@ -3,7 +3,7 @@
 
 use crate::{
     cache::linkage_context::LinkageContext,
-    natives::functions::NativeFunctions,
+    natives::{functions::NativeFunctions, extensions::NativeContextExtensions},
     on_chain::ast::{PackageStorageId, RuntimePackageId},
     test_utils::{
         gas_schedule::GasStatus, storage::InMemoryStorage, test_store::TestStore,
@@ -39,20 +39,25 @@ impl InMemoryTestAdapter {
         Self { vm, storage }
     }
 
-    /// Insert a package into storage without any checking or validation. This is useful for
+    pub fn new_with_vm_and_storage(vm: VirtualMachine, storage: TestStore) -> Self {
+        Self { vm, storage }
+    }
+
+    /// Insert package into storage without any checking or validation. This is useful for
     /// testing invalid packages and other failures.
-    pub fn insert_packages_into_storage(&mut self, modules: Vec<CompiledModule>) {
-        assert!(!modules.is_empty(), "Tried to publish empty package(s)");
+    pub fn insert_modules_into_storage(&mut self, modules: Vec<CompiledModule>) -> anyhow::Result<()> {
+        assert!(!modules.is_empty(), "Tried to add empty module(s) to storage");
+        // TODO: Should we enforce this is a set?
         for module in modules {
             let module_id = module.self_id();
             let mut module_bytes = vec![];
             module
-                .serialize_with_version(module.version, &mut module_bytes)
-                .unwrap();
+                .serialize_with_version(module.version, &mut module_bytes)?;
             self.storage
                 .store
                 .publish_or_overwrite_module(module_id, module_bytes);
         }
+        Ok(())
     }
 }
 
@@ -95,12 +100,21 @@ impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
     }
 
     fn make_vm_instance<'extensions>(
-        &mut self,
+        &self,
         linkage_context: LinkageContext,
     ) -> VMResult<VirtualMachineExecutionInstance<'extensions, &TestStore>> {
         let Self { vm, storage } = self;
         let storage: &TestStore = storage;
         vm.make_instance(storage, linkage_context)
+    }
+
+    fn make_vm_instance_with_native_extensions<'extensions>(
+        &self,
+        linkage_context: LinkageContext,
+        native_extensions: NativeContextExtensions<'extensions>
+    ) -> VMResult<VirtualMachineExecutionInstance<'extensions, &TestStore>> {
+        let Self { vm, storage } = self;
+        vm.make_instance_with_native_extensions(storage, linkage_context, native_extensions)
     }
 
     // Generate a linkage context for a given runtime ID, storage ID, and list of compiled modules.

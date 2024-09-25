@@ -63,11 +63,20 @@ impl VirtualMachine {
     /// cache loading efforts.
     /// TODO: Have this hand back a tokio Notify
     pub fn make_instance<'extensions, DataCache: MoveResolver>(
-        &mut self,
-        remote: DataCache,
+        &self,
+        data_cache: DataCache,
         link_context: LinkageContext,
     ) -> VMResult<VirtualMachineExecutionInstance<'extensions, DataCache>> {
-        let data_cache = TransactionDataCache::new(remote);
+        self.make_instance_with_native_extensions(data_cache, link_context, NativeContextExtensions::default())
+    }
+
+    pub fn make_instance_with_native_extensions<'extensions, DataCache: MoveResolver>(
+        &self,
+        data_cache: DataCache,
+        link_context: LinkageContext,
+        native_extensions: NativeContextExtensions<'extensions>
+    ) -> VMResult<VirtualMachineExecutionInstance<'extensions, DataCache>> {
+        let data_cache = TransactionDataCache::new(data_cache);
         let virtual_tables = self
             .cache
             .generate_runtime_vtables(&data_cache, &link_context)?;
@@ -78,7 +87,7 @@ impl VirtualMachine {
             vm_config: self.vm_config.clone(),
             data_cache,
             link_context,
-            native_extensions: NativeContextExtensions::default(),
+            native_extensions,
         };
         Ok(instance)
     }

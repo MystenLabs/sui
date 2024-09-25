@@ -15,7 +15,6 @@ use move_binary_format::{
     errors::{Location, VMResult},
     file_format::CompiledModule,
 };
-use move_bytecode_utils::Modules;
 use move_command_line_common::error_bitset::ErrorBitset;
 use move_compiler::{
     compiled_unit::NamedCompiledModule,
@@ -23,7 +22,6 @@ use move_compiler::{
 };
 use move_core_types::{
     account_address::AccountAddress,
-    effects::ChangeSet,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     runtime_value::{serialize_values, MoveValue},
@@ -31,16 +29,27 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
-    natives::functions::NativeFunctionTable,
+    natives::functions::{NativeFunctionTable, NativeFunctions},
     test_utils::{
         gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
-        storage::InMemoryStorage,
+        in_memory_test_adapter::InMemoryTestAdapter,
+        test_store::TestStore,
+        vm_test_adapter::VMTestAdapter,
     },
     vm::vm::VirtualMachine,
 };
+use move_vm_types::gas::GasMeter;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
-use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
+use std::{
+    collections::BTreeMap,
+    io::Write,
+    marker::Send,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
+
+use parking_lot::RwLock;
 
 use move_vm_runtime::natives::extensions::NativeContextExtensions;
 
@@ -49,8 +58,8 @@ pub struct SharedTestingConfig {
     report_stacktrace_on_abort: bool,
     execution_bound: u64,
     cost_table: CostTable,
-    native_function_table: NativeFunctionTable,
-    starting_storage_state: InMemoryStorage,
+    vm_test_adapter: Arc<RwLock<dyn VMTestAdapter<TestStore> + Sync + Send>>,
+    // native_function_table: NativeFunctionTable,
     prng_seed: Option<u64>,
     num_iters: u64,
     deterministic_generation: bool,
@@ -62,23 +71,13 @@ pub struct TestRunner {
     tests: TestPlan,
 }
 
-/// Setup storage state with the set of modules that will be needed for all tests
+/// Insert the provided modules into the provided test store so that they can be loaded by the
+/// vm during test execution.
 fn setup_test_storage<'a>(
+    adapter: &mut InMemoryTestAdapter,
     modules: impl Iterator<Item = &'a CompiledModule>,
-) -> Result<InMemoryStorage> {
-    let mut storage = InMemoryStorage::new();
-    let modules = Modules::new(modules);
-    for module in modules
-        .compute_dependency_graph()
-        .compute_topological_order()?
-    {
-        let module_id = module.self_id();
-        let mut module_bytes = Vec::new();
-        module.serialize_with_version(module.version, &mut module_bytes)?;
-        storage.publish_or_overwrite_module(module_id, module_bytes);
-    }
-
-    Ok(storage)
+) -> Result<()> {
+    adapter.insert_modules_into_storage(modules.map(|module| module.clone()).collect())
 }
 
 fn convert_clever_move_abort_error(
@@ -123,8 +122,6 @@ impl TestRunner {
         native_function_table: Option<NativeFunctionTable>,
         cost_table: Option<CostTable>,
     ) -> Result<Self> {
-        let modules = tests.module_info.values().map(|info| &info.module);
-        let starting_storage_state = setup_test_storage(modules)?;
         let native_function_table = native_function_table.unwrap_or_else(|| {
             move_vm_runtime::natives::move_stdlib::stdlib_native_function_table(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
@@ -132,15 +129,23 @@ impl TestRunner {
                 /* silent */ false,
             )
         });
+        let native_functions = NativeFunctions::new(native_function_table)?;
+        let vm = VirtualMachine::new_with_default_config(native_functions);
+
+        let mut vm_test_adapter = InMemoryTestAdapter::new_with_vm(vm);
+
+        let modules = tests.module_info.values().map(|info| &info.module);
+        setup_test_storage(&mut vm_test_adapter, modules)?;
+
         Ok(Self {
             testing_config: SharedTestingConfig {
                 report_stacktrace_on_abort,
-                starting_storage_state,
                 execution_bound,
-                native_function_table,
+                // native_function_table,
+                vm_test_adapter: Arc::new(RwLock::new(vm_test_adapter)),
                 // TODO: our current implementation uses a unit cost table to prevent programs from
-                // running indefinitely. This should probably be done in a different way, like halting
-                // after executing a certain number of instructions or setting a timer.
+                // running indefinitely. This should probably be done in a different way, like
+                // halting after executing a certain number of instructions or setting a timer.
                 //
                 // From the API standpoint, we should let the client specify the cost table.
                 cost_table: cost_table.unwrap_or_else(unit_cost_schedule),
@@ -244,60 +249,80 @@ impl SharedTestingConfig {
         function_name: &str,
         arguments: Vec<MoveValue>,
     ) -> (
-        VMResult<ChangeSet>,
-        VMResult<NativeContextExtensions>,
-        VMResult<Vec<Vec<u8>>>,
+        VMResult<(Vec<Vec<u8>>, NativeContextExtensions)>,
         TestRunInfo,
     ) {
-        todo!("Update with new VM");
-        //     let move_vm = MoveVM::new(self.native_function_table.clone()).unwrap();
-        //     let extensions = extensions::new_extensions();
-        //     let mut session =
-        //         move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
-        //     let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
-        //     move_vm_profiler::gas_profiler_feature_enabled! {
-        //         use move_vm_profiler::GasProfiler;
-        //         use move_vm_types::gas::GasMeter;
-        //         gas_meter.set_profiler(GasProfiler::init_default_cfg(
-        //             function_name.to_owned(),
-        //             self.execution_bound,
-        //         ));
-        //     }
-        //
-        //     // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
-        //
-        //     let now = Instant::now();
-        //     let serialized_return_values_result = session.execute_function_bypass_visibility(
-        //         &test_plan.module_id,
-        //         IdentStr::new(function_name).unwrap(),
-        //         vec![], // no ty args, at least for now
-        //         serialize_values(arguments.iter()),
-        //         &mut gas_meter,
-        //     );
-        //     let mut return_result = serialized_return_values_result.map(|res| {
-        //         res.return_values
-        //             .into_iter()
-        //             .map(|(bytes, _layout)| bytes)
-        //             .collect()
-        //     });
-        //     if !self.report_stacktrace_on_abort {
-        //         if let Err(err) = &mut return_result {
-        //             err.remove_exec_state();
-        //         }
-        //     }
-        //     let test_run_info = TestRunInfo::new(
-        //         now.elapsed(),
-        //         // TODO(Gas): This doesn't look quite right...
-        //         //            We're not computing the number of instructions executed even with a unit gas schedule.
-        //         Gas::new(self.execution_bound)
-        //             .checked_sub(gas_meter.remaining_gas())
-        //             .unwrap()
-        //             .into(),
-        //     );
-        //     match session.finish_with_extensions().0 {
-        //         Ok((cs, extensions)) => (Ok(cs), Ok(extensions), return_result, test_run_info),
-        //         Err(err) => (Err(err.clone()), Err(err), return_result, test_run_info),
-        //     }
+        // A nicety since Rust doesn't have `try { .. }` yet
+        fn do_call<'extensions>(
+            test_config: &SharedTestingConfig,
+            gas_meter: &mut impl GasMeter,
+            module_id: ModuleId,
+            function_name: &str,
+            arguments: Vec<MoveValue>,
+        ) -> VMResult<(Vec<Vec<u8>>, NativeContextExtensions<'extensions>)> {
+            // TODO: This does not support upgrades. Maybe that does not matter?
+            let link_context = test_config
+                .vm_test_adapter
+                .read()
+                .generate_default_linkage(*module_id.address())?;
+            let extensions = extensions::new_extensions();
+            let adapter = test_config.vm_test_adapter.read();
+            let mut vm_instance =
+                adapter.make_vm_instance_with_native_extensions(link_context, extensions)?;
+
+            let function_name = IdentStr::new(function_name).unwrap();
+
+            let serialized_return_values_result = vm_instance.execute_function_bypass_visibility(
+                &module_id,
+                function_name,
+                vec![], /* no ty args for now */
+                serialize_values(arguments.iter()),
+                gas_meter,
+            );
+            serialized_return_values_result.map(|res| {
+                (
+                    res.return_values
+                        .into_iter()
+                        .map(|(bytes, _layout)| bytes)
+                        .collect::<Vec<_>>(),
+                    vm_instance.into_extensions(),
+                )
+            })
+        }
+
+        let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
+        move_vm_profiler::gas_profiler_feature_enabled! {
+            use move_vm_profiler::GasProfiler;
+            use move_vm_types::gas::GasMeter;
+            gas_meter.set_profiler(GasProfiler::init_default_cfg(
+                function_name.to_owned(),
+                self.execution_bound,
+            ));
+        }
+
+        // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
+
+        let now = Instant::now();
+        let module_id = test_plan.module_id.clone();
+
+        let mut return_result = do_call(self, &mut gas_meter, module_id, function_name, arguments);
+
+        if !self.report_stacktrace_on_abort {
+            if let Err(err) = &mut return_result {
+                err.remove_exec_state();
+            }
+        }
+        let test_run_info = TestRunInfo::new(
+            now.elapsed(),
+            // TODO(Gas): This doesn't look quite right...
+            // We're not computing the number of instructions executed even with a unit gas
+            // schedule.
+            Gas::new(self.execution_bound)
+                .checked_sub(gas_meter.remaining_gas())
+                .unwrap()
+                .into(),
+        );
+        (return_result, test_run_info)
     }
 
     fn exec_module_tests_with_move_vm(
@@ -391,7 +416,8 @@ impl SharedTestingConfig {
             }
             TypeTag::Bool => MoveValue::Bool(rng.gen::<bool>()),
             TypeTag::Struct(_) => {
-                unreachable!("Structs are not supported as generated values in unit tests and cannot get to this point")
+                unreachable!("Structs are not supported as generated values \
+                             in unit tests and cannot get to this point")
             }
             TypeTag::Signer => unreachable!("Signer arguments not allowed"),
         }
@@ -409,7 +435,7 @@ impl SharedTestingConfig {
         prng_seed: Option<u64>,
         is_last_execution_of_test: bool,
     ) -> bool {
-        let (_cs_result, _ext_result, exec_result, test_run_info) =
+        let (exec_result, test_run_info) =
             self.execute_via_move_vm(test_plan, function_name, arguments);
 
         match exec_result {

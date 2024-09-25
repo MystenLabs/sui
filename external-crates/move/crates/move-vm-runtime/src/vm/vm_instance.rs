@@ -367,4 +367,12 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
             return_values: serialized_return_values,
         })
     }
+
+    // -------------------------------------------
+    // Into Methods
+    // -------------------------------------------
+
+    pub fn into_extensions(self) -> NativeContextExtensions<'extensions> {
+        self.native_extensions
+    }
 }

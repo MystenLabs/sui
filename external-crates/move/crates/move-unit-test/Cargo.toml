@@ -15,6 +15,7 @@ better_any.workspace = true
 clap.workspace = true
 codespan-reporting.workspace = true
 colored.workspace = true
+parking_lot.workspace = true
 rayon.workspace = true
 regex.workspace = true
 once_cell.workspace = true

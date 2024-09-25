@@ -44,7 +44,7 @@ pub(crate) fn new_extensions<'a>() -> NativeContextExtensions<'a> {
 mod tests {
     use crate::extensions::{new_extensions, set_extension_hook};
     use better_any::{Tid, TidAble};
-    use move_vm_runtime::native_extensions::NativeContextExtensions;
+    use move_vm_runtime::natives::extensions::NativeContextExtensions;
 
     /// A test that extension hooks work as expected.
     #[test]
