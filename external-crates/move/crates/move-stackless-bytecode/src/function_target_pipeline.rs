@@ -409,9 +409,7 @@ impl FunctionTargetPipeline {
         // analyze bottom-up from the leaves of the call graph
         // NOTE: this algorithm produces a deterministic ordering of functions to be analyzed
         let mut dep_ordered = vec![];
-        while !worklist.is_empty() {
-            let (call_id, callees) = worklist.pop().unwrap();
-
+        while let Some((call_id, callees)) = worklist.pop() {
             // At this point, one of two things is true:
             // 1. callees is empty (common case)
             // 2. callees is nonempty and call_id is part of a recursive or mutually recursive function group
