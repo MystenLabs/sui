@@ -449,6 +449,9 @@ mod tests {
                 assert!(matches!(block_status, BlockStatus::Sequenced(_)));
             }
         }
+
+        // Ensure internal structure is clear
+        assert!(consumer.block_status_subscribers.lock().is_empty());
     }
 
     #[tokio::test]
