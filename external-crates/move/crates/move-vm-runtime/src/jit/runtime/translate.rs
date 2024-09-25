@@ -22,7 +22,8 @@ use move_binary_format::{
     },
 };
 use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode, language_storage::ModuleId,
+    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
+    vm_status::StatusCode,
 };
 use move_vm_types::loaded_data::runtime_types::{
     CachedDatatype, Datatype, EnumType, StructType, Type, VariantType,
@@ -424,7 +425,6 @@ fn load_module_types(
         let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
         let name = module.identifier_at(struct_handle.name);
 
-
         // TODO/FIXME(Tim): This is always the runtime address at the moment. It should not be. How
         // do we get the _correct_ one?
         let struct_module_handle = module.module_handle_at(struct_handle.module);
@@ -485,7 +485,6 @@ fn load_module_types(
     for (idx, enum_def) in module.enum_defs().iter().enumerate() {
         let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
         let name = module.identifier_at(enum_handle.name);
-
 
         // TODO/FIXME(Tim): This is always the runtime address at the moment. It should not be. How
         // do we get the _correct_ one?

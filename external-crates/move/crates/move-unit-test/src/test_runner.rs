@@ -34,7 +34,7 @@ use move_vm_runtime::{
     natives::functions::NativeFunctionTable,
     test_utils::{
         gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
-        InMemoryStorage,
+        storage::InMemoryStorage,
     },
     vm::vm::VirtualMachine,
 };

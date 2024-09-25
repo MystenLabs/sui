@@ -11,7 +11,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::{ModuleResolver, ResourceResolver},
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
@@ -245,33 +245,6 @@ impl OnDiskStateView {
                     .map_err(|e| anyhow!("Failed to deserialized module: {:?}", e))
             })
             .collect::<Result<Vec<CompiledModule>>>()
-    }
-}
-
-/// Default implementation of LinkageResolver (no re-linking).
-impl LinkageResolver for OnDiskStateView {
-    type Error = anyhow::Error;
-
-    fn link_context(&self) -> AccountAddress {
-        todo!("VM rewrite")
-    }
-
-    fn relocate(&self, module_id: &ModuleId) -> std::result::Result<ModuleId, Self::Error> {
-        todo!("VM rewrite")
-    }
-
-    fn defining_module(
-        &self,
-        module_id: &ModuleId,
-        _struct: &move_core_types::identifier::IdentStr,
-    ) -> std::result::Result<ModuleId, Self::Error> {
-        todo!("VM rewrite")
-    }
-
-    fn all_package_dependencies(
-        &self,
-    ) -> std::result::Result<std::collections::BTreeSet<AccountAddress>, Self::Error> {
-        todo!("VM rewrite")
     }
 }
 

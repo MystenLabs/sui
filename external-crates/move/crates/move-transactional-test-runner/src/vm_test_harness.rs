@@ -2,7 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 use crate::{
     framework::{run_test_impl, CompiledState, MaybeNamedCompiledModule, MoveTestAdapter},
@@ -29,11 +32,15 @@ use move_stdlib::move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::{
-    natives::functions::NativeFunctions, shared::serialization::SerializedReturnValues,
-};
-use move_vm_runtime::{
+    cache::linkage_context::LinkageContext,
     natives::move_stdlib::{stdlib_native_functions, GasParameters},
-    test_utils::{gas_schedule::GasStatus, InMemoryStorage},
+    shared::serialization::SerializedReturnValues,
+    test_utils::{
+        gas_schedule::{self, GasStatus},
+        in_memory_test_adapter::InMemoryTestAdapter,
+        test_store::TestStore,
+        vm_test_adapter::VMTestAdapter,
+    },
     vm::vm::VirtualMachine,
 };
 use once_cell::sync::Lazy;
@@ -43,8 +50,11 @@ const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
 struct SimpleVMTestAdapter {
     compiled_state: CompiledState,
-    storage: InMemoryStorage,
     default_syntax: SyntaxChoice,
+    // NB: We can reuse the in-memory test adapter from the vm runtime tests
+    adapter: InMemoryTestAdapter,
+    // storage: InMemoryStorage,
+    // vm: VirtualMachine,
 }
 
 #[derive(Debug, Parser)]
@@ -101,6 +111,13 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
             }
             named_address_mapping.insert(name, addr);
         }
+        println!("creating VM");
+        let native_functions =
+            stdlib_native_functions(STD_ADDR, GasParameters::zeros(), /* silent */ false)
+                .map_err(|e| e.finish(Location::Undefined))
+                .expect("Failed to initialize natives");
+        let vm_config = test_vm_config();
+        let vm = VirtualMachine::new(native_functions, vm_config);
         println!("creating adapter");
         let mut adapter = Self {
             compiled_state: CompiledState::new(
@@ -111,41 +128,27 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
                 None,
             ),
             default_syntax,
-            storage: InMemoryStorage::new(),
+            adapter: InMemoryTestAdapter::new_with_vm(vm),
         };
 
         println!("doing initial publish");
         adapter
-            .perform_action(
-                None,
-                |vm, storage, gas_status| {
-                    let mut sender = None;
-                    println!("serializing modules");
-                    let modules = MOVE_STDLIB_COMPILED
-                        .iter()
-                        .map(|module| {
-                            let mut module_bytes = vec![];
-                            sender = Some(*module.self_id().address());
-                            module
-                                .serialize_with_version(module.version, &mut module_bytes)
-                                .unwrap();
-                            module_bytes
-                        })
-                        .collect::<Vec<_>>();
-
-                    println!("calling publish");
-                    let pub_storage: &InMemoryStorage = storage;
-                    let (changeset, _storage) = vm.publish_package(
-                        pub_storage,
-                        sender.expect("Must have at least one module"),
-                        modules,
-                        gas_status,
-                    );
-                    storage.apply(changeset?).unwrap();
-                    Ok(())
-                },
-                VMConfig::default(),
-            )
+            .perform_action(None, |inner_adapter, _gas_status| {
+                let move_stdlib = MOVE_STDLIB_COMPILED.to_vec();
+                let sender = *move_stdlib.first().unwrap().self_id().address();
+                println!("generating stdlib linkage");
+                let linkage_context =
+                    LinkageContext::new(sender, HashMap::from([(sender, sender)]));
+                println!("calling stdlib publish with address {sender:?}");
+                inner_adapter.publish_package(
+                    linkage_context,
+                    sender,
+                    move_stdlib,
+                    // FIXME(cswords): support gas
+                    // gas_status,
+                )?;
+                Ok(())
+            })
             .unwrap();
         let mut addr_to_name_mapping = BTreeMap::new();
         for (name, addr) in move_stdlib_named_addresses() {
@@ -171,38 +174,27 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
         _extra_args: Self::ExtraPublishArgs,
     ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
         println!("---- PUBLISHING MODULE --------------------------------------------------------");
-        println!("computing module bytes");
-        let all_bytes = modules
+        let pub_modules = modules
             .iter()
-            .map(|m| {
-                let mut module_bytes = vec![];
-                m.module
-                    .serialize_with_version(m.module.version, &mut module_bytes)?;
-                Ok(module_bytes)
-            })
-            .collect::<Result<_>>()?;
-
+            .map(|module| module.module.clone())
+            .collect::<Vec<_>>();
         println!("collecting ID");
-        let id = modules.first().unwrap().module.self_id();
+        let id = pub_modules.first().unwrap().self_id();
         println!("computing sender");
         let sender = *id.address();
-        println!("performing publish");
-        match self.perform_action(
-            gas_budget,
-            |vm, storage, gas_status| {
-                let pub_storage: &InMemoryStorage = storage;
-                println!("doing publish");
-                let (changeset, _storage) =
-                    vm.publish_package(&pub_storage, sender, all_bytes, gas_status);
-                println!("applying changeset");
-                // save changeset
-                // TODO support events
-                storage.apply(changeset?).unwrap();
-                println!("done");
-                Ok(())
-            },
-            VMConfig::default(),
-        ) {
+        println!("performing publish for {sender}");
+        let publish_result = self.perform_action(gas_budget, |inner_adapter, _gas_status| {
+            // TODO: If there are linkage directives, respect them here.
+            println!("generating linkage");
+            let linkage_context =
+                inner_adapter.generate_linkage_context(sender, sender, &pub_modules)?;
+            println!("linkage: {linkage_context:#?}");
+            println!("doing publish");
+            inner_adapter.publish_package(linkage_context, sender, pub_modules)?;
+            println!("done");
+            Ok(())
+        });
+        match publish_result {
             Ok(()) => Ok((None, modules)),
             Err(e) => Err(anyhow!(
                 "Unable to publish module '{}'. Got VMError: {}",
@@ -239,29 +231,25 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
             .chain(args)
             .collect();
         let serialized_return_values = self
-            .perform_action(
-                gas_budget,
-                |vm, storage, gas_status| {
-                    // Set the storage's root context to the call module's address.
-                    storage.context = module.address().clone();
-                    println!("Current storage: {:?}", storage);
-                    println!("Current vm: {:#?}", vm);
-                    let instance_storage: &InMemoryStorage = storage;
-                    println!("Generating VM instance");
-                    let mut vm_instance = vm.make_instance(instance_storage)?;
-                    println!("Creating type arguments");
-                    let type_args: Vec<_> = type_arg_tags
-                        .into_iter()
-                        .map(|tag| vm_instance.load_type(&tag))
-                        .collect::<VMResult<_>>()?;
+            .perform_action(gas_budget, |inner_adapter, gas_status| {
+                println!("current storage: {:#?}", inner_adapter.storage());
+                let runtime_id = *module.address();
+                // TODO: If there are linkage directives, respect them here.
+                println!("generating linkage");
+                let linkage = inner_adapter.generate_default_linkage(runtime_id)?;
+                println!("generating vm instance");
+                let mut vm_instance = inner_adapter.make_vm_instance(linkage)?;
+                println!("Creating type arguments");
+                let type_args: Vec<_> = type_arg_tags
+                    .into_iter()
+                    .map(|tag| vm_instance.load_type(&tag))
+                    .collect::<VMResult<_>>()?;
 
-                    println!("Doing call");
-                    vm_instance.execute_function_bypass_visibility(
-                        module, function, type_args, args, gas_status,
-                    )
-                },
-                test_vm_config(),
-            )
+                println!("Doing call");
+                vm_instance.execute_function_bypass_visibility(
+                    module, function, type_args, args, gas_status,
+                )
+            })
             .map_err(|e| {
                 anyhow!(
                     "Function execution failed with VMError: {}",
@@ -293,12 +281,14 @@ pub fn format_vm_error(e: &VMError) -> String {
         "{{
     major_status: {major_status:?},
     sub_status: {sub_status:?},
+    message: {message:?},
     location: {location_string},
     indices: {indices:?},
     offsets: {offsets:?},
 }}",
         major_status = e.major_status(),
         sub_status = e.sub_status(),
+        message = e.message(),
         location_string = location_string,
         // TODO maybe include source map info?
         indices = e.indices(),
@@ -310,26 +300,25 @@ impl SimpleVMTestAdapter {
     fn perform_action<Ret>(
         &mut self,
         gas_budget: Option<u64>,
-        f: impl FnOnce(&mut VirtualMachine, &mut InMemoryStorage, &mut GasStatus) -> VMResult<Ret>,
-        vm_config: VMConfig,
+        f: impl FnOnce(&mut dyn VMTestAdapter<TestStore>, &mut GasStatus) -> VMResult<Ret>,
     ) -> VMResult<Ret> {
         println!("creating natives");
         // start session
-        let natives =
-            stdlib_native_functions(STD_ADDR, GasParameters::zeros(), /* silent */ false)
-                .map_err(|e| e.finish(Location::Undefined))?;
-        println!("creating VM");
-        let mut vm = VirtualMachine::new(natives, vm_config);
+        // let natives =
+        //     stdlib_native_functions(STD_ADDR, GasParameters::zeros(), /* silent */ false)
+        //         .map_err(|e| e.finish(Location::Undefined))?;
+        // println!("creating VM");
+        // let mut vm = VirtualMachine::new(natives, vm_config);
         println!("creating gas_status");
         let mut gas_status = move_cli::sandbox::utils::get_gas_status(
-            &move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE,
+            &gas_schedule::INITIAL_COST_SCHEDULE,
             gas_budget,
         )
         .unwrap();
 
         // perform op
         println!("performing operation");
-        let res = f(&mut vm, &mut self.storage, &mut gas_status)?;
+        let res = f(&mut self.adapter, &mut gas_status)?;
 
         Ok(res)
     }

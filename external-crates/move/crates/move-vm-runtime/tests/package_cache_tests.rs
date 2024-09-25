@@ -573,7 +573,6 @@ fn publish_unpublished_dependency() {
         .unwrap_err();
 }
 
-
 #[test]
 fn publish_upgrade() {
     let v0_pkg_address = AccountAddress::from_hex_literal("0x2").unwrap();
@@ -592,7 +591,13 @@ fn publish_upgrade() {
 
     let linkage_table = HashMap::from([(v0_pkg_address, v0_pkg_address)]);
     let linkage_context = LinkageContext::new(v0_pkg_address, linkage_table);
-    adapter.publish_package(linkage_context, /* runtime_id */ v0_pkg_address, modules).unwrap();
+    adapter
+        .publish_package(
+            linkage_context,
+            /* runtime_id */ v0_pkg_address,
+            modules,
+        )
+        .unwrap();
 
     // First publish / linkage is `0x3 => 0x2` for V1
 
@@ -604,9 +609,14 @@ fn publish_upgrade() {
 
     let linkage_table = HashMap::from([(v0_pkg_address, v1_pkg_address)]);
     let linkage_context = LinkageContext::new(v1_pkg_address, linkage_table);
-    adapter.publish_package(linkage_context, /* runtime_id */ v0_pkg_address, modules).unwrap();
+    adapter
+        .publish_package(
+            linkage_context,
+            /* runtime_id */ v0_pkg_address,
+            modules,
+        )
+        .unwrap();
 }
-
 
 // Test that we properly publish and relink (and reuse) packages.
 #[test]
