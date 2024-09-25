@@ -805,7 +805,7 @@ mod tests {
         authority::test_authority_builder::TestAuthorityBuilder,
         consensus_adapter::{
             ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
-            MockSubmitToConsensus,
+            MockSubmitToConsensus, SubmitResponse,
         },
         epoch::randomness::*,
     };
@@ -847,7 +847,7 @@ mod tests {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
-                .returning(|_, _| Ok(()));
+                .returning(|_, _| Ok(SubmitResponse::NoStatusWaiter));
 
             let state = TestAuthorityBuilder::new()
                 .with_protocol_config(protocol_config.clone())
@@ -979,7 +979,7 @@ mod tests {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
-                .returning(|_, _| Ok(()));
+                .returning(|_, _| Ok(SubmitResponse::NoStatusWaiter));
 
             let state = TestAuthorityBuilder::new()
                 .with_protocol_config(protocol_config.clone())
