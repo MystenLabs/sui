@@ -22,9 +22,9 @@ use sui_types::execution_status::ExecutionStatus;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
 
 use crate::events::{
-    MoveBalanceEvent, MoveFlashLoanBorrowedEvent, MoveOrderCanceledEvent, MoveOrderFilledEvent,
-    MoveOrderModifiedEvent, MoveOrderPlacedEvent, MovePriceAddedEvent, MoveProposalEvent,
-    MoveRebateEvent, MoveStakeEvent, MoveTradeParamsUpdateEvent, MoveVoteEvent,
+    MoveBalanceEvent, MoveFlashLoanBorrowedEvent, MoveOrderCanceledEvent, MoveOrderExpiredEvent,
+    MoveOrderFilledEvent, MoveOrderModifiedEvent, MoveOrderPlacedEvent, MovePriceAddedEvent,
+    MoveProposalEvent, MoveRebateEvent, MoveStakeEvent, MoveTradeParamsUpdateEvent, MoveVoteEvent,
 };
 use crate::metrics::DeepBookIndexerMetrics;
 use crate::postgres_manager::PgPool;
@@ -461,6 +461,35 @@ fn process_sui_event(
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                 }))
             }
+            "OrderExpired" => {
+                info!("Observed Deepbook Order Expired {:?}", ev);
+                // metrics.total_sui_token_deposited.inc();
+                let move_event: MoveOrderExpiredEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
+                Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
+                    digest: tx.transaction.digest().to_string(),
+                    sender: tx.transaction.sender_address().to_string(),
+                    checkpoint,
+                    package,
+                    status: OrderUpdateStatus::Expired,
+                    pool_id: move_event.pool_id.to_string(),
+                    order_id: move_event.order_id,
+                    client_order_id: move_event.client_order_id,
+                    price: move_event.price,
+                    is_bid: move_event.is_bid,
+                    onchain_timestamp: move_event.timestamp,
+                    original_quantity: move_event.original_quantity,
+                    quantity: move_event.base_asset_quantity_canceled,
+                    trader: move_event.trader.to_string(),
+                    balance_manager_id: move_event.balance_manager_id.to_string(),
+                }))
+            }
             "OrderFilled" => {
                 info!("Observed Deepbook Order Filled {:?}", ev);
                 // metrics.total_sui_token_deposited.inc();
@@ -485,7 +514,9 @@ fn process_sui_event(
                     price: move_event.price,
                     taker_is_bid: move_event.taker_is_bid,
                     taker_fee: move_event.taker_fee,
+                    taker_fee_is_deep: move_event.taker_fee_is_deep,
                     maker_fee: move_event.maker_fee,
+                    maker_fee_is_deep: move_event.maker_fee_is_deep,
                     base_quantity: move_event.base_quantity,
                     quote_quantity: move_event.quote_quantity,
                     maker_balance_manager_id: move_event.maker_balance_manager_id.to_string(),
