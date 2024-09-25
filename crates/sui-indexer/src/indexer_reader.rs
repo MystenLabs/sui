@@ -324,27 +324,7 @@ impl IndexerReader {
             Some(stored_epoch) => stored_epoch,
             None => return Err(IndexerError::InvalidArgumentError("Invalid epoch".into())),
         };
-
-        let system_state_summary: SuiSystemStateSummary =
-            bcs::from_bytes(&stored_epoch.system_state).map_err(|_| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Failed to deserialize `system_state` for epoch {:?}",
-                    epoch,
-                ))
-            })?;
-        #[cfg(debug_assertions)]
-        {
-            let correct_system_state_summary: SuiSystemStateSummary =
-                serde_json::from_value(stored_epoch.system_state_summary_json.clone().unwrap())
-                    .unwrap();
-            // The old system state summary is incorrect and its epoch will be offset by 1.
-            // This is fixed in the new system state summary. Assert it here to double check.
-            assert_eq!(
-                correct_system_state_summary.epoch,
-                stored_epoch.epoch as u64
-            );
-        }
-        Ok(system_state_summary)
+        stored_epoch.get_json_system_state_summary()
     }
 
     async fn get_checkpoint_from_db(
