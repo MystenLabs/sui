@@ -24,7 +24,7 @@ use move_command_line_common::{
 use move_compiler::{editions::Edition, shared::PackagePaths, FullyCompiledProgram};
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::IdentStr,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     runtime_value::MoveValue,
 };
@@ -63,12 +63,93 @@ pub struct AdapterInitArgs {
     pub edition: Option<Edition>,
 }
 
+#[derive(Debug, Parser, Default)]
+pub struct PublishLinkageArgs {
+    #[arg(long = "location")]
+    pub location: Option<AccountAddress>,
+    #[clap(flatten)]
+    pub linkage: Linkage,
+}
+
+#[derive(Debug, Clone, Parser, Default)]
+pub struct Linkage {
+    #[arg(long = "linkage", value_parser = parse_linkage, num_args(1..))]
+    pub linkage: Vec<(AccountAddress, AccountAddress)>,
+    #[arg(long = "type-origin", value_parser = parse_type_origin, num_args(1..))]
+    pub type_origin: Vec<((AccountAddress, Identifier, Identifier), AccountAddress)>,
+}
+
+impl Linkage {
+    pub fn overlay(&self, mut existing_linkage: LinkageContext) -> LinkageContext {
+        for (runtime_id, package_id) in self.linkage.iter() {
+            existing_linkage
+                .linkage_table
+                .insert(*runtime_id, *package_id);
+            existing_linkage.linkage_table.remove(package_id);
+        }
+        // Remap the root address if it is in the linkage table since it may be overriden
+        existing_linkage.root_package = existing_linkage
+            .linkage_table
+            .get(&existing_linkage.root_package)
+            .unwrap_or(&existing_linkage.root_package)
+            .clone();
+        existing_linkage
+    }
+}
+
+impl PublishLinkageArgs {
+    pub fn overlay(&self, existing_linkage: LinkageContext) -> LinkageContext {
+        let mut linkage = self.linkage.overlay(existing_linkage);
+        if let Some(location) = self.location {
+            linkage.root_package = location;
+        }
+
+        linkage
+    }
+}
+
+fn parse_linkage(s: &str) -> Result<(AccountAddress, AccountAddress)> {
+    let parts: Vec<_> = s.split("=>").collect::<Vec<_>>();
+    if parts.len() != 2 {
+        return Err(anyhow!("Invalid linkage format. Expected 'addr1=>addr2'"));
+    }
+    let addr1 = AccountAddress::from_hex_literal(parts[0])?;
+    let addr2 = AccountAddress::from_hex_literal(parts[1])?;
+    Ok((addr1, addr2))
+}
+
+fn parse_type_origin(
+    s: &str,
+) -> Result<((AccountAddress, Identifier, Identifier), AccountAddress)> {
+    let parts: Vec<_> = s.split("=>").collect::<Vec<_>>();
+    if parts.len() != 2 {
+        return Err(anyhow!(
+            "Invalid type origin format. Expected 'addr1::name::name=>addr2'"
+        ));
+    }
+    let (addr1, mname, tname) = {
+        let tparts: Vec<_> = parts[0].split("::").collect::<Vec<_>>();
+        if tparts.len() != 3 {
+            return Err(anyhow!(
+                "Invalid type origin format. Expected 'addr1::name::name=>addr2'"
+            ));
+        }
+        (
+            AccountAddress::from_hex_literal(tparts[0])?,
+            Identifier::new(tparts[1])?,
+            Identifier::new(tparts[2])?,
+        )
+    };
+    let addr2 = AccountAddress::from_hex_literal(parts[1])?;
+    Ok(((addr1, mname, tname), addr2))
+}
+
 #[async_trait]
 impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
     type ExtraInitArgs = AdapterInitArgs;
-    type ExtraPublishArgs = EmptyCommand;
+    type ExtraPublishArgs = PublishLinkageArgs;
     type ExtraValueArgs = ();
-    type ExtraRunArgs = EmptyCommand;
+    type ExtraRunArgs = Linkage;
     type Subcommand = EmptyCommand;
 
     fn compiled_state(&mut self) -> &mut CompiledState {
@@ -171,7 +252,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
         &mut self,
         modules: Vec<MaybeNamedCompiledModule>,
         gas_budget: Option<u64>,
-        _extra_args: Self::ExtraPublishArgs,
+        extra_args: Self::ExtraPublishArgs,
     ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
         println!("---- PUBLISHING MODULE --------------------------------------------------------");
         let pub_modules = modules
@@ -186,8 +267,11 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
         let publish_result = self.perform_action(gas_budget, |inner_adapter, _gas_status| {
             // TODO: If there are linkage directives, respect them here.
             println!("generating linkage");
-            let linkage_context =
-                inner_adapter.generate_linkage_context(sender, sender, &pub_modules)?;
+            let linkage_context = extra_args.overlay(inner_adapter.generate_linkage_context(
+                sender,
+                sender,
+                &pub_modules,
+            )?);
             println!("linkage: {linkage_context:#?}");
             println!("doing publish");
             inner_adapter.publish_package(linkage_context, sender, pub_modules)?;
@@ -212,7 +296,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
         signers: Vec<ParsedAddress>,
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
-        _extra_args: Self::ExtraRunArgs,
+        extra_args: Self::ExtraRunArgs,
     ) -> Result<(Option<String>, SerializedReturnValues)> {
         println!("---- CALLING FUNCTION ---------------------------------------------------------");
         let signers: Vec<_> = signers
@@ -235,7 +319,9 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
                 let runtime_id = *module.address();
                 // TODO: If there are linkage directives, respect them here.
                 println!("generating linkage");
-                let linkage = inner_adapter.generate_default_linkage(runtime_id)?;
+                let linkage =
+                    extra_args.overlay(inner_adapter.generate_default_linkage(runtime_id)?);
+                
                 println!("generating vm instance");
                 let mut vm_instance = inner_adapter.make_vm_instance(linkage)?;
                 println!("Creating type arguments");
