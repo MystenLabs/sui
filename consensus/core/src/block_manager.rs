@@ -159,7 +159,6 @@ impl BlockManager {
                 }
             }
             for (block_ref, block) in blocks_to_reject {
-                // It's safe to look up in the authority here since we know that the block has been already verified either via the synchronization methods.
                 let hostname = self
                     .context
                     .committee
