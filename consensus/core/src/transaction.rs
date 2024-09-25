@@ -46,10 +46,10 @@ pub(crate) struct TransactionConsumer {
 pub enum BlockStatus {
     /// The block has been sequenced as part of a committed sub dag. That means that any transaction that has been included in the block
     /// has been committed as well.
-    Sequenced,
+    Sequenced(BlockRef),
     /// The block has been garbage collected and will never be committed. Any transactions that have been included in the block should also
     /// be considered as impossible to be committed as part of this block and might need to be retried
-    GarbageCollected,
+    GarbageCollected(BlockRef),
 }
 
 impl TransactionConsumer {
@@ -163,7 +163,7 @@ impl TransactionConsumer {
         for block_ref in committed_blocks {
             if let Some(subscribers) = block_status_subscribers.remove(&block_ref) {
                 subscribers.into_iter().for_each(|s| {
-                    let _ = s.send(BlockStatus::Sequenced);
+                    let _ = s.send(BlockStatus::Sequenced(block_ref));
                 });
             }
         }
@@ -172,7 +172,7 @@ impl TransactionConsumer {
         while let Some((block_ref, subscribers)) = block_status_subscribers.pop_first() {
             if block_ref.round <= gc_round {
                 subscribers.into_iter().for_each(|s| {
-                    let _ = s.send(BlockStatus::GarbageCollected);
+                    let _ = s.send(BlockStatus::GarbageCollected(block_ref));
                 });
             } else {
                 block_status_subscribers.insert(block_ref, subscribers);
@@ -444,9 +444,9 @@ mod tests {
             let block_status = waiter.await.expect("Block status waiter shouldn't fail");
 
             if block_ref.round <= gc_round {
-                assert_eq!(block_status, BlockStatus::GarbageCollected);
+                assert!(matches!(block_status, BlockStatus::GarbageCollected(_)))
             } else {
-                assert_eq!(block_status, BlockStatus::Sequenced);
+                assert!(matches!(block_status, BlockStatus::Sequenced(_)));
             }
         }
     }
