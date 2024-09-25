@@ -270,6 +270,7 @@ fn check_valid_module_member_name_impl(
     Ok(())
 }
 
+#[allow(clippy::result_unit_err)]
 pub fn check_valid_type_parameter_name(
     env: &mut CompilationEnv,
     is_macro: Option<Loc>,
