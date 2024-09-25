@@ -15,7 +15,8 @@ use tracing::{error, info, warn};
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    consensus_adapter::SubmitToConsensus, consensus_handler::SequencedConsensusTransactionKey,
+    consensus_adapter::{SubmitResponse, SubmitToConsensus},
+    consensus_handler::SequencedConsensusTransactionKey,
 };
 
 /// Gets a client to submit transactions to Mysticeti, or waits for one to be available.
@@ -79,7 +80,7 @@ impl SubmitToConsensus for LazyMysticetiClient {
         &self,
         transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
+    ) -> SuiResult<SubmitResponse> {
         // TODO(mysticeti): confirm comment is still true
         // The retrieved TransactionClient can be from the past epoch. Submit would fail after
         // Mysticeti shuts down, so there should be no correctness issue.
@@ -88,7 +89,7 @@ impl SubmitToConsensus for LazyMysticetiClient {
             .iter()
             .map(|t| bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail"))
             .collect::<Vec<_>>();
-        let block_ref = client
+        let (block_ref, status_waiter) = client
             .as_ref()
             .expect("Client should always be returned")
             .submit(transactions_bytes)
@@ -126,6 +127,6 @@ impl SubmitToConsensus for LazyMysticetiClient {
             let transaction_key = SequencedConsensusTransactionKey::External(transactions[0].key());
             tracing::info!("Transaction {transaction_key:?} was included in {block_ref}",)
         };
-        Ok(())
+        Ok(SubmitResponse::WithStatusWaiter(status_waiter))
     }
 }
