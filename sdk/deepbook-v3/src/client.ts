@@ -569,10 +569,11 @@ export class DeepBookClient {
 	}
 
 	/**
-	 * @description Get the vault balances for a pool
+	 * @description Get the locked balances for a pool and balance manager
 	 * @param {string} poolKey Key of the pool
+	 * @param {string} managerKey The key of the BalanceManager
 	 * @returns {Promise<{ base: number, quote: number, deep: number }>}
-	 * An object with base, quote, and deep balances in the vault
+	 * An object with base, quote, and deep locked for the balance manager in the pool
 	 */
 	async lockedBalance(poolKey: string, balanceManagerKey: string) {
 		const tx = new Transaction();
