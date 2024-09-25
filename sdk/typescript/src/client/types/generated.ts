@@ -290,7 +290,7 @@ export type SuiEventFilter =
 			Or: [SuiEventFilter, SuiEventFilter];
 	  };
 /**
- * Unique ID of a Sui Event, the ID is a combination of tx seq number and event seq number.
+ * Unique ID of a Sui Event, the ID is a combination of transaction digest and event seq number.
  */
 export interface EventId {
 	eventSeq: string;
