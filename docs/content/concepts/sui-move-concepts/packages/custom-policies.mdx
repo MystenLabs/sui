@@ -523,9 +523,8 @@ The instruction that follows publishes this example package and then upgrades it
 
 Create a new directory to store a Node.js project. You can use the `npm init` function to create the `package.json`, or manually create the file. Depending on your approach to creating `package.json`, populate or add the following JSON to it:
 
-```JSON
+```json
 { "type": "module" }
-
 ```
 
 Open a terminal or console to the root of your Node.js project. Run the following command to add the Sui TypeScript SDK as a dependency:
@@ -1124,8 +1123,8 @@ If you attempt the first upgrade before Tuesday or you change the constant again
 ```bash
 ...
 status: {
-        status: 'failure',
-        error: 'MoveAbort(MoveLocation { module: ModuleId { address: <POLICY-PACKAGE>, name: Identifier("day_of_week") }, function: 1, instruction: 11, function_name: Some("authorize_upgrade") }, 2) in command 0'
-      },
+  status: 'failure',
+  error: 'MoveAbort(MoveLocation { module: ModuleId { address: <POLICY-PACKAGE>, name: Identifier("day_of_week") }, function: 1, instruction: 11, function_name: Some("authorize_upgrade") }, 2) in command 0'
+},
 ...
 ```
