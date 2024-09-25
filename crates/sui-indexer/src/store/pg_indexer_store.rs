@@ -1131,17 +1131,20 @@ impl PgIndexerStore {
                         0 | 1 => 0,
                         _ => {
                             let prev_epoch_id = epoch_id - 2;
-                            let result = checkpoints::table
+                            let last_epoch_max_tx_sequence_number = checkpoints::table
                                 .filter(checkpoints::epoch.eq(prev_epoch_id as i64))
-                                .select(max(checkpoints::network_total_transactions))
+                                .select(checkpoints::max_tx_sequence_number)
+                                .order_by(checkpoints::sequence_number.desc())
                                 .first::<Option<i64>>(conn)
-                                .await
-                                .map(|o| o.unwrap_or(0))?;
-
-                            result as u64
+                                .await?
+                                .ok_or_else(|| {
+                                    IndexerError::PersistentStorageDataCorruptionError(
+                                        "max_tx_sequence_number should not be None".to_string(),
+                                    )
+                                })?;
+                            (last_epoch_max_tx_sequence_number as u64).saturating_add(1)
                         }
                     };
-
                     let epoch_total_transactions = epoch.network_total_transactions
                         - previous_epoch_network_total_transactions;
 
@@ -1458,16 +1461,18 @@ impl PgIndexerStore {
         use diesel_async::RunQueryDsl;
 
         let mut connection = self.pool.get().await?;
-
-        checkpoints::table
+        let max_tx_sequence_number = checkpoints::table
             .filter(checkpoints::epoch.eq(epoch as i64))
-            .select(checkpoints::network_total_transactions)
+            .select(checkpoints::max_tx_sequence_number)
             .order_by(checkpoints::sequence_number.desc())
-            .first::<i64>(&mut connection)
-            .await
-            .map_err(Into::into)
-            .context("Failed to get network total transactions in epoch")
-            .map(|v| v as u64)
+            .first::<Option<i64>>(&mut connection)
+            .await?
+            .ok_or_else(|| {
+                IndexerError::PersistentStorageDataCorruptionError(
+                    "max_tx_sequence_number should not be None".to_string(),
+                )
+            })?;
+        Ok((max_tx_sequence_number as u64).saturating_add(1))
     }
 }
 

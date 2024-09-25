@@ -24,7 +24,6 @@ pub struct StoredCheckpoint {
     pub sequence_number: i64,
     pub checkpoint_digest: Vec<u8>,
     pub epoch: i64,
-    pub network_total_transactions: i64,
     pub previous_checkpoint_digest: Option<Vec<u8>>,
     pub end_of_epoch: bool,
     pub tx_digests: Vec<Option<Vec<u8>>>,
@@ -52,7 +51,6 @@ impl From<&IndexedCheckpoint> for StoredCheckpoint {
                 .iter()
                 .map(|tx| Some(tx.into_inner().to_vec()))
                 .collect(),
-            network_total_transactions: c.network_total_transactions as i64,
             previous_checkpoint_digest: c
                 .previous_checkpoint_digest
                 .as_ref()
@@ -118,6 +116,13 @@ impl TryFrom<StoredCheckpoint> for RpcCheckpoint {
                 })
                 .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?
         };
+
+        let max_tx_sequence_number = checkpoint.max_tx_sequence_number.ok_or_else(|| {
+            IndexerError::PersistentStorageDataCorruptionError(
+                "max_tx_sequence_number should not be None".to_string(),
+            )
+        })?;
+
         let validator_signature =
             bcs::from_bytes(&checkpoint.validator_signature).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -158,7 +163,7 @@ impl TryFrom<StoredCheckpoint> for RpcCheckpoint {
                 storage_rebate: checkpoint.storage_rebate as u64,
                 non_refundable_storage_fee: checkpoint.non_refundable_storage_fee as u64,
             },
-            network_total_transactions: checkpoint.network_total_transactions as u64,
+            network_total_transactions: (max_tx_sequence_number as u64).saturating_add(1),
             timestamp_ms: checkpoint.timestamp_ms as u64,
             transactions,
             validator_signature,

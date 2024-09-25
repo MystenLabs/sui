@@ -34,7 +34,6 @@ pub struct IndexedCheckpoint {
     pub checkpoint_digest: CheckpointDigest,
     pub epoch: u64,
     pub tx_digests: Vec<TransactionDigest>,
-    pub network_total_transactions: u64,
     pub previous_checkpoint_digest: Option<CheckpointDigest>,
     pub timestamp_ms: u64,
     pub total_gas_cost: i64, // total gas cost could be negative
@@ -64,9 +63,10 @@ impl IndexedCheckpoint {
             + checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64
             - checkpoint.epoch_rolling_gas_cost_summary.storage_rebate as i64;
         let tx_digests = contents.iter().map(|t| t.transaction).collect::<Vec<_>>();
-        let max_tx_sequence_number = checkpoint.network_total_transactions - 1;
-        // NOTE: + 1u64 first to avoid subtraction with overflow
-        let min_tx_sequence_number = max_tx_sequence_number + 1u64 - tx_digests.len() as u64;
+        let max_tx_sequence_number = checkpoint.network_total_transactions.saturating_sub(1);
+        let min_tx_sequence_number = checkpoint
+            .network_total_transactions
+            .saturating_sub(tx_digests.len() as u64);
         let auth_sig = &checkpoint.auth_sig().signature;
         Self {
             sequence_number: checkpoint.sequence_number,
@@ -84,7 +84,6 @@ impl IndexedCheckpoint {
                 .epoch_rolling_gas_cost_summary
                 .non_refundable_storage_fee,
             successful_tx_num,
-            network_total_transactions: checkpoint.network_total_transactions,
             timestamp_ms: checkpoint.timestamp_ms,
             validator_signature: auth_sig.clone(),
             checkpoint_commitments: checkpoint.checkpoint_commitments.clone(),

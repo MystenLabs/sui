@@ -13,7 +13,6 @@ diesel::table! {
         sequence_number -> Int8,
         checkpoint_digest -> Bytea,
         epoch -> Int8,
-        network_total_transactions -> Int8,
         previous_checkpoint_digest -> Nullable<Bytea>,
         end_of_epoch -> Bool,
         tx_digests -> Array<Nullable<Bytea>>,
