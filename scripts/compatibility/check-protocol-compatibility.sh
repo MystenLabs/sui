@@ -60,6 +60,7 @@ function check_git_clean {
   # if any files are edited or staged, exit with error
   if ! git diff --quiet --exit-code -- $path || ! git diff --cached --quiet --exit-code -- $path; then
     echo "Error: $message"
+    git diff HEAD
     exit 1
   fi
 }
