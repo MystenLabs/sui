@@ -66,17 +66,16 @@ impl Pruner {
             cancel_clone.clone(),
         ));
 
-        let mut epoch_watermark =
-            get_and_update_watermarks_epoch(&self.store, self.epochs_to_keep).await?;
-        let mut last_seen_max_epoch = epoch_watermark.reader_hi();
+        let mut epoch_watermark = self.store.get_available_epoch_range().await?;
+        let mut last_seen_max_epoch;
         // The first epoch that has not yet been pruned.
         let mut next_prune_epoch = None;
         while !cancel.is_cancelled() {
-            // TODO: (wlmyng) pruner advances based on the epoch table
+            // TODO: (wlmyng) pruner currently prunes all unpartitioned data based on the epoch
+            // table instead of the respective table.
             if !should_prune(&epoch_watermark) {
                 tokio::time::sleep(Duration::from_secs(5)).await;
-                epoch_watermark =
-                    get_and_update_watermarks_epoch(&self.store, self.epochs_to_keep).await?;
+                epoch_watermark = self.store.get_available_epoch_range().await?;
                 continue;
             }
 
@@ -125,24 +124,27 @@ fn should_prune(watermark: &WatermarkRead) -> bool {
     }
 }
 
-/// Fetch epoch watermark and updates lower bounds for all watermarks for readers. Refetch to get
-/// the timestamp from db.
-async fn get_and_update_watermarks_epoch(
-    store: &PgIndexerStore,
-    epochs_to_keep: u64,
-) -> IndexerResult<WatermarkRead> {
-    let watermark = store.get_available_epoch_range().await?;
-    if should_update_watermark(&watermark, epochs_to_keep) {
-        let new_epoch_bound = watermark.epoch_hi.saturating_sub(epochs_to_keep - 1);
-        let (cp, tx) = store.get_min_cp_and_tx_for_epoch(new_epoch_bound).await?;
-        store
-            .update_watermarks(Watermark::new_lower_bounds(new_epoch_bound, cp, tx))
-            .await?;
-        info!("Finished updating lower bounds for watermarks");
-        // We refetch to use the database's timestamp
-        Ok(store.get_available_epoch_range().await?)
+/// Pruner waits for some time before pruning to ensure that in-flight reads complete or timeout
+/// before the underlying data is pruned.
+async fn wait_for_prune_delay(
+    watermark: &WatermarkRead,
+    cancel: &CancellationToken,
+    delay_amount: i64,
+) -> IndexerResult<()> {
+    let current_time = chrono::Utc::now().timestamp_millis();
+    let delay = (watermark.timestamp_ms + delay_amount - current_time).max(0) as u64;
+
+    if delay > 0 {
+        info!("Waiting for {}ms before pruning", delay);
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_millis(delay)) => Ok(()),
+            _ = cancel.cancelled() => {
+                info!("Pruning cancelled during delay");
+                Ok(())
+            }
+        }
     } else {
-        Ok(watermark)
+        Ok(())
     }
 }
 
@@ -188,30 +190,6 @@ async fn update_watermarks_lower_bounds(
     }
 
     Ok(())
-}
-
-/// Pruner waits for some time before pruning to ensure that in-flight reads complete or timeout
-/// before the underlying data is pruned.
-async fn wait_for_prune_delay(
-    watermark: &WatermarkRead,
-    cancel: &CancellationToken,
-    delay_amount: i64,
-) -> IndexerResult<()> {
-    let current_time = chrono::Utc::now().timestamp_millis();
-    let delay = (watermark.timestamp_ms + delay_amount - current_time).max(0) as u64;
-
-    if delay > 0 {
-        info!("Waiting for {}ms before pruning", delay);
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_millis(delay)) => Ok(()),
-            _ = cancel.cancelled() => {
-                info!("Pruning cancelled during delay");
-                Ok(())
-            }
-        }
-    } else {
-        Ok(())
-    }
 }
 
 /// Task to periodically query the `watermarks` table and update the lower bounds for all watermarks
@@ -263,6 +241,7 @@ async fn prune_epoch_partitioned_tables_task(
         // `[min_partition, watermark.epoch_lo)`
         for (table_name, (min_partition, _)) in &table_partitions {
             let Some(lookup) = WatermarkEntity::from_str(table_name) else {
+                // TODO: (wlmyng) handle this error
                 println!(
                     "could not convert table name to WatermarkEntity: {}",
                     table_name

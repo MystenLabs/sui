@@ -70,6 +70,7 @@ pub struct WatermarkRead {
     pub hi: u64,
     pub lo: u64,
     pub timestamp_ms: i64,
+    /// Data at and below `pruned_lo` is considered pruned by the pruner.
     pub pruned_lo: Option<u64>,
 }
 
@@ -84,11 +85,13 @@ impl WatermarkRead {
         self.lo
     }
 
-    /// Returns the lowest watermark of unpruned data that the pruner should use. If `pruned_lo` is
-    /// not set, defaults to 0. This should be at most `reader_lo - 1`, never equal to `reader_lo`
-    /// because that data should not be pruned yet.
+    /// Represents the first `unit` (checkpoint, tx, epoch) that has not yet been pruned. If
+    /// `pruned_lo` is not set in db, default to 0. Otherwise, this is `pruned_lo + `.
     pub fn pruner_lo(&self) -> u64 {
-        self.pruned_lo.unwrap_or(0)
+        match self.pruned_lo {
+            Some(pruned_lo) => pruned_lo.saturating_add(1),
+            None => 0,
+        }
     }
 }
 
