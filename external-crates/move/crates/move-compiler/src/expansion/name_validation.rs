@@ -101,6 +101,7 @@ impl NameCase {
 // Valid names
 //**************************************************************************************************
 
+#[allow(clippy::result_unit_err)]
 pub fn check_valid_address_name(
     env: &mut CompilationEnv,
     sp!(_, ln_): &P::LeadingNameAccess,
@@ -118,6 +119,7 @@ pub fn valid_local_variable_name(s: Symbol) -> bool {
     s.starts_with('_') || s.starts_with(|c: char| c.is_ascii_lowercase())
 }
 
+#[allow(clippy::result_unit_err)]
 pub fn check_valid_function_parameter_name(
     env: &mut CompilationEnv,
     is_macro: Option<Loc>,
@@ -346,6 +348,7 @@ pub fn is_valid_datatype_or_constant_name(s: &str) -> bool {
     s.starts_with(|c: char| c.is_ascii_uppercase())
 }
 
+#[allow(clippy::result_unit_err)]
 // Checks for a restricted name in any decl case
 // Self and vector are not allowed
 pub fn check_restricted_name_all_cases(
