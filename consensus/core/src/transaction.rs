@@ -26,7 +26,7 @@ pub(crate) struct TransactionsGuard {
     // A TransactionsGuard may be partially consumed by `TransactionConsumer`, in which case, this holds the remaining transactions.
     transactions: Vec<Transaction>,
 
-    included_in_block_ack: oneshot::Sender<(BlockRef, RegistrationOwned<BlockRef, Status>)>,
+    included_in_block_ack: oneshot::Sender<(BlockRef, RegistrationOwned<BlockRef, BlockStatus>)>,
 }
 
 /// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
@@ -37,12 +37,12 @@ pub(crate) struct TransactionConsumer {
     max_consumed_bytes_per_request: u64,
     max_consumed_transactions_per_request: u64,
     pending_transactions: Option<TransactionsGuard>,
-    status_notifier: Arc<NotifyRead<BlockRef, Status>>,
+    status_notifier: Arc<NotifyRead<BlockRef, BlockStatus>>,
 }
 
 #[derive(Debug, Clone)]
 #[allow(unused)]
-pub enum Status {
+pub enum BlockStatus {
     /// The block has been sequenced as part of a committed sub dag. That means that any transaction that has been included in the block
     /// has been committed as well.
     Sequenced,
@@ -140,6 +140,12 @@ impl TransactionConsumer {
         )
     }
 
+
+    /// Notifies all the transaction submitters who are waiting to receive an update on the status of the block.
+    pub(crate) fn notify_block_status(&self, block_ref: BlockRef, status: BlockStatus) {
+        self.status_notifier.notify(&block_ref, &status);
+    }
+
     #[cfg(test)]
     fn is_empty(&mut self) -> bool {
         if self.pending_transactions.is_some() {
@@ -186,7 +192,7 @@ impl TransactionClient {
     pub async fn submit(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<(BlockRef, RegistrationOwned<BlockRef, Status>), ClientError> {
+    ) -> Result<(BlockRef, RegistrationOwned<BlockRef, BlockStatus>), ClientError> {
         // TODO: Support returning the block refs for transactions that span multiple blocks
         let included_in_block = self.submit_no_wait(transactions).await?;
         included_in_block
@@ -205,7 +211,7 @@ impl TransactionClient {
     pub(crate) async fn submit_no_wait(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<oneshot::Receiver<(BlockRef, RegistrationOwned<BlockRef, Status>)>, ClientError>
+    ) -> Result<oneshot::Receiver<(BlockRef, RegistrationOwned<BlockRef, BlockStatus>)>, ClientError>
     {
         let (included_in_block_ack_send, included_in_block_ack_receive) = oneshot::channel();
         for transaction in &transactions {
