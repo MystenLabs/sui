@@ -211,14 +211,14 @@ pub enum BlockStatus {
 }
 
 pub enum SubmitResponse {
-    NoStatusWaiter,
+    NoStatusWaiter(BlockStatus),
     WithStatusWaiter(oneshot::Receiver<consensus_core::BlockStatus>),
 }
 
 impl SubmitResponse {
     pub async fn wait_for_status(self) -> SuiResult<BlockStatus> {
         match self {
-            SubmitResponse::NoStatusWaiter => Ok(BlockStatus::Sequenced), // When no status feedback mechanism is offered then we default to "sequenced". This is the case for Narwhal.
+            SubmitResponse::NoStatusWaiter(status) => Ok(status),
             SubmitResponse::WithStatusWaiter(receiver) => match receiver.await {
                 Ok(status) => match status {
                     consensus_core::BlockStatus::Sequenced(_) => Ok(BlockStatus::Sequenced),
@@ -258,7 +258,7 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
                 warn!("Submit transaction failed with: {:?}", r);
             })?;
         // For Narwhal we don't offer any status feedback mechanism
-        Ok(SubmitResponse::NoStatusWaiter)
+        Ok(SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced))
     }
 }
 
@@ -1216,7 +1216,7 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<SubmitResponse> {
         self.submit_batch(transactions, None, epoch_store)
-            .map(|_| SubmitResponse::NoStatusWaiter)
+            .map(|_| SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced))
     }
 }
 
