@@ -395,6 +395,11 @@ impl<'a> Analyzer<'a> {
                 }
 
                 if callee_env.is_native_or_intrinsic() && !actuals.is_empty() {
+                    self.info
+                        .funs
+                        .entry((callee_env.get_qualified_id(), FunctionVariant::Baseline))
+                        .or_default()
+                        .insert(actuals.clone());
                     // Mark the associated module to be instantiated with the given actuals.
                     // This will instantiate all functions in the module with matching number
                     // of type parameters.

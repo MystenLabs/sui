@@ -1,6 +1,6 @@
 module prover::opaque_tests;
 
-use prover::prover::{requires, ensures, asserts, old, max_u64};
+use prover::prover::{requires, ensures, asserts, old, max_u64, drop};
 
 fun inc(x: u64): u64 {
     x + 1
@@ -85,17 +85,22 @@ fun scale<T>(r: &mut Range<T>, k: u64) {
     r.y = r.y * k;
 }
 
-// fun scale_spec<T>(r: &mut Range<T>, k: u64) {
-//     let old_r = old!(r);
+fun scale_spec<T>(r: &mut Range<T>, k: u64) {
+    let old_r = old!(r);
 
-//     scale(r, k);
+    requires(r.x <= r.y);
 
-//     ensures(r.x == old_r.x * k);
-//     ensures(r.y == old_r.y * k);
-// }
+    asserts(r.y.to_int().mul(k.to_int()).lte(max_u64().to_int()));
 
-fun scale_range<T, U>(r: &Range<T>, k: u64): Range<U> {
-    let mut result = Range<U> { x: r.x, y: r.y };
-    scale(&mut result, k);
-    result
+    scale(r, k);
+
+    ensures(r.x == old_r.x * k);
+    ensures(r.y == old_r.y * k);
+
+    // use a dummy range to introduce the instantiation of drop
+    let dummy_r = Range<T> {
+        x: old_r.x,
+        y: old_r.y,
+    };
+    drop(dummy_r);
 }

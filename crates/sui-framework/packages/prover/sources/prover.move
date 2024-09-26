@@ -73,10 +73,38 @@ module prover::prover {
     native public fun invariant_end();
 
     native public fun val<T>(x: &T): T;
+    fun val_spec<T>(x: &T): T {
+        let result = val(x);
+
+        ensures(result == x);
+
+        result
+    }
+
     native public fun ref<T>(x: T): &T;
+    fun ref_spec<T>(x: T): &T {
+        let old_x = val(&x);
+
+        let result = ref(x);
+
+        ensures(result == old_x);
+        drop(old_x);
+
+        result
+    }
+
     native public fun drop<T>(x: T);
+    fun drop_spec<T>(x: T) {
+        drop(x);
+    }
+
     public macro fun old<$T>($x: &$T): &$T {
         ref(val($x))
+    }
+
+    native public fun fresh<T>(): T;
+    fun fresh_spec<T>(): T {
+        fresh()
     }
 
     const MAX_U8: u8 = 255u8;
@@ -103,6 +131,4 @@ module prover::prover {
     public fun max_u256(): u256 {
         MAX_U256
     }
-
-    native public fun fresh<T>(): T;
 }
