@@ -107,6 +107,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -117,6 +118,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
@@ -267,6 +269,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -277,6 +280,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
@@ -427,6 +431,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -437,6 +442,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
@@ -587,6 +593,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -597,6 +604,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
@@ -747,6 +755,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -757,6 +766,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
@@ -907,6 +917,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -917,6 +928,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
@@ -1067,6 +1079,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -1077,6 +1090,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
