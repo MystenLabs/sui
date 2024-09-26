@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{sandbox::utils::OnDiskStateView, DEFAULT_BUILD_DIR};
 use anyhow::Result;
+use move_core_types::account_address::AccountAddress;
 use move_package::{compilation::compiled_package::CompiledPackage, BuildConfig};
+use move_vm_runtime::cache::linkage_context::LinkageContext;
 use std::path::{Path, PathBuf};
 
 /// The PackageContext controls the package that the CLI is executing with respect to, and handles the

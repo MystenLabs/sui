@@ -3,7 +3,7 @@
 
 use crate::{
     cache::linkage_context::LinkageContext,
-    natives::{functions::NativeFunctions, extensions::NativeContextExtensions},
+    natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
     on_chain::ast::{PackageStorageId, RuntimePackageId},
     test_utils::{
         gas_schedule::GasStatus, storage::InMemoryStorage, test_store::TestStore,
@@ -45,14 +45,19 @@ impl InMemoryTestAdapter {
 
     /// Insert package into storage without any checking or validation. This is useful for
     /// testing invalid packages and other failures.
-    pub fn insert_modules_into_storage(&mut self, modules: Vec<CompiledModule>) -> anyhow::Result<()> {
-        assert!(!modules.is_empty(), "Tried to add empty module(s) to storage");
+    pub fn insert_modules_into_storage(
+        &mut self,
+        modules: Vec<CompiledModule>,
+    ) -> anyhow::Result<()> {
+        assert!(
+            !modules.is_empty(),
+            "Tried to add empty module(s) to storage"
+        );
         // TODO: Should we enforce this is a set?
         for module in modules {
             let module_id = module.self_id();
             let mut module_bytes = vec![];
-            module
-                .serialize_with_version(module.version, &mut module_bytes)?;
+            module.serialize_with_version(module.version, &mut module_bytes)?;
             self.storage
                 .store
                 .publish_or_overwrite_module(module_id, module_bytes);
@@ -111,7 +116,7 @@ impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
     fn make_vm_instance_with_native_extensions<'extensions>(
         &self,
         linkage_context: LinkageContext,
-        native_extensions: NativeContextExtensions<'extensions>
+        native_extensions: NativeContextExtensions<'extensions>,
     ) -> VMResult<VirtualMachineExecutionInstance<'extensions, &TestStore>> {
         let Self { vm, storage } = self;
         vm.make_instance_with_native_extensions(storage, linkage_context, native_extensions)
@@ -121,6 +126,7 @@ impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
     // This will generate the linkage context based on the transitive dependencies of the
     // provided package modules if the package's dependencies are in the data cache, or error
     // otherwise.
+    // TODO: It would be great, longer term, to move this to the trait and reuse it.
     fn generate_linkage_context(
         &self,
         runtime_package_id: RuntimePackageId,
@@ -135,15 +141,21 @@ impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
                 .map(|dep| dep.address())
                 .filter(|dep| *dep != &runtime_package_id)
             {
+                // If this dependency is in here, its transitive dependencies are, too.
+                if all_dependencies.contains(dep) {
+                    continue;
+                }
                 let new_dependencies = self.storage.transitive_dependencies(dep)?;
                 all_dependencies.extend(new_dependencies.into_iter());
             }
         }
-        all_dependencies.remove(&storage_id);
-        // Consider making this into an VM error on failure instead.
+        // Consider making tehse into VM errors on failure instead.
+        assert!(!all_dependencies.remove(&storage_id),
+            "Found circular dependencies during linkage generation."
+        );
         assert!(
             !all_dependencies.contains(&runtime_package_id),
-            "Found circular dependencies during dependency generation for publication."
+            "Found circular dependencies during linkage generation."
         );
         let linkage_context = LinkageContext::new(
             storage_id,
@@ -154,16 +166,6 @@ impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
                 .collect(),
         );
         Ok(linkage_context)
-    }
-
-    // Generate a "default" linkage for an account address. This assumes its publication and
-    // runtime ID are the same, and computes dependencies by retrieving the definition from the
-    // data cache. This will generate the linkage context based on the transitive dependencies of
-    // the provided package modules if the package's dependencies are in the store, or error
-    // otherwise.
-    fn generate_default_linkage(&self, package_id: AccountAddress) -> VMResult<LinkageContext> {
-        let modules = self.storage.get_compiled_modules(&package_id)?;
-        self.generate_linkage_context(package_id, package_id, &modules)
     }
 
     fn get_compiled_modules_from_storage(

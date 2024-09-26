@@ -67,14 +67,18 @@ impl VirtualMachine {
         data_cache: DataCache,
         link_context: LinkageContext,
     ) -> VMResult<VirtualMachineExecutionInstance<'extensions, DataCache>> {
-        self.make_instance_with_native_extensions(data_cache, link_context, NativeContextExtensions::default())
+        self.make_instance_with_native_extensions(
+            data_cache,
+            link_context,
+            NativeContextExtensions::default(),
+        )
     }
 
     pub fn make_instance_with_native_extensions<'extensions, DataCache: MoveResolver>(
         &self,
         data_cache: DataCache,
         link_context: LinkageContext,
-        native_extensions: NativeContextExtensions<'extensions>
+        native_extensions: NativeContextExtensions<'extensions>,
     ) -> VMResult<VirtualMachineExecutionInstance<'extensions, DataCache>> {
         let data_cache = TransactionDataCache::new(data_cache);
         let virtual_tables = self

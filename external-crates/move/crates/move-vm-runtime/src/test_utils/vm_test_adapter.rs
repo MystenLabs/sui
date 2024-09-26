@@ -39,7 +39,7 @@ pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
     fn make_vm_instance_with_native_extensions<'extensions>(
         &self,
         linkage_context: LinkageContext,
-        native_extensions: NativeContextExtensions<'extensions>
+        native_extensions: NativeContextExtensions<'extensions>,
     ) -> VMResult<VirtualMachineExecutionInstance<'extensions, &Storage>>;
 
     /// Generate a linkage context for a given runtime ID, storage ID, and list of compiled modules.

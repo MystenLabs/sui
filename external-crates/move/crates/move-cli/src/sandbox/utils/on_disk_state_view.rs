@@ -15,7 +15,9 @@ use move_core_types::{
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
+use move_vm_runtime::cache::linkage_context::LinkageContext;
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -245,6 +247,107 @@ impl OnDiskStateView {
                     .map_err(|e| anyhow!("Failed to deserialized module: {:?}", e))
             })
             .collect::<Result<Vec<CompiledModule>>>()
+    }
+
+    /// Get the compiled modules for a given package.
+    pub fn get_compiled_modules(
+        &self,
+        package_address: &AccountAddress,
+    ) -> Result<Vec<CompiledModule>> {
+        let Some(package_bytes) = self.get_package_bytes(package_address)? else {
+            return Err(anyhow!("No package fount at {package_address}"));
+        };
+        package_bytes
+            .into_iter()
+            .map(|module| {
+                CompiledModule::deserialize_with_defaults(&module)
+                    .map_err(|e| anyhow!("Failed to deserialized module: {:?}", e))
+            })
+            .collect::<Result<Vec<CompiledModule>>>()
+    }
+
+    /// Compute all of the transitive dependencies for a `root_package`, including itself.
+    pub fn transitive_dependencies(
+        &self,
+        root_package: &AccountAddress,
+    ) -> Result<BTreeSet<AccountAddress>> {
+        let mut seen: BTreeSet<AccountAddress> = BTreeSet::new();
+        let mut to_process: Vec<AccountAddress> = vec![*root_package];
+
+        while let Some(package_id) = to_process.pop() {
+            // If we've already processed this package, skip it
+            if seen.contains(&package_id) {
+                continue;
+            }
+
+            // Add the current package to the seen set
+            seen.insert(package_id);
+
+            // Attempt to retrieve the package's modules from the store
+            let Ok(Some(modules)) = self.get_package(&package_id) else {
+                return Err(anyhow!(
+                    "Cannot find {:?} in data cache when building linkage context",
+                    package_id
+                ));
+            };
+
+            // Process each module and add its dependencies to the to_process list
+            for module in &modules {
+                let module = CompiledModule::deserialize_with_defaults(module).unwrap();
+                let deps = module
+                    .immediate_dependencies()
+                    .into_iter()
+                    .map(|module| *module.address());
+
+                // Add unprocessed dependencies to the queue
+                for dep in deps {
+                    if !seen.contains(&dep) {
+                        to_process.push(dep);
+                    }
+                }
+            }
+        }
+
+        Ok(seen)
+    }
+
+    /// Generates a reflective link context (that is, all addresses map to themselves) by
+    /// collecting the modules and transitive dependencies from the specified address.
+    pub fn generate_linkage_context(
+        &self,
+        package_address: &AccountAddress,
+    ) -> Result<LinkageContext> {
+        let modules = self.get_compiled_modules(package_address)?;
+        let mut all_dependencies: BTreeSet<AccountAddress> = BTreeSet::new();
+        for module in modules {
+            for dep in module
+                .immediate_dependencies()
+                .iter()
+                .map(|dep| dep.address())
+                .filter(|dep| *dep != package_address)
+            {
+                // If this dependency is in here, its transitive dependencies are, too.
+                if all_dependencies.contains(dep) {
+                    continue;
+                }
+                let new_dependencies = self.transitive_dependencies(dep)?;
+                all_dependencies.extend(new_dependencies.into_iter());
+            }
+        }
+        // Consider making tehse into VM errors on failure instead.
+        assert!(
+            !all_dependencies.remove(package_address),
+            "Found circular dependencies during dependency generation."
+        );
+        let linkage_context = LinkageContext::new(
+            *package_address,
+            all_dependencies
+                .into_iter()
+                .map(|id| (id, id))
+                .chain(vec![(*package_address, *package_address)])
+                .collect(),
+        );
+        Ok(linkage_context)
     }
 }
 

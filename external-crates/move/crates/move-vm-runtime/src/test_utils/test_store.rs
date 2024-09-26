@@ -43,21 +43,25 @@ impl TestStore {
             .collect())
     }
 
+    /// Compute all of the transitive dependencies for a `root_package`, including itself.
     pub fn transitive_dependencies(
         &self,
         root_package: &AccountAddress,
     ) -> VMResult<BTreeSet<AccountAddress>> {
-        fn generate_dependencies(
-            store: &TestStore,
-            seen: &mut BTreeSet<AccountAddress>,
-            package_id: &AccountAddress,
-        ) -> VMResult<()> {
-            if seen.contains(package_id) {
-                return Ok(());
+        let mut seen: BTreeSet<AccountAddress> = BTreeSet::new();
+        let mut to_process: Vec<AccountAddress> = vec![*root_package];
+
+        while let Some(package_id) = to_process.pop() {
+            // If we've already processed this package, skip it
+            if seen.contains(&package_id) {
+                continue;
             }
 
-            seen.insert(*package_id);
-            let Ok(Some(modules)) = store.store.get_package(package_id) else {
+            // Add the current package to the seen set
+            seen.insert(package_id);
+
+            // Attempt to retrieve the package's modules from the store
+            let Ok(Some(modules)) = self.store.get_package(&package_id) else {
                 return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                     .with_message(format!(
                         "Cannot find {:?} in data cache when building linkage context",
@@ -65,60 +69,27 @@ impl TestStore {
                     ))
                     .finish(Location::Undefined));
             };
+
+            // Process each module and add its dependencies to the to_process list
             for module in &modules {
                 let module = CompiledModule::deserialize_with_defaults(module).unwrap();
                 let deps = module
                     .immediate_dependencies()
                     .into_iter()
-                    .map(|module| *module.address())
-                    .collect::<Vec<_>>();
-                for dep in &deps {
-                    generate_dependencies(store, seen, dep)?;
+                    .map(|module| *module.address());
+
+                // Add unprocessed dependencies to the queue
+                for dep in deps {
+                    if !seen.contains(&dep) {
+                        to_process.push(dep);
+                    }
                 }
             }
-            Ok(())
         }
 
-        let mut deps = BTreeSet::new();
-        generate_dependencies(self, &mut deps, root_package)?;
-        Ok(deps)
+        Ok(seen)
     }
 }
-
-// impl LinkageResolver for RelinkingStore {
-//     type Error = ();
-//
-//     fn link_context(&self) -> AccountAddress {
-//         self.context
-//     }
-//
-//     /// Remaps `module_id` if it exists in the current linkage table, or returns it unchanged
-//     /// otherwise.
-//     fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-//         Ok(self.linkage.get(module_id).unwrap_or(module_id).clone())
-//     }
-//
-//     fn defining_module(
-//         &self,
-//         module_id: &ModuleId,
-//         struct_: &IdentStr,
-//     ) -> Result<ModuleId, Self::Error> {
-//         Ok(self
-//             .type_origin
-//             .get(&(module_id.clone(), struct_.to_owned()))
-//             .unwrap_or(module_id)
-//             .clone())
-//     }
-//
-//     fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error> {
-//         if let Some(dependent_packages) = &self.dependent_packages {
-//             return Ok(dependent_packages.clone());
-//         }
-//         let modules = self.store.get_package(&self.context)?.unwrap();
-//
-//         Ok(all_deps)
-//     }
-// }
 
 /// Implement by forwarding to the underlying in memory storage
 impl ModuleResolver for TestStore {

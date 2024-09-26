@@ -89,7 +89,9 @@ fn compile_packages(
 fn cache_package_internal_package_calls_only_no_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package1.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package1.move", &[]))
+        .unwrap();
 
     let link_context = &adapter.generate_default_linkage(package_address).unwrap();
     let result = adapter.vm().cache().load_link_context_dependencies(
@@ -109,7 +111,9 @@ fn cache_package_internal_package_calls_only_no_types() {
 fn cache_package_internal_package_calls_only_with_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package2.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package2.move", &[]))
+        .unwrap();
 
     let link_context = adapter.generate_default_linkage(package_address).unwrap();
     let result = adapter.vm().cache().load_link_context_dependencies(
@@ -134,7 +138,9 @@ fn cache_package_external_package_calls_no_types() {
     let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package3.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package3.move", &[]))
+        .unwrap();
 
     let link_context = adapter.generate_default_linkage(package2_address).unwrap();
     let result = adapter.vm().cache().load_link_context_dependencies(
@@ -166,7 +172,9 @@ fn dummy_cache_for_testing() -> VMCache {
 fn load_package_internal_package_calls_only_no_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package1.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package1.move", &[]))
+        .unwrap();
     let link_context = adapter.generate_default_linkage(package_address).unwrap();
 
     let result = adapter.vm().cache().load_link_context_dependencies(
@@ -187,7 +195,9 @@ fn load_package_internal_package_calls_only_no_types() {
 fn load_package_internal_package_calls_only_with_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package1.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package1.move", &[]))
+        .unwrap();
     let link_context = adapter.generate_default_linkage(package_address).unwrap();
 
     let cache = dummy_cache_for_testing();
@@ -210,7 +220,9 @@ fn load_package_internal_package_calls_only_with_types() {
 fn load_package_external_package_calls_no_types() {
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package3.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package3.move", &[]))
+        .unwrap();
     let link_context = adapter.generate_default_linkage(package2_address).unwrap();
 
     let result = adapter.vm().cache().load_link_context_dependencies(
@@ -235,7 +247,9 @@ fn load_package_external_package_calls_no_types() {
 fn cache_package_external_package_type_references() {
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package4.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package4.move", &[]))
+        .unwrap();
     let link_context = adapter.generate_default_linkage(package2_address).unwrap();
 
     let result = adapter.vm().cache().load_link_context_dependencies(
@@ -305,7 +319,9 @@ fn cache_package_external_package_type_references_cache_reload() {
     let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package4.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package4.move", &[]))
+        .unwrap();
     let link_context = adapter.generate_default_linkage(package1_address).unwrap();
 
     println!("link context: {link_context:#?}");
@@ -349,7 +365,9 @@ fn cache_package_external_package_type_references_cache_reload() {
 fn cache_package_external_package_type_references_with_shared_dep() {
     let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package5.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package5.move", &[]))
+        .unwrap();
     let link_context = adapter.generate_default_linkage(package3_address).unwrap();
 
     let result = adapter.vm().cache().load_link_context_dependencies(
@@ -378,7 +396,9 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
 
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package5.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package5.move", &[]))
+        .unwrap();
 
     // Load from the bottom up
     let link_context = adapter.generate_default_linkage(package1_address).unwrap();
@@ -438,7 +458,9 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     // Now load it the other way -- from the top down. We do it in a new adapter to get a new
     // cache, etc., all set up.
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(compile_modules_in_file("package5.move", &[])).unwrap();
+    adapter
+        .insert_modules_into_storage(compile_modules_in_file("package5.move", &[]))
+        .unwrap();
 
     let link_context = adapter.generate_default_linkage(package3_address).unwrap();
     let result3 = adapter.vm().cache().load_link_context_dependencies(
@@ -501,7 +523,9 @@ fn linkage_missing_dependency() {
     let packages = compile_packages("rt_b_v0.move", &["rt_c_v0.move"]);
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
-    adapter.insert_modules_into_storage(modules.clone()).unwrap();
+    adapter
+        .insert_modules_into_storage(modules.clone())
+        .unwrap();
     // Linkage generation fails because we can't find the dependency.
     adapter
         .generate_linkage_context(runtime_package_id, runtime_package_id, &modules)
@@ -514,7 +538,9 @@ fn linkage_unpublished_dependency() {
     let packages = compile_packages("rt_b_v0.move", &["rt_c_v0.move"]);
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
-    adapter.insert_modules_into_storage(modules.clone()).unwrap();
+    adapter
+        .insert_modules_into_storage(modules.clone())
+        .unwrap();
     // Linkage generation fails because we can't find the dependency.
     adapter
         .generate_linkage_context(runtime_package_id, runtime_package_id, &modules)
@@ -533,7 +559,9 @@ fn publish_missing_dependency() {
 
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
-    adapter.insert_modules_into_storage(modules.clone()).unwrap();
+    adapter
+        .insert_modules_into_storage(modules.clone())
+        .unwrap();
 
     // Custom linkage because 0x2 is missing from the store and linkage generation would fail.
     let linkage_table = HashMap::from([(runtime_package_id, runtime_package_id)]);
@@ -558,7 +586,9 @@ fn publish_unpublished_dependency() {
 
     assert!(packages.len() == 1);
     let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
-    adapter.insert_modules_into_storage(modules.clone()).unwrap();
+    adapter
+        .insert_modules_into_storage(modules.clone())
+        .unwrap();
 
     // Custom linkage including `0x2 => 0x2`, which will cause publication to fail `0x3::b`.
     let linkage_table = HashMap::from([

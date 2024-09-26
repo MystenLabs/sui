@@ -5,7 +5,9 @@ use std::collections::{BTreeSet, HashMap};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
 use move_core_types::{
-    account_address::AccountAddress, identifier::IdentStr, language_storage::{ModuleId, TypeTag, StructTag},
+    account_address::AccountAddress,
+    identifier::IdentStr,
+    language_storage::{ModuleId, TypeTag},
 };
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
@@ -43,13 +45,40 @@ impl LinkageContext {
     /// Add a Runtime ID -> Storage ID entry to the linkage table. This allows for shadowing of
     /// exsting Runtime ID definitions, but will error of the Storage ID is already being used as a
     /// Runtime ID in the linkage.
-    pub fn add_entry(&mut self, runtime_id: AccountAddress, storage_id: AccountAddress) -> PartialVMResult<()> {
+    pub fn add_entry(
+        &mut self,
+        runtime_id: AccountAddress,
+        storage_id: AccountAddress,
+    ) -> PartialVMResult<()> {
         if self.linkage_table.contains_key(&storage_id) {
-            return Err(PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
-                    .with_message(format!("Storage ID {storage_id} is a key in the current linkage context")))
+            return Err(
+                PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
+                    .with_message(format!(
+                        "Storage ID {storage_id} is a key in the current linkage context"
+                    )),
+            );
         };
         self.linkage_table.insert(runtime_id, storage_id);
         Ok(())
+    }
+
+    /// Adds the addresses mentioned in a type tags to the linkage context as follows: if the
+    /// address is already a key, ignore it; if it is not, add it as a reflextive entry.
+    ///
+    /// This is to help harness/testing cases, where we might find type arguments to calls that would
+    /// otherwise not appear in any dependencies in the target module (e.g., we are calling it
+    /// polymorphicall).
+    pub fn add_type_arg_addresses_reflexive<'a>(&mut self, type_tags: impl IntoIterator<Item=&'a TypeTag>) {
+          let type_arg_addresses =
+              type_tags.into_iter().fold(BTreeSet::new(), |mut acc, tag| {
+                  acc.extend(tag.all_addresses());
+                  acc
+              });
+          for arg_address in type_arg_addresses {
+              if !self.contains_key(&arg_address) {
+                  let _ = self.add_entry(arg_address, arg_address);
+              }
+          }
     }
 
     /// The root package identifies the root package to use for mapping from runtime `ModuleId`s to

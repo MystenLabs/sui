@@ -319,21 +319,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
                 println!("generating linkage");
                 let mut linkage =
                     extra_args.overlay(inner_adapter.generate_default_linkage(runtime_id)?)?;
-
-                // If the pacakage doesn't mention a dependency but a type argument does (e.g.,
-                // invoking a polymorphic function), we need to add those to linkage.
-                // This is a bit wonky: If it is there, we don't want to touch it. If it isn't,
-                // we just add it as reflexive as a best-effort.
-                let type_arg_addresses =
-                    type_arg_tags.iter().fold(BTreeSet::new(), |mut acc, tag| {
-                        acc.extend(tag.all_addresses());
-                        acc
-                    });
-                for arg_address in type_arg_addresses {
-                    if !linkage.contains_key(&arg_address) {
-                        linkage.add_entry(arg_address, arg_address);
-                    }
-                }
+                linkage.add_type_arg_addresses_reflexive(&type_arg_tags);
 
                 println!("generating vm instance");
                 let mut vm_instance = inner_adapter.make_vm_instance(linkage)?;

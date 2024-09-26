@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::file_format::CompiledModule;
+use move_core_types::account_address::AccountAddress;
 use petgraph::graphmap::DiGraphMap;
 
-use anyhow::{bail, Result};
-use std::collections::BTreeMap;
+use anyhow::{anyhow, bail, Result};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Directed graph capturing dependencies between modules
 pub struct DependencyGraph<'a> {
@@ -58,5 +59,41 @@ impl<'a> DependencyGraph<'a> {
             Err(_) => bail!("Circular dependency detected"),
             Ok(ordered_idxs) => Ok(ordered_idxs.into_iter().map(move |idx| self.modules[idx.0])),
         }
+    }
+
+    /// Given an `AccountAddress`, find all `AccountAddress`es that it depends on (not including itself).
+    pub fn find_all_dependencies(
+        &self,
+        target_address: &AccountAddress,
+    ) -> Result<BTreeSet<AccountAddress>> {
+        // First, find the `ModuleIndex` corresponding to the target `AccountAddress`
+        let target_module_idx = self
+            .modules
+            .iter()
+            .position(|module| module.self_id().address() == target_address)
+            .map(ModuleIndex)
+            .ok_or_else(|| anyhow!("Target address not found in the graph"))?;
+
+        // Perform a reverse graph traversal (from the target) to find all its dependencies
+        let mut dependencies = BTreeSet::new();
+        let mut stack = vec![target_module_idx];
+        let mut visited = BTreeSet::new();
+
+        while let Some(module_idx) = stack.pop() {
+            // Skip if this module was already visited
+            if !visited.insert(module_idx) {
+                continue;
+            }
+
+            // For each incoming edge (dependency), add the address and push to the stack
+            for neighbor in self.graph.neighbors_directed(module_idx, petgraph::Direction::Incoming) {
+                let dependency_address = self.modules[neighbor.0].address();
+                if dependency_address != target_address {
+                    dependencies.insert(*dependency_address);
+                    stack.push(neighbor);
+                }
+            }
+        }
+        Ok(dependencies)
     }
 }
