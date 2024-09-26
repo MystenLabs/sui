@@ -805,7 +805,7 @@ mod tests {
         authority::test_authority_builder::TestAuthorityBuilder,
         consensus_adapter::{
             BlockStatus, ConnectionMonitorStatusForTests, ConsensusAdapter,
-            ConsensusAdapterMetrics, MockSubmitToConsensus, SubmitResponse,
+            ConsensusAdapterMetrics, MockConsensusClient, SubmitResponse,
         },
         epoch::randomness::*,
     };
@@ -839,10 +839,10 @@ mod tests {
 
         for validator in network_config.validator_configs.iter() {
             // Send consensus messages to channel.
-            let mut mock_consensus_client = MockSubmitToConsensus::new();
+            let mut mock_consensus_client = MockConsensusClient::new();
             let tx_consensus = tx_consensus.clone();
             mock_consensus_client
-                .expect_submit_to_consensus()
+                .expect_submit()
                 .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
@@ -971,10 +971,10 @@ mod tests {
 
         for validator in network_config.validator_configs.iter() {
             // Send consensus messages to channel.
-            let mut mock_consensus_client = MockSubmitToConsensus::new();
+            let mut mock_consensus_client = MockConsensusClient::new();
             let tx_consensus = tx_consensus.clone();
             mock_consensus_client
-                .expect_submit_to_consensus()
+                .expect_submit()
                 .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true

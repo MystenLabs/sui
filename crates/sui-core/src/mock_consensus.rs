@@ -4,7 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
-use crate::consensus_adapter::{BlockStatus, SubmitResponse, SubmitToConsensus};
+use crate::consensus_adapter::{BlockStatus, ConsensusClient, SubmitResponse, SubmitToConsensus};
 use crate::consensus_handler::SequencedConsensusTransaction;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
@@ -88,6 +88,19 @@ impl MockConsensusClient {
 #[async_trait::async_trait]
 impl SubmitToConsensus for MockConsensusClient {
     async fn submit_to_consensus(
+        &self,
+        transactions: &[ConsensusTransaction],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
+        self.submit(transactions, epoch_store)
+            .await
+            .map(|_response| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl ConsensusClient for MockConsensusClient {
+    async fn submit(
         &self,
         transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,

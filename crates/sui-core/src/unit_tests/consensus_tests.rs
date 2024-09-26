@@ -195,8 +195,8 @@ pub fn make_consensus_adapter_for_test(
     }
 
     #[async_trait::async_trait]
-    impl SubmitToConsensus for SubmitDirectly {
-        async fn submit_to_consensus(
+    impl ConsensusClient for SubmitDirectly {
+        async fn submit(
             &self,
             transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,

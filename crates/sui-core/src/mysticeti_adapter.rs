@@ -15,7 +15,7 @@ use tracing::{error, info, warn};
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    consensus_adapter::{SubmitResponse, SubmitToConsensus},
+    consensus_adapter::{ConsensusClient, SubmitResponse},
     consensus_handler::SequencedConsensusTransactionKey,
 };
 
@@ -75,8 +75,8 @@ impl LazyMysticetiClient {
 }
 
 #[async_trait::async_trait]
-impl SubmitToConsensus for LazyMysticetiClient {
-    async fn submit_to_consensus(
+impl ConsensusClient for LazyMysticetiClient {
+    async fn submit(
         &self,
         transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,

@@ -192,16 +192,6 @@ impl ConsensusAdapterMetrics {
     }
 }
 
-#[mockall::automock]
-#[async_trait::async_trait]
-pub trait SubmitToConsensus: Sync + Send + 'static {
-    async fn submit_to_consensus(
-        &self,
-        transactions: &[ConsensusTransaction],
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<SubmitResponse>;
-}
-
 pub enum BlockStatus {
     Sequenced,
     GarbageCollected,
@@ -229,10 +219,31 @@ impl SubmitResponse {
     }
 }
 
+
+#[mockall::automock]
+#[async_trait::async_trait]
+pub trait SubmitToConsensus: Sync + Send + 'static {
+    async fn submit_to_consensus(
+        &self,
+        transactions: &[ConsensusTransaction],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult;
+}
+
+#[mockall::automock]
+#[async_trait::async_trait]
+pub trait ConsensusClient: Sync + Send + 'static {
+    async fn submit(
+        &self,
+        transactions: &[ConsensusTransaction],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<SubmitResponse>;
+}
+
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
-    consensus_client: Arc<dyn SubmitToConsensus>,
+    consensus_client: Arc<dyn ConsensusClient>,
     /// Authority pubkey.
     authority: AuthorityName,
     /// The limit to number of inflight transactions at this node.
@@ -280,7 +291,7 @@ pub struct ConnectionMonitorStatusForTests {}
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
-        consensus_client: Arc<dyn SubmitToConsensus>,
+        consensus_client: Arc<dyn ConsensusClient>,
         authority: AuthorityName,
         connection_monitor_status: Arc<dyn CheckConnection>,
         max_pending_transactions: usize,
@@ -882,7 +893,7 @@ impl ConsensusAdapter {
         let submit_response = loop {
             match self
                 .consensus_client
-                .submit_to_consensus(transactions, epoch_store)
+                .submit(transactions, epoch_store)
                 .await
             {
                 Err(err) => {
@@ -1225,9 +1236,9 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         &self,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<SubmitResponse> {
+    ) -> SuiResult {
         self.submit_batch(transactions, None, epoch_store)
-            .map(|_| SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced))
+            .map(|_| ())
     }
 }
 
