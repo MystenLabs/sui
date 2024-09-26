@@ -1267,22 +1267,6 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_epochs_table(&self, epoch: u64) -> Result<(), IndexerError> {
-        use diesel_async::RunQueryDsl;
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::delete(epochs::table.filter(epochs::epoch.eq(epoch as i64)))
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed to prune epochs table")?;
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
-        .await
-    }
-
     async fn prune_event_indices_table(
         &self,
         min_tx: u64,
@@ -1932,8 +1916,6 @@ impl IndexerStore for PgIndexerStore {
             self.metrics.last_pruned_checkpoint.set(cp as i64);
         }
 
-        // NOTE: prune epochs table last, otherwise get_checkpoint_range_for_epoch would fail.
-        self.prune_epochs_table(epoch).await?;
         Ok(())
     }
 
