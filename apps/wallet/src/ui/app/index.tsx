@@ -8,7 +8,7 @@ import { setNavVisibility } from '_redux/slices/app';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { persistableStorage } from '_src/shared/analytics/amplitude';
 import { type LedgerAccountsPublicKeys } from '_src/shared/messaging/messages/payloads/MethodPayload';
-import { toB64 } from '@mysten/sui/utils';
+import { toBase64 } from '@mysten/sui/utils';
 import { useEffect, useMemo } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { throttle } from 'throttle-debounce';
@@ -115,7 +115,7 @@ const App = () => {
 								const { publicKey } = await suiLedgerClient.getPublicKey(derivationPath);
 								publicKeysToStore.push({
 									accountID: id,
-									publicKey: toB64(publicKey),
+									publicKey: toBase64(publicKey),
 								});
 							} catch (e) {
 								// do nothing

@@ -172,6 +172,21 @@ const keypair = Ed25519Keypair.fromSecretKey(secretKey);
 See [SIP-15](https://github.com/sui-foundation/sips/blob/main/sips/sip-15.md) for additional context
 and motivation.
 
+If you know your keypair schema, you can use the `fromSecretKey` method of the appropriate keypair
+to directly derive the keypair from the secret key.
+
+```typescript
+const secretKey = 'suiprivkey1qzse89atw7d3zum8ujep76d2cxmgduyuast0y9fu23xcl0mpafgkktllhyc';
+
+const keypair = Ed25519Keypair.fromSecretKey(secretKey);
+```
+
+You can also export a keypair to a Bech32 encoded secret key using the `getSecretKey` method.
+
+```typescript
+const secretKey = keypair.getSecretKey();
+```
+
 ## Deriving a `Keypair` from a hex encoded secret key
 
 If you have an existing secret key formatted as a hex encoded string, you can derive a `Keypair` by

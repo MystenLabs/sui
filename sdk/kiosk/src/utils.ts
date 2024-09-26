@@ -11,7 +11,7 @@ import type {
 	SuiObjectResponse,
 } from '@mysten/sui/client';
 import {
-	fromB64,
+	fromBase64,
 	normalizeStructTag,
 	normalizeSuiAddress,
 	parseStructTag,
@@ -34,7 +34,7 @@ export async function getKioskObject(client: SuiClient, id: string): Promise<Kio
 		throw new Error(`Invalid kiosk query: ${id}, expected object, got package`);
 	}
 
-	return KioskType.parse(fromB64(queryRes.data.bcs!.bcsBytes));
+	return KioskType.parse(fromBase64(queryRes.data.bcs!.bcsBytes));
 }
 
 // helper to extract kiosk data from dynamic fields.

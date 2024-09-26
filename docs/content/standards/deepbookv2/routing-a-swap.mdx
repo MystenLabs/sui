@@ -22,7 +22,7 @@ To use the smart routing functionality, one should first find the best route. Th
 public async findBestRoute(tokenInObject: string, tokenOut: string, amountIn: number): Promise<smartRouteResult> {
     // const tokenTypeIn: string = convertToTokenType(tokenIn, this.records);
     // should get the tokenTypeIn from tokenInObject
-    const tokenInfo = await this.provider.getObject({
+    const tokenInfo = await this.suiClient.getObject({
         id: tokenInObject,
         options: {
             showType: true,
@@ -159,9 +159,9 @@ public async placeMarketOrderWithSmartRouting(
             i += 1;
         }
     }
-    const r = await this.provider.dryRunTransactionBlock({
+    const r = await this.suiClient.dryRunTransactionBlock({
         transactionBlock: await overrides.txb.build({
-            provider: this.provider,
+            client: this.suiClient,
         }),
     });
     if (r.effects.status.status === 'success') {

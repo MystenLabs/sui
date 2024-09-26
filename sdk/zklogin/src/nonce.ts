@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toHEX } from '@mysten/bcs';
+import { toHex } from '@mysten/bcs';
 import type { PublicKey } from '@mysten/sui/cryptography';
 import { toPaddedBigEndianBytes } from '@mysten/sui/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
@@ -12,7 +12,7 @@ import { poseidonHash } from './poseidon.js';
 export const NONCE_LENGTH = 27;
 
 function toBigIntBE(bytes: Uint8Array) {
-	const hex = toHEX(bytes);
+	const hex = toHex(bytes);
 	if (hex.length === 0) {
 		return BigInt(0);
 	}

@@ -8,7 +8,7 @@ import { useGetQredoTransaction } from '_src/ui/app/hooks/useGetQredoTransaction
 import { Text } from '_src/ui/app/shared/text';
 import { formatDate, useOnScreen } from '@mysten/core';
 import { bcs } from '@mysten/sui/bcs';
-import { fromB64 } from '@mysten/sui/utils';
+import { fromBase64 } from '@mysten/sui/utils';
 import { useMemo, useRef } from 'react';
 
 export type QredoTransactionProps = {
@@ -26,7 +26,7 @@ export function QredoTransaction({ qredoID, qredoTransactionID }: QredoTransacti
 	});
 	const messageWithIntent = useMemo(() => {
 		if (data?.MessageWithIntent) {
-			return fromB64(data.MessageWithIntent);
+			return fromBase64(data.MessageWithIntent);
 		}
 		return null;
 	}, [data?.MessageWithIntent]);
