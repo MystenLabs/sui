@@ -159,11 +159,18 @@ impl BlockManager {
                 }
             }
             for (block_ref, block) in blocks_to_reject {
+                let hostname = self
+                    .context
+                    .committee
+                    .authority(block_ref.author)
+                    .hostname
+                    .clone();
+
                 self.context
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[&block_ref.author.to_string(), "accept_block"])
+                    .with_label_values(&[&hostname, "accept_block", "InvalidAncestors"])
                     .inc();
                 warn!("Invalid block {:?} is rejected", block);
             }

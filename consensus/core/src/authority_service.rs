@@ -94,7 +94,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "handle_send_block"])
+                .with_label_values(&[peer_hostname, "handle_send_block", "UnexpectedAuthority"])
                 .inc();
             let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
             info!("Block with wrong authority from {}: {}", peer, e);
@@ -108,7 +108,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "handle_send_block"])
+                .with_label_values(&[peer_hostname, "handle_send_block", e.clone().name()])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);
