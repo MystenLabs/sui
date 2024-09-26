@@ -1141,7 +1141,8 @@ impl SuiNode {
             network
         };
 
-        let discovery_handle = discovery.start(p2p_network.clone());
+        let discovery_handle =
+            discovery.start(p2p_network.clone(), config.network_key_pair().copy());
         let state_sync_handle = state_sync.start(p2p_network.clone());
         let randomness_handle = randomness.start(p2p_network.clone());
 

@@ -66,7 +66,8 @@ pub enum IntentScope {
     ProofOfPossession = 5, // Used as a signature representing an authority's proof of possession of its authority protocol key.
     HeaderDigest = 6,      // Used for narwhal authority signature on header digest.
     BridgeEventUnused = 7, // for bridge purposes but it's currently not included in messages.
-    ConsensusBlock = 8,    // Used for consensus authority signature on block's digest
+    ConsensusBlock = 8,    // Used for consensus authority signature on block's digest.
+    DiscoveryPeers = 9,    // Used for reporting peer addresses in discovery.
 }
 
 impl TryFrom<u8> for IntentScope {
