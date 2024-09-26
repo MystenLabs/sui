@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::consensus_adapter::{SubmitResponse, SubmitToConsensus};
+use crate::consensus_adapter::{ConsensusClient, SubmitResponse};
 use crate::consensus_handler::ConsensusHandlerInitializer;
 use crate::consensus_manager::mysticeti_manager::MysticetiManager;
 use crate::consensus_validator::SuiTxValidator;
@@ -81,7 +81,7 @@ pub struct ConsensusManager {
     mysticeti_manager: ProtocolManager,
     mysticeti_client: Arc<LazyMysticetiClient>,
     active: parking_lot::Mutex<bool>,
-    consensus_client: Arc<ConsensusClient>,
+    consensus_client: Arc<ConsensusClientWrapper>,
 }
 
 impl ConsensusManager {
@@ -89,7 +89,7 @@ impl ConsensusManager {
         node_config: &NodeConfig,
         consensus_config: &ConsensusConfig,
         registry_service: &RegistryService,
-        consensus_client: Arc<ConsensusClient>,
+        consensus_client: Arc<ConsensusClientWrapper>,
     ) -> Self {
         let metrics = Arc::new(ConsensusManagerMetrics::new(
             &registry_service.default_registry(),
@@ -163,19 +163,19 @@ impl ConsensusManagerTrait for ConsensusManager {
 }
 
 #[derive(Default)]
-pub struct ConsensusClient {
+pub struct ConsensusClientWrapper {
     // An extra layer of Arc<> is needed as required by ArcSwapAny.
-    client: ArcSwapOption<Arc<dyn SubmitToConsensus>>,
+    client: ArcSwapOption<Arc<dyn ConsensusClient>>,
 }
 
-impl ConsensusClient {
+impl ConsensusClientWrapper {
     pub fn new() -> Self {
         Self {
             client: ArcSwapOption::empty(),
         }
     }
 
-    async fn get(&self) -> Arc<Arc<dyn SubmitToConsensus>> {
+    async fn get(&self) -> Arc<Arc<dyn ConsensusClient>> {
         const START_TIMEOUT: Duration = Duration::from_secs(30);
         const RETRY_INTERVAL: Duration = Duration::from_millis(100);
         if let Ok(client) = timeout(START_TIMEOUT, async {
@@ -198,7 +198,7 @@ impl ConsensusClient {
         );
     }
 
-    pub fn set(&self, client: Arc<dyn SubmitToConsensus>) {
+    pub fn set(&self, client: Arc<dyn ConsensusClient>) {
         self.client.store(Some(Arc::new(client)));
     }
 
@@ -208,14 +208,14 @@ impl ConsensusClient {
 }
 
 #[async_trait]
-impl SubmitToConsensus for ConsensusClient {
-    async fn submit_to_consensus(
+impl ConsensusClient for ConsensusClientWrapper {
+    async fn submit(
         &self,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<SubmitResponse> {
         let client = self.get().await;
-        client.submit_to_consensus(transactions, epoch_store).await
+        client.submit(transactions, epoch_store).await
     }
 }
 
