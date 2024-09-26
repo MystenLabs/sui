@@ -17,6 +17,7 @@ use sui_bridge::eth_syncer::EthSyncer;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::retry_with_max_elapsed_time;
 use sui_indexer_builder::Task;
+use tap::tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -32,6 +33,7 @@ use crate::{
     BridgeDataSource, ProcessedTxnData, TokenTransfer, TokenTransferData, TokenTransferStatus,
 };
 
+#[derive(Debug)]
 pub struct RawEthData {
     log: RawEthLog,
     block: Block<H256>,
@@ -73,21 +75,34 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
         task: Task,
         data_sender: DataSender<RawEthData>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
+        assert!(
+            task.is_live_task,
+            "EthSubscriptionDatasource only supports live tasks"
+        );
         let filter = Filter::new()
             .address(self.addresses.clone())
             .from_block(task.start_checkpoint)
             .to_block(task.target_checkpoint);
 
         let eth_ws_url = self.eth_ws_url.clone();
-
+        let task_name = task.task_name.clone();
         let handle = spawn_monitored_task!(async move {
-            let eth_ws_client = Provider::<Ws>::connect(&eth_ws_url).await?;
+            let eth_ws_client = Provider::<Ws>::connect(&eth_ws_url).await.tap_err(|e| {
+                tracing::error!("Failed to connect to websocket: {:?}", e);
+            })?;
 
             // TODO: enable a shared cache for blocks that can be used by both the subscription and finalized sync
             let mut cached_blocks: HashMap<u64, Block<H256>> = HashMap::new();
 
-            let mut stream = eth_ws_client.subscribe_logs(&filter).await?;
+            let mut stream = eth_ws_client.subscribe_logs(&filter).await.tap_err(|e| {
+                tracing::error!("Failed to subscribe logs: {:?}", e);
+            })?;
             while let Some(log) = stream.next().await {
+                tracing::info!(
+                    task_name,
+                    "EthSubscriptionDatasource retrieved log: {:?}",
+                    log
+                );
                 let raw_log = RawEthLog {
                     block_number: log
                         .block_number
@@ -127,21 +142,30 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
                 ) else {
                     panic!("Unable to get transaction from provider");
                 };
-
+                tracing::info!(
+                    task_name,
+                    "Sending data: {:?}",
+                    (raw_log.tx_hash, block_number)
+                );
+                let raw_eth_data = vec![RawEthData {
+                    log: raw_log,
+                    block,
+                    transaction,
+                    is_finalized: false,
+                }];
                 data_sender
-                    .send((
-                        block_number,
-                        vec![RawEthData {
-                            log: raw_log,
-                            block,
-                            transaction,
-                            is_finalized: false,
-                        }],
-                    ))
-                    .await?;
+                    .send((block_number, raw_eth_data))
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::error!(
+                            task_name,
+                            "Failed to send data from EthSubscriptionDatasource: {:?}",
+                            e
+                        );
+                    });
             }
-
-            Ok::<_, Error>(())
+            // We do not expect EthSubscriptionDatasource live task to exit
+            panic!("EthSubscriptionDatasource stream ended unexpectedly");
         });
         Ok(handle)
     }
@@ -163,6 +187,10 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
+    }
+
+    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.inflight_live_tasks
     }
 }
 
@@ -205,30 +233,27 @@ impl Datasource<RawEthData> for EthFinalizedSyncDatasource {
             Provider::<Http>::try_from(&self.eth_http_url)?
                 .interval(std::time::Duration::from_millis(2000)),
         );
-
         let bridge_addresses = self.bridge_addresses.clone();
         let client = self.eth_client.clone();
         let provider = provider.clone();
         let bridge_metrics = self.bridge_metrics.clone();
-
         let handle = spawn_monitored_task!(async move {
             if task.is_live_task {
-                retrieve_and_process_live_finalized_logs(
+                loop_retrieve_and_process_live_finalized_logs(
+                    task,
                     client,
                     provider,
                     bridge_addresses,
-                    task.start_checkpoint,
                     data_sender,
                     bridge_metrics,
                 )
                 .await?;
             } else {
-                retrieve_and_process_log_range(
+                loop_retrieve_and_process_log_range(
+                    task,
                     client,
                     provider,
                     bridge_addresses,
-                    task.start_checkpoint,
-                    task.target_checkpoint,
                     data_sender,
                 )
                 .await?;
@@ -257,16 +282,22 @@ impl Datasource<RawEthData> for EthFinalizedSyncDatasource {
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
     }
+
+    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.inflight_live_tasks
+    }
 }
 
-async fn retrieve_and_process_live_finalized_logs(
+async fn loop_retrieve_and_process_live_finalized_logs(
+    task: Task,
     client: Arc<EthClient<MeteredEthHttpProvier>>,
     provider: Arc<Provider<Http>>,
     addresses: Vec<EthAddress>,
-    starting_checkpoint: u64,
     data_sender: DataSender<RawEthData>,
     bridge_metrics: Arc<BridgeMetrics>,
 ) -> Result<(), Error> {
+    let task_name = task.task_name.clone();
+    let starting_checkpoint = task.start_checkpoint;
     let eth_contracts_to_watch = HashMap::from_iter(
         addresses
             .iter()
@@ -289,22 +320,31 @@ async fn retrieve_and_process_live_finalized_logs(
             })
             .collect();
 
-        process_logs(raw_logs, provider.clone(), data_sender.clone(), block, true)
-            .await
-            .expect("Failed to process logs");
+        process_logs(
+            &task_name,
+            raw_logs,
+            provider.clone(),
+            data_sender.clone(),
+            block,
+            true,
+        )
+        .await
+        .expect("Failed to process logs");
     }
 
     panic!("Eth finalized syncer live task stopped unexpectedly");
 }
 
-async fn retrieve_and_process_log_range(
+async fn loop_retrieve_and_process_log_range(
+    task: Task,
     client: Arc<EthClient<MeteredEthHttpProvier>>,
     provider: Arc<Provider<Http>>,
     addresses: Vec<EthAddress>,
-    starting_checkpoint: u64,
-    target_checkpoint: u64,
     data_sender: DataSender<RawEthData>,
 ) -> Result<(), Error> {
+    let task_name = task.task_name.clone();
+    let starting_checkpoint = task.start_checkpoint;
+    let target_checkpoint = task.target_checkpoint;
     let mut all_logs = Vec::new();
     let mut current_start = starting_checkpoint;
 
@@ -331,22 +371,29 @@ async fn retrieve_and_process_log_range(
     }
 
     process_logs(
+        &task_name,
         all_logs,
         provider.clone(),
         data_sender.clone(),
         target_checkpoint,
         true,
     )
-    .await?;
-
+    .await
+    .tap_ok(|_| {
+        tracing::info!(task_name, "Finished processing range");
+    })
+    .tap_err(|e| {
+        tracing::error!(task_name, "Failed to process logs: {:?}", e);
+    })?;
     Ok::<_, Error>(())
 }
 
 async fn process_logs(
+    task_name: &str,
     logs: Vec<RawEthLog>,
     provider: Arc<Provider<Http>>,
     data_sender: DataSender<RawEthData>,
-    target_checkpoint: u64,
+    block_height: u64,
     is_finalized: bool,
 ) -> Result<(), Error> {
     let mut data = Vec::new();
@@ -382,8 +429,12 @@ async fn process_logs(
             is_finalized,
         });
     }
-
-    data_sender.send((target_checkpoint, data)).await?;
+    let tx_hashes = data
+        .iter()
+        .map(|data| (data.log.tx_hash, data.block.number.map(|n| n.as_u64())))
+        .collect::<Vec<(H256, Option<u64>)>>();
+    tracing::info!(task_name, "Sending data: {:?}", tx_hashes);
+    data_sender.send((block_height, data)).await?;
 
     Ok::<_, Error>(())
 }

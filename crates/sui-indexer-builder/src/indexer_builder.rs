@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Error;
 use async_trait::async_trait;
 use futures::StreamExt;
-use prometheus::{IntCounterVec, IntGaugeVec};
+use prometheus::{IntCounterVec, IntGauge, IntGaugeVec};
 use tokio::task::JoinHandle;
 
 use crate::{Task, Tasks};
@@ -396,6 +396,14 @@ pub trait Datasource<T: Send>: Sync + Send {
                 .with_label_values(&[&format!("{}-{}", task_name_prefix, task_type_label)]),
         );
         let is_live_task = task.is_live_task;
+        let _live_tasks_tracker = if is_live_task {
+            Some(LiveTasksTracker::new(
+                self.get_inflight_live_tasks_metrics().clone(),
+                &task_name,
+            ))
+        } else {
+            None
+        };
         let join_handle = self.start_data_retrieval(task.clone(), data_sender).await?;
         let processed_checkpoints_metrics = self
             .get_tasks_processed_checkpoints_metric()
@@ -529,6 +537,8 @@ pub trait Datasource<T: Send>: Sync + Send {
     fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec;
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec;
+
+    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec;
 }
 
 pub enum BackfillStrategy {
@@ -539,4 +549,22 @@ pub enum BackfillStrategy {
 
 pub trait DataMapper<T, R>: Sync + Send + Clone {
     fn map(&self, data: T) -> Result<Vec<R>, anyhow::Error>;
+}
+
+struct LiveTasksTracker {
+    gauge: IntGauge,
+}
+
+impl LiveTasksTracker {
+    pub fn new(metrics: IntGaugeVec, task_name: &str) -> Self {
+        let gauge = metrics.with_label_values(&[task_name]);
+        gauge.inc();
+        Self { gauge }
+    }
+}
+
+impl Drop for LiveTasksTracker {
+    fn drop(&mut self) {
+        self.gauge.dec();
+    }
 }
