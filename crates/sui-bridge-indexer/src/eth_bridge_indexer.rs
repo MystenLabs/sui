@@ -18,7 +18,7 @@ use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::retry_with_max_elapsed_time;
 use sui_indexer_builder::Task;
 use tokio::task::JoinHandle;
-use tracing::info;
+use tracing::{info, warn};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_bridge::abi::{
@@ -503,10 +503,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         data: serde_json::to_value(bridge_event)?,
                     }));
                 }
-                EthSuiBridgeEvents::InitializedFilter(_) => {}
-                EthSuiBridgeEvents::UpgradedFilter(_) => {}
-                EthSuiBridgeEvents::PausedFilter(_) => {}
-                EthSuiBridgeEvents::UnpausedFilter(_) => {}
+                _ => {
+                    warn!("Unexpected event {bridge_event}.")
+                }
             },
             EthBridgeEvent::EthBridgeCommitteeEvents(bridge_event) => match &bridge_event {
                 EthBridgeCommitteeEvents::BlocklistUpdatedV2Filter(f) => {
@@ -543,9 +542,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         data: serde_json::to_value(bridge_event)?,
                     }));
                 }
-                EthBridgeCommitteeEvents::InitializedFilter(_) => {}
-                EthBridgeCommitteeEvents::BlocklistUpdatedFilter(_) => {}
-                EthBridgeCommitteeEvents::UpgradedFilter(_) => {}
+                _ => {
+                    warn!("Unexpected event {bridge_event}.")
+                }
             },
             EthBridgeEvent::EthBridgeLimiterEvents(bridge_event) => match &bridge_event {
                 EthBridgeLimiterEvents::LimitUpdatedV2Filter(f) => {
@@ -582,11 +581,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         data: serde_json::to_value(bridge_event)?,
                     }));
                 }
-                EthBridgeLimiterEvents::InitializedFilter(_)
-                | EthBridgeLimiterEvents::HourlyTransferAmountUpdatedFilter(_)
-                | EthBridgeLimiterEvents::OwnershipTransferredFilter(_)
-                | EthBridgeLimiterEvents::UpgradedFilter(_) => {}
-                EthBridgeLimiterEvents::LimitUpdatedFilter(_) => {}
+                _ => {
+                    warn!("Unexpected event {bridge_event}.")
+                }
             },
             EthBridgeEvent::EthBridgeConfigEvents(bridge_event) => match &bridge_event {
                 EthBridgeConfigEvents::TokenPriceUpdatedV2Filter(f) => {
@@ -640,12 +637,13 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         data: serde_json::to_value(bridge_event)?,
                     }));
                 }
-                EthBridgeConfigEvents::InitializedFilter(_) => {}
-                EthBridgeConfigEvents::UpgradedFilter(_) => {}
-                EthBridgeConfigEvents::TokenPriceUpdatedFilter(_) => {}
-                EthBridgeConfigEvents::TokenAddedFilter(_) => {}
+                _ => {
+                    warn!("Unexpected event {bridge_event}.")
+                }
             },
-            EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => {}
+            _ => {
+                warn!("Unexpected event {bridge_event}.")
+            }
         };
         Ok(processed_txn_data)
     }
