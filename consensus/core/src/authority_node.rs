@@ -426,7 +426,7 @@ mod tests {
     use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
     use consensus_config::{local_committee_and_keys, Parameters};
-    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
+    use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use prometheus::Registry;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
@@ -457,8 +457,7 @@ mod tests {
         let protocol_keypair = keypairs[own_index].1.clone();
         let network_keypair = keypairs[own_index].0.clone();
 
-        let (sender, _receiver) = unbounded_channel("consensus_output");
-        let commit_consumer = CommitConsumer::new(sender, 0);
+        let (commit_consumer, _, _) = CommitConsumer::new(0);
 
         let authority = ConsensusAuthority::start(
             network_type,
@@ -721,8 +720,7 @@ mod tests {
         let protocol_keypair = keypairs[index].1.clone();
         let network_keypair = keypairs[index].0.clone();
 
-        let (sender, receiver) = unbounded_channel("consensus_output");
-        let commit_consumer = CommitConsumer::new(sender, 0);
+        let (commit_consumer, commit_receiver, _) = CommitConsumer::new(0);
 
         let authority = ConsensusAuthority::start(
             network_type,
@@ -739,6 +737,6 @@ mod tests {
         )
         .await;
 
-        (authority, receiver)
+        (authority, commit_receiver)
     }
 }

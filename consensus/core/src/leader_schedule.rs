@@ -888,6 +888,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             vec![],
+            vec![],
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
             vec![],
@@ -969,6 +970,7 @@ mod tests {
         let leader_block = leader.unwrap();
         let leader_ref = leader_block.reference();
         let commit_index = 1;
+        let rejected_transactions = vec![vec![]; blocks.len()];
 
         let last_commit = TrustedCommit::new_for_test(
             commit_index,
@@ -984,6 +986,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
+            rejected_transactions,
             context.clock.timestamp_utc_ms(),
             last_commit.reference(),
             vec![],
@@ -1535,6 +1538,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             vec![],
+            vec![],
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
             vec![],
@@ -1622,6 +1626,7 @@ mod tests {
         let leader_block = leader.unwrap();
         let leader_ref = leader_block.reference();
         let commit_index = 1;
+        let rejected_transactions = vec![vec![]; blocks.len()];
 
         let last_commit = TrustedCommit::new_for_test(
             commit_index,
@@ -1637,6 +1642,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
+            rejected_transactions,
             context.clock.timestamp_utc_ms(),
             last_commit.reference(),
             vec![],

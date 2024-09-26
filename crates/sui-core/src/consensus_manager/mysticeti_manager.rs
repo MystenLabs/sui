@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority};
 use fastcrypto::ed25519;
-use mysten_metrics::{monitored_mpsc::unbounded_channel, RegistryID, RegistryService};
+use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
 use sui_config::NodeConfig;
 use sui_protocol_config::ConsensusNetwork;
@@ -19,7 +19,9 @@ use tracing::info;
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    consensus_handler::{ConsensusHandlerInitializer, MysticetiConsensusHandler},
+    consensus_handler::{
+        ConsensusHandlerInitializer, ConsensusTransactionHandler, MysticetiConsensusHandler,
+    },
     consensus_manager::{
         ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
     },
@@ -144,17 +146,11 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
-        let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
-
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
-        let consumer = CommitConsumer::new(
-            commit_sender,
-            consensus_handler.last_processed_subdag_index() as CommitIndex,
-        );
-        let monitor = consumer.monitor();
+        let (commit_consumer, commit_receiver, transaction_receiver) =
+            CommitConsumer::new(consensus_handler.last_processed_subdag_index() as CommitIndex);
+        let monitor = commit_consumer.monitor();
 
-        // TODO(mysticeti): Investigate if we need to return potential errors from
-        // AuthorityNode and add retries here?
         let boot_counter = *self.boot_counter.lock().await;
         let authority = ConsensusAuthority::start(
             network_type,
@@ -165,7 +161,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             self.protocol_keypair.clone(),
             self.network_keypair.clone(),
             Arc::new(tx_validator.clone()),
-            consumer,
+            commit_consumer,
             registry.clone(),
             boot_counter,
         )
@@ -185,7 +181,18 @@ impl ConsensusManagerTrait for MysticetiManager {
         self.client.set(client);
 
         // spin up the new mysticeti consensus handler to listen for committed sub dags
-        let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver, monitor);
+        let consensus_transaction_handler = ConsensusTransactionHandler::new(
+            epoch_store.clone(),
+            consensus_handler.transaction_manager_sender().clone(),
+            consensus_handler_initializer.metrics().clone(),
+        );
+        let handler = MysticetiConsensusHandler::new(
+            consensus_handler,
+            consensus_transaction_handler,
+            commit_receiver,
+            transaction_receiver,
+            monitor,
+        );
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);
 

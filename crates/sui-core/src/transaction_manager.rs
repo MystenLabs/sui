@@ -863,7 +863,7 @@ impl TransactionManager {
 
     // Verify TM has no pending item for tests.
     #[cfg(test)]
-    fn check_empty_for_testing(&self) {
+    pub(crate) fn check_empty_for_testing(&self) {
         let reconfig_lock = self.inner.read();
         let inner = reconfig_lock.read();
         assert!(
