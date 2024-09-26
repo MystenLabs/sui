@@ -129,6 +129,7 @@ impl VMCache {
     ) -> VMResult<Package> {
         let loading_package = self.deserialize_and_verify_package(modules)?;
 
+        println!("doing verification with linkage context {link_context:#?}");
         // Make sure all modules' self addresses match the `runtime_package_id`.
         for module in loading_package.as_modules().into_iter() {
             if module.address() != &runtime_package_id {

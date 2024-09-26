@@ -5,7 +5,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
 use move_core_types::{
-    account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
+    account_address::AccountAddress, identifier::IdentStr, language_storage::{ModuleId, TypeTag, StructTag},
 };
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
@@ -36,6 +36,22 @@ impl LinkageContext {
         }
     }
 
+    pub fn contains_key(&self, address: &AccountAddress) -> bool {
+        self.linkage_table.contains_key(address)
+    }
+
+    /// Add a Runtime ID -> Storage ID entry to the linkage table. This allows for shadowing of
+    /// exsting Runtime ID definitions, but will error of the Storage ID is already being used as a
+    /// Runtime ID in the linkage.
+    pub fn add_entry(&mut self, runtime_id: AccountAddress, storage_id: AccountAddress) -> PartialVMResult<()> {
+        if self.linkage_table.contains_key(&storage_id) {
+            return Err(PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
+                    .with_message(format!("Storage ID {storage_id} is a key in the current linkage context")))
+        };
+        self.linkage_table.insert(runtime_id, storage_id);
+        Ok(())
+    }
+
     /// The root package identifies the root package to use for mapping from runtime `ModuleId`s to
     /// the `ModuleId`s in storage that they are loaded from as returned by `relocate`.
     pub fn root_package(&self) -> AccountAddress {
@@ -47,7 +63,7 @@ impl LinkageContext {
         self.linkage_table
             .get(module_id.address())
             .map(|remapped_address| ModuleId::new(*remapped_address, module_id.name().into()))
-            .ok_or({
+            .ok_or_else(|| {
                 PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
                     .with_message(format!("Did not find {module_id} in linkage table"))
             })

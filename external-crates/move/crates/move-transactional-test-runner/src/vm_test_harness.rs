@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     path::Path,
 };
 
@@ -80,12 +80,11 @@ pub struct Linkage {
 }
 
 impl Linkage {
-    pub fn overlay(&self, mut existing_linkage: LinkageContext) -> LinkageContext {
-        for (runtime_id, package_id) in self.linkage.iter() {
+    pub fn overlay(&self, mut existing_linkage: LinkageContext) -> VMResult<LinkageContext> {
+        for (runtime_id, storage_id) in self.linkage.iter() {
             existing_linkage
-                .linkage_table
-                .insert(*runtime_id, *package_id);
-            existing_linkage.linkage_table.remove(package_id);
+                .add_entry(*runtime_id, *storage_id)
+                .map_err(|err| err.finish(Location::Undefined))?;
         }
         // Remap the root address if it is in the linkage table since it may be overriden
         existing_linkage.root_package = existing_linkage
@@ -93,18 +92,18 @@ impl Linkage {
             .get(&existing_linkage.root_package)
             .unwrap_or(&existing_linkage.root_package)
             .clone();
-        existing_linkage
+        Ok(existing_linkage)
     }
 }
 
 impl PublishLinkageArgs {
-    pub fn overlay(&self, existing_linkage: LinkageContext) -> LinkageContext {
-        let mut linkage = self.linkage.overlay(existing_linkage);
+    pub fn overlay(&self, existing_linkage: LinkageContext) -> VMResult<LinkageContext> {
+        let mut linkage = self.linkage.overlay(existing_linkage)?;
         if let Some(location) = self.location {
             linkage.root_package = location;
         }
 
-        linkage
+        Ok(linkage)
     }
 }
 
@@ -264,20 +263,19 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
         println!("computing sender");
         let sender = *id.address();
         println!("performing publish for {sender}");
-        let publish_result = self.perform_action(gas_budget, |inner_adapter, _gas_status| {
-            // TODO: If there are linkage directives, respect them here.
-            println!("generating linkage");
-            let linkage_context = extra_args.overlay(inner_adapter.generate_linkage_context(
-                sender,
-                sender,
-                &pub_modules,
-            )?);
-            println!("linkage: {linkage_context:#?}");
-            println!("doing publish");
-            inner_adapter.publish_package(linkage_context, sender, pub_modules)?;
-            println!("done");
-            Ok(())
-        });
+        let publish_result =
+            self.perform_action(gas_budget, |inner_adapter, _gas_status| {
+                // TODO: If there are linkage directives, respect them here.
+                println!("generating linkage");
+                let linkage_context = extra_args.overlay(
+                    inner_adapter.generate_linkage_context(sender, sender, &pub_modules)?,
+                )?;
+                println!("linkage: {linkage_context:#?}");
+                println!("doing publish");
+                inner_adapter.publish_package(linkage_context, sender, pub_modules)?;
+                println!("done");
+                Ok(())
+            });
         match publish_result {
             Ok(()) => Ok((None, modules)),
             Err(e) => Err(anyhow!(
@@ -319,9 +317,24 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
                 let runtime_id = *module.address();
                 // TODO: If there are linkage directives, respect them here.
                 println!("generating linkage");
-                let linkage =
-                    extra_args.overlay(inner_adapter.generate_default_linkage(runtime_id)?);
-                
+                let mut linkage =
+                    extra_args.overlay(inner_adapter.generate_default_linkage(runtime_id)?)?;
+
+                // If the pacakage doesn't mention a dependency but a type argument does (e.g.,
+                // invoking a polymorphic function), we need to add those to linkage.
+                // This is a bit wonky: If it is there, we don't want to touch it. If it isn't,
+                // we just add it as reflexive as a best-effort.
+                let type_arg_addresses =
+                    type_arg_tags.iter().fold(BTreeSet::new(), |mut acc, tag| {
+                        acc.extend(tag.all_addresses());
+                        acc
+                    });
+                for arg_address in type_arg_addresses {
+                    if !linkage.contains_key(&arg_address) {
+                        linkage.add_entry(arg_address, arg_address);
+                    }
+                }
+
                 println!("generating vm instance");
                 let mut vm_instance = inner_adapter.make_vm_instance(linkage)?;
                 println!("Creating type arguments");
@@ -362,18 +375,33 @@ pub fn format_vm_error(e: &VMError) -> String {
         Location::Undefined => "undefined".to_owned(),
         Location::Module(id) => format!("0x{}::{}", id.address().short_str_lossless(), id.name()),
     };
+    // format!(
+    //     "{{
+    // major_status: {major_status:?},
+    // sub_status: {sub_status:?},
+    // message: {message:?},
+    // location: {location_string},
+    // indices: {indices:?},
+    // offsets: {offsets:?},
+    // }}",
+    //     major_status = e.major_status(),
+    //     sub_status = e.sub_status(),
+    //     message = e.message(),
+    //     location_string = location_string,
+    //     // TODO maybe include source map info?
+    //     indices = e.indices(),
+    //     offsets = e.offsets(),
+    // ) ;
     format!(
         "{{
     major_status: {major_status:?},
     sub_status: {sub_status:?},
-    message: {message:?},
     location: {location_string},
     indices: {indices:?},
     offsets: {offsets:?},
 }}",
         major_status = e.major_status(),
         sub_status = e.sub_status(),
-        message = e.message(),
         location_string = location_string,
         // TODO maybe include source map info?
         indices = e.indices(),
