@@ -228,8 +228,8 @@ impl BaseCommitter {
         all_votes: &mut HashMap<BlockRef, bool>,
     ) -> bool {
         let (gc_enabled, gc_round) = {
-            let dag_state = self.dag_state.read();   
-            (dag_state.gc_enabled(), dag_state.gc_round()) 
+            let dag_state = self.dag_state.read();
+            (dag_state.gc_enabled(), dag_state.gc_round())
         };
 
         let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
@@ -237,11 +237,8 @@ impl BaseCommitter {
             let is_vote = if let Some(is_vote) = all_votes.get(reference) {
                 *is_vote
             } else {
-                let potential_vote = self
-                        .dag_state
-                        .read()
-                        .get_block(reference);
-                
+                let potential_vote = self.dag_state.read().get_block(reference);
+
                 let is_vote = if gc_enabled {
                     if let Some(potential_vote) = potential_vote {
                         self.is_vote(&potential_vote, leader_block)
@@ -250,7 +247,8 @@ impl BaseCommitter {
                         false
                     }
                 } else {
-                    let potential_vote = potential_vote.unwrap_or_else(|| panic!("Block not found in storage: {:?}", reference));
+                    let potential_vote = potential_vote
+                        .unwrap_or_else(|| panic!("Block not found in storage: {:?}", reference));
                     self.is_vote(&potential_vote, leader_block)
                 };
 
