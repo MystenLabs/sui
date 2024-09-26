@@ -4,12 +4,13 @@
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, LockDetails};
 use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
+use mysten_common::*;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::VerifiedSignedTransaction;
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{debug, info, instrument, trace};
 
 use super::writeback_cache::WritebackCache;
 
@@ -144,11 +145,7 @@ impl ObjectLocks {
             let entry = self.locked_transactions.entry(*obj_ref);
             let mut occupied = match entry {
                 DashMapEntry::Vacant(_) => {
-                    if cfg!(debug_assertions) {
-                        panic!("lock must exist");
-                    } else {
-                        error!(?obj_ref, "lock should exist");
-                    }
+                    debug_fatal!("lock must exist for object: {:?}", obj_ref);
                     continue;
                 }
                 DashMapEntry::Occupied(occupied) => occupied,
