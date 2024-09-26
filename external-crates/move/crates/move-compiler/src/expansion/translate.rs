@@ -826,7 +826,7 @@ fn module_(
     assert!(address.is_none());
     set_module_address(context, &name, module_address);
     let _ = check_restricted_name_all_cases(context.defn_context.env, NameCase::Module, &name.0);
-    if name.value().starts_with(|c| c == '_') {
+    if name.value().starts_with('_') {
         let msg = format!(
             "Invalid module name '{}'. Module names cannot start with '_'",
             name,

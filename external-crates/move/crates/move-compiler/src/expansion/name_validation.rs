@@ -224,7 +224,7 @@ fn check_valid_module_member_name_impl(
     }
     match member {
         M::Function => {
-            if n.value.starts_with(|c| c == '_') {
+            if n.value.starts_with('_') {
                 let msg = format!(
                     "Invalid {} name '{}'. {} names cannot start with '_'",
                     case.name(),

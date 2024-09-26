@@ -4,7 +4,6 @@
 
 use core::fmt;
 use std::{
-    cmp::Ordering,
     collections::{btree_map::Entry as MapEntry, BTreeMap, BTreeSet},
     fmt::Formatter,
     fs,
@@ -12,10 +11,7 @@ use std::{
 
 use itertools::{Either, Itertools};
 use log::{debug, info};
-use petgraph::{
-    algo::has_path_connecting,
-    graph::{DiGraph, NodeIndex},
-};
+use petgraph::graph::{DiGraph, NodeIndex};
 
 use move_model::model::{FunId, FunctionEnv, GlobalEnv, QualifiedId};
 
@@ -338,12 +334,19 @@ impl FunctionTargetPipeline {
     }
 
     /// Collect strongly connected components (SCCs) from the call graph.
+    /// Returns a list of node SCCs in reverse topological order, and a map from function id
+    /// to other functions in the same SCC.
     fn derive_call_graph_sccs(
         env: &GlobalEnv,
         graph: &DiGraph<QualifiedId<FunId>, ()>,
-    ) -> BTreeMap<QualifiedId<FunId>, Option<BTreeSet<QualifiedId<FunId>>>> {
+    ) -> (
+        Vec<Vec<NodeIndex>>,
+        BTreeMap<QualifiedId<FunId>, Option<BTreeSet<QualifiedId<FunId>>>>,
+    ) {
         let mut sccs = BTreeMap::new();
-        for scc in petgraph::algo::tarjan_scc(graph) {
+        // Returned SCCs are in reverse topological order.
+        let scc_nodes = petgraph::algo::tarjan_scc(graph);
+        for scc in scc_nodes.clone() {
             let mut part = BTreeSet::new();
             let mut is_cyclic = scc.len() > 1;
             for node_idx in scc {
@@ -367,7 +370,7 @@ impl FunctionTargetPipeline {
                 assert!(existing.is_none());
             }
         }
-        sccs
+        (scc_nodes, sccs)
     }
 
     /// Sort the call graph in topological order with strongly connected components (SCCs)
@@ -377,11 +380,11 @@ impl FunctionTargetPipeline {
         targets: &FunctionTargetsHolder,
     ) -> Vec<Either<QualifiedId<FunId>, Vec<QualifiedId<FunId>>>> {
         // collect sccs
-        let (graph, nodes) = Self::build_call_graph(env, targets);
-        let sccs = Self::derive_call_graph_sccs(env, &graph);
+        let (graph, _nodes) = Self::build_call_graph(env, targets);
+        let (scc_nodes, scc_map) = Self::derive_call_graph_sccs(env, &graph);
 
         let mut scc_staging = BTreeMap::new();
-        for scc_opt in sccs.values() {
+        for scc_opt in scc_map.values() {
             match scc_opt.as_ref() {
                 None => (),
                 Some(scc) => {
@@ -390,48 +393,28 @@ impl FunctionTargetPipeline {
             }
         }
 
-        // construct the work list (with a deterministic ordering)
+        // Construct the work list from a deterministic topological ordering.
         let mut worklist = vec![];
-        for fun in targets.get_funs() {
-            let fun_env = env.get_function(fun);
-            worklist.push((
-                fun,
-                fun_env.get_called_functions().into_iter().collect_vec(),
-            ));
+        for scc in scc_nodes.into_iter().rev() {
+            for node_idx in scc {
+                let fun_id = *graph.node_weight(node_idx).unwrap();
+                let fun_env = env.get_function(fun_id);
+                worklist.push((
+                    fun_id,
+                    fun_env.get_called_functions().into_iter().collect_vec(),
+                ));
+            }
         }
 
         // analyze bottom-up from the leaves of the call graph
         // NOTE: this algorithm produces a deterministic ordering of functions to be analyzed
         let mut dep_ordered = vec![];
-        while !worklist.is_empty() {
-            worklist.sort_by(|(caller1, callees1), (caller2, callees2)| {
-                // rules of ordering:
-                // - if function A depends on B (i.e., calls B), put B towards the end of the worklist
-                // - if there are no dependencies among A and B, rank them by callee size
-
-                let node1 = *nodes.get(caller1).unwrap();
-                let node2 = *nodes.get(caller2).unwrap();
-                match (
-                    has_path_connecting(&graph, node1, node2, None),
-                    has_path_connecting(&graph, node2, node1, None),
-                ) {
-                    (true, true) => Ordering::Equal,
-                    (true, false) => Ordering::Less,
-                    (false, true) => Ordering::Greater,
-                    (false, false) => {
-                        // Put functions with 0 calls first in line, at the end of the vector
-                        callees2.len().cmp(&callees1.len())
-                    }
-                }
-            });
-
-            let (call_id, callees) = worklist.pop().unwrap();
-
+        while let Some((call_id, callees)) = worklist.pop() {
             // At this point, one of two things is true:
             // 1. callees is empty (common case)
             // 2. callees is nonempty and call_id is part of a recursive or mutually recursive function group
 
-            match sccs.get(&call_id).unwrap().as_ref() {
+            match scc_map.get(&call_id).unwrap().as_ref() {
                 None => {
                     // case 1: non-recursive call
                     assert!(callees.is_empty());

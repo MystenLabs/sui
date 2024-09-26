@@ -8,7 +8,7 @@ use std::{borrow::Borrow, collections::BTreeMap, error::Error};
 
 pub trait Map<'a, K, V>
 where
-    K: Serialize + DeserializeOwned + ?Sized,
+    K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
     type Error: Error;
@@ -151,7 +151,7 @@ where
 #[async_trait]
 pub trait AsyncMap<'a, K, V>
 where
-    K: Serialize + DeserializeOwned + ?Sized + std::marker::Sync,
+    K: Serialize + DeserializeOwned + std::marker::Sync,
     V: Serialize + DeserializeOwned + std::marker::Sync + std::marker::Send,
 {
     type Error: Error;

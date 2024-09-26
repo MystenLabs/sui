@@ -3163,11 +3163,10 @@ mod test {
             .feature_flags
             .lookup_attr("some random string".to_owned())
             .is_none());
-        assert!(prot
+        assert!(!prot
             .feature_flags
             .attr_map()
-            .get("some random string")
-            .is_none());
+            .contains_key("some random string"));
 
         // Was false in v1
         assert!(
