@@ -85,6 +85,13 @@ impl OnDiskStateView {
         path
     }
 
+    fn get_package_path(&self, addr: &AccountAddress) -> PathBuf {
+        let mut path = self.storage_dir.clone();
+        path.push(format!("0x{}", addr));
+        path.push(MODULES_DIR);
+        path
+    }
+
     fn get_module_path(&self, module_id: &ModuleId) -> PathBuf {
         let mut path = self.get_addr_path(module_id.address());
         path.push(MODULES_DIR);
@@ -116,7 +123,7 @@ impl OnDiskStateView {
 
     /// Read the package bytes stored on-disk at `addr`
     fn get_package_bytes(&self, address: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>> {
-        let addr_path = self.get_addr_path(address);
+        let addr_path = self.get_package_path(address);
         if !addr_path.exists() {
             return Ok(None);
         }
