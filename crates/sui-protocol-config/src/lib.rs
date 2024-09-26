@@ -1601,7 +1601,7 @@ impl ProtocolConfig {
     pub fn validate_identifier_inputs(&self) -> bool {
         self.feature_flags.validate_identifier_inputs
     }
-    
+
     pub fn gc_depth(&self) -> u32 {
         self.consensus_gc_depth.unwrap_or(0)
     }
