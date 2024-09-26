@@ -108,6 +108,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -118,6 +119,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -268,6 +270,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -278,6 +281,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -428,6 +432,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -438,6 +443,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -588,6 +594,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -598,6 +605,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -748,6 +756,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -758,6 +767,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -908,6 +918,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -918,6 +929,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -1068,6 +1080,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -1078,6 +1091,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Twitch
+        - Threedos
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
