@@ -197,6 +197,7 @@ pub enum Command {
         start: usize,
         /// End of the range to backfill, inclusive.
         end: usize,
+        #[clap(subcommand)]
         runner_kind: BackfillTaskKind,
         #[command(flatten)]
         backfill_config: BackFillConfig,

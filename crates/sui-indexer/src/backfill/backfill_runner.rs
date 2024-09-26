@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::backfill::backfill_instances::full_objects_history::FullObjectsHistoryBackfill;
-use crate::backfill::backfill_instances::system_state_summary_json::SystemStateSummaryJsonBackfill;
+use crate::backfill::backfill_instances::get_backfill_task;
 use crate::backfill::backfill_task::BackfillTask;
 use crate::backfill::BackfillTaskKind;
 use crate::config::BackFillConfig;
@@ -23,27 +22,16 @@ impl BackfillRunner {
         backfill_config: BackFillConfig,
         total_range: RangeInclusive<usize>,
     ) {
-        match runner_kind {
-            BackfillTaskKind::FullObjectsHistory => {
-                Self::run_impl::<FullObjectsHistoryBackfill>(pool, backfill_config, total_range)
-                    .await;
-            }
-            BackfillTaskKind::SystemStateSummaryJson => {
-                Self::run_impl::<SystemStateSummaryJsonBackfill>(
-                    pool,
-                    backfill_config,
-                    total_range,
-                )
-                .await;
-            }
-        }
+        let task = get_backfill_task(runner_kind);
+        Self::run_impl(pool, backfill_config, total_range, task).await;
     }
 
     /// Main function to run the parallel queries and batch processing.
-    async fn run_impl<T: BackfillTask>(
+    async fn run_impl(
         pool: ConnectionPool,
         config: BackFillConfig,
         total_range: RangeInclusive<usize>,
+        task: Arc<dyn BackfillTask>,
     ) {
         let cur_time = Instant::now();
         // Keeps track of the checkpoint ranges (using starting checkpoint number)
@@ -63,10 +51,11 @@ impl BackfillRunner {
             .for_each_concurrent(concurrency, move |range| {
                 let pool_clone = pool.clone();
                 let in_progress_clone = in_progress.clone();
+                let task = task.clone();
 
                 async move {
                     in_progress_clone.lock().await.insert(*range.start());
-                    T::backfill_range(pool_clone, &range).await;
+                    task.backfill_range(pool_clone, &range).await;
                     println!("Finished range: {:?}.", range);
                     in_progress_clone.lock().await.remove(range.start());
                     let cur_min_in_progress = in_progress_clone.lock().await.iter().next().cloned();

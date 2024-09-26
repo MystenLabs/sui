@@ -14,20 +14,21 @@ pub struct SystemStateSummaryJsonBackfill {}
 
 #[async_trait]
 impl BackfillTask for SystemStateSummaryJsonBackfill {
-    async fn backfill_range(pool: ConnectionPool, range: &RangeInclusive<usize>) {
+    async fn backfill_range(&self, pool: ConnectionPool, range: &RangeInclusive<usize>) {
         let mut conn = pool.get().await.unwrap();
 
-        let results: Vec<Vec<u8>> = epochs::table
+        let results: Vec<Option<Vec<u8>>> = epochs::table
             .select(epochs::system_state)
             .filter(epochs::epoch.between(*range.start() as i64, *range.end() as i64))
             .load(&mut conn)
             .await
             .unwrap();
 
-        let system_states = results.into_iter().map(|bytes| {
+        let system_states = results.into_iter().filter_map(|bytes| {
+            let bytes = bytes?;
             let system_state_summary: SuiSystemStateSummary = bcs::from_bytes(&bytes).unwrap();
             let json_ser = serde_json::to_value(&system_state_summary).unwrap();
-            (system_state_summary.epoch, json_ser)
+            Some((system_state_summary.epoch, json_ser))
         });
         conn.transaction::<_, diesel::result::Error, _>(|conn| {
             Box::pin(async move {

@@ -8,5 +8,5 @@ use std::ops::RangeInclusive;
 #[async_trait]
 pub trait BackfillTask: Send + Sync {
     /// Backfill the database for a specific range.
-    async fn backfill_range(pool: ConnectionPool, range: &RangeInclusive<usize>);
+    async fn backfill_range(&self, pool: ConnectionPool, range: &RangeInclusive<usize>);
 }
