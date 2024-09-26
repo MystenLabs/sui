@@ -5,8 +5,8 @@ import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-quer
 import { useMutation } from '@tanstack/react-query';
 
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
-import { WalletNotConnectedError } from '../../errors/walletErrors.js';
-import { useCurrentWallet } from './useCurrentWallet.js';
+import { getDisconnectWallet } from '../../core/wallet/getDisconnectWallet.js';
+import type { WalletNotConnectedError } from '../../errors/walletErrors.js';
 import { useWalletStore } from './useWalletStore.js';
 
 type UseDisconnectWalletError = WalletNotConnectedError | Error;
@@ -27,26 +27,12 @@ export function useDisconnectWallet({
 	UseDisconnectWalletError,
 	void
 > {
-	const { currentWallet } = useCurrentWallet();
-	const setWalletDisconnected = useWalletStore((state) => state.setWalletDisconnected);
+	const disconnectWallet = useWalletStore(getDisconnectWallet);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.disconnectWallet(mutationKey),
 		mutationFn: async () => {
-			if (!currentWallet) {
-				throw new WalletNotConnectedError('No wallet is connected.');
-			}
-
-			try {
-				// Wallets aren't required to implement the disconnect feature, so we'll
-				// optionally call the disconnect feature if it exists and reset the UI
-				// state on the frontend at a minimum.
-				await currentWallet.features['standard:disconnect']?.disconnect();
-			} catch (error) {
-				console.error('Failed to disconnect the application from the current wallet.', error);
-			}
-
-			setWalletDisconnected();
+			return disconnectWallet();
 		},
 		...mutationOptions,
 	});

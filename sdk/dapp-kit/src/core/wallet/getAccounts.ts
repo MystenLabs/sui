@@ -3,12 +3,11 @@
 
 import type { WalletAccount } from '@mysten/wallet-standard';
 
-import { getAccounts } from '../../core/wallet/getAccounts.js';
-import { useWalletStore } from './useWalletStore.js';
+import type { StoreState } from '../../walletStore.js';
 
 /**
  * Retrieves a list of connected accounts authorized by the dApp.
  */
-export function useAccounts(): readonly WalletAccount[] {
-	return useWalletStore(getAccounts);
+export function getAccounts(state: StoreState): readonly WalletAccount[] {
+	return state.accounts;
 }

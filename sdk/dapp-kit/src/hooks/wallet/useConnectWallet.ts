@@ -4,13 +4,13 @@
 import type {
 	StandardConnectInput,
 	StandardConnectOutput,
-	WalletAccount,
 	WalletWithRequiredFeatures,
 } from '@mysten/wallet-standard';
 import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
+import { getConnectWallet } from '../../core/wallet/getConnectWallet.js';
 import { useWalletStore } from './useWalletStore.js';
 
 type ConnectWalletArgs = {
@@ -40,47 +40,13 @@ export function useConnectWallet({
 	ConnectWalletArgs,
 	unknown
 > {
-	const setWalletConnected = useWalletStore((state) => state.setWalletConnected);
-	const setConnectionStatus = useWalletStore((state) => state.setConnectionStatus);
+	const connectWallet = useWalletStore(getConnectWallet);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.connectWallet(mutationKey),
-		mutationFn: async ({ wallet, accountAddress, ...connectArgs }) => {
-			try {
-				setConnectionStatus('connecting');
-
-				const connectResult = await wallet.features['standard:connect'].connect(connectArgs);
-				const connectedSuiAccounts = connectResult.accounts.filter((account) =>
-					account.chains.some((chain) => chain.split(':')[0] === 'sui'),
-				);
-				const selectedAccount = getSelectedAccount(connectedSuiAccounts, accountAddress);
-
-				setWalletConnected(
-					wallet,
-					connectedSuiAccounts,
-					selectedAccount,
-					connectResult.supportedIntents,
-				);
-
-				return { accounts: connectedSuiAccounts };
-			} catch (error) {
-				setConnectionStatus('disconnected');
-				throw error;
-			}
+		mutationFn: async (args) => {
+			return connectWallet(args);
 		},
 		...mutationOptions,
 	});
-}
-
-function getSelectedAccount(connectedAccounts: readonly WalletAccount[], accountAddress?: string) {
-	if (connectedAccounts.length === 0) {
-		return null;
-	}
-
-	if (accountAddress) {
-		const selectedAccount = connectedAccounts.find((account) => account.address === accountAddress);
-		return selectedAccount ?? connectedAccounts[0];
-	}
-
-	return connectedAccounts[0];
 }

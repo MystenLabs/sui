@@ -6,7 +6,7 @@ import { fromB64, isSerializedBcs } from '@mysten/bcs';
 import type { InferInput } from 'valibot';
 import { is, parse } from 'valibot';
 
-import type { SuiClient } from '../client/index.js';
+import { SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { TransactionArgument } from './Commands.js';
