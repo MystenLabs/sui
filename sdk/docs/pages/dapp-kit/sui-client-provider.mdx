@@ -173,13 +173,13 @@ const { networkConfig, useNetworkVariable } = createNetworkConfig({
 		url: getFullnodeUrl('localnet'),
 		variables: {
 			myMovePackageId: '0x123',
-		}
+		},
 	},
 	mainnet: {
 		url: getFullnodeUrl('mainnet'),
 		variables: {
 			myMovePackageId: '0x456',
-		}
+		},
 	},
 });
 
@@ -196,7 +196,6 @@ function App() {
 		</QueryClientProvider>
 	);
 }
-
 
 function YourApp() {
 	const id = useNetworkVariable('myMovePackageId');
