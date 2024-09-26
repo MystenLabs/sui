@@ -7,9 +7,9 @@ use clap::Args;
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
 use diesel::table;
-use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use std::collections::BTreeSet;
 use std::time::Duration;
 use tracing::info;
 
@@ -111,28 +111,27 @@ async fn check_db_migration_consistency_impl(
     // Unfortunately we cannot call applied_migrations() directly on the connection,
     // since it implicitly creates the __diesel_schema_migrations table if it doesn't exist,
     // which is a write operation that we don't want to do in this function.
-    let applied_migrations: Vec<MigrationVersion> = __diesel_schema_migrations::table
-        .select(__diesel_schema_migrations::version)
-        .order(__diesel_schema_migrations::version.asc())
-        .load(conn)
-        .await?;
+    let applied_migrations: BTreeSet<MigrationVersion<'_>> = BTreeSet::from_iter(
+        __diesel_schema_migrations::table
+            .select(__diesel_schema_migrations::version)
+            .load(conn)
+            .await?,
+    );
 
-    // We check that the local migrations is a prefix of the applied migrations.
-    if local_migrations.len() > applied_migrations.len() {
-        return Err(IndexerError::DbMigrationError(format!(
-            "The number of local migrations is greater than the number of applied migrations. Local migrations: {:?}, Applied migrations: {:?}",
-            local_migrations, applied_migrations
-        )));
+    // We check that the local migrations is a subset of the applied migrations.
+    let unapplied_migrations: Vec<_> = local_migrations
+        .into_iter()
+        .filter(|m| !applied_migrations.contains(m))
+        .collect();
+
+    if unapplied_migrations.is_empty() {
+        return Ok(());
     }
-    for (local_migration, applied_migration) in local_migrations.iter().zip(&applied_migrations) {
-        if local_migration != applied_migration {
-            return Err(IndexerError::DbMigrationError(format!(
-                "The next applied migration `{:?}` diverges from the local migration `{:?}`",
-                applied_migration, local_migration
-            )));
-        }
-    }
-    Ok(())
+
+    Err(IndexerError::DbMigrationError(format!(
+        "This binary expected the following migrations to have been run, and they were not: {:?}",
+        unapplied_migrations
+    )))
 }
 
 pub use setup_postgres::{reset_database, run_migrations};
@@ -310,6 +309,34 @@ mod tests {
         local_migrations.pop();
         // Local migrations is one record less than the applied migrations.
         // This should pass the consistency check since it's still a prefix.
+        check_db_migration_consistency_impl(&mut pool.get().await.unwrap(), local_migrations)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn db_migration_consistency_subset_test() {
+        let database = TempDb::new().unwrap();
+        let pool = ConnectionPool::new(
+            database.database().url().to_owned(),
+            ConnectionPoolConfig {
+                pool_size: 2,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        reset_database(pool.dedicated_connection().await.unwrap())
+            .await
+            .unwrap();
+
+        let migrations: Vec<Box<dyn Migration<Pg>>> = MIGRATIONS.migrations().unwrap();
+        let mut local_migrations: Vec<_> = migrations.iter().map(|m| m.name().version()).collect();
+        local_migrations.remove(2);
+
+        // Local migrations are missing one record compared to the applied migrations, which should
+        // still be okay.
         check_db_migration_consistency_impl(&mut pool.get().await.unwrap(), local_migrations)
             .await
             .unwrap();
