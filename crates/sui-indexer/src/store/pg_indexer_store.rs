@@ -342,6 +342,7 @@ impl PgIndexerStore {
 
     async fn get_min_cp_and_tx_for_epoch(&self, epoch: u64) -> Result<(u64, u64), IndexerError> {
         use diesel_async::RunQueryDsl;
+        // TODO: (wlmyng) just use min and max on checkpoints
         let epoch = epoch.saturating_sub(1) as i64;
 
         let mut connection = self.pool.get().await?;

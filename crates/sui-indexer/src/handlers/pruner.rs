@@ -125,7 +125,9 @@ fn should_prune(watermark: &WatermarkRead) -> bool {
 }
 
 /// Pruner waits for some time before pruning to ensure that in-flight reads complete or timeout
-/// before the underlying data is pruned.
+/// before the underlying data is pruned. While waiting, it is possible that the valid data range
+/// further shifts into the future. Callers of this function can still proceed with pruning because
+/// the data to prune must be much staler than any data accessible by readers.
 async fn wait_for_prune_delay(
     watermark: &WatermarkRead,
     cancel: &CancellationToken,

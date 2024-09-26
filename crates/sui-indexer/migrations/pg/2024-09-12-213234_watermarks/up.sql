@@ -20,15 +20,15 @@ CREATE TABLE watermarks
     -- checkpoint sequence number, for `transactions`, the transaction sequence number, etc.
     hi                          BIGINT        NOT NULL,
     -- Inclusive low watermark that the pruner advances. Data before this watermark is considered
-    -- pruned by a reader.
+    -- pruned by a reader. The underlying data may still exist in the db instance.
     lo                          BIGINT        NOT NULL,
     -- Updated using the database's current timestamp when the pruner sees that some data needs to
     -- be dropped. The pruner uses this column to determine whether to prune or wait long enough
     -- that all in-flight reads complete or timeout before it acts on an updated watermark.
     timestamp_ms                BIGINT        NOT NULL,
     -- Pruner updates this, and uses this when recovering from a crash to determine where to
-    -- continue pruning. Data at and below `pruned_lo` is considered pruned by the pruner. Has the
-    -- same unit as `lo`.
+    -- continue pruning. Data at and below `pruned_lo` is considered pruned by the pruner, and
+    -- should not exist in the db. Has the same unit as `lo`.
     pruned_lo                   BIGINT,
     PRIMARY KEY (entity)
 );
