@@ -367,11 +367,7 @@ pub fn parse_dependency(mut tval: TV) -> Result<PM::Dependency> {
         .get(EXTERNAL_RESOLVER_PREFIX)
         .and_then(|e| parse_external_resolver_name(e).transpose())
     {
-        return Ok(PM::Dependency::External(
-            external_resolver_binary_name.with_context(|| {
-                format!("Malformed external resolver declaration for dependency {tval}")
-            })?,
-        ));
+        return Ok(PM::Dependency::External( external_resolver_binary_name?));
     }
 
     let subst = table
