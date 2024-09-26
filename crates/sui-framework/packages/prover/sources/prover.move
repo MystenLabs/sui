@@ -103,4 +103,6 @@ module prover::prover {
     public fun max_u256(): u256 {
         MAX_U256
     }
+
+    native public fun fresh<T>(): T;
 }
