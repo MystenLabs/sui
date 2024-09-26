@@ -63,7 +63,7 @@ pub struct InternalDependency {
 pub enum DependencyKind {
     Local(PathBuf),
     Git(GitInfo),
-    Custom(CustomDepInfo),
+    OnChain(OnChainInfo),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -78,16 +78,8 @@ pub struct GitInfo {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct CustomDepInfo {
-    /// The url of the node to download from
-    pub node_url: Symbol,
-    /// The address where the package is published. The representation depends
-    /// on the registered node resolver.
-    pub package_address: Symbol,
-    /// The package's name (i.e. the dependency name).
-    pub package_name: Symbol,
-    /// The path under this repo where the move package can be found
-    pub subdir: PathBuf,
+pub struct OnChainInfo {
+    pub id: Symbol,
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
@@ -116,7 +108,7 @@ impl DependencyKind {
             // If `self` is a git or custom dependency kind, it does not need to be re-rooted
             // because its URI is already absolute. (i.e. the location of an absolute URI does not
             // change if referenced relative to some other URI).
-            (_, DependencyKind::Git(_) | DependencyKind::Custom(_)) => return Ok(()),
+            (_, DependencyKind::Git(_) | DependencyKind::OnChain(_)) => return Ok(()),
 
             (DependencyKind::Local(parent), DependencyKind::Local(subdir)) => {
                 parent.push(subdir);
@@ -128,10 +120,7 @@ impl DependencyKind {
                 git.subdir = normalize_path(&git.subdir, /* allow_cwd_parent */ false)?;
             }
 
-            (DependencyKind::Custom(custom), DependencyKind::Local(subdir)) => {
-                custom.subdir.push(subdir);
-                custom.subdir = normalize_path(&custom.subdir, /* allow_cwd_parent */ false)?;
-            }
+            (DependencyKind::OnChain(_), _) => return Ok(()),
         };
 
         *self = parent;
