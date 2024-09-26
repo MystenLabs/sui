@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 60;
+const MAX_PROTOCOL_VERSION: u64 = 61;
 
 // Record history of protocol version allocations here:
 //
@@ -180,7 +180,7 @@ const MAX_PROTOCOL_VERSION: u64 = 60;
 // Version 59: Enable round prober in consensus.
 // Version 60: Validation of public inputs for Groth16 verification.
 //             Enable configuration of maximum number of type nodes in a type layout.
-//             Switch to distributed vote scoring in consensus in testnet
+// Version 61: Switch to distributed vote scoring in consensus in testnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2782,7 +2782,8 @@ impl ProtocolConfig {
                 60 => {
                     cfg.max_type_to_layout_nodes = Some(512);
                     cfg.feature_flags.validate_identifier_inputs = true;
-
+                }
+                61 => {
                     if chain != Chain::Mainnet {
                         // Enable distributed vote scoring for testnet
                         cfg.feature_flags
