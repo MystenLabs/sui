@@ -13222,6 +13222,7 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "tokio",
+ "tokio-retry",
  "tracing",
  "url",
 ]
