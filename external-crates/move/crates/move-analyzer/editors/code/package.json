@@ -124,13 +124,13 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "sui.serverVersion"
+          "command": "move.serverVersion"
         },
         {
-          "command": "sui.build"
+          "command": "move.build"
         },
         {
-          "command": "sui.test"
+          "command": "move.test"
         }
       ]
     }
@@ -163,7 +163,9 @@
     "@types/glob": "^7.1.4",
     "@types/mocha": "^9.0.0",
     "@types/node": "^14.17.22",
+    "@types/parse-json": "^4.0.2",
     "@types/vscode": "^1.61.0",
+    "@types/ws": "^8.5.12",
     "@typescript-eslint/eslint-plugin": "^6.10.0",
     "@typescript-eslint/parser": "^6.10.0",
     "@vscode/test-electron": "^2.0.0",
