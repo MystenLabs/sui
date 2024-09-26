@@ -15,6 +15,7 @@ use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
+use sui_core::consensus_adapter::ConsensusClient;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::net::SocketAddr;
@@ -29,7 +30,7 @@ use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::SubmitToConsensus;
-use sui_core::consensus_manager::ConsensusClient;
+use sui_core::consensus_manager::ConsensusClientWrapper;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
 use sui_core::state_accumulator::StateAccumulatorMetrics;
@@ -1198,7 +1199,7 @@ impl SuiNode {
             .as_mut()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
-        let client = Arc::new(ConsensusClient::new());
+        let client = Arc::new(ConsensusClientWrapper::new());
         let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
             &committee,
             consensus_config,
@@ -1434,7 +1435,7 @@ impl SuiNode {
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         prometheus_registry: &Registry,
         protocol_config: ProtocolConfig,
-        consensus_client: Arc<dyn SubmitToConsensus>,
+        consensus_client: Arc<dyn ConsensusClient>,
     ) -> ConsensusAdapter {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
