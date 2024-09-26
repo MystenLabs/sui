@@ -235,8 +235,11 @@ impl DiscoveryEventLoop {
     }
 
     fn update_our_info_timestamp(&mut self, now_unix: u64) {
-        if let Some(our_info) = &mut self.state.write().unwrap().our_info {
-            our_info.timestamp_ms = now_unix;
+        let state = &mut self.state.write().unwrap();
+        if let Some(our_info) = &state.our_info {
+            let mut data = our_info.data().clone();
+            data.timestamp_ms = now_unix;
+            state.our_info = Some(data.sign(&self.keypair));
         }
     }
 

@@ -67,7 +67,10 @@ async fn get_known_peers() -> Result<()> {
 
 #[tokio::test]
 async fn make_connection_to_seed_peer() -> Result<()> {
-    let config = P2pConfig::default();
+    let config = P2pConfig::default().set_discovery_config(DiscoveryConfig {
+        enable_node_info_signatures: Some(true),
+        ..DiscoveryConfig::default()
+    });
     let (builder, server) = Builder::new(create_test_channel().1).config(config).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (_event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
@@ -100,7 +103,10 @@ async fn make_connection_to_seed_peer() -> Result<()> {
 
 #[tokio::test]
 async fn make_connection_to_seed_peer_with_peer_id() -> Result<()> {
-    let config = P2pConfig::default();
+    let config = P2pConfig::default().set_discovery_config(DiscoveryConfig {
+        enable_node_info_signatures: Some(true),
+        ..DiscoveryConfig::default()
+    });
     let (builder, server) = Builder::new(create_test_channel().1).config(config).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (_event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
@@ -134,7 +140,10 @@ async fn make_connection_to_seed_peer_with_peer_id() -> Result<()> {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn three_nodes_can_connect_via_discovery() -> Result<()> {
     // Setup the peer that will be the seed for the other two
-    let config = P2pConfig::default();
+    let config = P2pConfig::default().set_discovery_config(DiscoveryConfig {
+        enable_node_info_signatures: Some(true),
+        ..DiscoveryConfig::default()
+    });
     let (builder, server) = Builder::new(create_test_channel().1).config(config).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
@@ -196,9 +205,12 @@ async fn three_nodes_can_connect_via_discovery() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn peers_are_added_from_reocnfig_channel() -> Result<()> {
+async fn peers_are_added_from_reconfig_channel() -> Result<()> {
     let (tx_1, rx_1) = create_test_channel();
-    let config = P2pConfig::default();
+    let config = P2pConfig::default().set_discovery_config(DiscoveryConfig {
+        enable_node_info_signatures: Some(true),
+        ..DiscoveryConfig::default()
+    });
     let (builder, server) = Builder::new(rx_1).config(config.clone()).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
@@ -287,6 +299,7 @@ async fn test_access_types() {
     let default_discovery_config = DiscoveryConfig {
         target_concurrent_connections: Some(100),
         interval_period_ms: Some(1000),
+        enable_node_info_signatures: Some(true),
         ..Default::default()
     };
     let default_p2p_config = P2pConfig {
@@ -297,6 +310,7 @@ async fn test_access_types() {
         target_concurrent_connections: Some(100),
         interval_period_ms: Some(1000),
         access_type: Some(AccessType::Private),
+        enable_node_info_signatures: Some(true),
         ..Default::default()
     };
 
