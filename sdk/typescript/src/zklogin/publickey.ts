@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB64 } from '@mysten/bcs';
+import { fromBase64, toBase64 } from '@mysten/bcs';
 
 import { PublicKey } from '../cryptography/publickey.js';
 import type { PublicKeyInitData } from '../cryptography/publickey.js';
@@ -29,7 +29,7 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 		this.#client = client;
 
 		if (typeof value === 'string') {
-			this.#data = fromB64(value);
+			this.#data = fromBase64(value);
 		} else if (value instanceof Uint8Array) {
 			this.#data = value;
 		} else {
@@ -74,7 +74,7 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 
 		return graphqlVerifyZkLoginSignature({
 			address: address,
-			bytes: toB64(message),
+			bytes: toBase64(message),
 			signature: parsedSignature.serializedSignature,
 			intentScope: 'PERSONAL_MESSAGE',
 			client: this.#client,
@@ -89,7 +89,7 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 		const address = new ZkLoginPublicIdentifier(parsedSignature.publicKey).toSuiAddress();
 		return graphqlVerifyZkLoginSignature({
 			address: address,
-			bytes: toB64(transaction),
+			bytes: toBase64(transaction),
 			signature: parsedSignature.serializedSignature,
 			intentScope: 'TRANSACTION_DATA',
 			client: this.#client,
@@ -164,7 +164,7 @@ async function graphqlVerifyZkLoginSignature({
 }
 
 export function parseSerializedZkLoginSignature(signature: Uint8Array | string) {
-	const bytes = typeof signature === 'string' ? fromB64(signature) : signature;
+	const bytes = typeof signature === 'string' ? fromBase64(signature) : signature;
 
 	if (bytes[0] !== SIGNATURE_SCHEME_TO_FLAG.ZkLogin) {
 		throw new Error('Invalid signature scheme');
@@ -176,7 +176,7 @@ export function parseSerializedZkLoginSignature(signature: Uint8Array | string) 
 	const iss = extractClaimValue<string>(issBase64Details, 'iss');
 	const publicIdentifer = toZkLoginPublicIdentifier(BigInt(addressSeed), iss);
 	return {
-		serializedSignature: toB64(bytes),
+		serializedSignature: toBase64(bytes),
 		signatureScheme: 'ZkLogin' as const,
 		zkLogin: {
 			inputs,

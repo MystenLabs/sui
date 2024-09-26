@@ -4,7 +4,7 @@
 // This is adapted from https://github.com/alepop/ed25519-hd-key replacing create-hmac
 // with @noble/hashes to be browser compatible.
 
-import { fromHEX } from '@mysten/bcs';
+import { fromHex } from '@mysten/bcs';
 import { hmac } from '@noble/hashes/hmac';
 import { sha512 } from '@noble/hashes/sha512';
 import nacl from 'tweetnacl';
@@ -26,7 +26,7 @@ export const replaceDerive = (val: string): string => val.replace("'", '');
 
 export const getMasterKeyFromSeed = (seed: Hex): Keys => {
 	const h = hmac.create(sha512, ED25519_CURVE);
-	const I = h.update(fromHEX(seed)).digest();
+	const I = h.update(fromHex(seed)).digest();
 	const IL = I.slice(0, 32);
 	const IR = I.slice(32);
 	return {

@@ -11,7 +11,7 @@ import {
 } from '@mysten/sui/client';
 import { messageWithIntent } from '@mysten/sui/cryptography';
 import { isTransaction, type Transaction } from '@mysten/sui/transactions';
-import { fromB64, toB64 } from '@mysten/sui/utils';
+import { fromBase64, toBase64 } from '@mysten/sui/utils';
 
 export type SignedTransaction = {
 	transactionBlockBytes: string;
@@ -43,7 +43,7 @@ export abstract class WalletSigner {
 		);
 
 		return {
-			messageBytes: toB64(input.message),
+			messageBytes: toBase64(input.message),
 			signature,
 		};
 	}
@@ -59,7 +59,7 @@ export abstract class WalletSigner {
 		}
 
 		if (typeof transactionBlock === 'string') {
-			return fromB64(transactionBlock);
+			return fromBase64(transactionBlock);
 		}
 
 		if (transactionBlock instanceof Uint8Array) {
@@ -78,7 +78,7 @@ export abstract class WalletSigner {
 		const signature = await this.signData(messageWithIntent('TransactionData', bytes));
 
 		return {
-			transactionBlockBytes: toB64(bytes),
+			transactionBlockBytes: toBase64(bytes),
 			signature,
 		};
 	}

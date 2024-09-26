@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB58 } from '@mysten/bcs';
+import { fromBase64, toBase58 } from '@mysten/bcs';
 import { bcs } from '@mysten/sui/bcs';
 import type {
 	SuiArgument,
@@ -47,7 +47,7 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 		...(options?.showRawEffects
 			? {
 					rawEffects: transactionBlock.effects?.bcs
-						? Array.from(fromB64(transactionBlock.effects?.bcs))
+						? Array.from(fromBase64(transactionBlock.effects?.bcs))
 						: undefined,
 				}
 			: {}),
@@ -73,7 +73,7 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 					transaction:
 						transactionBlock.rawTransaction &&
 						mapTransactionBlockToInput(
-							bcs.SenderSignedData.parse(fromB64(transactionBlock.rawTransaction))[0],
+							bcs.SenderSignedData.parse(fromBase64(transactionBlock.rawTransaction))[0],
 						),
 				}
 			: {}),
@@ -214,7 +214,7 @@ function mapTransactionInput(input: typeof bcs.CallArg.$inferType): SuiCallArg {
 	if (input.Pure) {
 		return {
 			type: 'pure',
-			value: fromB64(input.Pure.bytes),
+			value: fromBase64(input.Pure.bytes),
 		};
 	}
 
@@ -340,13 +340,13 @@ function mapTransactionArgument(arg: typeof bcs.Argument.$inferType): SuiArgumen
 	throw new Error(`Unknown argument type ${arg}`);
 }
 
-const OBJECT_DIGEST_DELETED = toB58(Uint8Array.from({ length: 32 }, () => 99));
-const OBJECT_DIGEST_WRAPPED = toB58(Uint8Array.from({ length: 32 }, () => 88));
-const OBJECT_DIGEST_ZERO = toB58(Uint8Array.from({ length: 32 }, () => 0));
+const OBJECT_DIGEST_DELETED = toBase58(Uint8Array.from({ length: 32 }, () => 99));
+const OBJECT_DIGEST_WRAPPED = toBase58(Uint8Array.from({ length: 32 }, () => 88));
+const OBJECT_DIGEST_ZERO = toBase58(Uint8Array.from({ length: 32 }, () => 0));
 const ADDRESS_ZERO = normalizeSuiAddress('0x0');
 
 export function mapEffects(data: string): SuiTransactionBlockResponse['effects'] {
-	const effects = bcs.TransactionEffects.parse(fromB64(data));
+	const effects = bcs.TransactionEffects.parse(fromBase64(data));
 
 	let effectsV1 = effects.V1;
 

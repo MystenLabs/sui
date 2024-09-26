@@ -4,7 +4,7 @@
 import type { SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import { toB64 } from '@mysten/sui/utils';
+import { toBase64 } from '@mysten/sui/utils';
 import type {
 	StandardConnectFeature,
 	StandardConnectMethod,
@@ -198,7 +198,7 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 				bytes,
 				signature,
 				digest,
-				effects: toB64(new Uint8Array(rawEffects!)),
+				effects: toBase64(new Uint8Array(rawEffects!)),
 			};
 		};
 	}
