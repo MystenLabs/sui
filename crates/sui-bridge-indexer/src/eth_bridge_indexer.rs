@@ -422,7 +422,11 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
         match bridge_event {
             EthBridgeEvent::EthSuiBridgeEvents(bridge_event) => match &bridge_event {
                 EthSuiBridgeEvents::TokensDepositedFilter(bridge_event) => {
-                    info!("Observed Eth Deposit at block: {}", log.block_number());
+                    info!(
+                        "Observed Eth Deposit at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
                     self.metrics.total_eth_token_deposited.inc();
                     processed_txn_data.push(ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.source_chain_id,
@@ -446,7 +450,11 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                     }));
                 }
                 EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
-                    info!("Observed Eth Claim at block: {}", log.block_number());
+                    info!(
+                        "Observed Eth Claim at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
                     self.metrics.total_eth_token_transfer_claimed.inc();
                     processed_txn_data.push(ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.source_chain_id,
@@ -464,8 +472,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                 }
                 EthSuiBridgeEvents::EmergencyOperationFilter(f) => {
                     info!(
-                        "Observed Eth Emergency Operation at block: {}",
-                        log.block_number()
+                        "Observed Eth Emergency Operation at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
                     );
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce),
@@ -479,8 +488,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                 }
                 EthSuiBridgeEvents::ContractUpgradedFilter(f) => {
                     info!(
-                        "Observed Eth SuiBridge Upgrade at block: {}",
-                        log.block_number()
+                        "Observed Eth SuiBridge Upgrade at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
                     );
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
@@ -501,8 +511,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
             EthBridgeEvent::EthBridgeCommitteeEvents(bridge_event) => match &bridge_event {
                 EthBridgeCommitteeEvents::BlocklistUpdatedV2Filter(f) => {
                     info!(
-                        "Observed Eth Blocklist Update at block: {}",
-                        log.block_number()
+                        "Observed Eth Blocklist Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
                     );
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
@@ -517,8 +528,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                 }
                 EthBridgeCommitteeEvents::ContractUpgradedFilter(f) => {
                     info!(
-                        "Observed Eth BridgeCommittee Upgrade at block: {}",
-                        log.block_number()
+                        "Observed Eth BridgeCommittee Upgrade at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
                     );
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
@@ -538,8 +550,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
             EthBridgeEvent::EthBridgeLimiterEvents(bridge_event) => match &bridge_event {
                 EthBridgeLimiterEvents::LimitUpdatedV2Filter(f) => {
                     info!(
-                        "Observed Eth BridgeLimiter Update at block: {}",
-                        log.block_number()
+                        "Observed Eth BridgeLimiter Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
                     );
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
@@ -554,8 +567,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                 }
                 EthBridgeLimiterEvents::ContractUpgradedFilter(f) => {
                     info!(
-                        "Observed Eth BridgeLimiter Upgrade at block: {}",
-                        log.block_number()
+                        "Observed Eth BridgeLimiter Upgrade at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
                     );
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
@@ -577,8 +591,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
             EthBridgeEvent::EthBridgeConfigEvents(bridge_event) => match &bridge_event {
                 EthBridgeConfigEvents::TokenPriceUpdatedV2Filter(f) => {
                     info!(
-                        "Observed Eth TokenPrices Update at block: {}",
-                        log.block_number()
+                        "Observed Eth TokenPrices Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
                     );
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
@@ -592,7 +607,11 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                     }));
                 }
                 EthBridgeConfigEvents::TokensAddedV2Filter(f) => {
-                    info!("Observed Eth AddSuiTokens at block: {}", log.block_number());
+                    info!(
+                        "Observed Eth AddSuiTokens at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce),
@@ -606,8 +625,9 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                 }
                 EthBridgeConfigEvents::ContractUpgradedFilter(f) => {
                     info!(
-                        "Observed Eth BridgeConfig Upgrade at block: {}",
-                        log.block_number()
+                        "Observed Eth BridgeConfig Upgrade at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
                     );
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
