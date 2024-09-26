@@ -367,7 +367,7 @@ pub fn parse_dependency(mut tval: TV) -> Result<PM::Dependency> {
         .get(EXTERNAL_RESOLVER_PREFIX)
         .and_then(|e| parse_external_resolver_name(e).transpose())
     {
-        return Ok(PM::Dependency::External( external_resolver_binary_name?));
+        return Ok(PM::Dependency::External(external_resolver_binary_name?));
     }
 
     let subst = table
@@ -439,7 +439,7 @@ pub fn parse_dependency(mut tval: TV) -> Result<PM::Dependency> {
         }
 
         _ => {
-            let keys = vec!["'local'", "'git'", "'r.<external_resolver_binary_name>'"];
+            let keys = ["'local'", "'git'", "'r.<external_resolver_binary_name>'"];
             bail!(
                 "must provide exactly one of {} for dependency.",
                 keys.join(" or ")
