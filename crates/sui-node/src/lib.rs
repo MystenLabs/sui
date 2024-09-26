@@ -13,7 +13,6 @@ use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
 use prometheus::Registry;
-use sui_core::consensus_adapter::ConsensusClient;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::net::SocketAddr;
@@ -27,7 +26,7 @@ use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::CHAIN_IDENTIFIER;
-use sui_core::consensus_adapter::SubmitToConsensus;
+use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::ConsensusClientWrapper;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
