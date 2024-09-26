@@ -354,8 +354,12 @@ async fn submit_multiple_transactions_to_consensus_adapter() {
     process_via_checkpoint.insert(*certificates[1].digest());
 
     // Make a new consensus adapter instance.
-    let adapter =
-        make_consensus_adapter_for_test(state.clone(), process_via_checkpoint, false, vec![SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)]);
+    let adapter = make_consensus_adapter_for_test(
+        state.clone(),
+        process_via_checkpoint,
+        false,
+        vec![SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)],
+    );
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
