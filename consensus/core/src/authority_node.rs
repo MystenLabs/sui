@@ -495,9 +495,8 @@ mod tests {
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        if gc_depth > 0 {
-            protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
-        }
+        protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
+
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
             .map(|_| TempDir::new().unwrap())
             .collect::<Vec<_>>();
@@ -603,9 +602,7 @@ mod tests {
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        if gc_depth > 0 {
-            protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
-        }
+        protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
