@@ -25,6 +25,8 @@ const DEV_ADDRESSES_NAME: &str = "dev-addresses";
 const DEPENDENCY_NAME: &str = "dependencies";
 const DEV_DEPENDENCY_NAME: &str = "dev-dependencies";
 
+const EXTERNAL_RESOLVER_PREFIX: &str = "r";
+
 const KNOWN_NAMES: &[&str] = &[
     PACKAGE_NAME,
     BUILD_NAME,
@@ -32,6 +34,7 @@ const KNOWN_NAMES: &[&str] = &[
     DEV_ADDRESSES_NAME,
     DEPENDENCY_NAME,
     DEV_DEPENDENCY_NAME,
+    EXTERNAL_RESOLVER_PREFIX,
 ];
 
 const REQUIRED_FIELDS: &[&str] = &[PACKAGE_NAME];
@@ -329,24 +332,42 @@ fn parse_address_literal(address_str: &str) -> Result<AccountAddress, AccountAdd
     AccountAddress::from_hex_literal(address_str)
 }
 
+fn parse_external_resolver_name(resolver_val: &TV) -> Result<Option<Symbol>> {
+    let Some(table) = resolver_val.as_table() else {
+        bail!("Malformed dependency {}", resolver_val);
+    };
+
+    if table.len() != 1 {
+        bail!("Malformed external resolver declaration for dependency {EXTERNAL_RESOLVER_PREFIX}.{resolver_val}",);
+    }
+
+    let key = table
+        .keys()
+        .next()
+        .expect("Exactly one key by check above")
+        .as_str();
+
+    let key_value = table.get(key).ok_or_else(|| {
+        format_err!("Malformed external resolver declaration for dependency {EXTERNAL_RESOLVER_PREFIX}.{resolver_val}",)
+    })?;
+
+    if !key_value.is_str() {
+        bail!("Malformed external resolver declaration for dependency {EXTERNAL_RESOLVER_PREFIX}.{resolver_val}",);
+    }
+
+    Ok(Some(Symbol::from(key)))
+}
+
 pub fn parse_dependency(mut tval: TV) -> Result<PM::Dependency> {
     let Some(table) = tval.as_table_mut() else {
         bail!("Malformed dependency {}", tval);
     };
 
-    if let Some(resolver) = table.remove("resolver") {
-        let Some(resolver) = resolver.as_str().map(Symbol::from) else {
-            bail!("Resolver name is not a string")
-        };
-
-        // Not relevant except for the external resolver, but remove it to mark it as a
-        // recognised part of the manifest.
-        let _ = table.remove("packages");
-
-        // Any fields that are left are unknown
-        warn_if_unknown_field_names(table, &[]);
-
-        return Ok(PM::Dependency::External(resolver));
+    if let Some(external_resolver_binary_name) = table
+        .get(EXTERNAL_RESOLVER_PREFIX)
+        .and_then(|e| parse_external_resolver_name(e).transpose())
+    {
+        return Ok(PM::Dependency::External(external_resolver_binary_name?));
     }
 
     let subst = table
@@ -418,7 +439,7 @@ pub fn parse_dependency(mut tval: TV) -> Result<PM::Dependency> {
         }
 
         _ => {
-            let keys = ["'local'", "'git'", "'resolver'", "'id'"];
+            let keys = ["'local'", "'git'", "'r.<external_resolver_binary_name>'"];
             bail!(
                 "must provide exactly one of {} for dependency.",
                 keys.join(" or ")
@@ -506,7 +527,7 @@ fn parse_dep_override(tval: TV) -> Result<PM::DepOverride> {
     Ok(tval.as_bool().unwrap())
 }
 
-// check that only recognized names are provided at the top-level
+// Check that only recognized names are provided at the top-level.
 fn warn_if_unknown_field_names(table: &toml::map::Map<String, TV>, known_names: &[&str]) {
     let mut unknown_names = BTreeSet::new();
     for key in table.keys() {

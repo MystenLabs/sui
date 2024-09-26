@@ -1,0 +1,6 @@
+[package]
+name = "Root"
+
+[r.foo]
+network = "something"
+other_thing = "hmmm"
