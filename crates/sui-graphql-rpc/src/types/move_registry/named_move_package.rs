@@ -23,8 +23,8 @@ use super::{
 pub(crate) struct NamedMovePackage;
 
 impl NamedMovePackage {
-    /// Queries a package by name (and version, encoded in the name).
-    /// Name's format should be `{application}@{organization}/v{versiion}`.
+    /// Queries a package by name (and version, encoded in the name but optional).
+    /// Name's format should be `{organization}/{application}:v{version}`.
     pub(crate) async fn query(
         ctx: &Context<'_>,
         name: &str,
