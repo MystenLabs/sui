@@ -15,7 +15,7 @@ use crate::{
     storage::mem_store::MemStore,
     test_dag::{build_dag, build_dag_layer},
     test_dag_builder::DagBuilder,
-    test_dag_parser::parse_dag,
+    test_dag_parser::{parse_dag, parse_dag_with_context},
     universal_committer::universal_committer_builder::UniversalCommitterBuilder,
 };
 
@@ -704,6 +704,87 @@ async fn test_byzantine_direct_commit() {
     } else {
         panic!("Expected a committed leader")
     };
+}
+
+#[tokio::test]
+async fn direct_commit_with_weak_links_below_gc_round() {
+    const GC_DEPTH: u32 = 2;
+
+    telemetry_subscribers::init_for_testing();
+    let dag_str = "DAG { 
+        Round 0 : { 4 },
+        Round 1 : { * },
+        Round 2 : {
+            B -> [-A1],
+            C -> [-A1],
+            D -> [-A1],
+        },
+        Round 3 : { 
+            B -> [*],
+            C -> [*],
+            D -> [*],
+        },
+        Round 4 : {
+            B -> [*],
+            C -> [*],
+            D -> [*],
+        },
+        Round 5 : {
+            B -> [*],
+            C -> [*],
+            D -> [*],
+        },
+        Round 6 : {
+            B -> [A1, B5, C5, D5],
+            C -> [A1, B5, C5, D5],
+            D -> [A1, B5, C5, D5],
+        }
+     }";
+
+    let (mut context, _keys) = Context::new_for_test(4);
+    context.protocol_config.set_consensus_gc_depth_for_testing(GC_DEPTH);
+
+    let context = Arc::new(context);
+    let (_, dag_builder) = parse_dag_with_context(dag_str, context).expect("Invalid dag");
+    let dag_state = Arc::new(RwLock::new(DagState::new(
+        dag_builder.context.clone(),
+        Arc::new(MemStore::new()),
+    )));
+    let leader_schedule = Arc::new(LeaderSchedule::new(
+        dag_builder.context.clone(),
+        LeaderSwapTable::default(),
+    ));
+
+    dag_builder.print();
+    dag_builder.persist_all_blocks(dag_state.clone());
+
+    // Create committer without pipelining and only 1 leader per leader round
+    let committer = UniversalCommitterBuilder::new(
+        dag_builder.context.clone(),
+        leader_schedule,
+        dag_state.clone(),
+    )
+    .build();
+    // note: without pipelining or multi-leader enabled there should only be one committer.
+    assert!(committer.committers.len() == 1);
+
+    // Ensure we indirectly commit the leader of wave 1 via the directly committed
+    // leader of wave 2.
+    let last_decided = Slot::new_for_test(0, 0);
+    let sequence = committer.try_decide(last_decided);
+    tracing::info!("Commit sequence: {sequence:#?}");
+    assert_eq!(sequence.len(), 3);
+
+    for (idx, decided_leader) in sequence.iter().enumerate() {
+        let leader_round = committer.committers[0].leader_round(idx as u32 + 1);
+        let expected_leader = committer.get_leaders(leader_round)[0];
+        if let DecidedLeader::Commit(ref block) = decided_leader {
+            assert_eq!(block.round(), leader_round);
+            assert_eq!(block.author(), expected_leader);
+        } else {
+            panic!("Expected a committed leader")
+        };
+    }
 }
 
 // TODO: Add byzantine variant of tests for indirect/direct commit/skip/undecided decisions

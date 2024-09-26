@@ -53,11 +53,20 @@ use crate::{
 /// ```
 
 pub(crate) fn parse_dag(dag_string: &str) -> IResult<&str, DagBuilder> {
-    let (input, _) = tuple((tag("DAG"), multispace0, char('{')))(dag_string)?;
+    parse_dag_inner(dag_string, None)
+}
 
+pub(crate) fn parse_dag_with_context(dag_string: &str, context: Arc<Context>) -> IResult<&str, DagBuilder> {
+    parse_dag_inner(dag_string, Some(context))
+}
+
+fn parse_dag_inner(dag_string: &str, context: Option<Arc<Context>>) -> IResult<&str, DagBuilder> {
+    let (input, _) = tuple((tag("DAG"), multispace0, char('{')))(dag_string)?;
     let (mut input, num_authors) = parse_genesis(input)?;
 
-    let context = Arc::new(Context::new_for_test(num_authors as usize).0);
+    let context = context.unwrap_or(Arc::new(Context::new_for_test(num_authors as usize).0));
+    assert_eq!(num_authors, context.committee.size() as u32, "Constructed committee has different size from the one declared in the DAG genesis");
+
     let mut dag_builder = DagBuilder::new(context);
 
     // Parse subsequent rounds
