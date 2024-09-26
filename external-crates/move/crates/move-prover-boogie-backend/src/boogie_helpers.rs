@@ -108,11 +108,18 @@ pub fn boogie_function_name(
         FunctionTranslationStyle::Aborts => "$aborts",
         FunctionTranslationStyle::SpecNoAbortCheck => "$spec_no_abort_check",
     };
+    let non_empty_inst = if inst.is_empty() {
+        (0..fun_env.get_type_parameter_count())
+            .map(|i| Type::TypeParameter(i as u16))
+            .collect()
+    } else {
+        inst.to_vec()
+    };
     format!(
         "${}_{}{}{}",
         boogie_module_name(&fun_env.module_env),
         fun_env.get_name().display(fun_env.symbol_pool()),
-        boogie_inst_suffix(fun_env.module_env.env, inst),
+        boogie_inst_suffix(fun_env.module_env.env, &non_empty_inst),
         style_suffix,
     )
 }

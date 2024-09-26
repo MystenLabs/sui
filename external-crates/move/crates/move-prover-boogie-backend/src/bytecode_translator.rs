@@ -540,6 +540,10 @@ impl<'env> BoogieTranslator<'env> {
 
         let fun_target = FunctionTarget::new(builder.fun_env, &data);
         if style == FunctionTranslationStyle::Default
+            && !self
+                .get_verification_target_fun_env(&fun_target.func_env.get_qualified_id())
+                .unwrap()
+                .is_native()
             || style == FunctionTranslationStyle::Asserts
             || style == FunctionTranslationStyle::Aborts
             || style == FunctionTranslationStyle::SpecNoAbortCheck
@@ -559,12 +563,26 @@ impl<'env> BoogieTranslator<'env> {
             mono_analysis::get_info(self.env)
                 .funs
                 .get(&(
-                    fun_target.func_env.get_qualified_id(),
+                    *self
+                        .verification_targets
+                        .get(&fun_target.func_env.get_qualified_id())
+                        .unwrap(),
                     FunctionVariant::Baseline,
                 ))
                 .unwrap_or(&BTreeSet::new())
                 .iter()
                 .for_each(|type_inst| {
+                    // Skip the none instantiation (i.e., each type parameter is
+                    // instantiated to itself as a concrete type). This has the same
+                    // effect as `type_inst: &[]` and is already captured above.
+                    let is_none_inst = type_inst
+                        .iter()
+                        .enumerate()
+                        .all(|(i, t)| matches!(t, Type::TypeParameter(idx) if *idx == i as u16));
+                    if is_none_inst {
+                        return;
+                    }
+
                     FunctionTranslator {
                         parent: self,
                         fun_target: &fun_target,
@@ -574,6 +592,15 @@ impl<'env> BoogieTranslator<'env> {
                     .translate();
                 });
         }
+    }
+
+    fn get_verification_target_fun_env(
+        &self,
+        spec_fun_qid: &QualifiedId<FunId>,
+    ) -> Option<FunctionEnv> {
+        self.verification_targets
+            .get(spec_fun_qid)
+            .map(|qid| self.env.get_function(*qid))
     }
 }
 
