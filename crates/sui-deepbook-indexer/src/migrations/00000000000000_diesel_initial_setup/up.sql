@@ -184,18 +184,17 @@ CREATE TABLE IF NOT EXISTS sui_error_transactions
 
 CREATE TABLE IF NOT EXISTS pools
 (
-    id                          SERIAL       PRIMARY KEY,
-    pool_id                     TEXT         NOT NULL,
+    pool_id                     TEXT         PRIMARY KEY,
     pool_name                   TEXT         NOT NULL,
     base_asset_id               TEXT         NOT NULL,
-    base_asset_decimals         BIGINT       NOT NULL,
+    base_asset_decimals         SMALLINT     NOT NULL,
     base_asset_symbol           TEXT         NOT NULL,
     base_asset_name             TEXT         NOT NULL,
     quote_asset_id              TEXT         NOT NULL,
-    quote_asset_decimals        BIGINT       NOT NULL,
+    quote_asset_decimals        SMALLINT     NOT NULL,
     quote_asset_symbol          TEXT         NOT NULL,
     quote_asset_name            TEXT         NOT NULL,
-    min_size                    BIGINT       NOT NULL,
-    lot_size                    BIGINT       NOT NULL,
-    tick_size                   BIGINT       NOT NULL,
+    min_size                    INTEGER      NOT NULL,
+    lot_size                    INTEGER      NOT NULL,
+    tick_size                   INTEGER      NOT NULL
 );

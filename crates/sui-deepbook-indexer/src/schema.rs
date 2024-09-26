@@ -1,5 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
@@ -92,6 +90,24 @@ diesel::table! {
         target_pool -> Text,
         reference_pool -> Text,
         conversion_rate -> Int8,
+    }
+}
+
+diesel::table! {
+    pools (pool_id) {
+        pool_id -> Text,
+        pool_name -> Text,
+        base_asset_id -> Text,
+        base_asset_decimals -> Int2,
+        base_asset_symbol -> Text,
+        base_asset_name -> Text,
+        quote_asset_id -> Text,
+        quote_asset_decimals -> Int2,
+        quote_asset_symbol -> Text,
+        quote_asset_name -> Text,
+        min_size -> Int4,
+        lot_size -> Int4,
+        tick_size -> Int4,
     }
 }
 
@@ -202,6 +218,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     order_fills,
     order_updates,
     pool_prices,
+    pools,
     progress_store,
     proposals,
     rebates,
