@@ -504,7 +504,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                     }));
                 }
                 _ => {
-                    warn!("Unexpected event {bridge_event}.")
+                    warn!("Unexpected event {bridge_event:?}.")
                 }
             },
             EthBridgeEvent::EthBridgeCommitteeEvents(bridge_event) => match &bridge_event {
@@ -543,7 +543,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                     }));
                 }
                 _ => {
-                    warn!("Unexpected event {bridge_event}.")
+                    warn!("Unexpected event {bridge_event:?}.")
                 }
             },
             EthBridgeEvent::EthBridgeLimiterEvents(bridge_event) => match &bridge_event {
@@ -582,7 +582,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                     }));
                 }
                 _ => {
-                    warn!("Unexpected event {bridge_event}.")
+                    warn!("Unexpected event {bridge_event:?}.")
                 }
             },
             EthBridgeEvent::EthBridgeConfigEvents(bridge_event) => match &bridge_event {
@@ -638,11 +638,11 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                     }));
                 }
                 _ => {
-                    warn!("Unexpected event {bridge_event}.")
+                    warn!("Unexpected event {bridge_event:?}.")
                 }
             },
             _ => {
-                warn!("Unexpected event {bridge_event}.")
+                warn!("Unexpected event {bridge_event:?}.")
             }
         };
         Ok(processed_txn_data)
