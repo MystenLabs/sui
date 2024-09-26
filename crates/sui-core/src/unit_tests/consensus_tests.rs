@@ -6,11 +6,17 @@ use std::collections::HashSet;
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
+use crate::consensus_adapter::BlockStatus;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+<<<<<<< HEAD
+=======
+use parking_lot::Mutex;
+use sui_network::tonic;
+>>>>>>> b33bb8f465 ([test] refactor tests so submit result status can be used.)
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
@@ -182,6 +188,7 @@ pub fn make_consensus_adapter_for_test(
     state: Arc<AuthorityState>,
     process_via_checkpoint: HashSet<TransactionDigest>,
     execute: bool,
+    mock_submit_responses: Vec<SubmitResponse>,
 ) -> Arc<ConsensusAdapter> {
     let metrics = ConsensusAdapterMetrics::new_test();
 
@@ -190,6 +197,7 @@ pub fn make_consensus_adapter_for_test(
         state: Arc<AuthorityState>,
         process_via_checkpoint: HashSet<TransactionDigest>,
         execute: bool,
+        mock_submit_responses: Arc<Mutex<Vec<SubmitResponse>>>,
     }
 
     #[async_trait::async_trait]
@@ -259,7 +267,12 @@ pub fn make_consensus_adapter_for_test(
                     .transaction_manager()
                     .enqueue(transactions, epoch_store);
             }
-            Ok(SubmitResponse::NoStatusWaiter)
+
+            assert!(
+                !self.mock_submit_responses.lock().is_empty(),
+                "No mock submit responses left"
+            );
+            Ok(self.mock_submit_responses.lock().remove(0))
         }
     }
     let epoch_store = state.epoch_store_for_testing();
@@ -269,6 +282,7 @@ pub fn make_consensus_adapter_for_test(
             state: state.clone(),
             process_via_checkpoint,
             execute,
+            mock_submit_responses: Arc::new(Mutex::new(mock_submit_responses)),
         }),
         state.name,
         Arc::new(ConnectionMonitorStatusForTests {}),
@@ -298,7 +312,13 @@ async fn submit_transaction_to_consensus_adapter() {
     let epoch_store = state.epoch_store_for_testing();
 
     // Make a new consensus adapter instance.
-    let adapter = make_consensus_adapter_for_test(state.clone(), HashSet::new(), false);
+    let submit_responses = vec![
+        SubmitResponse::NoStatusWaiter(BlockStatus::GarbageCollected),
+        SubmitResponse::NoStatusWaiter(BlockStatus::GarbageCollected),
+        SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced),
+    ];
+    let adapter =
+        make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, submit_responses);
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
@@ -334,7 +354,8 @@ async fn submit_multiple_transactions_to_consensus_adapter() {
     process_via_checkpoint.insert(*certificates[1].digest());
 
     // Make a new consensus adapter instance.
-    let adapter = make_consensus_adapter_for_test(state.clone(), process_via_checkpoint, false);
+    let adapter =
+        make_consensus_adapter_for_test(state.clone(), process_via_checkpoint, false, vec![SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)]);
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
@@ -365,7 +386,7 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
     let epoch_store = state.epoch_store_for_testing();
 
     // Make a new consensus adapter instance.
-    let adapter = make_consensus_adapter_for_test(state, HashSet::new(), false);
+    let adapter = make_consensus_adapter_for_test(state, HashSet::new(), false, vec![SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)]);
 
     let checkpoint_summary = CheckpointSummary::new(
         &ProtocolConfig::get_for_max_version_UNSAFE(),
