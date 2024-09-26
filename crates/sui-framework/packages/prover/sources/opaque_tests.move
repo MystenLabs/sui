@@ -63,6 +63,23 @@ fun size_spec<T>(r: &Range<T>): u64 {
     result
 }
 
+fun add_size<T, U>(r1: &Range<T>, r2: &Range<U>): u64 {
+    size(r1) + size(r2)
+}
+
+fun add_size_spec<T, U>(r1: &Range<T>, r2: &Range<U>): u64 {
+    requires(r1.x <= r1.y);
+    requires(r2.x <= r2.y);
+
+    asserts(((r1.y - r1.x) as u128) + ((r2.y - r2.x) as u128) <= max_u64() as u128);
+
+    let result0 = add_size(r1, r2);
+
+    ensures(result0 == (r1.y - r1.x) + (r2.y - r2.x));
+
+    result0
+}
+
 fun scale<T>(r: &mut Range<T>, k: u64) {
     r.x = r.x * k;
     r.y = r.y * k;
