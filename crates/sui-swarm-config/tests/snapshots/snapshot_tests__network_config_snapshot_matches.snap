@@ -107,8 +107,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -118,8 +118,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -269,8 +269,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -280,8 +280,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -431,8 +431,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -442,8 +442,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -593,8 +593,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -604,8 +604,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -755,8 +755,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -766,8 +766,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -917,8 +917,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -928,8 +928,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
@@ -1079,8 +1079,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Testnet:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
@@ -1090,8 +1090,8 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
-        - Twitch
         - Threedos
+        - Twitch
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
