@@ -16,7 +16,7 @@ npm i @mysten/bcs
 ## Quickstart
 
 ```ts
-import { bcs } from '@mysten/bcs';
+import { bcs, fromHEX, toHEX } from '@mysten/bcs';
 
 // define UID as a 32-byte array, then add a transform to/from hex strings
 const UID = bcs.fixedArray(32, bcs.u8()).transform({
@@ -114,9 +114,9 @@ import { bcs } from '@mysten/bcs';
 const intList = bcs.vector(bcs.u8()).serialize([1, 2, 3, 4, 5]).toBytes();
 const stringList = bcs.vector(bcs.string()).serialize(['a', 'b', 'c']).toBytes();
 
-// Arrays
-const intArray = bcs.array(4, bcs.u8()).serialize([1, 2, 3, 4]).toBytes();
-const stringArray = bcs.array(3, bcs.string()).serialize(['a', 'b', 'c']).toBytes();
+// Fixed length Arrays
+const intArray = bcs.fixedArray(4, bcs.u8()).serialize([1, 2, 3, 4]).toBytes();
+const stringArray = bcs.fixedArray(3, bcs.string()).serialize(['a', 'b', 'c']).toBytes();
 
 // Option
 const option = bcs.option(bcs.string()).serialize('some value').toBytes();
@@ -127,7 +127,7 @@ const MyEnum = bcs.enum('MyEnum', {
 	NoType: null,
 	Int: bcs.u8(),
 	String: bcs.string(),
-	Array: bcs.array(3, bcs.u8()),
+	Array: bcs.fixedArray(3, bcs.u8()),
 });
 
 const noTypeEnum = MyEnum.serialize({ NoType: null }).toBytes();
@@ -163,8 +163,8 @@ const map = bcs
 const parsedIntList = bcs.vector(bcs.u8()).parse(intList);
 const parsedStringList = bcs.vector(bcs.string()).parse(stringList);
 
-// Arrays
-const parsedIntArray = bcs.array(4, bcs.u8()).parse(intArray);
+// Fixed length Arrays
+const parsedIntArray = bcs.fixedArray(4, bcs.u8()).parse(intArray);
 
 // Option
 const parsedOption = bcs.option(bcs.string()).parse(option);
@@ -242,6 +242,8 @@ represent an address as a hex string, but the BCS serialization format for addre
 array. To handle this, you can use the `transform` API to map between the two formats:
 
 ```ts
+import { bcs, toHEX } from '@mysten/bcs';
+
 const Address = bcs.bytes(32).transform({
 	// To change the input type, you need to provide a type definition for the input
 	input: (val: string) => fromHEX(val),

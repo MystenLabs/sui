@@ -13,36 +13,36 @@ import { setup, TestToolbox } from './utils/setup';
 let toolbox: TestToolbox;
 let executor: ParallelTransactionExecutor;
 
-beforeAll(async () => {
-	toolbox = await setup();
+describe('ParallelTransactionExecutor', { retry: 3 }, () => {
+	beforeAll(async () => {
+		toolbox = await setup();
 
-	// Creates bear package
-	await toolbox.mintNft();
+		// Creates bear package
+		await toolbox.mintNft();
 
-	executor = new ParallelTransactionExecutor({
-		client: toolbox.client,
-		signer: toolbox.keypair,
-		maxPoolSize: 3,
-		coinBatchSize: 2,
+		executor = new ParallelTransactionExecutor({
+			client: toolbox.client,
+			signer: toolbox.keypair,
+			maxPoolSize: 3,
+			coinBatchSize: 2,
+		});
+
+		vi.spyOn(toolbox.client, 'multiGetObjects');
+		vi.spyOn(toolbox.client, 'getCoins');
+		vi.spyOn(toolbox.client, 'executeTransactionBlock');
 	});
 
-	vi.spyOn(toolbox.client, 'multiGetObjects');
-	vi.spyOn(toolbox.client, 'getCoins');
-	vi.spyOn(toolbox.client, 'executeTransactionBlock');
-});
+	afterEach(async () => {
+		await executor.waitForLastTransaction();
+	});
 
-afterEach(async () => {
-	await executor.waitForLastTransaction();
-});
-
-afterAll(() => {
-	vi.restoreAllMocks();
-});
-
-describe('ParallelTransactionExecutor', { retry: 3 }, () => {
 	beforeEach(async () => {
 		await executor.resetCache();
 		vi.clearAllMocks();
+	});
+
+	afterAll(() => {
+		vi.restoreAllMocks();
 	});
 
 	it('Executes multiple transactions in parallel', async () => {
