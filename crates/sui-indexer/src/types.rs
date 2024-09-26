@@ -12,7 +12,7 @@ use sui_types::base_types::{ObjectDigest, SequenceNumber};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionDigest;
-use sui_types::dynamic_field::DynamicFieldInfo;
+use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
 use sui_types::event::SystemEpochInfoEvent;
 use sui_types::messages_checkpoint::{
@@ -347,19 +347,19 @@ pub enum DynamicFieldKind {
 pub struct IndexedObject {
     pub checkpoint_sequence_number: CheckpointSequenceNumber,
     pub object: Object,
-    pub df_info: Option<DynamicFieldInfo>,
+    pub df_kind: Option<DynamicFieldType>,
 }
 
 impl IndexedObject {
     pub fn from_object(
         checkpoint_sequence_number: CheckpointSequenceNumber,
         object: Object,
-        df_info: Option<DynamicFieldInfo>,
+        df_kind: Option<DynamicFieldType>,
     ) -> Self {
         Self {
             checkpoint_sequence_number,
             object,
-            df_info,
+            df_kind,
         }
     }
 }
