@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.8.0
+
+### Minor Changes
+
+- 0d17307: Update deepbook sdk
+
 ## 0.7.1
 
 ### Patch Changes

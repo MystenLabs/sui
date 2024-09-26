@@ -1,5 +1,12 @@
 # @mysten/dapp-kit
 
+## 0.14.23
+
+### Patch Changes
+
+- 640b757: Add `getSuiClientQuery` to get the `queryOptions` config for usage with the `QueryClient`
+  outside of React hooks. Added `useSuiClientSuspenseQuery` to support suspense-based data fetching.
+
 ## 0.14.22
 
 ### Patch Changes
