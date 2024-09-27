@@ -7,6 +7,7 @@ use super::{
 use crate::discovery::TrustedPeerChangeEvent;
 use anemo::codegen::InboundRequestLayer;
 use anemo_tower::rate_limit;
+use fastcrypto::traits::KeyPair;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -165,6 +166,7 @@ impl UnstartedDiscovery {
     }
 
     pub fn start(self, network: anemo::Network, keypair: NetworkKeyPair) -> Handle {
+        assert_eq!(network.peer_id().0, *keypair.public().0.as_bytes());
         let (event_loop, handle) = self.build(network, keypair);
         tokio::spawn(event_loop.start());
 
