@@ -785,6 +785,8 @@ impl ConsensusAdapter {
             // We enter this branch when in select above await_submit completed and processed_waiter is pending
             // This means it is time for us to submit transaction to consensus
             let submit_inner = async {
+                const RETRY_DELAY_STEP: Duration = Duration::from_secs(1);
+
                 loop {
                     // Submit the transaction to consensus and return the submit result with a status waiter
                     let submit_result = self
@@ -820,12 +822,14 @@ impl ConsensusAdapter {
                             debug!(
                                 "Transaction {transaction_keys:?} was garbage collected before being sequenced. Will be retried."
                             );
+                            time::sleep(RETRY_DELAY_STEP).await;
                             continue;
                         }
                         Err(_err) => {
                             warn!(
                                 "Error while waiting for status from consensus for transactions {transaction_keys:?}. Will be retried."
                             );
+                            time::sleep(RETRY_DELAY_STEP).await;
                             continue;
                         }
                     }
