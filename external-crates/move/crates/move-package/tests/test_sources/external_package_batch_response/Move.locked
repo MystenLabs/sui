@@ -12,6 +12,7 @@ dependencies = [
 [[move.package]]
 id = "bar"
 source = { local = "deps_only/bar" }
+version = "5"
 
 [[move.package]]
 id = "foo"

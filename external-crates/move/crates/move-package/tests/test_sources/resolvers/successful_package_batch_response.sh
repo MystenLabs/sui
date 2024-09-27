@@ -40,9 +40,10 @@ dependencies = [
 
 [[move.package]]
 id = "bar"
+version = "5"
 source = { local = "./deps_only/bar" }
 EOF
 )
 
 # Echo the two separate graph contents twice with a null separator in between
-echo "$foo\0$bar"
+printf "$foo\0$bar"
