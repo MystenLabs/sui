@@ -475,7 +475,6 @@ impl ValidatorService {
     async fn handle_transaction_v2(
         &self,
         request: tonic::Request<HandleTransactionRequestV2>,
-        // TODO: Do we want to make a new response type for this?
     ) -> WrappedServiceResponse<HandleTransactionResponseV2> {
         let Self {
             state,
@@ -821,7 +820,7 @@ impl ValidatorService {
                             .await?
                     }
                     ConsensusTransactionKind::UserTransaction(tx) => {
-                        self.state.await_transaction(*tx.digest()).await?
+                        self.state.await_transaction_effects(*tx.digest()).await?
                     }
                     _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction or UserTransaction"),
                 };

@@ -1015,7 +1015,7 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
     ) -> SuiResult<Option<(SenderSignedData, TransactionStatus)>> {
         let tx_digest = *transaction.digest();
-        debug!("handle_transaction");
+        debug!("handle_transaction_v2");
 
         // Ensure an idempotent answer.
         let tx_status = self.get_transaction_status(&tx_digest, epoch_store)?;
@@ -1212,7 +1212,7 @@ impl AuthorityState {
     /// Awaits the effects of executing a user transaction.
     ///
     /// Relies on consensus to enqueue the transaction for execution.
-    pub async fn await_transaction(
+    pub async fn await_transaction_effects(
         &self,
         digest: TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
