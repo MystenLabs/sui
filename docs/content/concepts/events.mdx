@@ -75,7 +75,7 @@ module examples::donuts_with_events {
 
         // Emit the event using future object's ID.
         event::emit(DonutBought { id: object::uid_to_inner(&id) });
-       Donut { id }
+        Donut { id }
     }
 
     /// Consume donut and get nothing...

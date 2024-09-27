@@ -10,11 +10,7 @@ use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
-use std::{
-    collections::BTreeMap,
-    path::Path,
-    sync::{Arc, RwLock},
-};
+use std::{cell::RefCell, collections::BTreeMap, path::Path, sync::Arc};
 use sui_move_build::decorate_warnings;
 use sui_move_natives::test_scenario::InMemoryTestStore;
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -58,8 +54,10 @@ impl Test {
     }
 }
 
-static TEST_STORE_INNER: Lazy<RwLock<InMemoryStorage>> =
-    Lazy::new(|| RwLock::new(InMemoryStorage::default()));
+// Create a separate test store per-thread.
+thread_local! {
+    static TEST_STORE_INNER: RefCell<InMemoryStorage> = RefCell::new(InMemoryStorage::default());
+}
 
 static TEST_STORE: Lazy<InMemoryTestStore> = Lazy::new(|| InMemoryTestStore(&TEST_STORE_INNER));
 

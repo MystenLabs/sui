@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use move_core_types::identifier::IdentStr;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
@@ -24,7 +23,7 @@ struct State {
 
 #[async_trait::async_trait]
 impl Worker for MoveCallHandler {
-    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
@@ -80,7 +79,7 @@ impl MoveCallHandler {
         checkpoint: u64,
         timestamp_ms: u64,
         transaction_digest: String,
-        move_calls: &[(&ObjectID, &IdentStr, &IdentStr)],
+        move_calls: &[(&ObjectID, &str, &str)],
         state: &mut State,
     ) {
         for (package, module, function) in move_calls.iter() {

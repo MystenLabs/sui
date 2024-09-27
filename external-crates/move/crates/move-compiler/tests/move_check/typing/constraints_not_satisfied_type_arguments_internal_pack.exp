@@ -40,11 +40,3 @@ error[E05001]: ability constraint not satisfied
   │         Cannot ignore values without the 'drop' ability. The value must be used
   │         The type '0x8675309::M::Box<0x8675309::M::R>' does not have the ability 'drop'
 
-warning[W09005]: dead or unreachable code
-  ┌─ tests/move_check/typing/constraints_not_satisfied_type_arguments_internal_pack.move:9:9
-  │
-9 │         Box<R>{ f: R{} };
-  │         ^^^^^^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
-  │
-  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

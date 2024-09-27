@@ -93,5 +93,4 @@ sui-test-transaction-builder.workspace = true
 sui-move-build.workspace = true
 
 [features]
-default = []
-pg_integration = []
+staging = []

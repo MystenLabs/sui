@@ -12,7 +12,7 @@ use crate::{
     editions::FeatureGate,
     expansion::{
         ast::{self as E, AbilitySet, Ellipsis, ModuleIdent, Mutability, Visibility},
-        translate::is_valid_datatype_or_constant_name as is_constant_name,
+        name_validation::is_valid_datatype_or_constant_name as is_constant_name,
     },
     ice,
     naming::{

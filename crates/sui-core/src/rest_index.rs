@@ -452,7 +452,9 @@ impl IndexStoreTables {
                         }
                         Owner::ObjectOwner(parent) => {
                             if let Some(field_info) =
-                                try_create_dynamic_field_info(object, resolver)?
+                                try_create_dynamic_field_info(object, resolver)
+                                    .ok()
+                                    .flatten()
                             {
                                 let field_key = DynamicFieldKey::new(*parent, object.id());
 

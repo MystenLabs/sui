@@ -16,8 +16,7 @@ use mysten_metrics::{
     monitored_scope,
 };
 use parking_lot::{Mutex, RwLock};
-#[cfg(not(test))]
-use rand::{prelude::SliceRandom, rngs::ThreadRng};
+use rand::{prelude::SliceRandom as _, rngs::ThreadRng};
 use sui_macros::fail_point_async;
 use tap::TapFallible;
 use tokio::{
@@ -612,11 +611,13 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             if let Err(e) = block_verifier.verify(&signed_block) {
                 // TODO: we might want to use a different metric to track the invalid "served" blocks
                 // from the invalid "proposed" ones.
+                let hostname = context.committee.authority(peer_index).hostname.clone();
+
                 context
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[&signed_block.author().to_string(), "synchronizer"])
+                    .with_label_values(&[&hostname, "synchronizer", e.clone().name()])
                     .inc();
                 warn!("Invalid block received from {}: {}", peer_index, e);
                 return Err(e);
@@ -721,11 +722,16 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                     for serialized_block in blocks {
                                         let signed_block = bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
                                         block_verifier.verify(&signed_block).tap_err(|err|{
+                                            let hostname = if context.committee.is_valid_index(signed_block.author()) {
+                                                context.committee.authority(signed_block.author()).hostname.clone()
+                                            } else {
+                                                signed_block.author().to_string()
+                                            };
                                             context
                                                 .metrics
                                                 .node_metrics
                                                 .invalid_blocks
-                                                .with_label_values(&[&signed_block.author().to_string(), "synchronizer_own_block"])
+                                                .with_label_values(&[&hostname, "synchronizer_own_block", err.clone().name()])
                                                 .inc();
                                             warn!("Invalid block received from {}: {}", authority_index, err);
                                         })?;
@@ -862,6 +868,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
                 // Fetch blocks from peers
                 let results = Self::fetch_blocks_from_authorities(context.clone(), blocks_to_fetch.clone(), network_client, missing_blocks, core_dispatcher.clone(), dag_state).await;
+                context.metrics.node_metrics.fetch_blocks_scheduler_inflight.dec();
                 if results.is_empty() {
                     warn!("No results returned while requesting missing blocks");
                     return;
@@ -877,7 +884,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     }
                 }
 
-                context.metrics.node_metrics.fetch_blocks_scheduler_inflight.dec();
                 debug!("Total blocks requested to fetch: {}, total fetched: {}", total_requested, total_fetched);
             }));
         Ok(())
@@ -913,8 +919,22 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             .into_iter()
             .take(MAX_PEERS * context.parameters.max_blocks_per_fetch)
             .collect::<Vec<_>>();
+        let mut missing_blocks_per_authority = vec![0; context.committee.size()];
+        for block in &missing_blocks {
+            missing_blocks_per_authority[block.author] += 1;
+        }
+        for (missing, (_, authority)) in missing_blocks_per_authority
+            .into_iter()
+            .zip(context.committee.authorities())
+        {
+            context
+                .metrics
+                .node_metrics
+                .synchronizer_missing_blocks_by_authority
+                .with_label_values(&[&authority.hostname])
+                .inc_by(missing as u64);
+        }
 
-        #[allow(unused_mut)]
         let mut peers = context
             .committee
             .authorities()
@@ -922,11 +942,9 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             .collect::<Vec<_>>();
 
         // TODO: probably inject the RNG to allow unit testing - this is a work around for now.
-        cfg_if::cfg_if! {
-            if #[cfg(not(test))] {
-                // Shuffle the peers
-                peers.shuffle(&mut ThreadRng::default());
-            }
+        if cfg!(not(test)) {
+            // Shuffle the peers
+            peers.shuffle(&mut ThreadRng::default());
         }
 
         let mut peers = peers.into_iter();
@@ -1169,6 +1187,14 @@ mod tests {
             }
 
             Ok(serialised)
+        }
+
+        async fn get_latest_rounds(
+            &self,
+            _peer: AuthorityIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Round>> {
+            unimplemented!("Unimplemented")
         }
     }
 

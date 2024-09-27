@@ -217,6 +217,7 @@ impl ValidationMode {
     /// modules from the root package will be expected at address `0x0` and this address will be
     /// substituted with the specified address.
     fn local(&self, package: &CompiledPackage) -> Result<LocalModules, Error> {
+        let sui_package = package;
         let package = &package.package;
         let root_package = package.compiled_package_info.package_name;
         let mut map = LocalModules::new();
@@ -242,6 +243,19 @@ impl ValidationMode {
                 }
 
                 map.insert((address, module), (package, m.module.clone()));
+            }
+
+            // Include bytecode dependencies.
+            for (package, module) in sui_package.bytecode_deps.iter() {
+                let address = *module.address();
+                if address == AccountAddress::ZERO {
+                    continue;
+                }
+
+                map.insert(
+                    (address, Symbol::from(module.name().as_str())),
+                    (*package, module.clone()),
+                );
             }
         }
 

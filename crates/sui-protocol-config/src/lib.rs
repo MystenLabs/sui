@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 58;
+const MAX_PROTOCOL_VERSION: u64 = 61;
 
 // Record history of protocol version allocations here:
 //
@@ -177,6 +177,10 @@ const MAX_PROTOCOL_VERSION: u64 = 58;
 // Version 58: Optimize boolean binops
 //             Finalize bridge committee on mainnet.
 //             Switch to distributed vote scoring in consensus in devnet
+// Version 59: Enable round prober in consensus.
+// Version 60: Validation of public inputs for Groth16 verification.
+//             Enable configuration of maximum number of type nodes in a type layout.
+// Version 61: Switch to distributed vote scoring in consensus in testnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -523,6 +527,14 @@ struct FeatureFlags {
     // Use distributed vote leader scoring strategy in consensus.
     #[serde(skip_serializing_if = "is_false")]
     consensus_distributed_vote_scoring_strategy: bool,
+
+    // Probe rounds received by peers from every authority.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_round_prober: bool,
+
+    // Validate identifier inputs separately
+    #[serde(skip_serializing_if = "is_false")]
+    validate_identifier_inputs: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -859,6 +871,9 @@ pub struct ProtocolConfig {
     // than a per-byte cost. checking an object lock should not require loading an
     // entire object, just consulting an ID -> tx digest map
     obj_access_cost_verify_per_byte: Option<u64>,
+
+    // Maximal nodes which are allowed when converting to a type layout.
+    max_type_to_layout_nodes: Option<u64>,
 
     /// === Gas version. gas model ===
 
@@ -1235,6 +1250,10 @@ pub struct ProtocolConfig {
     /// This config plays the same role as `max_accumulated_txn_cost_per_object_in_narwhal_commit`
     /// but for mysticeti commits due to that mysticeti has higher commit rate.
     max_accumulated_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
+
+    /// Configures the garbage collection depth for consensus. When is unset or `0` then the garbage collection
+    /// is disabled.
+    consensus_gc_depth: Option<u32>,
 }
 
 // feature flags
@@ -1574,6 +1593,17 @@ impl ProtocolConfig {
         self.feature_flags
             .consensus_distributed_vote_scoring_strategy
     }
+
+    pub fn consensus_round_prober(&self) -> bool {
+        self.feature_flags.consensus_round_prober
+    }
+
+    pub fn validate_identifier_inputs(&self) -> bool {
+        self.feature_flags.validate_identifier_inputs
+    }
+    pub fn gc_depth(&self) -> u32 {
+        self.consensus_gc_depth.unwrap_or(0)
+    }
 }
 
 #[cfg(not(msim))]
@@ -1765,6 +1795,7 @@ impl ProtocolConfig {
             max_num_transferred_move_object_ids_system_tx: Some(2048 * 16),
             max_event_emit_size: Some(250 * 1024),
             max_move_vector_len: Some(256 * 1024),
+            max_type_to_layout_nodes: None,
 
             max_back_edges_per_function: Some(10_000),
             max_back_edges_per_module: Some(10_000),
@@ -2086,6 +2117,8 @@ impl ProtocolConfig {
             bridge_should_try_to_finalize_committee: None,
 
             max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
+
+            consensus_gc_depth: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2742,6 +2775,21 @@ impl ProtocolConfig {
                             .consensus_distributed_vote_scoring_strategy = true;
                     }
                 }
+                59 => {
+                    // Enable round prober in consensus.
+                    cfg.feature_flags.consensus_round_prober = true;
+                }
+                60 => {
+                    cfg.max_type_to_layout_nodes = Some(512);
+                    cfg.feature_flags.validate_identifier_inputs = true;
+                }
+                61 => {
+                    if chain != Chain::Mainnet {
+                        // Enable distributed vote scoring for testnet
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2902,6 +2950,14 @@ impl ProtocolConfig {
         self.feature_flags
             .consensus_distributed_vote_scoring_strategy = val;
     }
+
+    pub fn set_consensus_round_prober_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_round_prober = val;
+    }
+
+    pub fn set_gc_depth_for_testing(&mut self, val: u32) {
+        self.consensus_gc_depth = Some(val);
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
@@ -3051,6 +3107,17 @@ mod test {
     }
 
     #[test]
+    #[should_panic(expected = "unsupported version")]
+    fn max_version_test() {
+        // When this does not panic, version higher than MAX_PROTOCOL_VERSION exists.
+        // To fix, bump MAX_PROTOCOL_VERSION or disable this check for the version.
+        let _ = ProtocolConfig::get_for_version_impl(
+            ProtocolVersion::new(MAX_PROTOCOL_VERSION + 1),
+            Chain::Unknown,
+        );
+    }
+
+    #[test]
     fn lookup_by_string_test() {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
@@ -3097,11 +3164,10 @@ mod test {
             .feature_flags
             .lookup_attr("some random string".to_owned())
             .is_none());
-        assert!(prot
+        assert!(!prot
             .feature_flags
             .attr_map()
-            .get("some random string")
-            .is_none());
+            .contains_key("some random string"));
 
         // Was false in v1
         assert!(

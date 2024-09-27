@@ -39,6 +39,7 @@ diesel::table! {
         txn_sender -> Bytea,
         gas_usage -> Int8,
         data_source -> Text,
+        is_finalized -> Bool,
     }
 }
 
@@ -54,6 +55,7 @@ diesel::table! {
         recipient_address -> Bytea,
         token_id -> Int4,
         amount -> Int8,
+        is_finalized -> Bool,
     }
 }
 

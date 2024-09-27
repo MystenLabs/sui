@@ -51,6 +51,7 @@ pub struct TokenTransfer {
     pub txn_sender: Vec<u8>,
     pub gas_usage: i64,
     pub data_source: String,
+    pub is_finalized: bool,
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -66,6 +67,7 @@ pub struct TokenTransferData {
     pub recipient_address: Vec<u8>,
     pub token_id: i32,
     pub amount: i64,
+    pub is_finalized: bool,
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]

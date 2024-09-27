@@ -8,13 +8,15 @@ use async_trait::async_trait;
 use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
+use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
+use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use crate::types::{
     EventIndex, IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
 };
 
 #[allow(clippy::large_enum_variant)]
-pub enum ObjectChangeToCommit {
+pub enum ObjectsToCommit {
     MutatedObject(StoredObject),
     DeletedObject(StoredDeletedObject),
 }
@@ -53,6 +55,11 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError>;
 
+    async fn persist_object_versions(
+        &self,
+        object_versions: Vec<StoredObjectVersion>,
+    ) -> Result<(), IndexerError>;
+
     async fn persist_objects_snapshot(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
@@ -61,6 +68,11 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
     async fn persist_checkpoints(
         &self,
         checkpoints: Vec<IndexedCheckpoint>,
+    ) -> Result<(), IndexerError>;
+
+    async fn persist_chain_identifier(
+        &self,
+        checkpoint_digest: Vec<u8>,
     ) -> Result<(), IndexerError>;
 
     async fn persist_transactions(
@@ -95,4 +107,11 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
     ) -> Result<u64, IndexerError>;
 
     async fn upload_display(&self, epoch: u64) -> Result<(), IndexerError>;
+
+    async fn restore_display(&self, bytes: bytes::Bytes) -> Result<(), IndexerError>;
+
+    async fn persist_raw_checkpoints(
+        &self,
+        checkpoints: Vec<StoredRawCheckpoint>,
+    ) -> Result<(), IndexerError>;
 }

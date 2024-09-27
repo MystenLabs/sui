@@ -3,7 +3,7 @@ processed 2 tasks
 task 0, lines 1-24:
 //# print-bytecode
 // Move bytecode v7
-module 1.MonomorphicEnums {
+module 6.MonomorphicEnums {
 
 
 enum EnumWithTwoVariants<Ty0> {
@@ -39,10 +39,10 @@ Jump tables:
 
 task 1, lines 26-49:
 //# publish
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::MonomorphicEnums'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::MonomorphicEnums'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
-    location: 0x1::MonomorphicEnums,
+    location: 0x6::MonomorphicEnums,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }

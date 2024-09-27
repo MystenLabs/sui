@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { resolve } from 'path';
-import { fromHEX, toB64 } from '@mysten/bcs';
+import { fromHex, toBase64 } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../src/bcs';
@@ -57,7 +57,7 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					Pure: {
-						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+						bytes: toBase64(fromHex(receiver.toSuiAddress())),
 					},
 				},
 			],
@@ -107,12 +107,12 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					Pure: {
-						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+						bytes: toBase64(fromHex(receiver.toSuiAddress())),
 					},
 				},
 				{
 					Pure: {
-						bytes: toB64(bcs.u64().serialize(12345).toBytes()),
+						bytes: toBase64(bcs.u64().serialize(12345).toBytes()),
 					},
 				},
 			],
@@ -205,7 +205,7 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					Pure: {
-						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+						bytes: toBase64(fromHex(receiver.toSuiAddress())),
 					},
 				},
 			],
@@ -255,7 +255,7 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					Pure: {
-						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+						bytes: toBase64(fromHex(receiver.toSuiAddress())),
 					},
 				},
 				{
@@ -265,7 +265,7 @@ describe('coinWithBalance', () => {
 				},
 				{
 					Pure: {
-						bytes: toB64(bcs.u64().serialize(1).toBytes()),
+						bytes: toBase64(bcs.u64().serialize(1).toBytes()),
 					},
 				},
 			],
@@ -355,7 +355,7 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					Pure: {
-						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+						bytes: toBase64(fromHex(receiver.toSuiAddress())),
 					},
 				},
 			],
@@ -444,7 +444,7 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					Pure: {
-						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+						bytes: toBase64(fromHex(receiver.toSuiAddress())),
 					},
 				},
 				{
@@ -454,22 +454,22 @@ describe('coinWithBalance', () => {
 				},
 				{
 					Pure: {
-						bytes: toB64(bcs.u64().serialize(1).toBytes()),
+						bytes: toBase64(bcs.u64().serialize(1).toBytes()),
 					},
 				},
 				{
 					Pure: {
-						bytes: toB64(bcs.u64().serialize(2).toBytes()),
+						bytes: toBase64(bcs.u64().serialize(2).toBytes()),
 					},
 				},
 				{
 					Pure: {
-						bytes: toB64(bcs.u64().serialize(3).toBytes()),
+						bytes: toBase64(bcs.u64().serialize(3).toBytes()),
 					},
 				},
 				{
 					Pure: {
-						bytes: toB64(bcs.u64().serialize(4).toBytes()),
+						bytes: toBase64(bcs.u64().serialize(4).toBytes()),
 					},
 				},
 			],

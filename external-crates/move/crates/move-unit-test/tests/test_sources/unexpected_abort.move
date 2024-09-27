@@ -1,17 +1,17 @@
-module 0x1::M {
+module 0x6::M {
     #[test]
     public fun unexpected_abort() {
         abort 0
     }
 
     #[test]
-    #[expected_failure(abort_code=1, location=0x1::M)]
+    #[expected_failure(abort_code=1, location=0x6::M)]
     public fun wrong_abort_code() {
         abort 0
     }
 
     #[test]
-    #[expected_failure(abort_code=0, location=0x1::M)]
+    #[expected_failure(abort_code=0, location=0x6::M)]
     public fun correct_abort_code() {
         abort 0
     }

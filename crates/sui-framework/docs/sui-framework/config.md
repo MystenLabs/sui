@@ -406,7 +406,7 @@ title: Module `0x2::config`
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
 &gt;(
-    <a href="../sui-framework/config.md#0x2_config">config</a>: & <a href="../sui-framework/config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
+    <a href="../sui-framework/config.md#0x2_config">config</a>: &<a href="../sui-framework/config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
     name: Name,
     ctx: &TxContext,
 ): bool {

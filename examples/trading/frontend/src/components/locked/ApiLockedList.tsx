@@ -40,6 +40,9 @@ export function LockedList({
       initialPageParam: null,
       queryKey: [QueryKey.Locked, params, lockedId],
       queryFn: async ({ pageParam }) => {
+        /*
+         * Fetch the locked objects from the API.
+         */
         const data = await (
           await fetch(
             CONSTANTS.apiEndpoint +
@@ -52,6 +55,10 @@ export function LockedList({
           )
         ).json();
 
+        /*
+         * Use the objectIds from the API to fetch the on-chain state. This is done to ensure that
+         * the ownership of each object is up-to-date.
+         */
         const objects = await suiClient.multiGetObjects({
           ids: data.data.map((x: ApiLockedObject) => x.objectId),
           options: {
@@ -70,6 +77,9 @@ export function LockedList({
       enabled: !lockedId,
     });
 
+  /**
+   * Returns all `Locked` objects or the one that matches the search query if it exists.
+   */
   const suiObjects = () => {
     if (lockedId) {
       if (
@@ -94,13 +104,12 @@ export function LockedList({
   return (
     <>
       {enableSearch && (
-        <TextField.Root className="mt-3">
-          <TextField.Input
-            placeholder="Search by locked id"
-            value={lockedId}
-            onChange={(e) => setLockedId(e.target.value)}
-          />
-        </TextField.Root>
+        <TextField.Root
+          className="mt-3"
+          placeholder="Search by locked id"
+          value={lockedId}
+          onChange={(e) => setLockedId(e.target.value)}
+        ></TextField.Root>
       )}
       <InfiniteScrollArea
         loadMore={() => fetchNextPage()}

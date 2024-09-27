@@ -274,6 +274,14 @@ mod test {
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }
+
+        async fn get_latest_rounds(
+            &self,
+            _peer: AuthorityIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Round>> {
+            unimplemented!("Unimplemented")
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -308,7 +316,7 @@ mod test {
             if index == context.own_index {
                 continue;
             }
-            assert!(blocks_sent.get(&index).is_none());
+            assert!(!blocks_sent.contains_key(&index));
         }
 
         // ... until LAST_BLOCK_RETRY_INTERVAL

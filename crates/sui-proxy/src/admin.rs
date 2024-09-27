@@ -3,11 +3,10 @@
 use crate::config::{DynamicPeerValidationConfig, RemoteWriteConfig, StaticPeerValidationConfig};
 use crate::handlers::publish_metrics;
 use crate::histogram_relay::HistogramRelay;
-use crate::ip::{is_private, to_multiaddr};
 use crate::middleware::{
     expect_content_length, expect_mysten_proxy_header, expect_valid_public_key,
 };
-use crate::peers::{SuiNodeProvider, SuiPeer};
+use crate::peers::{AllowedPeer, SuiNodeProvider};
 use crate::var;
 use anyhow::Error;
 use anyhow::Result;
@@ -16,7 +15,7 @@ use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use std::fs;
 use std::io::BufReader;
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_tls::SUI_VALIDATOR_SERVER_NAME;
@@ -29,7 +28,7 @@ use tower_http::{
     trace::{DefaultOnResponse, TraceLayer},
     LatencyUnit,
 };
-use tracing::{error, info, Level};
+use tracing::{info, Level};
 
 /// Configure our graceful shutdown scenarios
 pub async fn shutdown_signal(h: axum_server::Handle) {
@@ -200,30 +199,27 @@ fn load_private_key(filename: &str) -> rustls::pki_types::PrivateKeyDer<'static>
 /// load the static keys we'll use to allow external non-validator nodes to push metrics
 fn load_static_peers(
     static_peers: Option<StaticPeerValidationConfig>,
-) -> Result<Vec<SuiPeer>, Error> {
+) -> Result<Vec<AllowedPeer>, Error> {
     let Some(static_peers) = static_peers else {
         return Ok(vec![]);
     };
-    let static_keys = static_peers.pub_keys.into_iter().filter_map(|spk|{
-        let p2p_address: IpAddr = spk.p2p_address.parse().unwrap();
-        if is_private(p2p_address) {
-            error!("{} appears to be a private address. We only allow 169.254.0.0/16 addresses to be private; ignoring this entry", p2p_address);
-            dbg!("skipping {}", spk);
-            return None;
-        }
-        Some(spk)
-    }).map(|spk|{
-        let peer_id = hex::decode(spk.peer_id).unwrap();
-        let public_key = Ed25519PublicKey::from_bytes(peer_id.as_ref()).unwrap();
-        let p2p_address: IpAddr = spk.p2p_address.parse().unwrap();
-        let s = SuiPeer{
-            name:spk.name.clone(),
-            p2p_address: to_multiaddr(p2p_address),
-            public_key,
-        };
-        info!("loaded static peer: {} public key: {} p2p address: {}", &s.name, &s.public_key, &s.p2p_address);
-        s
-    }).collect();
+    let static_keys = static_peers
+        .pub_keys
+        .into_iter()
+        .map(|spk| {
+            let peer_id = hex::decode(spk.peer_id).unwrap();
+            let public_key = Ed25519PublicKey::from_bytes(peer_id.as_ref()).unwrap();
+            let s = AllowedPeer {
+                name: spk.name.clone(),
+                public_key,
+            };
+            info!(
+                "loaded static peer: {} public key: {}",
+                &s.name, &s.public_key,
+            );
+            s
+        })
+        .collect();
     Ok(static_keys)
 }
 

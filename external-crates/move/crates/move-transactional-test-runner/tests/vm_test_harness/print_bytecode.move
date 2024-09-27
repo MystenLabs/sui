@@ -7,7 +7,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x42::M {
+module 0x43::M {
 entry fun foo<X, Y>() {
 }
 }

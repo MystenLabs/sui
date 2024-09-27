@@ -158,7 +158,8 @@ impl BridgeNodeConfig {
 
         // we do this check here instead of `prepare_for_sui` below because
         // that is only called when `run_client` is true.
-        let sui_client = Arc::new(SuiClient::<SuiSdkClient>::new(&self.sui.sui_rpc_url).await?);
+        let sui_client =
+            Arc::new(SuiClient::<SuiSdkClient>::new(&self.sui.sui_rpc_url, metrics.clone()).await?);
         let bridge_committee = sui_client
             .get_bridge_committee()
             .await

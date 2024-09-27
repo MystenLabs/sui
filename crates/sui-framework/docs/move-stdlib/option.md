@@ -285,10 +285,7 @@ Return <code>default</code> if <code>t</code> does not hold a value
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_get_with_default">get_with_default</a>&lt;Element: <b>copy</b> + drop&gt;(
-    t: &<a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;,
-    default: Element,
-): Element {
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_get_with_default">get_with_default</a>&lt;Element: <b>copy</b> + drop&gt;(t: &<a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;, default: Element): Element {
     <b>let</b> vec_ref = &t.vec;
     <b>if</b> (vec_ref.is_empty()) default
     <b>else</b> vec_ref[0]
@@ -432,7 +429,7 @@ Different from swap(), swap_or_fill() allows for <code>t</code> not holding a va
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_swap_or_fill">swap_or_fill</a>&lt;Element&gt;(t: &<b>mut</b> <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;, e: Element): <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt; {
     <b>let</b> vec_ref = &<b>mut</b> t.vec;
     <b>let</b> old_value = <b>if</b> (vec_ref.is_empty()) <a href="../move-stdlib/option.md#0x1_option_none">none</a>()
-        <b>else</b> <a href="../move-stdlib/option.md#0x1_option_some">some</a>(vec_ref.pop_back());
+    <b>else</b> <a href="../move-stdlib/option.md#0x1_option_some">some</a>(vec_ref.pop_back());
     vec_ref.push_back(e);
     old_value
 }

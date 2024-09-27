@@ -13,10 +13,22 @@ interface ISrcDefinitionLocation {
     end: number;
 }
 
+interface ISrcStructSourceMapEntry {
+    definition_location: ISrcDefinitionLocation;
+    type_parameters: [string, ISrcDefinitionLocation][];
+    fields: ISrcDefinitionLocation[];
+}
+
+interface ISrcEnumSourceMapEntry {
+    definition_location: ISrcDefinitionLocation;
+    type_parameters: [string, ISrcDefinitionLocation][];
+    variants: [[string, ISrcDefinitionLocation], ISrcDefinitionLocation[]][];
+}
+
 interface ISrcFunctionMapEntry {
     definition_location: ISrcDefinitionLocation;
-    type_parameters: any[];
-    parameters: any[];
+    type_parameters: [string, ISrcDefinitionLocation][];
+    parameters: [string, ISrcDefinitionLocation][];
     locals: [string, ISrcDefinitionLocation][];
     nops: Record<string, any>;
     code_map: Record<string, ISrcDefinitionLocation>;
@@ -26,10 +38,10 @@ interface ISrcFunctionMapEntry {
 interface ISrcRootObject {
     definition_location: ISrcDefinitionLocation;
     module_name: string[];
-    struct_map: Record<string, any>;
-    enum_map: Record<string, any>;
+    struct_map: Record<string, ISrcStructSourceMapEntry>;
+    enum_map: Record<string, ISrcEnumSourceMapEntry>;
     function_map: Record<string, ISrcFunctionMapEntry>;
-    constant_map: Record<string, any>;
+    constant_map: Record<string, string>;
 }
 
 // Runtime data types.
@@ -46,8 +58,15 @@ interface ILoc {
  * Describes a function in the source map.
  */
 interface ISourceMapFunction {
-    // Locations indexed with PC values.
-    pcLocs: ILoc[]
+    /**
+     * Locations indexed with PC values.
+     */
+    pcLocs: ILoc[],
+    /**
+     * Names of local variables by their index in the frame
+     * (parameters first, then actual locals).
+     */
+    localsNames: string[]
 }
 
 /**
@@ -68,10 +87,15 @@ export interface IFileInfo {
 export interface ISourceMap {
     fileHash: string
     modInfo: ModuleInfo,
-    functions: Map<string, ISourceMapFunction>
+    functions: Map<string, ISourceMapFunction>,
+    // Lines that are not present in the source map.
+    optimizedLines: number[]
 }
 
-export function readAllSourceMaps(directory: string, filesMap: Map<string, IFileInfo>): Map<string, ISourceMap> {
+export function readAllSourceMaps(
+    directory: string,
+    filesMap: Map<string, IFileInfo>
+): Map<string, ISourceMap> {
     const sourceMapsMap = new Map<string, ISourceMap>();
 
     const processDirectory = (dir: string) => {
@@ -81,7 +105,7 @@ export function readAllSourceMaps(directory: string, filesMap: Map<string, IFile
             const stats = fs.statSync(filePath);
             if (stats.isDirectory()) {
                 processDirectory(filePath);
-            } else if (path.extname(f) === ".json") {
+            } else if (path.extname(f) === '.json') {
                 const sourceMap = readSourceMap(filePath, filesMap);
                 sourceMapsMap.set(JSON.stringify(sourceMap.modInfo), sourceMap);
             }
@@ -99,6 +123,7 @@ export function readAllSourceMaps(directory: string, filesMap: Map<string, IFile
  * @param sourceMapPath path to the source map JSON file.
  * @param filesMap map from file hash to file information.
  * @returns source map.
+ * @throws Error if with a descriptive error message if the source map cannot be read.
  */
 function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>): ISourceMap {
     const sourceMapJSON: ISrcRootObject = JSON.parse(fs.readFileSync(sourceMapPath, 'utf8'));
@@ -111,12 +136,15 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
     const functions = new Map<string, ISourceMapFunction>();
     const fileInfo = filesMap.get(fileHash);
     if (!fileInfo) {
-        throw new Error("Could not find file with hash: "
+        throw new Error('Could not find file with hash: '
             + fileHash
-            + " when processing source map at: "
+            + ' when processing source map at: '
             + sourceMapPath);
     }
-    for (const funEntry of Object.values(sourceMapJSON.function_map)) {
+    const allSourceMapLines = new Set<number>();
+    prePopulateSourceMapLines(sourceMapJSON, fileInfo, allSourceMapLines);
+    const functionMap = sourceMapJSON.function_map;
+    for (const funEntry of Object.values(functionMap)) {
         let nameStart = funEntry.definition_location.start;
         let nameEnd = funEntry.definition_location.end;
         const funName = fileInfo.content.slice(nameStart, nameEnd);
@@ -131,6 +159,9 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
         for (const [pc, defLocation] of Object.entries(funEntry.code_map)) {
             const currentPC = parseInt(pc);
             const currentLoc = byteOffsetToLineColumn(fileInfo, defLocation.start);
+            allSourceMapLines.add(currentLoc.line);
+            // add the end line to the set as well even if we don't need it for pcLocs
+            allSourceMapLines.add(byteOffsetToLineColumn(fileInfo, defLocation.end).line);
             for (let i = prevPC + 1; i < currentPC; i++) {
                 pcLocs.push(prevLoc);
             }
@@ -138,10 +169,112 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
             prevPC = currentPC;
             prevLoc = currentLoc;
         }
-        functions.set(funName, { pcLocs });
+
+        const localsNames: string[] = [];
+        for (const param of funEntry.parameters) {
+            const paramName = param[0].split("#")[0];
+            if (!paramName) {
+                localsNames.push(param[0]);
+            } else {
+                localsNames.push(paramName);
+            }
+        }
+
+        for (const local of funEntry.locals) {
+            const localsName = local[0].split("#")[0];
+            if (!localsName) {
+                localsNames.push(local[0]);
+            } else {
+                localsNames.push(localsName);
+            }
+        }
+
+        functions.set(funName, { pcLocs, localsNames });
     }
-    return { fileHash, modInfo, functions };
+    let optimized_lines: number[] = [];
+    for (let i = 0; i < fileInfo.lines.length; i++) {
+        if (!allSourceMapLines.has(i + 1)) { // allSourceMapLines is 1-based
+            optimized_lines.push(i); // result must be 0-based
+        }
+    }
+
+    return { fileHash, modInfo, functions, optimizedLines: optimized_lines };
 }
+
+/**
+ * Pre-populates the set of source file lines that are present in the source map
+ * with lines corresponding to the definitions of module, structs, enums, and functions
+ * (excluding location of instructions in the function body which are handled elsewhere).
+ * Constants do not have location information in the source map and must be handled separately.
+ *
+ * @param sourceMapJSON
+ * @param fileInfo
+ * @param sourceMapLines
+ */
+function prePopulateSourceMapLines(
+    sourceMapJSON: ISrcRootObject,
+    fileInfo: IFileInfo,
+    sourceMapLines: Set<number>
+): void {
+    addLinesForLocation(sourceMapJSON.definition_location, fileInfo, sourceMapLines);
+    const structMap = sourceMapJSON.struct_map;
+    for (const structEntry of Object.values(structMap)) {
+        addLinesForLocation(structEntry.definition_location, fileInfo, sourceMapLines);
+        for (const typeParam of structEntry.type_parameters) {
+            addLinesForLocation(typeParam[1], fileInfo, sourceMapLines);
+        }
+        for (const fieldDef of structEntry.fields) {
+            addLinesForLocation(fieldDef, fileInfo, sourceMapLines);
+        }
+    }
+
+    const enumMap = sourceMapJSON.enum_map;
+    for (const enumEntry of Object.values(enumMap)) {
+        addLinesForLocation(enumEntry.definition_location, fileInfo, sourceMapLines);
+        for (const typeParam of enumEntry.type_parameters) {
+            addLinesForLocation(typeParam[1], fileInfo, sourceMapLines);
+        }
+        for (const variant of enumEntry.variants) {
+            addLinesForLocation(variant[0][1], fileInfo, sourceMapLines);
+            for (const fieldDef of variant[1]) {
+                addLinesForLocation(fieldDef, fileInfo, sourceMapLines);
+            }
+        }
+    }
+
+    const functionMap = sourceMapJSON.function_map;
+    for (const funEntry of Object.values(functionMap)) {
+        addLinesForLocation(funEntry.definition_location, fileInfo, sourceMapLines);
+        for (const typeParam of funEntry.type_parameters) {
+            addLinesForLocation(typeParam[1], fileInfo, sourceMapLines);
+        }
+        for (const param of funEntry.parameters) {
+            addLinesForLocation(param[1], fileInfo, sourceMapLines);
+        }
+        for (const local of funEntry.locals) {
+            addLinesForLocation(local[1], fileInfo, sourceMapLines);
+        }
+    }
+}
+
+/**
+ * Adds source file lines for the given location to the set.
+ *
+ * @param loc  location in the source file.
+ * @param fileInfo  source file information.
+ * @param sourceMapLines  set of source file lines.
+ */
+function addLinesForLocation(
+    loc: ISrcDefinitionLocation,
+    fileInfo: IFileInfo,
+    sourceMapLines: Set<number>
+): void {
+    const startLine = byteOffsetToLineColumn(fileInfo, loc.start).line;
+    sourceMapLines.add(startLine);
+    const endLine = byteOffsetToLineColumn(fileInfo, loc.end).line;
+    sourceMapLines.add(endLine);
+}
+
 
 /**
  * Computes source file location (line/colum) from the byte offset

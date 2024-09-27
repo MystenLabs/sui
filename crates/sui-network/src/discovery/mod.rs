@@ -23,6 +23,9 @@ use tracing::{debug, info, trace};
 
 const TIMEOUT: Duration = Duration::from_secs(1);
 const ONE_DAY_MILLISECONDS: u64 = 24 * 60 * 60 * 1_000;
+const MAX_ADDRESS_LENGTH: usize = 300;
+const MAX_PEERS_TO_SEND: usize = 200;
+const MAX_ADDRESSES_PER_PEER: usize = 2;
 
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.Discovery.rs"));
@@ -462,7 +465,8 @@ fn update_known_peers(
     let now_unix = now_unix();
     let our_peer_id = state.read().unwrap().our_info.clone().unwrap().peer_id;
     let known_peers = &mut state.write().unwrap().known_peers;
-    for peer in found_peers {
+    // only take the first MAX_PEERS_TO_SEND peers
+    for peer in found_peers.into_iter().take(MAX_PEERS_TO_SEND) {
         // Skip peers whose timestamp is too far in the future from our clock
         // or that are too old
         if peer.timestamp_ms > now_unix.saturating_add(30 * 1_000) // 30 seconds
@@ -477,6 +481,20 @@ fn update_known_peers(
 
         // If Peer is Private, and not in our allowlist, skip it.
         if peer.access_type == AccessType::Private && !allowlisted_peers.contains_key(&peer.peer_id)
+        {
+            continue;
+        }
+
+        // Skip entries that have too many addresses as a means to cap the size of a node's info
+        if peer.addresses.len() > MAX_ADDRESSES_PER_PEER {
+            continue;
+        }
+
+        // verify that all addresses provided are valid anemo addresses
+        if !peer
+            .addresses
+            .iter()
+            .all(|addr| addr.len() < MAX_ADDRESS_LENGTH && addr.to_anemo_address().is_ok())
         {
             continue;
         }

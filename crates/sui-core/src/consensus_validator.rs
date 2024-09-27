@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use consensus_core::{TransactionVerifier, ValidationError};
+use consensus_core::{TransactionIndex, TransactionVerifier, ValidationError};
 use eyre::WrapErr;
 use fastcrypto_tbls::dkg;
 use mysten_metrics::monitored_scope;
@@ -151,6 +151,10 @@ impl TransactionVerifier for SuiTxValidator {
 
         self.validate_transactions(txs)
             .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))
+    }
+
+    fn vote_batch(&self, _batch: &[&[u8]]) -> Vec<TransactionIndex> {
+        vec![]
     }
 }
 

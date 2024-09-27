@@ -8,5 +8,5 @@ error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/pattern_ellipsis_invalid.move:10:13
    │
 10 │             ..
-   │             ^ Expected a call argument expression
+   │             ^ Unexpected '..'. Expected a call argument expression
 

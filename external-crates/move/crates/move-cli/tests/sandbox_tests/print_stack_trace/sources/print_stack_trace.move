@@ -1,6 +1,6 @@
 module 0x42::print_stack_trace {
     use std::debug;
-    use 0x2::N;
+    use 0x7::N;
 
     #[allow(unused_mut_ref)]
     entry fun print_stack_trace() {

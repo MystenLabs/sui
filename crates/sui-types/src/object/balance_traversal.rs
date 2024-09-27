@@ -255,7 +255,7 @@ mod tests {
         layout_(
             &format!("0x2::coin::Coin<{tag}>"),
             vec![
-                ("id", A::MoveTypeLayout::Struct(UID::layout())),
+                ("id", A::MoveTypeLayout::Struct(Box::new(UID::layout()))),
                 ("balance", bal_t(tag)),
             ],
         )
@@ -285,7 +285,10 @@ mod tests {
             .map(|(name, layout)| A::MoveFieldLayout::new(Identifier::new(name).unwrap(), layout))
             .collect();
 
-        A::MoveTypeLayout::Struct(A::MoveStructLayout { type_, fields })
+        A::MoveTypeLayout::Struct(Box::new(A::MoveStructLayout {
+            type_,
+            fields: Box::new(fields),
+        }))
     }
 
     /// BCS encode Move value.

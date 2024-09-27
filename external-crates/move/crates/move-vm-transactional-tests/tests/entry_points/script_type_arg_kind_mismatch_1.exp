@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 1, lines 20-28:
-//# run --type-args 0x1::Coin::Coin
+//# run --type-args 0x5::Coin::Coin
 Error: Function execution failed with VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,

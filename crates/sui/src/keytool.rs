@@ -951,7 +951,7 @@ impl KeyToolCommand {
                 )
                 .await
                 .unwrap();
-                let (_, aud) = parse_and_validate_jwt(&parsed_token).unwrap();
+                let (_, aud, _) = parse_and_validate_jwt(&parsed_token).unwrap();
                 let address_seed = gen_address_seed(user_salt, "sub", sub, &aud).unwrap();
                 let zk_login_inputs =
                     ZkLoginInputs::from_reader(reader, &address_seed.to_string()).unwrap();
@@ -1114,6 +1114,7 @@ impl KeyToolCommand {
                     "https://api.ambrus.studio/callback",
                     &jwt_randomness,
                 )?;
+                // This is only for CLI testing. If frontend apps will be built, no need to add anything here.
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
                 println!("Visit URL (Facebook): {url_3}");

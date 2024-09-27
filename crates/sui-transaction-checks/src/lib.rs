@@ -12,7 +12,7 @@ mod checked {
     use sui_config::verifier_signing_config::VerifierSigningConfig;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, ObjectRef};
-    use sui_types::error::{UserInputError, UserInputResult};
+    use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::transaction::{
@@ -22,7 +22,7 @@ mod checked {
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
-        error::{SuiError, SuiResult},
+        error::SuiError,
         fp_bail, fp_ensure,
         gas::SuiGasStatus,
         object::{Object, Owner},
@@ -588,7 +588,7 @@ mod checked {
             .try_for_each(|module_bytes| {
                 verifier.meter_module_bytes(protocol_config, module_bytes, meter.as_mut())
             })
-            .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() });
+            .map_err(|e| UserInputError::PackageVerificationTimeout { err: e.to_string() });
 
         match verifier_status {
             Ok(_) => {

@@ -98,9 +98,15 @@ impl MoveValue {
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
 
+        let Some(layout) = self.type_.layout_impl(resolver).await.extend()? else {
+            return Err(Error::Internal(
+                "Move value must have valid layout".to_string(),
+            ))
+            .extend();
+        };
+
         // Factor out into its own non-GraphQL, non-async function for better testability
-        self.data_impl(self.type_.layout_impl(resolver).await.extend()?)
-            .extend()
+        self.data_impl(layout).extend()
     }
 
     /// Representation of a Move value in JSON, where:
@@ -121,15 +127,21 @@ impl MoveValue {
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
 
+        let Some(layout) = self.type_.layout_impl(resolver).await.extend()? else {
+            return Err(Error::Internal(
+                "Move value must have valid layout".to_string(),
+            ))
+            .extend();
+        };
+
         // Factor out into its own non-GraphQL, non-async function for better testability
-        self.json_impl(self.type_.layout_impl(resolver).await.extend()?)
-            .extend()
+        self.json_impl(layout).extend()
     }
 }
 
 impl MoveValue {
     pub fn new(tag: TypeTag, bcs: Base64) -> Self {
-        let type_ = MoveType::new(tag);
+        let type_ = MoveType::from(tag);
         Self { type_, bcs }
     }
 
@@ -474,13 +486,13 @@ mod tests {
 
     macro_rules! struct_layout {
         ($type:literal { $($name:literal : $layout:expr),* $(,)?}) => {
-            A::MoveTypeLayout::Struct(S {
+            A::MoveTypeLayout::Struct(Box::new(S {
                 type_: StructTag::from_str($type).expect("Failed to parse struct"),
-                fields: vec![$(MoveFieldLayout {
+                fields: Box::new(vec![$(MoveFieldLayout {
                     name: ident_str!($name).to_owned(),
                     layout: $layout,
-                }),*]
-            })
+                }),*])
+            }))
         }
     }
 
@@ -509,14 +521,14 @@ mod tests {
         data: T,
     ) -> Result<MoveData, Error> {
         let tag = TypeTag::from_str(tag.into().as_str()).unwrap();
-        let type_ = MoveType::new(tag);
+        let type_ = MoveType::from(tag);
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
         MoveValue { type_, bcs }.data_impl(layout)
     }
 
     fn json<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<Json, Error> {
         let tag: TypeTag = (&layout).into();
-        let type_ = MoveType::new(tag);
+        let type_ = MoveType::from(tag);
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
         MoveValue { type_, bcs }.json_impl(layout)
     }

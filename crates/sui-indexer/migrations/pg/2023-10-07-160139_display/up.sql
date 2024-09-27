@@ -1,4 +1,3 @@
--- Your SQL goes here
 CREATE TABLE display
 (
     object_type     text        PRIMARY KEY,

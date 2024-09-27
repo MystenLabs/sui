@@ -90,22 +90,29 @@ use move_command_line_common::files::FileHash;
 use move_compiler::{
     command_line::compiler::{construct_pre_compiled_lib, FullyCompiledProgram},
     editions::{Edition, FeatureGate, Flavor},
-    expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
+    expansion::{
+        ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
+        name_validation::{IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES},
+    },
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeName_, Type_, VariantFields},
-    parser::ast as P,
+    parser::ast::{self as P},
     shared::{
         files::{FileId, MappedFiles},
         unique_map::UniqueMap,
         Identifier, Name, NamedAddressMap, NamedAddressMaps,
     },
     typing::{
-        ast::{Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
+        ast::{
+            self as T, Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_,
+            UnannotatedExp_,
+        },
         visitor::TypingVisitorContext,
     },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_package::{
     compilation::{build_plan::BuildPlan, compiled_package::ModuleFormat},
@@ -115,7 +122,45 @@ use move_package::{
 use move_symbol_pool::Symbol;
 
 const MANIFEST_FILE_NAME: &str = "Move.toml";
+const STD_LIB_PKG_ADDRESS: &str = "0x1";
+type SourceFiles = BTreeMap<FileHash, (FileName, String, bool)>;
 
+/// Information about the compiled package and data structures
+/// computed during compilation
+#[derive(Clone)]
+pub struct CompiledPkgInfo {
+    parsed_program: P::Program,
+    typed_program: T::Program,
+    libs: Option<Arc<FullyCompiledProgram>>,
+    source_files: SourceFiles,
+    mapped_files: MappedFiles,
+    edition: Option<Edition>,
+    compiler_info: Option<CompilerInfo>,
+}
+
+/// Data used during symbols computation
+#[derive(Clone)]
+pub struct SymbolsComputationData {
+    mod_outer_defs: BTreeMap<String, ModuleDefs>,
+    mod_use_defs: BTreeMap<String, UseDefMap>,
+    references: BTreeMap<Loc, BTreeSet<UseLoc>>,
+    def_info: BTreeMap<Loc, DefInfo>,
+    mod_to_alias_lengths: BTreeMap<String, BTreeMap<Position, usize>>,
+}
+
+impl SymbolsComputationData {
+    pub fn new() -> Self {
+        Self {
+            mod_outer_defs: BTreeMap::new(),
+            mod_use_defs: BTreeMap::new(),
+            references: BTreeMap::new(),
+            def_info: BTreeMap::new(),
+            mod_to_alias_lengths: BTreeMap::new(),
+        }
+    }
+}
+
+/// Information about precompiled package dependencies
 #[derive(Clone)]
 pub struct PrecompiledPkgDeps {
     /// Hash of the manifest file for a given package
@@ -615,20 +660,35 @@ impl fmt::Display for DefInfo {
                 ret_type,
                 _,
             ) => {
-                let type_args_str = type_args_to_ide_string(type_args, /* verbose */ true);
+                const SINGLE_LINE_TYPE_ARGS_NUM: usize = 2;
+                // The strategy for displaying function signature is as follows:
+                // - if there are more than SINGLE_LINE_TYPE_ARGS_NUM type args,
+                //   they are displayed on separate lines
+                // - "regular" args are always displayed on separate lines, which
+                //   which is motivated by the fact that datatypes are displayed
+                //   in a fully-qualified form (i.e., with package and module name),
+                //   and that makes the function name already long and (likely)
+                //   the length of each individual type also long (modulo primitive
+                //   types of course, but I think we can live with that)
+                let type_args_str = type_args_to_ide_string(
+                    type_args,
+                    /* separate_lines */ type_args.len() > SINGLE_LINE_TYPE_ARGS_NUM,
+                    /* verbose */ true,
+                );
+                let args_str = typed_id_list_to_ide_string(
+                    arg_names, arg_types, '(', ')', /* separate_lines */ true,
+                    /* verbose */ true,
+                );
                 let ret_type_str = ret_type_to_ide_str(ret_type, /* verbose */ true);
                 write!(
                     f,
-                    "{}{}fun {}::{}{}({}){}",
+                    "{}{}fun {}{}{}{}{}",
                     visibility_to_ide_string(visibility),
                     fun_type_to_ide_string(fun_type),
-                    mod_ident_to_ide_string(mod_ident),
+                    mod_ident_to_ide_string(mod_ident, None, true),
                     name,
                     type_args_str,
-                    typed_id_list_to_ide_string(
-                        arg_names, arg_types, /* separate_lines */ false,
-                        /* verbose */ true
-                    ),
+                    args_str,
                     ret_type_str,
                 )
             }
@@ -648,9 +708,9 @@ impl fmt::Display for DefInfo {
                 if field_names.is_empty() {
                     write!(
                         f,
-                        "{}struct {}::{}{}{} {{}}",
+                        "{}struct {}{}{}{} {{}}",
                         visibility_to_ide_string(visibility),
-                        mod_ident_to_ide_string(mod_ident),
+                        mod_ident_to_ide_string(mod_ident, Some(name), true),
                         name,
                         type_args_str,
                         abilities_str,
@@ -658,15 +718,17 @@ impl fmt::Display for DefInfo {
                 } else {
                     write!(
                         f,
-                        "{}struct {}::{}{}{} {{\n{}\n}}",
+                        "{}struct {}{}{}{} {}",
                         visibility_to_ide_string(visibility),
-                        mod_ident_to_ide_string(mod_ident),
+                        mod_ident_to_ide_string(mod_ident, Some(name), true),
                         name,
                         type_args_str,
                         abilities_str,
                         typed_id_list_to_ide_string(
                             field_names,
                             field_types,
+                            '{',
+                            '}',
                             /* separate_lines */ true,
                             /* verbose */ true
                         ),
@@ -680,9 +742,9 @@ impl fmt::Display for DefInfo {
                 if variants.is_empty() {
                     write!(
                         f,
-                        "{}enum {}::{}{}{} {{}}",
+                        "{}enum {}{}{}{} {{}}",
                         visibility_to_ide_string(visibility),
-                        mod_ident_to_ide_string(mod_ident),
+                        mod_ident_to_ide_string(mod_ident, Some(name), true),
                         name,
                         type_args_str,
                         abilities_str,
@@ -690,9 +752,9 @@ impl fmt::Display for DefInfo {
                 } else {
                     write!(
                         f,
-                        "{}enum {}::{}{}{} {{\n{}\n}}",
+                        "{}enum {}{}{}{} {{\n{}\n}}",
                         visibility_to_ide_string(visibility),
-                        mod_ident_to_ide_string(mod_ident),
+                        mod_ident_to_ide_string(mod_ident, Some(name), true),
                         name,
                         type_args_str,
                         abilities_str,
@@ -704,30 +766,36 @@ impl fmt::Display for DefInfo {
                 if field_types.is_empty() {
                     write!(
                         f,
-                        "{}::{}::{}",
-                        mod_ident_to_ide_string(mod_ident),
+                        "{}{}::{}",
+                        mod_ident_to_ide_string(mod_ident, Some(enum_name), true),
                         enum_name,
                         name
                     )
                 } else if *positional {
                     write!(
                         f,
-                        "{}::{}::{}({})",
-                        mod_ident_to_ide_string(mod_ident),
+                        "{}{}::{}({})",
+                        mod_ident_to_ide_string(mod_ident, Some(enum_name), true),
                         enum_name,
                         name,
-                        type_list_to_ide_string(field_types, /* verbose */ true)
+                        type_list_to_ide_string(
+                            field_types,
+                            /* separate_lines */ false,
+                            /* verbose */ true
+                        )
                     )
                 } else {
                     write!(
                         f,
-                        "{}::{}::{}{{{}}}",
-                        mod_ident_to_ide_string(mod_ident),
+                        "{}{}::{}{}",
+                        mod_ident_to_ide_string(mod_ident, Some(enum_name), true),
                         enum_name,
                         name,
                         typed_id_list_to_ide_string(
                             field_names,
                             field_types,
+                            '{',
+                            '}',
                             /* separate_lines */ false,
                             /* verbose */ true,
                         ),
@@ -737,8 +805,8 @@ impl fmt::Display for DefInfo {
             Self::Field(mod_ident, struct_name, name, t, _) => {
                 write!(
                     f,
-                    "{}::{}\n{}: {}",
-                    mod_ident_to_ide_string(mod_ident),
+                    "{}{}\n{}: {}",
+                    mod_ident_to_ide_string(mod_ident, Some(struct_name), true),
                     struct_name,
                     name,
                     type_to_ide_string(t, /* verbose */ true)
@@ -875,11 +943,17 @@ fn visibility_to_ide_string(visibility: &Visibility) -> String {
     visibility_str
 }
 
-pub fn type_args_to_ide_string(type_args: &[Type], verbose: bool) -> String {
+pub fn type_args_to_ide_string(type_args: &[Type], separate_lines: bool, verbose: bool) -> String {
     let mut type_args_str = "".to_string();
     if !type_args.is_empty() {
         type_args_str.push('<');
-        type_args_str.push_str(&type_list_to_ide_string(type_args, verbose));
+        if separate_lines {
+            type_args_str.push('\n');
+        }
+        type_args_str.push_str(&type_list_to_ide_string(type_args, separate_lines, verbose));
+        if separate_lines {
+            type_args_str.push('\n');
+        }
         type_args_str.push('>');
     }
     type_args_str
@@ -898,10 +972,12 @@ fn datatype_type_args_to_ide_string(type_args: &[(Type, bool)], verbose: bool) -
 fn typed_id_list_to_ide_string(
     names: &[Name],
     types: &[Type],
+    list_start: char,
+    list_end: char,
     separate_lines: bool,
     verbose: bool,
 ) -> String {
-    names
+    let list = names
         .iter()
         .zip(types.iter())
         .map(|(n, t)| {
@@ -912,7 +988,12 @@ fn typed_id_list_to_ide_string(
             }
         })
         .collect::<Vec<_>>()
-        .join(if separate_lines { ",\n" } else { ", " })
+        .join(if separate_lines { ",\n" } else { ", " });
+    if separate_lines && !list.is_empty() {
+        format!("{}\n{}\n{}", list_start, list, list_end)
+    } else {
+        format!("{}{}{}", list_start, list, list_end)
+    }
 }
 
 pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
@@ -928,32 +1009,47 @@ pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
         }
         Type_::Apply(_, sp!(_, type_name), ss) => match type_name {
             TypeName_::Multiple(_) => {
-                format!("({})", type_list_to_ide_string(ss, verbose))
+                format!(
+                    "({})",
+                    type_list_to_ide_string(ss, /* separate_lines */ false, verbose)
+                )
             }
             TypeName_::Builtin(name) => {
                 if ss.is_empty() {
                     format!("{}", name)
                 } else {
-                    format!("{}<{}>", name, type_list_to_ide_string(ss, verbose))
+                    format!(
+                        "{}<{}>",
+                        name,
+                        type_list_to_ide_string(ss, /* separate_lines */ false, verbose)
+                    )
                 }
             }
-            TypeName_::ModuleType(sp!(_, module_ident), struct_name) => {
+            TypeName_::ModuleType(sp!(_, mod_ident), datatype_name) => {
                 let type_args = if ss.is_empty() {
                     "".to_string()
                 } else {
-                    format!("<{}>", type_list_to_ide_string(ss, verbose))
+                    format!(
+                        "<{}>",
+                        type_list_to_ide_string(ss, /* separate_lines */ false, verbose)
+                    )
                 };
                 if verbose {
-                    format!("{}::{}{}", module_ident, struct_name, type_args,)
+                    format!(
+                        "{}{}{}",
+                        mod_ident_to_ide_string(mod_ident, Some(&datatype_name.value()), true),
+                        datatype_name,
+                        type_args
+                    )
                 } else {
-                    struct_name.to_string()
+                    datatype_name.to_string()
                 }
             }
         },
         Type_::Fun(args, ret) => {
             format!(
                 "|{}| -> {}",
-                type_list_to_ide_string(args, verbose),
+                type_list_to_ide_string(args, /* separate_lines */ false, verbose),
                 type_to_ide_string(ret, verbose)
             )
         }
@@ -963,12 +1059,18 @@ pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
     }
 }
 
-pub fn type_list_to_ide_string(types: &[Type], verbose: bool) -> String {
+pub fn type_list_to_ide_string(types: &[Type], separate_lines: bool, verbose: bool) -> String {
     types
         .iter()
-        .map(|t| type_to_ide_string(t, verbose))
+        .map(|t| {
+            if separate_lines {
+                format!("\t{}", type_to_ide_string(t, verbose))
+            } else {
+                type_to_ide_string(t, verbose)
+            }
+        })
         .collect::<Vec<_>>()
-        .join(", ")
+        .join(if separate_lines { ",\n" } else { ", " })
 }
 
 fn datatype_type_list_to_ide_string(types: &[(Type, bool)], verbose: bool) -> String {
@@ -1086,15 +1188,59 @@ fn ast_value_to_ide_string(sp!(_, val): &Value) -> String {
     }
 }
 
-pub fn mod_ident_to_ide_string(mod_ident: &E::ModuleIdent_) -> String {
+/// Creates a string representing a module ID, either on it's owne as in `pkg::module`
+/// or as part of a datatype or function type, in which it should be `pkg::module::`.
+/// If it's part of the datatype, name of the datatype is passed in `datatype_name_opt`.
+pub fn mod_ident_to_ide_string(
+    mod_ident: &ModuleIdent_,
+    datatype_name_opt: Option<&Symbol>,
+    is_access_chain_prefix: bool, // part of access chaing that should end with `::`
+) -> String {
     use E::Address as A;
+    // the module ID is to be a prefix to a data
+    let suffix = if is_access_chain_prefix { "::" } else { "" };
     match mod_ident.address {
-        A::Numerical {
-            name: None, value, ..
-        } => format!("{value}::{}", mod_ident.module).to_string(),
-        A::Numerical { name: Some(n), .. } | A::NamedUnassigned(n) => {
-            format!("{n}::{}", mod_ident.module).to_string()
+        A::Numerical { name, value, .. } => {
+            let pkg_name = match name {
+                Some(n) => n.to_string(),
+                None => value.to_string(),
+            };
+
+            let Ok(std_lib_pkg_address) = AccountAddress::from_hex_literal(STD_LIB_PKG_ADDRESS)
+            else {
+                // getting stdlib address did not work - use the whole thing
+                return format!("{pkg_name}::{}{}", mod_ident.module, suffix);
+            };
+            if value.value.into_inner() != std_lib_pkg_address {
+                // it's not a stdlib package - use the whole thing
+                return format!("{pkg_name}::{}{}", mod_ident.module, suffix);
+            }
+            // try stripping both package and module if this conversion
+            // is for a datatype, oherwise try only stripping package
+            if let Some(datatype_name) = datatype_name_opt {
+                if IMPLICIT_STD_MEMBERS.iter().any(
+                    |(implicit_mod_name, implicit_datatype_name, _)| {
+                        mod_ident.module.value() == *implicit_mod_name
+                            && datatype_name == implicit_datatype_name
+                    },
+                ) {
+                    // strip both package and module (whether its meant to be
+                    // part of access chain or not, if there is not module,
+                    // there should be no `::` at the end)
+                    return "".to_string();
+                }
+            }
+            if IMPLICIT_STD_MODULES
+                .iter()
+                .any(|implicit_mod_name| mod_ident.module.value() == *implicit_mod_name)
+            {
+                // strip package
+                return format!("{}{}", mod_ident.module.value(), suffix);
+            }
+            // stripping prefix didn't work - use the whole thing
+            format!("{pkg_name}::{}{}", mod_ident.module, suffix)
         }
+        A::NamedUnassigned(n) => format!("{n}::{}", mod_ident.module).to_string(),
     }
 }
 
@@ -1545,17 +1691,14 @@ fn has_precompiled_deps(
     pkg_deps.contains_key(pkg_path)
 }
 
-/// Main driver to get symbols for the whole package. Returned symbols is an option as only the
-/// correctly computed symbols should be a replacement for the old set - if symbols are not
-/// actually (re)computed and the diagnostics are returned, the old symbolic information should
-/// be retained even if it's getting out-of-date.
-pub fn get_symbols(
+/// Builds a package at a given path and, if successful, returns parsed AST
+/// and typed AST as well as (regardless of success) diagnostics.
+pub fn get_compiled_pkg(
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: LintLevel,
-    cursor_info: Option<(&PathBuf, Position)>,
-) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
+) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let build_config = move_package::BuildConfig {
         test_mode: true,
         install_dir: Some(tempdir().unwrap().path().to_path_buf()),
@@ -1752,16 +1895,28 @@ pub fn get_symbols(
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
     let parsed_program = parsed_ast.unwrap();
-    let mut typed_program = typed_ast.clone().unwrap();
+    let typed_program = typed_ast.clone().unwrap();
+    let compiled_pkg_info = CompiledPkgInfo {
+        parsed_program,
+        typed_program,
+        libs: compiled_libs,
+        source_files,
+        mapped_files,
+        edition,
+        compiler_info,
+    };
+    Ok((Some(compiled_pkg_info), ide_diagnostics))
+}
 
-    let mut mod_outer_defs = BTreeMap::new();
-    let mut mod_use_defs = BTreeMap::new();
-    let mut references = BTreeMap::new();
-    let mut def_info = BTreeMap::new();
-
+/// Preprocess parsed and typed programs prior to actual symbols computation.
+pub fn compute_symbols_pre_process(
+    computation_data: &mut SymbolsComputationData,
+    compiled_pkg_info: &CompiledPkgInfo,
+    cursor_info: Option<(&PathBuf, Position)>,
+) -> Option<CursorContext> {
     let mut file_id_to_lines = HashMap::new();
-    for file_id in mapped_files.file_mapping().values() {
-        let Ok(file) = mapped_files.files().get(*file_id) else {
+    for file_id in compiled_pkg_info.mapped_files.file_mapping().values() {
+        let Ok(file) = compiled_pkg_info.mapped_files.files().get(*file_id) else {
             eprintln!("file id without source code");
             continue;
         };
@@ -1772,48 +1927,51 @@ pub fn get_symbols(
 
     let mut fields_order_info = FieldOrderInfo::new();
 
-    pre_process_parsed_program(&parsed_program, &mut fields_order_info);
+    pre_process_parsed_program(&compiled_pkg_info.parsed_program, &mut fields_order_info);
 
-    let mut cursor_context = compute_cursor_context(&mapped_files, cursor_info);
+    let mut cursor_context = compute_cursor_context(&compiled_pkg_info.mapped_files, cursor_info);
 
     pre_process_typed_modules(
-        &typed_program.modules,
+        &compiled_pkg_info.typed_program.modules,
         &fields_order_info,
-        &mapped_files,
+        &compiled_pkg_info.mapped_files,
         &file_id_to_lines,
-        &mut mod_outer_defs,
-        &mut mod_use_defs,
-        &mut references,
-        &mut def_info,
-        &edition,
+        &mut computation_data.mod_outer_defs,
+        &mut computation_data.mod_use_defs,
+        &mut computation_data.references,
+        &mut computation_data.def_info,
+        &compiled_pkg_info.edition,
         cursor_context.as_mut(),
     );
 
-    if let Some(libs) = compiled_libs.clone() {
+    if let Some(libs) = compiled_pkg_info.libs.clone() {
         pre_process_typed_modules(
             &libs.typing.modules,
             &fields_order_info,
-            &mapped_files,
+            &compiled_pkg_info.mapped_files,
             &file_id_to_lines,
-            &mut mod_outer_defs,
-            &mut mod_use_defs,
-            &mut references,
-            &mut def_info,
-            &edition,
+            &mut computation_data.mod_outer_defs,
+            &mut computation_data.mod_use_defs,
+            &mut computation_data.references,
+            &mut computation_data.def_info,
+            &compiled_pkg_info.edition,
             None, // Cursor can never be in a compiled library(?)
         );
     }
+    cursor_context
+}
 
-    eprintln!("get_symbols loaded");
-
-    let mut file_use_defs = BTreeMap::new();
-    let mut mod_to_alias_lengths = BTreeMap::new();
-
+/// Process parsed program for symbols computation.
+pub fn compute_symbols_parsed_program(
+    computation_data: &mut SymbolsComputationData,
+    compiled_pkg_info: &CompiledPkgInfo,
+    mut cursor_context: Option<CursorContext>,
+) -> Option<CursorContext> {
     let mut parsing_symbolicator = parsing_analysis::ParsingAnalysisContext {
-        mod_outer_defs: &mut mod_outer_defs,
-        files: &mapped_files,
-        references: &mut references,
-        def_info: &mut def_info,
+        mod_outer_defs: &mut computation_data.mod_outer_defs,
+        files: &compiled_pkg_info.mapped_files,
+        references: &mut computation_data.references,
+        def_info: &mut computation_data.def_info,
         use_defs: UseDefMap::new(),
         current_mod_ident_str: None,
         alias_lengths: BTreeMap::new(),
@@ -1822,25 +1980,34 @@ pub fn get_symbols(
     };
 
     parsing_symbolicator.prog_symbols(
-        &parsed_program,
-        &mut mod_use_defs,
-        &mut mod_to_alias_lengths,
+        &compiled_pkg_info.parsed_program,
+        &mut computation_data.mod_use_defs,
+        &mut computation_data.mod_to_alias_lengths,
     );
-    if let Some(libs) = compiled_libs.clone() {
+    if let Some(libs) = compiled_pkg_info.libs.clone() {
         parsing_symbolicator.cursor = None;
         parsing_symbolicator.prog_symbols(
             &libs.parser,
-            &mut mod_use_defs,
-            &mut mod_to_alias_lengths,
+            &mut computation_data.mod_use_defs,
+            &mut computation_data.mod_to_alias_lengths,
         );
     }
+    cursor_context
+}
 
-    let mut compiler_info = compiler_info.unwrap();
+/// Process typed program for symbols computation.
+pub fn compute_symbols_typed_program(
+    mut computation_data: SymbolsComputationData,
+    mut compiled_pkg_info: CompiledPkgInfo,
+    cursor_context: Option<CursorContext>,
+) -> Symbols {
+    let mut file_use_defs = BTreeMap::new();
+    let mut compiler_info = compiled_pkg_info.compiler_info.unwrap();
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
-        mod_outer_defs: &mut mod_outer_defs,
-        files: &mapped_files,
-        references: &mut references,
-        def_info: &mut def_info,
+        mod_outer_defs: &mut computation_data.mod_outer_defs,
+        files: &compiled_pkg_info.mapped_files,
+        references: &mut computation_data.references,
+        def_info: &mut computation_data.def_info,
         use_defs: UseDefMap::new(),
         current_mod_ident_str: None,
         alias_lengths: &BTreeMap::new(),
@@ -1851,40 +2018,80 @@ pub fn get_symbols(
     };
 
     process_typed_modules(
-        &mut typed_program.modules,
-        &source_files,
-        &mod_to_alias_lengths,
+        &mut compiled_pkg_info.typed_program.modules,
+        &compiled_pkg_info.source_files,
+        &computation_data.mod_to_alias_lengths,
         &mut typing_symbolicator,
         &mut file_use_defs,
-        &mut mod_use_defs,
+        &mut computation_data.mod_use_defs,
     );
 
-    if let Some(libs) = compiled_libs {
+    if let Some(libs) = compiled_pkg_info.libs {
         process_typed_modules(
             &mut libs.typing.modules.clone(),
-            &source_files,
-            &mod_to_alias_lengths,
+            &compiled_pkg_info.source_files,
+            &computation_data.mod_to_alias_lengths,
             &mut typing_symbolicator,
             &mut file_use_defs,
-            &mut mod_use_defs,
+            &mut computation_data.mod_use_defs,
         );
     }
 
     let mut file_mods: FileModules = BTreeMap::new();
-    for d in mod_outer_defs.into_values() {
-        let path = mapped_files.file_path(&d.fhash.clone());
+    for d in computation_data.mod_outer_defs.into_values() {
+        let path = compiled_pkg_info.mapped_files.file_path(&d.fhash.clone());
         file_mods.entry(path.to_path_buf()).or_default().insert(d);
     }
 
-    let symbols = Symbols {
-        references,
+    Symbols {
+        references: computation_data.references,
         file_use_defs,
         file_mods,
-        def_info,
-        files: mapped_files,
+        def_info: computation_data.def_info,
+        files: compiled_pkg_info.mapped_files,
         compiler_info,
         cursor_context,
+    }
+}
+
+/// Compute symbols for a given package from the parsed and typed ASTs,
+/// as well as other auxiliary data provided in `compiled_pkg_info`.
+pub fn compute_symbols(
+    compiled_pkg_info: CompiledPkgInfo,
+    cursor_info: Option<(&PathBuf, Position)>,
+) -> Symbols {
+    let mut symbols_computation_data = SymbolsComputationData::new();
+    let cursor_context = compute_symbols_pre_process(
+        &mut symbols_computation_data,
+        &compiled_pkg_info,
+        cursor_info,
+    );
+    let cursor_context = compute_symbols_parsed_program(
+        &mut symbols_computation_data,
+        &compiled_pkg_info,
+        cursor_context,
+    );
+
+    compute_symbols_typed_program(symbols_computation_data, compiled_pkg_info, cursor_context)
+}
+
+/// Main driver to get symbols for the whole package. Returned symbols is an option as only the
+/// correctly computed symbols should be a replacement for the old set - if symbols are not
+/// actually (re)computed and the diagnostics are returned, the old symbolic information should
+/// be retained even if it's getting out-of-date.
+pub fn get_symbols(
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
+    ide_files_root: VfsPath,
+    pkg_path: &Path,
+    lint: LintLevel,
+    cursor_info: Option<(&PathBuf, Position)>,
+) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
+    let (compiled_pkg_info_opt, ide_diagnostics) =
+        get_compiled_pkg(pkg_dependencies, ide_files_root, pkg_path, lint)?;
+    let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
+        return Ok((None, ide_diagnostics));
     };
+    let symbols = compute_symbols(compiled_pkg_info, cursor_info);
 
     eprintln!("get_symbols load complete");
 
@@ -2004,7 +2211,7 @@ fn pre_process_typed_modules(
 
 fn process_typed_modules<'a>(
     typed_modules: &mut UniqueMap<ModuleIdent, ModuleDefinition>,
-    source_files: &BTreeMap<FileHash, (Symbol, String, bool)>,
+    source_files: &SourceFiles,
     mod_to_alias_lengths: &'a BTreeMap<String, BTreeMap<Position, usize>>,
     typing_symbolicator: &mut typing_analysis::TypingAnalysisContext<'a>,
     file_use_defs: &mut FileUseDefs,
@@ -2032,10 +2239,7 @@ fn process_typed_modules<'a>(
     }
 }
 
-fn file_sources(
-    resolved_graph: &ResolvedGraph,
-    overlay_fs: VfsPath,
-) -> BTreeMap<FileHash, (FileName, String, bool)> {
+fn file_sources(resolved_graph: &ResolvedGraph, overlay_fs: VfsPath) -> SourceFiles {
     resolved_graph
         .package_table
         .iter()
@@ -2074,7 +2278,17 @@ fn file_sources(
 pub fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
     use E::Address as A;
     match mod_ident.address {
-        A::Numerical { value, .. } => format!("{value}::{}", mod_ident.module).to_string(),
+        A::Numerical {
+            name,
+            value,
+            name_conflict: _,
+        } => {
+            if let Some(n) = name {
+                format!("({n}={value})::{}", mod_ident.module).to_string()
+            } else {
+                format!("{value}::{}", mod_ident.module).to_string()
+            }
+        }
         A::NamedUnassigned(n) => format!("{n}::{}", mod_ident.module).to_string(),
     }
 }
@@ -2090,7 +2304,14 @@ pub fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: &NamedAddressMap)
         P::LeadingNameAccess_::AnonymousAddress(bytes) => E::Address::anonymous(loc, bytes),
         P::LeadingNameAccess_::GlobalAddress(name) => E::Address::NamedUnassigned(name),
         P::LeadingNameAccess_::Name(name) => match pkg_addresses.get(&name.value).copied() {
-            Some(addr) => E::Address::anonymous(loc, addr),
+            // set `name_conflict` to `true` to force displaying (addr==pkg_name) so that the string
+            // representing map key is consistent with what's generated for expansion ModuleIdent in
+            // `expansion_mod_ident_to_map_key`
+            Some(addr) => E::Address::Numerical {
+                name: Some(name),
+                value: sp(loc, addr),
+                name_conflict: true,
+            },
             None => E::Address::NamedUnassigned(name),
         },
     }
@@ -2103,7 +2324,8 @@ pub fn parsing_leading_and_mod_names_to_map_key(
     ln: P::LeadingNameAccess,
     name: P::ModuleName,
 ) -> String {
-    format!("{}::{}", parsed_address(ln, pkg_addresses), name).to_string()
+    let parsed_addr = parsed_address(ln, pkg_addresses);
+    format!("{}::{}", parsed_addr, name).to_string()
 }
 
 /// Produces module ident string of the form pkg::module to be used as a map key.
@@ -2458,7 +2680,7 @@ fn get_mod_outer_defs(
         );
         def_info.insert(
             mod_defs.name_loc,
-            DefInfo::Module(mod_ident_to_ide_string(&ident), doc_comment),
+            DefInfo::Module(mod_ident_to_ide_string(&ident, None, false), doc_comment),
         );
     }
 
@@ -2595,7 +2817,7 @@ fn extract_doc_string(
     // Detect the two different types of docstrings
     if line_before.starts_with("///") {
         while let Some(stripped_line) = line_before.strip_prefix("///") {
-            doc_string = format!("{}\n{}", stripped_line.trim(), doc_string);
+            doc_string = format!("{}\n{}", stripped_line, doc_string);
             if iter == 0 {
                 break;
             }
@@ -2604,7 +2826,13 @@ fn extract_doc_string(
         }
     } else if line_before.ends_with("*/") {
         let mut doc_string_found = false;
-        line_before = file_lines[iter].strip_suffix("*/").unwrap_or("").trim();
+        // we need a line with preserved (whitespace) prefix so that
+        // we can trim other lines in the doc comment to the same prefix
+        let mut current_line = file_lines[iter].trim_end();
+        current_line = current_line.strip_suffix("*/").unwrap_or("");
+        let current_line_len = current_line.len();
+        line_before = current_line.trim();
+        let trimmed_len = current_line_len - line_before.len();
 
         // Loop condition is a safe guard.
         while !doc_string_found {
@@ -2628,7 +2856,36 @@ fn extract_doc_string(
             }
 
             iter -= 1;
-            line_before = file_lines[iter].trim();
+
+            // we need to trim the block comment line the same as
+            // the line containing its ending marker
+            current_line = file_lines[iter].trim_end();
+            let first_non_whitespace = current_line
+                .chars()
+                .position(|c| !c.is_whitespace())
+                .unwrap_or_default();
+            if first_non_whitespace < trimmed_len {
+                // There is not enough whitespace to trim but trim as much as you can.
+                // The reason likely is that the docsting is misformatted, for example:
+                // ```
+                //   /**
+                //     Properly formatted line
+                //     Another properly formatted line
+                // Misformatted line
+                //   */
+                // ```
+                //
+                // This will result in the following doc comment extracted:
+                //     Properly formatted line
+                //```
+                //   Properly formatted line
+                //   Another properly formatted line
+                //Misformatted line
+                //```
+                line_before = current_line.trim_start();
+            } else {
+                line_before = current_line[trimmed_len..].into();
+            }
         }
 
         // No doc_string found - return String::new();

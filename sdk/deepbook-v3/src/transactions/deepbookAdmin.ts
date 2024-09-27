@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { coinWithBalance } from '@mysten/sui/transactions';
 import type { Transaction } from '@mysten/sui/transactions';
 
 import type { CreatePoolAdminParams } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
-import { FLOAT_SCALAR, POOL_CREATION_FEE } from '../utils/config.js';
+import { FLOAT_SCALAR } from '../utils/config.js';
 
 /**
  * DeepBookAdminContract class for managing admin actions.
@@ -44,9 +43,7 @@ export class DeepBookAdminContract {
 			params;
 		const baseCoin = this.#config.getCoin(baseCoinKey);
 		const quoteCoin = this.#config.getCoin(quoteCoinKey);
-		const deepCoinType = this.#config.getCoin('DEEP').type;
 
-		const creationFee = coinWithBalance({ type: deepCoinType, balance: POOL_CREATION_FEE });
 		const baseScalar = baseCoin.scalar;
 		const quoteScalar = quoteCoin.scalar;
 
@@ -61,7 +58,6 @@ export class DeepBookAdminContract {
 				tx.pure.u64(adjustedTickSize), // adjusted tick_size
 				tx.pure.u64(adjustedLotSize), // adjusted lot_size
 				tx.pure.u64(adjustedMinSize), // adjusted min_size
-				creationFee, // 0x2::balance::Balance<0x2::sui::SUI>
 				tx.pure.bool(whitelisted),
 				tx.pure.bool(stablePool),
 				tx.object(this.#adminCap()),
@@ -81,7 +77,11 @@ export class DeepBookAdminContract {
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::unregister_pool_admin`,
-			arguments: [tx.object(this.#config.REGISTRY_ID), tx.object(this.#adminCap())],
+			arguments: [
+				tx.object(pool.address),
+				tx.object(this.#config.REGISTRY_ID),
+				tx.object(this.#adminCap()),
+			],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 	};
@@ -133,6 +133,22 @@ export class DeepBookAdminContract {
 			arguments: [
 				tx.object(this.#config.REGISTRY_ID),
 				tx.pure.u64(version),
+				tx.object(this.#adminCap()),
+			],
+		});
+	};
+
+	/**
+	 * @description Sets the treasury address where pool creation fees will be sent
+	 * @param {string} treasuryAddress The treasury address
+	 * @returns A function that takes a Transaction object
+	 */
+	setTreasuryAddress = (treasuryAddress: string) => (tx: Transaction) => {
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::registry::set_treasury_address`,
+			arguments: [
+				tx.object(this.#config.REGISTRY_ID),
+				tx.pure.address(treasuryAddress),
 				tx.object(this.#adminCap()),
 			],
 		});

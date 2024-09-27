@@ -4,7 +4,14 @@
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken, DebugSession } from 'vscode';
+import { StackFrame } from '@vscode/debugadapter';
+import {
+    WorkspaceFolder,
+    DebugConfiguration,
+    CancellationToken,
+    TextDocument,
+    Position
+} from 'vscode';
 
 /**
  * Log level for the debug adapter.
@@ -15,6 +22,19 @@ const LOG_LEVEL = 'log';
  * Describes debugger configuration name defined in package.json
  */
 const DEBUGGER_TYPE = 'move-debug';
+
+/**
+ * Provider of on-hover information during debug session.
+ */
+class MoveEvaluatableExpressionProvider {
+    // TODO: implement a more sophisticated provider that actually provides correct on-hover information,
+    // at least for variable definitions whose locations are readily available in the source map
+    // (user can always use go-to-def to see the definition and the value)
+    provideEvaluatableExpression(_document: TextDocument, _position: Position, _token: CancellationToken) {
+        // suppress debug-time on hover information for now
+        return null;
+    }
+}
 
 /**
  * Called when the extension is activated.
@@ -35,6 +55,75 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    let previousSourcePath: string | undefined;
+    const decorationType = vscode.window.createTextEditorDecorationType({
+        color: 'grey',
+        backgroundColor: 'rgba(220, 220, 220, 0.5)' // grey with 50% opacity
+    });
+    context.subscriptions.push(
+        vscode.debug.onDidChangeActiveStackItem(async stackItem => {
+            if (stackItem instanceof vscode.DebugStackFrame) {
+                const session = vscode.debug.activeDebugSession;
+                if (session) {
+                    // Request the stack frame details from the debug adapter
+                    const stackTraceResponse = await session.customRequest('stackTrace', {
+                        threadId: stackItem.threadId,
+                        startFrame: stackItem.frameId,
+                        levels: 1
+                    });
+
+                    const stackFrame: StackFrame = stackTraceResponse.stackFrames[0];
+                    if (stackFrame && stackFrame.source && stackFrame.source.path !== previousSourcePath) {
+                        previousSourcePath = stackFrame.source.path;
+                        const source = stackFrame.source;
+                        const line = stackFrame.line;
+                        console.log(`Frame details: ${source?.name} at line ${line}`);
+
+                        const editor = vscode.window.activeTextEditor;
+                        if (editor) {
+                            const optimized_lines = stackTraceResponse.optimized_lines;
+                            const document = editor.document;
+                            let decorationsArray: vscode.DecorationOptions[] = [];
+
+                            optimized_lines.forEach((lineNumber: number) => {
+                                const line = document.lineAt(lineNumber);
+                                const lineLength = line.text.length;
+                                const lineText = line.text.trim();
+                                if (lineText.length !== 0 // ignore empty lines
+                                    && !lineText.startsWith("const") // ignore constant declarations (not in the source map)
+                                    && !lineText.startsWith("}")) { // ignore closing braces with nothing else on the same line
+                                    const decoration = {
+                                        range: new vscode.Range(lineNumber, 0, lineNumber, lineLength),
+                                    };
+                                    decorationsArray.push(decoration);
+                                }
+                            });
+
+                            editor.setDecorations(decorationType, decorationsArray);
+                        }
+                    }
+                }
+            }
+        })
+    );
+
+    // register a provider of on-hover information during debug session
+    const langSelector = { scheme: 'file', language: 'move' };
+    context.subscriptions.push(
+        vscode.languages.registerEvaluatableExpressionProvider(
+            langSelector,
+            new MoveEvaluatableExpressionProvider()
+        )
+    );
+
+    context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(() => {
+        // reset all decorations when the debug session is terminated
+        // to avoid showing lines for code that was optimized away
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            editor.setDecorations(decorationType, []);
+        }
+    }));
 }
 
 /**

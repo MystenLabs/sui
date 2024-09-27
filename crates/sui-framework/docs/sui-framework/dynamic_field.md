@@ -191,10 +191,7 @@ type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_borrow">borrow</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
-    <a href="../sui-framework/object.md#0x2_object">object</a>: &UID,
-    name: Name,
-): &Value {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_borrow">borrow</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &UID, name: Name): &Value {
     <b>let</b> object_addr = <a href="../sui-framework/object.md#0x2_object">object</a>.to_address();
     <b>let</b> hash = <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
     <b>let</b> field = <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, hash);
@@ -260,10 +257,7 @@ type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_remove">remove</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
-    <a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID,
-    name: Name,
-): Value {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_remove">remove</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID, name: Name): Value {
     <b>let</b> object_addr = <a href="../sui-framework/object.md#0x2_object">object</a>.to_address();
     <b>let</b> hash = <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
     <b>let</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_Field">Field</a> { id, name: _, value } = <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_remove_child_object">remove_child_object</a>&lt;<a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash);
@@ -293,10 +287,7 @@ Returns true if and only if the <code><a href="../sui-framework/object.md#0x2_ob
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_exists_">exists_</a>&lt;Name: <b>copy</b> + drop + store&gt;(
-    <a href="../sui-framework/object.md#0x2_object">object</a>: &UID,
-    name: Name,
-): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_exists_">exists_</a>&lt;Name: <b>copy</b> + drop + store&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &UID, name: Name): bool {
     <b>let</b> object_addr = <a href="../sui-framework/object.md#0x2_object">object</a>.to_address();
     <b>let</b> hash = <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
     <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_has_child_object">has_child_object</a>(object_addr, hash)
@@ -325,7 +316,7 @@ Removes the dynamic field if it exists. Returns the <code>some(Value)</code> if 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_remove_if_exists">remove_if_exists</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
     <a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID,
-    name: Name
+    name: Name,
 ): Option&lt;Value&gt; {
     <b>if</b> (<a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_exists_">exists_</a>&lt;Name&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, name)) {
         <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_remove">remove</a>(<a href="../sui-framework/object.md#0x2_object">object</a>, name))
@@ -446,7 +437,10 @@ May abort with <code><a href="../sui-framework/dynamic_field.md#0x2_dynamic_fiel
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>&lt;K: <b>copy</b> + drop + store&gt;(parent: <b>address</b>, k: K): <b>address</b>;
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>&lt;K: <b>copy</b> + drop + store&gt;(
+    parent: <b>address</b>,
+    k: K,
+): <b>address</b>;
 </code></pre>
 
 
@@ -516,7 +510,10 @@ we need two versions to return a reference or a mutable reference
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;Child: key&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID, id: <b>address</b>): &<b>mut</b> Child;
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;Child: key&gt;(
+    <a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID,
+    id: <b>address</b>,
+): &<b>mut</b> Child;
 </code></pre>
 
 

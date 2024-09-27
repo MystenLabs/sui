@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::json;
+use std::num::NonZeroUsize;
 use std::time::Duration;
 
 use rosetta_client::start_rosetta_test_server;
@@ -175,8 +176,10 @@ async fn test_stake() {
         tx.effects.as_ref().unwrap().status()
     );
 
-    let con_cache = CoinMetadataCache::new(client);
-    let ops2 = Operations::try_from_response(tx, &con_cache).await.unwrap();
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
     assert!(
         ops2.contains(&ops),
         "Operation mismatch. expecting:{}, got:{}",
@@ -236,7 +239,7 @@ async fn test_stake_all() {
         tx.effects.as_ref().unwrap().status()
     );
 
-    let coin_cache = CoinMetadataCache::new(client);
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
     let ops2 = Operations::try_from_response(tx, &coin_cache)
         .await
         .unwrap();
@@ -255,7 +258,7 @@ async fn test_withdraw_stake() {
     telemetry_subscribers::init_for_testing();
 
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(10000)
+        .with_epoch_duration_ms(60000)
         .build()
         .await;
     let sender = test_cluster.get_address_0();
@@ -321,8 +324,8 @@ async fn test_withdraw_stake() {
     assert_eq!(1, response.balances.len());
     assert_eq!(1000000000, response.balances[0].value);
 
-    // wait for epoch.
-    tokio::time::sleep(Duration::from_millis(15000)).await;
+    // Trigger epoch change.
+    test_cluster.trigger_reconfiguration().await;
 
     // withdraw all stake
     let ops = serde_json::from_value(json!(
@@ -354,7 +357,7 @@ async fn test_withdraw_stake() {
         tx.effects.as_ref().unwrap().status()
     );
     println!("Sui TX: {tx:?}");
-    let coin_cache = CoinMetadataCache::new(client);
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
     let ops2 = Operations::try_from_response(tx, &coin_cache)
         .await
         .unwrap();
@@ -425,7 +428,7 @@ async fn test_pay_sui() {
         tx.effects.as_ref().unwrap().status()
     );
     println!("Sui TX: {tx:?}");
-    let coin_cache = CoinMetadataCache::new(client);
+    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
     let ops2 = Operations::try_from_response(tx, &coin_cache)
         .await
         .unwrap();
@@ -449,7 +452,7 @@ async fn test_pay_sui_multiple_times() {
     let keystore = &test_cluster.wallet.config.keystore;
 
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
-    let coin_cache = CoinMetadataCache::new(client.clone());
+    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
 
     for i in 1..20 {
         println!("Iteration: {}", i);

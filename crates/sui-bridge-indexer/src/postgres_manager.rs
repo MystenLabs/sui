@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::models::SuiProgressStore;
-use crate::models::TokenTransfer as DBTokenTransfer;
 use crate::schema::sui_progress_store::txn_digest;
 use crate::schema::{sui_error_transactions, token_transfer_data};
 use crate::{schema, schema::token_transfer, ProcessedTxnData};
-use diesel::result::Error;
-use diesel::BoolExpressionMethods;
+use diesel::query_dsl::methods::FilterDsl;
+use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::pooled_connection::bb8::Pool;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
@@ -59,12 +58,54 @@ pub async fn write(pool: &PgPool, token_txns: Vec<ProcessedTxnData>) -> Result<(
             async move {
                 diesel::insert_into(token_transfer_data::table)
                     .values(&data)
-                    .on_conflict_do_nothing()
+                    .on_conflict((
+                        schema::token_transfer_data::dsl::chain_id,
+                        schema::token_transfer_data::dsl::nonce,
+                    ))
+                    .do_update()
+                    .set((
+                        token_transfer_data::txn_hash.eq(excluded(token_transfer_data::txn_hash)),
+                        token_transfer_data::chain_id.eq(excluded(token_transfer_data::chain_id)),
+                        token_transfer_data::nonce.eq(excluded(token_transfer_data::nonce)),
+                        token_transfer_data::block_height
+                            .eq(excluded(token_transfer_data::block_height)),
+                        token_transfer_data::timestamp_ms
+                            .eq(excluded(token_transfer_data::timestamp_ms)),
+                        token_transfer_data::sender_address
+                            .eq(excluded(token_transfer_data::sender_address)),
+                        token_transfer_data::destination_chain
+                            .eq(excluded(token_transfer_data::destination_chain)),
+                        token_transfer_data::recipient_address
+                            .eq(excluded(token_transfer_data::recipient_address)),
+                        token_transfer_data::token_id.eq(excluded(token_transfer_data::token_id)),
+                        token_transfer_data::amount.eq(excluded(token_transfer_data::amount)),
+                        token_transfer_data::is_finalized
+                            .eq(excluded(token_transfer_data::is_finalized)),
+                    ))
+                    .filter(token_transfer_data::is_finalized.eq(false))
                     .execute(conn)
                     .await?;
                 diesel::insert_into(token_transfer::table)
                     .values(&transfers)
-                    .on_conflict_do_nothing()
+                    .on_conflict((
+                        schema::token_transfer::dsl::chain_id,
+                        schema::token_transfer::dsl::nonce,
+                        schema::token_transfer::dsl::status,
+                    ))
+                    .do_update()
+                    .set((
+                        token_transfer::txn_hash.eq(excluded(token_transfer::txn_hash)),
+                        token_transfer::chain_id.eq(excluded(token_transfer::chain_id)),
+                        token_transfer::nonce.eq(excluded(token_transfer::nonce)),
+                        token_transfer::status.eq(excluded(token_transfer::status)),
+                        token_transfer::block_height.eq(excluded(token_transfer::block_height)),
+                        token_transfer::timestamp_ms.eq(excluded(token_transfer::timestamp_ms)),
+                        token_transfer::txn_sender.eq(excluded(token_transfer::txn_sender)),
+                        token_transfer::gas_usage.eq(excluded(token_transfer::gas_usage)),
+                        token_transfer::data_source.eq(excluded(token_transfer::data_source)),
+                        token_transfer::is_finalized.eq(excluded(token_transfer::is_finalized)),
+                    ))
+                    .filter(token_transfer::is_finalized.eq(false))
                     .execute(conn)
                     .await?;
                 diesel::insert_into(sui_error_transactions::table)
@@ -109,30 +150,5 @@ pub async fn read_sui_progress_store(pool: &PgPool) -> anyhow::Result<Option<Tra
             val.txn_digest.as_slice(),
         )?)),
         None => Ok(None),
-    }
-}
-
-pub async fn get_latest_eth_token_transfer(
-    pool: &PgPool,
-    finalized: bool,
-) -> Result<Option<DBTokenTransfer>, Error> {
-    use crate::schema::token_transfer::dsl::*;
-
-    let connection = &mut pool.get().await.unwrap();
-
-    if finalized {
-        token_transfer
-            .filter(data_source.eq("ETH").and(status.eq("Deposited")))
-            .order(block_height.desc())
-            .first::<DBTokenTransfer>(connection)
-            .await
-            .optional()
-    } else {
-        token_transfer
-            .filter(status.eq("DepositedUnfinalized"))
-            .order(block_height.desc())
-            .first::<DBTokenTransfer>(connection)
-            .await
-            .optional()
     }
 }

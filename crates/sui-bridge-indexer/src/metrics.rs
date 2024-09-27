@@ -19,11 +19,10 @@ pub struct BridgeIndexerMetrics {
     pub(crate) total_eth_token_transfer_claimed: IntCounter,
     pub(crate) total_eth_bridge_txn_other: IntCounter,
     pub(crate) last_committed_sui_checkpoint: IntGauge,
-    pub(crate) latest_committed_eth_block: IntGauge,
-    pub(crate) last_synced_eth_block: IntGauge,
-    pub(crate) tasks_remaining_checkpoints: IntGaugeVec,
+    pub(crate) backfill_tasks_remaining_checkpoints: IntGaugeVec,
     pub(crate) tasks_processed_checkpoints: IntCounterVec,
     pub(crate) tasks_current_checkpoints: IntGaugeVec,
+    pub(crate) inflight_live_tasks: IntGaugeVec,
 }
 
 impl BridgeIndexerMetrics {
@@ -89,21 +88,9 @@ impl BridgeIndexerMetrics {
                 registry,
             )
             .unwrap(),
-            latest_committed_eth_block: register_int_gauge_with_registry!(
-                "bridge_indexer_last_committed_eth_block",
-                "The latest eth block that indexer committed to DB",
-                registry,
-            )
-            .unwrap(),
-            last_synced_eth_block: register_int_gauge_with_registry!(
-                "bridge_indexer_last_synced_eth_block",
-                "The last eth block that indexer committed to DB",
-                registry,
-            )
-            .unwrap(),
-            tasks_remaining_checkpoints: register_int_gauge_vec_with_registry!(
-                "bridge_indexer_tasks_remaining_checkpoints",
-                "The remaining checkpoints for each task",
+            backfill_tasks_remaining_checkpoints: register_int_gauge_vec_with_registry!(
+                "bridge_indexer_backfill_tasks_remaining_checkpoints",
+                "The remaining checkpoints for the currently running backfill task",
                 &["task_name"],
                 registry,
             )
@@ -111,13 +98,20 @@ impl BridgeIndexerMetrics {
             tasks_processed_checkpoints: register_int_counter_vec_with_registry!(
                 "bridge_indexer_tasks_processed_checkpoints",
                 "Total processed checkpoints for each task",
-                &["task_name"],
+                &["task_name", "task_type"],
                 registry,
             )
             .unwrap(),
             tasks_current_checkpoints: register_int_gauge_vec_with_registry!(
                 "bridge_indexer_tasks_current_checkpoints",
                 "Current checkpoint for each task",
+                &["task_name", "task_type"],
+                registry,
+            )
+            .unwrap(),
+            inflight_live_tasks: register_int_gauge_vec_with_registry!(
+                "bridge_indexer_inflight_live_tasks",
+                "Number of inflight live tasks",
                 &["task_name"],
                 registry,
             )

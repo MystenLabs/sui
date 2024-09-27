@@ -28,8 +28,7 @@ runs:
 
     - name: cargo build
       if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to s3 yet
-      run: |
-        cargo build --bin sui --features indexer
+      run: cargo build --bin sui
       shell: bash
 
     - name: Dowload from S3
@@ -37,7 +36,7 @@ runs:
       working-directory: ./target/debug
       run: |
         mkdir -p $PWD/target/debug
-        wget -O target/debug/sui https://sui-releases.s3.us-east-1.amazonaws.com/${{ github.sha }}/debug/sui-pg
+        wget -O target/debug/sui https://sui-releases.s3.us-east-1.amazonaws.com/${{ github.sha }}/debug/sui
         chmod +x $PWD/target/debug/sui
       shell: bash
 

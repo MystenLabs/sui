@@ -1,0 +1,10 @@
+[package]
+name = "Pkg"
+edition = "2024.alpha"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+DepPkg = { local = "../dep-pkg" }
+
+[addresses]
+Pkg = "0x0"

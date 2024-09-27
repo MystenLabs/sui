@@ -24,6 +24,7 @@ pub struct TestDatasource<T> {
     pub genesis_checkpoint: u64,
     pub gauge_metric: IntGaugeVec,
     pub counter_metric: IntCounterVec,
+    pub inflight_live_tasks: IntGaugeVec,
 }
 
 #[async_trait]
@@ -66,6 +67,11 @@ where
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         // This is dummy
         &self.counter_metric
+    }
+
+    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
+        // This is dummy
+        &self.inflight_live_tasks
     }
 }
 
@@ -112,16 +118,14 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
 
     async fn save_progress(
         &mut self,
-        task_name: String,
+        task: &Task,
         checkpoint_numbers: &[u64],
-        _start_checkpoint_number: u64,
-        _target_checkpoint_number: u64,
     ) -> anyhow::Result<Option<u64>> {
         let checkpoint_number = *checkpoint_numbers.last().unwrap();
         self.progress_store
             .lock()
             .await
-            .get_mut(&task_name)
+            .get_mut(&task.task_name)
             .unwrap()
             .start_checkpoint = checkpoint_number;
         Ok(Some(checkpoint_number))

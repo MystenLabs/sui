@@ -494,7 +494,7 @@ pub struct Processor {
 #[async_trait::async_trait]
 impl Worker for Processor {
     #[inline]
-    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         self.processor.process_checkpoint(checkpoint_data).await
     }
 }

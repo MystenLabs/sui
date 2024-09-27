@@ -527,7 +527,7 @@ User->>User's Kiosk: Resolve Promise by returning Tokenized Asset X in user's Ki
 
 The following sequence diagram shows the burn flow and assumes that:
 
-- Tokenized asset has already been minted by the creator of its type. 
+- Tokenized asset has already been minted by the creator of its type.
 - Tokenized asset is already placed and locked inside the user's Kiosk.
 - Everything is executed in the same PTB.
 
@@ -808,7 +808,7 @@ xxd -c 0 -p build/template/bytecode_modules/template.mv | head -n 1
 
 <details>
   <summary>
-  Toggle response
+  Console response
   </summary>
 
 The response you should receive looks similar to the following:
@@ -908,7 +908,7 @@ Lastly, to deploy the changed template module, build and publish:
 const tx = new Transaction();
   tx.setGasBudget(100000000);
   const [upgradeCap] = tx.publish({
-    modules: [[...fromHEX(bytesToPublish)], [...fromHEX(genesis_bytecode)]],
+    modules: [[...fromHex(bytesToPublish)], [...fromHex(genesis_bytecode)]],
     dependencies: [
       normalizeSuiObjectId("0x1"),
       normalizeSuiObjectId("0x2"),

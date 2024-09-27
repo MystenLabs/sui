@@ -406,7 +406,7 @@ pub async fn get_transaction_block(
         .sorted_by(|(k1, err1, _), (k2, err2, _)| {
             Ord::cmp(k1, k2).then_with(|| Ord::cmp(err1, err2))
         })
-        .group_by(|(_, _err, r)| {
+        .chunk_by(|(_, _err, r)| {
             r.2.as_ref().map(|ok_result| match &ok_result.status {
                 TransactionStatus::Signed(_) => None,
                 TransactionStatus::Executed(_, effects, _) => Some((

@@ -1,5 +1,5 @@
 //# publish
-module 0x1.M {
+module 0x6.M {
     f<T1, T2, T3>() {
     label b0:
         Self.g<T2, T3, T1>();

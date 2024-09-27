@@ -228,7 +228,7 @@ impl ServerBuilder {
         self
     }
 
-    #[cfg(all(test, feature = "pg_integration"))]
+    #[cfg(test)]
     fn build_schema(self) -> Schema<Query, Mutation, EmptySubscription> {
         self.schema.finish()
     }
@@ -265,12 +265,9 @@ impl ServerBuilder {
         if self.router.is_none() {
             let router: Router = Router::new()
                 .route("/", post(graphql_handler))
-                .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
-                .route("/graphql/:version", post(graphql_handler))
                 .route("/health", get(health_check))
                 .route("/graphql/health", get(health_check))
-                .route("/graphql/:version/health", get(health_check))
                 .with_state(self.state.clone())
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
@@ -678,7 +675,7 @@ async fn get_or_init_server_start_time() -> &'static Instant {
     ONCE.get_or_init(|| async move { Instant::now() }).await
 }
 
-#[cfg(all(test, feature = "pg_integration"))]
+#[cfg(test)]
 pub mod tests {
     use super::*;
     use crate::test_infra::cluster::{prep_executor_cluster, start_cluster};
@@ -778,7 +775,7 @@ pub mod tests {
         telemetry_subscribers::init_for_testing();
         let cluster = start_cluster(ServiceConfig::test_defaults()).await;
         cluster
-            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(30))
             .await;
         // timeout test includes mutation timeout, which requires a [SuiClient] to be able to run
         // the test, and a transaction. [WalletContext] gives access to everything that's needed.

@@ -99,6 +99,7 @@ members = [
     "crates/sui-cost",
     "crates/sui-data-ingestion",
     "crates/sui-data-ingestion-core",
+    "crates/sui-deepbook-indexer",
     "crates/sui-e2e-tests",
     "crates/sui-enum-compat-util",
     "crates/sui-faucet",
@@ -201,7 +202,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.34.0"
+version = "1.35.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -364,7 +365,7 @@ inquire = "0.6.0"
 insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
 integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
-itertools = "0.10.5"
+itertools = "0.13.0"
 jemalloc-ctl = "^0.5"
 jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
     "server",
@@ -571,10 +572,10 @@ move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3366c26a746b72707572c4f3f05915e20d5c16c2" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3366c26a746b72707572c4f3f05915e20d5c16c2" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3366c26a746b72707572c4f3f05915e20d5c16c2", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3366c26a746b72707572c4f3f05915e20d5c16c2", features = [
     "experimental",
 ] }
 passkey-types = { version = "0.2.0" }

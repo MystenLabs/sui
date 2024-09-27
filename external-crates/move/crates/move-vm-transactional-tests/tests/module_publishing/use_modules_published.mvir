@@ -31,7 +31,7 @@ module 0x44.M {
 }
 
 //# run
-module 0x42.m {
+module 0x45.m {
 import 0x42.M;
 
 entry foo() {
@@ -42,7 +42,7 @@ label b0:
 }
 
 //# publish
-module 0x45.M {
+module 0x46.M {
     public baz(): u64 {
     label b0:
         return 9;
@@ -50,7 +50,7 @@ module 0x45.M {
 }
 
 //# run
-module 0x42.m {
+module 0x47.m {
 import 0x42.M as M1;
 import 0x43.M as M2;
 import 0x44.M as M3;

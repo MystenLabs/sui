@@ -69,7 +69,7 @@ function Interstitial({
 				</button>
 				{bannerUrl && (
 					<ExternalLink href={bannerUrl} onClick={onClick} className="w-full text-center">
-						<img className="rounded-2xl" src={imageUrl} alt="interstitial-banner" />
+						<img className="rounded-2xl w-full p-2" src={imageUrl} alt="interstitial-banner" />
 					</ExternalLink>
 				)}
 				<ButtonOrLink
