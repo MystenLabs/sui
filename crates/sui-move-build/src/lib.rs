@@ -642,6 +642,7 @@ impl PackageHooks for SuiPackageHooks {
     fn custom_resolve_pkg_id(
         &self,
         manifest: &SourceManifest,
+        _: Option<&str>,
     ) -> anyhow::Result<PackageIdentifier> {
         if (!cfg!(debug_assertions) || cfg!(test))
             && manifest.package.edition == Some(Edition::DEVELOPMENT)
@@ -651,7 +652,11 @@ impl PackageHooks for SuiPackageHooks {
         Ok(manifest.package.name)
     }
 
-    fn resolve_version(&self, _: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
+    fn resolve_version(
+        &self,
+        _: &SourceManifest,
+        _: Option<&str>,
+    ) -> anyhow::Result<Option<Symbol>> {
         Ok(None)
     }
 }
