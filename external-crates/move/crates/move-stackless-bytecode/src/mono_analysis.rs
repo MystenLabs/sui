@@ -200,7 +200,8 @@ impl<'a> Analyzer<'a> {
         for module in self.env.get_modules() {
             for fun in module.get_functions() {
                 for (variant, target) in self.targets.get_targets(&fun) {
-                    if !variant.is_verified() {
+                    if !variant.is_verified() || !self.targets.is_verified(&fun.get_qualified_id())
+                    {
                         continue;
                     }
                     self.analyze_fun(target.clone());
@@ -219,7 +220,6 @@ impl<'a> Analyzer<'a> {
         // Next do todo-list for regular functions, while self.inst_opt contains the
         // specific instantiation.
         while let Some((fun, variant, inst)) = self.todo_funs.pop() {
-            self.done_funs.insert((fun, variant.clone(), inst.clone()));
             self.inst_opt = Some(inst);
             self.analyze_fun(
                 self.targets
@@ -315,18 +315,6 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        if let Some(inst) = &self.inst_opt {
-            if let Some(spec_qid) = self
-                .targets
-                .get_opaque_spec_by_fun(&target.func_env.get_qualified_id())
-            {
-                let entry = (spec_qid.clone(), FunctionVariant::Baseline, inst.clone());
-                if !self.done_funs.contains(&entry) {
-                    self.todo_funs.push(entry);
-                };
-            };
-        };
-
         // Analyze instantiations (when this function is a verification target)
         if self.inst_opt.is_none() {
             // collect information
@@ -364,6 +352,11 @@ impl<'a> Analyzer<'a> {
 
             // mark all the instantiated targets as todo
             for fun_inst in all_insts {
+                self.done_funs.insert((
+                    target.func_env.get_qualified_id(),
+                    target.data.variant.clone(),
+                    fun_inst.clone(),
+                ));
                 self.todo_funs.push((
                     target.func_env.get_qualified_id(),
                     target.data.variant.clone(),
@@ -407,21 +400,19 @@ impl<'a> Analyzer<'a> {
                     }
                 }
 
+                if let Some(spec_qid) = self
+                    .targets
+                    .get_opaque_spec_by_fun(&callee_env.get_qualified_id())
+                {
+                    self.push_todo_fun(spec_qid.clone(), actuals.clone());
+                };
+
                 if callee_env.is_native_or_intrinsic() && !actuals.is_empty() {
                     self.info
                         .funs
                         .entry((callee_env.get_qualified_id(), FunctionVariant::Baseline))
                         .or_default()
                         .insert(actuals.clone());
-                    if let Some(spec_qid) = self
-                        .targets
-                        .get_opaque_spec_by_fun(&callee_env.get_qualified_id())
-                    {
-                        let entry = (spec_qid.clone(), FunctionVariant::Baseline, actuals.clone());
-                        if !self.done_funs.contains(&entry) {
-                            self.todo_funs.push(entry);
-                        };
-                    };
                     // Mark the associated module to be instantiated with the given actuals.
                     // This will instantiate all functions in the module with matching number
                     // of type parameters.
@@ -430,13 +421,15 @@ impl<'a> Analyzer<'a> {
                         .entry(callee_env.module_env.get_id())
                         .or_default()
                         .insert(actuals);
-                } else if !callee_env.is_opaque() {
+                } else if !callee_env.is_opaque()
+                    && !self
+                        .targets
+                        .no_verify_specs()
+                        .contains(&callee_env.get_qualified_id())
+                {
                     // This call needs to be inlined, with targs instantiated by self.inst_opt.
                     // Schedule for later processing if this instance has not been processed yet.
-                    let entry = (mid.qualified(*fid), FunctionVariant::Baseline, actuals);
-                    if !self.done_funs.contains(&entry) {
-                        self.todo_funs.push(entry);
-                    }
+                    self.push_todo_fun(mid.qualified(*fid), actuals);
                 }
             }
             Call(_, _, WriteBack(_, edge), ..) => {
@@ -455,6 +448,14 @@ impl<'a> Analyzer<'a> {
                 self.add_struct(struct_env, &mem.inst);
             }
             _ => {}
+        }
+    }
+
+    fn push_todo_fun(&mut self, id: QualifiedId<FunId>, actuals: Vec<Type>) {
+        let entry = (id, FunctionVariant::Baseline, actuals);
+        if !self.done_funs.contains(&entry) {
+            self.done_funs.insert(entry.clone());
+            self.todo_funs.push(entry);
         }
     }
 

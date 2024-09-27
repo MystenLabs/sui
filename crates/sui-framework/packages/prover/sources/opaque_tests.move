@@ -64,6 +64,26 @@ fun double_wrap_spec(x: u64): u64 {
     result
 }
 
+fun add_wrap_buggy(x: u64, y: u64): u64 {
+    x + y
+}
+
+fun add_wrap_buggy_no_verify_spec(x: u64, y: u64): u64 {
+    let result = add_wrap_buggy(x, y);
+    ensures(result == x.to_int().add(y.to_int()).to_u64());
+    result
+}
+
+fun double_wrap_buggy(x: u64): u64 {
+    add_wrap_buggy(x, x)
+}
+
+fun double_wrap_buggy_spec(x: u64): u64 {
+    let result = double_wrap_buggy(x);
+    ensures(result == x.to_int().mul((2 as u8).to_int()).to_u64());
+    result
+}
+
 public struct Range<phantom T> {
     x: u64,
     y: u64,

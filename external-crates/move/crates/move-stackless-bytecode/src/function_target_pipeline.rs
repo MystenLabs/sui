@@ -33,6 +33,7 @@ use crate::{
 pub struct FunctionTargetsHolder {
     targets: BTreeMap<QualifiedId<FunId>, BTreeMap<FunctionVariant, FunctionData>>,
     opaque_specs: BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>>,
+    no_verify_specs: BTreeSet<QualifiedId<FunId>>,
 }
 
 /// Describes a function verification flavor.
@@ -168,6 +169,7 @@ impl FunctionTargetsHolder {
         Self {
             targets: BTreeMap::new(),
             opaque_specs: BiBTreeMap::new(),
+            no_verify_specs: BTreeSet::new(),
         }
     }
 
@@ -197,6 +199,14 @@ impl FunctionTargetsHolder {
         self.opaque_specs.get_by_right(id)
     }
 
+    pub fn no_verify_specs(&self) -> &BTreeSet<QualifiedId<FunId>> {
+        &self.no_verify_specs
+    }
+
+    pub fn is_verified(&self, id: &QualifiedId<FunId>) -> bool {
+        self.get_fun_by_opaque_spec(id).is_some() && !self.no_verify_specs.contains(id)
+    }
+
     /// Adds a new function target. The target will be initialized from the Move byte code.
     pub fn add_target(&mut self, func_env: &FunctionEnv<'_>) {
         let generator = StacklessBytecodeGenerator::new(func_env);
@@ -206,19 +216,29 @@ impl FunctionTargetsHolder {
             .or_default()
             .insert(FunctionVariant::Baseline, data);
 
-        func_env.get_name_str().strip_suffix("_spec").map(|name| {
-            self.opaque_specs.insert(
-                func_env.get_qualified_id(),
-                func_env
-                    .module_env
-                    .find_function(func_env.symbol_pool().make(name))
-                    .unwrap_or_else(|| {
-                        // TODO: report error
-                        panic!("prover target function not found: function={}", name,)
-                    })
-                    .get_qualified_id(),
-            )
-        });
+        func_env
+            .get_name_str()
+            .strip_suffix("_spec")
+            .map(|name| match name.strip_suffix("_no_verify") {
+                Some(actual_name) => {
+                    self.no_verify_specs.insert(func_env.get_qualified_id());
+                    actual_name
+                }
+                None => name,
+            })
+            .map(|name| {
+                self.opaque_specs.insert(
+                    func_env.get_qualified_id(),
+                    func_env
+                        .module_env
+                        .find_function(func_env.symbol_pool().make(name))
+                        .unwrap_or_else(|| {
+                            // TODO: report error
+                            panic!("prover target function not found: function={}", name,)
+                        })
+                        .get_qualified_id(),
+                )
+            });
     }
 
     /// Gets a function target for read-only consumption, for the given variant.

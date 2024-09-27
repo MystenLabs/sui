@@ -72,8 +72,6 @@ pub struct BoogieTranslator<'env> {
     writer: &'env CodeWriter,
     spec_translator: SpecTranslator<'env>,
     targets: &'env FunctionTargetsHolder,
-    verification_targets: BTreeMap<QualifiedId<FunId>, QualifiedId<FunId>>,
-    called_targets: BTreeSet<QualifiedId<FunId>>,
 }
 
 pub struct FunctionTranslator<'env> {
@@ -96,47 +94,12 @@ impl<'env> BoogieTranslator<'env> {
         targets: &'env FunctionTargetsHolder,
         writer: &'env CodeWriter,
     ) -> Self {
-        let (verification_targets, called_targets): (Vec<_>, Vec<_>) = env
-            .get_modules()
-            .flat_map(|module_env| {
-                module_env
-                    .get_functions()
-                    .filter_map(|function_env| {
-                        function_env
-                            .get_name_str()
-                            .strip_suffix("_spec")
-                            .map(|name| {
-                                let target_function_env = function_env
-                                    .module_env
-                                    .find_function(function_env.symbol_pool().make(name))
-                                    .unwrap_or_else(|| {
-                                        // TODO: report error
-                                        panic!(
-                                            "prover target function not found: function={}",
-                                            name,
-                                        )
-                                    });
-                                (
-                                    (
-                                        function_env.get_qualified_id(),
-                                        target_function_env.get_qualified_id(),
-                                    ),
-                                    function_env.get_transitive_closure_of_called_functions(),
-                                )
-                            })
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unzip();
-
         Self {
             env,
             options,
             targets,
             writer,
             spec_translator: SpecTranslator::new(writer, env, options),
-            verification_targets: verification_targets.into_iter().collect(),
-            called_targets: called_targets.into_iter().flatten().collect(),
         }
     }
 
@@ -304,7 +267,7 @@ impl<'env> BoogieTranslator<'env> {
                         FunctionTranslationStyle::SpecNoAbortCheck,
                     );
                     self.translate_function_style(fun_env, FunctionTranslationStyle::Opaque);
-                } else if self.called_targets.contains(&fun_env.get_qualified_id()) {
+                } else {
                     let fun_target = self.targets.get_target(fun_env, &FunctionVariant::Baseline);
 
                     // This variant is inlined, so translate for all type instantiations.
@@ -425,6 +388,19 @@ impl<'env> BoogieTranslator<'env> {
     fn translate_function_style(&self, fun_env: &FunctionEnv, style: FunctionTranslationStyle) {
         use Bytecode::*;
 
+        if style == FunctionTranslationStyle::Default
+            && (self
+                .get_verification_target_fun_env(&fun_env.get_qualified_id())
+                .unwrap()
+                .is_native()
+                || self
+                    .targets
+                    .no_verify_specs()
+                    .contains(&fun_env.get_qualified_id()))
+        {
+            return;
+        }
+
         let prover_module_id = fun_env
             .module_env
             .env
@@ -464,10 +440,6 @@ impl<'env> BoogieTranslator<'env> {
             | FunctionTranslationStyle::Opaque => FunctionVariant::Baseline,
         };
         let spec_fun_target = self.targets.get_target(&fun_env, &variant);
-        // let spec_fun_target = self.targets.get_target(
-        //     &fun_env,
-        //     &FunctionVariant::Verification(VerificationFlavor::Regular),
-        // );
 
         println!(
             "spec_fun_target function={}, variant={}",
@@ -539,10 +511,6 @@ impl<'env> BoogieTranslator<'env> {
 
         let fun_target = FunctionTarget::new(builder.fun_env, &data);
         if style == FunctionTranslationStyle::Default
-            && !self
-                .get_verification_target_fun_env(&fun_target.func_env.get_qualified_id())
-                .unwrap()
-                .is_native()
             || style == FunctionTranslationStyle::Asserts
             || style == FunctionTranslationStyle::Aborts
             || style == FunctionTranslationStyle::SpecNoAbortCheck
