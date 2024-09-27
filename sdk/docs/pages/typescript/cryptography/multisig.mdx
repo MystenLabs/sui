@@ -142,7 +142,7 @@ const multisigAddress = multiSigPublicKey.toSuiAddress();
 const zkLoginSig = getZkLoginSignature({
 	inputs: zkLoginInputs,
 	maxEpoch: '2',
-	userSignature: fromB64(ephemeralSig),
+	userSignature: fromBase64(ephemeralSig),
 });
 
 // a valid multisig with just the zklogin signature.

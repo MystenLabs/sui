@@ -8,7 +8,7 @@ import path from 'path';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import { fromB64 } from '@mysten/sui/utils';
+import { fromBase64 } from '@mysten/sui/utils';
 
 export type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
 
@@ -29,7 +29,7 @@ export const getSigner = () => {
 	);
 
 	for (const priv of keystore) {
-		const raw = fromB64(priv);
+		const raw = fromBase64(priv);
 		if (raw[0] !== 0) {
 			continue;
 		}

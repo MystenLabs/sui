@@ -378,6 +378,7 @@ where
 
                 // TODO: spawn a task for this
                 if attempt_times >= MAX_SIGNING_ATTEMPTS {
+                    metrics.err_signature_aggregation_too_many_failures.inc();
                     error!("Manual intervention is required. Failed to collect sigs for bridge action after {MAX_SIGNING_ATTEMPTS} attempts: {:?}", e);
                     return;
                 }
@@ -542,10 +543,10 @@ where
                 let sender_clone = execution_queue_sender.clone();
                 spawn_logged_monitored_task!(async move {
                     // If it fails for too many times, log and ask for manual intervention.
-                    metrics_clone
-                        .err_sui_transaction_submission_too_many_failures
-                        .inc();
                     if attempt_times >= MAX_EXECUTION_ATTEMPTS {
+                        metrics_clone
+                            .err_sui_transaction_submission_too_many_failures
+                            .inc();
                         error!("Manual intervention is required. Failed to collect execute transaction for bridge action after {MAX_EXECUTION_ATTEMPTS} attempts: {:?}", err);
                         return;
                     }

@@ -305,7 +305,7 @@ fn min_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
 /// Constructs a `RawQuery` as a join over all relevant side tables, filtered on their own filter
 /// condition, plus optionally a sender, plus optionally tx/cp bounds.
 pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -> Option<RawQuery> {
-    let sender = filter.sign_address;
+    let sender = filter.sent_address.or(filter.sign_address);
 
     let mut subqueries = vec![];
 
@@ -323,24 +323,38 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
             ),
         });
     }
+
     if let Some(kind) = &filter.kind {
         subqueries.push(("tx_kinds", select_kind(*kind, sender, tx_bounds)));
     }
+
+    #[cfg(feature = "staging")]
+    if let Some(affected) = &filter.affected_address {
+        subqueries.push((
+            "tx_affected_addresses",
+            select_affected_address(affected, sender, tx_bounds),
+        ));
+    }
+
     if let Some(recv) = &filter.recv_address {
         subqueries.push(("tx_recipients", select_recipient(recv, sender, tx_bounds)));
     }
+
     if let Some(input) = &filter.input_object {
         subqueries.push(("tx_input_objects", select_input(input, sender, tx_bounds)));
     }
+
     if let Some(changed) = &filter.changed_object {
         subqueries.push((
             "tx_changed_objects",
             select_changed(changed, sender, tx_bounds),
         ));
     }
+
     if let Some(sender) = &filter.explicit_sender() {
         subqueries.push(("tx_senders", select_sender(sender, tx_bounds)));
     }
+
     if let Some(txs) = &filter.transaction_ids {
         subqueries.push(("tx_digests", select_ids(txs, tx_bounds)));
     }
@@ -439,6 +453,18 @@ fn select_kind(
             format!("tx_kind = {}", kind as i16)
         ),
     }
+}
+
+#[cfg(feature = "staging")]
+fn select_affected_address(
+    affected: &SuiAddress,
+    sender: Option<SuiAddress>,
+    bound: TxBounds,
+) -> RawQuery {
+    filter!(
+        select_tx(sender, bound, "tx_affected_addresses"),
+        format!("affected = {}", bytea_literal(affected.as_slice()))
+    )
 }
 
 fn select_sender(sender: &SuiAddress, bound: TxBounds) -> RawQuery {

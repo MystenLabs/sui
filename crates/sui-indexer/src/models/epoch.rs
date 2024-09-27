@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::{Insertable, Queryable, Selectable};
-
 use crate::schema::epochs;
 use crate::types::IndexedEpochInfo;
 use crate::{errors::IndexerError, schema::feature_flags, schema::protocol_configs};
+use diesel::{Insertable, Queryable, Selectable};
 use sui_json_rpc_types::{EndOfEpochInfo, EpochInfo};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
@@ -19,7 +18,7 @@ pub struct StoredEpochInfo {
     pub protocol_version: i64,
     pub total_stake: i64,
     pub storage_fund_balance: i64,
-    pub system_state: Vec<u8>,
+    pub system_state: Option<Vec<u8>>,
     pub epoch_total_transactions: Option<i64>,
     pub last_checkpoint_id: Option<i64>,
     pub epoch_end_timestamp: Option<i64>,
@@ -31,6 +30,8 @@ pub struct StoredEpochInfo {
     pub total_stake_rewards_distributed: Option<i64>,
     pub leftover_storage_fund_inflow: Option<i64>,
     pub epoch_commitments: Option<Vec<u8>>,
+    /// This is the system state summary at the beginning of the epoch, serialized as JSON.
+    pub system_state_summary_json: Option<serde_json::Value>,
 }
 
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
@@ -82,6 +83,9 @@ impl StoredEpochInfo {
     pub fn from_epoch_beginning_info(e: &IndexedEpochInfo) -> Self {
         Self {
             epoch: e.epoch as i64,
+            system_state_summary_json: Some(
+                serde_json::to_value(e.system_state_summary.clone()).unwrap(),
+            ),
             first_checkpoint_id: e.first_checkpoint_id as i64,
             epoch_start_timestamp: e.epoch_start_timestamp as i64,
             reference_gas_price: e.reference_gas_price as i64,
@@ -92,10 +96,15 @@ impl StoredEpochInfo {
         }
     }
 
+    // TODO: It's a bit fragile to construct the full data structure but only
+    // commit partial data. We should refactor this.
     pub fn from_epoch_end_info(e: &IndexedEpochInfo) -> Self {
         Self {
             epoch: e.epoch as i64,
-            system_state: e.system_state.clone(),
+            // TODO: Deprecate this.
+            system_state: None,
+            // At epoch end the system state would be the state of the next epoch, so we ignore it.
+            system_state_summary_json: None,
             epoch_total_transactions: e.epoch_total_transactions.map(|v| v as i64),
             last_checkpoint_id: e.last_checkpoint_id.map(|v| v as i64),
             epoch_end_timestamp: e.epoch_end_timestamp.map(|v| v as i64),
@@ -122,6 +131,23 @@ impl StoredEpochInfo {
             total_stake: 0,
             storage_fund_balance: 0,
         }
+    }
+
+    pub fn get_json_system_state_summary(&self) -> Result<SuiSystemStateSummary, IndexerError> {
+        let Some(system_state_summary_json) = self.system_state_summary_json.clone() else {
+            return Err(IndexerError::PersistentStorageDataCorruptionError(
+                "System state summary is null for the given epoch".into(),
+            ));
+        };
+        let system_state_summary: SuiSystemStateSummary =
+            serde_json::from_value(system_state_summary_json).map_err(|_| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Failed to deserialize `system_state` for epoch {:?}",
+                    self.epoch,
+                ))
+            })?;
+        debug_assert_eq!(system_state_summary.epoch, self.epoch as u64);
+        Ok(system_state_summary)
     }
 }
 
@@ -151,20 +177,11 @@ impl TryFrom<StoredEpochInfo> for EpochInfo {
     type Error = IndexerError;
 
     fn try_from(value: StoredEpochInfo) -> Result<Self, Self::Error> {
-        let epoch = value.epoch as u64;
         let end_of_epoch_info = (&value).into();
-        let system_state: Option<SuiSystemStateSummary> = bcs::from_bytes(&value.system_state)
-            .map_err(|_| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Failed to deserialize `system_state` for epoch {epoch}",
-                ))
-            })
-            .ok();
+        let system_state_summary = value.get_json_system_state_summary()?;
         Ok(EpochInfo {
             epoch: value.epoch as u64,
-            validators: system_state
-                .map(|s| s.active_validators)
-                .unwrap_or_default(),
+            validators: system_state_summary.active_validators,
             epoch_total_transactions: value.epoch_total_transactions.unwrap_or(0) as u64,
             first_checkpoint_id: value.first_checkpoint_id as u64,
             epoch_start_timestamp: value.epoch_start_timestamp as u64,

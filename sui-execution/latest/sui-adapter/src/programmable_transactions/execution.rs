@@ -19,7 +19,7 @@ mod checked {
     };
     use move_core_types::{
         account_address::AccountAddress,
-        identifier::IdentStr,
+        identifier::{IdentStr, Identifier},
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
@@ -39,6 +39,7 @@ mod checked {
     use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
     use sui_types::storage::{get_package_objects, PackageObject};
+    use sui_types::type_input::TypeInput;
     use sui_types::{
         base_types::{
             MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -132,6 +133,9 @@ mod checked {
                         "input checker ensures if args are empty, there is a type specified"
                     );
                 };
+
+                let tag = to_type_tag(context, tag)?;
+
                 let elem_ty = context
                     .load_type(&tag)
                     .map_err(|e| context.convert_vm_error(e))?;
@@ -158,6 +162,7 @@ mod checked {
                 let mut arg_iter = args.into_iter().enumerate();
                 let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                     Some(tag) => {
+                        let tag = to_type_tag(context, tag)?;
                         let elem_ty = context
                             .load_type(&tag)
                             .map_err(|e| context.convert_vm_error(e))?;
@@ -285,9 +290,13 @@ mod checked {
                     arguments,
                 } = *move_call;
 
+                let module = to_identifier(context, module)?;
+                let function = to_identifier(context, function)?;
+
                 // Convert type arguments to `Type`s
                 let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
                 for (ix, type_arg) in type_arguments.into_iter().enumerate() {
+                    let type_arg = to_type_tag(context, type_arg)?;
                     let ty = context
                         .load_type(&type_arg)
                         .map_err(|e| context.convert_type_argument_error(ix, e))?;
@@ -1358,6 +1367,41 @@ mod checked {
             }
         }
         Ok(())
+    }
+
+    fn to_identifier(
+        context: &mut ExecutionContext<'_, '_, '_>,
+        ident: String,
+    ) -> Result<Identifier, ExecutionError> {
+        if context.protocol_config.validate_identifier_inputs() {
+            Identifier::new(ident).map_err(|e| {
+                ExecutionError::new_with_source(
+                    ExecutionErrorKind::VMInvariantViolation,
+                    e.to_string(),
+                )
+            })
+        } else {
+            // SAFETY: Preserving existing behaviour for identifier deserialization.
+            Ok(unsafe { Identifier::new_unchecked(ident) })
+        }
+    }
+
+    fn to_type_tag(
+        context: &mut ExecutionContext<'_, '_, '_>,
+        type_input: TypeInput,
+    ) -> Result<TypeTag, ExecutionError> {
+        if context.protocol_config.validate_identifier_inputs() {
+            type_input.into_type_tag().map_err(|e| {
+                ExecutionError::new_with_source(
+                    ExecutionErrorKind::VMInvariantViolation,
+                    e.to_string(),
+                )
+            })
+        } else {
+            // SAFETY: Preserving existing behaviour for identifier deserialization within type
+            // tags and inputs.
+            Ok(unsafe { type_input.into_type_tag_unchecked() })
+        }
     }
 
     fn get_datatype_ident(s: &CachedDatatype) -> (&AccountAddress, &IdentStr, &IdentStr) {

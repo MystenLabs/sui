@@ -883,6 +883,7 @@ pub struct TestClusterBuilder {
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
+    disable_fullnode_pruning: bool,
     validator_supported_protocol_versions_config: ProtocolVersionsConfig,
     // Default to validator_supported_protocol_versions_config, but can be overridden.
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
@@ -912,6 +913,7 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
+            disable_fullnode_pruning: false,
             validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
@@ -979,6 +981,11 @@ impl TestClusterBuilder {
 
     pub fn enable_fullnode_events(mut self) -> Self {
         self.enable_fullnode_events = true;
+        self
+    }
+
+    pub fn disable_fullnode_pruning(mut self) -> Self {
+        self.disable_fullnode_pruning = true;
         self
     }
 
@@ -1453,6 +1460,10 @@ impl TestClusterBuilder {
         if let Some(submit_delay_step_override_millis) = self.submit_delay_step_override_millis {
             builder =
                 builder.with_submit_delay_step_override_millis(submit_delay_step_override_millis);
+        }
+
+        if self.disable_fullnode_pruning {
+            builder = builder.with_disable_fullnode_pruning();
         }
 
         let mut swarm = builder.build();

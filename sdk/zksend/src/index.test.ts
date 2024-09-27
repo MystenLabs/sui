@@ -7,7 +7,7 @@ import { decodeSuiPrivateKey, Keypair } from '@mysten/sui/cryptography';
 import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import { toB64 } from '@mysten/sui/utils';
+import { toBase64 } from '@mysten/sui/utils';
 import { beforeAll, expect, test } from 'vitest';
 
 import { getSentTransactionsWithLinks, ZkSendLink, ZkSendLinkBuilder } from './index.js';
@@ -481,7 +481,7 @@ describe('Non contract links', () => {
 
 			expect(res.balanceChanges?.length).toEqual(2);
 			const link2 = await ZkSendLink.fromUrl(
-				`https://zksend.con/claim#${toB64(decodeSuiPrivateKey(linkKp.getSecretKey()).secretKey)}`,
+				`https://zksend.con/claim#${toBase64(decodeSuiPrivateKey(linkKp.getSecretKey()).secretKey)}`,
 				{
 					contract: ZK_BAG_CONFIG,
 					network: 'testnet',

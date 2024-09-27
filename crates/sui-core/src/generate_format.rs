@@ -4,20 +4,34 @@
 use clap::*;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
-use move_core_types::language_storage::{StructTag, TypeTag};
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use pretty_assertions::assert_str_eq;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use roaring::RoaringBitmap;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::str::FromStr;
 use std::{fs::File, io::Write};
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::{
+    AggregateAuthoritySignature, AuthorityQuorumSignInfo, AuthorityStrongQuorumSignInfo,
+};
+use sui_types::effects::TransactionEvents;
+use sui_types::event::Event;
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
     TypeArgumentError,
 };
+use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
 use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::move_package::TypeOrigin;
+use sui_types::object::Object;
+use sui_types::transaction::{SenderSignedData, TransactionData};
+use sui_types::type_input::{StructInput, TypeInput};
 use sui_types::{
     base_types::MoveObjectType_,
     crypto::Signer,
@@ -60,23 +74,30 @@ fn get_registry() -> Result<Registry> {
     // tracer.trace_value(&mut samples, ...)?;
     // with all the base types contained in messages, especially the ones with custom serializers;
     // or involving generics (see [serde_reflection documentation](https://novifinancial.github.io/serde-reflection/serde_reflection/index.html)).
+
+    let m = ModuleId::new(AccountAddress::ZERO, Identifier::new("foo").unwrap());
+    tracer.trace_value(&mut samples, &m).unwrap();
+    tracer
+        .trace_value(&mut samples, &Identifier::new("foo").unwrap())
+        .unwrap();
+
     let (addr, kp): (_, AuthorityKeyPair) = get_key_pair();
     let (s_addr, s_kp): (_, AccountKeyPair) = get_key_pair();
     let pk: AuthorityPublicKeyBytes = kp.public().into();
-    tracer.trace_value(&mut samples, &addr)?;
-    tracer.trace_value(&mut samples, &kp)?;
-    tracer.trace_value(&mut samples, &pk)?;
+    tracer.trace_value(&mut samples, &addr).unwrap();
+    tracer.trace_value(&mut samples, &kp).unwrap();
+    tracer.trace_value(&mut samples, &pk).unwrap();
 
-    tracer.trace_value(&mut samples, &s_addr)?;
-    tracer.trace_value(&mut samples, &s_kp)?;
+    tracer.trace_value(&mut samples, &s_addr).unwrap();
+    tracer.trace_value(&mut samples, &s_kp).unwrap();
 
     // We have two signature types: one for Authority Signatures, which don't include the PubKey ...
     let sig: AuthoritySignature = Signer::sign(&kp, b"hello world");
-    tracer.trace_value(&mut samples, &sig)?;
+    tracer.trace_value(&mut samples, &sig).unwrap();
     // ... and the user signature which does
 
     let sig: Signature = Signer::sign(&s_kp, b"hello world");
-    tracer.trace_value(&mut samples, &sig)?;
+    tracer.trace_value(&mut samples, &sig).unwrap();
 
     let kp1: SuiKeyPair =
         SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
@@ -117,78 +138,143 @@ fn get_registry() -> Result<Registry> {
         multisig_pk,
     )
     .unwrap();
-    tracer.trace_value(&mut samples, &multi_sig)?;
+    tracer.trace_value(&mut samples, &multi_sig).unwrap();
 
     let generic_sig_multi = GenericSignature::MultiSig(multi_sig);
-    tracer.trace_value(&mut samples, &generic_sig_multi)?;
+    tracer
+        .trace_value(&mut samples, &generic_sig_multi)
+        .unwrap();
 
-    tracer.trace_value(&mut samples, &sig1)?;
-    tracer.trace_value(&mut samples, &sig2)?;
-    tracer.trace_value(&mut samples, &sig3)?;
-    tracer.trace_value(&mut samples, &sig4)?;
-    tracer.trace_value(&mut samples, &sig5)?;
+    tracer.trace_value(&mut samples, &sig1).unwrap();
+    tracer.trace_value(&mut samples, &sig2).unwrap();
+    tracer.trace_value(&mut samples, &sig3).unwrap();
+    tracer.trace_value(&mut samples, &sig4).unwrap();
+    tracer.trace_value(&mut samples, &sig5).unwrap();
     // ObjectID and SuiAddress are the same length
     let oid: ObjectID = addr.into();
-    tracer.trace_value(&mut samples, &oid)?;
+    tracer.trace_value(&mut samples, &oid).unwrap();
 
     // ObjectDigest and Transaction digest use the `serde_as`speedup for ser/de => trace them
     let od = ObjectDigest::random();
     let td = TransactionDigest::random();
-    tracer.trace_value(&mut samples, &od)?;
-    tracer.trace_value(&mut samples, &td)?;
+    tracer.trace_value(&mut samples, &od).unwrap();
+    tracer.trace_value(&mut samples, &td).unwrap();
 
     let teff = TransactionEffectsDigest::random();
-    tracer.trace_value(&mut samples, &teff)?;
+    tracer.trace_value(&mut samples, &teff).unwrap();
 
     let ccd = CheckpointContentsDigest::random();
-    tracer.trace_value(&mut samples, &ccd)?;
+    tracer.trace_value(&mut samples, &ccd).unwrap();
 
     let struct_tag = StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap();
-    tracer.trace_value(&mut samples, &struct_tag)?;
+    tracer.trace_value(&mut samples, &struct_tag).unwrap();
 
     let ccd = CheckpointDigest::random();
-    tracer.trace_value(&mut samples, &ccd)?;
+    tracer.trace_value(&mut samples, &ccd).unwrap();
 
     let tot = TypeOrigin {
         module_name: "module_name".to_string(),
         datatype_name: "datatype_name".to_string(),
         package: ObjectID::random(),
     };
-    tracer.trace_value(&mut samples, &tot)?;
+    tracer.trace_value(&mut samples, &tot).unwrap();
+
+    let si = StructInput {
+        address: AccountAddress::ZERO,
+        module: "foo".to_owned(),
+        name: "bar".to_owned(),
+        type_params: vec![TypeInput::Bool],
+    };
+    tracer.trace_value(&mut samples, &si).unwrap();
 
     // 2. Trace the main entry point(s) + every enum separately.
-    tracer.trace_type::<Owner>(&samples)?;
-    tracer.trace_type::<ExecutionStatus>(&samples)?;
-    tracer.trace_type::<ExecutionFailureStatus>(&samples)?;
-    tracer.trace_type::<CallArg>(&samples)?;
-    tracer.trace_type::<ObjectArg>(&samples)?;
-    tracer.trace_type::<Data>(&samples)?;
-    tracer.trace_type::<TypeTag>(&samples)?;
-    tracer.trace_type::<TypedStoreError>(&samples)?;
-    tracer.trace_type::<ObjectInfoRequestKind>(&samples)?;
-    tracer.trace_type::<TransactionKind>(&samples)?;
-    tracer.trace_type::<MoveObjectType>(&samples)?;
-    tracer.trace_type::<MoveObjectType_>(&samples)?;
-    tracer.trace_type::<base_types::SuiAddress>(&samples)?;
-    tracer.trace_type::<DeleteKind>(&samples)?;
-    tracer.trace_type::<Argument>(&samples)?;
-    tracer.trace_type::<Command>(&samples)?;
-    tracer.trace_type::<CommandArgumentError>(&samples)?;
-    tracer.trace_type::<TypeArgumentError>(&samples)?;
-    tracer.trace_type::<PackageUpgradeError>(&samples)?;
-    tracer.trace_type::<TransactionExpiration>(&samples)?;
-    tracer.trace_type::<EndOfEpochTransactionKind>(&samples)?;
+    tracer.trace_type::<StructInput>(&samples).unwrap();
+    tracer.trace_type::<TypeInput>(&samples).unwrap();
+    tracer.trace_type::<Owner>(&samples).unwrap();
+    tracer.trace_type::<ExecutionStatus>(&samples).unwrap();
+    tracer
+        .trace_type::<ExecutionFailureStatus>(&samples)
+        .unwrap();
+    tracer.trace_type::<CallArg>(&samples).unwrap();
+    tracer.trace_type::<ObjectArg>(&samples).unwrap();
+    tracer.trace_type::<Data>(&samples).unwrap();
+    tracer.trace_type::<TypeTag>(&samples).unwrap();
+    tracer.trace_type::<TypedStoreError>(&samples).unwrap();
+    tracer
+        .trace_type::<ObjectInfoRequestKind>(&samples)
+        .unwrap();
+    tracer.trace_type::<TransactionKind>(&samples).unwrap();
+    tracer.trace_type::<MoveObjectType>(&samples).unwrap();
+    tracer.trace_type::<MoveObjectType_>(&samples).unwrap();
+    tracer
+        .trace_type::<base_types::SuiAddress>(&samples)
+        .unwrap();
+    tracer.trace_type::<DeleteKind>(&samples).unwrap();
+    tracer.trace_type::<Argument>(&samples).unwrap();
+    tracer.trace_type::<Command>(&samples).unwrap();
+    tracer.trace_type::<CommandArgumentError>(&samples).unwrap();
+    tracer.trace_type::<TypeArgumentError>(&samples).unwrap();
+    tracer.trace_type::<PackageUpgradeError>(&samples).unwrap();
+    tracer
+        .trace_type::<TransactionExpiration>(&samples)
+        .unwrap();
+    tracer
+        .trace_type::<EndOfEpochTransactionKind>(&samples)
+        .unwrap();
 
-    tracer.trace_type::<IDOperation>(&samples)?;
-    tracer.trace_type::<ObjectIn>(&samples)?;
-    tracer.trace_type::<ObjectOut>(&samples)?;
-    tracer.trace_type::<UnchangedSharedKind>(&samples)?;
-    tracer.trace_type::<TransactionEffects>(&samples)?;
+    tracer.trace_type::<IDOperation>(&samples).unwrap();
+    tracer.trace_type::<ObjectIn>(&samples).unwrap();
+    tracer.trace_type::<ObjectOut>(&samples).unwrap();
+    tracer.trace_type::<UnchangedSharedKind>(&samples).unwrap();
+    tracer.trace_type::<TransactionEffects>(&samples).unwrap();
 
     // uncomment once GenericSignature is added
-    tracer.trace_type::<FullCheckpointContents>(&samples)?;
-    tracer.trace_type::<CheckpointContents>(&samples)?;
-    tracer.trace_type::<CheckpointSummary>(&samples)?;
+    tracer
+        .trace_type::<FullCheckpointContents>(&samples)
+        .unwrap();
+    tracer.trace_type::<CheckpointContents>(&samples).unwrap();
+    tracer.trace_type::<CheckpointSummary>(&samples).unwrap();
+
+    let sender_data = SenderSignedData::new(
+        TransactionData::new_with_gas_coins(
+            TransactionKind::EndOfEpochTransaction(Vec::new()),
+            SuiAddress::ZERO,
+            Vec::new(),
+            0,
+            0,
+        ),
+        Vec::new(),
+    );
+    tracer.trace_value(&mut samples, &sender_data).unwrap();
+
+    let quorum_sig: AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo {
+        epoch: 0,
+        signature: AggregateAuthoritySignature::default(),
+        signers_map: RoaringBitmap::default(),
+    };
+    tracer.trace_value(&mut samples, &quorum_sig).unwrap();
+
+    tracer
+        .trace_type::<CertifiedCheckpointSummary>(&samples)
+        .unwrap();
+
+    let event = Event {
+        package_id: ObjectID::random(),
+        transaction_module: Identifier::new("foo").unwrap(),
+        sender: SuiAddress::ZERO,
+        type_: struct_tag.clone(),
+        contents: vec![0],
+    };
+    tracer.trace_value(&mut samples, &event).unwrap();
+
+    tracer.trace_type::<Object>(&samples).unwrap();
+
+    tracer.trace_type::<TransactionEvents>(&samples).unwrap();
+    tracer
+        .trace_type::<CheckpointTransaction>(&samples)
+        .unwrap();
+
+    tracer.trace_type::<CheckpointData>(&samples).unwrap();
 
     tracer.registry()
 }

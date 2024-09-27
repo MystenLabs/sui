@@ -3,7 +3,12 @@
 
 import nacl from 'tweetnacl';
 
-import { encodeSuiPrivateKey, Keypair, PRIVATE_KEY_SIZE } from '../../cryptography/keypair.js';
+import {
+	decodeSuiPrivateKey,
+	encodeSuiPrivateKey,
+	Keypair,
+	PRIVATE_KEY_SIZE,
+} from '../../cryptography/keypair.js';
 import { isValidHardenedPath, mnemonicToSeedHex } from '../../cryptography/mnemonics.js';
 import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
 import { derivePath } from './ed25519-hd-key.js';
@@ -63,13 +68,23 @@ export class Ed25519Keypair extends Keypair {
 	 *
 	 * @throws error if the provided secret key is invalid and validation is not skipped.
 	 *
-	 * @param secretKey secret key byte array
+	 * @param secretKey secret key as a byte array or Bech32 secret key string
 	 * @param options: skip secret key validation
 	 */
 	static fromSecretKey(
-		secretKey: Uint8Array,
+		secretKey: Uint8Array | string,
 		options?: { skipValidation?: boolean },
 	): Ed25519Keypair {
+		if (typeof secretKey === 'string') {
+			const decoded = decodeSuiPrivateKey(secretKey);
+
+			if (decoded.schema !== 'ED25519') {
+				throw new Error(`Expected a ED25519 keypair, got ${decoded.schema}`);
+			}
+
+			return this.fromSecretKey(decoded.secretKey, options);
+		}
+
 		const secretKeyLength = secretKey.length;
 		if (secretKeyLength !== PRIVATE_KEY_SIZE) {
 			throw new Error(

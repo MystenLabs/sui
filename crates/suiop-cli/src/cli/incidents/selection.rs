@@ -239,7 +239,7 @@ mod tests {
 
         assert_eq!(groups.len(), 3);
         assert_eq!(groups.get("Incident 1").unwrap().len(), 2);
-        assert!(groups.get("Incident 2").is_none());
+        assert!(!groups.contains_key("Incident 2"));
         assert_eq!(groups.get("Another thing entirely").unwrap().len(), 2);
         assert_eq!(
             groups

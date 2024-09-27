@@ -125,6 +125,18 @@ The following keys are used by Sui Node:
 
 These are configured in the [Sui Node configuration file](#configuration).
 
+You can generate each of these via the [sui cli](https://docs.sui.io/guides/developer/getting-started/sui-install).
+
+```
+$ sui keytool generate bls12381
+$ sui keytool generate ed25519
+$ sui keytool generate ed25519
+$ sui keytool generate ed25519
+```
+
+This will create files like `0x0061b30cdda02b6f55f575f1485a2890ec5c95b753deabbf823b6de7c936eb26.key` & `bls-0x1b7a4038f207d6c65cc106dd5be7270b3031e671fc8f9c1318b19e94a3bf3ed5.key`
+which you can copy to your validator and rename to `protocol.key` or `account.key`, etc.
+
 ## Monitoring
 
 ### Metrics

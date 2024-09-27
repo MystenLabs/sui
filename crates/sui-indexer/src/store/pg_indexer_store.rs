@@ -1,30 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::io::Cursor;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
-use csv::Writer;
+use csv::{ReaderBuilder, Writer};
 use diesel::dsl::{max, min};
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::QueryDsl;
 use diesel_async::scoped_futures::ScopedFutureExt;
+use futures::future::Either;
 use itertools::Itertools;
 use object_store::path::Path;
+use sui_types::base_types::ObjectID;
 use tap::TapFallible;
 use tracing::{info, warn};
 
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_protocol_config::ProtocolConfig;
 use sui_storage::object_store::util::put;
-use sui_types::base_types::ObjectID;
 
-use crate::config::RestoreConfig;
+use crate::config::UploadOptions;
 use crate::database::ConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
@@ -38,9 +38,8 @@ use crate::models::epoch::StoredEpochInfo;
 use crate::models::epoch::{StoredFeatureFlag, StoredProtocolConfig};
 use crate::models::events::StoredEvent;
 use crate::models::obj_indices::StoredObjectVersion;
-use crate::models::objects::StoredFullHistoryObject;
 use crate::models::objects::{
-    StoredDeletedHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
+    StoredDeletedObject, StoredFullHistoryObject, StoredHistoryObject, StoredObject,
     StoredObjectSnapshot,
 };
 use crate::models::packages::StoredPackage;
@@ -50,17 +49,18 @@ use crate::schema::{
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
     event_struct_package, events, feature_flags, full_objects_history, objects, objects_history,
     objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
-    transactions, tx_affected_addresses, tx_calls_fun, tx_calls_mod, tx_calls_pkg,
-    tx_changed_objects, tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
+    raw_checkpoints, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
+    tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
+    tx_recipients, tx_senders,
 };
 use crate::store::transaction_with_retry;
-use crate::types::EventIndex;
+use crate::types::{EventIndex, IndexedDeletedObject, IndexedObject};
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStore;
-use super::ObjectChangeToCommit;
 
+use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use diesel::upsert::excluded;
 use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 
@@ -108,7 +108,7 @@ pub struct PgIndexerStore {
 impl PgIndexerStore {
     pub fn new(
         pool: ConnectionPool,
-        restore_config: RestoreConfig,
+        upload_options: UploadOptions,
         metrics: IndexerMetrics,
     ) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
@@ -124,8 +124,8 @@ impl PgIndexerStore {
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
             parallel_objects_chunk_size,
-            gcs_cred_path: restore_config.gcs_cred_path,
-            gcs_display_bucket: restore_config.gcs_display_bucket,
+            gcs_cred_path: upload_options.gcs_cred_path,
+            gcs_display_bucket: upload_options.gcs_display_bucket,
         };
 
         Self {
@@ -307,14 +307,14 @@ impl PgIndexerStore {
 
     async fn persist_display_updates(
         &self,
-        display_updates: BTreeMap<String, StoredDisplay>,
+        display_updates: Vec<StoredDisplay>,
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::insert_into(display::table)
-                    .values(display_updates.values().collect::<Vec<_>>())
+                    .values(display_updates)
                     .on_conflict(display::object_type)
                     .do_update()
                     .set((
@@ -344,7 +344,6 @@ impl PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects_chunks
             .start_timer();
-        let len = mutated_object_mutation_chunk.len();
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::insert_into(objects::table)
@@ -355,8 +354,6 @@ impl PgIndexerStore {
                         objects::object_id.eq(excluded(objects::object_id)),
                         objects::object_version.eq(excluded(objects::object_version)),
                         objects::object_digest.eq(excluded(objects::object_digest)),
-                        objects::checkpoint_sequence_number
-                            .eq(excluded(objects::checkpoint_sequence_number)),
                         objects::owner_type.eq(excluded(objects::owner_type)),
                         objects::owner_id.eq(excluded(objects::owner_id)),
                         objects::object_type.eq(excluded(objects::object_type)),
@@ -364,9 +361,6 @@ impl PgIndexerStore {
                         objects::coin_type.eq(excluded(objects::coin_type)),
                         objects::coin_balance.eq(excluded(objects::coin_balance)),
                         objects::df_kind.eq(excluded(objects::df_kind)),
-                        objects::df_name.eq(excluded(objects::df_name)),
-                        objects::df_object_type.eq(excluded(objects::df_object_type)),
-                        objects::df_object_id.eq(excluded(objects::df_object_id)),
                     ))
                     .execute(conn)
                     .await?;
@@ -376,8 +370,7 @@ impl PgIndexerStore {
         })
         .await
         .tap_ok(|_| {
-            let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked objects", len);
+            guard.stop_and_record();
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object mutations with error: {}", e);
@@ -393,7 +386,6 @@ impl PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects_chunks
             .start_timer();
-        let len = deleted_objects_chunk.len();
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::delete(
@@ -417,35 +409,22 @@ impl PgIndexerStore {
         })
         .await
         .tap_ok(|_| {
-            let elapsed = guard.stop_and_record();
-            info!(elapsed, "Deleted {} chunked objects", len);
+            guard.stop_and_record();
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object deletions with error: {}", e);
         })
     }
 
-    async fn backfill_objects_snapshot_chunk(
+    async fn persist_objects_snapshot_chunk(
         &self,
-        objects: Vec<ObjectChangeToCommit>,
+        objects_snapshot: Vec<StoredObjectSnapshot>,
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_objects_snapshot_chunks
             .start_timer();
-        let mut objects_snapshot: Vec<StoredObjectSnapshot> = vec![];
-        for object in objects {
-            match object {
-                ObjectChangeToCommit::MutatedObject(stored_object) => {
-                    objects_snapshot.push(stored_object.into());
-                }
-                ObjectChangeToCommit::DeletedObject(stored_deleted_object) => {
-                    objects_snapshot.push(stored_deleted_object.into());
-                }
-            }
-        }
-
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 for objects_snapshot_chunk in
@@ -462,8 +441,6 @@ impl PgIndexerStore {
                                 .eq(excluded(objects_snapshot::object_status)),
                             objects_snapshot::object_digest
                                 .eq(excluded(objects_snapshot::object_digest)),
-                            objects_snapshot::checkpoint_sequence_number
-                                .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
                             objects_snapshot::owner_type.eq(excluded(objects_snapshot::owner_type)),
                             objects_snapshot::owner_id.eq(excluded(objects_snapshot::owner_id)),
                             objects_snapshot::object_type_package
@@ -480,11 +457,8 @@ impl PgIndexerStore {
                             objects_snapshot::coin_balance
                                 .eq(excluded(objects_snapshot::coin_balance)),
                             objects_snapshot::df_kind.eq(excluded(objects_snapshot::df_kind)),
-                            objects_snapshot::df_name.eq(excluded(objects_snapshot::df_name)),
-                            objects_snapshot::df_object_type
-                                .eq(excluded(objects_snapshot::df_object_type)),
-                            objects_snapshot::df_object_id
-                                .eq(excluded(objects_snapshot::df_object_id)),
+                            objects_snapshot::checkpoint_sequence_number
+                                .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
                         ))
                         .execute(conn)
                         .await?;
@@ -495,12 +469,7 @@ impl PgIndexerStore {
         })
         .await
         .tap_ok(|_| {
-            let elapsed = guard.stop_and_record();
-            info!(
-                elapsed,
-                "Persisted {} chunked objects snapshot",
-                objects_snapshot.len(),
-            );
+            guard.stop_and_record();
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object snapshot with error: {}", e);
@@ -509,29 +478,17 @@ impl PgIndexerStore {
 
     async fn persist_objects_history_chunk(
         &self,
-        objects: Vec<ObjectChangeToCommit>,
+        stored_objects_history: Vec<StoredHistoryObject>,
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_objects_history_chunks
             .start_timer();
-        let mut mutated_objects: Vec<StoredHistoryObject> = vec![];
-        let mut deleted_object_ids: Vec<StoredDeletedHistoryObject> = vec![];
-        for object in objects {
-            match object {
-                ObjectChangeToCommit::MutatedObject(stored_object) => {
-                    mutated_objects.push(stored_object.into());
-                }
-                ObjectChangeToCommit::DeletedObject(stored_deleted_object) => {
-                    deleted_object_ids.push(stored_deleted_object.into());
-                }
-            }
-        }
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
-                for mutated_object_change_chunk in
-                    mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                for stored_objects_history_chunk in
+                    stored_objects_history.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
                     let error_message = concat!(
                         "Failed to write to ",
@@ -539,43 +496,20 @@ impl PgIndexerStore {
                         " DB"
                     );
                     diesel::insert_into(objects_history::table)
-                        .values(mutated_object_change_chunk)
+                        .values(stored_objects_history_chunk)
                         .on_conflict_do_nothing()
                         .execute(conn)
                         .await
                         .map_err(IndexerError::from)
                         .context(error_message)?;
                 }
-
-                for deleted_objects_chunk in
-                    deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    let error_message = concat!(
-                        "Failed to write to ",
-                        stringify!((objects_history::table)),
-                        " DB"
-                    );
-                    diesel::insert_into(objects_history::table)
-                        .values(deleted_objects_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context(error_message)?;
-                }
-
                 Ok::<(), IndexerError>(())
             }
             .scope_boxed()
         })
         .await
         .tap_ok(|_| {
-            let elapsed = guard.stop_and_record();
-            info!(
-                elapsed,
-                "Persisted {} chunked objects history",
-                mutated_objects.len() + deleted_object_ids.len(),
-            );
+            guard.stop_and_record();
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object history with error: {}", e);
@@ -648,6 +582,28 @@ impl PgIndexerStore {
         .await
     }
 
+    async fn persist_raw_checkpoints_impl(
+        &self,
+        raw_checkpoints: &[StoredRawCheckpoint],
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::insert_into(raw_checkpoints::table)
+                    .values(raw_checkpoints)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed to write to raw_checkpoints table")?;
+                Ok::<(), IndexerError>(())
+            }
+            .scope_boxed()
+        })
+        .await
+    }
+
     async fn persist_checkpoints(
         &self,
         checkpoints: Vec<IndexedCheckpoint>,
@@ -664,23 +620,7 @@ impl PgIndexerStore {
             let checkpoint_digest = first_checkpoint.checkpoint_digest.into_inner().to_vec();
             self.persist_protocol_configs_and_feature_flags(checkpoint_digest.clone())
                 .await?;
-
-            transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-                async {
-                    let checkpoint_digest =
-                        first_checkpoint.checkpoint_digest.into_inner().to_vec();
-                    diesel::insert_into(chain_identifier::table)
-                        .values(StoredChainIdentifier { checkpoint_digest })
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context("failed to write to chain_identifier table")?;
-                    Ok::<(), IndexerError>(())
-                }
-                .scope_boxed()
-            })
-            .await?;
+            self.persist_chain_identifier(checkpoint_digest).await?;
         }
         let guard = self
             .metrics
@@ -1027,6 +967,7 @@ impl PgIndexerStore {
         let len = indices.len();
         let (
             affected_addresses,
+            affected_objects,
             senders,
             recipients,
             input_objects,
@@ -1048,9 +989,11 @@ impl PgIndexerStore {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                Vec::new(),
             ),
             |(
                 mut tx_affected_addresses,
+                mut tx_affected_objects,
                 mut tx_senders,
                 mut tx_recipients,
                 mut tx_input_objects,
@@ -1063,17 +1006,19 @@ impl PgIndexerStore {
             ),
              index| {
                 tx_affected_addresses.extend(index.0);
-                tx_senders.extend(index.1);
-                tx_recipients.extend(index.2);
-                tx_input_objects.extend(index.3);
-                tx_changed_objects.extend(index.4);
-                tx_pkgs.extend(index.5);
-                tx_mods.extend(index.6);
-                tx_funs.extend(index.7);
-                tx_digests.extend(index.8);
-                tx_kinds.extend(index.9);
+                tx_affected_objects.extend(index.1);
+                tx_senders.extend(index.2);
+                tx_recipients.extend(index.3);
+                tx_input_objects.extend(index.4);
+                tx_changed_objects.extend(index.5);
+                tx_pkgs.extend(index.6);
+                tx_mods.extend(index.7);
+                tx_funs.extend(index.8);
+                tx_digests.extend(index.9);
+                tx_kinds.extend(index.10);
                 (
                     tx_affected_addresses,
+                    tx_affected_objects,
                     tx_senders,
                     tx_recipients,
                     tx_input_objects,
@@ -1091,6 +1036,12 @@ impl PgIndexerStore {
             async {
                 diesel::insert_into(tx_affected_addresses::table)
                     .values(&affected_addresses)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+
+                diesel::insert_into(tx_affected_objects::table)
+                    .values(&affected_objects)
                     .on_conflict_do_nothing()
                     .execute(conn)
                     .await?;
@@ -1316,22 +1267,6 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_epochs_table(&self, epoch: u64) -> Result<(), IndexerError> {
-        use diesel_async::RunQueryDsl;
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::delete(epochs::table.filter(epochs::epoch.eq(epoch as i64)))
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed to prune epochs table")?;
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
-        .await
-    }
-
     async fn prune_event_indices_table(
         &self,
         min_tx: u64,
@@ -1406,6 +1341,13 @@ impl PgIndexerStore {
                 diesel::delete(
                     tx_affected_addresses::table
                         .filter(tx_affected_addresses::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    tx_affected_objects::table
+                        .filter(tx_affected_objects::tx_sequence_number.between(min_tx, max_tx)),
                 )
                 .execute(conn)
                 .await?;
@@ -1549,21 +1491,15 @@ impl IndexerStore for PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects
             .start_timer();
-        let objects = make_final_list_of_objects_to_commit(object_changes);
-        let len = objects.len();
-
-        let mut object_mutations = vec![];
-        let mut object_deletions = vec![];
-        for object in objects {
-            match object {
-                ObjectChangeToCommit::MutatedObject(mutation) => {
-                    object_mutations.push(mutation);
-                }
-                ObjectChangeToCommit::DeletedObject(deletion) => {
-                    object_deletions.push(deletion);
-                }
-            }
-        }
+        let (indexed_mutations, indexed_deletions) = retain_latest_indexed_objects(object_changes);
+        let object_mutations = indexed_mutations
+            .into_iter()
+            .map(StoredObject::from)
+            .collect::<Vec<_>>();
+        let object_deletions = indexed_deletions
+            .into_iter()
+            .map(StoredDeletedObject::from)
+            .collect::<Vec<_>>();
         let mutation_len = object_mutations.len();
         let deletion_len = object_deletions.len();
 
@@ -1603,10 +1539,7 @@ impl IndexerStore for PgIndexerStore {
         let elapsed = guard.stop_and_record();
         info!(
             elapsed,
-            "Persisted {} objects with {} mutations and {} deletions ",
-            len,
-            mutation_len,
-            deletion_len,
+            "Persisted objects with {} mutations and {} deletions ", mutation_len, deletion_len,
         );
         Ok(())
     }
@@ -1622,12 +1555,21 @@ impl IndexerStore for PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects_snapshot
             .start_timer();
-        let objects = make_final_list_of_objects_to_commit(object_changes);
-        let len = objects.len();
-        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
+        let (indexed_mutations, indexed_deletions) = retain_latest_indexed_objects(object_changes);
+        let objects_snapshot = indexed_mutations
+            .into_iter()
+            .map(StoredObjectSnapshot::from)
+            .chain(
+                indexed_deletions
+                    .into_iter()
+                    .map(StoredObjectSnapshot::from),
+            )
+            .collect::<Vec<_>>();
+        let len = objects_snapshot.len();
+        let chunks = chunk!(objects_snapshot, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
-            .map(|c| self.backfill_objects_snapshot_chunk(c))
+            .map(|c| self.persist_objects_snapshot_chunk(c))
             .collect::<Vec<_>>();
 
         futures::future::join_all(futures)
@@ -1848,8 +1790,8 @@ impl IndexerStore for PgIndexerStore {
         if display_updates.is_empty() {
             return Ok(());
         }
-
-        self.persist_display_updates(display_updates).await
+        self.persist_display_updates(display_updates.values().cloned().collect::<Vec<_>>())
+            .await
     }
 
     async fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError> {
@@ -1974,33 +1916,26 @@ impl IndexerStore for PgIndexerStore {
             self.metrics.last_pruned_checkpoint.set(cp as i64);
         }
 
-        // NOTE: prune epochs table last, otherwise get_checkpoint_range_for_epoch would fail.
-        self.prune_epochs_table(epoch).await?;
         Ok(())
     }
 
     async fn upload_display(&self, epoch_number: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
-
         let mut connection = self.pool.get().await?;
-
         let mut buffer = Cursor::new(Vec::new());
         {
             let mut writer = Writer::from_writer(&mut buffer);
-
             let displays = display::table
                 .load::<StoredDisplay>(&mut connection)
                 .await
                 .map_err(Into::into)
                 .context("Failed to get display from database")?;
-
             info!("Read {} displays", displays.len());
             writer
                 .write_record(["object_type", "id", "version", "bcs"])
                 .map_err(|_| {
                     IndexerError::GcsError("Failed to write display to csv".to_string())
                 })?;
-
             for display in displays {
                 writer
                     .write_record(&[
@@ -2011,7 +1946,6 @@ impl IndexerStore for PgIndexerStore {
                     ])
                     .map_err(|_| IndexerError::GcsError("Failed to write to csv".to_string()))?;
             }
-
             writer
                 .flush()
                 .map_err(|_| IndexerError::GcsError("Failed to flush csv".to_string()))?;
@@ -2032,7 +1966,6 @@ impl IndexerStore for PgIndexerStore {
             let remote_store = remote_store_config.make().map_err(|e| {
                 IndexerError::GcsError(format!("Failed to make GCS remote store: {}", e))
             })?;
-
             let path = Path::from(format!("display_{}.csv", epoch_number).as_str());
             put(&remote_store, &path, buffer.into_inner().into())
                 .await
@@ -2041,6 +1974,18 @@ impl IndexerStore for PgIndexerStore {
             warn!("Either GCS cred path or bucket is not set, skipping display upload.");
         }
         Ok(())
+    }
+
+    async fn restore_display(&self, bytes: bytes::Bytes) -> Result<(), IndexerError> {
+        let cursor = Cursor::new(bytes);
+        let mut csv_reader = ReaderBuilder::new().has_headers(true).from_reader(cursor);
+        let displays = csv_reader
+            .deserialize()
+            .collect::<Result<Vec<StoredDisplay>, csv::Error>>()
+            .map_err(|e| {
+                IndexerError::GcsError(format!("Failed to deserialize display records: {}", e))
+            })?;
+        self.persist_display_updates(displays).await
     }
 
     async fn get_network_total_transactions_by_end_of_epoch(
@@ -2134,73 +2079,135 @@ impl IndexerStore for PgIndexerStore {
         .await?;
         Ok(())
     }
-}
 
-/// Construct deleted objects and mutated objects to commit.
-/// In particular, filter mutated objects updates that would
-/// be override immediately.
-fn make_final_list_of_objects_to_commit(
-    tx_object_changes: Vec<TransactionObjectChangesToCommit>,
-) -> Vec<ObjectChangeToCommit> {
-    let deleted_objects = tx_object_changes
-        .clone()
-        .into_iter()
-        .flat_map(|changes| changes.deleted_objects)
-        .map(|o| (o.object_id, o.into()))
-        .collect::<HashMap<ObjectID, StoredDeletedObject>>();
+    async fn persist_chain_identifier(
+        &self,
+        checkpoint_digest: Vec<u8>,
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
 
-    let mutated_objects = tx_object_changes
-        .into_iter()
-        .flat_map(|changes| changes.changed_objects);
-    let mut latest_objects = HashMap::new();
-    for object in mutated_objects {
-        if deleted_objects.contains_key(&object.object.id()) {
-            continue;
-        }
-        match latest_objects.entry(object.object.id()) {
-            Entry::Vacant(e) => {
-                e.insert(object);
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::insert_into(chain_identifier::table)
+                    .values(StoredChainIdentifier { checkpoint_digest })
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("failed to write to chain_identifier table")?;
+                Ok::<(), IndexerError>(())
             }
-            Entry::Occupied(mut e) => {
-                if object.object.version() > e.get().object.version() {
-                    e.insert(object);
-                }
-            }
-        }
+            .scope_boxed()
+        })
+        .await?;
+        Ok(())
     }
-    deleted_objects
-        .into_values()
-        .map(ObjectChangeToCommit::DeletedObject)
-        .chain(
-            latest_objects
-                .into_values()
-                .map(StoredObject::from)
-                .map(ObjectChangeToCommit::MutatedObject),
-        )
-        .collect()
+
+    async fn persist_raw_checkpoints(
+        &self,
+        checkpoints: Vec<StoredRawCheckpoint>,
+    ) -> Result<(), IndexerError> {
+        self.persist_raw_checkpoints_impl(&checkpoints).await
+    }
 }
 
 fn make_objects_history_to_commit(
     tx_object_changes: Vec<TransactionObjectChangesToCommit>,
-) -> Vec<ObjectChangeToCommit> {
-    let deleted_objects: Vec<StoredDeletedObject> = tx_object_changes
+) -> Vec<StoredHistoryObject> {
+    let deleted_objects: Vec<StoredHistoryObject> = tx_object_changes
         .clone()
         .into_iter()
         .flat_map(|changes| changes.deleted_objects)
         .map(|o| o.into())
         .collect();
-    let mutated_objects: Vec<StoredObject> = tx_object_changes
+    let mutated_objects: Vec<StoredHistoryObject> = tx_object_changes
         .into_iter()
         .flat_map(|changes| changes.changed_objects)
         .map(|o| o.into())
         .collect();
-    deleted_objects
+    deleted_objects.into_iter().chain(mutated_objects).collect()
+}
+
+// Partition object changes into deletions and mutations,
+// within partition of mutations or deletions, retain the latest with highest version;
+// For overlappings of mutations and deletions, only keep one with higher version.
+// This is necessary b/c after this step, DB commit will be done in parallel and not in order.
+fn retain_latest_indexed_objects(
+    tx_object_changes: Vec<TransactionObjectChangesToCommit>,
+) -> (Vec<IndexedObject>, Vec<IndexedDeletedObject>) {
+    // Only the last deleted / mutated object will be in the map,
+    // b/c tx_object_changes are in order and versions always increment,
+    let (mutations, deletions) = tx_object_changes
         .into_iter()
-        .map(ObjectChangeToCommit::DeletedObject)
-        .chain(
-            mutated_objects
+        .flat_map(|change| {
+            change
+                .changed_objects
                 .into_iter()
-                .map(ObjectChangeToCommit::MutatedObject),
-        )
-        .collect()
+                .map(Either::Left)
+                .chain(
+                    change
+                        .deleted_objects
+                        .into_iter()
+                        .map(Either::Right),
+                )
+        })
+        .fold(
+            (HashMap::<ObjectID, IndexedObject>::new(), HashMap::<ObjectID, IndexedDeletedObject>::new()),
+            |(mut mutations, mut deletions), either_change| {
+                match either_change {
+                    // Remove mutation / deletion with a following deletion / mutation,
+                    // b/c following deletion / mutation always has a higher version.
+                    // Technically, assertions below are not required, double check just in case.
+                    Either::Left(mutation) => {
+                        let id = mutation.object.id();
+                        let mutation_version = mutation.object.version();
+                        if let Some(existing) = deletions.remove(&id) {
+                            assert!(
+                                existing.object_version < mutation_version.value(),
+                                "Mutation version ({:?}) should be greater than existing deletion version ({:?}) for object {:?}",
+                                mutation_version,
+                                existing.object_version,
+                                id
+                            );
+                        }
+                        if let Some(existing) = mutations.insert(id, mutation) {
+                            assert!(
+                                existing.object.version() < mutation_version,
+                                "Mutation version ({:?}) should be greater than existing mutation version ({:?}) for object {:?}",
+                                mutation_version,
+                                existing.object.version(),
+                                id
+                            );
+                        }
+                    }
+                    Either::Right(deletion) => {
+                        let id = deletion.object_id;
+                        let deletion_version = deletion.object_version;
+                        if let Some(existing) = mutations.remove(&id) {
+                            assert!(
+                                existing.object.version().value() < deletion_version,
+                                "Deletion version ({:?}) should be greater than existing mutation version ({:?}) for object {:?}",
+                                deletion_version,
+                                existing.object.version(),
+                                id
+                            );
+                        }
+                        if let Some(existing) = deletions.insert(id, deletion) {
+                            assert!(
+                                existing.object_version < deletion_version,
+                                "Deletion version ({:?}) should be greater than existing deletion version ({:?}) for object {:?}",
+                                deletion_version,
+                                existing.object_version,
+                                id
+                            );
+                        }
+                    }
+                }
+                (mutations, deletions)
+            },
+        );
+    (
+        mutations.into_values().collect(),
+        deletions.into_values().collect(),
+    )
 }

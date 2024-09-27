@@ -10,7 +10,7 @@ import {
 } from '_src/shared/qredo-api';
 import { type SuiClient } from '@mysten/sui/client';
 import { messageWithIntent } from '@mysten/sui/cryptography';
-import { toB64 } from '@mysten/sui/utils';
+import { toBase64 } from '@mysten/sui/utils';
 import mitt from 'mitt';
 
 import { WalletSigner } from './WalletSigner';
@@ -86,7 +86,7 @@ export class QredoSigner extends WalletSigner {
 			clientIdentifier,
 		);
 		return {
-			messageBytes: toB64(input.message),
+			messageBytes: toBase64(input.message),
 			signature,
 		};
 	};
@@ -98,7 +98,7 @@ export class QredoSigner extends WalletSigner {
 			clientIdentifier,
 		);
 		return {
-			transactionBlockBytes: toB64(transactionBlockBytes),
+			transactionBlockBytes: toBase64(transactionBlockBytes),
 			signature,
 		};
 	};
@@ -157,7 +157,7 @@ export class QredoSigner extends WalletSigner {
 			throw new Error(`Unsupported network ${networkNames[this.#apiEnv]}`);
 		}
 		const qredoTransaction = await this.#qredoAPI.createTransaction({
-			messageWithIntent: toB64(intent),
+			messageWithIntent: toBase64(intent),
 			network: this.#network,
 			broadcast,
 			from: await this.getAddress(),

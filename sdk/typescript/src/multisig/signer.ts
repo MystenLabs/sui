@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { toB64 } from '@mysten/bcs';
+import { toBase64 } from '@mysten/bcs';
 
 import type { SignatureScheme } from '../cryptography/index.js';
 import { Signer } from '../cryptography/index.js';
@@ -73,7 +73,7 @@ export class MultiSigSigner extends Signer {
 
 		return {
 			signature,
-			bytes: toB64(bytes),
+			bytes: toBase64(bytes),
 		};
 	}
 
@@ -86,7 +86,7 @@ export class MultiSigSigner extends Signer {
 
 		return {
 			signature,
-			bytes: toB64(bytes),
+			bytes: toBase64(bytes),
 		};
 	}
 }

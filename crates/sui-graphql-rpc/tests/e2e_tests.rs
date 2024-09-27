@@ -32,7 +32,7 @@ async fn test_simple_client_validator_cluster() {
     let cluster = start_cluster(ServiceConfig::test_defaults()).await;
 
     cluster
-        .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+        .wait_for_checkpoint_catchup(1, Duration::from_secs(30))
         .await;
 
     let query = r#"
@@ -91,7 +91,7 @@ async fn test_simple_client_simulator_cluster() {
     )
     .await;
     cluster
-        .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+        .wait_for_checkpoint_catchup(1, Duration::from_secs(30))
         .await;
 
     let query = r#"

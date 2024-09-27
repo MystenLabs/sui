@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.34.0"
+    "version": "1.35.0"
   },
   "methods": [
     {
@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "60",
+              "maxSupportedProtocolVersion": "61",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1352,6 +1352,7 @@
                 "throughput_aware_consensus_submission": false,
                 "txn_base_cost_as_multiplier": false,
                 "upgraded_multisig_supported": false,
+                "validate_identifier_inputs": false,
                 "verify_legacy_zklogin_address": false,
                 "zklogin_auth": false
               },
@@ -1420,6 +1421,7 @@
                 "config_read_setting_impl_cost_base": null,
                 "config_read_setting_impl_cost_per_byte": null,
                 "consensus_bad_nodes_stake_threshold": null,
+                "consensus_gc_depth": null,
                 "consensus_max_num_transactions_in_block": null,
                 "consensus_max_transaction_size_bytes": null,
                 "consensus_max_transactions_in_block_bytes": null,
@@ -6350,7 +6352,7 @@
         ]
       },
       "EventID": {
-        "description": "Unique ID of a Sui Event, the ID is a combination of tx seq number and event seq number, the ID is local to this particular fullnode and will be different from other fullnode.",
+        "description": "Unique ID of a Sui Event, the ID is a combination of transaction digest and event seq number.",
         "type": "object",
         "required": [
           "eventSeq",

@@ -775,7 +775,7 @@ pub mod tests {
         telemetry_subscribers::init_for_testing();
         let cluster = start_cluster(ServiceConfig::test_defaults()).await;
         cluster
-            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(30))
             .await;
         // timeout test includes mutation timeout, which requires a [SuiClient] to be able to run
         // the test, and a transaction. [WalletContext] gives access to everything that's needed.

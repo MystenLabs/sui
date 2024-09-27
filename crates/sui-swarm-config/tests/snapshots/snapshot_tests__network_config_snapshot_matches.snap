@@ -105,6 +105,9 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -113,9 +116,13 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -261,6 +268,9 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -269,9 +279,13 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -417,6 +431,9 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -425,9 +442,13 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -573,6 +594,9 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -581,9 +605,13 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -729,6 +757,9 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -737,9 +768,13 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -885,6 +920,9 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -893,9 +931,13 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -1041,6 +1083,9 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -1049,9 +1094,13 @@ validator_configs:
         - Facebook
         - Google
         - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3

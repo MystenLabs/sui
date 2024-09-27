@@ -49,7 +49,7 @@ diesel::table! {
         protocol_version -> Int8,
         total_stake -> Int8,
         storage_fund_balance -> Int8,
-        system_state -> Bytea,
+        system_state -> Nullable<Bytea>,
         epoch_total_transactions -> Nullable<Int8>,
         last_checkpoint_id -> Nullable<Int8>,
         epoch_end_timestamp -> Nullable<Int8>,
@@ -61,6 +61,7 @@ diesel::table! {
         total_stake_rewards_distributed -> Nullable<Int8>,
         leftover_storage_fund_inflow -> Nullable<Int8>,
         epoch_commitments -> Nullable<Bytea>,
+        system_state_summary_json -> Nullable<Jsonb>,
     }
 }
 
@@ -167,7 +168,6 @@ diesel::table! {
         object_id -> Bytea,
         object_version -> Int8,
         object_digest -> Bytea,
-        checkpoint_sequence_number -> Int8,
         owner_type -> Int2,
         owner_id -> Nullable<Bytea>,
         object_type -> Nullable<Text>,
@@ -178,9 +178,6 @@ diesel::table! {
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
         df_kind -> Nullable<Int2>,
-        df_name -> Nullable<Bytea>,
-        df_object_type -> Nullable<Text>,
-        df_object_id -> Nullable<Bytea>,
     }
 }
 
@@ -201,9 +198,6 @@ diesel::table! {
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
         df_kind -> Nullable<Int2>,
-        df_name -> Nullable<Bytea>,
-        df_object_type -> Nullable<Text>,
-        df_object_id -> Nullable<Bytea>,
     }
 }
 
@@ -224,9 +218,6 @@ diesel::table! {
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
         df_kind -> Nullable<Int2>,
-        df_name -> Nullable<Bytea>,
-        df_object_type -> Nullable<Text>,
-        df_object_id -> Nullable<Bytea>,
     }
 }
 
@@ -265,6 +256,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    raw_checkpoints (sequence_number) {
+        sequence_number -> Int8,
+        certified_checkpoint -> Bytea,
+        checkpoint_contents -> Bytea,
+    }
+}
+
+diesel::table! {
     transactions (tx_sequence_number) {
         tx_sequence_number -> Int8,
         transaction_digest -> Bytea,
@@ -282,6 +281,14 @@ diesel::table! {
 
 diesel::table! {
     tx_affected_addresses (affected, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        affected -> Bytea,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_affected_objects (affected, tx_sequence_number) {
         tx_sequence_number -> Int8,
         affected -> Bytea,
         sender -> Bytea,
@@ -382,8 +389,10 @@ diesel::allow_tables_to_appear_in_same_query!(
     packages,
     protocol_configs,
     pruner_cp_watermark,
+    raw_checkpoints,
     transactions,
     tx_affected_addresses,
+    tx_affected_objects,
     tx_calls_fun,
     tx_calls_mod,
     tx_calls_pkg,

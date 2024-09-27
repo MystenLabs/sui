@@ -46,8 +46,7 @@ async fn main() -> anyhow::Result<()> {
         .with_prom_registry(&prometheus_registry)
         .init();
 
-    let metadata =
-        BridgeNodePublicMetadata::new(VERSION.into(), config.metrics_key_pair.public().clone());
+    let metadata = BridgeNodePublicMetadata::new(VERSION, config.metrics_key_pair.public().clone());
 
     start_metrics_push_task(
         &config.metrics,

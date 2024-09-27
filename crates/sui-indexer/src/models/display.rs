@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::prelude::*;
+use serde::Deserialize;
+
 use sui_types::display::DisplayVersionUpdatedEvent;
 
 use crate::schema::display;
 
-#[derive(Queryable, Insertable, Selectable, Debug, Clone)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Deserialize)]
 #[diesel(table_name = display)]
 pub struct StoredDisplay {
     pub object_type: String,

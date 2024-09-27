@@ -36,7 +36,9 @@ CREATE TABLE IF NOT EXISTS order_fills
     taker_client_order_id       BIGINT       NOT NULL,
     price                       BIGINT       NOT NULL,
     taker_fee                   BIGINT       NOT NULL,
+    taker_fee_is_deep           BOOLEAN      NOT NULL,
     maker_fee                   BIGINT       NOT NULL,
+    maker_fee_is_deep           BOOLEAN      NOT NULL,
     taker_is_bid                BOOLEAN      NOT NULL,
     base_quantity               BIGINT       NOT NULL,
     quote_quantity              BIGINT       NOT NULL,
@@ -178,4 +180,21 @@ CREATE TABLE IF NOT EXISTS sui_error_transactions
     failure_status              TEXT         NOT NULL,
     package                     TEXT         NOT NULL,
     cmd_idx                     BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS pools
+(
+    pool_id                     TEXT         PRIMARY KEY,
+    pool_name                   TEXT         NOT NULL,
+    base_asset_id               TEXT         NOT NULL,
+    base_asset_decimals         SMALLINT     NOT NULL,
+    base_asset_symbol           TEXT         NOT NULL,
+    base_asset_name             TEXT         NOT NULL,
+    quote_asset_id              TEXT         NOT NULL,
+    quote_asset_decimals        SMALLINT     NOT NULL,
+    quote_asset_symbol          TEXT         NOT NULL,
+    quote_asset_name            TEXT         NOT NULL,
+    min_size                    INTEGER      NOT NULL,
+    lot_size                    INTEGER      NOT NULL,
+    tick_size                   INTEGER      NOT NULL
 );
