@@ -96,11 +96,4 @@ fun scale_spec<T>(r: &mut Range<T>, k: u64) {
 
     ensures(r.x == old_r.x * k);
     ensures(r.y == old_r.y * k);
-
-    // use a dummy range to introduce the instantiation of drop
-    let dummy_r = Range<T> {
-        x: old_r.x,
-        y: old_r.y,
-    };
-    drop(dummy_r);
 }

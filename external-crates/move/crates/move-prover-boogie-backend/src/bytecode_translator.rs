@@ -290,8 +290,9 @@ impl<'env> BoogieTranslator<'env> {
                 }
 
                 if self
-                    .verification_targets
-                    .contains_key(&fun_env.get_qualified_id())
+                    .targets
+                    .get_fun_by_opaque_spec(&fun_env.get_qualified_id())
+                    .is_some()
                 {
                     verified_functions_count += 1;
 
@@ -486,13 +487,12 @@ impl<'env> BoogieTranslator<'env> {
                 FunctionTranslationStyle::Default => match bc {
                     Bytecode::Call(_, _, op, _, _) if op == asserts_function => {}
                     Call(_, _, Operation::Function(module_id, fun_id, _), _, _)
-                        if self
-                            .verification_targets
-                            .get(&spec_fun_target.func_env.get_qualified_id())
-                            == Some(&QualifiedId {
-                                module_id,
-                                id: fun_id,
-                            }) =>
+                        if self.targets.get_fun_by_opaque_spec(
+                            &spec_fun_target.func_env.get_qualified_id(),
+                        ) == Some(&QualifiedId {
+                            module_id,
+                            id: fun_id,
+                        }) =>
                     {
                         builder.emit(bc)
                     }
@@ -501,13 +501,12 @@ impl<'env> BoogieTranslator<'env> {
                 FunctionTranslationStyle::Asserts | FunctionTranslationStyle::Aborts => match bc {
                     Call(_, _, op, _, _) if op == requires_function || op == ensures_function => {}
                     Call(_, _, Operation::Function(module_id, fun_id, _), _, _)
-                        if self
-                            .verification_targets
-                            .get(&spec_fun_target.func_env.get_qualified_id())
-                            == Some(&QualifiedId {
-                                module_id,
-                                id: fun_id,
-                            }) => {}
+                        if self.targets.get_fun_by_opaque_spec(
+                            &spec_fun_target.func_env.get_qualified_id(),
+                        ) == Some(&QualifiedId {
+                            module_id,
+                            id: fun_id,
+                        }) => {}
                     Ret(..) => {}
                     _ => builder.emit(bc.update_abort_action(|_| None)),
                 },
@@ -564,8 +563,8 @@ impl<'env> BoogieTranslator<'env> {
                 .funs
                 .get(&(
                     *self
-                        .verification_targets
-                        .get(&fun_target.func_env.get_qualified_id())
+                        .targets
+                        .get_fun_by_opaque_spec(&fun_target.func_env.get_qualified_id())
                         .unwrap(),
                     FunctionVariant::Baseline,
                 ))
@@ -598,8 +597,8 @@ impl<'env> BoogieTranslator<'env> {
         &self,
         spec_fun_qid: &QualifiedId<FunId>,
     ) -> Option<FunctionEnv> {
-        self.verification_targets
-            .get(spec_fun_qid)
+        self.targets
+            .get_fun_by_opaque_spec(spec_fun_qid)
             .map(|qid| self.env.get_function(*qid))
     }
 }
@@ -912,9 +911,9 @@ impl<'env> FunctionTranslator<'env> {
         };
         if self
             .parent
-            .verification_targets
-            .values()
-            .any(|id| id == &self.fun_target.func_env.get_qualified_id())
+            .targets
+            .get_opaque_spec_by_fun(&self.fun_target.func_env.get_qualified_id())
+            .is_some()
             && style == FunctionTranslationStyle::Default
         {
             return format!(
@@ -924,8 +923,8 @@ impl<'env> FunctionTranslator<'env> {
         }
         let fun_name = self
             .parent
-            .verification_targets
-            .get(&self.fun_target.func_env.get_qualified_id())
+            .targets
+            .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
             .map_or(
                 boogie_function_name(self.fun_target.func_env, self.type_inst, style),
                 |fun_id| {
@@ -1778,15 +1777,12 @@ impl<'env> FunctionTranslator<'env> {
                                 FunctionTranslationStyle::Default,
                             );
 
-                            if self
-                                .parent
-                                .verification_targets
-                                .get(&self.fun_target.func_env.get_qualified_id())
-                                == Some(&QualifiedId {
-                                    module_id: *mid,
-                                    id: *fid,
-                                })
-                            {
+                            if self.parent.targets.get_fun_by_opaque_spec(
+                                &self.fun_target.func_env.get_qualified_id(),
+                            ) == Some(&QualifiedId {
+                                module_id: *mid,
+                                id: *fid,
+                            }) {
                                 if self.style == FunctionTranslationStyle::Default
                                     && self.fun_target.data.variant
                                         == FunctionVariant::Verification(

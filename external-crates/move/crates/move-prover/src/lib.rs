@@ -226,7 +226,7 @@ pub fn verify_boogie(
 
 /// Create bytecode and process it.
 pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> FunctionTargetsHolder {
-    let mut targets = FunctionTargetsHolder::default();
+    let mut targets = FunctionTargetsHolder::new();
     let output_dir = Path::new(&options.output_path)
         .parent()
         .expect("expect the parent directory of the output path to exist");
@@ -301,7 +301,7 @@ fn run_docgen<W: WriteColor>(
 }
 
 fn run_escape(env: &GlobalEnv, options: &Options, now: Instant) {
-    let mut targets = FunctionTargetsHolder::default();
+    let mut targets = FunctionTargetsHolder::new();
     for module_env in env.get_modules() {
         for func_env in module_env.get_functions() {
             targets.add_target(&func_env)

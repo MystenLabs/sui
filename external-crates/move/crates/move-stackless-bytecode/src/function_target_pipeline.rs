@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use bimap::btree::BiBTreeMap;
 use core::fmt;
 use std::{
     cmp::Ordering,
@@ -28,9 +29,10 @@ use crate::{
 
 /// A data structure which holds data for multiple function targets, and allows to
 /// manipulate them as part of a transformation pipeline.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct FunctionTargetsHolder {
     targets: BTreeMap<QualifiedId<FunId>, BTreeMap<FunctionVariant, FunctionData>>,
+    opaque_specs: BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>>,
 }
 
 /// Describes a function verification flavor.
@@ -162,6 +164,13 @@ pub struct FunctionTargetPipeline {
 }
 
 impl FunctionTargetsHolder {
+    pub fn new() -> Self {
+        Self {
+            targets: BTreeMap::new(),
+            opaque_specs: BiBTreeMap::new(),
+        }
+    }
+
     /// Get an iterator for all functions this holder.
     pub fn get_funs(&self) -> impl Iterator<Item = QualifiedId<FunId>> + '_ {
         self.targets.keys().cloned()
@@ -176,6 +185,18 @@ impl FunctionTargetsHolder {
             .flat_map(|(id, vs)| vs.keys().map(move |v| (*id, v.clone())))
     }
 
+    pub fn opaque_specs(&self) -> &BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>> {
+        &self.opaque_specs
+    }
+
+    pub fn get_fun_by_opaque_spec(&self, id: &QualifiedId<FunId>) -> Option<&QualifiedId<FunId>> {
+        self.opaque_specs.get_by_left(id)
+    }
+
+    pub fn get_opaque_spec_by_fun(&self, id: &QualifiedId<FunId>) -> Option<&QualifiedId<FunId>> {
+        self.opaque_specs.get_by_right(id)
+    }
+
     /// Adds a new function target. The target will be initialized from the Move byte code.
     pub fn add_target(&mut self, func_env: &FunctionEnv<'_>) {
         let generator = StacklessBytecodeGenerator::new(func_env);
@@ -184,6 +205,20 @@ impl FunctionTargetsHolder {
             .entry(func_env.get_qualified_id())
             .or_default()
             .insert(FunctionVariant::Baseline, data);
+
+        func_env.get_name_str().strip_suffix("_spec").map(|name| {
+            self.opaque_specs.insert(
+                func_env.get_qualified_id(),
+                func_env
+                    .module_env
+                    .find_function(func_env.symbol_pool().make(name))
+                    .unwrap_or_else(|| {
+                        // TODO: report error
+                        panic!("prover target function not found: function={}", name,)
+                    })
+                    .get_qualified_id(),
+            )
+        });
     }
 
     /// Gets a function target for read-only consumption, for the given variant.
@@ -270,7 +305,10 @@ impl FunctionTargetsHolder {
         variant: FunctionVariant,
         data: FunctionData,
     ) {
-        self.targets.entry(*id).or_default().insert(variant, data);
+        self.targets
+            .get_mut(id)
+            .unwrap_or_else(|| panic!("function qualified id {:#?} not found in targets", id))
+            .insert(variant, data);
     }
 
     /// Processes the function target data for given function.

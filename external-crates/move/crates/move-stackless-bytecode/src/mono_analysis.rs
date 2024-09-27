@@ -219,6 +219,7 @@ impl<'a> Analyzer<'a> {
         // Next do todo-list for regular functions, while self.inst_opt contains the
         // specific instantiation.
         while let Some((fun, variant, inst)) = self.todo_funs.pop() {
+            self.done_funs.insert((fun, variant.clone(), inst.clone()));
             self.inst_opt = Some(inst);
             self.analyze_fun(
                 self.targets
@@ -228,10 +229,9 @@ impl<'a> Analyzer<'a> {
             // Insert it into final analysis result.
             self.info
                 .funs
-                .entry((fun, variant.clone()))
+                .entry((fun, variant))
                 .or_default()
-                .insert(inst.clone());
-            self.done_funs.insert((fun, variant, inst));
+                .insert(inst);
         }
 
         // Next do axioms, based on the types discovered for regular functions.
@@ -314,6 +314,19 @@ impl<'a> Analyzer<'a> {
                 self.analyze_bytecode(&target, bc);
             }
         }
+
+        if let Some(inst) = &self.inst_opt {
+            if let Some(spec_qid) = self
+                .targets
+                .get_opaque_spec_by_fun(&target.func_env.get_qualified_id())
+            {
+                let entry = (spec_qid.clone(), FunctionVariant::Baseline, inst.clone());
+                if !self.done_funs.contains(&entry) {
+                    self.todo_funs.push(entry);
+                };
+            };
+        };
+
         // Analyze instantiations (when this function is a verification target)
         if self.inst_opt.is_none() {
             // collect information
@@ -400,6 +413,15 @@ impl<'a> Analyzer<'a> {
                         .entry((callee_env.get_qualified_id(), FunctionVariant::Baseline))
                         .or_default()
                         .insert(actuals.clone());
+                    if let Some(spec_qid) = self
+                        .targets
+                        .get_opaque_spec_by_fun(&callee_env.get_qualified_id())
+                    {
+                        let entry = (spec_qid.clone(), FunctionVariant::Baseline, actuals.clone());
+                        if !self.done_funs.contains(&entry) {
+                            self.todo_funs.push(entry);
+                        };
+                    };
                     // Mark the associated module to be instantiated with the given actuals.
                     // This will instantiate all functions in the module with matching number
                     // of type parameters.
