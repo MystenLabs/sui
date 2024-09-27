@@ -1,5 +1,5 @@
 [package]
 name = "Root"
 
-[dependencies.A]
-resolver = "../resolvers/silent.sh"
+[dependencies]
+A = { r."../resolvers/silent.sh" = "a" }

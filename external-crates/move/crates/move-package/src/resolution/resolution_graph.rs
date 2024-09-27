@@ -125,7 +125,7 @@ impl ResolvedGraph {
                 match dep {
                     PM::Dependency::External(_) => continue,
                     PM::Dependency::Internal(internal) => {
-                        if let PM::DependencyKind::Custom(_) = internal.kind {
+                        if let PM::DependencyKind::OnChain(_) = internal.kind {
                             continue;
                         }
                         let dep_path = &resolved_pkg.package_path.join(local_path(&internal.kind));

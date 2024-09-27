@@ -14,7 +14,9 @@ pub struct MoveOrderFilledEvent {
     pub price: u64,
     pub taker_is_bid: bool,
     pub taker_fee: u64,
+    pub taker_fee_is_deep: bool,
     pub maker_fee: u64,
+    pub maker_fee_is_deep: bool,
     pub base_quantity: u64,
     pub quote_quantity: u64,
     pub maker_balance_manager_id: ObjectID,
@@ -24,6 +26,20 @@ pub struct MoveOrderFilledEvent {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct MoveOrderCanceledEvent {
+    pub balance_manager_id: ObjectID,
+    pub pool_id: ObjectID,
+    pub order_id: u128,
+    pub client_order_id: u64,
+    pub trader: SuiAddress,
+    pub price: u64,
+    pub is_bid: bool,
+    pub original_quantity: u64,
+    pub base_asset_quantity_canceled: u64,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct MoveOrderExpiredEvent {
     pub balance_manager_id: ObjectID,
     pub pool_id: ObjectID,
     pub order_id: u128,

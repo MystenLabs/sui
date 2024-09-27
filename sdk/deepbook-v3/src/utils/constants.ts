@@ -12,8 +12,8 @@ export interface DeepbookPackageIds {
 }
 
 export const testnetPackageIds = {
-	DEEPBOOK_PACKAGE_ID: '0x48cc688a15bdda6017c730a3c65b30414e642d041f2931ef14e08f6b0b2a1b7f',
-	REGISTRY_ID: '0x60517d0cae6f1168c1ba94cb45c06191f9837ec695d0d465d594b2f6287534f0',
+	DEEPBOOK_PACKAGE_ID: '0xa706f5eebcfde58ee1b03d642f222c646fe09b8d2d7a59fbee0fdc73fa21eb33',
+	REGISTRY_ID: '0x98dace830ebebd44b7a3331c00750bf758f8a4b17a27380f5bb3fbe68cb984a7',
 	DEEP_TREASURY_ID: '0x69fffdae0075f8f71f4fa793549c11079266910e8905169845af1f5d00e09dcb',
 } satisfies DeepbookPackageIds;
 
@@ -58,9 +58,9 @@ export const mainnetCoins: CoinMap = {
 		scalar: 1000000000,
 	},
 	USDC: {
-		address: ``,
-		type: ``,
-		scalar: 0,
+		address: `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7`,
+		type: `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC`,
+		scalar: 6,
 	},
 	WUSDC: {
 		address: `0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf`,
@@ -86,22 +86,22 @@ export const mainnetCoins: CoinMap = {
 
 export const testnetPools: PoolMap = {
 	DEEP_SUI: {
-		address: `0x877c81b2d760a91a405dc12974742ba2401dc1da727681d2de32c861f807ec28`,
+		address: `0x0d1b1746d220bd5ebac5231c7685480a16f1c707a46306095a4c67dc7ce4dcae`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'SUI',
 	},
 	SUI_DBUSDC: {
-		address: `0x966c99a5ce0ce3e09dacac0a42cc2b888d9e1a0c5f39b69f556c38f38ef0b81d`,
+		address: `0x520c89c6c78c566eed0ebf24f854a8c22d8fdd06a6f16ad01f108dad7f1baaea`,
 		baseCoin: 'SUI',
 		quoteCoin: 'DBUSDC',
 	},
 	DEEP_DBUSDC: {
-		address: `0x6546ae819e61770c6070962157a2868c012c121ef4e6dd93e81e98900c61b799`,
+		address: `0xee4bb0db95dc571b960354713388449f0158317e278ee8cda59ccf3dcd4b5288`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'DBUSDC',
 	},
 	DBUSDT_DBUSDC: {
-		address: `0x9c0a6ef057b5f81d9f2d95a38ad753b8b5b8f535f9c10bb3e7d7256296eb4e18`,
+		address: `0x69cbb39a3821d681648469ff2a32b4872739d2294d30253ab958f85ace9e0491`,
 		baseCoin: 'DBUSDT',
 		quoteCoin: 'DBUSDC',
 	},
@@ -112,5 +112,25 @@ export const mainnetPools: PoolMap = {
 		address: ``,
 		baseCoin: 'DEEP',
 		quoteCoin: 'SUI',
+	},
+	SUI_USDC: {
+		address: ``,
+		baseCoin: 'SUI',
+		quoteCoin: 'USDC',
+	},
+	DEEP_USDC: {
+		address: ``,
+		baseCoin: 'DEEP',
+		quoteCoin: 'USDC',
+	},
+	USDT_USDC: {
+		address: ``,
+		baseCoin: 'USDT',
+		quoteCoin: 'USDC',
+	},
+	WUSDC_USDC: {
+		address: ``,
+		baseCoin: 'WUSDC',
+		quoteCoin: 'USDC',
 	},
 };

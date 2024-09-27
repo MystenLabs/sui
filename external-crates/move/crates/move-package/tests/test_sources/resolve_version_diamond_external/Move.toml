@@ -19,5 +19,5 @@ name = "Root"
 version = "1"
 
 [dependencies]
-A = { resolver = "../resolvers/successful_version.sh", packages = { Contains = "Anything", Has = { No = "Schema" } } }
+A =  { r."../resolvers/successful_version.sh" = "A" }
 B = { local = "./deps_only/B" }

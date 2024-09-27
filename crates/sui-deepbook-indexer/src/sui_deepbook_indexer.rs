@@ -22,9 +22,9 @@ use sui_types::execution_status::ExecutionStatus;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
 
 use crate::events::{
-    MoveBalanceEvent, MoveFlashLoanBorrowedEvent, MoveOrderCanceledEvent, MoveOrderFilledEvent,
-    MoveOrderModifiedEvent, MoveOrderPlacedEvent, MovePriceAddedEvent, MoveProposalEvent,
-    MoveRebateEvent, MoveStakeEvent, MoveTradeParamsUpdateEvent, MoveVoteEvent,
+    MoveBalanceEvent, MoveFlashLoanBorrowedEvent, MoveOrderCanceledEvent, MoveOrderExpiredEvent,
+    MoveOrderFilledEvent, MoveOrderModifiedEvent, MoveOrderPlacedEvent, MovePriceAddedEvent,
+    MoveProposalEvent, MoveRebateEvent, MoveStakeEvent, MoveTradeParamsUpdateEvent, MoveVoteEvent,
 };
 use crate::metrics::DeepBookIndexerMetrics;
 use crate::postgres_manager::PgPool;
@@ -376,7 +376,6 @@ fn process_sui_event(
         match ev.type_.name.as_str() {
             "OrderPlaced" => {
                 info!("Observed Deepbook Order Placed {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderPlacedEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -405,7 +404,6 @@ fn process_sui_event(
             }
             "OrderModified" => {
                 info!("Observed Deepbook Order Modified {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderModifiedEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -434,7 +432,6 @@ fn process_sui_event(
             }
             "OrderCanceled" => {
                 info!("Observed Deepbook Order Canceled {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderCanceledEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -461,9 +458,36 @@ fn process_sui_event(
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                 }))
             }
+            "OrderExpired" => {
+                info!("Observed Deepbook Order Expired {:?}", ev);
+                let move_event: MoveOrderExpiredEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
+                Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
+                    digest: tx.transaction.digest().to_string(),
+                    sender: tx.transaction.sender_address().to_string(),
+                    checkpoint,
+                    package,
+                    status: OrderUpdateStatus::Expired,
+                    pool_id: move_event.pool_id.to_string(),
+                    order_id: move_event.order_id,
+                    client_order_id: move_event.client_order_id,
+                    price: move_event.price,
+                    is_bid: move_event.is_bid,
+                    onchain_timestamp: move_event.timestamp,
+                    original_quantity: move_event.original_quantity,
+                    quantity: move_event.base_asset_quantity_canceled,
+                    trader: move_event.trader.to_string(),
+                    balance_manager_id: move_event.balance_manager_id.to_string(),
+                }))
+            }
             "OrderFilled" => {
                 info!("Observed Deepbook Order Filled {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderFilledEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -485,7 +509,9 @@ fn process_sui_event(
                     price: move_event.price,
                     taker_is_bid: move_event.taker_is_bid,
                     taker_fee: move_event.taker_fee,
+                    taker_fee_is_deep: move_event.taker_fee_is_deep,
                     maker_fee: move_event.maker_fee,
+                    maker_fee_is_deep: move_event.maker_fee_is_deep,
                     base_quantity: move_event.base_quantity,
                     quote_quantity: move_event.quote_quantity,
                     maker_balance_manager_id: move_event.maker_balance_manager_id.to_string(),
@@ -495,7 +521,6 @@ fn process_sui_event(
             }
             "FlashLoanBorrowed" => {
                 info!("Observed Deepbook Flash Loan Borrowed {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveFlashLoanBorrowedEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -517,7 +542,6 @@ fn process_sui_event(
             }
             "PriceAdded" => {
                 info!("Observed Deepbook Price Addition {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MovePriceAddedEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -538,7 +562,6 @@ fn process_sui_event(
             }
             "BalanceEvent" => {
                 info!("Observed Deepbook Balance Event {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveBalanceEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -560,7 +583,6 @@ fn process_sui_event(
             }
             "ProposalEvent" => {
                 info!("Observed Deepbook Proposal Event {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveProposalEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -583,7 +605,6 @@ fn process_sui_event(
             }
             "RebateEvent" => {
                 info!("Observed Deepbook Rebate Event {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveRebateEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -605,7 +626,6 @@ fn process_sui_event(
             }
             "StakeEvent" => {
                 info!("Observed Deepbook Stake Event {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveStakeEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -628,7 +648,6 @@ fn process_sui_event(
             }
             "TradeParamsUpdateEvent" => {
                 info!("Observed Deepbook Trade Params Update Event {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveTradeParamsUpdateEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();
@@ -662,7 +681,6 @@ fn process_sui_event(
             }
             "VoteEvent" => {
                 info!("Observed Deepbook Vote Event {:?}", ev);
-                // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveVoteEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
                 let first_command = txn_kind.iter_commands().next();

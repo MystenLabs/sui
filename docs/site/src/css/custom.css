@@ -7,6 +7,23 @@
  @tailwind components;
  @tailwind utilities;
 
+ @layer utilities {
+  .bg-checkerboard {
+    background-image: linear-gradient(45deg, var(--sui-black) 25%, transparent 25%, transparent 75%, var(--sui-black) 75%, var(--sui-black)),
+                      linear-gradient(45deg, var(--sui-black) 25%, transparent 25%, transparent 75%, var(--sui-black) 75%, var(--sui-black));
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    border-right: 1px solid var(--sui-blue);
+  }
+  .bg-checkerboard-dark {
+    background-image: linear-gradient(45deg, rgb(var(--sui-blue-dark)) 25%, transparent 25%, transparent 75%, rgb(var(--sui-blue-dark)) 75%, rgb(var(--sui-blue-dark))),
+                      linear-gradient(45deg, rgb(var(--sui-blue-dark)) 25%, transparent 25%, transparent 75%, rgb(var(--sui-blue-dark)) 75%, rgb(var(--sui-blue-dark)));
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    border-right: 1px solid rgb(var(--sui-blue-dark));
+  }
+}
+
 /* You can override the default Infima variables here. */
 :root {
   --ifm-color-primary: #4ca2ff;
@@ -354,7 +371,21 @@ h4 {
   color: var(--sui-white);
   text-decoration: none;
 }
+/*
+details {
+  @apply !bg-sui-gray-45 !border-sui-gray-65 relative before:content-["Click\20to\20toggle"] before:absolute before:-top-3 before:-left-1 before:text-xs before:bg-white before:px-2 before:py-0.5 before:rounded before:border before:border-sui-gray-65 before:border-solid before:opacity-0 hover:before:opacity-100 before:duration-300 before:transition-opacity;
+}
+[data-theme='dark'] details {
+  @apply !bg-sui-gray-90 !border-sui-gray-65;
+}
+*/
+summary::before {
+  @apply !border-l-sui-gray-65;
+}
 
+details > div > div {
+  @apply !border-t-sui-gray-65;
+}
 @media (max-width: 1050px) {
   .navbar .button-cta {
     display: none;

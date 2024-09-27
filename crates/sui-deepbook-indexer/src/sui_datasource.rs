@@ -111,6 +111,10 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
     }
+
+    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.inflight_live_tasks
+    }
 }
 
 struct PerTaskInMemProgressStore {

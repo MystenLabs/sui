@@ -578,6 +578,7 @@ pub struct ObjectInner {
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[serde(from = "ObjectInner")]
 pub struct Object(Arc<ObjectInner>);
 
 impl From<ObjectInner> for Object {

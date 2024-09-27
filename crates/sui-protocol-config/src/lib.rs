@@ -180,8 +180,8 @@ const MAX_PROTOCOL_VERSION: u64 = 61;
 // Version 59: Enable round prober in consensus.
 // Version 60: Validation of public inputs for Groth16 verification.
 //             Enable configuration of maximum number of type nodes in a type layout.
-//             Switch to distributed vote scoring in consensus in testnet
-// Version 61: Further reduce minimum number of random beacon shares.
+// Version 61: Switch to distributed vote scoring in consensus in testnet
+//             Further reduce minimum number of random beacon shares.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2783,14 +2783,13 @@ impl ProtocolConfig {
                 60 => {
                     cfg.max_type_to_layout_nodes = Some(512);
                     cfg.feature_flags.validate_identifier_inputs = true;
-
+                }
+                61 => {
                     if chain != Chain::Mainnet {
                         // Enable distributed vote scoring for testnet
                         cfg.feature_flags
                             .consensus_distributed_vote_scoring_strategy = true;
                     }
-                }
-                61 => {
                     // Further reduce minimum number of random beacon shares.
                     cfg.random_beacon_reduction_lower_bound = Some(700);
                 }
@@ -3168,11 +3167,10 @@ mod test {
             .feature_flags
             .lookup_attr("some random string".to_owned())
             .is_none());
-        assert!(prot
+        assert!(!prot
             .feature_flags
             .attr_map()
-            .get("some random string")
-            .is_none());
+            .contains_key("some random string"));
 
         // Was false in v1
         assert!(

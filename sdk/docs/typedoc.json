@@ -15,5 +15,6 @@
 	"excludePrivate": true,
 	"intentionallyNotExported": [],
 	"out": "public/typedoc",
-	"entryPointStrategy": "packages"
+	"entryPointStrategy": "packages",
+	"plugin": ["typedoc-plugin-mermaid"]
 }

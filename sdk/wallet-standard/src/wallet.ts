@@ -3,7 +3,7 @@
 
 import { bcs } from '@mysten/sui/bcs';
 import { Transaction } from '@mysten/sui/transactions';
-import { fromB64, toB64 } from '@mysten/sui/utils';
+import { fromBase64, toBase64 } from '@mysten/sui/utils';
 import type { WalletWithFeatures } from '@wallet-standard/core';
 
 import type {
@@ -61,7 +61,7 @@ export async function signAndExecuteTransaction(
 			txSignatures: [signature],
 			intentMessage: { value: bcsTransaction },
 		},
-	] = bcs.SenderSignedData.parse(fromB64(rawTransaction!));
+	] = bcs.SenderSignedData.parse(fromBase64(rawTransaction!));
 
 	const bytes = bcs.TransactionData.serialize(bcsTransaction).toBase64();
 
@@ -69,7 +69,7 @@ export async function signAndExecuteTransaction(
 		digest,
 		signature,
 		bytes,
-		effects: toB64(new Uint8Array(rawEffects!)),
+		effects: toBase64(new Uint8Array(rawEffects!)),
 	};
 }
 
