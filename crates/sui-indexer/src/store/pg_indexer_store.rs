@@ -343,6 +343,9 @@ impl PgIndexerStore {
     async fn get_min_cp_and_tx_for_epoch(&self, epoch: u64) -> Result<(u64, u64), IndexerError> {
         use diesel_async::RunQueryDsl;
         // TODO: (wlmyng) just use min and max on checkpoints
+
+        // TODO: (wlmyng) just add a new field to the unpruned epochs table instead of relying on
+        // checkpoints
         let epoch = epoch.saturating_sub(1) as i64;
 
         let mut connection = self.pool.get().await?;
@@ -359,6 +362,21 @@ impl PgIndexerStore {
             .map_err(Into::into)
             .map(|(cp, tx)| ((cp + 1) as u64, tx as u64))
             .context("Failed reading min cp and tx for epoch from PostgresDB")
+    }
+
+    async fn get_latest_epoch(&self) -> Result<u64, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        epochs::table
+            .select(epochs::epoch)
+            .order_by(epochs::epoch.desc())
+            .first::<i64>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .map(|v| v as u64)
+            .context("Failed to read latest epoch from PostgresDB")
     }
 
     async fn persist_display_updates(
@@ -1642,6 +1660,10 @@ impl IndexerStore for PgIndexerStore {
 
     async fn get_min_cp_and_tx_for_epoch(&self, epoch: u64) -> Result<(u64, u64), IndexerError> {
         self.get_min_cp_and_tx_for_epoch(epoch).await
+    }
+
+    async fn get_latest_epoch(&self) -> Result<u64, IndexerError> {
+        self.get_latest_epoch().await
     }
 
     async fn persist_objects(

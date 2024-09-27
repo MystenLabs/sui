@@ -156,31 +156,37 @@ async fn update_watermarks_lower_bounds(
     store: &PgIndexerStore,
     epochs_to_keep: u64,
 ) -> IndexerResult<()> {
+    // TODO: (wlmyng) maybe we want at least epoch_hi? what if we start backfilling or what if
+    // somehow each table can have a different upper bound? Then it would throw the assumptions for
+    // calculating the lower bound off
+    let max_epoch = store.get_latest_epoch().await?;
     let watermarks = store.get_watermarks().await?;
     let mut lower_bound_updates = vec![];
 
     for (key, value) in watermarks.iter() {
+        // Determine the retention policy for the entry, and calculate the inclusive lower bound for
+        // the reader.
+
+        // TODO: (wlmyng) introduce the mapping for retention policies for each table
         let epochs_to_keep = if key.as_str() == "objects_history" {
             OBJECTS_HISTORY_EPOCHS_TO_KEEP
         } else {
             epochs_to_keep
         };
+        let new_reader_epoch_lower_bound = max_epoch.saturating_sub(epochs_to_keep - 1);
+        let (cp, tx) = store
+            .get_min_cp_and_tx_for_epoch(new_reader_epoch_lower_bound)
+            .await?;
+        // The lower bound for the entity corresponding to the new epoch lower bound.
+        let new_lo = match key {
+            WatermarkEntity::ObjectsHistory | WatermarkEntity::Checkpoints => cp,
+            WatermarkEntity::Transactions | WatermarkEntity::Events => tx,
+        };
 
-        // We should update the watermarks and prepare for pruning
-        if should_update_watermark(value, epochs_to_keep) {
-            let new_inclusive_epoch_lower_bound = value.epoch_hi.saturating_sub(epochs_to_keep - 1);
-            // TODO: (wlmyng) don't rely on `checkpoints` table
-            let (cp, tx) = store
-                .get_min_cp_and_tx_for_epoch(new_inclusive_epoch_lower_bound)
-                .await?;
-            let new_lo = match key {
-                WatermarkEntity::ObjectsHistory | WatermarkEntity::Checkpoints => cp,
-                WatermarkEntity::Transactions | WatermarkEntity::Events => tx,
-                WatermarkEntity::Epochs => new_inclusive_epoch_lower_bound,
-            };
+        if value.lo < new_lo {
             lower_bound_updates.push(Watermark::lower_bound(
                 *key,
-                new_inclusive_epoch_lower_bound,
+                new_reader_epoch_lower_bound,
                 new_lo,
             ));
         }
@@ -258,17 +264,61 @@ async fn prune_epoch_partitioned_tables_task(
 
             wait_for_prune_delay(&entry, &cancel, 1000).await?;
 
-            for epoch in *min_partition..entry.epoch_lo {
-                if cancel.is_cancelled() {
-                    info!("Pruner prune_epoch_partitioned_tables_task task cancelled.");
-                    return Ok(());
-                }
-                partition_manager
-                    .drop_table_partition(table_name.clone(), epoch)
-                    .await?;
-                info!("Dropped table partition {} epoch {}", table_name, epoch);
-            }
+            prune_epoch_partitioned_table(
+                partition_manager.clone(),
+                table_name.clone(),
+                *min_partition,
+                entry.lo,
+                cancel.clone(),
+            )
+            .await?;
         }
         tokio::time::sleep(Duration::from_secs(5)).await;
     }
+}
+
+async fn prune_epoch_partitioned_table(
+    partition_manager: PgPartitionManager,
+    table_name: String,
+    inclusive_start: u64,
+    exclusive_end: u64,
+    cancel: CancellationToken,
+) -> IndexerResult<()> {
+    for epoch in inclusive_start..exclusive_end {
+        if cancel.is_cancelled() {
+            info!("Pruner prune_epoch_partitioned_tables_task task cancelled.");
+            return Ok(());
+        }
+        partition_manager
+            .drop_table_partition(table_name.clone(), epoch)
+            .await?;
+        info!("Dropped table partition {} epoch {}", table_name, epoch);
+    }
+    Ok(())
+}
+
+/// inclusive_start comes from `watermark.pruned_lo`, and exclusive_end comes from
+/// `watermark.reader_lo`.
+async fn prune_unpartitioned_table(
+    store: PgIndexerStore,
+    table_name: String,
+    inclusive_start: u64,
+    exclusive_end: u64,
+    cancel: CancellationToken,
+) -> IndexerResult<()> {
+    // match on table_name for the correct pruning function to call
+    // today we have
+    // prune_checkpoints_table
+    // prune_tx_indices_table
+    // prune_event_indices_table
+    // prune_cp_tx_table - i think we can drop this once we update pruner
+    for epoch in inclusive_start..exclusive_end {
+        if cancel.is_cancelled() {
+            info!("Pruner prune_unpartitioned_table task cancelled.");
+            return Ok(());
+        }
+        store.prune_epoch(table_name.clone(), epoch).await?;
+        info!("Pruned table {} epoch {}", table_name, epoch);
+    }
+    Ok(())
 }

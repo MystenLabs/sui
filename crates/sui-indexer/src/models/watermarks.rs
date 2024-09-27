@@ -34,7 +34,6 @@ pub struct StoredWatermark {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum WatermarkEntity {
     Checkpoints,
-    Epochs,
     Events,
     ObjectsHistory,
     Transactions,
@@ -101,7 +100,6 @@ impl WatermarkEntity {
             WatermarkEntity::Transactions => "transactions",
             WatermarkEntity::ObjectsHistory => "objects_history",
             WatermarkEntity::Checkpoints => "checkpoints",
-            WatermarkEntity::Epochs => "epochs",
             WatermarkEntity::Events => "events",
         }
     }
@@ -111,7 +109,6 @@ impl WatermarkEntity {
             "transactions" => Some(WatermarkEntity::Transactions),
             "objects_history" => Some(WatermarkEntity::ObjectsHistory),
             "checkpoints" => Some(WatermarkEntity::Checkpoints),
-            "epochs" => Some(WatermarkEntity::Epochs),
             "events" => Some(WatermarkEntity::Events),
             _ => None,
         }
@@ -143,7 +140,6 @@ impl Watermark {
     pub fn new_upper_bounds(epoch_hi: u64, cp_hi: u64, tx_hi: u64) -> Vec<Watermark> {
         vec![
             Watermark::upper_bound(WatermarkEntity::Checkpoints, epoch_hi, cp_hi),
-            Watermark::upper_bound(WatermarkEntity::Epochs, epoch_hi, epoch_hi),
             Watermark::upper_bound(WatermarkEntity::Events, epoch_hi, tx_hi),
             Watermark::upper_bound(WatermarkEntity::ObjectsHistory, epoch_hi, cp_hi),
             Watermark::upper_bound(WatermarkEntity::Transactions, epoch_hi, tx_hi),
@@ -153,7 +149,6 @@ impl Watermark {
     pub fn new_lower_bounds(epoch_lo: u64, cp_lo: u64, tx_lo: u64) -> Vec<Watermark> {
         vec![
             Watermark::lower_bound(WatermarkEntity::Checkpoints, epoch_lo, cp_lo),
-            Watermark::lower_bound(WatermarkEntity::Epochs, epoch_lo, epoch_lo),
             Watermark::lower_bound(WatermarkEntity::Events, epoch_lo, tx_lo),
             Watermark::lower_bound(WatermarkEntity::ObjectsHistory, epoch_lo, cp_lo),
             Watermark::lower_bound(WatermarkEntity::Transactions, epoch_lo, tx_lo),
@@ -202,7 +197,6 @@ impl From<StoredWatermark> for WatermarkRead {
                 "transactions" => WatermarkEntity::Transactions,
                 "objects_history" => WatermarkEntity::ObjectsHistory,
                 "checkpoints" => WatermarkEntity::Checkpoints,
-                "epochs" => WatermarkEntity::Epochs,
                 "events" => WatermarkEntity::Events,
                 _ => unreachable!(),
             },

@@ -124,4 +124,6 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
     async fn update_watermarks(&self, watermarks: Vec<Watermark>) -> Result<(), IndexerError>;
 
     async fn get_min_cp_and_tx_for_epoch(&self, epoch: u64) -> Result<(u64, u64), IndexerError>;
+
+    async fn get_latest_epoch(&self) -> Result<u64, IndexerError>;
 }
