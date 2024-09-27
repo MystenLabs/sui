@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use arc_swap::{ArcSwap, ArcSwapOption};
-use clap::error;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{self, select, Either};
