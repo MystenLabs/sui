@@ -1,6 +1,6 @@
 module Symbols::M1 {
 
-    struct SomeStruct has key, drop, store {
+    struct SomeStruct has drop, store {
         some_field: u64,
     }
 
@@ -85,7 +85,7 @@ module Symbols::M1 {
         *tmp
     }
 
-    struct OuterStruct has key, drop {
+    struct OuterStruct has drop {
         some_struct: SomeStruct,
     }
 

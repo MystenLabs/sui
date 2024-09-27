@@ -18,7 +18,7 @@ function getOwnerAddress(o: OwnedObjectRef): string | undefined {
 	}
 }
 
-describe('Transfer to Object', () => {
+describe('Transfer to Object', { retry: 3 }, () => {
 	let toolbox: TestToolbox;
 	let packageId: string;
 	let parentObjectId: OwnedObjectRef;

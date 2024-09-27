@@ -1,5 +1,25 @@
 # @mysten/deepbook-v3
 
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies [489f421]
+- Updated dependencies [489f421]
+  - @mysten/sui@1.11.0
+
+## 0.8.0
+
+### Minor Changes
+
+- 0d17307: Update deepbook sdk
+
+## 0.7.1
+
+### Patch Changes
+
+- 37d259a: Locked balance feature
+
 ## 0.7.0
 
 ### Minor Changes

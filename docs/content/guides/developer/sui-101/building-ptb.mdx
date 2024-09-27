@@ -10,7 +10,7 @@ This example starts by constructing a PTB to send Sui. If you are familiar with 
 ```ts
 import { Transaction } from '@mysten/sui/transactions';
 
-const txb = new Transaction();
+const tx = new Transaction();
 ```
 
 Using this, you can then add transactions to this PTB.
@@ -18,10 +18,10 @@ Using this, you can then add transactions to this PTB.
 ```ts
 // Create a new coin with balance 100, based on the coins used as gas payment.
 // You can define any balance here.
-const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(100)]);
 
 // Transfer the split coin to a specific address.
-txb.transferObjects([coin], txb.pure('0xSomeSuiAddress'));
+tx.transferObjects([coin], tx.pure('0xSomeSuiAddress'));
 ```
 
 You can attach multiple transaction commands of the same type to a PTB as well. For example, to get a list of transfers, and iterate over them to transfer coins to each of them:
@@ -35,24 +35,24 @@ interface Transfer {
 // Procure a list of some Sui transfers to make:
 const transfers: Transfer[] = getTransfers();
 
-const txb = new Transaction();
+const tx = new Transaction();
 
 // First, split the gas coin into multiple coins:
-const coins = txb.splitCoins(
-	txb.gas,
-	transfers.map((transfer) => txb.pure(transfer.amount)),
+const coins = tx.splitCoins(
+	tx.gas,
+	transfers.map((transfer) => tx.pure(transfer.amount)),
 );
 
 // Next, create a transfer transaction for each coin:
 transfers.forEach((transfer, index) => {
-	txb.transferObjects([coins[index]], txb.pure(transfer.to));
+	tx.transferObjects([coins[index]], tx.pure(transfer.to));
 });
 ```
 
-After you have the PTB defined, you can directly execute it with a `signer` using `signAndExecuteTransaction`.
+After you have the Transaction defined, you can directly execute it with a `SuiClient` and `KeyPair` using `client.signAndExecuteTransaction`.
 
 ```ts
-signer.signAndExecuteTransaction({ transaction: txb });
+client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
 ```
 
 ## Constructing inputs
@@ -61,8 +61,8 @@ Inputs are how you provide external values to PTBs. For example, defining an amo
 
 There are currently two ways to define inputs:
 
-- For objects: the `txb.object(objectId)` function is used to construct an input that contains an object reference.
-- For pure values: the `txb.pure(value, type?)` function is used to construct an input for a non-object input.
+- For objects: the `tx.object(objectId)` function is used to construct an input that contains an object reference.
+- For pure values: the `tx.pure(value, type?)` function is used to construct an input for a non-object input.
   - If value is a `Uint8Array`, then the value is assumed to be raw bytes and is used directly.
   - If type is provided, it's used to generate the BCS serialization layout for the value. If not provided, the type is automatically determined based on the value.
 
@@ -70,17 +70,17 @@ There are currently two ways to define inputs:
 
 Sui supports following transaction commands:
 
-- `txb.splitCoins(coin, amounts)`: Creates new coins with the defined amounts, split from the provided coin. Returns the coins so that it can be used in subsequent transactions.
-  - Example: `txb.splitCoins(txb.gas, [txb.pure(100), txb.pure(200)])`
-- `txb.mergeCoins(destinationCoin, sourceCoins)`: Merges the sourceCoins into the destinationCoin.
-  - Example: `txb.mergeCoins(txb.object(coin1), [txb.object(coin2), txb.object(coin3)])`
-- `txb.transferObjects(objects, address)`: Transfers a list of objects to the specified address.
-  - Example: `txb.transferObjects([txb.object(thing1), txb.object(thing2)], txb.pure(myAddress))`
-- `txb.moveCall({ target, arguments, typeArguments })`: Executes a Move call. Returns whatever the Sui Move call returns.
-  - Example: `txb.moveCall({ target: '0x2::devnet_nft::mint', arguments: [txb.pure(name), txb.pure(description), txb.pure(image)] })`
-- `txb.makeMoveVec({ type, elements })`: Constructs a vector of objects that can be passed into a moveCall. This is required as there's no other way to define a vector as an input.
-  - Example: `txb.makeMoveVec({ elements: [txb.object(id1), txb.object(id2)] })`
-- `txb.publish(modules, dependencies)`: Publishes a Move package. Returns the upgrade capability object.
+- `tx.splitCoins(coin, amounts)`: Creates new coins with the defined amounts, split from the provided coin. Returns the coins so that it can be used in subsequent transactions.
+  - Example: `tx.splitCoins(tx.gas, [tx.pure(100), tx.pure(200)])`
+- `tx.mergeCoins(destinationCoin, sourceCoins)`: Merges the sourceCoins into the destinationCoin.
+  - Example: `tx.mergeCoins(tx.object(coin1), [tx.object(coin2), tx.object(coin3)])`
+- `tx.transferObjects(objects, address)`: Transfers a list of objects to the specified address.
+  - Example: `tx.transferObjects([tx.object(thing1), tx.object(thing2)], tx.pure(myAddress))`
+- `tx.moveCall({ target, arguments, typeArguments })`: Executes a Move call. Returns whatever the Sui Move call returns.
+  - Example: `tx.moveCall({ target: '0x2::devnet_nft::mint', arguments: [tx.pure(name), tx.pure(description), tx.pure(image)] })`
+- `tx.makeMoveVec({ type, elements })`: Constructs a vector of objects that can be passed into a moveCall. This is required as there's no other way to define a vector as an input.
+  - Example: `tx.makeMoveVec({ elements: [tx.object(id1), tx.object(id2)] })`
+- `tx.publish(modules, dependencies)`: Publishes a Move package. Returns the upgrade capability object.
 
 ## Passing transaction results as arguments
 
@@ -88,26 +88,26 @@ You can use the result of a transaction command as an argument in subsequent tra
 
 ```ts
 // Split a coin object off of the gas object:
-const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(100)]);
 // Transfer the resulting coin object:
-txb.transferObjects([coin], txb.pure(address));
+tx.transferObjects([coin], tx.pure(address));
 ```
 
 When a transaction command returns multiple results, you can access the result at a specific index either using destructuring, or array indexes.
 
 ```ts
 // Destructuring (preferred, as it gives you logical local names):
-const [nft1, nft2] = txb.moveCall({ target: '0x2::nft::mint_many' });
-txb.transferObjects([nft1, nft2], txb.pure(address));
+const [nft1, nft2] = tx.moveCall({ target: '0x2::nft::mint_many' });
+tx.transferObjects([nft1, nft2], tx.pure(address));
 
 // Array indexes:
-const mintMany = txb.moveCall({ target: '0x2::nft::mint_many' });
-txb.transferObjects([mintMany[0], mintMany[1]], txb.pure(address));
+const mintMany = tx.moveCall({ target: '0x2::nft::mint_many' });
+tx.transferObjects([mintMany[0], mintMany[1]], tx.pure(address));
 ```
 
 ## Use the gas coin
 
-With PTBs, you can use the gas payment coin to construct coins with a set balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin selection. You can use `txb.gas` to access the gas coin in a PTB, and it is valid as input for any arguments; with the exception of `transferObjects`, `txb.gas` must be used by-reference. Practically speaking, this means you can also add to the gas coin with `mergeCoins` or borrow it for Move functions with `moveCall`.
+With PTBs, you can use the gas payment coin to construct coins with a set balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin selection. You can use `tx.gas` to access the gas coin in a PTB, and it is valid as input for any arguments; with the exception of `transferObjects`, `tx.gas` must be used by-reference. Practically speaking, this means you can also add to the gas coin with `mergeCoins` or borrow it for Move functions with `moveCall`.
 
 You can also transfer the gas coin using `transferObjects`, in the event that you want to transfer all of your coin balance to another address.
 
@@ -122,11 +122,11 @@ You might need to explicitly call `setSender()` on the PTB to ensure that the `s
 :::
 
 ```ts
-const txb = new Transaction();
+const tx = new Transaction();
 
 // ... add some transactions...
 
-await txb.build({ provider });
+await tx.build({ provider });
 ```
 
 In most cases, building requires your JSON RPC provider to fully resolve input values.
@@ -135,7 +135,7 @@ If you have PTB bytes, you can also convert them back into a `Transaction` class
 
 ```ts
 const bytes = getTransactionBytesFromSomewhere();
-const txb = Transaction.from(bytes);
+const tx = Transaction.from(bytes);
 ```
 
 ## Building offline
@@ -146,13 +146,13 @@ In the event that you want to build a PTB offline (as in with no `provider` requ
 import { Inputs } from '@mysten/sui/transactions';
 
 // For pure values:
-txb.pure(pureValueAsBytes);
+tx.pure(pureValueAsBytes);
 
 // For owned or immutable objects:
-txb.object(Inputs.ObjectRef({ digest, objectId, version }));
+tx.object(Inputs.ObjectRef({ digest, objectId, version }));
 
 // For shared objects:
-txb.object(Inputs.SharedObjectRef({ objectId, initialSharedVersion, mutable }));
+tx.object(Inputs.SharedObjectRef({ objectId, initialSharedVersion, mutable }));
 ```
 
 You can then omit the `provider` object when calling `build` on the transaction. If there is any required data that is missing, this will throw an error.
@@ -166,7 +166,7 @@ The new transaction builder comes with default behavior for all gas logic, inclu
 By default, the gas price is set to the reference gas price of the network. You can also explicitly set the gas price of the PTB by calling `setGasPrice` on the transaction builder.
 
 ```ts
-txb.setGasPrice(gasPrice);
+tx.setGasPrice(gasPrice);
 ```
 
 ### Budget
@@ -180,7 +180,7 @@ The gas budget is represented in Sui, and should take the gas price of the PTB i
 :::
 
 ```ts
-txb.setGasBudget(gasBudgetAmount);
+tx.setGasBudget(gasBudgetAmount);
 ```
 
 ### Gas payment
@@ -192,14 +192,16 @@ The list of coins used as gas payment will be merged down into a single gas coin
 ```ts
 // NOTE: You need to ensure that the coins do not overlap with any
 // of the input objects for the PTB.
-txb.setGasPayment([coin1, coin2]);
+tx.setGasPayment([coin1, coin2]);
 ```
+
+Gas coins should be objects containing the coins objectId, version, and digest (ie `{ objectId: string, version: string | number, digest: string }`).
 
 ### dApp / Wallet integration
 
 The Wallet Standard interface has been updated to support the `Transaction` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from dApps into wallets is expected to provide a `Transaction` class. This PTB class can then be serialized and sent to your wallet for execution.
 
-To serialize a PTB for sending to a wallet, Sui recommends using the `txb.serialize()` function, which returns an opaque string representation of the PTB that can be passed from the wallet standard dApp context to your wallet. This can then be converted back into a `Transaction` using `Transaction.from()`.
+To serialize a PTB for sending to a wallet, Sui recommends using the `tx.serialize()` function, which returns an opaque string representation of the PTB that can be passed from the wallet standard dApp context to your wallet. This can then be converted back into a `Transaction` using `Transaction.from()`.
 
 :::tip
 
@@ -228,16 +230,16 @@ function handleSignRequest(input) {
 The PTB builder can support sponsored PTBs by using the `onlyTransactionKind` flag when building the PTB.
 
 ```ts
-const txb = new Transaction();
+const tx = new Transaction();
 // ... add some transactions...
 
-const kindBytes = await txb.build({ provider, onlyTransactionKind: true });
+const kindBytes = await tx.build({ provider, onlyTransactionKind: true });
 
 // Construct a sponsored transaction from the kind bytes:
-const sponsoredTxb = Transaction.fromKind(kindBytes);
+const sponsoredTx = Transaction.fromKind(kindBytes);
 
 // You can now set the sponsored transaction data that is required:
-sponsoredTxb.setSender(sender);
-sponsoredTxb.setGasOwner(sponsor);
-sponsoredTxb.setGasPayment(sponsorCoins);
+sponsoredTx.setSender(sender);
+sponsoredTx.setGasOwner(sponsor);
+sponsoredTx.setGasPayment(sponsorCoins);
 ```

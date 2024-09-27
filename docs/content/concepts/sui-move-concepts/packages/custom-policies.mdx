@@ -553,7 +553,7 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { fromB64 } from '@mysten/sui/utils';
+import { fromBase64 } from '@mysten/sui/utils';
 
 const sender = execSync(`${SUI} client active-address`, { encoding: 'utf8' }).trim();
 const signer = (() => {
@@ -562,7 +562,7 @@ const signer = (() => {
 	);
 
 	for (const priv of keystore) {
-		const raw = fromB64(priv);
+		const raw = fromBase64(priv);
 		if (raw[0] !== 0) {
 			continue;
 		}
@@ -648,7 +648,7 @@ import { fileURLToPath } from 'url';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import { fromB64 } from '@mysten/sui/utils';
+import { fromBase64 } from '@mysten/sui/utils';
 
 const SUI = 'sui';
 const POLICY_PACKAGE_ID = '<POLICY-PACKAGE>';
@@ -659,7 +659,7 @@ const signer = (() => {
 	);
 
 	for (const priv of keystore) {
-		const raw = fromB64(priv);
+		const raw = fromBase64(priv);
 		if (raw[0] !== 0) {
 			continue;
 		}
@@ -888,7 +888,7 @@ import { fileURLToPath } from 'url';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction, UpgradePolicy } from '@mysten/sui/transactions';
-import { fromB64 } from '@mysten/sui/utils';
+import { fromBase64 } from '@mysten/sui/utils';
 
 const SUI = 'sui';
 const POLICY_PACKAGE_ID = '<POLICY-PACKAGE>';
@@ -901,7 +901,7 @@ const signer = (() => {
 	);
 
 	for (const priv of keystore) {
-		const raw = fromB64(priv);
+		const raw = fromBase64(priv);
 		if (raw[0] !== 0) {
 			continue;
 		}

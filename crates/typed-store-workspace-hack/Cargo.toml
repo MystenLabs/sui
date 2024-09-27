@@ -9,6 +9,7 @@
 name = "typed-store-workspace-hack"
 version = "0.0.0"
 license = "Apache-2.0"
+edition = "2021"
 publish = false
 
 [dependencies]

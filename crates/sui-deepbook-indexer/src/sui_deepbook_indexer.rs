@@ -490,6 +490,34 @@ fn process_sui_event(
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                 }))
             }
+            "OrderExpired" => {
+                info!("Observed Deepbook Order Expired {:?}", ev);
+                let move_event: MoveOrderExpiredEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
+                Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
+                    digest: tx.transaction.digest().to_string(),
+                    sender: tx.transaction.sender_address().to_string(),
+                    checkpoint,
+                    package,
+                    status: OrderUpdateStatus::Expired,
+                    pool_id: move_event.pool_id.to_string(),
+                    order_id: move_event.order_id,
+                    client_order_id: move_event.client_order_id,
+                    price: move_event.price,
+                    is_bid: move_event.is_bid,
+                    onchain_timestamp: move_event.timestamp,
+                    original_quantity: move_event.original_quantity,
+                    quantity: move_event.base_asset_quantity_canceled,
+                    trader: move_event.trader.to_string(),
+                    balance_manager_id: move_event.balance_manager_id.to_string(),
+                }))
+            }
             "OrderFilled" => {
                 info!("Observed Deepbook Order Filled {:?}", ev);
                 let move_event: MoveOrderFilledEvent = bcs::from_bytes(&ev.contents)?;

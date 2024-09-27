@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB58 } from '@mysten/bcs';
+import { fromBase64, toBase58 } from '@mysten/bcs';
 import type {
 	MoveValue,
 	ProtocolConfigValue,
@@ -948,12 +948,12 @@ export const RPC_METHODS: {
 									: {
 											Result: ref.input.cmd,
 										},
-						Array.from(fromB64(ref.bcs)),
+						Array.from(fromBase64(ref.bcs)),
 						toShortTypeString(ref.type.repr),
 					],
 				),
 				returnValues: result.returnValues?.map((value) => [
-					Array.from(fromB64(value.bcs)),
+					Array.from(fromBase64(value.bcs)),
 					toShortTypeString(value.type.repr),
 				]),
 			})),
@@ -974,7 +974,7 @@ export const RPC_METHODS: {
 
 		return {
 			data: fields.map((field) => ({
-				bcsName: field.name?.bcs && toB58(fromB64(field.name.bcs)),
+				bcsName: field.name?.bcs && toBase58(fromBase64(field.name.bcs)),
 				digest: (field.value?.__typename === 'MoveObject' ? field.value.digest : undefined)!,
 				name: {
 					type: toShortTypeString(field.name?.type.repr)!,
@@ -1077,7 +1077,7 @@ export const RPC_METHODS: {
 		);
 
 		if (!effects?.transactionBlock) {
-			const tx = Transaction.from(fromB64(txBytes));
+			const tx = Transaction.from(fromBase64(txBytes));
 			return { errors: errors ?? undefined, digest: await tx.getDigest() };
 		}
 
@@ -1090,7 +1090,7 @@ export const RPC_METHODS: {
 		);
 	},
 	async dryRunTransactionBlock(transport, [txBytes]) {
-		const tx = Transaction.from(fromB64(txBytes));
+		const tx = Transaction.from(fromBase64(txBytes));
 		const { transaction, error } = await transport.graphqlQuery(
 			{
 				query: DryRunTransactionBlockDocument,

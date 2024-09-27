@@ -5,7 +5,7 @@ import { bcs } from '@mysten/sui/bcs';
 import type { SuiClient } from '@mysten/sui/client';
 import { SuiGraphQLClient } from '@mysten/sui/graphql';
 import { graphql } from '@mysten/sui/graphql/schemas/2024.4';
-import { fromB64, normalizeSuiAddress } from '@mysten/sui/utils';
+import { fromBase64, normalizeSuiAddress } from '@mysten/sui/utils';
 
 import { ZkSendLink } from './claim.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
@@ -85,7 +85,7 @@ export async function listCreatedLinks({
 					return null;
 				}
 
-				const kind = bcs.SenderSignedData.parse(fromB64(node.bcs))?.[0]?.intentMessage.value.V1
+				const kind = bcs.SenderSignedData.parse(fromBase64(node.bcs))?.[0]?.intentMessage.value.V1
 					.kind;
 
 				if (!kind.ProgrammableTransaction) {
