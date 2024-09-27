@@ -67,6 +67,7 @@ pub struct OrderUpdate {
     pub(crate) is_bid: bool,
     pub(crate) original_quantity: u64,
     pub(crate) quantity: u64,
+    pub(crate) filled_quantity: u64,
     pub(crate) onchain_timestamp: u64,
     pub(crate) trader: String,
     pub(crate) balance_manager_id: String,
@@ -88,6 +89,7 @@ impl OrderUpdate {
             is_bid: self.is_bid,
             original_quantity: self.original_quantity as i64,
             quantity: self.quantity as i64,
+            filled_quantity: self.filled_quantity as i64,
             onchain_timestamp: self.onchain_timestamp as i64,
             balance_manager_id: self.balance_manager_id.clone(),
         }

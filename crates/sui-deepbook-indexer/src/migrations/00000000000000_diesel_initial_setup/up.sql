@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS order_updates
     is_bid                      BOOLEAN      NOT NULL,
     original_quantity           BIGINT       NOT NULL,
     quantity                    BIGINT       NOT NULL,
+    filled_quantity             BIGINT       NOT NULL,
     onchain_timestamp           BIGINT       NOT NULL,
     balance_manager_id          TEXT         NOT NULL,
     trader                      TEXT         NOT NULL

@@ -75,6 +75,7 @@ diesel::table! {
         is_bid -> Bool,
         original_quantity -> Int8,
         quantity -> Int8,
+        filled_quantity -> Int8,
         onchain_timestamp -> Int8,
         balance_manager_id -> Text,
         trader -> Text,
