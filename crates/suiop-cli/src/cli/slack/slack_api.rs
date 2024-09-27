@@ -16,16 +16,24 @@ const CHANNELS_URL: &str = "https://slack.com/api/conversations.list";
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UsersResponse {
     ok: bool,
-    members: Option<Vec<User>>,
+    members: Option<Vec<SlackUser>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct User {
+pub struct SlackUser {
     pub id: String,
     pub name: String,
+    pub profile: Option<Profile>,
+    #[serde(skip)]
+    pub notion_id: Option<String>,
 }
 
-impl Display for User {
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Profile {
+    pub email: String,
+}
+
+impl Display for SlackUser {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.name)
     }
@@ -90,7 +98,7 @@ pub async fn get_channels(client: &Client) -> Result<Vec<Channel>> {
     Ok(channels)
 }
 
-pub async fn get_users(client: &Client) -> Result<Vec<User>> {
+pub async fn get_users(client: &Client) -> Result<Vec<SlackUser>> {
     let url = "https://slack.com/api/users.list";
     let response = client
         .get(url)

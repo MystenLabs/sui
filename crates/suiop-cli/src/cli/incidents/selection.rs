@@ -7,16 +7,18 @@ use std::collections::HashMap;
 use strsim::normalized_damerau_levenshtein;
 use tracing::debug;
 
+use crate::cli::incidents::notion::Notion;
+use crate::cli::incidents::user::User;
 use crate::cli::lib::utils::day_of_week;
-use crate::cli::slack::{Channel, Slack, User};
+use crate::cli::slack::{Channel, Slack, SlackUser};
 use crate::DEBUG_MODE;
 
 use super::incident::Incident;
 
-fn request_pocs(slack: &Slack) -> Result<Vec<User>> {
+fn request_pocs(users: Vec<User>) -> Result<Vec<User>> {
     MultiSelect::new(
         "Please select the users who are POCs for this incident",
-        slack.users.clone(),
+        users,
     )
     .with_default(&[])
     .prompt()
@@ -46,6 +48,19 @@ fn filter_incidents_for_review(incidents: Vec<Incident>, min_priority: &str) -> 
 
 pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
     let slack = Slack::new().await;
+    let notion = Notion::new();
+    let combined_users = notion
+        .get_all_people()
+        .await?
+        .into_iter()
+        .map(|nu| {
+            let slack_user = slack
+                .users
+                .iter()
+                .find(|su| su.profile.as_ref().unwrap().email == nu.person.email);
+            User::new(slack_user.cloned(), Some(nu)).expect("Failed to convert user from Notion")
+        })
+        .collect::<Vec<_>>();
     let filtered_incidents = filter_incidents_for_review(incidents, "P2");
     let mut group_map = group_by_similar_title(filtered_incidents, 0.9);
     let mut to_review = vec![];
@@ -74,7 +89,7 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
                 .prompt()
                 .expect("Unexpected response");
             if ans {
-                let poc_users = request_pocs(&slack)?;
+                let poc_users = request_pocs(combined_users.clone())?;
                 incident_group
                     .iter_mut()
                     .for_each(|i| i.poc_users = Some(poc_users.clone()));
@@ -90,7 +105,7 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
                     .prompt()
                     .expect("Unexpected response");
                 if ans {
-                    let poc_users = request_pocs(&slack)?;
+                    let poc_users = request_pocs(combined_users.clone())?;
                     incident.poc_users = Some(poc_users.clone());
                     to_review.push(incident.clone());
                 } else {
@@ -142,17 +157,24 @@ Please comment in the thread to request an adjustment to the list.",
     } else {
         "incident-postmortems"
     };
-    let ans = Confirm::new(&format!(
+    let send_message = Confirm::new(&format!(
         "Send this message to the #{} channel?",
         slack_channel
     ))
     .with_default(false)
     .prompt()
     .expect("Unexpected response");
-    if ans {
+    if send_message {
         slack.send_message(slack_channel, &message).await?;
+        debug!("Message sent to #{}", slack_channel);
+        if !*DEBUG_MODE {
+            println!("Inserting incidents into Notion database");
+            for incident in to_review.iter() {
+                debug!("Inserting incident into Notion: {}", incident.number);
+                notion.insert_incident(incident.clone()).await?;
+            }
+        }
     }
-    // post to https://slack.com/api/chat.postMessage with message
     Ok(())
 }
 

@@ -19,7 +19,7 @@ pub use slack_api::*;
 pub struct Slack {
     client: Client,
     pub channels: Vec<Channel>,
-    pub users: Vec<User>,
+    pub users: Vec<SlackUser>,
 }
 
 fn get_serialize_filepath(subname: &str) -> PathBuf {

@@ -3,9 +3,10 @@
 
 mod incident;
 mod jira;
-mod notion;
+pub(crate) mod notion;
 mod pd;
 mod selection;
+mod user;
 
 use crate::cli::slack::Slack;
 use anyhow::Result;
@@ -89,7 +90,6 @@ pub async fn incidents_cmd(args: &IncidentsArgs) -> Result<()> {
                 // let notionIncidents = notion::Notion::new()
                 //     .get_incident_selection_incidents()
                 //     .await?;
-                notion::Notion::new().insert_incident().await?;
                 review_recent_incidents(incidents).await?
             } else {
                 print_recent_incidents(incidents, *long, *with_priority).await?
