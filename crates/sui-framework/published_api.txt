@@ -166,6 +166,12 @@ StakingRequestEvent
 UnstakingRequestEvent
 	public struct
 	0x3::validator
+ConvertingToFungibleStakedSuiEvent
+	public struct
+	0x3::validator
+RedeemingFungibleStakedSuiEvent
+	public struct
+	0x3::validator
 new_metadata
 	public(package) fun
 	0x3::validator

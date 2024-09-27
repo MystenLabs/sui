@@ -976,7 +976,7 @@ the stake and any rewards corresponding to it will be immediately processed.
     <b>let</b> staking_pool_id = pool_id(&staked_sui);
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> =
         <b>if</b> (self.staking_pool_mappings.contains(staking_pool_id)) { // This is an active <a href="validator.md#0x3_validator">validator</a>.
-            <b>let</b> validator_address = self.staking_pool_mappings[pool_id(&staked_sui)];
+            <b>let</b> validator_address = self.staking_pool_mappings[staking_pool_id];
             <a href="validator_set.md#0x3_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self, validator_address)
         } <b>else</b> { // This is an inactive pool.
             <b>assert</b>!(self.inactive_validators.contains(staking_pool_id), <a href="validator_set.md#0x3_validator_set_ENoPoolFound">ENoPoolFound</a>);

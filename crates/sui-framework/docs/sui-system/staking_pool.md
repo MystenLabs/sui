@@ -771,6 +771,12 @@ returns (principal_withdraw_amount, rewards_withdraw_amount)
     // 1. <b>if</b> the entire <a href="staking_pool.md#0x3_staking_pool_FungibleStakedSuiData">FungibleStakedSuiData</a> supply is redeemed, how much <a href="../sui-framework/sui.md#0x2_sui">sui</a> should we receive?
     <b>let</b> total_sui_amount = <a href="staking_pool.md#0x3_staking_pool_get_sui_amount">get_sui_amount</a>(&latest_exchange_rate, fungible_staked_sui_data_total_supply);
 
+    // <b>min</b> <b>with</b> total_sui_amount <b>to</b> prevent underflow
+    <b>let</b> fungible_staked_sui_data_principal_amount = std::u64::min(
+        fungible_staked_sui_data_principal_amount,
+        total_sui_amount
+    );
+
     // 2. how much do we need <b>to</b> withdraw from the rewards pool?
     <b>let</b> total_rewards = total_sui_amount - fungible_staked_sui_data_principal_amount;
 
@@ -1376,9 +1382,6 @@ Returns true if the input staking pool is inactive.
     <b>assert</b>!(split_amount &lt;= fungible_staked_sui.value, <a href="staking_pool.md#0x3_staking_pool_EInsufficientPoolTokenBalance">EInsufficientPoolTokenBalance</a>);
 
     fungible_staked_sui.value = fungible_staked_sui.value - split_amount;
-
-    <b>assert</b>!(fungible_staked_sui.value &gt;= <a href="staking_pool.md#0x3_staking_pool_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>, <a href="staking_pool.md#0x3_staking_pool_EStakedSuiBelowThreshold">EStakedSuiBelowThreshold</a>);
-    <b>assert</b>!(split_amount &gt;= <a href="staking_pool.md#0x3_staking_pool_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>, <a href="staking_pool.md#0x3_staking_pool_EStakedSuiBelowThreshold">EStakedSuiBelowThreshold</a>);
 
     <a href="staking_pool.md#0x3_staking_pool_FungibleStakedSui">FungibleStakedSui</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
