@@ -2,11 +2,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 use crate::{sandbox::utils::OnDiskStateView, DEFAULT_BUILD_DIR};
-use anyhow::Result;
-use move_core_types::account_address::AccountAddress;
+use anyhow::{bail, Result};
 use move_package::{compilation::compiled_package::CompiledPackage, BuildConfig};
-use move_vm_runtime::cache::linkage_context::LinkageContext;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 /// The PackageContext controls the package that the CLI is executing with respect to, and handles the
 /// creation of the `OnDiskStateView` with the package's dependencies.
@@ -30,30 +31,48 @@ impl PackageContext {
     }
 
     /// Prepare an OnDiskStateView that is ready to use. Library modules will be preloaded into the
-    /// storage if `load_libraries` is true.
+    /// storage. Note that only the package's dependencies will be "published" and the package
+    /// itself will not be published.
     ///
     /// NOTE: this is the only way to get a state view in Move CLI, and thus, this function needs
     /// to be run before every command that needs a state view, i.e., `publish`, `run`,
-    /// `view`, and `doctor`.
+    /// and `view`
     pub fn prepare_state(&self, storage_dir: &Path) -> Result<OnDiskStateView> {
         let state = OnDiskStateView::create(self.build_dir.as_path(), storage_dir)?;
 
         // preload the storage with library modules (if such modules do not exist yet)
         let package = self.package();
-        let new_modules = package
-            .deps_compiled_units
-            .iter()
-            .map(|(_, unit)| &unit.unit.module)
-            .filter(|m| !state.has_module(&m.self_id()));
 
-        let mut serialized_modules = vec![];
-        for module in new_modules {
-            let self_id = module.self_id();
-            let mut module_bytes = vec![];
-            module.serialize_with_version(module.version, &mut module_bytes)?;
-            serialized_modules.push((self_id, module_bytes));
+        // Separate dependencies into packages based on their package name, and verify that all
+        // modules in a package have the same runtime address.
+        let mut package_id_mapping = BTreeMap::new();
+        for (name, module) in package.deps_compiled_units.iter() {
+            let id = package_id_mapping
+                .entry(name)
+                .or_insert((*module.unit.module.self_id().address(), vec![]));
+            if id.0 != *module.unit.module.self_id().address() {
+                bail!(
+                    "All modules in the package must have the same address but the address for {name} \
+                     has value {} which is different from the runtime address of the package {}",
+                    module.unit.module.self_id().address(),
+                    id.0,
+                );
+            }
+            id.1.push(module.unit.module.clone());
         }
-        state.save_modules(&serialized_modules)?;
+
+        for (package_id, package) in package_id_mapping.values() {
+            state.save_package(
+                package_id,
+                package.into_iter().map(|module| {
+                    let mut module_bytes = vec![];
+                    module
+                        .serialize_with_version(module.version, &mut module_bytes)
+                        .unwrap();
+                    (module.self_id().name().to_owned(), module_bytes)
+                }),
+            )?;
+        }
 
         Ok(state)
     }

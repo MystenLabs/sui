@@ -13,19 +13,16 @@ use anyhow::{anyhow, bail, Result};
 use move_binary_format::file_format::CompiledModule;
 use move_command_line_common::files::try_exists;
 use move_core_types::{
-    account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::TypeTag,
-    runtime_value::MoveValue,
     transaction_argument::{convert_txn_args, TransactionArgument},
 };
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
-    natives::{self, functions::NativeFunctions},
-    test_utils::gas_schedule::CostTable,
+    natives::functions::NativeFunctions, test_utils::gas_schedule::CostTable,
     vm::vm::VirtualMachine,
 };
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{fs, path::Path};
 
 pub fn run(
     natives: impl IntoIterator<Item = NativeFunctionRecord>,
@@ -34,7 +31,6 @@ pub fn run(
     _package: &CompiledPackage,
     module_file: &Path,
     function: &str,
-    signers: &[String],
     txn_args: &[TransactionArgument],
     vm_type_tags: Vec<TypeTag>,
     gas_budget: Option<u64>,
@@ -46,17 +42,13 @@ pub fn run(
     };
     assert!(
         is_bytecode_file(module_file)
-            && (state.is_module_path(module_file) || !contains_module(module_file)),
+            && (state.is_package_path(module_file) || !contains_module(module_file)),
         "Attempting to run module {:?} outside of the `storage/` directory.
         move run` must be applied to a module inside `storage/`",
         module_file
     );
     let bytecode = fs::read(module_file)?;
 
-    let signer_addresses = signers
-        .iter()
-        .map(|s| AccountAddress::from_hex_literal(s))
-        .collect::<Result<Vec<AccountAddress>, _>>()?;
     // TODO: parse Value's directly instead of going through the indirection of TransactionArgument?
     let vm_args: Vec<Vec<u8>> = convert_txn_args(txn_args);
 
@@ -69,15 +61,6 @@ pub fn run(
     let script_parameters = vec![];
 
     // // TODO rethink move-cli arguments for executing functions
-    let args = signer_addresses
-        .iter()
-        .map(|a| {
-            MoveValue::Signer(*a)
-                .simple_serialize()
-                .expect("transaction arguments must serialize")
-        })
-        .chain(vm_args)
-        .collect();
     let res = {
         // script fun. parse module, extract script ID to pass to VM
         let module = CompiledModule::deserialize_with_defaults(&bytecode)
@@ -107,7 +90,7 @@ pub fn run(
             &module.self_id(),
             function,
             type_args,
-            args,
+            vm_args,
             &mut gas_status,
         )
     };
@@ -119,7 +102,6 @@ pub fn run(
             &script_type_parameters,
             &script_parameters,
             &vm_type_tags,
-            &signer_addresses,
             txn_args,
         )
     } else {

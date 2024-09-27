@@ -9,21 +9,21 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::Identifier,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
-use move_vm_runtime::cache::linkage_context::LinkageContext;
+use move_vm_runtime::{cache::linkage_context::LinkageContext, on_chain::ast::PackageStorageId};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
 };
 
-/// subdirectory of `DEFAULT_STORAGE_DIR`/<addr> where modules are stored
-pub const MODULES_DIR: &str = "modules";
+/// subdirectory of `DEFAULT_STORAGE_DIR`/<addr> where packages are stored
+pub const PACKAGES_DIR: &str = "package";
 
 /// file under `DEFAULT_BUILD_DIR` where a registry of generated struct layouts are stored
 pub const STRUCT_LAYOUTS_FILE: &str = "struct_layouts.yaml";
@@ -35,7 +35,7 @@ pub struct OnDiskStateView {
 }
 
 impl OnDiskStateView {
-    /// Create an `OnDiskStateView` that reads/writes resource data and modules in `storage_dir`.
+    /// Create an `OnDiskStateView` that reads/writes resource data and packages in `storage_dir`.
     pub fn create<P: Into<PathBuf>>(build_dir: P, storage_dir: P) -> Result<Self> {
         let build_dir = build_dir.into();
         if !build_dir.exists() {
@@ -75,33 +75,37 @@ impl OnDiskStateView {
             }
     }
 
-    pub fn is_module_path(&self, p: &Path) -> bool {
-        self.is_data_path(p, MODULES_DIR)
+    pub fn is_package_path(&self, p: &Path) -> bool {
+        self.is_data_path(p, PACKAGES_DIR)
     }
 
-    fn get_addr_path(&self, addr: &AccountAddress) -> PathBuf {
+    fn get_package_path(&self, addr: &PackageStorageId) -> PathBuf {
         let mut path = self.storage_dir.clone();
         path.push(format!("0x{}", addr));
+        path.push(PACKAGES_DIR);
         path
     }
 
-    fn get_package_path(&self, addr: &AccountAddress) -> PathBuf {
-        let mut path = self.storage_dir.clone();
-        path.push(format!("0x{}", addr));
-        path.push(MODULES_DIR);
-        path
+    pub fn storage_id_of_path(&self, p: &Path) -> Option<PackageStorageId> {
+        if !self.is_package_path(p) {
+            return None;
+        }
+
+        p.parent()
+            .and_then(|p| p.file_stem())
+            .and_then(|a| a.to_str())
+            .and_then(|a| AccountAddress::from_hex_literal(a).ok())
     }
 
-    fn get_module_path(&self, module_id: &ModuleId) -> PathBuf {
-        let mut path = self.get_addr_path(module_id.address());
-        path.push(MODULES_DIR);
-        path.push(module_id.name().to_string());
+    fn get_module_path(&self, package_id: &PackageStorageId, module_name: &IdentStr) -> PathBuf {
+        let mut path = self.get_package_path(package_id);
+        path.push(module_name.as_str());
         path.with_extension(MOVE_COMPILED_EXTENSION)
     }
 
     /// Extract a module ID from a path
     pub fn get_module_id(&self, p: &Path) -> Option<ModuleId> {
-        if !self.is_module_path(p) {
+        if !self.is_package_path(p) {
             return None;
         }
         let name = Identifier::new(p.file_stem().unwrap().to_str().unwrap()).unwrap();
@@ -116,36 +120,56 @@ impl OnDiskStateView {
         }
     }
 
-    /// Read the resource bytes stored on-disk at `addr`/`tag`
-    fn get_module_bytes(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>> {
-        Self::get_bytes(&self.get_module_path(module_id))
-    }
-
-    /// Read the package bytes stored on-disk at `addr`
-    fn get_package_bytes(&self, address: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>> {
-        let addr_path = self.get_package_path(address);
-        if !addr_path.exists() {
+    fn get_package_bytes_at_path(
+        &self,
+        path: &Path,
+    ) -> Result<Option<BTreeMap<Identifier, Vec<u8>>>> {
+        if !self.is_package_path(path) {
             return Ok(None);
         }
-        let mut modules = vec![];
-        for entry in fs::read_dir(addr_path)? {
+        let mut modules = BTreeMap::new();
+        for entry in fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
+            let name = Identifier::new(path.file_stem().unwrap().to_str().unwrap()).unwrap();
             if path.is_file() {
-                modules.push(Self::get_bytes(&path)?.unwrap());
+                modules.insert(name, Self::get_bytes(&path)?.unwrap());
             }
         }
         Ok(Some(modules))
     }
 
+    /// Read the package bytes stored on-disk at `addr`
+    fn get_package_bytes(
+        &self,
+        address: &AccountAddress,
+    ) -> Result<Option<BTreeMap<Identifier, Vec<u8>>>> {
+        let addr_path = self.get_package_path(address);
+        self.get_package_bytes_at_path(&addr_path)
+    }
+
+    pub fn has_package(&self, package_id: &PackageStorageId) -> bool {
+        self.get_package_path(package_id).exists()
+    }
+
     /// Check if a module at `addr`/`module_id` exists
-    pub fn has_module(&self, module_id: &ModuleId) -> bool {
-        self.get_module_path(module_id).exists()
+    pub fn has_module_in_package(
+        &self,
+        package_id: &PackageStorageId,
+        module_name: &IdentStr,
+    ) -> bool {
+        self.get_module_path(package_id, module_name).exists()
     }
 
     /// Return the name of the function at `idx` in `module_id`
-    pub fn resolve_function(&self, module_id: &ModuleId, idx: u16) -> Result<Option<Identifier>> {
-        if let Some(m) = self.get_module_by_id(module_id)? {
+    pub fn resolve_function(
+        &self,
+        package_id: PackageStorageId,
+        module_name: &IdentStr,
+        idx: u16,
+    ) -> Result<Option<Identifier>> {
+        let module_id = ModuleId::new(package_id, module_name.to_owned());
+        if let Some(m) = self.get_module_by_id(&module_id)? {
             Ok(Some(
                 m.identifier_at(
                     m.function_handle_at(m.function_def_at(FunctionDefinitionIndex(idx)).function)
@@ -189,8 +213,13 @@ impl OnDiskStateView {
     }
 
     /// Save `module` on disk under the path `module.address()`/`module.name()`
-    pub fn save_module(&self, module_id: &ModuleId, module_bytes: &[u8]) -> Result<()> {
-        let path = self.get_module_path(module_id);
+    fn save_module(
+        &self,
+        package_id: &PackageStorageId,
+        module_name: &IdentStr,
+        module_bytes: &[u8],
+    ) -> Result<()> {
+        let path = self.get_module_path(package_id, module_name);
         if !path.exists() {
             fs::create_dir_all(path.parent().unwrap())?
         }
@@ -207,24 +236,13 @@ impl OnDiskStateView {
     }
 
     /// Save all the modules in the local cache, re-generate mv_interfaces if required.
-    pub fn save_modules<'a>(
+    pub fn save_package(
         &self,
-        modules: impl IntoIterator<Item = &'a (ModuleId, Vec<u8>)>,
+        package_id: &PackageStorageId,
+        modules: impl IntoIterator<Item = (Identifier, Vec<u8>)>,
     ) -> Result<()> {
-        for (module_id, module_bytes) in modules {
-            self.save_module(module_id, module_bytes)?;
-        }
-        Ok(())
-    }
-
-    pub fn delete_module(&self, id: &ModuleId) -> Result<()> {
-        let path = self.get_module_path(id);
-        fs::remove_file(path)?;
-
-        // delete addr directory if this address is now empty
-        let addr_path = self.get_addr_path(id.address());
-        if addr_path.read_dir()?.next().is_none() {
-            fs::remove_dir(addr_path)?
+        for (module_name, module_bytes) in modules {
+            self.save_module(package_id, &module_name, &module_bytes)?;
         }
         Ok(())
     }
@@ -241,19 +259,33 @@ impl OnDiskStateView {
             .filter(move |path| f(path))
     }
 
-    pub fn module_paths(&self) -> impl Iterator<Item = PathBuf> + '_ {
-        self.iter_paths(move |p| self.is_module_path(p))
+    pub fn package_paths(&self) -> impl Iterator<Item = PathBuf> + '_ {
+        self.iter_paths(move |p| self.is_package_path(p))
     }
 
     /// Build all modules in the self.storage_dir.
     /// Returns an Err if a module does not deserialize.
-    pub fn get_all_modules(&self) -> Result<Vec<CompiledModule>> {
-        self.module_paths()
+    pub fn get_all_packages(
+        &self,
+    ) -> Result<BTreeMap<PackageStorageId, BTreeMap<Identifier, CompiledModule>>> {
+        self.package_paths()
             .map(|path| {
-                CompiledModule::deserialize_with_defaults(&Self::get_bytes(&path)?.unwrap())
-                    .map_err(|e| anyhow!("Failed to deserialized module: {:?}", e))
+                let package_id = self.storage_id_of_path(&path).unwrap();
+                let modules = self
+                    .get_package_bytes_at_path(&path)?
+                    .unwrap()
+                    .into_iter()
+                    .map(|(mname, mbytes)| {
+                        Ok((
+                            mname,
+                            CompiledModule::deserialize_with_defaults(&mbytes)
+                                .map_err(|e| anyhow!("Failed to deserialized module: {:?}", e))?,
+                        ))
+                    })
+                    .collect::<Result<_>>()?;
+                Ok((package_id, modules))
             })
-            .collect::<Result<Vec<CompiledModule>>>()
+            .collect::<Result<_>>()
     }
 
     /// Get the compiled modules for a given package.
@@ -266,7 +298,7 @@ impl OnDiskStateView {
         };
         package_bytes
             .into_iter()
-            .map(|module| {
+            .map(|(_, module)| {
                 CompiledModule::deserialize_with_defaults(&module)
                     .map_err(|e| anyhow!("Failed to deserialized module: {:?}", e))
             })
@@ -361,11 +393,14 @@ impl OnDiskStateView {
 impl ModuleResolver for OnDiskStateView {
     type Error = anyhow::Error;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.get_module_bytes(module_id)
+        let package = self.get_package_bytes(module_id.address())?;
+        Ok(package.and_then(|modules| modules.get(module_id.name()).map(|bytes| bytes.clone())))
     }
 
     fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
-        self.get_package_bytes(id)
+        Ok(self
+            .get_package_bytes(id)?
+            .map(|modules| modules.into_iter().map(|(_, m)| m).collect()))
     }
 }
 

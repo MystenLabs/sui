@@ -1,4 +1,4 @@
-module 0xa::M1 {
+module 0xc::M1 {
 
     #[allow(unused_field)]
     public struct S { i: u64 }
