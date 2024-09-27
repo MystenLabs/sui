@@ -154,10 +154,6 @@ impl TransactionConsumer {
         committed_blocks: Vec<BlockRef>,
         gc_round: Round,
     ) {
-        if committed_blocks.is_empty() {
-            return;
-        }
-
         // Notify for all the committed blocks first
         let mut block_status_subscribers = self.block_status_subscribers.lock();
         for block_ref in committed_blocks {
