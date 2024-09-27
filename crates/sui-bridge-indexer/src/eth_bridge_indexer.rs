@@ -503,7 +503,11 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         data: serde_json::to_value(bridge_event)?,
                     }));
                 }
-                _ => {
+
+                EthSuiBridgeEvents::InitializedFilter(_)
+                | EthSuiBridgeEvents::PausedFilter(_)
+                | EthSuiBridgeEvents::UnpausedFilter(_)
+                | EthSuiBridgeEvents::UpgradedFilter(_) => {
                     warn!("Unexpected event {bridge_event:?}.")
                 }
             },
@@ -542,7 +546,10 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         data: serde_json::to_value(bridge_event)?,
                     }));
                 }
-                _ => {
+
+                EthBridgeCommitteeEvents::BlocklistUpdatedFilter(_)
+                | EthBridgeCommitteeEvents::InitializedFilter(_)
+                | EthBridgeCommitteeEvents::UpgradedFilter(_) => {
                     warn!("Unexpected event {bridge_event:?}.")
                 }
             },
@@ -581,7 +588,12 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         data: serde_json::to_value(bridge_event)?,
                     }));
                 }
-                _ => {
+
+                EthBridgeLimiterEvents::HourlyTransferAmountUpdatedFilter(_)
+                | EthBridgeLimiterEvents::InitializedFilter(_)
+                | EthBridgeLimiterEvents::LimitUpdatedFilter(_)
+                | EthBridgeLimiterEvents::OwnershipTransferredFilter(_)
+                | EthBridgeLimiterEvents::UpgradedFilter(_) => {
                     warn!("Unexpected event {bridge_event:?}.")
                 }
             },
@@ -637,11 +649,15 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         data: serde_json::to_value(bridge_event)?,
                     }));
                 }
-                _ => {
+
+                EthBridgeConfigEvents::InitializedFilter(_)
+                | EthBridgeConfigEvents::TokenAddedFilter(_)
+                | EthBridgeConfigEvents::TokenPriceUpdatedFilter(_)
+                | EthBridgeConfigEvents::UpgradedFilter(_) => {
                     warn!("Unexpected event {bridge_event:?}.")
                 }
             },
-            _ => {
+            EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => {
                 warn!("Unexpected event {bridge_event:?}.")
             }
         };

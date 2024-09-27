@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Error;
-use tracing::info;
+use tracing::{info, warn};
 
 use sui_bridge::events::{
-    EmergencyOpEvent, MoveBlocklistValidatorEvent, MoveTokenDepositedEvent,
+    EmergencyOpEvent, MoveBlocklistValidatorEvent, MoveNewTokenEvent, MoveTokenDepositedEvent,
     MoveTokenRegistrationEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
     UpdateRouteLimitEvent, UpdateTokenPriceEvent,
 };
@@ -218,8 +218,23 @@ fn process_sui_event(
                     data: serde_json::to_value(event)?,
                 }))
             }
+            "NewTokenEvent" => {
+                info!("Observed Sui New token event {:?}", ev);
+                let event: MoveNewTokenEvent = bcs::from_bytes(&ev.contents)?;
+
+                Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
+                    tx_digest: tx.transaction.digest().inner().to_vec(),
+                    sender: ev.sender.to_vec(),
+                    timestamp_ms,
+                    action: GovernanceActionType::AddSuiTokens,
+                    data: serde_json::to_value(event)?,
+                }))
+            }
             _ => {
                 // todo: metrics.total_sui_bridge_txn_other.inc();
+                warn!("Unexpected event {ev:?}.");
                 None
             }
         }
