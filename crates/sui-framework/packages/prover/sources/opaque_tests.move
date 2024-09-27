@@ -44,6 +44,26 @@ fun double_spec(x: u64): u64 {
     result
 }
 
+fun add_wrap(x: u64, y: u64): u64 {
+    (((x as u128) + (y as u128)) % 18446744073709551616) as u64
+}
+
+fun add_wrap_spec(x: u64, y: u64): u64 {
+    let result = add_wrap(x, y);
+    ensures(result == x.to_int().add(y.to_int()).to_u64());
+    result
+}
+
+fun double_wrap(x: u64): u64 {
+    add_wrap(x, x)
+}
+
+fun double_wrap_spec(x: u64): u64 {
+    let result = double_wrap(x);
+    ensures(result == x.to_int().mul((2 as u8).to_int()).to_u64());
+    result
+}
+
 public struct Range<phantom T> {
     x: u64,
     y: u64,

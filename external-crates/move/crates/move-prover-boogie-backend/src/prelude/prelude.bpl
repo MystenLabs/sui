@@ -59,22 +59,22 @@ procedure {:inline 1} $1_integer_from_u256(x: int) returns (y: int) {
     y := x;
 }
 procedure {:inline 1} $1_integer_to_u8(x: int) returns (y: int) {
-    y := x;
+    y := x mod 256;
 }
 procedure {:inline 1} $1_integer_to_u16(x: int) returns (y: int) {
-    y := x;
+    y := x mod 65536;
 }
 procedure {:inline 1} $1_integer_to_u32(x: int) returns (y: int) {
-    y := x;
+    y := x mod 4294967296;
 }
 procedure {:inline 1} $1_integer_to_u64(x: int) returns (y: int) {
-    y := x;
+    y := x mod 18446744073709551616;
 }
 procedure {:inline 1} $1_integer_to_u128(x: int) returns (y: int) {
-    y := x;
+    y := x mod 340282366920938463463374607431768211456;
 }
 procedure {:inline 1} $1_integer_to_u256(x: int) returns (y: int) {
-    y := x;
+    y := x mod 115792089237316195423570985008687907853269984665640564039457584007913129639936;
 }
 procedure {:inline 1} $1_integer_add(x: int, y: int) returns (z: int) {
     z := x + y;
