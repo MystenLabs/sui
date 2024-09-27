@@ -19,10 +19,13 @@ use sui_bridge::retry_with_max_elapsed_time;
 use sui_indexer_builder::Task;
 use tap::tap::TapFallible;
 use tokio::task::JoinHandle;
-use tracing::info;
+use tracing::{info, warn};
 
 use mysten_metrics::spawn_monitored_task;
-use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
+use sui_bridge::abi::{
+    EthBridgeCommitteeEvents, EthBridgeConfigEvents, EthBridgeEvent, EthBridgeLimiterEvents,
+    EthSuiBridgeEvents,
+};
 
 use crate::metrics::BridgeIndexerMetrics;
 use sui_bridge::metrics::BridgeMetrics;
@@ -30,7 +33,8 @@ use sui_bridge::types::{EthEvent, RawEthLog};
 use sui_indexer_builder::indexer_builder::{DataMapper, DataSender, Datasource};
 
 use crate::{
-    BridgeDataSource, ProcessedTxnData, TokenTransfer, TokenTransferData, TokenTransferStatus,
+    BridgeDataSource, GovernanceAction, GovernanceActionType, ProcessedTxnData, TokenTransfer,
+    TokenTransferData, TokenTransferStatus,
 };
 
 #[derive(Debug)]
@@ -462,70 +466,315 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
         let bridge_event = eth_bridge_event.unwrap();
         let timestamp_ms = block.timestamp.as_u64() * 1000;
         let gas = transaction.gas;
+        let mut processed_txn_data = Vec::new();
+        let txn_sender = transaction.from.as_bytes().to_vec();
+        let txn_hash = transaction.hash.as_bytes().to_vec();
 
-        let transfer = match bridge_event {
-            EthBridgeEvent::EthSuiBridgeEvents(bridge_event) => match bridge_event {
+        match bridge_event {
+            EthBridgeEvent::EthSuiBridgeEvents(bridge_event) => match &bridge_event {
                 EthSuiBridgeEvents::TokensDepositedFilter(bridge_event) => {
-                    info!("Observed Eth Deposit at block: {}", log.block_number());
+                    info!(
+                        "Observed Eth Deposit at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
                     self.metrics.total_eth_token_deposited.inc();
-                    ProcessedTxnData::TokenTransfer(TokenTransfer {
+                    processed_txn_data.push(ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.source_chain_id,
                         nonce: bridge_event.nonce,
                         block_height: log.block_number(),
                         timestamp_ms,
-                        txn_hash: transaction.hash.as_bytes().to_vec(),
-                        txn_sender: bridge_event.sender_address.as_bytes().to_vec(),
+                        txn_hash: txn_hash.clone(),
+                        txn_sender: txn_sender.clone(),
                         status: TokenTransferStatus::Deposited,
                         gas_usage: gas.as_u64() as i64,
                         data_source: BridgeDataSource::Eth,
                         is_finalized,
                         data: Some(TokenTransferData {
-                            sender_address: bridge_event.sender_address.as_bytes().to_vec(),
+                            sender_address: txn_sender.clone(),
                             destination_chain: bridge_event.destination_chain_id,
                             recipient_address: bridge_event.recipient_address.to_vec(),
                             token_id: bridge_event.token_id,
                             amount: bridge_event.sui_adjusted_amount,
                             is_finalized,
                         }),
-                    })
+                    }));
                 }
                 EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
-                    info!("Observed Eth Claim at block: {}", log.block_number());
+                    info!(
+                        "Observed Eth Claim at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
                     self.metrics.total_eth_token_transfer_claimed.inc();
-                    ProcessedTxnData::TokenTransfer(TokenTransfer {
+                    processed_txn_data.push(ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.source_chain_id,
                         nonce: bridge_event.nonce,
                         block_height: log.block_number(),
                         timestamp_ms,
-                        txn_hash: transaction.hash.as_bytes().to_vec(),
-                        txn_sender: bridge_event.sender_address.to_vec(),
+                        txn_hash: txn_hash.clone(),
+                        txn_sender: txn_sender.clone(),
                         status: TokenTransferStatus::Claimed,
                         gas_usage: gas.as_u64() as i64,
                         data_source: BridgeDataSource::Eth,
                         data: None,
                         is_finalized,
-                    })
+                    }));
                 }
-                EthSuiBridgeEvents::PausedFilter(_)
-                | EthSuiBridgeEvents::ContractUpgradedFilter(_)
-                | EthSuiBridgeEvents::EmergencyOperationFilter(_)
+                EthSuiBridgeEvents::EmergencyOperationFilter(f) => {
+                    info!(
+                        "Observed Eth Emergency Operation at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: Some(f.nonce),
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::EmergencyOperation,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthSuiBridgeEvents::ContractUpgradedFilter(f) => {
+                    info!(
+                        "Observed Eth SuiBridge Upgrade at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: Some(f.nonce.as_u64()),
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpgradeEVMContract,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+
+                EthSuiBridgeEvents::InitializedFilter(_)
+                | EthSuiBridgeEvents::PausedFilter(_)
                 | EthSuiBridgeEvents::UnpausedFilter(_)
-                | EthSuiBridgeEvents::UpgradedFilter(_)
-                | EthSuiBridgeEvents::InitializedFilter(_) => {
-                    // TODO: handle these events
-                    self.metrics.total_eth_bridge_txn_other.inc();
-                    return Ok(vec![]);
+                | EthSuiBridgeEvents::UpgradedFilter(_) => {
+                    warn!("Unexpected event {bridge_event:?}.")
                 }
             },
-            EthBridgeEvent::EthBridgeCommitteeEvents(_)
-            | EthBridgeEvent::EthBridgeLimiterEvents(_)
-            | EthBridgeEvent::EthBridgeConfigEvents(_)
-            | EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => {
-                // TODO: handle these events
-                self.metrics.total_eth_bridge_txn_other.inc();
-                return Ok(vec![]);
+            EthBridgeEvent::EthBridgeCommitteeEvents(bridge_event) => match &bridge_event {
+                EthBridgeCommitteeEvents::BlocklistUpdatedFilter(_) => {
+                    info!(
+                        "Observed Eth Blocklist Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: None,
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpdateCommitteeBlocklist,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthBridgeCommitteeEvents::BlocklistUpdatedV2Filter(f) => {
+                    info!(
+                        "Observed Eth Blocklist Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: Some(f.nonce),
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpdateCommitteeBlocklist,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthBridgeCommitteeEvents::ContractUpgradedFilter(f) => {
+                    info!(
+                        "Observed Eth BridgeCommittee Upgrade at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: Some(f.nonce.as_u64()),
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpgradeEVMContract,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthBridgeCommitteeEvents::InitializedFilter(_)
+                | EthBridgeCommitteeEvents::UpgradedFilter(_) => {
+                    warn!("Unexpected event {bridge_event:?}.")
+                }
+            },
+            EthBridgeEvent::EthBridgeLimiterEvents(bridge_event) => match &bridge_event {
+                EthBridgeLimiterEvents::LimitUpdatedFilter(_) => {
+                    info!(
+                        "Observed Eth BridgeLimiter Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: None,
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpdateBridgeLimit,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthBridgeLimiterEvents::LimitUpdatedV2Filter(f) => {
+                    info!(
+                        "Observed Eth BridgeLimiter Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: Some(f.nonce),
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpdateBridgeLimit,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthBridgeLimiterEvents::ContractUpgradedFilter(f) => {
+                    info!(
+                        "Observed Eth BridgeLimiter Upgrade at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: Some(f.nonce.as_u64()),
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpgradeEVMContract,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+
+                EthBridgeLimiterEvents::HourlyTransferAmountUpdatedFilter(_)
+                | EthBridgeLimiterEvents::InitializedFilter(_)
+                | EthBridgeLimiterEvents::OwnershipTransferredFilter(_)
+                | EthBridgeLimiterEvents::UpgradedFilter(_) => {
+                    warn!("Unexpected event {bridge_event:?}.")
+                }
+            },
+            EthBridgeEvent::EthBridgeConfigEvents(bridge_event) => match &bridge_event {
+                EthBridgeConfigEvents::TokenPriceUpdatedFilter(_) => {
+                    info!(
+                        "Observed Eth TokenPrices Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: None,
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpdateTokenPrices,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthBridgeConfigEvents::TokenPriceUpdatedV2Filter(f) => {
+                    info!(
+                        "Observed Eth TokenPrices Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: Some(f.nonce),
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpdateTokenPrices,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthBridgeConfigEvents::TokenAddedFilter(_) => {
+                    info!(
+                        "Observed Eth AddSuiTokens at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: None,
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::AddEVMTokens,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthBridgeConfigEvents::TokensAddedV2Filter(f) => {
+                    info!(
+                        "Observed Eth AddSuiTokens at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: Some(f.nonce),
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::AddEVMTokens,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthBridgeConfigEvents::ContractUpgradedFilter(f) => {
+                    info!(
+                        "Observed Eth BridgeConfig Upgrade at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: Some(f.nonce.as_u64()),
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpgradeEVMContract,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+
+                EthBridgeConfigEvents::InitializedFilter(_)
+                | EthBridgeConfigEvents::UpgradedFilter(_) => {
+                    warn!("Unexpected event {bridge_event:?}.")
+                }
+            },
+            EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => {
+                warn!("Unexpected event {bridge_event:?}.")
             }
         };
-        Ok(vec![transfer])
+        Ok(processed_txn_data)
     }
 }

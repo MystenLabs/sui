@@ -17,7 +17,6 @@ pub struct BridgeIndexerMetrics {
     pub(crate) total_eth_bridge_transactions: IntCounter,
     pub(crate) total_eth_token_deposited: IntCounter,
     pub(crate) total_eth_token_transfer_claimed: IntCounter,
-    pub(crate) total_eth_bridge_txn_other: IntCounter,
     pub(crate) last_committed_sui_checkpoint: IntGauge,
     pub(crate) backfill_tasks_remaining_checkpoints: IntGaugeVec,
     pub(crate) tasks_processed_checkpoints: IntCounterVec,
@@ -73,12 +72,6 @@ impl BridgeIndexerMetrics {
             total_eth_token_transfer_claimed: register_int_counter_with_registry!(
                 "bridge_indexer_total_eth_token_transfer_claimed",
                 "Total number of eth token claimed transactions",
-                registry,
-            )
-            .unwrap(),
-            total_eth_bridge_txn_other: register_int_counter_with_registry!(
-                "bridge_indexer_total_eth_bridge_txn_other",
-                "Total number of other eth bridge transactions",
                 registry,
             )
             .unwrap(),
