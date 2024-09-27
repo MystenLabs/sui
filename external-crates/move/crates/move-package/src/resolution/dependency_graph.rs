@@ -510,8 +510,14 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
                 Ok(external_deps
                     .into_iter()
-                    .map(|(pkg_graph, _, resolved_pkg_name)| {
-                        (pkg_graph, false, true, resolved_pkg_name, None)
+                    .map(|(pkg_graph, _, resolved_pkg_id, resolved_pkg_version)| {
+                        (
+                            pkg_graph,
+                            false,
+                            true,
+                            resolved_pkg_id,
+                            resolved_pkg_version,
+                        )
                     })
                     .collect())
             }
@@ -1375,7 +1381,14 @@ impl DependencyGraph {
         resolver: Symbol,
         package_path: &Path,
         progress_output: &mut Progress,
-    ) -> Result<Vec<(DependencyGraph, PM::Dependency, PM::PackageName)>> {
+    ) -> Result<
+        Vec<(
+            DependencyGraph,
+            PM::Dependency,
+            PM::PackageName,
+            Option<Symbol>, // version
+        )>,
+    > {
         let mode_label = if mode == DependencyMode::DevOnly {
             "dev-dependencies"
         } else {
@@ -1445,22 +1458,29 @@ impl DependencyGraph {
                         format!("Parsing response from '{resolver}' for dependency '{to_name}' of package '{from_id}'")
                     })?;
 
-                    let mut root_sub_package = None;
-                    for (_from_package, to_pkg, _) in sub_graph.package_graph.edges(from_id) {
-                        if root_sub_package.is_some() {
-                            // TODO: We can in fact allow allow multiple root packages / graphs and relax this constraint.
-                            bail!("Multiple root packages in external dependencies found but expected only one");
-                        }
-                        root_sub_package = Some(to_pkg);
-                    }
-                    let Some(root_sub_package) = root_sub_package else {
-                        bail!(
-                            "Expected a root package in external dependencies group but none found"
-                        );
+                    let root_sub_package_id = match sub_graph
+                        .package_graph
+                        .edges(from_id)
+                        .collect::<Vec<_>>()
+                        .as_slice()
+                    {
+                        [(_, id, _)] => *id,
+                        // TODO: We can in fact allow allow multiple root packages / graphs and relax this constraint.
+                        _ => bail!("Expected a single root dependency but none or multiple found"),
                     };
+                    let root_sub_package_version = sub_graph
+                        .package_table
+                        .get(&root_sub_package_id)
+                        .unwrap()
+                        .version;
 
-                    let new_dep = PM::Dependency::External(root_sub_package);
-                    result.push((sub_graph, new_dep, root_sub_package));
+                    let new_dep = PM::Dependency::External(root_sub_package_id);
+                    result.push((
+                        sub_graph,
+                        new_dep,
+                        root_sub_package_id,
+                        root_sub_package_version,
+                    ));
                     buffer.clear();
                 }
                 Err(e) => return Err(e.into()),

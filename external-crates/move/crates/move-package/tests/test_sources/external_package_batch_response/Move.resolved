@@ -32,7 +32,9 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/bar",
                 ),
-                version: None,
+                version: Some(
+                    "5",
+                ),
                 resolver: Some(
                     "../resolvers/successful_package_batch_response.sh",
                 ),
