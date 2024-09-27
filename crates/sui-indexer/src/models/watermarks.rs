@@ -35,8 +35,22 @@ pub struct StoredWatermark {
 pub enum WatermarkEntity {
     Checkpoints,
     Events,
+    EvLookup,
+    // EventEmit,
+    // EventSenders,
+    // EventStruct,
     ObjectsHistory,
     Transactions,
+    TxLookup,
+    // TxAffectedAddresses,
+    // TxAffectedObjects,
+    // TxCalls,
+    // TxChangedObjects,
+    // TxDigests,
+    // TxInputObjects,
+    // TxKinds,
+    // TxRecipients,
+    // TxSenders,
 }
 
 pub struct Watermark {
@@ -87,9 +101,17 @@ impl WatermarkRead {
     /// Represents the first `unit` (checkpoint, tx, epoch) that has not yet been pruned. If
     /// `pruned_lo` is not set in db, default to 0. Otherwise, this is `pruned_lo + `.
     pub fn pruner_lo(&self) -> u64 {
-        match self.pruned_lo {
-            Some(pruned_lo) => pruned_lo.saturating_add(1),
-            None => 0,
+        self.pruned_lo.map_or(0, |lo| lo.saturating_add(1))
+    }
+
+    pub fn map_to_bound(&self, cp: u64, tx: u64) -> u64 {
+        match self.entity {
+            WatermarkEntity::Checkpoints => cp,
+            WatermarkEntity::ObjectsHistory => cp,
+            WatermarkEntity::Events => tx,
+            WatermarkEntity::EvLookup => tx,
+            WatermarkEntity::Transactions => tx,
+            WatermarkEntity::TxLookup => tx,
         }
     }
 }
@@ -97,10 +119,12 @@ impl WatermarkRead {
 impl WatermarkEntity {
     pub fn as_str(&self) -> &'static str {
         match self {
-            WatermarkEntity::Transactions => "transactions",
-            WatermarkEntity::ObjectsHistory => "objects_history",
             WatermarkEntity::Checkpoints => "checkpoints",
+            WatermarkEntity::ObjectsHistory => "objects_history",
             WatermarkEntity::Events => "events",
+            WatermarkEntity::EvLookup => "ev_lookup",
+            WatermarkEntity::Transactions => "transactions",
+            WatermarkEntity::TxLookup => "tx_lookup",
         }
     }
 
@@ -110,6 +134,8 @@ impl WatermarkEntity {
             "objects_history" => Some(WatermarkEntity::ObjectsHistory),
             "checkpoints" => Some(WatermarkEntity::Checkpoints),
             "events" => Some(WatermarkEntity::Events),
+            "ev_lookup" => Some(WatermarkEntity::EvLookup),
+            "tx_lookup" => Some(WatermarkEntity::TxLookup),
             _ => None,
         }
     }
@@ -140,18 +166,22 @@ impl Watermark {
     pub fn new_upper_bounds(epoch_hi: u64, cp_hi: u64, tx_hi: u64) -> Vec<Watermark> {
         vec![
             Watermark::upper_bound(WatermarkEntity::Checkpoints, epoch_hi, cp_hi),
-            Watermark::upper_bound(WatermarkEntity::Events, epoch_hi, tx_hi),
             Watermark::upper_bound(WatermarkEntity::ObjectsHistory, epoch_hi, cp_hi),
+            Watermark::upper_bound(WatermarkEntity::Events, epoch_hi, tx_hi),
+            Watermark::upper_bound(WatermarkEntity::EvLookup, epoch_hi, tx_hi),
             Watermark::upper_bound(WatermarkEntity::Transactions, epoch_hi, tx_hi),
+            Watermark::upper_bound(WatermarkEntity::TxLookup, epoch_hi, tx_hi),
         ]
     }
 
     pub fn new_lower_bounds(epoch_lo: u64, cp_lo: u64, tx_lo: u64) -> Vec<Watermark> {
         vec![
             Watermark::lower_bound(WatermarkEntity::Checkpoints, epoch_lo, cp_lo),
-            Watermark::lower_bound(WatermarkEntity::Events, epoch_lo, tx_lo),
             Watermark::lower_bound(WatermarkEntity::ObjectsHistory, epoch_lo, cp_lo),
+            Watermark::lower_bound(WatermarkEntity::Events, epoch_lo, tx_lo),
+            Watermark::lower_bound(WatermarkEntity::EvLookup, epoch_lo, tx_lo),
             Watermark::lower_bound(WatermarkEntity::Transactions, epoch_lo, tx_lo),
+            Watermark::lower_bound(WatermarkEntity::TxLookup, epoch_lo, tx_lo),
         ]
     }
 
@@ -192,14 +222,10 @@ impl From<Watermark> for StoredWatermark {
 
 impl From<StoredWatermark> for WatermarkRead {
     fn from(watermark: StoredWatermark) -> Self {
+        let entity = WatermarkEntity::from_str(&watermark.entity).unwrap();
+
         WatermarkRead {
-            entity: match watermark.entity.as_str() {
-                "transactions" => WatermarkEntity::Transactions,
-                "objects_history" => WatermarkEntity::ObjectsHistory,
-                "checkpoints" => WatermarkEntity::Checkpoints,
-                "events" => WatermarkEntity::Events,
-                _ => unreachable!(),
-            },
+            entity,
             epoch_hi: watermark.epoch_hi as u64,
             epoch_lo: watermark.epoch_lo as u64,
             hi: watermark.hi as u64,

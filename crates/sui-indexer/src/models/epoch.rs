@@ -8,7 +8,7 @@ use diesel::{Insertable, Queryable, Selectable};
 use sui_json_rpc_types::{EndOfEpochInfo, EpochInfo};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Insertable, Debug, Clone, Default, Selectable)]
 #[diesel(table_name = epochs)]
 pub struct StoredEpochInfo {
     pub epoch: i64,
@@ -32,6 +32,7 @@ pub struct StoredEpochInfo {
     pub epoch_commitments: Option<Vec<u8>>,
     /// This is the system state summary at the beginning of the epoch, serialized as JSON.
     pub system_state_summary_json: Option<serde_json::Value>,
+    pub first_tx_sequence_number: Option<i64>,
 }
 
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
@@ -87,6 +88,7 @@ impl StoredEpochInfo {
                 serde_json::to_value(e.system_state_summary.clone()).unwrap(),
             ),
             first_checkpoint_id: e.first_checkpoint_id as i64,
+            first_tx_sequence_number: Some(e.first_tx_sequence_number as i64),
             epoch_start_timestamp: e.epoch_start_timestamp as i64,
             reference_gas_price: e.reference_gas_price as i64,
             protocol_version: e.protocol_version as i64,
@@ -107,6 +109,7 @@ impl StoredEpochInfo {
             system_state_summary_json: None,
             epoch_total_transactions: e.epoch_total_transactions.map(|v| v as i64),
             last_checkpoint_id: e.last_checkpoint_id.map(|v| v as i64),
+            first_tx_sequence_number: Some(e.first_tx_sequence_number as i64),
             epoch_end_timestamp: e.epoch_end_timestamp.map(|v| v as i64),
             storage_fund_reinvestment: e.storage_fund_reinvestment.map(|v| v as i64),
             storage_charge: e.storage_charge.map(|v| v as i64),

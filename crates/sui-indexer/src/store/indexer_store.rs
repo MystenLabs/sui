@@ -26,7 +26,7 @@ pub enum ObjectsToCommit {
 pub trait IndexerStore: Clone + Sync + Send + 'static {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError>;
 
-    async fn get_available_epoch_range(&self) -> Result<WatermarkRead, IndexerError>;
+    async fn get_available_epoch_range(&self) -> Result<(u64, u64), IndexerError>;
 
     async fn get_watermarks(
         &self,

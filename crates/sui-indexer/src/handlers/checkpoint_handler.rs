@@ -192,6 +192,7 @@ impl CheckpointHandler {
                 new_epoch: IndexedEpochInfo::from_new_system_state_summary(
                     system_state_summary,
                     0, //first_checkpoint_id
+                    0, // first_tx_sequence_number
                     None,
                 ),
                 network_total_transactions: 0,
@@ -248,6 +249,7 @@ impl CheckpointHandler {
             new_epoch: IndexedEpochInfo::from_new_system_state_summary(
                 system_state_summary,
                 checkpoint_summary.sequence_number + 1, // first_checkpoint_id
+                network_tx_count_prev_epoch,
                 Some(&event),
             ),
             network_total_transactions: checkpoint_summary.network_total_transactions,

@@ -218,26 +218,23 @@ impl PgIndexerStore {
             .context("Failed reading min and max checkpoint sequence numbers from PostgresDB")
     }
 
-    /// Read the `epochs` entity off watermarks table for the available epoch range. If `pruned_lo`
-    /// is also populated, then the lower bound is set to the smaller of `lo` and `pruned_lo`.
-    async fn get_prunable_epoch_range(&self) -> Result<WatermarkRead, IndexerError> {
+    async fn get_prunable_epoch_range(&self) -> Result<(u64, u64), IndexerError> {
         use diesel_async::RunQueryDsl;
 
-        // read_only transaction, otherwise this will block and get blocked by write transactions to
-        // the same table.
-        read_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                watermarks::table
-                    .filter(watermarks::entity.eq("epochs".to_string()))
-                    .first::<StoredWatermark>(conn)
-                    .await
-                    .map_err(Into::into)
-                    .context("Failed reading epoch range from PostgresDB")
-                    .map(WatermarkRead::from)
-            }
-            .scope_boxed()
-        })
-        .await
+        let mut connection = self.pool.get().await?;
+
+        epochs::table
+            .select((min(epochs::epoch), max(epochs::epoch)))
+            .first::<(Option<i64>, Option<i64>)>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .map(|(min, max)| {
+                (
+                    min.unwrap_or_default() as u64,
+                    max.unwrap_or_default() as u64,
+                )
+            })
+            .context("Failed reading min and max epoch numbers from PostgresDB")
     }
 
     async fn get_watermarks(
@@ -253,7 +250,7 @@ impl PgIndexerStore {
                     .load::<StoredWatermark>(conn)
                     .await
                     .map_err(|e| IndexerError::from(e))
-                    .context("Failed reading epoch range from PostgresDB")
+                    .context("Failed reading watermarks from PostgresDB")
                     .and_then(|watermarks: Vec<StoredWatermark>| {
                         watermarks
                             .into_iter()
@@ -342,25 +339,25 @@ impl PgIndexerStore {
 
     async fn get_min_cp_and_tx_for_epoch(&self, epoch: u64) -> Result<(u64, u64), IndexerError> {
         use diesel_async::RunQueryDsl;
-        // TODO: (wlmyng) just use min and max on checkpoints
-
-        // TODO: (wlmyng) just add a new field to the unpruned epochs table instead of relying on
-        // checkpoints
-        let epoch = epoch.saturating_sub(1) as i64;
-
         let mut connection = self.pool.get().await?;
 
-        checkpoints::table
+        epochs::table
             .select((
-                checkpoints::sequence_number,
-                checkpoints::network_total_transactions,
+                epochs::first_checkpoint_id,
+                epochs::first_tx_sequence_number,
             ))
-            .filter(checkpoints::epoch.eq(epoch))
-            .order_by(checkpoints::sequence_number.desc())
-            .first::<(i64, i64)>(&mut connection)
+            .filter(epochs::epoch.eq(epoch as i64))
+            .first::<(i64, Option<i64>)>(&mut connection)
             .await
             .map_err(Into::into)
-            .map(|(cp, tx)| ((cp + 1) as u64, tx as u64))
+            .and_then(|(cp, tx)| {
+                tx.map(|tx| (cp as u64, tx as u64)).ok_or_else(|| {
+                    IndexerError::PersistentStorageDataCorruptionError(format!(
+                        "Missing tx sequence number for epoch {}",
+                        epoch
+                    ))
+                })
+            })
             .context("Failed reading min cp and tx for epoch from PostgresDB")
     }
 
@@ -1633,7 +1630,7 @@ impl IndexerStore for PgIndexerStore {
         self.get_latest_checkpoint_sequence_number().await
     }
 
-    async fn get_available_epoch_range(&self) -> Result<WatermarkRead, IndexerError> {
+    async fn get_available_epoch_range(&self) -> Result<(u64, u64), IndexerError> {
         self.get_prunable_epoch_range().await
     }
 
@@ -2103,9 +2100,8 @@ impl IndexerStore for PgIndexerStore {
 
             self.update_watermarks(vec![
                 Watermark::new_lower_bound_tail(WatermarkEntity::Checkpoints, cp),
-                Watermark::new_lower_bound_tail(WatermarkEntity::ObjectsHistory, cp),
-                Watermark::new_lower_bound_tail(WatermarkEntity::Transactions, max_tx),
-                Watermark::new_lower_bound_tail(WatermarkEntity::Events, max_tx),
+                Watermark::new_lower_bound_tail(WatermarkEntity::TxLookup, max_tx),
+                Watermark::new_lower_bound_tail(WatermarkEntity::EvLookup, max_tx),
             ])
             .await?;
         }

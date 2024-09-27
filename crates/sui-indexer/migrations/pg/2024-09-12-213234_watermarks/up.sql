@@ -26,9 +26,9 @@ CREATE TABLE watermarks
     -- be dropped. The pruner uses this column to determine whether to prune or wait long enough
     -- that all in-flight reads complete or timeout before it acts on an updated watermark.
     timestamp_ms                BIGINT        NOT NULL,
-    -- Pruner updates this, and uses this when recovering from a crash to determine where to
-    -- continue pruning. Data at and below `pruned_lo` is considered pruned by the pruner, and
-    -- should not exist in the db. Has the same unit as `lo`.
+    -- Column used by the pruner to track its true progress. Data at and below this watermark has
+    -- been truly pruned from the db, and should no longer exist. When recovering from a crash, the
+    -- pruner will consult this column to determine where to continue.
     pruned_lo                   BIGINT,
     PRIMARY KEY (entity)
 );

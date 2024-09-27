@@ -102,6 +102,7 @@ impl IndexedCheckpoint {
 pub struct IndexedEpochInfo {
     pub epoch: u64,
     pub first_checkpoint_id: u64,
+    pub first_tx_sequence_number: u64,
     pub epoch_start_timestamp: u64,
     pub reference_gas_price: u64,
     pub protocol_version: u64,
@@ -125,11 +126,13 @@ impl IndexedEpochInfo {
     pub fn from_new_system_state_summary(
         new_system_state_summary: SuiSystemStateSummary,
         first_checkpoint_id: u64,
+        first_tx_sequence_number: u64,
         event: Option<&SystemEpochInfoEvent>,
     ) -> IndexedEpochInfo {
         Self {
             epoch: new_system_state_summary.epoch,
             first_checkpoint_id,
+            first_tx_sequence_number,
             epoch_start_timestamp: new_system_state_summary.epoch_start_timestamp_ms,
             reference_gas_price: new_system_state_summary.reference_gas_price,
             protocol_version: new_system_state_summary.protocol_version,
@@ -169,6 +172,7 @@ impl IndexedEpochInfo {
                     - network_total_tx_num_at_last_epoch_end,
             ),
             last_checkpoint_id: Some(*last_checkpoint_summary.sequence_number()),
+            first_tx_sequence_number: network_total_tx_num_at_last_epoch_end,
             epoch_end_timestamp: Some(last_checkpoint_summary.timestamp_ms),
             storage_fund_reinvestment: Some(event.storage_fund_reinvestment),
             storage_charge: Some(event.storage_charge),
