@@ -512,6 +512,23 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                 }
             },
             EthBridgeEvent::EthBridgeCommitteeEvents(bridge_event) => match &bridge_event {
+                EthBridgeCommitteeEvents::BlocklistUpdatedFilter(_) => {
+                    info!(
+                        "Observed Eth Blocklist Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: None,
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpdateCommitteeBlocklist,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
                 EthBridgeCommitteeEvents::BlocklistUpdatedV2Filter(f) => {
                     info!(
                         "Observed Eth Blocklist Update at block: {}, tx_hash: {}",
@@ -546,14 +563,29 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         data: serde_json::to_value(bridge_event)?,
                     }));
                 }
-
-                EthBridgeCommitteeEvents::BlocklistUpdatedFilter(_)
-                | EthBridgeCommitteeEvents::InitializedFilter(_)
+                EthBridgeCommitteeEvents::InitializedFilter(_)
                 | EthBridgeCommitteeEvents::UpgradedFilter(_) => {
                     warn!("Unexpected event {bridge_event:?}.")
                 }
             },
             EthBridgeEvent::EthBridgeLimiterEvents(bridge_event) => match &bridge_event {
+                EthBridgeLimiterEvents::LimitUpdatedFilter(_) => {
+                    info!(
+                        "Observed Eth BridgeLimiter Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: None,
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpdateBridgeLimit,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
                 EthBridgeLimiterEvents::LimitUpdatedV2Filter(f) => {
                     info!(
                         "Observed Eth BridgeLimiter Update at block: {}, tx_hash: {}",
@@ -591,13 +623,29 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                 EthBridgeLimiterEvents::HourlyTransferAmountUpdatedFilter(_)
                 | EthBridgeLimiterEvents::InitializedFilter(_)
-                | EthBridgeLimiterEvents::LimitUpdatedFilter(_)
                 | EthBridgeLimiterEvents::OwnershipTransferredFilter(_)
                 | EthBridgeLimiterEvents::UpgradedFilter(_) => {
                     warn!("Unexpected event {bridge_event:?}.")
                 }
             },
             EthBridgeEvent::EthBridgeConfigEvents(bridge_event) => match &bridge_event {
+                EthBridgeConfigEvents::TokenPriceUpdatedFilter(_) => {
+                    info!(
+                        "Observed Eth TokenPrices Update at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: None,
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::UpdateTokenPrices,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
                 EthBridgeConfigEvents::TokenPriceUpdatedV2Filter(f) => {
                     info!(
                         "Observed Eth TokenPrices Update at block: {}, tx_hash: {}",
@@ -612,6 +660,23 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         sender: txn_sender.clone(),
                         timestamp_ms,
                         action: GovernanceActionType::UpdateTokenPrices,
+                        data: serde_json::to_value(bridge_event)?,
+                    }));
+                }
+                EthBridgeConfigEvents::TokenAddedFilter(_) => {
+                    info!(
+                        "Observed Eth AddSuiTokens at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+
+                    processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                        nonce: None,
+                        data_source: BridgeDataSource::Eth,
+                        tx_digest: txn_hash.clone(),
+                        sender: txn_sender.clone(),
+                        timestamp_ms,
+                        action: GovernanceActionType::AddEVMTokens,
                         data: serde_json::to_value(bridge_event)?,
                     }));
                 }
@@ -651,8 +716,6 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                 }
 
                 EthBridgeConfigEvents::InitializedFilter(_)
-                | EthBridgeConfigEvents::TokenAddedFilter(_)
-                | EthBridgeConfigEvents::TokenPriceUpdatedFilter(_)
                 | EthBridgeConfigEvents::UpgradedFilter(_) => {
                     warn!("Unexpected event {bridge_event:?}.")
                 }
