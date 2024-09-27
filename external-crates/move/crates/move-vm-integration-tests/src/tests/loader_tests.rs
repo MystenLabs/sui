@@ -19,7 +19,7 @@ use move_core_types::{
     ident_str,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver},
     runtime_value::MoveValue,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
@@ -382,19 +382,6 @@ impl ModuleResolver for RelinkingStore {
 
     fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
         self.store.get_package(id)
-    }
-}
-
-/// Implement by forwarding to the underlying in memory storage
-impl ResourceResolver for RelinkingStore {
-    type Error = ();
-
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        typ: &move_core_types::language_storage::StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.store.get_resource(address, typ)
     }
 }
 

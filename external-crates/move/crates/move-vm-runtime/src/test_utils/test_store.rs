@@ -8,9 +8,7 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::ModuleId,
-    resolver::{ModuleResolver, ResourceResolver},
+    account_address::AccountAddress, language_storage::ModuleId, resolver::ModuleResolver,
     vm_status::StatusCode,
 };
 use std::collections::BTreeSet;
@@ -101,18 +99,5 @@ impl ModuleResolver for TestStore {
 
     fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
         self.store.get_package(id)
-    }
-}
-
-/// Implement by forwarding to the underlying in memory storage
-impl ResourceResolver for TestStore {
-    type Error = ();
-
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        typ: &move_core_types::language_storage::StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.store.get_resource(address, typ)
     }
 }

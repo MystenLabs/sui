@@ -19,7 +19,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver},
     runtime_value::{serialize_values, MoveValue},
     u256::U256,
     vm_status::{StatusCode, StatusType},
@@ -159,18 +159,6 @@ impl ModuleResolver for RemoteStore {
 
     fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
         unreachable!("Should never be called in v1")
-    }
-}
-
-impl ResourceResolver for RemoteStore {
-    type Error = VMError;
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(None)
     }
 }
 

@@ -8,7 +8,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver},
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_runtime::{move_vm::MoveVM, test_utils::InMemoryStorage};
@@ -389,18 +389,6 @@ impl ModuleResolver for BogusStorage {
     }
 
     fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
-        Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
-    }
-}
-
-impl ResourceResolver for BogusStorage {
-    type Error = VMError;
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
         Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
     }
 }

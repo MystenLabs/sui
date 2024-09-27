@@ -7,8 +7,8 @@ use move_core_types::{
     account_address::AccountAddress,
     effects::{AccountChangeSet, ChangeSet, Op},
     identifier::Identifier,
-    language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, MoveResolver, ResourceResolver},
+    language_storage::ModuleId,
+    resolver::{ModuleResolver, MoveResolver},
 };
 use std::{
     collections::{btree_map, BTreeMap},
@@ -175,46 +175,6 @@ impl ModuleResolver for InMemoryStorage {
             ));
         }
         Ok(None)
-    }
-}
-
-// -----------------------------------------------
-// Resource Resolvers
-// -----------------------------------------------
-
-impl ResourceResolver for BlankStorage {
-    type Error = ();
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(None)
-    }
-}
-
-impl<'a, 'b, S: ResourceResolver> ResourceResolver for DeltaStorage<'a, 'b, S> {
-    type Error = S::Error;
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, S::Error> {
-        unreachable!()
-    }
-}
-
-impl ResourceResolver for InMemoryStorage {
-    type Error = ();
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        unreachable!()
     }
 }
 

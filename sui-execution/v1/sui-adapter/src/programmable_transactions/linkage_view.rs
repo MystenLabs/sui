@@ -12,7 +12,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver},
 };
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
@@ -293,18 +293,6 @@ impl<'state> LinkageResolver for LinkageView<'state> {
 }
 
 /** Remaining implementations delegated to state_view *************************/
-
-impl<'state> ResourceResolver for LinkageView<'state> {
-    type Error = SuiError;
-
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        typ: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.resolver.get_resource(address, typ)
-    }
-}
 
 impl<'state> ModuleResolver for LinkageView<'state> {
     type Error = SuiError;

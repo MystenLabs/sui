@@ -10,8 +10,8 @@ use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
-    language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, ResourceResolver},
+    language_storage::ModuleId,
+    resolver::ModuleResolver,
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
@@ -401,18 +401,6 @@ impl ModuleResolver for OnDiskStateView {
         Ok(self
             .get_package_bytes(id)?
             .map(|modules| modules.into_iter().map(|(_, m)| m).collect()))
-    }
-}
-
-impl ResourceResolver for OnDiskStateView {
-    type Error = anyhow::Error;
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _struct_tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        unimplemented!()
     }
 }
 

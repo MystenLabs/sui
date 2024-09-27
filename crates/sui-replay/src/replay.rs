@@ -18,7 +18,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, ResourceResolver},
+    resolver::ModuleResolver,
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
@@ -1973,59 +1973,6 @@ impl ParentSync for LocalExec {
                     result: res.clone(),
                 },
             );
-        res
-    }
-}
-
-impl ResourceResolver for LocalExec {
-    type Error = SuiError;
-
-    /// In this case we might need to download a Move object on the fly which was not present in the
-    /// modified at versions list because packages are immutable
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        typ: &StructTag,
-    ) -> SuiResult<Option<Vec<u8>>> {
-        fn inner(
-            self_: &LocalExec,
-            address: &AccountAddress,
-            typ: &StructTag,
-        ) -> SuiResult<Option<Vec<u8>>> {
-            // If package not present fetch it from the network or some remote location
-            let Some(object) = self_.get_or_download_object(
-                &ObjectID::from(*address),
-                false, /* we expect a Move obj*/
-            )?
-            else {
-                return Ok(None);
-            };
-
-            match &object.data {
-                Data::Move(m) => {
-                    assert!(
-                        m.is_type(typ),
-                        "Invariant violation: ill-typed object in storage \
-                        or bad object request from caller"
-                    );
-                    Ok(Some(m.contents().to_vec()))
-                }
-                other => unimplemented!(
-                    "Bad object lookup: expected Move object, but got {:#?}",
-                    other
-                ),
-            }
-        }
-
-        let res = inner(self, address, typ);
-        self.exec_store_events
-            .lock()
-            .expect("Unable to lock events list")
-            .push(ExecutionStoreEvent::ResourceResolverGetResource {
-                address: *address,
-                typ: typ.clone(),
-                result: res.clone(),
-            });
         res
     }
 }
