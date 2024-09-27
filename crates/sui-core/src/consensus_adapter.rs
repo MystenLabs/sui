@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use arc_swap::{ArcSwap, ArcSwapOption};
+use clap::error;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{self, select, Either};
@@ -50,7 +51,7 @@ use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
 use tokio::time::Duration;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -70,7 +71,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_attempt: IntCounterVec,
     pub sequencing_certificate_success: IntCounterVec,
     pub sequencing_certificate_failures: IntCounterVec,
-    pub sequencing_certificate_gced: IntCounterVec,
+    pub sequencing_certificate_status: IntCounterVec,
     pub sequencing_certificate_inflight: IntGaugeVec,
     pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
@@ -108,10 +109,10 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
                 .unwrap(),
-            sequencing_certificate_gced: register_int_counter_vec_with_registry!(
-                "sequencing_certificate_gced",
-                "Counts the number of sequenced certificates that have been garbage collected from consensus.",
-                &["tx_type"],
+                sequencing_certificate_status: register_int_counter_vec_with_registry!(
+                "sequencing_certificate_status",
+                "The status of the certificate sequencing as reported by consensus. The status can be either sequenced or garbage collected.",
+                &["tx_type", "status"],
                 registry,
             )
                 .unwrap(),
@@ -798,23 +799,33 @@ impl ConsensusAdapter {
 
                     match submit_result.wait_for_status().await {
                         Ok(BlockStatus::Sequenced) => {
+                            self.metrics
+                                .sequencing_certificate_status
+                                .with_label_values(&[tx_type, "sequenced"])
+                                .inc();
                             // Block has been sequenced. Nothing more to do, we do have guarantees that the transaction will appear in consensus output.
+                            trace!(
+                                "Transaction {transaction_keys:?} has been sequenced by consensus."
+                            );
                             break;
                         }
                         Ok(BlockStatus::GarbageCollected) => {
                             self.metrics
-                                .sequencing_certificate_gced
-                                .with_label_values(&[tx_type])
+                                .sequencing_certificate_status
+                                .with_label_values(&[tx_type, "garbage_collected"])
                                 .inc();
                             // Block has been garbage collected and we have no guarantees that the transaction will appear in consensus output. We'll
                             // resubmit the transaction to consensus. If the transaction has been already "processed", then probably someone else has submitted
                             // the transaction and managed to get sequenced. Then this future will have been cancelled anyways so no need to check here on the processed output.
                             debug!(
-                                "Transaction {transaction_keys:?} was garbage collected before being sequenced"
+                                "Transaction {transaction_keys:?} was garbage collected before being sequenced. Will be retried."
                             );
                             continue;
                         }
                         Err(_err) => {
+                            warn!(
+                                "Error while waiting for status from consensus for transactions {transaction_keys:?}. Will be retried."
+                            );
                             continue;
                         }
                     }
