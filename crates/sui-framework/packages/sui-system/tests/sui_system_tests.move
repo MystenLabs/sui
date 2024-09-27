@@ -9,6 +9,7 @@
 module sui_system::sui_system_tests {
     use sui::test_scenario::{Self, Scenario};
     use sui::sui::SUI;
+    use sui::coin::Self;
     use sui_system::governance_test_utils::{add_validator_full_flow, advance_epoch, remove_validator, set_up_sui_system_state, create_sui_system_state_for_testing, stake_with, unstake};
     use sui_system::sui_system::SuiSystemState;
     use sui_system::sui_system_state_inner;
@@ -1070,4 +1071,58 @@ module sui_system::sui_system_tests {
 
         scenario_val.end();
     }
+
+    #[test]
+    fun test_convert_to_fungible_staked_sui_and_redeem() {
+        let mut scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        // Epoch duration is set to be 42 here.
+        set_up_sui_system_state(vector[@0x1, @0x2]);
+
+        {
+            scenario.next_tx(@0x0);
+            let mut system_state = scenario.take_shared<SuiSystemState>();
+            let staking_pool = system_state.active_validator_by_address(@0x1).get_staking_pool_ref();
+
+            assert!(staking_pool.pending_stake_amount() == 0, 0);
+            assert!(staking_pool.pending_stake_withdraw_amount() == 0, 0);
+            assert!(staking_pool.sui_balance() == 100 * 1_000_000_000, 0);
+
+            test_scenario::return_shared(system_state);
+        };
+
+        scenario.next_tx(@0x0);
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+
+        let staked_sui = system_state.request_add_stake_non_entry(
+            coin::mint_for_testing(100_000_000_000, scenario.ctx()), 
+            @0x1, 
+            scenario.ctx()
+        );
+
+        assert!(staked_sui.amount() == 100_000_000_000, 0);
+
+        test_scenario::return_shared(system_state);
+        advance_epoch(scenario);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let fungible_staked_sui = system_state.convert_to_fungible_staked_sui(
+            staked_sui, 
+            scenario.ctx()
+        );
+
+        assert!(fungible_staked_sui.value() == 100_000_000_000, 0);
+
+        let sui = system_state.redeem_fungible_staked_sui(
+            fungible_staked_sui, 
+            scenario.ctx()
+        );
+
+        assert!(sui.value() == 100_000_000_000, 0);
+
+        test_scenario::return_shared(system_state);
+        sui::test_utils::destroy(sui);
+        scenario_val.end();
+    }
+
 }
