@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use strsim::normalized_damerau_levenshtein;
 use tracing::debug;
 
-use crate::cli::incidents::notion::Notion;
+use crate::cli::incidents::notion::{Notion, INCIDENT_DB_ID, INCIDENT_DB_NAME};
 use crate::cli::incidents::user::User;
 use crate::cli::lib::utils::day_of_week;
 use crate::cli::slack::{Channel, Slack, SlackUser};
@@ -32,7 +32,6 @@ fn filter_incidents_for_review(incidents: Vec<Incident>, min_priority: &str) -> 
         .trim_start_matches("P")
         .parse::<u8>()
         .expect("Parsing priority");
-    println!("min_priority_u: {}", min_priority_u);
     incidents
         .into_iter()
         // filter on priority <= min_priority and any slack channel association
@@ -54,10 +53,15 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
         .await?
         .into_iter()
         .map(|nu| {
-            let slack_user = slack
-                .users
-                .iter()
-                .find(|su| su.profile.as_ref().unwrap().email == nu.person.email);
+            let slack_user = slack.users.iter().find(|su| {
+                su.profile
+                    .as_ref()
+                    .unwrap()
+                    .email
+                    .as_ref()
+                    .unwrap_or(&"".to_owned())
+                    == &nu.person.email
+            });
             User::new(slack_user.cloned(), Some(nu)).expect("Failed to convert user from Notion")
         })
         .collect::<Vec<_>>();
@@ -167,12 +171,20 @@ Please comment in the thread to request an adjustment to the list.",
     if send_message {
         slack.send_message(slack_channel, &message).await?;
         debug!("Message sent to #{}", slack_channel);
-        if !*DEBUG_MODE {
-            println!("Inserting incidents into Notion database");
-            for incident in to_review.iter() {
-                debug!("Inserting incident into Notion: {}", incident.number);
-                notion.insert_incident(incident.clone()).await?;
-            }
+    }
+    let insert_into_db = Confirm::new(&format!(
+        "Insert {} incidents into {} Notion database ({}) for review?",
+        to_review.len(),
+        INCIDENT_DB_NAME.to_string(),
+        INCIDENT_DB_ID.to_string()
+    ))
+    .with_default(false)
+    .prompt()
+    .expect("Unexpected response");
+    if insert_into_db {
+        for incident in to_review.iter() {
+            debug!("Inserting incident into Notion: {}", incident.number);
+            notion.insert_incident(incident.clone()).await?;
         }
     }
     Ok(())

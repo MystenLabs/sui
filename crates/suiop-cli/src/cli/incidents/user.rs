@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use crate::cli::slack::SlackUser;
 
@@ -31,7 +32,14 @@ impl Display for User {
         if let Some(name) = name {
             write!(f, "{}", name)
         } else {
-            Err(std::fmt::Error)
+            write!(
+                f,
+                "{}",
+                self.notion_user
+                    .as_ref()
+                    .expect("expected notion user")
+                    .name
+            )
         }
     }
 }

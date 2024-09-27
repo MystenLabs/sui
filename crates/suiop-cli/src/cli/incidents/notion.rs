@@ -10,11 +10,26 @@ use serde_json::json;
 use std::env;
 use std::str::FromStr;
 
+use crate::DEBUG_MODE;
+
 use super::incident::Incident;
 
 // incident selection db
-static INCIDENT_DB_ID: Lazy<DatabaseId> = Lazy::new(|| {
-    DatabaseId::from_str("a8da55dadb524e7db202b4dfd799d9ce").expect("Invalid Database ID")
+pub static INCIDENT_DB_ID: Lazy<DatabaseId> = Lazy::new(|| {
+    if *DEBUG_MODE {
+        DatabaseId::from_str("10e6d9dcb4e980f8ae73c4aa2da176cd").expect("Invalid Database ID")
+    } else {
+        DatabaseId::from_str("a8da55dadb524e7db202b4dfd799d9ce").expect("Invalid Database ID")
+    }
+});
+
+// incident selection db names
+pub static INCIDENT_DB_NAME: Lazy<String> = Lazy::new(|| {
+    if *DEBUG_MODE {
+        "Incident Selection (Debug)".to_owned()
+    } else {
+        "Incident Selection".to_owned()
+    }
 });
 
 /// Macro for debugging Notion database properties.
@@ -143,10 +158,7 @@ impl Notion {
     }
 
     pub async fn insert_incident(&self, incident: Incident) -> Result<()> {
-        let incs = self.get_incident_selection_incidents().await?;
-        println!("{:#?}", incs.results[0]);
-        let db = self.client.get_database(INCIDENT_DB_ID.clone()).await?;
-
+        debug_prop!(self, "Status");
         let url = format!("https://api.notion.com/v1/pages");
         let body = json!({
             "parent": { "database_id": INCIDENT_DB_ID.to_string() },
@@ -158,12 +170,7 @@ impl Notion {
                         }
                     }]
                 },
-                "Status": {
-                    "select": {
-                        "name": "Not started",
-                    }
-                },
-                "Link": {
+                "link": {
                     "url": incident.html_url,
                 },
                 // "PoC Teams": {

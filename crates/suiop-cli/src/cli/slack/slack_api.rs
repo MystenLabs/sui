@@ -7,9 +7,11 @@ use anyhow::Result;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::debug;
 
 const CHANNELS_URL: &str = "https://slack.com/api/conversations.list";
 
@@ -24,13 +26,11 @@ pub struct SlackUser {
     pub id: String,
     pub name: String,
     pub profile: Option<Profile>,
-    #[serde(skip)]
-    pub notion_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Profile {
-    pub email: String,
+    pub email: Option<String>,
 }
 
 impl Display for SlackUser {
@@ -55,7 +55,7 @@ struct ConversationsResponse {
     ok: bool,
     error: Option<String>,
     channels: Option<Vec<Channel>>,
-    response_metadata: ResponseMetadata,
+    response_metadata: Option<ResponseMetadata>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -76,9 +76,21 @@ pub async fn get_channels(client: &Client) -> Result<Vec<Channel>> {
         .map_err(|e| anyhow!(e))?
         .json()
         .await?;
-    let new_channels = result.channels.expect("Expected channels to exist").clone();
+    let new_channels = result
+        .clone()
+        .channels
+        .expect(&format!("Expected channels to exist for {:?}", result))
+        .clone();
     channels.extend(new_channels.into_iter());
-    while let Some(cursor) = result.response_metadata.next_cursor {
+    if result.response_metadata.is_none() {
+        debug!("No pagination in channels response");
+        return Ok(channels);
+    }
+    while let Some(cursor) = result
+        .response_metadata
+        .expect("Expected response metadata")
+        .next_cursor
+    {
         if cursor.is_empty() {
             break;
         }
@@ -91,7 +103,11 @@ pub async fn get_channels(client: &Client) -> Result<Vec<Channel>> {
             .json()
             .await
             .context("parsing json from channels api")?;
-        let extra_channels = result.channels.expect("Expected channels to exist").clone();
+        let extra_channels = result
+            .clone()
+            .channels
+            .expect(&format!("Expected channels to exist for {:?}", result))
+            .clone();
         channels.extend(extra_channels.into_iter());
     }
     channels = channels.iter().map(|c| (*c).clone()).collect();
