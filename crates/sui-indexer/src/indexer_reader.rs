@@ -14,10 +14,9 @@ use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::{StructTag, TypeTag};
-use sui_json_rpc_types::DisplayFieldsResponse;
-use sui_json_rpc_types::{Balance, Coin as SuiCoin, SuiCoinMetadata, SuiMoveValue};
 use sui_json_rpc_types::{
-    CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiObjectDataFilter,
+    Balance, Checkpoint as RpcCheckpoint, CheckpointId, Coin as SuiCoin, DisplayFieldsResponse,
+    EpochInfo, EventFilter, SuiCoinMetadata, SuiEvent, SuiMoveValue, SuiObjectDataFilter,
     SuiTransactionBlockResponse, TransactionFilter,
 };
 use sui_package_resolver::Package;
@@ -37,21 +36,24 @@ use sui_types::{coin::CoinMetadata, event::EventID};
 
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
-use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
-use crate::schema::pruner_cp_watermark;
-use crate::schema::tx_digests;
 use crate::{
     errors::IndexerError,
     models::{
-        checkpoints::StoredCheckpoint,
         display::StoredDisplay,
         epoch::StoredEpochInfo,
         events::StoredEvent,
         objects::{CoinBalance, StoredObject},
-        transactions::{tx_events_to_sui_tx_events, StoredTransaction},
+        raw_checkpoints::StoredRawCheckpoint,
+        transactions::{
+            stored_events_to_events, tx_events_to_sui_tx_events, StoredTransaction,
+            StoredTransactionEvents,
+        },
         tx_indices::TxSequenceNumber,
     },
-    schema::{checkpoints, display, epochs, events, objects, transactions},
+    schema::{
+        checkpoints, display, epochs, events, objects, pruner_cp_watermark, raw_checkpoints,
+        transactions, tx_digests,
+    },
     store::package_resolver::IndexerStorePackageResolver,
     types::{IndexerResult, OwnerType},
 };
@@ -327,104 +329,110 @@ impl IndexerReader {
         stored_epoch.get_json_system_state_summary()
     }
 
-    async fn get_checkpoint_from_db(
+    async fn get_raw_checkpoint_from_db(
         &self,
         checkpoint_id: CheckpointId,
-    ) -> Result<Option<StoredCheckpoint>, IndexerError> {
+    ) -> Result<Option<StoredRawCheckpoint>, IndexerError> {
         use diesel_async::RunQueryDsl;
 
         let mut connection = self.pool.get().await?;
-        let stored_checkpoint = checkpoints::table
-            .into_boxed()
-            .pipe(|query| match checkpoint_id {
-                CheckpointId::SequenceNumber(seq) => {
-                    query.filter(checkpoints::sequence_number.eq(seq as i64))
-                }
-                CheckpointId::Digest(digest) => {
-                    query.filter(checkpoints::checkpoint_digest.eq(digest.into_inner().to_vec()))
-                }
-            })
-            .first::<StoredCheckpoint>(&mut connection)
-            .await
-            .optional()?;
+        let stored_raw_checkpoint = match checkpoint_id {
+            CheckpointId::SequenceNumber(seq) => raw_checkpoints::table
+                .filter(raw_checkpoints::sequence_number.eq(seq as i64))
+                .first::<StoredRawCheckpoint>(&mut connection)
+                .await
+                .optional()?,
+            CheckpointId::Digest(digest) => {
+                let seq = checkpoints::table
+                    .filter(checkpoints::checkpoint_digest.eq(digest.into_inner().to_vec()))
+                    .select(checkpoints::sequence_number)
+                    .first::<i64>(&mut connection)
+                    .await
+                    .optional()?;
 
-        Ok(stored_checkpoint)
+                match seq {
+                    Some(seq) => raw_checkpoints::table
+                        .filter(raw_checkpoints::sequence_number.eq(seq))
+                        .first::<StoredRawCheckpoint>(&mut connection)
+                        .await
+                        .optional()?,
+                    None => None,
+                }
+            }
+        };
+
+        Ok(stored_raw_checkpoint)
     }
 
-    async fn get_latest_checkpoint_from_db(&self) -> Result<StoredCheckpoint, IndexerError> {
+    async fn get_latest_raw_checkpoint_from_db(&self) -> Result<StoredRawCheckpoint, IndexerError> {
         use diesel_async::RunQueryDsl;
 
         let mut connection = self.pool.get().await?;
 
-        checkpoints::table
-            .order_by(checkpoints::sequence_number.desc())
-            .first::<StoredCheckpoint>(&mut connection)
+        raw_checkpoints::table
+            .order_by(raw_checkpoints::sequence_number.desc())
+            .first::<StoredRawCheckpoint>(&mut connection)
             .await
             .map_err(Into::into)
     }
 
-    pub async fn get_checkpoint(
+    pub async fn get_rpc_checkpoint(
         &self,
         checkpoint_id: CheckpointId,
-    ) -> Result<Option<sui_json_rpc_types::Checkpoint>, IndexerError> {
-        let stored_checkpoint = match self.get_checkpoint_from_db(checkpoint_id).await? {
+    ) -> Result<Option<RpcCheckpoint>, IndexerError> {
+        let raw_checkpoint = match self.get_raw_checkpoint_from_db(checkpoint_id).await? {
             Some(stored_checkpoint) => stored_checkpoint,
             None => return Ok(None),
         };
 
-        let checkpoint = sui_json_rpc_types::Checkpoint::try_from(stored_checkpoint)?;
+        let checkpoint = RpcCheckpoint::try_from(raw_checkpoint)?;
         Ok(Some(checkpoint))
     }
 
-    pub async fn get_latest_checkpoint(
-        &self,
-    ) -> Result<sui_json_rpc_types::Checkpoint, IndexerError> {
-        let stored_checkpoint = self.get_latest_checkpoint_from_db().await?;
-
-        sui_json_rpc_types::Checkpoint::try_from(stored_checkpoint)
+    pub async fn get_latest_rpc_checkpoint(&self) -> Result<RpcCheckpoint, IndexerError> {
+        let raw_checkpoint = self.get_latest_raw_checkpoint_from_db().await?;
+        RpcCheckpoint::try_from(raw_checkpoint)
     }
 
-    async fn get_checkpoints_from_db(
+    async fn get_raw_checkpoints_from_db(
         &self,
         cursor: Option<u64>,
         limit: usize,
         descending_order: bool,
-    ) -> Result<Vec<StoredCheckpoint>, IndexerError> {
+    ) -> Result<Vec<StoredRawCheckpoint>, IndexerError> {
         use diesel_async::RunQueryDsl;
 
         let mut connection = self.pool.get().await?;
-
-        let mut query = checkpoints::table.into_boxed();
+        let mut query = raw_checkpoints::table.into_boxed();
         if let Some(cursor) = cursor {
             if descending_order {
-                query = query.filter(checkpoints::sequence_number.lt(cursor as i64));
+                query = query.filter(raw_checkpoints::sequence_number.lt(cursor as i64));
             } else {
-                query = query.filter(checkpoints::sequence_number.gt(cursor as i64));
+                query = query.filter(raw_checkpoints::sequence_number.gt(cursor as i64));
             }
         }
         if descending_order {
-            query = query.order_by(checkpoints::sequence_number.desc());
+            query = query.order_by(raw_checkpoints::sequence_number.desc());
         } else {
-            query = query.order_by(checkpoints::sequence_number.asc());
+            query = query.order_by(raw_checkpoints::sequence_number.asc());
         }
-
         query
             .limit(limit as i64)
-            .load::<StoredCheckpoint>(&mut connection)
+            .load::<StoredRawCheckpoint>(&mut connection)
             .await
             .map_err(Into::into)
     }
 
-    pub async fn get_checkpoints(
+    pub async fn get_rpc_checkpoints(
         &self,
         cursor: Option<u64>,
         limit: usize,
         descending_order: bool,
-    ) -> Result<Vec<sui_json_rpc_types::Checkpoint>, IndexerError> {
-        self.get_checkpoints_from_db(cursor, limit, descending_order)
+    ) -> Result<Vec<RpcCheckpoint>, IndexerError> {
+        self.get_raw_checkpoints_from_db(cursor, limit, descending_order)
             .await?
             .into_iter()
-            .map(sui_json_rpc_types::Checkpoint::try_from)
+            .map(RpcCheckpoint::try_from)
             .collect()
     }
 

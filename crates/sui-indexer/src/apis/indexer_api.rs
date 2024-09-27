@@ -305,7 +305,7 @@ impl IndexerApiServer for IndexerApi {
         let parent_record_id = self.name_service_config.record_field_id(&parent_domain);
 
         // get latest timestamp to check expiration.
-        let current_timestamp = self.inner.get_latest_checkpoint().await?.timestamp_ms;
+        let current_timestamp = self.inner.get_latest_rpc_checkpoint().await?.timestamp_ms;
 
         // gather the requests to fetch in the multi_get_objs.
         let mut requests = vec![record_id];

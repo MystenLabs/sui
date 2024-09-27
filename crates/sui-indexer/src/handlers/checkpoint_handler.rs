@@ -311,13 +311,8 @@ impl CheckpointHandler {
                 )
                 .await?;
 
-            let successful_tx_num: u64 = db_transactions.iter().map(|t| t.successful_tx_num).sum();
             (
-                IndexedCheckpoint::from_sui_checkpoint(
-                    checkpoint_summary,
-                    checkpoint_contents,
-                    successful_tx_num as usize,
-                ),
+                IndexedCheckpoint::from_sui_checkpoint(checkpoint_summary, checkpoint_contents),
                 db_transactions,
                 db_events,
                 db_tx_indices,
