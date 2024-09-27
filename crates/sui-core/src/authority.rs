@@ -3923,17 +3923,8 @@ impl AuthorityState {
 
         let limit = limit + 1;
         let mut event_keys = match query {
-            EventFilter::All(filters) => {
-                if filters.is_empty() {
-                    index_store.all_events(tx_num, event_num, limit, descending)?
-                } else {
-                    return Err(SuiError::UserInputError {
-                        error: UserInputError::Unsupported(
-                            "This query type does not currently support filter combinations"
-                                .to_string(),
-                        ),
-                    });
-                }
+            EventFilter::All(fs) if fs.is_empty() => {
+                index_store.all_events(tx_num, event_num, limit, descending)?
             }
             EventFilter::Transaction(digest) => {
                 index_store.events_by_transaction(&digest, tx_num, event_num, limit, descending)?
@@ -3966,12 +3957,7 @@ impl AuthorityState {
                     limit,
                     descending,
                 )?,
-            // not using "_ =>" because we want to make sure we remember to add new variants here
-            EventFilter::Package(_)
-            | EventFilter::MoveEventField { .. }
-            | EventFilter::Any(_)
-            | EventFilter::And(_, _)
-            | EventFilter::Or(_, _) => {
+            EventFilter::All(_) => {
                 return Err(SuiError::UserInputError {
                     error: UserInputError::Unsupported(
                         "This query type is not supported by the full node.".to_string(),

@@ -6106,6 +6106,22 @@
       "EventFilter": {
         "oneOf": [
           {
+            "description": "Query by events that match all the given filters, or return all events if no filters are supplied.",
+            "type": "object",
+            "required": [
+              "All"
+            ],
+            "properties": {
+              "All": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by sender address.",
             "type": "object",
             "required": [
@@ -6127,19 +6143,6 @@
             "properties": {
               "Transaction": {
                 "$ref": "#/components/schemas/TransactionDigest"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Return events emitted in a specified Package.",
-            "type": "object",
-            "required": [
-              "Package"
-            ],
-            "properties": {
-              "Package": {
-                "$ref": "#/components/schemas/ObjectID"
               }
             },
             "additionalProperties": false
@@ -6220,28 +6223,6 @@
             "additionalProperties": false
           },
           {
-            "type": "object",
-            "required": [
-              "MoveEventField"
-            ],
-            "properties": {
-              "MoveEventField": {
-                "type": "object",
-                "required": [
-                  "path",
-                  "value"
-                ],
-                "properties": {
-                  "path": {
-                    "type": "string"
-                  },
-                  "value": true
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
             "description": "Return events emitted in [start_time, end_time] interval",
             "type": "object",
             "required": [
@@ -6272,80 +6253,6 @@
                     ]
                   }
                 }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "All"
-            ],
-            "properties": {
-              "All": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EventFilter"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "Any"
-            ],
-            "properties": {
-              "Any": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EventFilter"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "And"
-            ],
-            "properties": {
-              "And": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "Or"
-            ],
-            "properties": {
-              "Or": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
               }
             },
             "additionalProperties": false
