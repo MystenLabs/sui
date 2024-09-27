@@ -231,7 +231,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // part of the newly computed dependency graph
         let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
         let lock_path = root_path.join(SourcePackageLayout::Lock.path());
-        let lock_file = File::open(lock_path);
+        let lock_file = File::open(&lock_path);
         let digest_and_lock_contents = lock_file
             .map(|mut lock_file| match schema::Header::read(&mut lock_file) {
                 Ok(header) if header.version < schema::VERSION => None, // outdated lock file - regenerate
@@ -241,12 +241,15 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             .unwrap_or(None);
 
         // collect sub-graphs for "regular" and "dev" dependencies
-        let root_pkg_id = custom_resolve_pkg_id(&root_manifest).with_context(|| {
-            format!(
-                "Resolving package name for '{}'",
-                root_manifest.package.name
-            )
-        })?;
+        let lock_string = std::fs::read_to_string(lock_path).ok();
+        let root_pkg_id =
+            custom_resolve_pkg_id(&root_manifest, lock_string.as_ref().map(|s| s.as_str()))
+                .with_context(|| {
+                    format!(
+                        "Resolving package name for '{}'",
+                        root_manifest.package.name
+                    )
+                })?;
         let root_pkg_name = root_manifest.package.name;
         let (mut dep_graphs, resolved_id_deps, mut dep_names, mut overrides) = self
             .collect_graphs(
@@ -459,10 +462,14 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 // resolve name and version
                 let manifest =
                     parse_source_manifest(parse_move_manifest_string(manifest_string.clone())?)?;
-                let resolved_pkg_id = custom_resolve_pkg_id(&manifest)
-                    .with_context(|| format!("Resolving package name for '{}'", dep_pkg_name))?;
-                let resolved_version = resolve_version(&manifest)
-                    .with_context(|| format!("Resolving version for '{}'", dep_pkg_name))?;
+                let resolved_pkg_id =
+                    custom_resolve_pkg_id(&manifest, lock_string.as_ref().map(|s| s.as_str()))
+                        .with_context(|| {
+                            format!("Resolving package name for '{}'", dep_pkg_name)
+                        })?;
+                let resolved_version =
+                    resolve_version(&manifest, lock_string.as_ref().map(|s| s.as_str()))
+                        .with_context(|| format!("Resolving version for '{}'", dep_pkg_name))?;
                 check_for_dep_cycles(
                     d.clone(),
                     resolved_pkg_id,

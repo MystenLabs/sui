@@ -214,6 +214,7 @@ impl PackageHooks for TestHooks {
     fn custom_resolve_pkg_id(
         &self,
         manifest: &SourceManifest,
+        _: Option<&str>,
     ) -> anyhow::Result<PackageIdentifier> {
         let name = manifest.package.name.to_string();
         if name.ends_with("-rename") {
@@ -223,7 +224,11 @@ impl PackageHooks for TestHooks {
         }
     }
 
-    fn resolve_version(&self, manifest: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
+    fn resolve_version(
+        &self,
+        manifest: &SourceManifest,
+        _: Option<&str>,
+    ) -> anyhow::Result<Option<Symbol>> {
         Ok(manifest
             .package
             .custom_properties
