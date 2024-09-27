@@ -17,12 +17,11 @@ export default function BetaTag(props) {
     <Admonition
       title="Beta Feature"
       icon="⚙️"
-      className="!my-12 bg-sui-blue-light border-sui-blue-dark dark:bg-sui-blue-dark dark:border-sui-blue-light"
+      className={`${props.slim ? "" : "!my-12"} bg-sui-blue-light border-sui-blue-dark dark:bg-sui-blue-dark dark:border-sui-blue-light`}
     >
       <p className="pt-2">
-        The content in this topic describes a beta feature or service. Beta
-        features and services are in active development, so details are likely
-        to change.
+        This content describes a beta feature or service. Beta features and
+        services are in active development, so details are likely to change.
       </p>
       {(beta.includes("testnet") ||
         beta.includes("devnet") ||
