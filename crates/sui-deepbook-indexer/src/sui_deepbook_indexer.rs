@@ -456,7 +456,8 @@ fn process_sui_event(
                     onchain_timestamp: move_event.timestamp,
                     original_quantity: move_event.original_quantity,
                     quantity: move_event.base_asset_quantity_canceled,
-                    filled_quantity: move_event.original_quantity - move_event.base_asset_quantity_canceled,
+                    filled_quantity: move_event.original_quantity
+                        - move_event.base_asset_quantity_canceled,
                     trader: move_event.trader.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                 }))
@@ -485,7 +486,8 @@ fn process_sui_event(
                     onchain_timestamp: move_event.timestamp,
                     original_quantity: move_event.original_quantity,
                     quantity: move_event.base_asset_quantity_canceled,
-                    filled_quantity: move_event.original_quantity - move_event.base_asset_quantity_canceled,
+                    filled_quantity: move_event.original_quantity
+                        - move_event.base_asset_quantity_canceled,
                     trader: move_event.trader.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                 }))
