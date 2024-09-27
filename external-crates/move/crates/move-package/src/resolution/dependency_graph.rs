@@ -1458,11 +1458,16 @@ impl DependencyGraph {
                         format!("Parsing response from '{resolver}' for dependency '{to_name}' of package '{from_id}'")
                     })?;
 
-                    let root_edges = sub_graph.package_graph.edges(from_id).collect::<Vec<_>>();
-                    if root_edges.len() != 1 {
-                        bail!("Expected a single root dependency but none or multiple found");
-                    }
-                    let root_sub_package_id = root_edges[0].1;
+                    let root_sub_package_id = match sub_graph
+                        .package_graph
+                        .edges(from_id)
+                        .collect::<Vec<_>>()
+                        .as_slice()
+                    {
+                        [(_, id, _)] => *id,
+                        // TODO: We can in fact allow allow multiple root packages / graphs and relax this constraint.
+                        _ => bail!("Expected a single root dependency but none or multiple found"),
+                    };
                     let root_sub_package_version = sub_graph
                         .package_table
                         .get(&root_sub_package_id)
