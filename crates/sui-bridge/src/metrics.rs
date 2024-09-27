@@ -132,7 +132,7 @@ impl BridgeMetrics {
             .unwrap(),
             err_signature_aggregation_too_many_failures: register_int_counter_with_registry!(
                 "bridge_err_signature_aggregation_too_many_failures",
-                "Total number of continuous failures to aggregating validators signatures",
+                "Total number of continuous failures during validator signature aggregation",
                 registry,
             )
             .unwrap(),
