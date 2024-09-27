@@ -159,7 +159,7 @@ fn process_sui_event(
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
                     action: GovernanceActionType::UpdateBridgeLimit,
-                    data: serde_json::to_value(event).unwrap(),
+                    data: serde_json::to_value(event)?,
                 }))
             }
             "EmergencyOpEvent" => {
@@ -173,7 +173,7 @@ fn process_sui_event(
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
                     action: GovernanceActionType::EmergencyOperation,
-                    data: serde_json::to_value(event).unwrap(),
+                    data: serde_json::to_value(event)?,
                 }))
             }
             "BlocklistValidatorEvent" => {
@@ -187,7 +187,7 @@ fn process_sui_event(
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
                     action: GovernanceActionType::UpdateCommitteeBlocklist,
-                    data: serde_json::to_value(event).unwrap(),
+                    data: serde_json::to_value(event)?,
                 }))
             }
             "TokenRegistrationEvent" => {
@@ -201,7 +201,7 @@ fn process_sui_event(
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
                     action: GovernanceActionType::AddSuiTokens,
-                    data: serde_json::to_value(event).unwrap(),
+                    data: serde_json::to_value(event)?,
                 }))
             }
             "UpdateTokenPriceEvent" => {
@@ -215,7 +215,7 @@ fn process_sui_event(
                     sender: ev.sender.to_vec(),
                     timestamp_ms,
                     action: GovernanceActionType::UpdateTokenPrices,
-                    data: serde_json::to_value(event).unwrap(),
+                    data: serde_json::to_value(event)?,
                 }))
             }
             _ => {
