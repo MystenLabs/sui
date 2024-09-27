@@ -914,14 +914,46 @@ impl CoreSignalsReceivers {
 /// cores and their respective signal receivers are returned in `AuthorityIndex` order asc.
 #[cfg(test)]
 pub(crate) fn create_cores(context: Context, authorities: Vec<Stake>) -> Vec<CoreTextFixture> {
-    let mut cores = Vec::new();
+    CoresBuilder::new(context, authorities).build()
+}
 
-    for index in 0..authorities.len() {
-        let own_index = AuthorityIndex::new_for_test(index as u32);
-        let core = CoreTextFixture::new(context.clone(), authorities.clone(), own_index);
-        cores.push(core);
+#[cfg(test)]
+pub(crate) struct CoresBuilder {
+    context: Context,
+    authorities: Vec<Stake>,
+    sync_last_known_block: bool,
+}
+
+#[cfg(test)]
+impl CoresBuilder {
+    fn new(context: Context, authorities: Vec<Stake>) -> Self {
+        Self {
+            context,
+            authorities,
+            sync_last_known_block: false,
+        }
     }
-    cores
+
+    fn with_sync_last_known_block(mut self, sync_last_known_block: bool) -> Self {
+        self.sync_last_known_block = sync_last_known_block;
+        self
+    }
+
+    fn build(self) -> Vec<CoreTextFixture> {
+        let mut cores = Vec::new();
+
+        for index in 0..self.authorities.len() {
+            let own_index = AuthorityIndex::new_for_test(index as u32);
+            let core = CoreTextFixture::new(
+                self.context.clone(),
+                self.authorities.clone(),
+                own_index,
+                self.sync_last_known_block,
+            );
+            cores.push(core);
+        }
+        cores
+    }
 }
 
 #[cfg(test)]
@@ -936,7 +968,12 @@ pub(crate) struct CoreTextFixture {
 
 #[cfg(test)]
 impl CoreTextFixture {
-    fn new(context: Context, authorities: Vec<Stake>, own_index: AuthorityIndex) -> Self {
+    fn new(
+        context: Context,
+        authorities: Vec<Stake>,
+        own_index: AuthorityIndex,
+        sync_last_known_block: bool,
+    ) -> Self {
         let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
         let mut context = context.clone();
         context = context
@@ -986,7 +1023,7 @@ impl CoreTextFixture {
             signals,
             block_signer,
             dag_state,
-            false,
+            sync_last_known_block,
         );
 
         Self {
@@ -1018,7 +1055,7 @@ mod test {
         leader_scoring::ReputationScores,
         storage::{mem_store::MemStore, Store, WriteBatch},
         test_dag_builder::DagBuilder,
-        test_dag_parser::parse_dag,
+        test_dag_parser::{parse_dag, parse_dag_with_context},
         transaction::{BlockStatus, TransactionClient},
         CommitConsumer, CommitIndex,
     };
@@ -2758,5 +2795,81 @@ mod test {
             .expect("Timeout while waiting to read from receiver")
             .expect("Signal receive channel shouldn't be closed");
         *receiver.borrow_and_update()
+    }
+
+    #[tokio::test]
+    async fn add_blocks_with_links_below_gc_round_and_commit() {
+        telemetry_subscribers::init_for_testing();
+
+        const GC_DEPTH: u32 = 2;
+
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+
+        // Create the cores
+        let mut cores = CoresBuilder::new(context, vec![1; 4])
+            .with_sync_last_known_block(true)
+            .build();
+        // Now just take only the first one
+        let core_fixture = cores.remove(0);
+        let mut core = core_fixture.core;
+
+        // We set the last own proposed round to 7 so we avoid proposing any new block since we have a pre-built DAG.
+        core.set_last_known_proposed_round(7);
+
+        // Creating a DAG where Node A does create a block on round 1 but no one refers to it and we don't even store it in our storage.
+        // Blocks of round 7 have a weak link to the missing block A1.
+        // By the moment we reach round 7, the block A1 is already GCed. The universal committer logic should not break by the non found block.
+        let dag_str = "DAG { 
+            Round 0 : { 4 },
+            Round 1 : { * },
+            Round 2 : {
+                A -> [A0, B1, C1, D1],
+                B -> [A0, B1, C1, D1],
+                C -> [A0, B1, C1, D1],
+                D -> [A0, B1, C1, D1],
+            },
+            Round 3 : { * },
+            Round 4 : { * },
+            Round 5 : { * },
+            Round 6 : { * },
+            Round 7 : {
+                A -> [A1, B6, C6, D6],
+                B -> [A1, B6, C6, D6],
+                C -> [A1, B6, C6, D6],
+                D -> [A1, B6, C6, D6],
+            }
+        }";
+
+        let (_, dag_builder) =
+            parse_dag_with_context(dag_str, core.context.clone()).expect("Failed to parse DAG");
+
+        // Now we process all blocks apart from the block A1. Again it's fine to not store it as no block refers to it until round 7, where
+        // blocks have a weak link to it.
+        let blocks = dag_builder
+            .blocks
+            .into_iter()
+            .filter_map(|(_block_ref, block)| {
+                if block.round() == 1 && block.author() == AuthorityIndex::new_for_test(0) {
+                    None
+                } else {
+                    Some(block)
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Add the blocks to the core. Now adding all those blocks should trigger the commits up to the point of committing the leaders up to round 5.
+        let mut missing_blocks = core.add_blocks(blocks).unwrap();
+
+        // We should have a missing block A1 as this is GC'ed only after the commmit rule has run, which is after the block_manager has processed the blocks.
+        assert_eq!(missing_blocks.len(), 1);
+        let slot: Slot = missing_blocks.pop_first().unwrap().into();
+        assert_eq!(slot, Slot::new(1, AuthorityIndex::new_for_test(0)));
+
+        // Ensure that we have committed all the leaders up to round 5.
+        let last_leader = core.dag_state.read().last_commit_leader();
+        assert_eq!(last_leader.round, 5);
     }
 }
