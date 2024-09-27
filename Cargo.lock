@@ -13683,6 +13683,7 @@ dependencies = [
  "test-cluster",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "url",
