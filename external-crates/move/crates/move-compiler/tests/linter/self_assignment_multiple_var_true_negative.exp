@@ -1,8 +1,0 @@
-warning[W09003]: unused assignment
-  ┌─ tests/linter/self_assignment_multiple_var_true_negative.move:3:14
-  │
-3 │         let (x, y, z) = (1, 2, 3);
-  │              ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
-  │
-  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

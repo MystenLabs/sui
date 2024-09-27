@@ -1,8 +1,0 @@
-warning[Lint W02003]: Explicit self-assignment detected. This operation is usually unnecessary and could indicate a typo or logical error.
-  ┌─ tests/linter/self_assignment_shadowing_false_negative.move:8:13
-  │
-8 │             *x = *x; // Self-assignment of the outer 'x'
-  │             ^^^^^^^ Explicit self-assignment detected for variable. Consider removing it to clarify intent.
-  │
-  = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
