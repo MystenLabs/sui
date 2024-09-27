@@ -44,19 +44,10 @@ async function runVSCodeTest(vscodeVersion: string): Promise<void> {
 
         // Install vscode and depends extension
         //
-        // Note: Running `npm test` previously failed with an ENOENT error when spawning Electron 
-        // at this filepath.
-        //
-        // The Electron binary is downloaded but not placed in the expected directory.
-        //
-        // Removing 'Visual Studio Code.app/' from the path fixes the ENOENT error but now results in 
-        // a system alert that the Electron executable is damaged or corrupted.
-        //
-        // Further work is needed to fix the broken CI tests, but this adjustment might help someone
-        // else figure out how to do that.
+        // TODO: currently, running `npm test` fails with an ENOENT error when spawning Electron;
+        // make sure that the path is correct and that `npm test` runs correctly to completion
         
-        const brokenVscodeExecutablePath = await downloadAndUnzipVSCode(vscodeVersion);
-        const vscodeExecutablePath = brokenVscodeExecutablePath.replace('Visual Studio Code.app/', '');
+        const vscodeExecutablePath = await downloadAndUnzipVSCode(vscodeVersion);
         const [cli, ...args] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
         const newCli = cli ?? 'code';
         cp.spawnSync(newCli, [...args, '--install-extension', 'damirka.move-syntax', '--force'], {
