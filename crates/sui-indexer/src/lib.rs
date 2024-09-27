@@ -31,6 +31,7 @@ pub mod config;
 pub mod database;
 pub mod db;
 pub mod errors;
+pub(crate) mod framework_experimental;
 pub mod handlers;
 pub mod indexer;
 pub mod indexer_reader;

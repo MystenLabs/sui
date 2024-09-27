@@ -4,7 +4,7 @@
 mod executor;
 mod metrics;
 mod progress_store;
-mod reader;
+pub mod reader;
 #[cfg(test)]
 mod tests;
 mod util;
