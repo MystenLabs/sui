@@ -22,7 +22,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::{ObjectChange, TransactionEffectsAPI};
 use sui_types::event::SystemEpochInfoEvent;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
@@ -441,10 +441,7 @@ impl CheckpointHandler {
                     .map(|display| (display.object_type.clone(), display)),
             );
 
-            let objects = input_objects
-                .iter()
-                .chain(output_objects.iter())
-                .collect::<Vec<_>>();
+            let objects: Vec<_> = input_objects.iter().chain(output_objects.iter()).collect();
 
             let (balance_change, object_changes) =
                 TxChangesProcessor::new(&objects, metrics.clone())
@@ -477,14 +474,21 @@ impl CheckpointHandler {
                 .expect("committed txns have been validated")
                 .into_iter()
                 .map(|obj_kind| obj_kind.object_id())
-                .collect::<Vec<_>>();
+                .collect();
 
             // Changed Objects
             let changed_objects = fx
                 .all_changed_objects()
                 .into_iter()
                 .map(|(object_ref, _owner, _write_kind)| object_ref.0)
-                .collect::<Vec<_>>();
+                .collect();
+
+            // Affected Objects
+            let affected_objects = fx
+                .object_changes()
+                .into_iter()
+                .map(|ObjectChange { id, .. }| id)
+                .collect();
 
             // Payers
             let payers = vec![tx.gas_owner()];
@@ -501,13 +505,13 @@ impl CheckpointHandler {
                     _ => None,
                 })
                 .unique()
-                .collect::<Vec<_>>();
+                .collect();
 
             // Move Calls
             let move_calls = tx
                 .move_calls()
-                .iter()
-                .map(|(p, m, f)| (*<&ObjectID>::clone(p), m.to_string(), f.to_string()))
+                .into_iter()
+                .map(|(p, m, f)| (p.clone(), m.to_string(), f.to_string()))
                 .collect();
 
             db_tx_indices.push(TxIndex {
@@ -516,6 +520,7 @@ impl CheckpointHandler {
                 checkpoint_sequence_number: *checkpoint_seq,
                 input_objects,
                 changed_objects,
+                affected_objects,
                 sender,
                 payers,
                 recipients,

@@ -144,10 +144,8 @@ impl TxIndex {
             .collect();
 
         let tx_affected_objects = self
-            .input_objects
+            .affected_objects
             .iter()
-            .chain(self.changed_objects.iter())
-            .unique()
             .map(|o| StoredTxAffectedObjects {
                 tx_sequence_number,
                 affected: o.to_vec(),
