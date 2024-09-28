@@ -9,6 +9,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use std::{ffi::OsString, fs, path::Path, process::Command};
+use sui::package_cache::PackageCache;
+use sui::package_hooks::SuiPackageHooks;
 use tokio::sync::oneshot::Sender;
 
 use anyhow::{anyhow, bail};
@@ -30,7 +32,7 @@ use move_core_types::account_address::AccountAddress;
 use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
 use move_symbol_pool::Symbol;
 use sui_move::manage_package::resolve_lock_file_path;
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::BuildConfig;
 use sui_sdk::rpc_types::SuiTransactionBlockEffects;
 use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::SuiClientBuilder;
@@ -149,7 +151,6 @@ pub async fn verify_package(
     network: &Network,
     package_path: impl AsRef<Path>,
 ) -> anyhow::Result<(Network, AddressLookup)> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     // TODO(rvantonder): use config RPC URL instead of hardcoded URLs
     let network_url = match network {
         Network::Mainnet => MAINNET_URL,
@@ -159,6 +160,11 @@ pub async fn verify_package(
     };
     let client = SuiClientBuilder::default().build(network_url).await?;
     let chain_id = client.read_api().get_chain_identifier().await?;
+
+    let package_cache = PackageCache::new(client.clone());
+    let hooks = SuiPackageHooks::new(Some(chain_id.clone()), package_cache);
+    move_package::package_hooks::register_package_hooks(Box::new(hooks));
+
     let mut config =
         resolve_lock_file_path(MoveBuildConfig::default(), Some(package_path.as_ref()))?;
     config.lint_flag = LintFlag::LEVEL_NONE;
