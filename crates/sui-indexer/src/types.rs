@@ -407,6 +407,7 @@ pub struct TxIndex {
     pub checkpoint_sequence_number: u64,
     pub input_objects: Vec<ObjectID>,
     pub changed_objects: Vec<ObjectID>,
+    pub affected_objects: Vec<ObjectID>,
     pub payers: Vec<SuiAddress>,
     pub sender: SuiAddress,
     pub recipients: Vec<SuiAddress>,
