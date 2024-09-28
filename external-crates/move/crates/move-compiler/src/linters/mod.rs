@@ -13,6 +13,7 @@ use crate::{
 
 pub mod abort_constant;
 pub mod constant_naming;
+pub mod empty_if_no_else;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
 pub mod unnecessary_conditional;
@@ -138,6 +139,12 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "unnecessary_conditional",
         "'if' expression can be removed"
+    ),
+    (
+        EmptyIfNoElse,
+        LinterDiagnosticCategory::Style,
+        "empty_if_no_else",
+        "Empty 'if' statement with no 'else' branch"
     )
 );
 
@@ -173,6 +180,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 abort_constant::AssertAbortNamedConstants.visitor(),
                 loop_without_exit::LoopWithoutExit.visitor(),
                 unnecessary_conditional::UnnecessaryConditional.visitor(),
+                empty_if_no_else::EmptyIfNoElse.visitor(),
             ]
         }
     }

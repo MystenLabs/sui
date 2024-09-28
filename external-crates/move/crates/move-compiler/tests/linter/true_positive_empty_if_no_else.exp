@@ -1,0 +1,30 @@
+warning[Lint W04008]: Empty 'if' statement with no 'else' branch
+  ┌─ tests/linter/true_positive_empty_if_no_else.move:3:9
+  │  
+3 │ ╭         if (x > 10) {
+4 │ │             // Empty if block
+5 │ │         };
+  │ ╰─────────^ Detected an empty `if` branch without an `else` branch. Consider removing or completing the conditional.
+  │  
+  = This warning can be suppressed with '#[allow(lint(empty_if_no_else))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04008]: Empty 'if' statement with no 'else' branch
+   ┌─ tests/linter/true_positive_empty_if_no_else.move:8:9
+   │  
+ 8 │ ╭         if (y < 3) {
+ 9 │ │             // Another empty if block
+10 │ │         };
+   │ ╰─────────^ Detected an empty `if` branch without an `else` branch. Consider removing or completing the conditional.
+   │  
+   = This warning can be suppressed with '#[allow(lint(empty_if_no_else))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04008]: Empty 'if' statement with no 'else' branch
+   ┌─ tests/linter/true_positive_empty_if_no_else.move:14:9
+   │  
+14 │ ╭         if (x == 0) {
+15 │ │             // This comment doesn't prevent the if block from being considered empty
+16 │ │         };
+   │ ╰─────────^ Detected an empty `if` branch without an `else` branch. Consider removing or completing the conditional.
+   │  
+   = This warning can be suppressed with '#[allow(lint(empty_if_no_else))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
