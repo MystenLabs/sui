@@ -623,14 +623,14 @@ fn dev_dep_test_package() -> PathBuf {
 
 const EMPTY_LOCK: &str = r#"
 [move]
-version = 3
+version = 4
 manifest_digest = "42"
 deps_digest = ""
 "#;
 
 const A_LOCK: &str = r#"
 [move]
-version = 3
+version = 4
 manifest_digest = "42"
 deps_digest = "7"
 dependencies = [
@@ -644,7 +644,7 @@ source = { local = "./A" }
 
 const AB_LOCK: &str = r#"
 [move]
-version = 3
+version = 4
 manifest_digest = "42"
 deps_digest = "7"
 dependencies = [
@@ -663,7 +663,7 @@ source = { local = "./B" }
 
 const A_DEP_B_LOCK: &str = r#"
 [move]
-version = 3
+version = 4
 manifest_digest = "42"
 deps_digest = "7"
 dependencies = [

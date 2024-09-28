@@ -9,7 +9,7 @@ PACKAGE="$2"
 # Print lock file
 cat <<EOF
 [move]
-version = 3
+version = 4
 manifest_digest = "42"
 deps_digest = "7"
 $TYPE = [
