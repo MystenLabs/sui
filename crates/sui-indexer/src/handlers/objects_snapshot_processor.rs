@@ -7,29 +7,22 @@ use mysten_metrics::get_metrics;
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_monitored_task;
 use sui_data_ingestion_core::Worker;
-use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_rest_api::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::config::SnapshotLagConfig;
-use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::PgIndexerStore;
 use crate::types::IndexerResult;
 use crate::{metrics::IndexerMetrics, store::IndexerStore};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 use super::checkpoint_handler::CheckpointHandler;
-use super::tx_processor::IndexingPackageBuffer;
 use super::TransactionObjectChangesToCommit;
 
 pub struct ObjectsSnapshotProcessor {
     pub store: PgIndexerStore,
-    package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
-    package_resolver: Arc<Resolver<PackageStoreWithLruCache<InterimPackageResolver>>>,
     pub indexed_obj_sender: Sender<CheckpointObjectChanges>,
     metrics: IndexerMetrics,
 }
@@ -44,28 +37,14 @@ impl Worker for ObjectsSnapshotProcessor {
     async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
         let checkpoint_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         // Index the object changes and send them to the committer.
-        let object_changes: TransactionObjectChangesToCommit = CheckpointHandler::index_objects(
-            checkpoint,
-            &self.metrics,
-            self.package_resolver.clone(),
-        )
-        .await?;
+        let object_changes: TransactionObjectChangesToCommit =
+            CheckpointHandler::index_objects(checkpoint, &self.metrics).await?;
         self.indexed_obj_sender
             .send(CheckpointObjectChanges {
                 checkpoint_sequence_number,
                 object_changes,
             })
             .await?;
-        Ok(())
-    }
-
-    fn preprocess_hook(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
-        let package_objects =
-            CheckpointHandler::get_package_objects(std::slice::from_ref(checkpoint));
-        self.package_buffer
-            .lock()
-            .unwrap()
-            .insert_packages(package_objects);
         Ok(())
     }
 }
@@ -86,8 +65,6 @@ pub async fn start_objects_snapshot_processor(
         .map(|seq| seq + 1)
         .unwrap_or_default();
 
-    let (commit_notifier, commit_receiver) = watch::channel(None);
-
     let global_metrics = get_metrics().unwrap();
     // Channel for actually communicating indexed object changes between the ingestion pipeline and the committer.
     let (indexed_obj_sender, indexed_obj_receiver) = mysten_metrics::metered_channel::channel(
@@ -99,19 +76,13 @@ pub async fn start_objects_snapshot_processor(
     );
 
     // Start an ingestion pipeline with the objects snapshot processor as a worker.
-    let worker = ObjectsSnapshotProcessor::new(
-        store.clone(),
-        indexed_obj_sender,
-        commit_receiver,
-        metrics.clone(),
-    );
+    let worker = ObjectsSnapshotProcessor::new(store.clone(), indexed_obj_sender, metrics.clone());
 
     // Now start the task that will commit the indexed object changes to the store.
     spawn_monitored_task!(ObjectsSnapshotProcessor::commit_objects_snapshot(
         store,
         watermark,
         indexed_obj_receiver,
-        commit_notifier,
         metrics,
         snapshot_config,
         cancel,
@@ -123,27 +94,11 @@ impl ObjectsSnapshotProcessor {
     pub fn new(
         store: PgIndexerStore,
         indexed_obj_sender: Sender<CheckpointObjectChanges>,
-        commit_receiver: watch::Receiver<Option<CheckpointSequenceNumber>>,
         metrics: IndexerMetrics,
     ) -> ObjectsSnapshotProcessor {
-        // Start the package buffer used for buffering packages before they are written to the db.
-        // We include a commit receiver which will be paged when a checkpoint has been processed and
-        // the corresponding package data can be deleted from the buffer.
-        let package_buffer = IndexingPackageBuffer::start(commit_receiver);
-        let package_db_resolver = IndexerStorePackageResolver::new(store.pool());
-        let in_mem_package_resolver = InterimPackageResolver::new(
-            package_db_resolver,
-            package_buffer.clone(),
-            metrics.clone(),
-        );
-        let cached_package_resolver = PackageStoreWithLruCache::new(in_mem_package_resolver);
-        let package_resolver = Arc::new(Resolver::new(cached_package_resolver));
-
         Self {
             store,
             indexed_obj_sender,
-            package_resolver,
-            package_buffer,
             metrics,
         }
     }
@@ -154,7 +109,6 @@ impl ObjectsSnapshotProcessor {
         store: PgIndexerStore,
         watermark: CheckpointSequenceNumber,
         indexed_obj_receiver: Receiver<CheckpointObjectChanges>,
-        commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
         metrics: IndexerMetrics,
         config: SnapshotLagConfig,
         cancel: CancellationToken,
@@ -220,9 +174,6 @@ impl ObjectsSnapshotProcessor {
                                 .unwrap_or_else(|_| panic!("Failed to backfill objects snapshot from {} to {}", first_checkpoint_seq, last_checkpoint_seq));
                             start_cp = last_checkpoint_seq + 1;
 
-                            // Tells the package buffer that this checkpoint has been processed and
-                            // the corresponding package data can be deleted.
-                            commit_notifier.send(Some(last_checkpoint_seq)).expect("Commit watcher should not be closed");
                             metrics
                                 .latest_object_snapshot_sequence_number
                                 .set(last_checkpoint_seq as i64);
