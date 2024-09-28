@@ -1,17 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::EthBridgeCommittee;
-use crate::abi::EthBridgeConfig;
-use crate::config::default_ed25519_key_pair;
-use crate::crypto::BridgeAuthorityKeyPair;
-use crate::crypto::BridgeAuthorityPublicKeyBytes;
-use crate::events::*;
-use crate::metrics::BridgeMetrics;
-use crate::server::BridgeNodePublicMetadata;
-use crate::types::BridgeAction;
-use crate::utils::get_eth_signer_client;
-use crate::utils::EthSigner;
 use ethers::types::Address as EthAddress;
 use move_core_types::language_storage::StructTag;
 use prometheus::Registry;
@@ -47,12 +36,22 @@ use tokio::task::JoinHandle;
 use tracing::error;
 use tracing::info;
 
-use crate::config::{BridgeNodeConfig, EthConfig, SuiConfig};
-use crate::node::run_bridge_node;
-use crate::sui_client::SuiBridgeClient;
-use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use ethers::prelude::*;
 use std::process::Child;
+use sui_bridge::abi::{EthBridgeCommittee, EthBridgeConfig};
+use sui_bridge::config::{default_ed25519_key_pair, BridgeNodeConfig, EthConfig, SuiConfig};
+use sui_bridge::crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKeyBytes};
+use sui_bridge::events::{
+    init_all_struct_tags, TokenTransferAlreadyApproved, TokenTransferAlreadyClaimed,
+    TokenTransferApproved, TokenTransferClaimed,
+};
+use sui_bridge::metrics::BridgeMetrics;
+use sui_bridge::node::run_bridge_node;
+use sui_bridge::server::BridgeNodePublicMetadata;
+use sui_bridge::sui_client::SuiBridgeClient;
+use sui_bridge::types::BridgeAction;
+use sui_bridge::utils::{get_eth_signer_client, EthSigner};
+use sui_bridge::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use sui_config::local_ip_utils::get_available_port;
 use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
@@ -276,7 +275,7 @@ impl BridgeTestCluster {
         self.eth_chain_id
     }
 
-    pub(crate) fn eth_env(&self) -> &EthBridgeEnvironment {
+    pub fn eth_env(&self) -> &EthBridgeEnvironment {
         &self.eth_environment
     }
 
@@ -696,18 +695,16 @@ impl EthBridgeEnvironment {
         self.contracts.as_ref().unwrap()
     }
 
-    pub(crate) fn get_bridge_config(
-        &self,
-    ) -> EthBridgeConfig<ethers::prelude::Provider<ethers::providers::Http>> {
+    pub(crate) fn get_bridge_config(&self) -> EthBridgeConfig<Provider<Http>> {
         let provider = Arc::new(
-            ethers::prelude::Provider::<ethers::providers::Http>::try_from(&self.rpc_url)
+            ethers::prelude::Provider::<Http>::try_from(&self.rpc_url)
                 .unwrap()
                 .interval(std::time::Duration::from_millis(2000)),
         );
         EthBridgeConfig::new(self.contracts().bridge_config, provider.clone())
     }
 
-    pub(crate) async fn get_supported_token(&self, token_id: u8) -> (EthAddress, u8, u64) {
+    pub async fn get_supported_token(&self, token_id: u8) -> (EthAddress, u8, u64) {
         let config = self.get_bridge_config();
         let token_address = config.token_address_of(token_id).call().await.unwrap();
         let token_sui_decimal = config.token_sui_decimal_of(token_id).call().await.unwrap();
@@ -801,7 +798,7 @@ pub(crate) async fn start_bridge_cluster(
     handles
 }
 
-pub(crate) async fn get_signatures(
+pub async fn get_signatures(
     sui_bridge_client: &SuiBridgeClient,
     nonce: u64,
     sui_chain_id: u8,
@@ -816,7 +813,7 @@ pub(crate) async fn get_signatures(
         .collect()
 }
 
-pub(crate) async fn send_eth_tx_and_get_tx_receipt<B, M, D>(
+pub async fn send_eth_tx_and_get_tx_receipt<B, M, D>(
     call: FunctionCall<B, M, D>,
 ) -> TransactionReceipt
 where

@@ -1,31 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{eth_sui_bridge, EthBridgeEvent, EthERC20, EthSuiBridge};
-use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
-use crate::e2e_tests::test_utils::BridgeTestCluster;
-use crate::e2e_tests::test_utils::{
-    get_signatures, send_eth_tx_and_get_tx_receipt, BridgeTestClusterBuilder,
-};
-use crate::eth_transaction_builder::build_eth_transaction;
-use crate::events::{
-    SuiBridgeEvent, SuiToEthTokenBridgeV1, TokenTransferApproved, TokenTransferClaimed,
-};
-use crate::sui_client::SuiBridgeClient;
-use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
-use crate::types::{AddTokensOnEvmAction, BridgeAction, BridgeActionStatus, SuiToEthBridgeAction};
-use crate::utils::publish_and_register_coins_return_add_coins_on_sui_action;
-use crate::utils::EthSigner;
+use anyhow::anyhow;
 use eth_sui_bridge::EthSuiBridgeEvents;
 use ethers::prelude::*;
 use ethers::types::Address as EthAddress;
 use move_core_types::ident_str;
 use std::collections::{HashMap, HashSet};
-
 use std::path::Path;
-
-use anyhow::anyhow;
 use std::sync::Arc;
+use sui_bridge::abi::{eth_sui_bridge, EthBridgeEvent, EthERC20, EthSuiBridge};
+use sui_bridge::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
+use sui_bridge::eth_transaction_builder::build_eth_transaction;
+use sui_bridge::events::{
+    SuiBridgeEvent, SuiToEthTokenBridgeV1, TokenTransferApproved, TokenTransferClaimed,
+};
+use sui_bridge::sui_client::SuiBridgeClient;
+use sui_bridge::sui_transaction_builder::build_add_tokens_on_sui_transaction;
+use sui_bridge::types::{
+    AddTokensOnEvmAction, BridgeAction, BridgeActionStatus, SuiToEthBridgeAction,
+};
+use sui_bridge::utils::publish_and_register_coins_return_add_coins_on_sui_action;
+use sui_bridge::utils::EthSigner;
+use sui_bridge_test_utils::test_utils::get_signatures;
+use sui_bridge_test_utils::test_utils::send_eth_tx_and_get_tx_receipt;
+use sui_bridge_test_utils::test_utils::BridgeTestCluster;
+use sui_bridge_test_utils::test_utils::BridgeTestClusterBuilder;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };

@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::e2e_tests::basic::initiate_bridge_eth_to_sui;
 use crate::e2e_tests::basic::initiate_bridge_sui_to_eth;
-use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
-use crate::sui_transaction_builder::build_sui_transaction;
-use crate::types::{BridgeAction, EmergencyAction};
-use crate::types::{BridgeActionStatus, EmergencyActionType};
 use ethers::types::Address as EthAddress;
 use std::sync::Arc;
+use sui_bridge::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
+use sui_bridge::sui_transaction_builder::build_sui_transaction;
+use sui_bridge::types::{BridgeAction, EmergencyAction};
+use sui_bridge::types::{BridgeActionStatus, EmergencyActionType};
+use sui_bridge_test_utils::test_utils::BridgeTestClusterBuilder;
 use sui_json_rpc_types::SuiExecutionStatus;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_types::bridge::{BridgeChainId, TOKEN_ID_ETH};
