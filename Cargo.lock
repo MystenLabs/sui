@@ -14054,6 +14054,9 @@ dependencies = [
  "bin-version",
  "clap",
  "move-analyzer",
+ "sui",
+ "sui-config",
+ "sui-sdk 1.35.0",
  "tokio",
 ]
 
