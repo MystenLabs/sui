@@ -25,6 +25,7 @@ tracing = "0.1.36"
 serde = { version = "1.0.144", features = ["derive"] }
 url = "2.3.1"
 
+sui.workspace = true
 sui-move.workspace = true 
 sui-move-build.workspace = true
 sui-sdk.workspace = true
