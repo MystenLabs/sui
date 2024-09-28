@@ -13,6 +13,8 @@ pub mod genesis_ceremony;
 pub mod genesis_inspector;
 pub mod key_identity;
 pub mod keytool;
+pub mod package_cache;
+pub mod package_hooks;
 pub mod shell;
 pub mod sui_commands;
 pub mod validator_commands;

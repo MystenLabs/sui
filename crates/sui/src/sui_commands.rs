@@ -6,6 +6,7 @@ use crate::console::start_console;
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
+use crate::package_hooks::SuiPackageHooks;
 use crate::validator_commands::SuiValidatorCommand;
 use anyhow::{anyhow, bail, ensure, Context};
 use clap::*;
@@ -45,7 +46,6 @@ use sui_graphql_rpc::{
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
-use sui_move_build::SuiPackageHooks;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -330,12 +330,14 @@ pub enum SuiCommand {
 
     /// Invoke Sui's move-analyzer via CLI
     #[clap(name = "analyzer", hide = true)]
-    Analyzer,
+    Analyzer {
+        #[clap(long = "client.config")]
+        client_config: Option<PathBuf>,
+    },
 }
 
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
-        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
         match self {
             SuiCommand::Network {
                 config,
@@ -419,6 +421,8 @@ impl SuiCommand {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config, false).await?;
                 let context = WalletContext::new(&config, None, None)?;
+                SuiPackageHooks::register_from_ctx(&context).await?;
+
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client {
@@ -431,6 +435,7 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 if let Some(cmd) = cmd {
                     let mut context = WalletContext::new(&config_path, None, None)?;
+                    SuiPackageHooks::register_from_ctx(&context).await?;
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
@@ -465,16 +470,13 @@ impl SuiCommand {
                 mut cmd,
                 config: client_config,
             } => {
+                let config = client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                prompt_if_no_config(&config, false).await?;
+                let context = WalletContext::new(&config, None, None)?;
+                SuiPackageHooks::register_from_ctx(&context).await?;
+
                 match &mut cmd {
                     sui_move::Command::Build(build) if build.dump_bytecode_as_base64 => {
-                        // `sui move build` does not ordinarily require a network connection.
-                        // The exception is when --dump-bytecode-as-base64 is specified: In this
-                        // case, we should resolve the correct addresses for the respective chain
-                        // (e.g., testnet, mainnet) from the Move.lock under automated address management.
-                        let config =
-                            client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                        prompt_if_no_config(&config, false).await?;
-                        let context = WalletContext::new(&config, None, None)?;
                         let client = context.get_client().await?;
                         let chain_id = client.read_api().get_chain_identifier().await.ok();
                         build.chain_id = chain_id.clone();
@@ -565,7 +567,11 @@ impl SuiCommand {
                 Ok(())
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
-            SuiCommand::Analyzer => {
+            SuiCommand::Analyzer { client_config } => {
+                let config = client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                let context = WalletContext::new(&config, None, None)?;
+                SuiPackageHooks::register_from_ctx(&context).await?;
+
                 analyzer::run();
                 Ok(())
             }
