@@ -86,7 +86,7 @@ pub struct BuildConfig {
 
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
-        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
         let mut build_config: Self = Default::default();
         let install_dir = tempfile::tempdir().unwrap().into_path();
         let lock_file = install_dir.join("Move.lock");
@@ -620,9 +620,9 @@ impl GetModule for CompiledPackage {
 
 pub const PUBLISHED_AT_MANIFEST_FIELD: &str = "published-at";
 
-pub struct SuiPackageHooks;
+pub struct SuiPackageHooksForTesting;
 
-impl PackageHooks for SuiPackageHooks {
+impl PackageHooks for SuiPackageHooksForTesting {
     fn custom_package_info_fields(&self) -> Vec<String> {
         vec![
             PUBLISHED_AT_MANIFEST_FIELD.to_string(),

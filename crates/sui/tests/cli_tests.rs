@@ -46,7 +46,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::{BuildConfig, SuiPackageHooksForTesting};
 use sui_sdk::sui_client_config::SuiClientConfig;
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig};
@@ -208,7 +208,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Error> {
     // Publish the package
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
@@ -328,7 +328,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
 
 #[sim_test]
 async fn test_ptb_publish() -> Result<(), anyhow::Error> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
@@ -1700,7 +1700,7 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
@@ -1835,7 +1835,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Error> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
@@ -1969,7 +1969,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
 
 #[sim_test]
 async fn test_package_management_on_upgrade_command_conflict() -> Result<(), anyhow::Error> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
@@ -3805,7 +3805,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_clever_errors() -> Result<(), anyhow::Error> {
     // Publish the package
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();

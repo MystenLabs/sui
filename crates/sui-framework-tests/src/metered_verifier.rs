@@ -11,7 +11,7 @@ use std::{
 use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_framework::BuiltInFramework;
-use sui_move_build::{CompiledPackage, SuiPackageHooks};
+use sui_move_build::{CompiledPackage, SuiPackageHooksForTesting};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -28,7 +28,7 @@ fn build(path: &Path) -> SuiResult<CompiledPackage> {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_metered_move_bytecode_verifier() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
     let compiled_package = build(&path).unwrap();
@@ -230,7 +230,7 @@ fn test_metered_move_bytecode_verifier() {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_meter_system_packages() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
 
     let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -286,7 +286,7 @@ fn test_meter_system_packages() {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_build_and_verify_programmability_examples() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
 
     let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();

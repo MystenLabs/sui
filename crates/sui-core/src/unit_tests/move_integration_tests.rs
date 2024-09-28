@@ -24,7 +24,7 @@ use sui_types::{
 
 use move_core_types::language_storage::TypeTag;
 
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::{BuildConfig, SuiPackageHooksForTesting};
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
@@ -2802,7 +2802,7 @@ pub fn build_package(
     code_dir: &str,
     with_unpublished_deps: bool,
 ) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", code_dir]);
     let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
@@ -2822,7 +2822,7 @@ pub async fn build_and_try_publish_test_package(
     gas_price: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", test_dir]);
 

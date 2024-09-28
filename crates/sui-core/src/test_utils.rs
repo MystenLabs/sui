@@ -17,7 +17,7 @@ use sui_config::node::AuthorityOverloadConfig;
 use sui_framework::BuiltInFramework;
 use sui_genesis_builder::validator_info::ValidatorInfo;
 use sui_macros::nondeterministic;
-use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
+use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooksForTesting};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
 use sui_types::crypto::{
@@ -199,7 +199,7 @@ pub fn compile_managed_coin_package() -> CompiledPackage {
 }
 
 pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push(relative_path);
 
