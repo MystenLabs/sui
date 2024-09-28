@@ -380,8 +380,18 @@ impl ModuleResolver for RelinkingStore {
         self.store.get_module(id)
     }
 
-    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
-        self.store.get_package(id)
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        self.store.get_packages_static(ids)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        self.store.get_packages(ids)
     }
 }
 

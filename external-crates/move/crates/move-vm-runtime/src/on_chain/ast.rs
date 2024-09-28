@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::CompiledModule;
-use move_core_types::{account_address::AccountAddress, language_storage::ModuleId};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::ModuleId,
+    resolver::{SerializedPackage, TypeOrigin},
+};
 use std::collections::BTreeMap;
 
 // -------------------------------------------------------------------------------------------------
@@ -21,8 +25,11 @@ pub type RuntimePackageId = AccountAddress;
 
 #[derive(Debug, Clone)]
 pub(crate) struct DeserializedPackage {
+    pub(crate) storage_id: PackageStorageId,
     pub(crate) runtime_id: RuntimePackageId,
     pub(crate) modules: BTreeMap<ModuleId, CompiledModule>,
+    pub(crate) type_origin_table: Vec<TypeOrigin>,
+    pub(crate) linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -30,10 +37,17 @@ pub(crate) struct DeserializedPackage {
 // -------------------------------------------------------------------------------------------------
 
 impl DeserializedPackage {
-    pub fn new(runtime_id: RuntimePackageId, modules: Vec<CompiledModule>) -> Self {
+    pub fn new(
+        runtime_id: RuntimePackageId,
+        modules: Vec<CompiledModule>,
+        pkg: SerializedPackage,
+    ) -> Self {
         Self {
             runtime_id,
             modules: modules.into_iter().map(|m| (m.self_id(), m)).collect(),
+            storage_id: pkg.storage_id,
+            type_origin_table: pkg.type_origin_table,
+            linkage_table: pkg.linkage_table,
         }
     }
 

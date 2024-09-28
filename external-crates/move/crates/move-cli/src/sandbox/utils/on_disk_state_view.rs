@@ -11,7 +11,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
-    resolver::ModuleResolver,
+    resolver::{ModuleResolver, SerializedPackage},
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
@@ -87,7 +87,7 @@ impl OnDiskStateView {
     }
 
     pub fn storage_id_of_path(&self, p: &Path) -> Option<PackageStorageId> {
-        if !self.is_package_path(p) {
+        if !p.exists() {
             return None;
         }
 
@@ -120,30 +120,25 @@ impl OnDiskStateView {
         }
     }
 
-    fn get_package_bytes_at_path(
-        &self,
-        path: &Path,
-    ) -> Result<Option<BTreeMap<Identifier, Vec<u8>>>> {
-        if !self.is_package_path(path) {
+    fn get_package_bytes_at_path(&self, path: &Path) -> Result<Option<SerializedPackage>> {
+        if !path.exists() {
             return Ok(None);
         }
-        let mut modules = BTreeMap::new();
+        let mut modules = vec![];
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
-            let name = Identifier::new(path.file_stem().unwrap().to_str().unwrap()).unwrap();
             if path.is_file() {
-                modules.insert(name, Self::get_bytes(&path)?.unwrap());
+                modules.push(Self::get_bytes(&path)?.unwrap());
             }
         }
-        Ok(Some(modules))
+        let package_id = self.storage_id_of_path(path).unwrap();
+        let pkg = SerializedPackage::raw_package(modules, package_id);
+        Ok(Some(pkg))
     }
 
     /// Read the package bytes stored on-disk at `addr`
-    fn get_package_bytes(
-        &self,
-        address: &AccountAddress,
-    ) -> Result<Option<BTreeMap<Identifier, Vec<u8>>>> {
+    fn get_package_bytes(&self, address: &AccountAddress) -> Result<Option<SerializedPackage>> {
         let addr_path = self.get_package_path(address);
         self.get_package_bytes_at_path(&addr_path)
     }
@@ -265,25 +260,12 @@ impl OnDiskStateView {
 
     /// Build all modules in the self.storage_dir.
     /// Returns an Err if a module does not deserialize.
-    pub fn get_all_packages(
-        &self,
-    ) -> Result<BTreeMap<PackageStorageId, BTreeMap<Identifier, CompiledModule>>> {
+    pub fn get_all_packages(&self) -> Result<BTreeMap<PackageStorageId, SerializedPackage>> {
         self.package_paths()
             .map(|path| {
                 let package_id = self.storage_id_of_path(&path).unwrap();
-                let modules = self
-                    .get_package_bytes_at_path(&path)?
-                    .unwrap()
-                    .into_iter()
-                    .map(|(mname, mbytes)| {
-                        Ok((
-                            mname,
-                            CompiledModule::deserialize_with_defaults(&mbytes)
-                                .map_err(|e| anyhow!("Failed to deserialized module: {:?}", e))?,
-                        ))
-                    })
-                    .collect::<Result<_>>()?;
-                Ok((package_id, modules))
+                let pkg = self.get_package_bytes_at_path(&path)?.unwrap();
+                Ok((package_id, pkg))
             })
             .collect::<Result<_>>()
     }
@@ -297,8 +279,9 @@ impl OnDiskStateView {
             return Err(anyhow!("No package fount at {package_address}"));
         };
         package_bytes
+            .modules
             .into_iter()
-            .map(|(_, module)| {
+            .map(|module| {
                 CompiledModule::deserialize_with_defaults(&module)
                     .map_err(|e| anyhow!("Failed to deserialized module: {:?}", e))
             })
@@ -323,7 +306,7 @@ impl OnDiskStateView {
             seen.insert(package_id);
 
             // Attempt to retrieve the package's modules from the store
-            let Ok(Some(modules)) = self.get_package(&package_id) else {
+            let Ok([Some(pkg)]) = self.get_packages_static([package_id]) else {
                 return Err(anyhow!(
                     "Cannot find {:?} in data cache when building linkage context",
                     package_id
@@ -331,7 +314,7 @@ impl OnDiskStateView {
             };
 
             // Process each module and add its dependencies to the to_process list
-            for module in &modules {
+            for module in &pkg.modules {
                 let module = CompiledModule::deserialize_with_defaults(module).unwrap();
                 let deps = module
                     .immediate_dependencies()
@@ -394,13 +377,33 @@ impl ModuleResolver for OnDiskStateView {
     type Error = anyhow::Error;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         let package = self.get_package_bytes(module_id.address())?;
-        Ok(package.and_then(|modules| modules.get(module_id.name()).map(|bytes| bytes.clone())))
+        Ok(package.and_then(|pkg| {
+            pkg.modules
+                .iter()
+                .find(|bytes| {
+                    let module = CompiledModule::deserialize_with_defaults(&bytes).unwrap();
+                    module.self_id() == *module_id
+                })
+                .cloned()
+        }))
     }
 
-    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
-        Ok(self
-            .get_package_bytes(id)?
-            .map(|modules| modules.into_iter().map(|(_, m)| m).collect()))
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        let mut packages = [(); N].map(|_| None);
+        for (i, id) in ids.iter().enumerate() {
+            packages[i] = self.get_package_bytes(id)?;
+        }
+        Ok(packages)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.iter().map(|id| self.get_package_bytes(id)).collect()
     }
 }
 

@@ -8,7 +8,9 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_core_types::{
-    account_address::AccountAddress, language_storage::ModuleId, resolver::ModuleResolver,
+    account_address::AccountAddress,
+    language_storage::ModuleId,
+    resolver::{ModuleResolver, SerializedPackage},
     vm_status::StatusCode,
 };
 use std::collections::BTreeSet;
@@ -27,7 +29,7 @@ impl TestStore {
         &self,
         package_id: &AccountAddress,
     ) -> VMResult<Vec<CompiledModule>> {
-        let Ok(Some(modules)) = self.store.get_package(package_id) else {
+        let Ok([Some(pkg)]) = self.store.get_packages_static([*package_id]) else {
             return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!(
                     "Cannot find {:?} in data cache when building linkage context",
@@ -35,7 +37,8 @@ impl TestStore {
                 ))
                 .finish(Location::Undefined));
         };
-        Ok(modules
+        Ok(pkg
+            .modules
             .iter()
             .map(|module| CompiledModule::deserialize_with_defaults(module).unwrap())
             .collect())
@@ -59,7 +62,7 @@ impl TestStore {
             seen.insert(package_id);
 
             // Attempt to retrieve the package's modules from the store
-            let Ok(Some(modules)) = self.store.get_package(&package_id) else {
+            let Ok([Some(pkg)]) = self.store.get_packages_static([package_id]) else {
                 return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                     .with_message(format!(
                         "Cannot find {:?} in data cache when building linkage context",
@@ -69,7 +72,7 @@ impl TestStore {
             };
 
             // Process each module and add its dependencies to the to_process list
-            for module in &modules {
+            for module in &pkg.modules {
                 let module = CompiledModule::deserialize_with_defaults(module).unwrap();
                 let deps = module
                     .immediate_dependencies()
@@ -97,7 +100,17 @@ impl ModuleResolver for TestStore {
         self.store.get_module(id)
     }
 
-    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
-        self.store.get_package(id)
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        self.store.get_packages_static(ids)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        self.store.get_packages(ids)
     }
 }

@@ -8,11 +8,11 @@ use move_core_types::{
     effects::{AccountChangeSet, ChangeSet, Op},
     identifier::Identifier,
     language_storage::ModuleId,
-    resolver::MoveResolver,
+    resolver::{MoveResolver, SerializedPackage},
     vm_status::StatusCode,
 };
 use move_vm_types::data_store::DataStore;
-use std::collections::btree_map::BTreeMap;
+use std::collections::{btree_map::BTreeMap, BTreeSet};
 
 use super::ast::PackageStorageId;
 
@@ -127,27 +127,101 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
         }
     }
 
-    fn load_package(&self, package_id: &AccountAddress) -> VMResult<Vec<Vec<u8>>> {
-        if let Some(account_cache) = self.module_map.get(package_id) {
-            return Ok(account_cache.module_map.values().cloned().collect());
+    fn load_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> VMResult<[SerializedPackage; N]> {
+        // Once https://doc.rust-lang.org/stable/std/primitive.array.html#method.try_map is stable
+        // we can use that here.
+        // TODO: We can optimize this to take advantage of bulk-get a bit more if we desire.
+        // However it's unlikely to be a bottleneck.
+        let mut packages = ids.map(SerializedPackage::empty);
+        for package in packages.iter_mut() {
+            let Some(account_cache) = self.module_map.get(&package.storage_id) else {
+                return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
+                    .with_message(format!(
+                        "Cannot find package {:?} in data cache",
+                        package.storage_id
+                    ))
+                    .finish(Location::Undefined));
+            };
+            let modules = account_cache
+                .module_map
+                .iter()
+                .map(|(_, blob)| blob.clone())
+                .collect();
+            // TODO(vm-rewrite): Update this to include linkage info and type origins
+            package.modules = modules;
         }
-        match self.remote.get_package(package_id) {
-            Ok(Some(bytes)) => Ok(bytes),
-            Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!(
-                    "Cannot find package {:?} in data cache",
-                    package_id
-                ))
-                .finish(Location::Undefined)),
+        Ok(packages)
+    }
+
+    fn load_packages(&self, ids: &[AccountAddress]) -> VMResult<Vec<SerializedPackage>> {
+        let mut cached = BTreeSet::new();
+        // Fetch all packages that we have locally
+        let mut cached_packages = ids
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, package_id)| {
+                self.module_map.get(package_id).map(|account_cache| {
+                    let modules = account_cache.module_map.values().cloned().collect();
+                    cached.insert(idx);
+                    SerializedPackage::raw_package(modules, *package_id)
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter();
+        let to_fetch_packages: Vec<_> = ids
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !cached.contains(idx))
+            .map(|(_, package_id)| *package_id)
+            .collect();
+
+        // fetch all of the remaining packages from the remote
+        let mut fetched_packages = match self.remote.get_packages(&to_fetch_packages) {
+            Ok(pkgs) => pkgs
+                .into_iter()
+                .enumerate()
+                .map(|(idx, pkg)| {
+                    pkg.ok_or_else(|| {
+                        PartialVMError::new(StatusCode::LINKER_ERROR)
+                            .with_message(format!(
+                                "Cannot find package {:?} in data cache",
+                                to_fetch_packages[idx],
+                            ))
+                            .finish(Location::Undefined)
+                    })
+                })
+                .collect::<VMResult<Vec<_>>>()?,
             Err(err) => {
                 let msg = format!("Unexpected storage error: {:?}", err);
-                Err(
+                return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(msg)
                         .finish(Location::Undefined),
-                )
+                );
             }
         }
+        .into_iter();
+        let mut result: Vec<SerializedPackage> = Vec::with_capacity(ids.len());
+
+        // Zip them back up. Relative ordering has been preserved so we can just merge them back.
+        for idx in 0..ids.len() {
+            if cached.contains(&idx) {
+                result.push(cached_packages.next().unwrap());
+            } else {
+                result.push(fetched_packages.next().unwrap());
+            }
+        }
+
+        // Should all be the same length, the the ordering should be preserved.
+        debug_assert_eq!(result.len(), ids.len());
+        for (pkg, id) in result.iter().zip(ids.iter()) {
+            debug_assert_eq!(pkg.storage_id, *id);
+        }
+
+        Ok(result)
     }
 
     fn publish_module(&mut self, module_id: &ModuleId, blob: Vec<u8>) -> VMResult<()> {

@@ -388,7 +388,17 @@ impl ModuleResolver for BogusStorage {
         Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
     }
 
-    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
     }
 }

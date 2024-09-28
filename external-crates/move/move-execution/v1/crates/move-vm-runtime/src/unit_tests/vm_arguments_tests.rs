@@ -19,7 +19,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{LinkageResolver, ModuleResolver},
+    resolver::{LinkageResolver, ModuleResolver, SerializedPackage},
     runtime_value::{serialize_values, MoveValue},
     u256::U256,
     vm_status::{StatusCode, StatusType},
@@ -157,7 +157,17 @@ impl ModuleResolver for RemoteStore {
         Ok(self.modules.get(module_id).cloned())
     }
 
-    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        unreachable!("Should never be called in v1")
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         unreachable!("Should never be called in v1")
     }
 }

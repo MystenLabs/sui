@@ -13,7 +13,10 @@ use move_binary_format::{
     errors::{Location, PartialVMResult, VMResult},
     CompiledModule,
 };
-use move_core_types::{effects::ChangeSet, resolver::MoveResolver};
+use move_core_types::{
+    effects::ChangeSet,
+    resolver::{MoveResolver, SerializedPackage},
+};
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::gas::GasMeter;
 use tracing::warn;
@@ -111,6 +114,7 @@ impl VirtualMachine {
     ///
     /// In case an invariant violation occurs, the provided data cache VM instance should be
     /// considered corrupted and discarded; a change set will not be returned.
+    /// TODO(vm-rewrite): This API should probably move to passing a `SerializedPackage` in.
     pub fn publish_package<DataCache: MoveResolver>(
         &mut self,
         data_cache: DataCache,
@@ -137,12 +141,20 @@ impl VirtualMachine {
         };
         println!("\n\nGrabbed modules\n\n");
 
+        let pkg = SerializedPackage {
+            modules: package,
+            storage_id: pkg_storage_id,
+            linkage_table: link_context.linkage_table.clone().into_iter().collect(),
+            // TODO(vm-rewrite): fill this in
+            type_origin_table: vec![],
+        };
+
         let mut data_cache = TransactionDataCache::new(data_cache);
         let _package = match self.cache.verify_package_for_publication(
             &data_cache,
             link_context,
             pkg_runtime_id,
-            package,
+            pkg,
         ) {
             Ok(package) => package,
             Err(err) => {

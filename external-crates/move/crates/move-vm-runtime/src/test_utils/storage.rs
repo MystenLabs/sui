@@ -8,7 +8,7 @@ use move_core_types::{
     effects::{AccountChangeSet, ChangeSet, Op},
     identifier::Identifier,
     language_storage::ModuleId,
-    resolver::{ModuleResolver, MoveResolver},
+    resolver::{ModuleResolver, MoveResolver, SerializedPackage},
 };
 use std::{
     collections::{btree_map, BTreeMap},
@@ -124,8 +124,22 @@ impl ModuleResolver for BlankStorage {
         Ok(None)
     }
 
-    fn get_package(&self, _id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
-        Ok(None)
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> std::prelude::v1::Result<[Option<SerializedPackage>; N], Self::Error> {
+        self.get_packages(&ids).map(|packages| {
+            packages
+                .try_into()
+                .expect("Impossible to get a length mismatch")
+        })
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        Ok(ids.iter().map(|_| None).collect())
     }
 }
 
@@ -142,15 +156,41 @@ impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
         self.base.get_module(module_id)
     }
 
-    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
-        if let Some(package) = self.delta.accounts().get(id) {
-            return Ok(package
-                .modules()
-                .values()
-                .map(|op| op.clone().ok())
-                .collect::<Option<_>>());
-        }
-        self.base.get_package(id)
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> std::prelude::v1::Result<[Option<SerializedPackage>; N], Self::Error> {
+        self.get_packages(&ids).map(|packages| {
+            packages
+                .try_into()
+                .expect("Impossible to get a length mismatch")
+        })
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.iter()
+            .map(|storage_id| {
+                if let Some(account_storage) = self.delta.accounts().get(storage_id) {
+                    let module_bytes: Vec<_> = account_storage
+                        .modules()
+                        .values()
+                        .map(|op| op.clone().ok())
+                        .collect::<Option<_>>()
+                        .unwrap_or_default();
+
+                    Ok(Some(SerializedPackage::raw_package(
+                        module_bytes,
+                        *storage_id,
+                    )))
+                } else {
+                    // TODO: Can optimize this to do a two-pass bulk lookup if we want
+                    Ok(self.base.get_packages(&[*storage_id])?[0].clone())
+                }
+            })
+            .collect::<Result<Vec<_>, Self::Error>>()
     }
 }
 
@@ -164,17 +204,39 @@ impl ModuleResolver for InMemoryStorage {
         Ok(None)
     }
 
-    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
-        if let Some(account_storage) = self.accounts.get(id) {
-            return Ok(Some(
-                account_storage
-                    .modules
-                    .values()
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            ));
-        }
-        Ok(None)
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> std::prelude::v1::Result<[Option<SerializedPackage>; N], Self::Error> {
+        self.get_packages(&ids).map(|packages| {
+            packages
+                .try_into()
+                .expect("Impossible to get a length mismatch")
+        })
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.iter()
+            .map(|storage_id| {
+                if let Some(account_storage) = self.accounts.get(storage_id) {
+                    let module_bytes: Vec<_> = account_storage
+                        .modules
+                        .values()
+                        .map(|op| op.clone())
+                        .collect();
+
+                    Ok(Some(SerializedPackage::raw_package(
+                        module_bytes,
+                        *storage_id,
+                    )))
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect::<Result<Vec<_>, Self::Error>>()
     }
 }
 

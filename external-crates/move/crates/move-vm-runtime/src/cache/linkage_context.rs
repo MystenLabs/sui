@@ -68,17 +68,19 @@ impl LinkageContext {
     /// This is to help harness/testing cases, where we might find type arguments to calls that would
     /// otherwise not appear in any dependencies in the target module (e.g., we are calling it
     /// polymorphicall).
-    pub fn add_type_arg_addresses_reflexive<'a>(&mut self, type_tags: impl IntoIterator<Item=&'a TypeTag>) {
-          let type_arg_addresses =
-              type_tags.into_iter().fold(BTreeSet::new(), |mut acc, tag| {
-                  acc.extend(tag.all_addresses());
-                  acc
-              });
-          for arg_address in type_arg_addresses {
-              if !self.contains_key(&arg_address) {
-                  let _ = self.add_entry(arg_address, arg_address);
-              }
-          }
+    pub fn add_type_arg_addresses_reflexive<'a>(
+        &mut self,
+        type_tags: impl IntoIterator<Item = &'a TypeTag>,
+    ) {
+        let type_arg_addresses = type_tags.into_iter().fold(BTreeSet::new(), |mut acc, tag| {
+            acc.extend(tag.all_addresses());
+            acc
+        });
+        for arg_address in type_arg_addresses {
+            if !self.contains_key(&arg_address) {
+                let _ = self.add_entry(arg_address, arg_address);
+            }
+        }
     }
 
     /// The root package identifies the root package to use for mapping from runtime `ModuleId`s to

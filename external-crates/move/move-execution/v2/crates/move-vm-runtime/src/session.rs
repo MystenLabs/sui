@@ -285,12 +285,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         self.data_cache.get_remote_resolver_mut()
     }
 
-    /// Gets the underlying data store
-    pub fn get_data_store(&mut self) -> &mut dyn DataStore {
-        &mut self.data_cache
-    }
-
-    /// Gets the underlying native extensions.
     pub fn get_native_extensions(&mut self) -> &mut NativeContextExtensions<'r> {
         &mut self.native_extensions
     }

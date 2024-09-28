@@ -24,7 +24,10 @@ use move_binary_format::{
     file_format::{StructFieldInformation, TableIndex},
     CompiledModule, IndexKind,
 };
-use move_core_types::{identifier::IdentStr, language_storage::ModuleId, vm_status::StatusCode};
+use move_core_types::{
+    identifier::IdentStr, language_storage::ModuleId, resolver::SerializedPackage,
+    vm_status::StatusCode,
+};
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{data_store::DataStore, loaded_data::runtime_types::Type};
 use parking_lot::RwLock;
@@ -125,9 +128,9 @@ impl VMCache {
         data_store: &impl DataStore,
         link_context: &LinkageContext,
         runtime_package_id: RuntimePackageId,
-        modules: Vec<Vec<u8>>,
+        pkg: SerializedPackage,
     ) -> VMResult<Package> {
-        let loading_package = self.deserialize_and_verify_package(modules)?;
+        let loading_package = self.deserialize_and_verify_package(pkg)?;
 
         println!("doing verification with linkage context {link_context:#?}");
         // Make sure all modules' self addresses match the `runtime_package_id`.
@@ -315,36 +318,23 @@ impl VMCache {
         println!("loading {packages_to_read:#?} in linkage context {link_context:#?}");
         let allow_loading_failure = true;
 
-        let mut seen_packages = BTreeSet::new();
-
         let mut cached_packages = BTreeMap::new();
         let mut pkgs_to_cache = BTreeMap::new();
-        let mut work_queue: Vec<_> = packages_to_read.clone().into_iter().collect();
 
         // Load all packages, compute dependency order (excluding already cached
         // packages). NB: packages can be loaded out of order here (e.g., in parallel) if so
         // desired.
-        while let Some(dep) = work_queue.pop() {
-            if seen_packages.contains(&dep) {
-                continue;
-            }
-
-            seen_packages.insert(dep);
-
+        for dep in
+            self.read_packages_from_store(data_store, allow_loading_failure, &packages_to_read)?
+        {
             // Check if package is already cached. If so add it to the cached packages.
             // Note that this package will not contribute to the dependency order of packages to
             // loade since it and its types are already cached.
-            if let Some(pkg) = self.cached_package_at(dep) {
-                cached_packages.insert(dep, pkg);
+            if let Some(pkg) = self.cached_package_at(dep.storage_id) {
+                cached_packages.insert(dep.storage_id, pkg);
             } else {
-                let pkg =
-                    self.read_package_modules_from_store(data_store, allow_loading_failure, &dep)?;
-                let package_deps = compute_immediate_package_dependencies(
-                    link_context,
-                    &dep,
-                    pkg.modules.values().collect::<Vec<_>>(),
-                )?;
-                pkgs_to_cache.insert(dep, (pkg, package_deps));
+                let package_deps = compute_immediate_package_dependencies(link_context, &dep)?;
+                pkgs_to_cache.insert(dep.storage_id, (dep, package_deps));
             };
         }
 
@@ -370,30 +360,36 @@ impl VMCache {
 
     // Read the package from the data store, deserialize it, and verify it (internally).
     // NB: Does not perform cyclic dependency verification or linkage checking.
-    fn read_package_modules_from_store(
+    fn read_packages_from_store(
         &self,
         data_store: &impl DataStore,
         allow_loading_failure: bool,
-        package_id: &PackageStorageId,
-    ) -> VMResult<DeserializedPackage> {
-        // Load the package bytes
-        let bytes = match data_store.load_package(package_id) {
-            Ok(bytes) => bytes,
+        packages_to_read: &BTreeSet<PackageStorageId>,
+    ) -> VMResult<Vec<DeserializedPackage>> {
+        let packages = packages_to_read.iter().cloned().collect::<Vec<_>>();
+        let packages = match data_store.load_packages(&packages) {
+            Ok(packages) => packages,
             Err(err) if allow_loading_failure => return Err(err),
             Err(err) => {
-                error!("[VM] Error fetching package {package_id:?}");
+                error!("[VM] Error fetching packages {packages_to_read:?}");
                 return Err(expect_no_verification_errors(err));
             }
         };
-        self.deserialize_and_verify_package(bytes)
+        packages
+            .into_iter()
+            .map(|pkg| self.deserialize_and_verify_package(pkg))
+            .collect()
     }
 
     // Deserialize and interanlly verify the package.
     // NB: Does not perform cyclic dependency verification or linkage checking.
-    fn deserialize_and_verify_package(&self, bytes: Vec<Vec<u8>>) -> VMResult<DeserializedPackage> {
+    fn deserialize_and_verify_package(
+        &self,
+        pkg: SerializedPackage,
+    ) -> VMResult<DeserializedPackage> {
         // Deserialize each module in the package
         let mut modules = vec![];
-        for module_bytes in bytes.iter() {
+        for module_bytes in pkg.modules.iter() {
             let module = CompiledModule::deserialize_with_config(
                 module_bytes,
                 &self.vm_config.binary_config,
@@ -430,7 +426,7 @@ impl VMCache {
             .self_id()
             .address();
 
-        Ok(DeserializedPackage::new(runtime_id, modules))
+        Ok(DeserializedPackage::new(runtime_id, modules, pkg))
     }
 
     fn cached_package_at(&self, package_key: PackageStorageId) -> Option<Arc<Package>> {
@@ -498,20 +494,19 @@ impl VMCache {
 // Compute the immediate dependencies of a package in terms of their storage IDs.
 fn compute_immediate_package_dependencies<'a>(
     link_context: &LinkageContext,
-    package_id: &PackageStorageId,
-    modules: impl IntoIterator<Item = &'a CompiledModule>,
+    pkg: &DeserializedPackage,
 ) -> VMResult<BTreeSet<PackageStorageId>> {
-    modules
-        .into_iter()
-        .flat_map(|m| m.immediate_dependencies())
+    pkg.modules
+        .iter()
+        .flat_map(|(_, m)| m.immediate_dependencies())
         .map(|m| Ok(*link_context.relocate(&m)?.address()))
-        .filter(|m| m.as_ref().is_ok_and(|m| m != package_id))
+        .filter(|m| m.as_ref().is_ok_and(|m| *m != pkg.storage_id))
         .collect::<PartialVMResult<BTreeSet<_>>>()
         .map_err(|e| {
             PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
                 .with_message(format!(
                     "Failed to locate immediate dependencies of package {}: {}",
-                    package_id, e
+                    pkg.storage_id, e
                 ))
                 .finish(Location::Undefined)
         })
