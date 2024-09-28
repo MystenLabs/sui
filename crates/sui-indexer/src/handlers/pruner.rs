@@ -71,37 +71,65 @@ impl Pruner {
             cancel_clone.clone(),
         ));
 
-        let mut last_seen_max_epoch = 0;
-        // The first epoch that has not yet been pruned.
-        let mut next_prune_epoch = None;
         while !cancel.is_cancelled() {
-            // TODO: (wlmyng) pruner currently prunes all unpartitioned data based on the epoch
-            // table instead of the respective table.
-            let (min_epoch, max_epoch) = self.store.get_available_epoch_range().await?;
-            if max_epoch == last_seen_max_epoch {
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                continue;
-            }
-            last_seen_max_epoch = max_epoch;
+            let watermarks = self.store.get_watermarks().await?;
 
-            let prune_to_epoch = last_seen_max_epoch.saturating_sub(self.epochs_to_keep - 1);
-            let prune_start_epoch = next_prune_epoch.unwrap_or(min_epoch);
-
-            // wait_for_prune_delay(&epoch_watermark, &cancel, 1000).await?;
-
-            for epoch in prune_start_epoch..prune_to_epoch {
+            for (key, watermark) in watermarks.iter() {
                 if cancel.is_cancelled() {
                     info!("Pruner task cancelled.");
                     return Ok(());
                 }
-                info!("Pruning epoch {}", epoch);
-                if let Err(err) = self.store.prune_epoch(epoch).await {
-                    error!("Failed to prune epoch {}: {}", epoch, err);
-                    break;
-                };
-                self.metrics.last_pruned_epoch.set(epoch as i64);
-                info!("Pruned epoch {}", epoch);
-                next_prune_epoch = Some(epoch + 1);
+
+                if should_prune(watermark) {
+                    // reader_lo - 1 because we don't want to prune the readable lower bound
+                    let inclusive_upper_bound = watermark.reader_lo().saturating_sub(1);
+
+                    match key {
+                        WatermarkEntity::Checkpoints => {
+                            self.store
+                                .prune_checkpoints_table(
+                                    watermark.pruner_lo(),
+                                    inclusive_upper_bound,
+                                )
+                                .await?;
+                            self.store
+                                .update_watermarks(vec![Watermark::new_lower_bound_tail(
+                                    WatermarkEntity::Checkpoints,
+                                    watermark.pruner_lo(),
+                                )])
+                                .await?;
+                        }
+                        WatermarkEntity::EvLookup => {
+                            self.store
+                                .prune_event_indices_table(
+                                    watermark.pruner_lo(),
+                                    inclusive_upper_bound,
+                                )
+                                .await?;
+                            self.store
+                                .update_watermarks(vec![Watermark::new_lower_bound_tail(
+                                    WatermarkEntity::EvLookup,
+                                    inclusive_upper_bound,
+                                )])
+                                .await?;
+                        }
+                        WatermarkEntity::TxLookup => {
+                            self.store
+                                .prune_tx_indices_table(
+                                    watermark.pruner_lo(),
+                                    inclusive_upper_bound,
+                                )
+                                .await?;
+                            self.store
+                                .update_watermarks(vec![Watermark::new_lower_bound_tail(
+                                    WatermarkEntity::TxLookup,
+                                    inclusive_upper_bound,
+                                )])
+                                .await?;
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
         info!("Pruner task cancelled.");
@@ -242,7 +270,7 @@ async fn prune_epoch_partitioned_tables_task(
 
         // `watermarks` table is the source of truth for the epoch range. The partitions to drop are
         // `[watermark.pruner_lo(), watermark.epoch_lo)`
-        for (table_name, (min_partition, _)) in &table_partitions {
+        for (table_name, (_, _)) in &table_partitions {
             let Some(lookup) = WatermarkEntity::from_str(table_name) else {
                 // TODO: (wlmyng) handle this error
                 println!(
@@ -277,22 +305,4 @@ async fn prune_epoch_partitioned_tables_task(
         }
         tokio::time::sleep(Duration::from_secs(5)).await;
     }
-}
-
-/// Caller responsibility to determine the pruning range, which is basically `(watermark.pruned_lo,
-/// watermark.reader_lo)`. Unpartitioned tables only need to care about the gap between `pruned_lo`
-/// and `reader_lo`.
-async fn prune_tx_calls(
-    store: PgIndexerStore,
-    pruned_lo: u64,
-    reader_lo: u64,
-    cancel: CancellationToken,
-) -> IndexerResult<()> {
-    // create chunks from pruned_lo and reader_lo
-    // for range_chunk in chunks
-    // check cancel signal
-    // self.prune_tx_indices_table(range_chunk.min_tx, range_chunk.max_tx).await?;
-    // update watermark.pruned_lo = range_chunk.max_tx
-
-    Ok(())
 }

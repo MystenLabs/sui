@@ -1417,12 +1417,18 @@ impl PgIndexerStore {
         })
     }
 
-    async fn prune_checkpoints_table(&self, cp: u64) -> Result<(), IndexerError> {
+    pub async fn prune_checkpoints_table(
+        &self,
+        start_cp: u64,
+        end_cp: u64,
+    ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::delete(
-                    checkpoints::table.filter(checkpoints::sequence_number.eq(cp as i64)),
+                    checkpoints::table.filter(
+                        checkpoints::sequence_number.between(start_cp as i64, end_cp as i64),
+                    ),
                 )
                 .execute(conn)
                 .await
@@ -1436,7 +1442,7 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_event_indices_table(
+    pub async fn prune_event_indices_table(
         &self,
         min_tx: u64,
         max_tx: u64,
@@ -1501,7 +1507,11 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_tx_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
+    pub async fn prune_tx_indices_table(
+        &self,
+        min_tx: u64,
+        max_tx: u64,
+    ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
@@ -1584,7 +1594,7 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
+    pub async fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
@@ -2079,7 +2089,7 @@ impl IndexerStore for PgIndexerStore {
                 "Pruning checkpoint {} of epoch {} (min_prunable_cp: {})",
                 cp, epoch, min_prunable_cp
             );
-            self.prune_checkpoints_table(cp).await?;
+            self.prune_checkpoints_table(cp, cp).await?;
 
             let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp).await?;
             self.prune_tx_indices_table(min_tx, max_tx).await?;
