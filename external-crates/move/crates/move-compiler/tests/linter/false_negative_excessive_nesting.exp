@@ -1,0 +1,62 @@
+warning[W09002]: unused variable
+  ┌─ tests/linter/false_negative_excessive_nesting.move:2:45
+  │
+2 │     public fun complex_logic_without_blocks(x: u64) {
+  │                                             ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+  ┌─ tests/linter/false_negative_excessive_nesting.move:3:12
+  │
+3 │         if x > 10 if x < 20 if x != 15 if x % 2 == 0 { x = x + 1 } else { x = x - 1 } else { x = x * 2 } else { x = x / 2 } else { x = 0 };
+  │            ^
+  │            │
+  │            Unexpected 'x'
+  │            Expected '('
+
+error[E03005]: unbound unscoped name
+   ┌─ tests/linter/false_negative_excessive_nesting.move:10:17
+   │
+10 │                 for (i in 0..x) {
+   │                 ^^^ Unbound function 'for' in current scope
+
+error[E03009]: unbound variable
+   ┌─ tests/linter/false_negative_excessive_nesting.move:10:22
+   │
+10 │                 for (i in 0..x) {
+   │                      ^ Unbound variable 'i'
+
+error[E01002]: unexpected token
+   ┌─ tests/linter/false_negative_excessive_nesting.move:10:24
+   │
+10 │                 for (i in 0..x) {
+   │                        ^^
+   │                        │
+   │                        Unexpected 'in'
+   │                        Expected ',' or ')'
+
+error[E01002]: unexpected token
+   ┌─ tests/linter/false_negative_excessive_nesting.move:10:33
+   │
+10 │                 for (i in 0..x) {
+   │                                 ^
+   │                                 │
+   │                                 Unexpected '{'
+   │                                 Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/linter/false_negative_excessive_nesting.move:17:13
+   │
+17 │             x = x - 1;
+   │             ^
+   │             │
+   │             Unexpected 'x'
+   │             Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/linter/false_negative_excessive_nesting.move:20:1
+   │
+20 │ }
+   │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
+

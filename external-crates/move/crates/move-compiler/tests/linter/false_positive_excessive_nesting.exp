@@ -1,0 +1,44 @@
+warning[W09002]: unused variable
+  ┌─ tests/linter/false_positive_excessive_nesting.move:2:40
+  │
+2 │     public fun nested_match_expression(x: u64) {
+  │                                        ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03009]: unbound variable
+  ┌─ tests/linter/false_positive_excessive_nesting.move:3:9
+  │
+3 │         match x {
+  │         ^^^^^ Unbound variable 'match'
+
+error[E01002]: unexpected token
+  ┌─ tests/linter/false_positive_excessive_nesting.move:3:15
+  │
+3 │         match x {
+  │               ^
+  │               │
+  │               Unexpected 'x'
+  │               Expected ';'
+
+warning[W09002]: unused variable
+   ┌─ tests/linter/false_positive_excessive_nesting.move:19:13
+   │
+19 │         let a = {
+   │             ^ Unused local variable 'a'. Consider removing or prefixing with an underscore: '_a'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01008]: excessive nesting
+   ┌─ tests/linter/false_positive_excessive_nesting.move:22:29
+   │  
+22 │                       let d = {
+   │ ╭─────────────────────────────^
+23 │ │                         // This looks like 4 levels of nesting, but it's actually a series of let bindings
+24 │ │                         // which might be more readable in this format than flattened
+25 │ │                         10
+26 │ │                     };
+   │ ╰─────────────────────^ Detected excessive block nesting. Consider refactoring to simplify the code.
+   │  
+   = This warning can be suppressed with '#[allow(lint(excessive_nesting))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

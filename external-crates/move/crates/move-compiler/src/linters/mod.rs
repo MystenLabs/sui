@@ -13,6 +13,7 @@ use crate::{
 
 pub mod abort_constant;
 pub mod constant_naming;
+pub mod excessive_nesting;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
 pub mod unnecessary_conditional;
@@ -138,6 +139,12 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "unnecessary_conditional",
         "'if' expression can be removed"
+    ),
+    (
+        ExcessiveNesting,
+        LinterDiagnosticCategory::Complexity,
+        "excessive_nesting",
+        "excessive nesting"
     )
 );
 
@@ -173,6 +180,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 abort_constant::AssertAbortNamedConstants.visitor(),
                 loop_without_exit::LoopWithoutExit.visitor(),
                 unnecessary_conditional::UnnecessaryConditional.visitor(),
+                excessive_nesting::ExcessiveNesting.visitor(),
             ]
         }
     }
