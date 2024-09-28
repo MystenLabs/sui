@@ -85,14 +85,12 @@ async fn main() -> Result<()> {
         ProgressSavingPolicy::SaveAfterDuration(SaveAfterDurationPolicy::new(
             tokio::time::Duration::from_secs(30),
         )),
-        indexer_meterics.clone(),
     );
     let datastore_with_out_of_order_source = PgBridgePersistent::new(
         get_connection_pool(db_url.clone()).await,
         ProgressSavingPolicy::OutOfOrderSaveAfterDuration(OutOfOrderSaveAfterDurationPolicy::new(
             tokio::time::Duration::from_secs(30),
         )),
-        indexer_meterics.clone(),
     );
 
     let eth_client: Arc<EthClient<MeteredEthHttpProvier>> = Arc::new(

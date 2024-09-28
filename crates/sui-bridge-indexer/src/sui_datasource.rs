@@ -5,6 +5,7 @@ use anyhow::Error;
 use async_trait::async_trait;
 use mysten_metrics::{metered_channel, spawn_monitored_task};
 use prometheus::IntCounterVec;
+use prometheus::IntGauge;
 use prometheus::IntGaugeVec;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -85,7 +86,11 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
             ingestion_reader_batch_size
         );
         let mut executor = IndexerExecutor::new(progress_store, 1, self.metrics.clone());
-        let worker = IndexerWorker::new(data_sender);
+        let progress_metric = self
+            .indexer_metrics
+            .tasks_latest_retrieved_checkpoints
+            .with_label_values(&[task.name_prefix(), task.type_str()]);
+        let worker = IndexerWorker::new(data_sender, progress_metric);
         let worker_pool = WorkerPool::new(worker, task.task_name.clone(), self.concurrency);
         executor.register(worker_pool).await?;
         let checkpoint_path = self.checkpoint_path.clone();
@@ -172,11 +177,18 @@ impl ProgressStore for PerTaskInMemProgressStore {
 
 pub struct IndexerWorker<T> {
     data_sender: metered_channel::Sender<(u64, Vec<T>)>,
+    progress_metric: IntGauge,
 }
 
 impl<T> IndexerWorker<T> {
-    pub fn new(data_sender: metered_channel::Sender<(u64, Vec<T>)>) -> Self {
-        Self { data_sender }
+    pub fn new(
+        data_sender: metered_channel::Sender<(u64, Vec<T>)>,
+        progress_metric: IntGauge,
+    ) -> Self {
+        Self {
+            data_sender,
+            progress_metric,
+        }
     }
 }
 
@@ -200,9 +212,10 @@ impl Worker for IndexerWorker<CheckpointTxnData> {
             .into_iter()
             .map(|tx| (tx, checkpoint_num, timestamp_ms))
             .collect();
-        Ok(self
-            .data_sender
+        self.data_sender
             .send((checkpoint_num, transactions))
-            .await?)
+            .await?;
+        self.progress_metric.set(checkpoint_num as i64);
+        Ok(())
     }
 }
