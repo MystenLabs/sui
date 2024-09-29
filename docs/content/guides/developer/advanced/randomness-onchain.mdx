@@ -14,8 +14,11 @@ entry fun roll_dice(r: &Random, ctx: &mut TxContext): Dice {
 
 `Random` has a reserved address `0x8`. See <a href="/references/framework/sui-framework/random" data-noBrokenLinkCheck='true'>random.move</a> for the Move APIs for accessing randomness on Sui.
 
-> [!NOTE]
-> Although `Random` is a shared object, it is inaccessible for mutable operations, and any transaction attempting to modify it fails.
+:::note
+
+Although `Random` is a shared object, it is inaccessible for mutable operations, and any transaction attempting to modify it fails.
+
+:::
 
 Having access to random numbers is only one part of designing secure applications, you should also pay careful attention to how you use that randomness.
 To securely access randomness:
@@ -47,8 +50,11 @@ entry fun insecure_play(r: &Random, payment: Coin<SUI>, ...) {
 Observe that the gas costs of a transaction that calls `insecure_play` depends on the value of `win` -
 An attacker could call this function with a gas budget that is sufficient for the happy flow but not the unhappy one, resulting in it either winning or reverting the transaction (but never losing the payment).
 
-> [!WARNING]
-> Sui does not prevent this kind of attack, and developers must be aware of this subtlety when designing their contracts.
+:::warning
+
+Sui does not prevent this kind of attack, and developers must be aware of this subtlety when designing their contracts.
+
+:::
 
 In many cases this attack is not an issue, like when selecting a raffle winner, or lottery numbers, as the code running is independent of the randomness.
 However, in the cases where it can be problematic, you can consider one of the following:
@@ -126,8 +132,11 @@ The attacker can now call `attack` with a guess, and **always** revert the fee t
 
 To protect against composition attacks, define your function as a private `entry` function so functions from other modules cannot call it.
 
-> [!TIP]
-> The Move compiler enforces this behavior by rejecting `public` functions with `Random` as an argument.
+:::tip
+
+The Move compiler enforces this behavior by rejecting `public` functions with `Random` as an argument.
+
+:::
 
 ## Programmable transaction block (PTB) restrictions
 
@@ -146,17 +155,21 @@ As before, the attack takes advantage of the atomic nature of PTBs and always re
 guess was incorrect, without paying the fee. Sending multiple transactions can repeat the attack, each one executed with
 different randomness and reverted if the guess is incorrect.
 
-> [!TIP]
-> To protect against PTB-based composition attacks, Sui rejects PTBs that have commands that are not `TransferObjects` or `MergeCoins` following a `MoveCall` command that uses `Random` as an input.
+:::tip
 
+To protect against PTB-based composition attacks, Sui rejects PTBs that have commands that are not `TransferObjects` or `MergeCoins` following a `MoveCall` command that uses `Random` as an input.
+
+:::
 
 ## Instantiating `RandomGenerator`
 
 `RandomGenerator` is secure as long as it's created by the consuming module. If passed as an argument, the caller might be able to predict the outputs of that `RandomGenerator` instance (for example, by calling `bcs::to_bytes(&generator)` and parsing its internal state).
 
-> [!TIP]
-> The Move compiler enforces this behavior by rejecting `public` functions with `RandomGenerator` as an argument.
+:::tip
 
+The Move compiler enforces this behavior by rejecting `public` functions with `RandomGenerator` as an argument.
+
+:::
 
 ## Accessing `Random` from TypeScript
 
