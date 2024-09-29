@@ -485,6 +485,13 @@ impl ValidatorService {
             client_id_source: _,
         } = self.clone();
         let epoch_store = state.load_epoch_store_one_call_per_task();
+        if !epoch_store.protocol_config().mysticeti_fastpath() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "Mysticeti fastpath".to_string(),
+            }
+            .into());
+        }
+
         let HandleTransactionRequestV2 {
             transaction,
             include_events,
