@@ -65,12 +65,12 @@ The first function, called by transaction `tx1`, fetches a random value and stor
 A second function, called by transaction `tx2`, reads the stored value and completes the operation.
 `tx2` might indeed fail, but now the random value is fixed and cannot be modified using repeated calls.
 It is important that the inputs to the second function are fixed and cannot be modified after `tx1` (otherwise an attacker can modify them after seeing the randomness committed by `tx1`).
-Also, it is important to handle the case in which the second step is never completed (e.g., charge a fee in the first step).
+Also, it is important to gracefully handle the case in which the second step is never completed (e.g., charge a fee in the first step).
 - Write the function in a way that the happy flow consumes more gas than the unhappy one.
   - Keep in mind that external functions or native ones can change in the future, potentially resulting in different costs compared to the time you conducted your tests.
   - [profile-transaction](../../../references/cli/client.mdx#profile-a-transaction) can be used to profile the costs of a transaction.
 
-Other limited resources per transaction are:
+Other limited resources per transaction that developers should consider are:
 
 - The number of new objects.
 - The number of objects that can be used (including dynamic fields).
