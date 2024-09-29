@@ -99,7 +99,7 @@ impl NodeInfoDigest {
 }
 
 impl Message for NodeInfo {
-    type DigestType = Ed25519Signature;
+    type DigestType = NodeInfoDigest;
     const SCOPE: IntentScope = IntentScope::DiscoveryPeers;
 
     fn digest(&self) -> Self::DigestType {
