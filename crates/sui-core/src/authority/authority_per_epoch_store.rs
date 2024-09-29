@@ -1965,17 +1965,12 @@ impl AuthorityPerEpochStore {
             .any(|processed| processed))
     }
 
-    /// Check whether any certificates were processed by consensus.
-    /// This handles multiple certificates at once.
-    pub fn is_all_tx_certs_consensus_message_processed<'a>(
+    /// Returns true if all messages with the given keys were processed by consensus.
+    pub fn all_external_consensus_messages_processed(
         &self,
-        certificates: impl Iterator<Item = &'a VerifiedCertificate>,
+        keys: impl Iterator<Item = ConsensusTransactionKey>,
     ) -> SuiResult<bool> {
-        let keys = certificates.map(|cert| {
-            SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
-                *cert.digest(),
-            ))
-        });
+        let keys = keys.map(SequencedConsensusTransactionKey::External);
         Ok(self
             .check_consensus_messages_processed(keys)?
             .into_iter()
