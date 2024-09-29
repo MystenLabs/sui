@@ -203,8 +203,15 @@ impl FunctionTargetsHolder {
         &self.no_verify_specs
     }
 
-    pub fn is_verified(&self, id: &QualifiedId<FunId>) -> bool {
+    pub fn is_verified_spec(&self, id: &QualifiedId<FunId>) -> bool {
         self.get_fun_by_opaque_spec(id).is_some() && !self.no_verify_specs.contains(id)
+    }
+
+    pub fn has_no_verify_spec(&self, id: &QualifiedId<FunId>) -> bool {
+        match self.get_opaque_spec_by_fun(id) {
+            Some(spec_id) => self.no_verify_specs.contains(spec_id),
+            None => false,
+        }
     }
 
     /// Adds a new function target. The target will be initialized from the Move byte code.

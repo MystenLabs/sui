@@ -200,7 +200,8 @@ impl<'a> Analyzer<'a> {
         for module in self.env.get_modules() {
             for fun in module.get_functions() {
                 for (variant, target) in self.targets.get_targets(&fun) {
-                    if !variant.is_verified() || !self.targets.is_verified(&fun.get_qualified_id())
+                    if !variant.is_verified()
+                        || !self.targets.is_verified_spec(&fun.get_qualified_id())
                     {
                         continue;
                     }
@@ -366,7 +367,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn analyze_bytecode(&mut self, _target: &FunctionTarget<'_>, bc: &Bytecode) {
+    fn analyze_bytecode(&mut self, target: &FunctionTarget<'_>, bc: &Bytecode) {
         use Bytecode::*;
         use Operation::*;
         // We only need to analyze function calls, not `pack` or other instructions
@@ -422,10 +423,14 @@ impl<'a> Analyzer<'a> {
                         .or_default()
                         .insert(actuals);
                 } else if !callee_env.is_opaque()
-                    && !self
+                    && (self
                         .targets
-                        .no_verify_specs()
-                        .contains(&callee_env.get_qualified_id())
+                        .get_opaque_spec_by_fun(&callee_env.get_qualified_id())
+                        .is_none()
+                        || self
+                            .targets
+                            .get_opaque_spec_by_fun(&callee_env.get_qualified_id())
+                            == Some(&target.func_env.get_qualified_id()))
                 {
                     // This call needs to be inlined, with targs instantiated by self.inst_opt.
                     // Schedule for later processing if this instance has not been processed yet.

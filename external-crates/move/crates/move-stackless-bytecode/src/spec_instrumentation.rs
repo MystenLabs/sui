@@ -130,7 +130,11 @@ impl FunctionTargetProcessor for SpecInstrumentationProcessor {
         }
 
         // Instrument baseline variant only if it is inlined.
-        if is_inlined {
+        if is_inlined
+            || targets
+                .get_fun_by_opaque_spec(&fun_env.get_qualified_id())
+                .is_some()
+        {
             Instrumenter::run(&options, targets, fun_env, data, scc_opt)
         } else {
             // Clear code but keep function data stub.
@@ -287,7 +291,7 @@ impl<'a> Instrumenter<'a> {
             can_abort: false,
             mem_info: &mem_info,
         };
-        instrumenter.instrument(&spec, &inlined_props);
+        instrumenter.instrument(&targets, &spec, &inlined_props);
 
         // Run copy propagation (reaching definitions) and then assignment
         // elimination (live vars). This cleans up some redundancy created by
@@ -305,6 +309,7 @@ impl<'a> Instrumenter<'a> {
 
     fn instrument(
         &mut self,
+        targets: &FunctionTargetsHolder,
         spec: &TranslatedSpec,
         inlined_props: &BTreeMap<AttrId, (TranslatedSpec, Exp)>,
     ) {
@@ -367,6 +372,9 @@ impl<'a> Instrumenter<'a> {
                     &self.builder.data
                 ))
                 .inlined
+                    || targets
+                        .get_fun_by_opaque_spec(&self.builder.fun_env.get_qualified_id())
+                        .is_some()
             );
             for translated_spec in inlined_props.values().map(|(s, _)| s) {
                 let saved_params = translated_spec.saved_params.clone();

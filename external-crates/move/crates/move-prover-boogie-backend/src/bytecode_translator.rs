@@ -439,6 +439,9 @@ impl<'env> BoogieTranslator<'env> {
             | FunctionTranslationStyle::Aborts
             | FunctionTranslationStyle::Opaque => FunctionVariant::Baseline,
         };
+        if variant.is_verified() && !self.targets.has_target(fun_env, &variant) {
+            return;
+        }
         let spec_fun_target = self.targets.get_target(&fun_env, &variant);
 
         println!(
