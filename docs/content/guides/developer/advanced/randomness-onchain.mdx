@@ -33,7 +33,7 @@ Developers must be aware that some resources that are available to transactions 
 If a function that reads `Random` consumes more resources in an unhappy path flow than in a happy path flow, an attacker can use that difference to revert the transaction in the unhappy flow.
 
 Concretely, gas is such a resource.
-Consider the following code vulnerable code:
+Consider the following vulnerable code:
 
 ```move
 // Insecure implementation, do not use!
@@ -58,7 +58,17 @@ Sui does not prevent this kind of attack, and developers must be aware of this s
 
 :::
 
-In many cases this attack is not an issue, like when selecting a raffle winner, or lottery numbers, as the code running is independent of the randomness.
+
+Other limited resources per transaction that developers should consider are:
+
+- The number of new objects.
+- The number of objects that can be used (including dynamic fields).
+- Number of events emitted.
+- Number of UIDs generated, or deleted, or transferred.
+
+
+
+For many use cases this attack is not an issue, like when selecting a raffle winner, or lottery numbers, as the code running is independent of the randomness.
 However, in the cases where it can be problematic, you can consider one of the following:
 
 - Use two steps:
@@ -72,12 +82,6 @@ Also, it is important to gracefully handle the case in which the second step is 
   - Keep in mind that external functions or native ones can change in the future, potentially resulting in different costs compared to the time you conducted your tests.
   - [profile-transaction](../../../references/cli/client.mdx#profile-a-transaction) can be used to profile the costs of a transaction.
 
-Other limited resources per transaction that developers should consider are:
-
-- The number of new objects.
-- The number of objects that can be used (including dynamic fields).
-- Number of events emitted.
-- Number of UIDs generated, or deleted, or transferred.
 
 
 ## Use (non-public) `entry` functions
