@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::io::Read;
 use std::net::SocketAddr;
 use std::os::unix::prelude::FileExt;
+use std::process::Command;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use std::env;
@@ -16,6 +17,7 @@ use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildCo
 use serde_json::json;
 use sui::client_ptb::ptb::PTB;
 use sui::key_identity::{get_identity_address, KeyIdentity};
+use sui::package_hooks::SuiPackageHooks;
 use sui::sui_commands::IndexerArgs;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
@@ -25,6 +27,7 @@ use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
+use tempfile::tempdir;
 use tokio::time::sleep;
 
 use sui::{
@@ -40,9 +43,10 @@ use sui_config::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    get_new_package_obj_from_response, OwnedObjectRef, SuiExecutionStatus, SuiObjectData,
-    SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiTransactionBlockDataAPI, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    get_new_package_obj_from_response, ObjectChange, OwnedObjectRef, SuiExecutionStatus,
+    SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -4021,4 +4025,136 @@ async fn test_parse_host_port() {
     assert!(parse_host_port(input.to_string(), 9123).is_err());
     let input = "127.9.0.1:asb";
     assert!(parse_host_port(input.to_string(), 9123).is_err());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+// multi_thread is needed because of async use in package hooks
+async fn test_on_chain_dep_publish() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+
+    let tmp = tempdir()?;
+    Command::new("cp")
+        .arg("-r")
+        .arg(PathBuf::from(TEST_DATA_DIR).join("on_chain_dependency"))
+        .arg(tmp.path())
+        .output()?;
+
+    let root_path = tmp.path().join("on_chain_dependency");
+
+    SuiPackageHooks::register_from_ctx(&test_cluster.wallet).await?;
+
+    // publish Local dep
+    publish_package(
+        &mut test_cluster,
+        root_path.join("dependencies/Local"),
+        BuildConfig::default(),
+    )
+    .await?;
+
+    // publish LocalWithoutLockfile dep
+    {
+        let dep_root = root_path.join("dependencies/LocalWithoutLockfile");
+        let resp =
+            publish_package(&mut test_cluster, dep_root.clone(), BuildConfig::default()).await?;
+
+        let manifest_path = dep_root.join("Move.toml");
+        let published_at = get_published_at(&resp);
+        insert_published_at_field(&manifest_path, published_at);
+        replace_template_str(&manifest_path, "0x0", &published_at.to_hex_literal());
+
+        let lockfile_path = dep_root.join("Move.lock");
+        std::fs::remove_file(lockfile_path).unwrap();
+    };
+
+    // publish OnChain dep
+    let on_chain_published_at = {
+        let resp = publish_package(
+            &mut test_cluster,
+            root_path.join("dependencies/OnChain"),
+            BuildConfig::default(),
+        )
+        .await?;
+        get_published_at(&resp)
+    };
+
+    // publish Root package
+    {
+        replace_template_str(
+            &root_path.join("Move.toml"),
+            "$ONCHAIN",
+            &on_chain_published_at.to_hex_literal(),
+        );
+        publish_package(&mut test_cluster, root_path.clone(), BuildConfig::default()).await?;
+    }
+
+    SuiClientCommands::VerifySource {
+        package_path: root_path,
+        build_config: BuildConfig::default().config,
+        verify_deps: true,
+        skip_source: false,
+        address_override: None,
+    }
+    .execute(test_cluster.wallet_mut())
+    .await?;
+
+    Ok(())
+}
+
+async fn publish_package(
+    test_cluster: &mut TestCluster,
+    package_path: PathBuf,
+    build_config: BuildConfig,
+) -> Result<SuiClientCommandResult, anyhow::Error> {
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let context = &mut test_cluster.wallet;
+
+    SuiClientCommands::Publish {
+        package_path,
+        build_config: build_config.config,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await
+}
+
+fn get_published_at(resp: &SuiClientCommandResult) -> ObjectID {
+    match resp {
+        SuiClientCommandResult::TransactionBlock(response) => {
+            for change in response.object_changes.as_ref().unwrap().iter() {
+                if let ObjectChange::Published { package_id, .. } = change {
+                    return *package_id;
+                }
+            }
+            unreachable!("Invalid response");
+        }
+        _ => unreachable!("Invalid response"),
+    }
+}
+
+fn insert_published_at_field(manifest_path: &PathBuf, published_at: ObjectID) {
+    let mut move_toml = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(manifest_path)
+        .unwrap();
+
+    let mut buf = String::new();
+    move_toml.read_to_string(&mut buf).unwrap();
+
+    let mut lines: Vec<String> = buf.split('\n').map(|x| x.to_string()).collect();
+    let idx = lines.iter().position(|s| s == "[package]").unwrap();
+    lines.insert(
+        idx + 1,
+        format!("published-at = \"{}\"", published_at.to_hex_literal()),
+    );
+    let new = lines.join("\n");
+    move_toml.write_at(new.as_bytes(), 0).unwrap();
+}
+
+fn replace_template_str(file_path: &PathBuf, template_str: &str, value: &str) {
+    let mut contents = std::fs::read_to_string(file_path).unwrap();
+    contents = contents.replace(template_str, value);
+    std::fs::write(file_path, contents).unwrap();
 }

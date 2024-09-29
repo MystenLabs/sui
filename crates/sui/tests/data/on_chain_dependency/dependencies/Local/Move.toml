@@ -1,0 +1,6 @@
+[package]
+name = "Local"
+edition = "2024.beta"
+
+[addresses]
+local = "0x0"

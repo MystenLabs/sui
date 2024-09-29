@@ -1,0 +1,6 @@
+[package]
+name = "OnChain"
+edition = "2024.beta"
+
+[addresses]
+onchain = "0x0"

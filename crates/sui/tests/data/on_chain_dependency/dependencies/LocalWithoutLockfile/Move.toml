@@ -1,0 +1,6 @@
+[package]
+name = "LocalWithoutLockfile"
+edition = "2024.beta"
+
+[addresses]
+local_without_lockfile = "0x0"
