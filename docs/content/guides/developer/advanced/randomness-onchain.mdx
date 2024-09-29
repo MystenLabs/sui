@@ -31,7 +31,9 @@ To securely access randomness:
 
 Developers must be aware that some resources that are available to transactions are limited.
 If a function that reads `Random` consumes more resources in an unhappy path flow than in a happy path flow, an attacker can use that difference to revert the transaction in the unhappy flow.
-Concretely, gas is such a resource. Consider the following code:
+
+Concretely, gas is such a resource.
+Consider the following code vulnerable code:
 
 ```move
 // Insecure implementation, do not use!
@@ -47,7 +49,7 @@ entry fun insecure_play(r: &Random, payment: Coin<SUI>, ...) {
 }
 ```
 
-Observe that the gas costs of a transaction that calls `insecure_play` depends on the value of `win` -
+Observe that the gas costs of a transaction that calls `insecure_play` depends on the value of `win`.
 An attacker could call this function with a gas budget that is sufficient for the happy flow but not the unhappy one, resulting in it either winning or reverting the transaction (but never losing the payment).
 
 :::warning
