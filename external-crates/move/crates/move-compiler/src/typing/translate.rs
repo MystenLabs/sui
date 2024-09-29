@@ -88,7 +88,6 @@ pub fn program(
         info: Arc::new(module_info),
     };
     for v in &compilation_env.visitors().typing {
-        let mut v = v.borrow_mut();
         v.visit(compilation_env, &prog);
     }
     prog

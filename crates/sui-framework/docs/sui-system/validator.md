@@ -8,6 +8,8 @@ title: Module `0x3::validator`
 -  [Struct `Validator`](#0x3_validator_Validator)
 -  [Struct `StakingRequestEvent`](#0x3_validator_StakingRequestEvent)
 -  [Struct `UnstakingRequestEvent`](#0x3_validator_UnstakingRequestEvent)
+-  [Struct `ConvertingToFungibleStakedSuiEvent`](#0x3_validator_ConvertingToFungibleStakedSuiEvent)
+-  [Struct `RedeemingFungibleStakedSuiEvent`](#0x3_validator_RedeemingFungibleStakedSuiEvent)
 -  [Constants](#@Constants_0)
 -  [Function `new_metadata`](#0x3_validator_new_metadata)
 -  [Function `new`](#0x3_validator_new)
@@ -15,6 +17,8 @@ title: Module `0x3::validator`
 -  [Function `activate`](#0x3_validator_activate)
 -  [Function `adjust_stake_and_gas_price`](#0x3_validator_adjust_stake_and_gas_price)
 -  [Function `request_add_stake`](#0x3_validator_request_add_stake)
+-  [Function `convert_to_fungible_staked_sui`](#0x3_validator_convert_to_fungible_staked_sui)
+-  [Function `redeem_fungible_staked_sui`](#0x3_validator_redeem_fungible_staked_sui)
 -  [Function `request_add_stake_at_genesis`](#0x3_validator_request_add_stake_at_genesis)
 -  [Function `request_withdraw_stake`](#0x3_validator_request_withdraw_stake)
 -  [Function `request_set_gas_price`](#0x3_validator_request_set_gas_price)
@@ -452,6 +456,92 @@ Event emitted when a new unstake request is received.
 </dd>
 <dt>
 <code>reward_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x3_validator_ConvertingToFungibleStakedSuiEvent"></a>
+
+## Struct `ConvertingToFungibleStakedSuiEvent`
+
+Event emitted when a staked SUI is converted to a fungible staked SUI.
+
+
+<pre><code><b>struct</b> <a href="validator.md#0x3_validator_ConvertingToFungibleStakedSuiEvent">ConvertingToFungibleStakedSuiEvent</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>pool_id: <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_activation_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>staked_sui_principal_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>fungible_staked_sui_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x3_validator_RedeemingFungibleStakedSuiEvent"></a>
+
+## Struct `RedeemingFungibleStakedSuiEvent`
+
+Event emitted when a fungible staked SUI is redeemed.
+
+
+<pre><code><b>struct</b> <a href="validator.md#0x3_validator_RedeemingFungibleStakedSuiEvent">RedeemingFungibleStakedSuiEvent</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>pool_id: <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>fungible_staked_sui_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>sui_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -913,6 +1003,88 @@ Request to add stake to the validator's staking pool, processed at the end of th
         }
     );
     staked_sui
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_convert_to_fungible_staked_sui"></a>
+
+## Function `convert_to_fungible_staked_sui`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_convert_to_fungible_staked_sui">convert_to_fungible_staked_sui</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, staked_sui: <a href="staking_pool.md#0x3_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="staking_pool.md#0x3_staking_pool_FungibleStakedSui">staking_pool::FungibleStakedSui</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_convert_to_fungible_staked_sui">convert_to_fungible_staked_sui</a>(
+    self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>,
+    staked_sui: StakedSui,
+    ctx: &<b>mut</b> TxContext,
+) : FungibleStakedSui {
+    <b>let</b> stake_activation_epoch = staked_sui.stake_activation_epoch();
+    <b>let</b> staked_sui_principal_amount = staked_sui.staked_sui_amount();
+
+    <b>let</b> fungible_staked_sui = self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_convert_to_fungible_staked_sui">convert_to_fungible_staked_sui</a>(staked_sui, ctx);
+
+    <a href="../sui-framework/event.md#0x2_event_emit">event::emit</a>(
+        <a href="validator.md#0x3_validator_ConvertingToFungibleStakedSuiEvent">ConvertingToFungibleStakedSuiEvent</a> {
+            pool_id: self.<a href="validator.md#0x3_validator_staking_pool_id">staking_pool_id</a>(),
+            stake_activation_epoch,
+            staked_sui_principal_amount,
+            fungible_staked_sui_amount: fungible_staked_sui.value(),
+        }
+    );
+
+    fungible_staked_sui
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_redeem_fungible_staked_sui"></a>
+
+## Function `redeem_fungible_staked_sui`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, fungible_staked_sui: <a href="staking_pool.md#0x3_staking_pool_FungibleStakedSui">staking_pool::FungibleStakedSui</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(
+    self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>,
+    fungible_staked_sui: FungibleStakedSui,
+    ctx: &TxContext,
+) : Balance&lt;SUI&gt; {
+    <b>let</b> fungible_staked_sui_amount = fungible_staked_sui.value();
+
+    <b>let</b> <a href="../sui-framework/sui.md#0x2_sui">sui</a> = self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(fungible_staked_sui, ctx);
+
+    <a href="../sui-framework/event.md#0x2_event_emit">event::emit</a>(
+        <a href="validator.md#0x3_validator_RedeemingFungibleStakedSuiEvent">RedeemingFungibleStakedSuiEvent</a> {
+            pool_id: self.<a href="validator.md#0x3_validator_staking_pool_id">staking_pool_id</a>(),
+            fungible_staked_sui_amount,
+            sui_amount: <a href="../sui-framework/sui.md#0x2_sui">sui</a>.value(),
+        }
+    );
+
+    <a href="../sui-framework/sui.md#0x2_sui">sui</a>
 }
 </code></pre>
 
