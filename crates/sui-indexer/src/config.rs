@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::backfill::BackfillTaskKind;
+use crate::db::ConnectionPoolConfig;
 use clap::{Args, Parser, Subcommand};
 use std::{net::SocketAddr, path::PathBuf};
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use url::Url;
-
-use crate::db::ConnectionPoolConfig;
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -144,7 +144,7 @@ impl Default for IngestionConfig {
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct SqlBackFillConfig {
+pub struct BackFillConfig {
     /// Maximum number of concurrent tasks to run.
     #[arg(
         long,
@@ -159,7 +159,7 @@ pub struct SqlBackFillConfig {
     pub chunk_size: usize,
 }
 
-impl SqlBackFillConfig {
+impl BackFillConfig {
     const DEFAULT_MAX_CONCURRENCY: usize = 10;
     const DEFAULT_CHUNK_SIZE: usize = 1000;
 }
@@ -183,23 +183,24 @@ pub enum Command {
     },
     /// Run through the migration scripts.
     RunMigrations,
-    /// Backfill DB tables for checkpoint range [\first_checkpoint, \last_checkpoint].
-    /// by running a SQL query provided in \sql.
-    /// The tool will automatically slice it into smaller checkpoint ranges and for each range [start, end],
-    /// it augments the \sql query with:
-    ///   "WHERE {checkpoint_column_name} BETWEEN {start} AND {end}"
-    /// to avoid running out of memory.
-    /// Example:
-    ///  ./sui-indexer --database-url <...> sql-back-fill
-    ///   "INSERT INTO full_objects_history (object_id, object_version, serialized_object) SELECT object_id, object_version, serialized_object FROM objects_history"
-    ///   "checkpoint_sequence_number" 0 100000
-    SqlBackFill {
-        sql: String,
-        checkpoint_column_name: String,
-        first_checkpoint: u64,
-        last_checkpoint: u64,
+    /// Backfill DB tables for some ID range [\start, \end].
+    /// The tool will automatically slice it into smaller ranges and for each range,
+    /// it first makes a read query to the DB to get data needed for backfil if needed,
+    /// which then can be processed and written back to the DB.
+    /// To add a new backfill, add a new module and implement the `BackfillTask` trait.
+    /// full_objects_history.rs provides an example to do SQL-only backfills.
+    /// system_state_summary_json.rs provides an example to do SQL + processing backfills.
+    RunBackFill {
+        /// Start of the range to backfill, inclusive.
+        /// It can be a checkpoint number or an epoch or any other identifier that can be used to
+        /// slice the backfill range.
+        start: usize,
+        /// End of the range to backfill, inclusive.
+        end: usize,
+        #[clap(subcommand)]
+        runner_kind: BackfillTaskKind,
         #[command(flatten)]
-        backfill_config: SqlBackFillConfig,
+        backfill_config: BackFillConfig,
     },
     /// Restore the database from formal snaphots.
     Restore(RestoreConfig),

@@ -7,7 +7,8 @@ use diesel::{Identifiable, Insertable, Queryable, Selectable};
 use sui_indexer_builder::{Task, LIVE_TASK_TARGET_CHECKPOINT};
 
 use crate::schema::{
-    progress_store, sui_error_transactions, sui_progress_store, token_transfer, token_transfer_data,
+    governance_actions, progress_store, sui_error_transactions, sui_progress_store, token_transfer,
+    token_transfer_data,
 };
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -78,4 +79,16 @@ pub struct SuiErrorTransactions {
     pub timestamp_ms: i64,
     pub failure_status: String,
     pub cmd_idx: Option<i64>,
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = governance_actions, primary_key(txn_digest))]
+pub struct GovernanceAction {
+    pub nonce: Option<i64>,
+    pub data_source: String,
+    pub txn_digest: Vec<u8>,
+    pub sender_address: Vec<u8>,
+    pub timestamp_ms: i64,
+    pub action: String,
+    pub data: serde_json::Value,
 }

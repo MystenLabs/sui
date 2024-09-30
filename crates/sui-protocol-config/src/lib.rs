@@ -181,6 +181,8 @@ const MAX_PROTOCOL_VERSION: u64 = 61;
 // Version 60: Validation of public inputs for Groth16 verification.
 //             Enable configuration of maximum number of type nodes in a type layout.
 // Version 61: Switch to distributed vote scoring in consensus in testnet
+//             Further reduce minimum number of random beacon shares.
+//             Add feature flag for Mysticeti fastpath.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -535,6 +537,10 @@ struct FeatureFlags {
     // Validate identifier inputs separately
     #[serde(skip_serializing_if = "is_false")]
     validate_identifier_inputs: bool,
+
+    // Enables Mysticeti fastpath.
+    #[serde(skip_serializing_if = "is_false")]
+    mysticeti_fastpath: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1601,8 +1607,13 @@ impl ProtocolConfig {
     pub fn validate_identifier_inputs(&self) -> bool {
         self.feature_flags.validate_identifier_inputs
     }
+
     pub fn gc_depth(&self) -> u32 {
         self.consensus_gc_depth.unwrap_or(0)
+    }
+
+    pub fn mysticeti_fastpath(&self) -> bool {
+        self.feature_flags.mysticeti_fastpath
     }
 }
 
@@ -2788,6 +2799,13 @@ impl ProtocolConfig {
                         // Enable distributed vote scoring for testnet
                         cfg.feature_flags
                             .consensus_distributed_vote_scoring_strategy = true;
+                    }
+                    // Further reduce minimum number of random beacon shares.
+                    cfg.random_beacon_reduction_lower_bound = Some(700);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Enable Mysticeti fastpath for devnet
+                        cfg.feature_flags.mysticeti_fastpath = true;
                     }
                 }
                 // Use this template when making changes:

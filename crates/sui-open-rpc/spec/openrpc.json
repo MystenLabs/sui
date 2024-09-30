@@ -1326,6 +1326,7 @@
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
+                "mysticeti_fastpath": false,
                 "mysticeti_leader_scoring_and_schedule": false,
                 "mysticeti_use_committed_subdag_digest": false,
                 "narwhal_certificate_v2": false,

@@ -722,11 +722,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                     for serialized_block in blocks {
                                         let signed_block = bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
                                         block_verifier.verify(&signed_block).tap_err(|err|{
-                                            let hostname = if context.committee.is_valid_index(signed_block.author()) {
-                                                context.committee.authority(signed_block.author()).hostname.clone()
-                                            } else {
-                                                signed_block.author().to_string()
-                                            };
+                                            let hostname = context.committee.authority(authority_index).hostname.clone();
                                             context
                                                 .metrics
                                                 .node_metrics

@@ -33,6 +33,15 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
+                .name("transaction_v2")
+                .route_name("TransactionV2")
+                .input_type("sui_types::messages_grpc::HandleTransactionRequestV2")
+                .output_type("sui_types::messages_grpc::HandleTransactionResponseV2")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
                 .name("handle_certificate_v2")
                 .route_name("CertifiedTransactionV2")
                 .input_type("sui_types::transaction::CertifiedTransaction")
