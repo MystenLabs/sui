@@ -28,7 +28,20 @@ impl User {
 
 impl Display for User {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let name = self.slack_user.as_ref().map(|u| u.name.clone());
+        let name = self
+            .slack_user
+            .as_ref()
+            .map(|u| {
+                format!(
+                    "{} {}",
+                    u.name.clone(),
+                    u.profile
+                        .as_ref()
+                        .map(|p| format!("({})", p.email.as_ref().unwrap_or(&"".to_string())))
+                        .unwrap_or("".to_string())
+                )
+            })
+            .or_else(|| self.notion_user.as_ref().map(|u| u.name.clone()));
         if let Some(name) = name {
             write!(f, "{}", name)
         } else {

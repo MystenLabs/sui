@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::env;
 use std::str::FromStr;
+use tracing::debug;
 
 use crate::DEBUG_MODE;
 
@@ -158,7 +159,6 @@ impl Notion {
     }
 
     pub async fn insert_incident(&self, incident: Incident) -> Result<()> {
-        debug_prop!(self, "Status");
         let url = format!("https://api.notion.com/v1/pages");
         let body = json!({
             "parent": { "database_id": INCIDENT_DB_ID.to_string() },
@@ -206,6 +206,10 @@ impl Notion {
             .context("sending insert db row")?;
 
         if response.status().is_success() {
+            debug!(
+                "inserted incident: {:?}",
+                response.text().await.context("getting response text")?
+            );
             Ok(())
         } else {
             Err(anyhow::anyhow!(
