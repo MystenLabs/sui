@@ -150,6 +150,15 @@ fn build_anemo_services(out_dir: &Path) {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("get_known_peers_v2")
+                .route_name("GetKnownPeersV2")
+                .request_type("()")
+                .response_type("crate::discovery::GetKnownPeersResponseV2")
+                .codec_path(codec_path)
+                .build(),
+        )
         .build();
 
     let state_sync = anemo_build::manual::Service::builder()
