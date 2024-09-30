@@ -298,7 +298,7 @@ impl Default for BoundedVisitor {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::str::FromStr;
 
     use super::*;
@@ -486,29 +486,77 @@ mod tests {
         expect.assert_eq(&err.to_string());
     }
 
+    type Variant<'s> = (&'s str, u16);
+    type FieldLayout<'s> = (&'s str, A::MoveTypeLayout);
+
+    fn ident_(name: &str) -> Identifier {
+        Identifier::new(name).unwrap()
+    }
+
     /// Create a struct value for test purposes.
-    fn value_(rep: &str, fields: Vec<(&str, A::MoveValue)>) -> A::MoveValue {
+    pub(crate) fn value_(rep: &str, fields: Vec<(&str, A::MoveValue)>) -> A::MoveValue {
         let type_ = StructTag::from_str(rep).unwrap();
         let fields = fields
             .into_iter()
-            .map(|(name, value)| (Identifier::new(name).unwrap(), value))
+            .map(|(name, value)| (ident_(name), value))
             .collect();
 
         A::MoveValue::Struct(A::MoveStruct::new(type_, fields))
     }
 
     /// Create a struct layout for test purposes.
-    fn layout_(rep: &str, fields: Vec<(&str, A::MoveTypeLayout)>) -> A::MoveTypeLayout {
+    pub(crate) fn layout_(rep: &str, fields: Vec<FieldLayout<'_>>) -> A::MoveTypeLayout {
         let type_ = StructTag::from_str(rep).unwrap();
         let fields = fields
             .into_iter()
-            .map(|(name, layout)| A::MoveFieldLayout::new(Identifier::new(name).unwrap(), layout))
+            .map(|(name, layout)| A::MoveFieldLayout::new(ident_(name), layout))
             .collect();
 
         A::MoveTypeLayout::Struct(Box::new(A::MoveStructLayout {
             type_,
             fields: Box::new(fields),
         }))
+    }
+
+    /// Create a variant value for test purposes.
+    pub(crate) fn variant_(
+        rep: &str,
+        name: &str,
+        tag: u16,
+        fields: Vec<(&str, A::MoveValue)>,
+    ) -> A::MoveValue {
+        let type_ = StructTag::from_str(rep).unwrap();
+        let fields = fields
+            .into_iter()
+            .map(|(name, value)| (ident_(name), value))
+            .collect();
+
+        A::MoveValue::Variant(A::MoveVariant {
+            type_,
+            variant_name: ident_(name),
+            tag,
+            fields,
+        })
+    }
+
+    /// Create an enum layout for test purposes.
+    pub(crate) fn enum_(
+        rep: &str,
+        variants: Vec<(Variant<'_>, Vec<FieldLayout<'_>>)>,
+    ) -> A::MoveTypeLayout {
+        let type_ = StructTag::from_str(rep).unwrap();
+        let variants = variants
+            .into_iter()
+            .map(|((name, tag), fields)| {
+                let fields = fields
+                    .into_iter()
+                    .map(|(name, layout)| A::MoveFieldLayout::new(ident_(name), layout))
+                    .collect();
+                ((ident_(name), tag), fields)
+            })
+            .collect();
+
+        A::MoveTypeLayout::Enum(Box::new(A::MoveEnumLayout { type_, variants }))
     }
 
     /// BCS encode Move value.

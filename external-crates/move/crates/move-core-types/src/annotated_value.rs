@@ -72,7 +72,7 @@ pub enum MoveValue {
     Variant(MoveVariant),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MoveFieldLayout {
     pub name: Identifier,
     pub layout: MoveTypeLayout,
@@ -84,14 +84,14 @@ impl MoveFieldLayout {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MoveStructLayout {
     /// An decorated representation with both types and human-readable field names
     pub type_: StructTag,
     pub fields: Box<Vec<MoveFieldLayout>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MoveEnumLayout {
     pub type_: StructTag,
     pub variants: BTreeMap<(Identifier, u16), Vec<MoveFieldLayout>>,
@@ -112,7 +112,7 @@ impl MoveDatatypeLayout {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MoveTypeLayout {
     #[serde(rename(serialize = "bool", deserialize = "bool"))]
     Bool,
