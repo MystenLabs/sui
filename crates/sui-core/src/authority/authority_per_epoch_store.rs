@@ -162,6 +162,8 @@ pub enum ConsensusCertificateResult {
     ),
 }
 
+// Unused type.
+// TODO: remove this type.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithHash {
     pub index: ExecutionIndices,
@@ -266,6 +268,8 @@ impl PartialOrd for ExecutionIndices {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithStats {
     pub index: ExecutionIndices,
+    // Hash is always 0 and kept for compatibility only.
+    // TODO: remove this field.
     pub hash: u64,
     pub stats: ConsensusStats,
 }
@@ -452,10 +456,8 @@ pub struct AuthorityEpochTables {
     #[allow(dead_code)]
     consensus_message_order: DBMap<ExecutionIndices, TransactionDigest>,
 
-    /// The following table is used to store a single value (the corresponding key is a constant). The value
-    /// represents the index of the latest consensus message this authority processed. This field is written
-    /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
-    /// every message output by consensus (and in the right order).
+    /// this table is no longer used
+    #[allow(dead_code)]
     last_consensus_index: DBMap<u64, ExecutionIndicesWithHash>,
 
     /// The following table is used to store a single value (the corresponding key is a constant). The value
@@ -680,8 +682,11 @@ impl AuthorityEpochTables {
         Ok(())
     }
 
-    pub fn get_last_consensus_index(&self) -> SuiResult<Option<ExecutionIndicesWithHash>> {
-        Ok(self.last_consensus_index.get(&LAST_CONSENSUS_STATS_ADDR)?)
+    pub fn get_last_consensus_index(&self) -> SuiResult<Option<ExecutionIndices>> {
+        Ok(self
+            .last_consensus_stats
+            .get(&LAST_CONSENSUS_STATS_ADDR)?
+            .map(|s| s.index))
     }
 
     pub fn get_last_consensus_stats(&self) -> SuiResult<Option<ExecutionIndicesWithStats>> {
@@ -1350,13 +1355,6 @@ impl AuthorityPerEpochStore {
             .collect()
     }
 
-    pub fn get_last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
-        self.tables()?
-            .get_last_consensus_index()
-            .map(|x| x.unwrap_or_default())
-            .map_err(SuiError::from)
-    }
-
     pub fn get_last_consensus_stats(&self) -> SuiResult<ExecutionIndicesWithStats> {
         match self
             .tables()?
@@ -1372,8 +1370,8 @@ impl AuthorityPerEpochStore {
                     .map(|x| x.unwrap_or_default())
                     .map_err(SuiError::from)?;
                 Ok(ExecutionIndicesWithStats {
-                    index: indices.index,
-                    hash: indices.hash,
+                    index: indices,
+                    hash: 0,
                     stats: ConsensusStats::default(),
                 })
             }
@@ -2573,7 +2571,7 @@ impl AuthorityPerEpochStore {
     }
 
     fn db_batch(&self) -> SuiResult<DBBatch> {
-        Ok(self.tables()?.last_consensus_index.batch())
+        Ok(self.tables()?.last_consensus_stats.batch())
     }
 
     #[cfg(test)]
@@ -4186,16 +4184,6 @@ impl ConsensusCommitOutput {
         }
 
         if let Some(consensus_commit_stats) = &self.consensus_commit_stats {
-            batch.insert_batch(
-                &tables.last_consensus_index,
-                [(
-                    LAST_CONSENSUS_STATS_ADDR,
-                    ExecutionIndicesWithHash {
-                        index: consensus_commit_stats.index,
-                        hash: consensus_commit_stats.hash,
-                    },
-                )],
-            )?;
             batch.insert_batch(
                 &tables.last_consensus_stats,
                 [(LAST_CONSENSUS_STATS_ADDR, consensus_commit_stats)],
