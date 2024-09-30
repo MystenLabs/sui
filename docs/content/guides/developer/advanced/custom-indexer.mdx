@@ -14,7 +14,7 @@ To use the framework, implement a basic interface:
 ```rust
 #[async_trait]
 trait Worker: Send + Sync {
-    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()>;
+    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()>;
 }
 ```
 
