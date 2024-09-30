@@ -18,16 +18,24 @@ use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use sui_json_rpc::get_object_changes;
+use sui_json_rpc::ObjectProvider;
 use sui_json_rpc_types::DisplayFieldsResponse;
-use sui_json_rpc_types::{Balance, Coin as SuiCoin, SuiCoinMetadata, SuiMoveValue};
 use sui_json_rpc_types::{
-    CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiObjectDataFilter,
-    SuiTransactionBlockResponse, TransactionFilter,
+    Balance, BalanceChange, Coin as SuiCoin, SuiCoinMetadata, SuiMoveValue, SuiTransactionBlock,
+    SuiTransactionBlockEffects, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+};
+use sui_json_rpc_types::{
+    CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiObjectDataFilter, TransactionFilter,
 };
 use sui_package_resolver::Package;
 use sui_package_resolver::PackageStore;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
-use sui_types::effects::TransactionEvents;
+use sui_types::base_types::SequenceNumber;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::event::Event;
+use sui_types::transaction::TransactionDataAPI;
 use sui_types::{balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName};
 use sui_types::{
     base_types::{ObjectID, SuiAddress, VersionNumber},
@@ -41,6 +49,7 @@ use sui_types::{coin::CoinMetadata, event::EventID};
 
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
+use crate::models::objects::StoredFullHistoryObject;
 use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
 use crate::schema::pruner_cp_watermark;
 use crate::schema::tx_digests;
@@ -55,7 +64,7 @@ use crate::{
         transactions::{tx_events_to_sui_tx_events, StoredTransaction},
         tx_indices::TxSequenceNumber,
     },
-    schema::{checkpoints, display, epochs, events, objects, transactions},
+    schema::{checkpoints, display, epochs, events, full_objects_history, objects, transactions},
     store::package_resolver::IndexerStorePackageResolver,
     types::{IndexerResult, OwnerType},
 };
@@ -466,10 +475,16 @@ impl IndexerReader {
         for stored_tx in stored_txes {
             let package_resolver_clone = self.package_resolver();
             let options_clone = options.clone();
-            tx_block_responses_futures.push(tokio::task::spawn(
-                stored_tx
-                    .try_into_sui_transaction_block_response(options_clone, package_resolver_clone),
-            ));
+            let reader = self.clone();
+            tx_block_responses_futures.push(tokio::task::spawn(async move {
+                reader
+                    .compose_sui_transaction_block_response(
+                        stored_tx,
+                        options_clone,
+                        package_resolver_clone,
+                    )
+                    .await
+            }));
         }
 
         let tx_blocks = futures::future::join_all(tx_block_responses_futures)
@@ -807,7 +822,7 @@ impl IndexerReader {
         &self,
         digests: &[TransactionDigest],
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
-    ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
+    ) -> Result<Vec<SuiTransactionBlockResponse>, IndexerError> {
         let stored_txes = self.multi_get_transactions(digests).await?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
             .await
@@ -819,7 +834,7 @@ impl IndexerReader {
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
         // Some(true) for desc, Some(false) for asc, None for undefined order
         is_descending: Option<bool>,
-    ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
+    ) -> Result<Vec<SuiTransactionBlockResponse>, IndexerError> {
         let stored_txes: Vec<StoredTransaction> = self
             .multi_get_transactions_with_sequence_numbers(tx_sequence_numbers, is_descending)
             .await?;
@@ -831,7 +846,7 @@ impl IndexerReader {
         &self,
         digests: Vec<TransactionDigest>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
-    ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
+    ) -> Result<Vec<SuiTransactionBlockResponse>, IndexerError> {
         self.multi_get_transaction_block_response_in_blocking_task_impl(&digests, options)
             .await
     }
@@ -1254,6 +1269,162 @@ impl IndexerReader {
         Ok(name_bcs_value)
     }
 
+    pub async fn compose_sui_transaction_block_response(
+        &self,
+        stored_transaction: StoredTransaction,
+        options: SuiTransactionBlockResponseOptions,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
+    ) -> IndexerResult<SuiTransactionBlockResponse> {
+        let options = options.clone();
+        let tx_digest = TransactionDigest::try_from(
+            stored_transaction.transaction_digest.as_slice(),
+        )
+        .map_err(|e| {
+            IndexerError::PersistentStorageDataCorruptionError(format!(
+                "Can't convert {:?} as tx_digest. Error: {e}",
+                stored_transaction.transaction_digest
+            ))
+        })?;
+
+        let sender_signed_data_option = if options.show_input || options.show_object_changes {
+            Some(stored_transaction.try_into_sender_signed_data()?)
+        } else {
+            None
+        };
+        let effects_option: Option<TransactionEffects> =
+            if options.show_effects || options.show_object_changes {
+                Some(
+                    bcs::from_bytes(&stored_transaction.raw_effects).map_err(|e| {
+                        IndexerError::PersistentStorageDataCorruptionError(format!(
+                            "Can't convert raw_effects of {} into TransactionEffects. Error: {e}",
+                            stored_transaction.tx_sequence_number
+                        ))
+                    })?,
+                )
+            } else {
+                None
+            };
+        let object_changes = if options.show_object_changes {
+            let sender = sender_signed_data_option
+                .as_ref()
+                .ok_or_else(|| {
+                    IndexerError::GenericError("Sender signed data should be available".into())
+                })?
+                .intent_message()
+                .value
+                .sender();
+            let effects = effects_option
+                .as_ref()
+                .ok_or_else(|| IndexerError::GenericError("Effects should be available".into()))?;
+            Some(
+                get_object_changes(
+                    self,
+                    sender,
+                    effects.modified_at_versions(),
+                    effects.all_changed_objects(),
+                    effects.all_removed_objects(),
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+
+        let transaction = if options.show_input {
+            let data = sender_signed_data_option.ok_or_else(|| {
+                IndexerError::GenericError("Sender signed data should be available".into())
+            })?;
+            Some(
+                SuiTransactionBlock::try_from_with_package_resolver(
+                    data.clone(),
+                    package_resolver.clone(),
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+
+        let effects = if options.show_effects {
+            let effects = effects_option
+                .ok_or_else(|| IndexerError::GenericError("Effects should be available".into()))?;
+            Some(SuiTransactionBlockEffects::try_from(effects)?)
+        } else {
+            None
+        };
+
+        let raw_transaction = if options.show_raw_input {
+            stored_transaction.raw_transaction
+        } else {
+            Vec::new()
+        };
+
+        let events = if options.show_events {
+            let events = {
+                stored_transaction
+                        .events
+                        .into_iter()
+                        .map(|event| match event {
+                            Some(event) => {
+                                let event: Event = bcs::from_bytes(&event).map_err(|e| {
+                                    IndexerError::PersistentStorageDataCorruptionError(format!(
+                                        "Can't convert event bytes into Event. tx_digest={:?} Error: {e}",
+                                        tx_digest
+                                    ))
+                                })?;
+                                Ok(event)
+                            }
+                            None => Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                                "Event should not be null, tx_digest={:?}",
+                                tx_digest
+                            ))),
+                        })
+                        .collect::<Result<Vec<Event>, IndexerError>>()?
+            };
+            let timestamp = stored_transaction.timestamp_ms as u64;
+            let tx_events = TransactionEvents { data: events };
+
+            tx_events_to_sui_tx_events(tx_events, package_resolver, tx_digest, timestamp).await?
+        } else {
+            None
+        };
+
+        let balance_changes = if options.show_balance_changes {
+            let balance_changes = {
+                stored_transaction.balance_changes.into_iter().map(|balance_change| {
+                        match balance_change {
+                            Some(balance_change) => {
+                                let balance_change: BalanceChange = bcs::from_bytes(&balance_change)
+                                    .map_err(|e| IndexerError::PersistentStorageDataCorruptionError(
+                                        format!("Can't convert balance_change bytes into BalanceChange. tx_digest={:?} Error: {e}", tx_digest)
+                                    ))?;
+                                Ok(balance_change)
+                            }
+                            None => Err(IndexerError::PersistentStorageDataCorruptionError(format!("object_change should not be null, tx_digest={:?}", tx_digest))),
+                        }
+                    }).collect::<Result<Vec<BalanceChange>, IndexerError>>()?
+            };
+            Some(balance_changes)
+        } else {
+            None
+        };
+
+        Ok(SuiTransactionBlockResponse {
+            digest: tx_digest,
+            transaction,
+            raw_transaction,
+            effects,
+            events,
+            object_changes,
+            balance_changes,
+            timestamp_ms: Some(stored_transaction.timestamp_ms as u64),
+            checkpoint: Some(stored_transaction.checkpoint_sequence_number as u64),
+            confirmed_local_execution: None,
+            errors: vec![],
+            raw_effects: stored_transaction.raw_effects,
+        })
+    }
+
     async fn get_display_object_by_type(
         &self,
         object_type: &move_core_types::language_storage::StructTag,
@@ -1430,6 +1601,56 @@ impl IndexerReader {
 
     pub fn package_resolver(&self) -> PackageResolver {
         self.package_resolver.clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl ObjectProvider for IndexerReader {
+    type Error = IndexerError;
+
+    async fn get_object(
+        &self,
+        id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<Object, Self::Error> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let stored_full_history_obj = full_objects_history::table
+            .filter(full_objects_history::object_id.eq(id.to_vec()))
+            .filter(full_objects_history::object_version.eq(version.value() as i64))
+            .first::<StoredFullHistoryObject>(&mut connection)
+            .await
+            .optional()?
+            .ok_or_else(|| {
+                IndexerError::PostgresReadError(format!(
+                    "Object not found: {:?}, {:?}",
+                    id, version
+                ))
+            })?;
+
+        stored_full_history_obj.try_into()
+    }
+
+    async fn find_object_lt_or_eq_version(
+        &self,
+        id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<Option<Object>, Self::Error> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let stored_object = full_objects_history::table
+            .filter(full_objects_history::object_id.eq(id.to_vec()))
+            .filter(full_objects_history::object_version.le(version.value() as i64))
+            .order(full_objects_history::object_version.desc())
+            .first::<StoredFullHistoryObject>(&mut connection)
+            .await
+            .optional()?;
+
+        stored_object.map(TryInto::try_into).transpose()
     }
 }
 

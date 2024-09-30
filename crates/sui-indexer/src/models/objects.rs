@@ -467,6 +467,26 @@ impl From<IndexedDeletedObject> for StoredFullHistoryObject {
     }
 }
 
+impl TryFrom<StoredFullHistoryObject> for Object {
+    type Error = IndexerError;
+
+    fn try_from(o: StoredFullHistoryObject) -> Result<Self, Self::Error> {
+        if let Some(serialized) = o.serialized_object {
+            bcs::from_bytes(&serialized).map_err(|e| {
+                IndexerError::SerdeError(format!(
+                    "Failed to deserialize object: {:?}, error: {}",
+                    o.object_id, e
+                ))
+            })
+        } else {
+            Err(IndexerError::PostgresReadError(format!(
+                "Object {:?} is wrapped or deleted",
+                o.object_id
+            )))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use move_core_types::{account_address::AccountAddress, language_storage::StructTag};

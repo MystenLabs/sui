@@ -7,20 +7,15 @@ use diesel::prelude::*;
 
 use move_core_types::annotated_value::{MoveDatatypeLayout, MoveTypeLayout};
 use move_core_types::language_storage::TypeTag;
-use sui_json_rpc_types::{
-    BalanceChange, ObjectChange, SuiEvent, SuiTransactionBlock, SuiTransactionBlockEffects,
-    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockEffects, SuiTransactionBlockEvents};
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::digests::TransactionDigest;
-use sui_types::effects::TransactionEffects;
-use sui_types::effects::TransactionEvents;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::event::Event;
 use sui_types::transaction::SenderSignedData;
 
 use crate::errors::IndexerError;
 use crate::schema::transactions;
-use crate::types::IndexedObjectChange;
 use crate::types::IndexedTransaction;
 use crate::types::IndexerResult;
 
@@ -128,131 +123,7 @@ impl StoredTransaction {
         self.events.get(idx).cloned().flatten()
     }
 
-    pub async fn try_into_sui_transaction_block_response(
-        self,
-        options: SuiTransactionBlockResponseOptions,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
-    ) -> IndexerResult<SuiTransactionBlockResponse> {
-        let options = options.clone();
-        let tx_digest =
-            TransactionDigest::try_from(self.transaction_digest.as_slice()).map_err(|e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Can't convert {:?} as tx_digest. Error: {e}",
-                    self.transaction_digest
-                ))
-            })?;
-
-        let transaction = if options.show_input {
-            let sender_signed_data = self.try_into_sender_signed_data()?;
-            let tx_block = SuiTransactionBlock::try_from_with_package_resolver(
-                sender_signed_data,
-                package_resolver.clone(),
-            )
-            .await?;
-            Some(tx_block)
-        } else {
-            None
-        };
-
-        let effects = if options.show_effects {
-            let effects = self.try_into_sui_transaction_effects()?;
-            Some(effects)
-        } else {
-            None
-        };
-
-        let raw_transaction = if options.show_raw_input {
-            self.raw_transaction
-        } else {
-            Vec::new()
-        };
-
-        let events = if options.show_events {
-            let events = {
-                self
-                        .events
-                        .into_iter()
-                        .map(|event| match event {
-                            Some(event) => {
-                                let event: Event = bcs::from_bytes(&event).map_err(|e| {
-                                    IndexerError::PersistentStorageDataCorruptionError(format!(
-                                        "Can't convert event bytes into Event. tx_digest={:?} Error: {e}",
-                                        tx_digest
-                                    ))
-                                })?;
-                                Ok(event)
-                            }
-                            None => Err(IndexerError::PersistentStorageDataCorruptionError(format!(
-                                "Event should not be null, tx_digest={:?}",
-                                tx_digest
-                            ))),
-                        })
-                        .collect::<Result<Vec<Event>, IndexerError>>()?
-            };
-            let timestamp = self.timestamp_ms as u64;
-            let tx_events = TransactionEvents { data: events };
-
-            tx_events_to_sui_tx_events(tx_events, package_resolver, tx_digest, timestamp).await?
-        } else {
-            None
-        };
-
-        let object_changes = if options.show_object_changes {
-            let object_changes = {
-                self.object_changes.into_iter().map(|object_change| {
-                        match object_change {
-                            Some(object_change) => {
-                                let object_change: IndexedObjectChange = bcs::from_bytes(&object_change)
-                                    .map_err(|e| IndexerError::PersistentStorageDataCorruptionError(
-                                        format!("Can't convert object_change bytes into IndexedObjectChange. tx_digest={:?} Error: {e}", tx_digest)
-                                    ))?;
-                                Ok(ObjectChange::from(object_change))
-                            }
-                            None => Err(IndexerError::PersistentStorageDataCorruptionError(format!("object_change should not be null, tx_digest={:?}", tx_digest))),
-                        }
-                    }).collect::<Result<Vec<ObjectChange>, IndexerError>>()?
-            };
-            Some(object_changes)
-        } else {
-            None
-        };
-
-        let balance_changes = if options.show_balance_changes {
-            let balance_changes = {
-                self.balance_changes.into_iter().map(|balance_change| {
-                        match balance_change {
-                            Some(balance_change) => {
-                                let balance_change: BalanceChange = bcs::from_bytes(&balance_change)
-                                    .map_err(|e| IndexerError::PersistentStorageDataCorruptionError(
-                                        format!("Can't convert balance_change bytes into BalanceChange. tx_digest={:?} Error: {e}", tx_digest)
-                                    ))?;
-                                Ok(balance_change)
-                            }
-                            None => Err(IndexerError::PersistentStorageDataCorruptionError(format!("object_change should not be null, tx_digest={:?}", tx_digest))),
-                        }
-                    }).collect::<Result<Vec<BalanceChange>, IndexerError>>()?
-            };
-            Some(balance_changes)
-        } else {
-            None
-        };
-
-        Ok(SuiTransactionBlockResponse {
-            digest: tx_digest,
-            transaction,
-            raw_transaction,
-            effects,
-            events,
-            object_changes,
-            balance_changes,
-            timestamp_ms: Some(self.timestamp_ms as u64),
-            checkpoint: Some(self.checkpoint_sequence_number as u64),
-            confirmed_local_execution: None,
-            errors: vec![],
-            raw_effects: self.raw_effects,
-        })
-    }
-    fn try_into_sender_signed_data(&self) -> IndexerResult<SenderSignedData> {
+    pub(crate) fn try_into_sender_signed_data(&self) -> IndexerResult<SenderSignedData> {
         let sender_signed_data: SenderSignedData =
             bcs::from_bytes(&self.raw_transaction).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
