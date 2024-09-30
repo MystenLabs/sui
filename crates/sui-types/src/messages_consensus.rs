@@ -4,9 +4,7 @@
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::digests::ConsensusCommitDigest;
-use crate::messages_checkpoint::{
-    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
-};
+use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use crate::supported_protocol_versions::{
     Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
 };
@@ -24,16 +22,29 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// The index of an authority in the consensus committee.
+/// The value should be the same in Sui committee.
+pub type AuthorityIndex = u32;
+
+/// Consensus round number.
+pub type Round = u32;
+
+/// The index of a transaction in a consensus block.
+pub type TransactionIndex = u16;
+
+/// Non-decreasing timestamp produced by consensus in ms.
+pub type TimestampMs = u64;
+
 /// Only commit_timestamp_ms is passed to the move call currently.
 /// However we include epoch and round to make sure each ConsensusCommitPrologue has a unique tx digest.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ConsensusCommitPrologue {
     /// Epoch of the commit prologue transaction
     pub epoch: u64,
-    /// Consensus round of the commit
+    /// Consensus round of the commit. Using u64 for compatibility.
     pub round: u64,
-    /// Unix timestamp from consensus
-    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Unix timestamp from consensus commit.
+    pub commit_timestamp_ms: TimestampMs,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -42,8 +53,8 @@ pub struct ConsensusCommitPrologueV2 {
     pub epoch: u64,
     /// Consensus round of the commit
     pub round: u64,
-    /// Unix timestamp from consensus
-    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Unix timestamp from consensus commit.
+    pub commit_timestamp_ms: TimestampMs,
     /// Digest of consensus output
     pub consensus_commit_digest: ConsensusCommitDigest,
 }
@@ -64,8 +75,8 @@ pub struct ConsensusCommitPrologueV3 {
     /// The sub DAG index of the consensus commit. This field will be populated if there
     /// are multiple consensus commits per round.
     pub sub_dag_index: Option<u64>,
-    /// Unix timestamp from consensus
-    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Unix timestamp from consensus commit.
+    pub commit_timestamp_ms: TimestampMs,
     /// Digest of consensus output
     pub consensus_commit_digest: ConsensusCommitDigest,
     /// Stores consensus handler determined shared object version assignments.
