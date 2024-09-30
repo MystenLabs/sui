@@ -144,7 +144,7 @@ impl TypingAnalysisContext<'_> {
         }
         let use_pos = name.loc();
         let use_name = name.value();
-        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident);
+        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
         };
