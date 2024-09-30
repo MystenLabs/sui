@@ -701,17 +701,15 @@ impl IndexerReader {
                 let package = Hex::encode(package.to_vec());
                 match (module, function) {
                     (Some(module), Some(function)) => (
-                        "tx_calls_fun".into(),
+                        "tx_calls_fun".to_owned(),
                         format!(
-                            "package = '\\x{}'::bytea AND module = '{}' AND func = '{}'",
-                            package, module, function
+                            "package = '\\x{package}'::bytea AND module = '{module}' AND func = '{function}'",
                         ),
                     ),
                     (Some(module), None) => (
-                        "tx_calls_mod".into(),
+                        "tx_calls_mod".to_owned(),
                         format!(
-                            "package = '\\x{}'::bytea AND module = '{}'",
-                            package, module
+                            "package = '\\x{package}'::bytea AND module = '{module}'",
                         ),
                     ),
                     (None, Some(_)) => {
@@ -720,106 +718,39 @@ impl IndexerReader {
                         ));
                     }
                     (None, None) => (
-                        "tx_calls_pkg".into(),
-                        format!("package = '\\x{}'::bytea", package),
+                        "tx_calls_pkg".to_owned(),
+                        format!("package = '\\x{package}'::bytea"),
                     ),
                 }
             }
             Some(TransactionFilter::AffectedObject(object_id)) => {
                 let object_id = Hex::encode(object_id.to_vec());
                 (
-                    "tx_affected_objects".into(),
-                    format!("affected = '\\x{}'::bytea", object_id),
-                )
-            }
-            Some(TransactionFilter::AffectedObject(object_id)) => {
-                let object_id = Hex::encode(object_id.to_vec());
-                (
-                    "tx_affected_objects".into(),
-                    format!("affected = '\\x{}'::bytea", object_id),
+                    "tx_affected_objects".to_owned(),
+                    format!("affected = '\\x{object_id}'::bytea"),
                 )
             }
             Some(TransactionFilter::FromAddress(from_address)) => {
                 let from_address = Hex::encode(from_address.to_vec());
                 (
-                    "tx_senders".into(),
-                    format!("sender = '\\x{}'::bytea", from_address),
-                )
-            }
-            Some(TransactionFilter::ToAddress(to_address)) => {
-                let to_address = Hex::encode(to_address.to_vec());
-                (
-                    "tx_recipients".into(),
-                    format!("recipient = '\\x{}'::bytea", to_address),
+                    "tx_senders".to_owned(),
+                    format!("sender = '\\x{from_address}'::bytea"),
                 )
             }
             Some(TransactionFilter::FromAndToAddress { from, to }) => {
                 let from_address = Hex::encode(from.to_vec());
                 let to_address = Hex::encode(to.to_vec());
-                // Need to remove ambiguities for tx_sequence_number column
-                let cursor_clause = if let Some(cursor_tx_seq) = cursor_tx_seq {
-                    if is_descending {
-                        format!(
-                            "AND tx_senders.{TX_SEQUENCE_NUMBER_STR} < {}",
-                            cursor_tx_seq
-                        )
-                    } else {
-                        format!(
-                            "AND tx_senders.{TX_SEQUENCE_NUMBER_STR} > {}",
-                            cursor_tx_seq
-                        )
-                    }
-                } else {
-                    "".to_string()
-                };
-                let inner_query = format!(
-                    "(SELECT tx_senders.{TX_SEQUENCE_NUMBER_STR} \
-                    FROM tx_senders \
-                    JOIN tx_recipients \
-                    ON tx_senders.{TX_SEQUENCE_NUMBER_STR} = tx_recipients.{TX_SEQUENCE_NUMBER_STR} \
-                    WHERE tx_senders.sender = '\\x{}'::BYTEA \
-                    AND tx_recipients.recipient = '\\x{}'::BYTEA \
-                    {} \
-                    ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
-                    LIMIT {}) AS inner_query
-                    ",
-                    from_address,
-                    to_address,
-                    cursor_clause,
-                    order_str,
-                    limit,
-                );
-                (inner_query, "1 = 1".into())
+                (
+                    "tx_affected_addresses".to_owned(),
+                    format!("sender = '\\x{from_address}'::bytea AND affected = '\\x{to_address}'::bytea"),
+                )
             }
-            // TODO: replace with tx_affected_address
             Some(TransactionFilter::FromOrToAddress { addr }) => {
                 let address = Hex::encode(addr.to_vec());
-                let inner_query = format!(
-                    "( \
-                        ( \
-                            SELECT {TX_SEQUENCE_NUMBER_STR} FROM tx_senders \
-                            WHERE sender = '\\x{}'::BYTEA {} \
-                            ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
-                            LIMIT {} \
-                        ) \
-                        UNION \
-                        ( \
-                            SELECT {TX_SEQUENCE_NUMBER_STR} FROM tx_recipients \
-                            WHERE recipient = '\\x{}'::BYTEA {} \
-                            ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
-                            LIMIT {} \
-                        ) \
-                    ) AS combined",
-                    address,
-                    cursor_clause,
-                    order_str,
-                    limit,
-                    address,
-                    cursor_clause,
-                    order_str,
-                    limit,
-                );
-                (inner_query, "1 = 1".into())
+                (
+                    "tx_affected_addresses".to_owned(),
+                    format!("affected = '\\x{address}'::bytea"),
+                )
             }
             Some(
                 TransactionFilter::TransactionKind(_) | TransactionFilter::TransactionKindIn(_),
@@ -833,9 +764,14 @@ impl IndexerReader {
                     "InputObject and OutputObject filters are not supported, please use AffectedObject instead.".into()
                 ))
             }
+            Some(TransactionFilter::ToAddress(_)) => {
+                return Err(IndexerError::NotSupportedError(
+                    "ToAddress filter is not supported, please use FromOrToAddress instead.".into()
+                ))
+            }
             None => {
                 // apply no filter
-                ("transactions".into(), "1 = 1".into())
+                ("transactions".to_owned(), "1 = 1".into())
             }
         };
 
