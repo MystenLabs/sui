@@ -382,6 +382,7 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
+        loc: _,
         compiled_visibility: tcompiled_visibility,
         visibility: tvisibility,
         entry,

@@ -96,7 +96,10 @@ use move_compiler::{
     },
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeName_, Type_, VariantFields},
-    parser::ast::{self as P},
+    parser::{
+        ast::{self as P},
+        comments::CommentMap,
+    },
     shared::{
         files::{FileId, MappedFiles},
         unique_map::UniqueMap,
@@ -136,6 +139,7 @@ pub struct CompiledPkgInfo {
     mapped_files: MappedFiles,
     edition: Option<Edition>,
     compiler_info: Option<CompilerInfo>,
+    all_comments: CommentMap,
 }
 
 /// Data used during symbols computation
@@ -1818,13 +1822,14 @@ pub fn get_compiled_pkg(
     };
 
     let mut edition = None;
+    let mut comments = None;
     build_plan.compile_with_driver_and_deps(dependencies, &mut std::io::sink(), |compiler| {
         let compiler = compiler.set_ide_mode();
         // extract expansion AST
         let (files, compilation_result) = compiler
             .set_pre_compiled_lib_opt(compiled_libs.clone())
             .run::<PASS_PARSER>()?;
-        let (_, compiler) = match compilation_result {
+        let (comments_map, compiler) = match compilation_result {
             Ok(v) => v,
             Err((_pass, diags)) => {
                 let failure = true;
@@ -1833,6 +1838,7 @@ pub fn get_compiled_pkg(
                 return Ok((files, vec![]));
             }
         };
+        comments = Some(comments_map);
         eprintln!("compiled to parsed AST");
         let (compiler, parsed_program) = compiler.into_ast();
         parsed_ast = Some(parsed_program.clone());
@@ -1896,6 +1902,10 @@ pub fn get_compiled_pkg(
     // when failing to produce the ASTs
     let parsed_program = parsed_ast.unwrap();
     let typed_program = typed_ast.clone().unwrap();
+    let mut all_comments = comments.unwrap();
+    if let Some(libs) = &compiled_libs {
+        all_comments.extend(libs.comments.clone());
+    }
     let compiled_pkg_info = CompiledPkgInfo {
         parsed_program,
         typed_program,
@@ -1904,6 +1914,7 @@ pub fn get_compiled_pkg(
         mapped_files,
         edition,
         compiler_info,
+        all_comments,
     };
     Ok((Some(compiled_pkg_info), ide_diagnostics))
 }
@@ -1942,6 +1953,7 @@ pub fn compute_symbols_pre_process(
         &mut computation_data.def_info,
         &compiled_pkg_info.edition,
         cursor_context.as_mut(),
+        &compiled_pkg_info.all_comments,
     );
 
     if let Some(libs) = compiled_pkg_info.libs.clone() {
@@ -1956,6 +1968,7 @@ pub fn compute_symbols_pre_process(
             &mut computation_data.def_info,
             &compiled_pkg_info.edition,
             None, // Cursor can never be in a compiled library(?)
+            &compiled_pkg_info.all_comments,
         );
     }
     cursor_context
@@ -2182,6 +2195,7 @@ fn pre_process_typed_modules(
     def_info: &mut DefMap,
     edition: &Option<Edition>,
     mut cursor_context: Option<&mut CursorContext>,
+    all_comments: &CommentMap,
 ) {
     for (pos, module_ident, module_def) in typed_modules {
         // If the cursor is in this module, mark that down.
@@ -2203,6 +2217,7 @@ fn pre_process_typed_modules(
             references,
             def_info,
             edition,
+            all_comments,
         );
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
         mod_use_defs.insert(mod_ident_str, symbols);
@@ -2367,6 +2382,7 @@ fn field_defs_and_types(
     files: &MappedFiles,
     file_id_to_lines: &HashMap<usize, Vec<String>>,
     def_info: &mut DefMap,
+    all_comments: &CommentMap,
 ) -> (Vec<FieldDef>, Vec<Type>) {
     let mut field_defs = vec![];
     let mut field_types = vec![];
@@ -2383,7 +2399,10 @@ fn field_defs_and_types(
             name: *fname,
             loc: floc,
         });
-        let doc_string = extract_doc_string(files, file_id_to_lines, &floc, Some(datatype_loc));
+        let doc_string = all_comments
+            .get(&floc.file_hash())
+            .and_then(|m| m.get(&floc.start()))
+            .cloned();
         def_info.insert(
             floc,
             DefInfo::Field(
@@ -2435,6 +2454,7 @@ fn get_mod_outer_defs(
     references: &mut References,
     def_info: &mut DefMap,
     edition: &Option<Edition>,
+    all_comments: &CommentMap,
 ) -> (ModuleDefs, UseDefMap) {
     let mut structs = BTreeMap::new();
     let mut enums = BTreeMap::new();
@@ -2462,6 +2482,7 @@ fn get_mod_outer_defs(
                 files,
                 file_id_to_lines,
                 def_info,
+                all_comments,
             );
         };
 
@@ -2486,7 +2507,10 @@ fn get_mod_outer_defs(
         } else {
             Visibility::Internal
         };
-        let doc_string = extract_doc_string(files, file_id_to_lines, &name_loc, None);
+        let doc_string = all_comments
+            .get(&def.loc.file_hash())
+            .and_then(|m| m.get(&def.loc.start()))
+            .cloned();
         def_info.insert(
             name_loc,
             DefInfo::Struct(
@@ -2523,6 +2547,7 @@ fn get_mod_outer_defs(
                         files,
                         file_id_to_lines,
                         def_info,
+                        all_comments,
                     );
                     (defs, types, *pos_fields)
                 }
@@ -2536,8 +2561,10 @@ fn get_mod_outer_defs(
             });
             variants_info.insert(*vname, (vname_loc, field_defs, positional));
 
-            let vdoc_string =
-                extract_doc_string(files, file_id_to_lines, &vname_loc, Some(name_loc));
+            let vdoc_string = all_comments
+                .get(&def.loc.file_hash())
+                .and_then(|m| m.get(&def.loc.start()))
+                .cloned();
             def_info.insert(
                 vname_loc,
                 DefInfo::Variant(
@@ -2559,7 +2586,10 @@ fn get_mod_outer_defs(
                 info: MemberDefInfo::Enum { variants_info },
             },
         );
-        let enum_doc_string = extract_doc_string(files, file_id_to_lines, &name_loc, None);
+        let enum_doc_string = all_comments
+            .get(&def.loc.file_hash())
+            .and_then(|m| m.get(&def.loc.start()))
+            .cloned();
         def_info.insert(
             name_loc,
             DefInfo::Enum(
@@ -2582,7 +2612,10 @@ fn get_mod_outer_defs(
                 info: MemberDefInfo::Const,
             },
         );
-        let doc_string = extract_doc_string(files, file_id_to_lines, &name_loc, None);
+        let doc_string = all_comments
+            .get(&c.loc.file_hash())
+            .and_then(|m| m.get(&c.loc.start()))
+            .cloned();
         def_info.insert(
             name_loc,
             DefInfo::Const(
@@ -2606,7 +2639,10 @@ fn get_mod_outer_defs(
         } else {
             FunType::Regular
         };
-        let doc_string = extract_doc_string(files, file_id_to_lines, &name_loc, None);
+        let doc_string = all_comments
+            .get(&fun.loc.file_hash())
+            .and_then(|m| m.get(&fun.loc.start()))
+            .cloned();
         let fun_info = DefInfo::Function(
             mod_ident.value,
             fun.visibility,
@@ -2650,7 +2686,10 @@ fn get_mod_outer_defs(
     let mut use_def_map = UseDefMap::new();
 
     let ident = mod_ident.value;
-    let doc_comment = extract_doc_string(files, file_id_to_lines, loc, None);
+    let doc_comment = all_comments
+        .get(&mod_def.loc.file_hash())
+        .and_then(|m| m.get(&mod_def.loc.start()))
+        .cloned();
     let mod_defs = ModuleDefs {
         fhash,
         ident,

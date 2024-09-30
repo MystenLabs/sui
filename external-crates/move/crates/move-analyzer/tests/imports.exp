@@ -9,7 +9,6 @@ module Symbols::M9
 
  A module doc comment
 
-
 -- test 1 -------------------
 use line: 8, use_ndx: 0
 Use: 'M1', start: 17, end: 19

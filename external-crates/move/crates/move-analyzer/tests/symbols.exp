@@ -690,7 +690,6 @@ public fun option::extract<Element>(
  Convert a `some` option to a `none` by removing and returning the value stored inside `t`
  Aborts if `t` does not hold a value
 
-
 -- test 17 -------------------
 use line: 78, use_ndx: 1
 Use: 'singleton', start: 21, end: 30
@@ -702,5 +701,4 @@ public fun vector::singleton<Element>(
 ): vector<Element>
 
  Return an vector of size one containing element `e`.
-
 
