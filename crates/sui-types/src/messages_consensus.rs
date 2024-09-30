@@ -393,6 +393,18 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_user_transaction_message(authority: &AuthorityName, tx: Transaction) -> Self {
+        let mut hasher = DefaultHasher::new();
+        let tx_digest = tx.digest();
+        tx_digest.hash(&mut hasher);
+        authority.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::UserTransaction(Box::new(tx)),
+        }
+    }
+
     pub fn new_checkpoint_signature_message(data: CheckpointSignatureMessage) -> Self {
         let mut hasher = DefaultHasher::new();
         data.summary.auth_sig().signature.hash(&mut hasher);
@@ -537,8 +549,12 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn is_user_certificate(&self) -> bool {
+    pub fn is_certified_transaction(&self) -> bool {
         matches!(self.kind, ConsensusTransactionKind::CertifiedTransaction(_))
+    }
+
+    pub fn is_user_transaction(&self) -> bool {
+        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
     }
 
     pub fn is_end_of_publish(&self) -> bool {
