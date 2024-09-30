@@ -26,6 +26,7 @@ pub struct OrderUpdate {
     pub is_bid: bool,
     pub original_quantity: i64,
     pub quantity: i64,
+    pub filled_quantity: i64,
     pub onchain_timestamp: i64,
     pub trader: String,
     pub balance_manager_id: String,

@@ -395,9 +395,10 @@ fn process_sui_event(
                     client_order_id: move_event.client_order_id,
                     price: move_event.price,
                     is_bid: move_event.is_bid,
-                    onchain_timestamp: move_event.expire_timestamp,
+                    onchain_timestamp: move_event.timestamp,
                     original_quantity: move_event.placed_quantity,
                     quantity: move_event.placed_quantity,
+                    filled_quantity: 0,
                     trader: move_event.trader.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                 }))
@@ -424,8 +425,9 @@ fn process_sui_event(
                     price: move_event.price,
                     is_bid: move_event.is_bid,
                     onchain_timestamp: move_event.timestamp,
-                    original_quantity: 0,
+                    original_quantity: move_event.previous_quantity,
                     quantity: move_event.new_quantity,
+                    filled_quantity: move_event.filled_quantity,
                     trader: move_event.trader.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                 }))
@@ -454,6 +456,8 @@ fn process_sui_event(
                     onchain_timestamp: move_event.timestamp,
                     original_quantity: move_event.original_quantity,
                     quantity: move_event.base_asset_quantity_canceled,
+                    filled_quantity: move_event.original_quantity
+                        - move_event.base_asset_quantity_canceled,
                     trader: move_event.trader.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                 }))
@@ -482,6 +486,8 @@ fn process_sui_event(
                     onchain_timestamp: move_event.timestamp,
                     original_quantity: move_event.original_quantity,
                     quantity: move_event.base_asset_quantity_canceled,
+                    filled_quantity: move_event.original_quantity
+                        - move_event.base_asset_quantity_canceled,
                     trader: move_event.trader.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                 }))

@@ -61,6 +61,8 @@ pub struct MoveOrderModifiedEvent {
     pub trader: SuiAddress,
     pub price: u64,
     pub is_bid: bool,
+    pub previous_quantity: u64,
+    pub filled_quantity: u64,
     pub new_quantity: u64,
     pub timestamp: u64,
 }
@@ -76,6 +78,7 @@ pub struct MoveOrderPlacedEvent {
     pub is_bid: bool,
     pub placed_quantity: u64,
     pub expire_timestamp: u64,
+    pub timestamp: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
