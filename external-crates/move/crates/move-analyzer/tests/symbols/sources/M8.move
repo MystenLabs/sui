@@ -30,4 +30,11 @@ module Symbols::M8 {
 
     const ANOTHER_USE_CONST: bool = Symbols::M8::EQUAL == false;
 
+    #[error]
+    const ERROR_CONST: u64 = 42;
+
+    public fun clever_assert() {
+        assert!(ERROR_CONST == 42, ERROR_CONST);
+    }
+
 }
