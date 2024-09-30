@@ -3923,9 +3923,7 @@ impl AuthorityState {
 
         let limit = limit + 1;
         let mut event_keys = match query {
-            EventFilter::All(fs) if fs.is_empty() => {
-                index_store.all_events(tx_num, event_num, limit, descending)?
-            }
+            EventFilter::All([]) => index_store.all_events(tx_num, event_num, limit, descending)?,
             EventFilter::Transaction(digest) => {
                 index_store.events_by_transaction(&digest, tx_num, event_num, limit, descending)?
             }
@@ -3957,13 +3955,6 @@ impl AuthorityState {
                     limit,
                     descending,
                 )?,
-            EventFilter::All(_) => {
-                return Err(SuiError::UserInputError {
-                    error: UserInputError::Unsupported(
-                        "This query type is not supported by the full node.".to_string(),
-                    ),
-                })
-            }
         };
 
         // skip one event if exclusive cursor is provided,

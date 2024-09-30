@@ -203,9 +203,8 @@ fn try_into_byte(v: &Value) -> Option<u8> {
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub enum EventFilter {
-    /// Query by events that match all the given filters, or return all events if no filters are
-    /// supplied.
-    All(Vec<EventFilter>),
+    /// Return all events.
+    All([Box<EventFilter>; 0]),
     /// Query by sender address.
     Sender(SuiAddress),
     /// Return events emitted by the given transaction.
@@ -263,7 +262,7 @@ impl Filter<SuiEvent> for EventFilter {
     fn matches(&self, item: &SuiEvent) -> bool {
         let _scope = monitored_scope("EventFilter::matches");
         match self {
-            EventFilter::All(fs) => fs.iter().all(|f| f.matches(item)),
+            EventFilter::All([]) => true,
             EventFilter::MoveEventType(event_type) => &item.type_ == event_type,
             EventFilter::Sender(sender) => &item.sender == sender,
             EventFilter::MoveModule { package, module } => {

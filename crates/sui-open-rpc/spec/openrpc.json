@@ -6106,7 +6106,7 @@
       "EventFilter": {
         "oneOf": [
           {
-            "description": "Query by events that match all the given filters, or return all events if no filters are supplied.",
+            "description": "Return all events.",
             "type": "object",
             "required": [
               "All"
@@ -6114,9 +6114,7 @@
             "properties": {
               "All": {
                 "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EventFilter"
-                }
+                "maxItems": 0
               }
             },
             "additionalProperties": false

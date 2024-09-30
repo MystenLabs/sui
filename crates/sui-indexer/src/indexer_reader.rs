@@ -1012,7 +1012,7 @@ impl IndexerReader {
                 .await;
         } else {
             let main_where_clause = match filter {
-                EventFilter::All(fs) if fs.is_empty() => {
+                EventFilter::All([]) => {
                     // No filter
                     "1 = 1".to_string()
                 }
@@ -1038,7 +1038,7 @@ impl IndexerReader {
                     // Processed above
                     unreachable!()
                 }
-                EventFilter::All(_) | EventFilter::TimeRange { .. } => {
+                EventFilter::TimeRange { .. } => {
                     return Err(IndexerError::NotSupportedError(
                         "This type of EventFilter is not supported.".to_owned(),
                     ));
