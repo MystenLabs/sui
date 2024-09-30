@@ -1,11 +1,11 @@
 == M6.move ========================================================
 -- test 0 -------------------
 use line: 5, use_ndx: 0
-Use: 'DocumentedStruct', start: 11, end: 27
-Def: 'DocumentedStruct', line: 4, def char: 11
-TypeDef: 'DocumentedStruct', line: 4, char: 11
+Use: 'DocumentedStruct', start: 18, end: 34
+Def: 'DocumentedStruct', line: 4, def char: 18
+TypeDef: 'DocumentedStruct', line: 4, char: 18
 On Hover:
-struct Symbols::M6::DocumentedStruct has drop, store {
+public struct Symbols::M6::DocumentedStruct has drop, store {
 	documented_field: u64
 }
 
@@ -38,17 +38,17 @@ fun Symbols::M6::unpack(
 use line: 15, use_ndx: 1
 Use: 's', start: 15, end: 16
 Def: 's', line: 14, def char: 15
-TypeDef: 'DocumentedStruct', line: 4, char: 11
+TypeDef: 'DocumentedStruct', line: 4, char: 18
 On Hover:
 s: Symbols::M6::DocumentedStruct
 
 -- test 4 -------------------
 use line: 15, use_ndx: 2
 Use: 'DocumentedStruct', start: 18, end: 34
-Def: 'DocumentedStruct', line: 4, def char: 11
-TypeDef: 'DocumentedStruct', line: 4, char: 11
+Def: 'DocumentedStruct', line: 4, def char: 18
+TypeDef: 'DocumentedStruct', line: 4, char: 18
 On Hover:
-struct Symbols::M6::DocumentedStruct has drop, store {
+public struct Symbols::M6::DocumentedStruct has drop, store {
 	documented_field: u64
 }
 
@@ -58,10 +58,10 @@ struct Symbols::M6::DocumentedStruct has drop, store {
 -- test 5 -------------------
 use line: 16, use_ndx: 0
 Use: 'DocumentedStruct', start: 12, end: 28
-Def: 'DocumentedStruct', line: 4, def char: 11
-TypeDef: 'DocumentedStruct', line: 4, char: 11
+Def: 'DocumentedStruct', line: 4, def char: 18
+TypeDef: 'DocumentedStruct', line: 4, char: 18
 On Hover:
-struct Symbols::M6::DocumentedStruct has drop, store {
+public struct Symbols::M6::DocumentedStruct has drop, store {
 	documented_field: u64
 }
 
@@ -83,7 +83,7 @@ documented_field: u64
 use line: 16, use_ndx: 3
 Use: 's', start: 59, end: 60
 Def: 's', line: 14, def char: 15
-TypeDef: 'DocumentedStruct', line: 4, char: 11
+TypeDef: 'DocumentedStruct', line: 4, char: 18
 On Hover:
 s: Symbols::M6::DocumentedStruct
 
@@ -118,10 +118,10 @@ fun Symbols::M6::acq(
 -- test 10 -------------------
 use line: 27, use_ndx: 2
 Use: 'OtherDocStruct', start: 41, end: 55
-Def: 'OtherDocStruct', line: 3, def char: 11
-TypeDef: 'OtherDocStruct', line: 3, char: 11
+Def: 'OtherDocStruct', line: 3, def char: 18
+TypeDef: 'OtherDocStruct', line: 3, char: 18
 On Hover:
-struct Symbols::M7::OtherDocStruct has drop {
+public struct Symbols::M7::OtherDocStruct has drop {
 	some_field: u64
 }
 
@@ -152,10 +152,10 @@ const Symbols::M6::DOCUMENTED_CONSTANT: u64 = 42
 -- test 13 -------------------
 use line: 39, use_ndx: 1
 Use: 'OtherDocStruct', start: 35, end: 49
-Def: 'OtherDocStruct', line: 3, def char: 11
-TypeDef: 'OtherDocStruct', line: 3, char: 11
+Def: 'OtherDocStruct', line: 3, def char: 18
+TypeDef: 'OtherDocStruct', line: 3, char: 18
 On Hover:
-struct Symbols::M7::OtherDocStruct has drop {
+public struct Symbols::M7::OtherDocStruct has drop {
 	some_field: u64
 }
 

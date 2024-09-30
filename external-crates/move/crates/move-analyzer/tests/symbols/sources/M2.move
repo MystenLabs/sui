@@ -1,6 +1,6 @@
 module Symbols::M2 {
 
-    struct SomeOtherStruct has drop {
+    public struct SomeOtherStruct has drop {
         some_field: u64,
     }
 

@@ -29,4 +29,5 @@ module Symbols::M8 {
     const EQUAL: bool = 1 == 1;
 
     const ANOTHER_USE_CONST: bool = Symbols::M8::EQUAL == false;
+
 }
