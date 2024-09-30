@@ -1,0 +1,255 @@
+processed 15 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-56:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8147200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 58-60:
+//# programmable --sender A --inputs 1 @A
+//> P::M::new(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 62-64:
+//# programmable --sender A --inputs 2 @A
+//> P::M::new(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 66-68:
+//# programmable --sender A --inputs 3 @A
+//> P::M::new(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 70-71:
+//# programmable --sender A --inputs object(2,0)
+//> P::M::inc(Input(0))
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 2272248, non_refundable_storage_fee: 22952
+
+task 6, lines 73-75:
+//# programmable --sender A --inputs object(2,0) @A
+//> P::M::wrap(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(6,0)
+mutated: object(0,0)
+wrapped: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 2272248, non_refundable_storage_fee: 22952
+
+task 7, lines 77-78:
+//# programmable --sender A --inputs object(6,0)
+//> P::M::incw(Input(0))
+mutated: object(0,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 2520540, non_refundable_storage_fee: 25460
+
+task 8, lines 80-82:
+//# programmable --sender A --inputs object(6,0) @A
+//> P::M::unwrap(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+mutated: object(0,0)
+unwrapped: object(2,0)
+deleted: object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 2520540, non_refundable_storage_fee: 25460
+
+task 9, lines 84-85:
+//# programmable --sender A --inputs object(3,0) object(2,0)
+//> P::M::transfer(Input(0), Input(1))
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3602400,  storage_rebate: 3566376, non_refundable_storage_fee: 36024
+
+task 10, lines 87-88:
+//# programmable --sender A --inputs receiving(2,0)
+//> P::M::drop_receiving(Input(0))
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, lines 90-92:
+//# programmable --sender A --inputs object(4,0) receiving(2,0) @A
+//> P::M::receive(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 3
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 12, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 0)] }), command: Some(0) } }
+
+task 12, lines 94-96:
+//# programmable --sender A --inputs object(3,0) receiving(2,0) @A
+//> P::M::receive(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3602400,  storage_rebate: 3566376, non_refundable_storage_fee: 36024
+
+task 13, line 98:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 14, lines 100-115:
+//# run-graphql
+Response: {
+  "data": {
+    "all": {
+      "nodes": [
+        {
+          "digest": "EAu7t7RFbwASW5ZLxtqa33ody8xidNR3U3KFKBKAFU5q"
+        },
+        {
+          "digest": "9Gorn5uVdjc7eHBW3WafnpiqQfYg6iPSkxhZ6CbuBqwk"
+        },
+        {
+          "digest": "3qPssWeR5bvwaZiwkjbYTkR7ng9XSDp7aaky8A4DJp6S"
+        },
+        {
+          "digest": "9iRKWAoNUXAnBbA2sajqXN7wV4t6XvgHaqhTmMW6TcDi"
+        },
+        {
+          "digest": "GT6fS3ko7JHfHvFmMg7AdZ2xTf1gjmckvrJSTRXSbLKt"
+        },
+        {
+          "digest": "2VpJzfhaw4oHY5LW2SLHsrYVYHHPjotB1fjwbks27VjF"
+        },
+        {
+          "digest": "3sGvS3VJnsdTVLNi14Xe7AaaaqsWwMc8ohbWEb6BNSWV"
+        },
+        {
+          "digest": "4yvTSsQXNH9nJeU1yXG66bFBkq9DFdYMNYyanvp8qqLi"
+        },
+        {
+          "digest": "CLgQXbBzTdre9fgFkZbN9NzcQe4f3fAsg2NowXFCEpJ5"
+        },
+        {
+          "digest": "B6avepddy14XNQf7Bwv1YL5Kt6JKj4wuFgkwNrGTDa3Y"
+        },
+        {
+          "digest": "HHKfCgrv9gBQ6j3sGK7qDNDahmYzK8Rf3on6JGA4DanS"
+        }
+      ]
+    },
+    "affect2": {
+      "nodes": [
+        {
+          "digest": "EAu7t7RFbwASW5ZLxtqa33ody8xidNR3U3KFKBKAFU5q"
+        },
+        {
+          "digest": "9iRKWAoNUXAnBbA2sajqXN7wV4t6XvgHaqhTmMW6TcDi"
+        },
+        {
+          "digest": "GT6fS3ko7JHfHvFmMg7AdZ2xTf1gjmckvrJSTRXSbLKt"
+        },
+        {
+          "digest": "3sGvS3VJnsdTVLNi14Xe7AaaaqsWwMc8ohbWEb6BNSWV"
+        },
+        {
+          "digest": "4yvTSsQXNH9nJeU1yXG66bFBkq9DFdYMNYyanvp8qqLi"
+        },
+        {
+          "digest": "HHKfCgrv9gBQ6j3sGK7qDNDahmYzK8Rf3on6JGA4DanS"
+        }
+      ]
+    },
+    "input2": {
+      "nodes": [
+        {
+          "digest": "9iRKWAoNUXAnBbA2sajqXN7wV4t6XvgHaqhTmMW6TcDi"
+        },
+        {
+          "digest": "GT6fS3ko7JHfHvFmMg7AdZ2xTf1gjmckvrJSTRXSbLKt"
+        },
+        {
+          "digest": "4yvTSsQXNH9nJeU1yXG66bFBkq9DFdYMNYyanvp8qqLi"
+        }
+      ]
+    },
+    "change2": {
+      "nodes": [
+        {
+          "digest": "EAu7t7RFbwASW5ZLxtqa33ody8xidNR3U3KFKBKAFU5q"
+        },
+        {
+          "digest": "9iRKWAoNUXAnBbA2sajqXN7wV4t6XvgHaqhTmMW6TcDi"
+        },
+        {
+          "digest": "3sGvS3VJnsdTVLNi14Xe7AaaaqsWwMc8ohbWEb6BNSWV"
+        },
+        {
+          "digest": "4yvTSsQXNH9nJeU1yXG66bFBkq9DFdYMNYyanvp8qqLi"
+        },
+        {
+          "digest": "HHKfCgrv9gBQ6j3sGK7qDNDahmYzK8Rf3on6JGA4DanS"
+        }
+      ]
+    },
+    "affect3": {
+      "nodes": [
+        {
+          "digest": "9Gorn5uVdjc7eHBW3WafnpiqQfYg6iPSkxhZ6CbuBqwk"
+        },
+        {
+          "digest": "4yvTSsQXNH9nJeU1yXG66bFBkq9DFdYMNYyanvp8qqLi"
+        },
+        {
+          "digest": "HHKfCgrv9gBQ6j3sGK7qDNDahmYzK8Rf3on6JGA4DanS"
+        }
+      ]
+    },
+    "input3": {
+      "nodes": [
+        {
+          "digest": "4yvTSsQXNH9nJeU1yXG66bFBkq9DFdYMNYyanvp8qqLi"
+        },
+        {
+          "digest": "HHKfCgrv9gBQ6j3sGK7qDNDahmYzK8Rf3on6JGA4DanS"
+        }
+      ]
+    },
+    "change3": {
+      "nodes": [
+        {
+          "digest": "9Gorn5uVdjc7eHBW3WafnpiqQfYg6iPSkxhZ6CbuBqwk"
+        },
+        {
+          "digest": "4yvTSsQXNH9nJeU1yXG66bFBkq9DFdYMNYyanvp8qqLi"
+        },
+        {
+          "digest": "HHKfCgrv9gBQ6j3sGK7qDNDahmYzK8Rf3on6JGA4DanS"
+        }
+      ]
+    },
+    "affect4": {
+      "nodes": [
+        {
+          "digest": "3qPssWeR5bvwaZiwkjbYTkR7ng9XSDp7aaky8A4DJp6S"
+        },
+        {
+          "digest": "B6avepddy14XNQf7Bwv1YL5Kt6JKj4wuFgkwNrGTDa3Y"
+        }
+      ]
+    },
+    "input4": {
+      "nodes": [
+        {
+          "digest": "B6avepddy14XNQf7Bwv1YL5Kt6JKj4wuFgkwNrGTDa3Y"
+        }
+      ]
+    },
+    "change4": {
+      "nodes": [
+        {
+          "digest": "3qPssWeR5bvwaZiwkjbYTkR7ng9XSDp7aaky8A4DJp6S"
+        },
+        {
+          "digest": "B6avepddy14XNQf7Bwv1YL5Kt6JKj4wuFgkwNrGTDa3Y"
+        }
+      ]
+    }
+  }
+}
