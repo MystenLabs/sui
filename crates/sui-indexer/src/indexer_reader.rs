@@ -9,43 +9,38 @@ use diesel::{
 };
 use itertools::Itertools;
 use std::sync::Arc;
-use sui_types::dynamic_field::visitor as DFV;
-use sui_types::object::bounded_visitor::BoundedVisitor;
 use tap::{Pipe, TapFallible};
 use tracing::{debug, error, warn};
 
-use fastcrypto::encoding::Encoding;
-use fastcrypto::encoding::Hex;
-use move_core_types::annotated_value::MoveStructLayout;
-use move_core_types::language_storage::{StructTag, TypeTag};
-use sui_json_rpc::get_object_changes;
-use sui_json_rpc::ObjectProvider;
-use sui_json_rpc_types::DisplayFieldsResponse;
+use fastcrypto::encoding::{Encoding, Hex};
+use move_core_types::{
+    annotated_value::MoveStructLayout,
+    language_storage::{StructTag, TypeTag},
+};
+use sui_json_rpc::{get_object_changes, ObjectProvider};
 use sui_json_rpc_types::{
-    Balance, BalanceChange, Coin as SuiCoin, SuiCoinMetadata, SuiMoveValue, SuiTransactionBlock,
+    Balance, BalanceChange, CheckpointId, Coin as SuiCoin, DisplayFieldsResponse, EpochInfo,
+    EventFilter, SuiCoinMetadata, SuiEvent, SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlock,
     SuiTransactionBlockEffects, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    TransactionFilter,
 };
-use sui_json_rpc_types::{
-    CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiObjectDataFilter, TransactionFilter,
-};
-use sui_package_resolver::Package;
-use sui_package_resolver::PackageStore;
-use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
-use sui_types::base_types::SequenceNumber;
-use sui_types::effects::TransactionEffectsAPI;
-use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::event::Event;
+use sui_package_resolver::{Package, PackageStore, PackageStoreWithLruCache, Resolver};
 use sui_types::transaction::TransactionDataAPI;
-use sui_types::{balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName};
 use sui_types::{
-    base_types::{ObjectID, SuiAddress, VersionNumber},
+    balance::Supply,
+    base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
+    coin::{CoinMetadata, TreasuryCap},
     committee::EpochId,
     digests::TransactionDigest,
+    dynamic_field::visitor as DFV,
     dynamic_field::DynamicFieldInfo,
+    dynamic_field::DynamicFieldName,
+    effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
+    event::{Event, EventID},
+    object::bounded_visitor::BoundedVisitor,
     object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
-use sui_types::{coin::CoinMetadata, event::EventID};
 
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
