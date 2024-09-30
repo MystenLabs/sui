@@ -792,6 +792,17 @@ async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), 
     assert_eq!(effects.unwrap().transaction_digest(), tx_digest);
     assert!(!confirmed_local_execution.unwrap());
 
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    let latest_seq = test_cluster
+        .fullnode_handle
+        .sui_node
+        .state()
+        .get_latest_checkpoint_sequence_number()?;
+    assert!(
+        latest_seq > 0,
+        "Expected latest sequence number to be greater than 0"
+    );
+
     Ok(())
 }
 
