@@ -175,8 +175,8 @@ Please comment in the thread to request an adjustment to the list.",
     let insert_into_db = Confirm::new(&format!(
         "Insert {} incidents into {:?} Notion database ({:?}) for review?",
         to_review.len(),
-        INCIDENT_DB_NAME,
-        INCIDENT_DB_ID
+        INCIDENT_DB_NAME.to_string(),
+        INCIDENT_DB_ID.to_string()
     ))
     .with_default(false)
     .prompt()
