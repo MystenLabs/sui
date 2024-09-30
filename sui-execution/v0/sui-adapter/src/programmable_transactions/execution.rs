@@ -743,14 +743,9 @@ mod checked {
                     };
 
                 let compatibility = Compatibility {
-                    check_datatype_and_pub_function_linking: true,
                     check_datatype_layout: true,
-                    check_friend_linking: false,
                     check_private_entry_linking: false,
                     disallowed_new_abilities,
-                    disallow_change_datatype_type_params: protocol_config
-                        .disallow_change_struct_type_params_on_upgrade(),
-                    disallow_new_variants: true,
                 };
 
                 compatibility.check(cur_module, new_module)
