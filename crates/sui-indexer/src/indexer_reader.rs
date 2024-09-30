@@ -739,6 +739,13 @@ impl IndexerReader {
                     format!("object_id = '\\x{}'::bytea", object_id),
                 )
             }
+            Some(TransactionFilter::AffectedObject(object_id)) => {
+                let object_id = Hex::encode(object_id.to_vec());
+                (
+                    "tx_affected_objects".into(),
+                    format!("affected = '\\x{}'::bytea", object_id),
+                )
+            }
             Some(TransactionFilter::FromAddress(from_address)) => {
                 let from_address = Hex::encode(from_address.to_vec());
                 (

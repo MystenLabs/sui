@@ -10863,6 +10863,19 @@
             "additionalProperties": false
           },
           {
+            "description": "Query for transactions that touch this object.",
+            "type": "object",
+            "required": [
+              "AffectedObject"
+            ],
+            "properties": {
+              "AffectedObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by sender address.",
             "type": "object",
             "required": [
