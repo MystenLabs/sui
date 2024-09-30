@@ -7,7 +7,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { expect, type Mock } from 'vitest';
 
-import { toB58 } from '../../../bcs/dist/cjs/b58.js';
+import { toBase58 } from '../../../bcs/dist/cjs/b58.js';
 import {
 	WalletFeatureNotSupportedError,
 	WalletNotConnectedError,
@@ -154,7 +154,7 @@ describe('useSignAndExecuteTransaction', () => {
 
 		const wrapper = createWalletProviderContextWrapper({}, suiClient);
 
-		const fakeDigest = toB58(
+		const fakeDigest = toBase58(
 			new Uint8Array([
 				1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1,
 				2,

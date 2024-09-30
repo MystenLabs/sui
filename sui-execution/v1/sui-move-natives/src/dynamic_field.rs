@@ -302,9 +302,8 @@ pub fn borrow_child_object(
     if !global_value.exists()? {
         return Ok(NativeResult::err(context.gas_used(), E_KEY_DOES_NOT_EXIST));
     }
-    let child_ref = global_value.borrow_global().map_err(|err| {
+    let child_ref = global_value.borrow_global().inspect_err(|err| {
         assert!(err.major_status() != StatusCode::MISSING_DATA);
-        err
     })?;
 
     native_charge_gas_early_exit!(
@@ -371,9 +370,8 @@ pub fn remove_child_object(
     if !global_value.exists()? {
         return Ok(NativeResult::err(context.gas_used(), E_KEY_DOES_NOT_EXIST));
     }
-    let child = global_value.move_from().map_err(|err| {
+    let child = global_value.move_from().inspect_err(|err| {
         assert!(err.major_status() != StatusCode::MISSING_DATA);
-        err
     })?;
 
     native_charge_gas_early_exit!(

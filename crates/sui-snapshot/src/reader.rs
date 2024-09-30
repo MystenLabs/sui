@@ -522,7 +522,7 @@ pub async fn download_bytes(
     part_num: &u32,
     max_timeout_secs: Option<u64>,
 ) -> (Bytes, [u8; 32]) {
-    let max_timeout = Duration::from_secs(max_timeout_secs.unwrap_or(30));
+    let max_timeout = Duration::from_secs(max_timeout_secs.unwrap_or(60));
     let mut timeout = Duration::from_secs(2);
     timeout += timeout / 2;
     timeout = std::cmp::min(max_timeout, timeout);

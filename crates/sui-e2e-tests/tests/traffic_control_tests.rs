@@ -421,7 +421,7 @@ async fn test_validator_traffic_control_error_delegated() -> Result<(), anyhow::
     let mut server = NodeFwTestServer::new();
     server.start(port).await;
     // await for the server to start
-    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..n {
@@ -547,7 +547,7 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
     // NOTE: we need to hold onto this tc handle to ensure we don't inadvertently close
     // the receive channel (this would cause traffic controller to exit the loop and thus
     // we will never engage the dead mans switch)
-    let _tc = TrafficController::spawn_for_test(policy_config, Some(firewall_config));
+    let _tc = TrafficController::init_for_test(policy_config, Some(firewall_config));
     assert!(
         !drain_path.exists(),
         "Expected drain file to not exist after startup unless previously set",
@@ -702,6 +702,32 @@ async fn test_traffic_sketch_with_sampled_spam() {
     // 5 instead of 4 as a buffer due in case we're unlucky with
     // the sampling
     assert!(metrics.num_blocked > (expected_requests / 5) - 1000);
+}
+
+#[sim_test]
+async fn test_traffic_sketch_allowlist_mode() {
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 1,
+        // first two clients allowlisted, rest blocked
+        allow_list: Some(vec![String::from("127.0.0.0"), String::from("127.0.0.1")]),
+        dry_run: false,
+        ..Default::default()
+    };
+    let metrics = TrafficSim::run(
+        policy_config,
+        4,      // num_clients
+        10_000, // per_client_tps
+        Duration::from_secs(10),
+        true, // report
+    )
+    .await;
+
+    let expected_requests = 10_000 * 10 * 4;
+    // ~half of all requests blocked
+    assert!(metrics.num_blocked >= expected_requests / 2 - 1000);
+    assert!(metrics.num_requests > expected_requests - 1_000);
+    assert!(metrics.num_requests < expected_requests + 200);
 }
 
 async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), anyhow::Error> {

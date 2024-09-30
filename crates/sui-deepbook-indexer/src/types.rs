@@ -38,6 +38,7 @@ pub(crate) enum OrderUpdateStatus {
     Placed,
     Modified,
     Canceled,
+    Expired,
 }
 
 impl Display for OrderUpdateStatus {
@@ -46,6 +47,7 @@ impl Display for OrderUpdateStatus {
             OrderUpdateStatus::Placed => "Placed",
             OrderUpdateStatus::Modified => "Modified",
             OrderUpdateStatus::Canceled => "Canceled",
+            OrderUpdateStatus::Expired => "Expired",
         };
         write!(f, "{str}")
     }
@@ -65,6 +67,7 @@ pub struct OrderUpdate {
     pub(crate) is_bid: bool,
     pub(crate) original_quantity: u64,
     pub(crate) quantity: u64,
+    pub(crate) filled_quantity: u64,
     pub(crate) onchain_timestamp: u64,
     pub(crate) trader: String,
     pub(crate) balance_manager_id: String,
@@ -86,6 +89,7 @@ impl OrderUpdate {
             is_bid: self.is_bid,
             original_quantity: self.original_quantity as i64,
             quantity: self.quantity as i64,
+            filled_quantity: self.filled_quantity as i64,
             onchain_timestamp: self.onchain_timestamp as i64,
             balance_manager_id: self.balance_manager_id.clone(),
         }
@@ -106,7 +110,9 @@ pub struct OrderFill {
     pub(crate) price: u64,
     pub(crate) taker_is_bid: bool,
     pub(crate) taker_fee: u64,
+    pub(crate) taker_fee_is_deep: bool,
     pub(crate) maker_fee: u64,
+    pub(crate) maker_fee_is_deep: bool,
     pub(crate) base_quantity: u64,
     pub(crate) quote_quantity: u64,
     pub(crate) maker_balance_manager_id: String,
@@ -128,7 +134,9 @@ impl OrderFill {
             taker_client_order_id: self.taker_client_order_id as i64,
             price: self.price as i64,
             taker_fee: self.taker_fee as i64,
+            taker_fee_is_deep: self.taker_fee_is_deep,
             maker_fee: self.maker_fee as i64,
+            maker_fee_is_deep: self.maker_fee_is_deep,
             taker_is_bid: self.taker_is_bid,
             base_quantity: self.base_quantity as i64,
             quote_quantity: self.quote_quantity as i64,

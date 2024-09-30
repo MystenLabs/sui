@@ -46,7 +46,7 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (_committee, _chainID, supportedTokens, tokenPrices, _supportedDestinationChains)
+                (_committee, _chainID, supportedTokens, tokenPrices, tokenIds, suiDecimals, _supportedDestinationChains)
             ),
             opts
         );

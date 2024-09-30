@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 60;
+const MAX_PROTOCOL_VERSION: u64 = 61;
 
 // Record history of protocol version allocations here:
 //
@@ -180,6 +180,9 @@ const MAX_PROTOCOL_VERSION: u64 = 60;
 // Version 59: Enable round prober in consensus.
 // Version 60: Validation of public inputs for Groth16 verification.
 //             Enable configuration of maximum number of type nodes in a type layout.
+// Version 61: Switch to distributed vote scoring in consensus in testnet
+//             Further reduce minimum number of random beacon shares.
+//             Add feature flag for Mysticeti fastpath.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -534,6 +537,10 @@ struct FeatureFlags {
     // Validate identifier inputs separately
     #[serde(skip_serializing_if = "is_false")]
     validate_identifier_inputs: bool,
+
+    // Enables Mysticeti fastpath.
+    #[serde(skip_serializing_if = "is_false")]
+    mysticeti_fastpath: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1600,8 +1607,13 @@ impl ProtocolConfig {
     pub fn validate_identifier_inputs(&self) -> bool {
         self.feature_flags.validate_identifier_inputs
     }
+
     pub fn gc_depth(&self) -> u32 {
         self.consensus_gc_depth.unwrap_or(0)
+    }
+
+    pub fn mysticeti_fastpath(&self) -> bool {
+        self.feature_flags.mysticeti_fastpath
     }
 }
 
@@ -2782,6 +2794,20 @@ impl ProtocolConfig {
                     cfg.max_type_to_layout_nodes = Some(512);
                     cfg.feature_flags.validate_identifier_inputs = true;
                 }
+                61 => {
+                    if chain != Chain::Mainnet {
+                        // Enable distributed vote scoring for testnet
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = true;
+                    }
+                    // Further reduce minimum number of random beacon shares.
+                    cfg.random_beacon_reduction_lower_bound = Some(700);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Enable Mysticeti fastpath for devnet
+                        cfg.feature_flags.mysticeti_fastpath = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -3156,11 +3182,10 @@ mod test {
             .feature_flags
             .lookup_attr("some random string".to_owned())
             .is_none());
-        assert!(prot
+        assert!(!prot
             .feature_flags
             .attr_map()
-            .get("some random string")
-            .is_none());
+            .contains_key("some random string"));
 
         // Was false in v1
         assert!(

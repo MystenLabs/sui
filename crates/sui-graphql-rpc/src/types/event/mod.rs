@@ -240,6 +240,7 @@ impl Event {
                 .to_canonical_string(/* with_prefix */ true),
             bcs: native_event.contents.clone(),
             timestamp_ms: stored_tx.timestamp_ms,
+            sender: Some(native_event.sender.to_vec()),
         };
 
         Ok(Self {

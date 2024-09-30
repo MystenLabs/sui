@@ -12,7 +12,6 @@ use prometheus::{
 };
 use std::time::Duration;
 use sui_types::crypto::NetworkKeyPair;
-use tokio::time::sleep;
 
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9,
@@ -54,15 +53,22 @@ pub fn start_metrics_push_task(
         let mut interval = tokio::time::interval(interval);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
+        let mut errors = 0;
         loop {
             interval.tick().await;
 
-            // Retry pushing metrics if there is an error.
-            while let Err(error) = push_metrics(&client, &url, &registry).await {
-                tracing::warn!("unable to push metrics: {error}; new client will be created");
-                sleep(Duration::from_secs(1)).await;
+            if let Err(error) = push_metrics(&client, &url, &registry).await {
+                errors += 1;
+                if errors >= 10 {
+                    // If we hit 10 failures in a row, start logging errors.
+                    tracing::error!("unable to push metrics: {error}; new client will be created");
+                } else {
+                    tracing::warn!("unable to push metrics: {error}; new client will be created");
+                }
                 // aggressively recreate our client connection if we hit an error
                 client = MetricsPushClient::new(metrics_key_pair.copy());
+            } else {
+                errors = 0;
             }
         }
     });
@@ -72,6 +78,7 @@ pub fn start_metrics_push_task(
 pub struct BridgeMetrics {
     pub(crate) err_build_sui_transaction: IntCounter,
     pub(crate) err_signature_aggregation: IntCounter,
+    pub(crate) err_signature_aggregation_too_many_failures: IntCounter,
     pub(crate) err_sui_transaction_submission: IntCounter,
     pub(crate) err_sui_transaction_submission_too_many_failures: IntCounter,
     pub(crate) err_sui_transaction_execution: IntCounter,
@@ -80,9 +87,9 @@ pub struct BridgeMetrics {
     pub(crate) err_requests: IntCounterVec,
     pub(crate) requests_inflight: IntGaugeVec,
 
-    pub last_synced_sui_checkpoint: IntGauge,
+    pub(crate) last_synced_sui_checkpoints: IntGaugeVec,
     pub(crate) last_finalized_eth_block: IntGauge,
-    pub(crate) last_synced_eth_block: IntGauge,
+    pub(crate) last_synced_eth_blocks: IntGaugeVec,
 
     pub(crate) sui_watcher_received_events: IntCounter,
     pub(crate) sui_watcher_received_actions: IntCounter,
@@ -120,6 +127,12 @@ impl BridgeMetrics {
             err_signature_aggregation: register_int_counter_with_registry!(
                 "bridge_err_signature_aggregation",
                 "Total number of errors of aggregating validators signatures",
+                registry,
+            )
+            .unwrap(),
+            err_signature_aggregation_too_many_failures: register_int_counter_with_registry!(
+                "bridge_err_signature_aggregation_too_many_failures",
+                "Total number of continuous failures during validator signature aggregation",
                 registry,
             )
             .unwrap(),
@@ -256,21 +269,23 @@ impl BridgeMetrics {
                 registry,
             )
             .unwrap(),
-            last_synced_sui_checkpoint: register_int_gauge_with_registry!(
-                "last_synced_sui_checkpoint",
-                "The latest sui checkpoint that indexer synced",
+            last_synced_sui_checkpoints: register_int_gauge_vec_with_registry!(
+                "bridge_last_synced_sui_checkpoints",
+                "The latest sui checkpoints synced for each module",
+                &["module_name"],
                 registry,
             )
             .unwrap(),
-            last_synced_eth_block: register_int_gauge_with_registry!(
-                "bridge_last_synced_eth_block",
-                "The latest finalized eth block that indexer synced",
+            last_synced_eth_blocks: register_int_gauge_vec_with_registry!(
+                "bridge_last_synced_eth_blocks",
+                "The latest synced eth blocks synced for each contract",
+                &["contract_address"],
                 registry,
             )
             .unwrap(),
             last_finalized_eth_block: register_int_gauge_with_registry!(
                 "bridge_last_finalized_eth_block",
-                "The latest finalized eth block that indexer observed",
+                "The latest finalized eth block observed",
                 registry,
             )
             .unwrap(),

@@ -1114,6 +1114,22 @@ impl KeyToolCommand {
                     "https://api.ambrus.studio/callback",
                     &jwt_randomness,
                 )?;
+                let url_14 = get_oidc_url(
+                    OIDCProvider::Arden,
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "2e3i87cb-bf24-4399-ab98-48343d457124",
+                    "https://www.sui.io",
+                    &jwt_randomness,
+                )?;
+                let url_15 = get_oidc_url(
+                    OIDCProvider::AwsTenant(("eu-west-3".to_string(), "trace".to_string())),
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "trace-dev",
+                    "https://trace.fan",
+                    &jwt_randomness,
+                )?;
                 // This is only for CLI testing. If frontend apps will be built, no need to add anything here.
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
@@ -1129,6 +1145,8 @@ impl KeyToolCommand {
                 println!("Visit URL (KarrierOne): {url_11}");
                 println!("Visit URL (Credenza3): {url_12}");
                 println!("Visit URL (AWS - Ambrus): {url_13}");
+                println!("Visit URL (Arden): {url_14}");
+                println!("Visit URL (AWS - Trace): {url_15}");
 
                 println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");
 

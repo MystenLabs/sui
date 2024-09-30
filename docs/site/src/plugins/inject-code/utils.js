@@ -21,12 +21,15 @@ exports.removeLeadingSpaces = (codeText, prepend = "") => {
 // Options are added to the @inject command by appending
 // a space delimited list
 
+const isOption = (opts, option) => {
+  return option
+    ? opts.some((element) => element.toLowerCase().includes(option))
+    : false;
+};
+
 // Remove comments. TODO: Add other langs
 const removeComments = (text, options) => {
-  const cont = options.some((element) =>
-    element.toLowerCase().includes("nocomment"),
-  );
-  if (cont) {
+  if (isOption(options, "nocomment")) {
     return text.replace(/^ *\/\/.*\n/gm, "");
   } else {
     return text;
@@ -34,16 +37,23 @@ const removeComments = (text, options) => {
 };
 
 const removeTests = (text, options) => {
-  const cont = options.some((element) =>
-    element.toLowerCase().includes("notest"),
-  );
-  if (cont) {
+  if (isOption(options, "notest")) {
     const processed = text
       .replace(
         /\s*#\[test.*?\n.*?(}(?!;)\n?|$)/gs,
         "\n{{plugin-removed-test}}\n",
       )
       .replace(/\{\{plugin-removed-test\}\}\s*/gm, "");
+    return processed;
+  } else {
+    return text;
+  }
+};
+
+// Remove double spaces from output when changing the code is not preferred.
+const singleSpace = (text, options) => {
+  if (isOption(options, "singlespace")) {
+    const processed = text.replace(/^\s*[\r\n]/gm, "");
     return processed;
   } else {
     return text;
@@ -89,6 +99,7 @@ exports.processOptions = (text, options) => {
     );
   processed = removeComments(processed, options);
   processed = removeTests(processed, options);
+  processed = singleSpace(processed, options);
   processed = trimContent(processed);
 
   return processed;
@@ -108,8 +119,9 @@ exports.capturePrepend = (match, text) => {
   let pre = [];
   for (let x = lines.length - 1; x > 0; x--) {
     if (
-      lines[x].match(/^\s*\/\//) ||
-      lines[x].match(/^\s*#/) ||
+      lines[x].match(/^ *\//) ||
+      lines[x].match(/^ *\*/) ||
+      lines[x].match(/^ *#/) ||
       lines[x].trim() === ""
     ) {
       // Capture sometimes incorrectly includes a blank line
@@ -134,6 +146,9 @@ exports.checkBracesBalance = (str) => {
 };
 
 // Output codeblocks
-exports.formatOutput = (language, title, content) => {
-  return `\`\`\`${language} title="${title}"\n${content}\n\`\`\``;
+exports.formatOutput = (language, title, content, options) => {
+  if (options && isOption(options, "notitle")) {
+    return `\`\`\`${language}\n${content.replace(/\t/g, "  ")}\n\`\`\``;
+  }
+  return `\`\`\`${language} title="${title}"\n${content.replace(/\t/g, "  ")}\n\`\`\``;
 };

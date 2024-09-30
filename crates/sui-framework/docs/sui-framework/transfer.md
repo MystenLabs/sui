@@ -321,10 +321,7 @@ that <code>T</code> is an object defined in the module where <code>receive</code
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_receive">receive</a>&lt;T: key&gt;(parent: &<b>mut</b> UID, to_receive: <a href="../sui-framework/transfer.md#0x2_transfer_Receiving">Receiving</a>&lt;T&gt;): T {
-    <b>let</b> <a href="../sui-framework/transfer.md#0x2_transfer_Receiving">Receiving</a> {
-        id,
-        version,
-    } = to_receive;
+    <b>let</b> <a href="../sui-framework/transfer.md#0x2_transfer_Receiving">Receiving</a> { id, version } = to_receive;
     <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>(parent.to_address(), id, version)
 }
 </code></pre>
@@ -353,10 +350,7 @@ The object must have <code>store</code> to be received outside of its defining m
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer_public_receive">public_receive</a>&lt;T: key + store&gt;(parent: &<b>mut</b> UID, to_receive: <a href="../sui-framework/transfer.md#0x2_transfer_Receiving">Receiving</a>&lt;T&gt;): T {
-    <b>let</b> <a href="../sui-framework/transfer.md#0x2_transfer_Receiving">Receiving</a> {
-        id,
-        version,
-    } = to_receive;
+    <b>let</b> <a href="../sui-framework/transfer.md#0x2_transfer_Receiving">Receiving</a> { id, version } = to_receive;
     <a href="../sui-framework/transfer.md#0x2_transfer_receive_impl">receive_impl</a>(parent.to_address(), id, version)
 }
 </code></pre>

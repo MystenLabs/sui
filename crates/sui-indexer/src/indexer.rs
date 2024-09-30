@@ -32,7 +32,8 @@ use crate::store::{IndexerStore, PgIndexerStore};
 pub struct Indexer;
 
 impl Indexer {
-    pub async fn start_writer(
+    #[cfg(test)]
+    pub async fn start_writer_for_testing(
         config: &IngestionConfig,
         store: PgIndexerStore,
         metrics: IndexerMetrics,

@@ -3762,7 +3762,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
     let sender = context.active_address().unwrap();
     let tx_builder = client.transaction_builder();
     let tx_kind = tx_builder.transfer_sui_tx_kind(address2, Some(amount));
-    let gas_estimate = estimate_gas_budget(&client, sender, tx_kind, rgp, None, None).await;
+    let gas_estimate = estimate_gas_budget(context, sender, tx_kind, rgp, None, None).await;
     assert!(gas_estimate.is_ok());
 
     let transfer_sui_cmd = SuiClientCommands::TransferSui {

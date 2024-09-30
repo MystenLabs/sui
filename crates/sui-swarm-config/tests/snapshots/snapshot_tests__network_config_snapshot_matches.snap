@@ -107,6 +107,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -117,9 +118,12 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -267,6 +271,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -277,9 +282,12 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -427,6 +435,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -437,9 +446,12 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -587,6 +599,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -597,9 +610,12 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -747,6 +763,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -757,9 +774,12 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -907,6 +927,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -917,9 +938,12 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -1067,6 +1091,7 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Testnet:
         - Apple
@@ -1077,9 +1102,12 @@ validator_configs:
         - KarrierOne
         - Onefc
         - Playtron
+        - Threedos
         - Twitch
       Unknown:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3

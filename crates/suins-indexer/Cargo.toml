@@ -34,6 +34,11 @@ sui-json-rpc.workspace = true
 dotenvy = "0.15"
 move-core-types.workspace = true
 mysten-service.workspace = true
+rustls.workspace = true
+webpki-roots = "0.26.3"
+tokio-postgres-rustls = "0.12.0"
+tokio-postgres = "0.7.12"
+futures-util = "0.3.30"
 
 [dev-dependencies]
 rand.workspace = true

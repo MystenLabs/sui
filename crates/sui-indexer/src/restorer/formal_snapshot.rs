@@ -46,14 +46,14 @@ impl IndexerFormalSnapshotRestorer {
     ) -> Result<Self, IndexerError> {
         let remote_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::S3),
-            aws_endpoint: Some(restore_config.s3_endpoint.clone()),
+            aws_endpoint: Some(restore_config.snapshot_endpoint.clone()),
             aws_virtual_hosted_style_request: true,
             object_store_connection_limit: restore_config.object_store_concurrent_limit,
             no_sign_request: true,
             ..Default::default()
         };
 
-        let base_path = PathBuf::from(restore_config.gcs_snapshot_dir.clone());
+        let base_path = PathBuf::from(restore_config.snapshot_download_dir.clone());
         let snapshot_dir = base_path.join("snapshot");
         if snapshot_dir.exists() {
             fs::remove_dir_all(snapshot_dir.clone()).unwrap();
@@ -238,14 +238,12 @@ impl IndexerFormalSnapshotRestorer {
     }
 
     async fn restore_display_table(&self) -> std::result::Result<(), anyhow::Error> {
-        let cred_path = self.restore_config.gcs_cred_path.clone();
         let bucket = self.restore_config.gcs_display_bucket.clone();
         let start_epoch = self.restore_config.start_epoch;
 
         let remote_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::GCS),
             bucket: Some(bucket),
-            google_service_account: Some(cred_path),
             object_store_connection_limit: 200,
             no_sign_request: false,
             ..Default::default()
@@ -261,7 +259,6 @@ impl IndexerFormalSnapshotRestorer {
 
     async fn restore_cp_watermark_and_chain_id(&self) -> Result<(), IndexerError> {
         let restore_checkpoint_info = read_restore_checkpoint_info(
-            self.restore_config.gcs_cred_path.clone(),
             Some(self.restore_config.gcs_archive_bucket.clone()),
             self.restore_config.start_epoch,
         )

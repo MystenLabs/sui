@@ -31,24 +31,25 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         uint8 _chainID,
         address[] memory _supportedTokens,
         uint64[] memory _tokenPrices,
+        uint8[] memory _tokenIds,
+        uint8[] memory _suiDecimals,
         uint8[] memory _supportedChains
     ) external initializer {
         __CommitteeUpgradeable_init(_committee);
-        require(_supportedTokens[0] == address(0), "BridgeConfig: Must reserve first token for SUI");
-        require(_supportedTokens.length == 5, "BridgeConfig: Invalid supported token addresses");
         require(
             _supportedTokens.length == _tokenPrices.length, "BridgeConfig: Invalid token prices"
         );
+        require(
+            _supportedTokens.length == _tokenIds.length, "BridgeConfig: Invalid token IDs"
+        );
+        require(
+            _supportedTokens.length == _suiDecimals.length, "BridgeConfig: Invalid Sui decimals"
+        );
 
-        uint8[] memory _suiDecimals = new uint8[](5);
-        _suiDecimals[0] = 9; // SUI
-        _suiDecimals[1] = 8; // wBTC
-        _suiDecimals[2] = 8; // wETH
-        _suiDecimals[3] = 6; // USDC
-        _suiDecimals[4] = 6; // USDT
-
-        for (uint8 i; i < _supportedTokens.length; i++) {
-            supportedTokens[i] = Token(_supportedTokens[i], _suiDecimals[i], true);
+        for (uint8 i; i < _tokenIds.length; i++) {
+            // `is_native` is hardcoded to `true` because we only support Eth native tokens
+            // at the moment. This needs to change when we support tokens native on other chains.
+            supportedTokens[_tokenIds[i]] = Token(_supportedTokens[i], _suiDecimals[i], true);
         }
 
         for (uint8 i; i < _supportedChains.length; i++) {
@@ -57,7 +58,7 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         }
 
         for (uint8 i; i < _tokenPrices.length; i++) {
-            tokenPrices[i] = _tokenPrices[i];
+            tokenPrices[_tokenIds[i]] = _tokenPrices[i];
         }
 
         chainID = _chainID;
@@ -117,6 +118,8 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         (uint8 tokenID, uint64 price) = BridgeUtils.decodeUpdateTokenPricePayload(message.payload);
 
         _updateTokenPrice(tokenID, price);
+
+        emit TokenPriceUpdatedV2(message.nonce, tokenID, price);
     }
 
     function addTokensWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
@@ -137,6 +140,8 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         for (uint8 i; i < tokenIDs.length; i++) {
             _addToken(tokenIDs[i], tokenAddresses[i], suiDecimals[i], _tokenPrices[i], native);
         }
+
+        emit TokensAddedV2(message.nonce, tokenIDs, tokenAddresses, suiDecimals, _tokenPrices);
     }
 
     /* ========== PRIVATE FUNCTIONS ========== */
@@ -149,8 +154,6 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         require(tokenPrice > 0, "BridgeConfig: Invalid token price");
 
         tokenPrices[tokenID] = tokenPrice;
-
-        emit TokenPriceUpdated(tokenID, tokenPrice);
     }
 
     /// @notice Updates the token with the provided ID.
@@ -175,8 +178,6 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
 
         supportedTokens[tokenID] = Token(tokenAddress, suiDecimal, native);
         tokenPrices[tokenID] = tokenPrice;
-
-        emit TokenAdded(tokenID, tokenAddress, suiDecimal, tokenPrice);
     }
 
     /* ========== MODIFIERS ========== */

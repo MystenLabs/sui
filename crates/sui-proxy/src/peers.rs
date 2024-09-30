@@ -342,6 +342,7 @@ fn extract(
         }
     })
 }
+
 async fn extract_bridge(
     summary: BridgeSummary,
     metrics_keys: MetricsPubKeys,
@@ -356,7 +357,10 @@ async fn extract_bridge(
         });
     }
 
-    let client = reqwest::Client::builder().build().unwrap();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
     let committee_members = summary.committee.members.clone();
     let results: Vec<_> = stream::iter(committee_members)
         .filter_map(|(_, cm)| {
@@ -429,6 +433,11 @@ async fn extract_bridge(
                                 // Successfully fetched the key, update the cache
                                 let mut metrics_keys_write = metrics_keys.write().unwrap();
                                 metrics_keys_write.insert(url_str.clone(), pubkey.clone());
+                                debug!(
+                                    url_str,
+                                    public_key = ?pubkey,
+                                    "Successfully added bridge peer to metrics_keys"
+                                );
                                 pubkey
                             }
                             Err(error) => {
@@ -479,7 +488,7 @@ fn fallback_to_cached_key(
             },
         ))
     } else {
-        error!(
+        warn!(
             url_str,
             "Failed to fetch public key and no cached key available"
         );

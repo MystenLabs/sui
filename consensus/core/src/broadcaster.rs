@@ -316,7 +316,7 @@ mod test {
             if index == context.own_index {
                 continue;
             }
-            assert!(blocks_sent.get(&index).is_none());
+            assert!(!blocks_sent.contains_key(&index));
         }
 
         // ... until LAST_BLOCK_RETRY_INTERVAL

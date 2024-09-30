@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Error;
-use tracing::info;
+use tracing::{info, warn};
 
 use sui_bridge::events::{
-    MoveTokenDepositedEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
+    EmergencyOpEvent, MoveBlocklistValidatorEvent, MoveNewTokenEvent, MoveTokenDepositedEvent,
+    MoveTokenRegistrationEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
+    UpdateRouteLimitEvent, UpdateTokenPriceEvent,
 };
 use sui_indexer_builder::indexer_builder::DataMapper;
 use sui_types::effects::TransactionEffectsAPI;
@@ -17,8 +19,8 @@ use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID};
 use crate::metrics::BridgeIndexerMetrics;
 use crate::sui_datasource::CheckpointTxnData;
 use crate::{
-    BridgeDataSource, ProcessedTxnData, SuiTxnError, TokenTransfer, TokenTransferData,
-    TokenTransferStatus,
+    BridgeDataSource, GovernanceAction, GovernanceActionType, ProcessedTxnData, SuiTxnError,
+    TokenTransfer, TokenTransferData, TokenTransferStatus,
 };
 
 /// Data mapper impl
@@ -146,8 +148,93 @@ fn process_sui_event(
                     is_finalized: true,
                 }))
             }
+            "UpdateRouteLimitEvent" => {
+                info!("Observed Sui Route Limit Update {:?}", ev);
+                let event: UpdateRouteLimitEvent = bcs::from_bytes(&ev.contents)?;
+
+                Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
+                    tx_digest: tx.transaction.digest().inner().to_vec(),
+                    sender: ev.sender.to_vec(),
+                    timestamp_ms,
+                    action: GovernanceActionType::UpdateBridgeLimit,
+                    data: serde_json::to_value(event)?,
+                }))
+            }
+            "EmergencyOpEvent" => {
+                info!("Observed Sui Emergency Op {:?}", ev);
+                let event: EmergencyOpEvent = bcs::from_bytes(&ev.contents)?;
+
+                Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
+                    tx_digest: tx.transaction.digest().inner().to_vec(),
+                    sender: ev.sender.to_vec(),
+                    timestamp_ms,
+                    action: GovernanceActionType::EmergencyOperation,
+                    data: serde_json::to_value(event)?,
+                }))
+            }
+            "BlocklistValidatorEvent" => {
+                info!("Observed Sui Blocklist Validator {:?}", ev);
+                let event: MoveBlocklistValidatorEvent = bcs::from_bytes(&ev.contents)?;
+
+                Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
+                    tx_digest: tx.transaction.digest().inner().to_vec(),
+                    sender: ev.sender.to_vec(),
+                    timestamp_ms,
+                    action: GovernanceActionType::UpdateCommitteeBlocklist,
+                    data: serde_json::to_value(event)?,
+                }))
+            }
+            "TokenRegistrationEvent" => {
+                info!("Observed Sui Token Registration {:?}", ev);
+                let event: MoveTokenRegistrationEvent = bcs::from_bytes(&ev.contents)?;
+
+                Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
+                    tx_digest: tx.transaction.digest().inner().to_vec(),
+                    sender: ev.sender.to_vec(),
+                    timestamp_ms,
+                    action: GovernanceActionType::AddSuiTokens,
+                    data: serde_json::to_value(event)?,
+                }))
+            }
+            "UpdateTokenPriceEvent" => {
+                info!("Observed Sui Token Price Update {:?}", ev);
+                let event: UpdateTokenPriceEvent = bcs::from_bytes(&ev.contents)?;
+
+                Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
+                    tx_digest: tx.transaction.digest().inner().to_vec(),
+                    sender: ev.sender.to_vec(),
+                    timestamp_ms,
+                    action: GovernanceActionType::UpdateTokenPrices,
+                    data: serde_json::to_value(event)?,
+                }))
+            }
+            "NewTokenEvent" => {
+                info!("Observed Sui New token event {:?}", ev);
+                let event: MoveNewTokenEvent = bcs::from_bytes(&ev.contents)?;
+
+                Some(ProcessedTxnData::GovernanceAction(GovernanceAction {
+                    nonce: None,
+                    data_source: BridgeDataSource::Sui,
+                    tx_digest: tx.transaction.digest().inner().to_vec(),
+                    sender: ev.sender.to_vec(),
+                    timestamp_ms,
+                    action: GovernanceActionType::AddSuiTokens,
+                    data: serde_json::to_value(event)?,
+                }))
+            }
             _ => {
                 // todo: metrics.total_sui_bridge_txn_other.inc();
+                warn!("Unexpected event {ev:?}.");
                 None
             }
         }

@@ -49,7 +49,7 @@ diesel::table! {
         protocol_version -> Int8,
         total_stake -> Int8,
         storage_fund_balance -> Int8,
-        system_state -> Bytea,
+        system_state -> Nullable<Bytea>,
         epoch_total_transactions -> Nullable<Int8>,
         last_checkpoint_id -> Nullable<Int8>,
         epoch_end_timestamp -> Nullable<Int8>,
@@ -144,6 +144,7 @@ diesel::table! {
         event_type -> Text,
         timestamp_ms -> Int8,
         bcs -> Bytea,
+        sender -> Nullable<Bytea>,
     }
 }
 

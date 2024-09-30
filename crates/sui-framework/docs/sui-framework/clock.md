@@ -154,11 +154,7 @@ called exactly once, during genesis.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/clock.md#0x2_clock_consensus_commit_prologue">consensus_commit_prologue</a>(
-    <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="../sui-framework/clock.md#0x2_clock_Clock">Clock</a>,
-    timestamp_ms: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
-    ctx: &TxContext,
-) {
+<pre><code><b>fun</b> <a href="../sui-framework/clock.md#0x2_clock_consensus_commit_prologue">consensus_commit_prologue</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="../sui-framework/clock.md#0x2_clock_Clock">Clock</a>, timestamp_ms: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &TxContext) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/clock.md#0x2_clock_ENotSystemAddress">ENotSystemAddress</a>);
 

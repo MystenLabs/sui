@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 arc-swap.workspace = true
+backoff.workspace = true
 chrono.workspace = true
 fastcrypto.workspace = true
 jsonrpsee.workspace = true

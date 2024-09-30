@@ -2361,6 +2361,8 @@ pub enum TransactionFilter {
     InputObject(ObjectID),
     /// Query by changed object, including created, mutated and unwrapped objects.
     ChangedObject(ObjectID),
+    /// Query for transactions that touch this object.
+    AffectedObject(ObjectID),
     /// Query by sender address.
     FromAddress(SuiAddress),
     /// Query by recipient address.
@@ -2390,6 +2392,18 @@ impl Filter<EffectsWithInput> for TransactionFilter {
                 .mutated()
                 .iter()
                 .any(|oref: &OwnedObjectRef| &oref.reference.object_id == o),
+            TransactionFilter::AffectedObject(o) => item
+                .effects
+                .created()
+                .iter()
+                .chain(item.effects.mutated().iter())
+                .chain(item.effects.unwrapped().iter())
+                .map(|oref: &OwnedObjectRef| &oref.reference)
+                .chain(item.effects.shared_objects().iter())
+                .chain(item.effects.deleted().iter())
+                .chain(item.effects.unwrapped_then_deleted().iter())
+                .chain(item.effects.wrapped().iter())
+                .any(|oref| &oref.object_id == o),
             TransactionFilter::FromAddress(a) => &item.input.sender() == a,
             TransactionFilter::ToAddress(a) => {
                 let mutated: &[OwnedObjectRef] = item.effects.mutated();

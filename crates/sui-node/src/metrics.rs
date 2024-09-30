@@ -6,7 +6,6 @@ use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
 };
-use tokio::time::sleep;
 
 use std::time::Duration;
 use sui_network::tonic::Code;
@@ -45,15 +44,22 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
         let mut interval = tokio::time::interval(interval);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
+        let mut errors = 0;
         loop {
             interval.tick().await;
 
-            // Retry pushing metrics if there is an error.
-            while let Err(error) = push_metrics(&client, &url, &registry).await {
-                tracing::warn!("unable to push metrics: {error}; new client will be created");
-                sleep(Duration::from_secs(1)).await;
+            if let Err(error) = push_metrics(&client, &url, &registry).await {
+                errors += 1;
+                if errors >= 10 {
+                    // If we hit 10 failures in a row, start logging errors.
+                    tracing::error!("unable to push metrics: {error}; new client will be created");
+                } else {
+                    tracing::warn!("unable to push metrics: {error}; new client will be created");
+                }
                 // aggressively recreate our client connection if we hit an error
                 client = MetricsPushClient::new(config_copy.network_key_pair().copy());
+            } else {
+                errors = 0;
             }
         }
     });

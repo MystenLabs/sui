@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    expansion::ast::{self as E, ModuleIdent},
-    expansion::translate::ModuleMemberKind,
+    expansion::{
+        ast::{self as E, ModuleIdent},
+        name_validation::ModuleMemberKind,
+    },
     parser::ast::{self as P},
     shared::{unique_map::UniqueMap, *},
 };

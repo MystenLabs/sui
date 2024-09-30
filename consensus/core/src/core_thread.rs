@@ -15,7 +15,7 @@ use mysten_metrics::{
     monitored_mpsc::{channel, Receiver, Sender, WeakSender},
     monitored_scope, spawn_logged_monitored_task,
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use thiserror::Error;
 use tokio::sync::{oneshot, watch};
 use tracing::warn;
@@ -300,13 +300,15 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
 }
 
 // TODO: complete the Mock for thread dispatcher to be used from several tests
+#[cfg(test)]
 #[derive(Default)]
 pub(crate) struct MockCoreThreadDispatcher {
-    add_blocks: Mutex<Vec<VerifiedBlock>>,
-    missing_blocks: Mutex<BTreeSet<BlockRef>>,
-    last_known_proposed_round: Mutex<Vec<Round>>,
+    add_blocks: parking_lot::Mutex<Vec<VerifiedBlock>>,
+    missing_blocks: parking_lot::Mutex<BTreeSet<BlockRef>>,
+    last_known_proposed_round: parking_lot::Mutex<Vec<Round>>,
 }
 
+#[cfg(test)]
 impl MockCoreThreadDispatcher {
     #[cfg(test)]
     pub(crate) async fn get_add_blocks(&self) -> Vec<VerifiedBlock> {
@@ -327,6 +329,7 @@ impl MockCoreThreadDispatcher {
     }
 }
 
+#[cfg(test)]
 #[async_trait]
 impl CoreThreadDispatcher for MockCoreThreadDispatcher {
     async fn add_blocks(

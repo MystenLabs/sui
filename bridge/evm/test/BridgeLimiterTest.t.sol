@@ -163,7 +163,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), chainID, _supportedTokens, tokenPrices, supportedChains)
+                (address(committee), chainID, _supportedTokens, tokenPrices, tokenIds, suiDecimals, supportedChains)
             ),
             opts
         );
@@ -265,7 +265,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), chainID, supportedTokens, tokenPrices, _supportedChains)
+                (address(committee), chainID, supportedTokens, tokenPrices, tokenIds, suiDecimals, _supportedChains)
             ),
             opts
         );
@@ -351,7 +351,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), chainID, supportedTokens, tokenPrices, _supportedChains)
+                (address(committee), chainID, supportedTokens, tokenPrices, tokenIds, suiDecimals, _supportedChains)
             ),
             opts
         );

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs, toB64 } from '@mysten/bcs';
+import { bcs, toBase64 } from '@mysten/bcs';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bech32 } from 'bech32';
 
@@ -47,7 +47,7 @@ export abstract class Signer {
 
 		return {
 			signature,
-			bytes: toB64(bytes),
+			bytes: toBase64(bytes),
 		};
 	}
 	/**
@@ -66,7 +66,7 @@ export abstract class Signer {
 		);
 
 		return {
-			bytes: toB64(bytes),
+			bytes: toBase64(bytes),
 			signature,
 		};
 	}

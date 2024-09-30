@@ -6,7 +6,8 @@ import path from "path";
 import math from "remark-math";
 import katex from "rehype-katex";
 
-const betatag = require("./src/plugins/betatag");
+const effortRemarkPlugin = require("./src/plugins/effort");
+const betaRemarkPlugin = require("./src/plugins/betatag");
 
 require("dotenv").config();
 
@@ -51,10 +52,11 @@ const config = {
   },
   plugins: [
     // ....
+    // path.resolve(__dirname, `./src/plugins/examples`),
     [
       "posthog-docusaurus",
       {
-        apiKey: process.env.POSTHOG_API_KEY || 'dev', // required
+        apiKey: process.env.POSTHOG_API_KEY || "dev", // required
         appUrl: "https://us.i.posthog.com", // optional, defaults to "https://us.i.posthog.com"
         enableInDevelopment: false, // optional
       },
@@ -63,8 +65,7 @@ const config = {
     [
       "@graphql-markdown/docusaurus",
       {
-        schema:
-          "../../crates/sui-graphql-rpc/schema.graphql",
+        schema: "../../crates/sui-graphql-rpc/schema.graphql",
         rootPath: "../content", // docs will be generated under rootPath/baseURL
         baseURL: "references/sui-api/sui-graphql/reference",
         loaders: {
@@ -116,13 +117,18 @@ const config = {
             "current",
             "1.0.0",
           ],*/
+          admonitions: {
+            keywords: ["checkpoint"],
+            extendDefaults: true,
+          },
           remarkPlugins: [
             math,
             [
               require("@docusaurus/remark-plugin-npm2yarn"),
               { sync: true, converters: ["yarn", "pnpm"] },
             ],
-            betatag,
+            effortRemarkPlugin,
+            betaRemarkPlugin,
           ],
           rehypePlugins: [katex],
         },
@@ -240,7 +246,7 @@ const config = {
       prism: {
         theme: themes.github,
         darkTheme: themes.nightOwl,
-        additionalLanguages: ["rust", "typescript", "toml"],
+        additionalLanguages: ["rust", "typescript", "toml", "json"],
       },
     }),
 };

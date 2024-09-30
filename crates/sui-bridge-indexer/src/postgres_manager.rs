@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::models::SuiProgressStore;
+use crate::schema::governance_actions;
 use crate::schema::sui_progress_store::txn_digest;
 use crate::schema::{sui_error_transactions, token_transfer_data};
 use crate::{schema, schema::token_transfer, ProcessedTxnData};
@@ -36,9 +37,9 @@ pub async fn write(pool: &PgPool, token_txns: Vec<ProcessedTxnData>) -> Result<(
     if token_txns.is_empty() {
         return Ok(());
     }
-    let (transfers, data, errors) = token_txns.iter().fold(
-        (vec![], vec![], vec![]),
-        |(mut transfers, mut data, mut errors), d| {
+    let (transfers, data, errors, gov_actions) = token_txns.iter().fold(
+        (vec![], vec![], vec![], vec![]),
+        |(mut transfers, mut data, mut errors, mut gov_actions), d| {
             match d {
                 ProcessedTxnData::TokenTransfer(t) => {
                     transfers.push(t.to_db());
@@ -47,8 +48,9 @@ pub async fn write(pool: &PgPool, token_txns: Vec<ProcessedTxnData>) -> Result<(
                     }
                 }
                 ProcessedTxnData::Error(e) => errors.push(e.to_db()),
+                ProcessedTxnData::GovernanceAction(a) => gov_actions.push(a.to_db()),
             }
-            (transfers, data, errors)
+            (transfers, data, errors, gov_actions)
         },
     );
 
@@ -110,6 +112,11 @@ pub async fn write(pool: &PgPool, token_txns: Vec<ProcessedTxnData>) -> Result<(
                     .await?;
                 diesel::insert_into(sui_error_transactions::table)
                     .values(&errors)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(governance_actions::table)
+                    .values(&gov_actions)
                     .on_conflict_do_nothing()
                     .execute(conn)
                     .await
