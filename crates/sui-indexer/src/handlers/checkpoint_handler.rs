@@ -1,26 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use itertools::Itertools;
+use sui_types::dynamic_field::visitor as DFV;
 use tap::tap::TapFallible;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
-use move_core_types::language_storage::{StructTag, TypeTag};
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::language_storage::TypeTag;
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_data_ingestion_core::Worker;
-use sui_json_rpc_types::SuiMoveValue;
 use sui_package_resolver::{PackageStore, PackageStoreWithLruCache, Resolver};
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
-use sui_types::base_types::ObjectID;
-use sui_types::dynamic_field::DynamicFieldInfo;
-use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::{ObjectChange, TransactionEffectsAPI};
 use sui_types::event::SystemEpochInfoEvent;
@@ -557,25 +554,16 @@ impl CheckpointHandler {
             .collect();
 
         let latest_live_output_objects = data.latest_live_output_objects();
-        let latest_live_output_object_map = latest_live_output_objects
-            .clone()
-            .into_iter()
-            .map(|o| (o.id(), o.clone()))
-            .collect::<HashMap<_, _>>();
-        let move_struct_layout_map =
-            get_move_struct_layout_map(latest_live_output_objects.clone(), package_resolver)
-                .await?;
+        let latest_live_output_object_layouts =
+            type_layout_map(&latest_live_output_objects, package_resolver).await?;
         let changed_objects = latest_live_output_objects
             .into_iter()
             .map(|o| {
-                let df_info = try_create_dynamic_field_info(
-                    o,
-                    &move_struct_layout_map,
-                    &latest_live_output_object_map,
-                );
-                df_info.map(|info| IndexedObject::from_object(checkpoint_seq, o.clone(), info))
+                try_extract_df_kind(o, &latest_live_output_object_layouts)
+                    .map(|df_kind| IndexedObject::from_object(checkpoint_seq, o.clone(), df_kind))
             })
             .collect::<Result<Vec<_>, _>>()?;
+
         Ok(TransactionObjectChangesToCommit {
             changed_objects,
             deleted_objects: indexed_eventually_removed_objects,
@@ -602,31 +590,20 @@ impl CheckpointHandler {
             })
             .collect();
 
-        let latest_live_output_objects = data.latest_live_output_objects();
-        let latest_live_output_object_map = latest_live_output_objects
-            .clone()
-            .into_iter()
-            .map(|o| (o.id(), o.clone()))
-            .collect::<HashMap<_, _>>();
-
-        let output_objects = data
+        let output_objects: Vec<_> = data
             .transactions
             .iter()
             .flat_map(|tx| &tx.output_objects)
-            .collect::<Vec<_>>();
+            .collect();
+
         // TODO(gegaowp): the current df_info implementation is not correct,
         // but we have decided remove all df_* except df_kind.
-        let move_struct_layout_map =
-            get_move_struct_layout_map(output_objects.clone(), package_resolver).await?;
+        let output_layouts = type_layout_map(&output_objects, package_resolver).await?;
         let changed_objects = output_objects
             .into_iter()
             .map(|o| {
-                let df_info = try_create_dynamic_field_info(
-                    o,
-                    &move_struct_layout_map,
-                    &latest_live_output_object_map,
-                );
-                df_info.map(|info| IndexedObject::from_object(checkpoint_seq, o.clone(), info))
+                try_extract_df_kind(o, &output_layouts)
+                    .map(|df_kind| IndexedObject::from_object(checkpoint_seq, o.clone(), df_kind))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -692,67 +669,49 @@ impl CheckpointHandler {
     }
 }
 
-async fn get_move_struct_layout_map(
-    objects: Vec<&Object>,
+/// Resolve the types of all `objects` and return them in a map. This is done in one go, rather
+/// than one at a time to allow type resolution of distinct types to happen concurrently.
+async fn type_layout_map(
+    objects: &[&Object],
     package_resolver: Arc<Resolver<impl PackageStore>>,
-) -> Result<HashMap<StructTag, MoveStructLayout>, IndexerError> {
-    let struct_tags = objects
-        .into_iter()
-        .filter_map(|o| {
-            let move_object = o.data.try_as_move().cloned();
-            move_object.map(|move_object| {
-                let struct_tag: StructTag = move_object.type_().clone().into();
-                struct_tag
-            })
-        })
-        .collect::<Vec<_>>();
-    let struct_tags = struct_tags.into_iter().unique().collect::<Vec<_>>();
-    info!(
-        "Resolving Move struct layouts for struct tags of size {}.",
-        struct_tags.len()
-    );
-    let move_struct_layout_futures = struct_tags
-        .into_iter()
-        .map(|struct_tag| {
-            let package_resolver_clone = package_resolver.clone();
+) -> IndexerResult<HashMap<TypeTag, MoveTypeLayout>> {
+    let types: HashSet<TypeTag> = objects
+        .iter()
+        .filter_map(|o| Some(o.data.try_as_move()?.type_().clone().into()))
+        .collect();
+
+    info!("Resolving layouts for {} types.", types.len());
+
+    let futures: Vec<_> = types
+        .iter()
+        .map(|type_| {
+            let package_resolver = package_resolver.clone();
             async move {
-                let move_type_layout = package_resolver_clone
-                    .type_layout(TypeTag::Struct(Box::new(struct_tag.clone())))
+                package_resolver
+                    .type_layout(type_.clone())
                     .await
                     .map_err(|e| {
                         IndexerError::DynamicFieldError(format!(
-                            "Fail to resolve struct layout for {:?} with {:?}.",
-                            struct_tag, e
+                            "Fail to resolve layout for {}: {e}.",
+                            type_.to_canonical_display(/* with_prefix */ true),
                         ))
-                    })?;
-                let move_struct_layout = match move_type_layout {
-                    MoveTypeLayout::Struct(s) => Ok(s),
-                    _ => Err(IndexerError::ResolveMoveStructError(
-                        "MoveTypeLayout is not Struct".to_string(),
-                    )),
-                }?;
-                Ok::<
-                    (
-                        move_core_types::language_storage::StructTag,
-                        move_core_types::annotated_value::MoveStructLayout,
-                    ),
-                    IndexerError,
-                >((struct_tag, *move_struct_layout))
+                    })
             }
         })
-        .collect::<Vec<_>>();
-    let move_struct_layout_map = futures::future::try_join_all(move_struct_layout_futures)
-        .await?
-        .into_iter()
-        .collect::<HashMap<_, _>>();
-    Ok(move_struct_layout_map)
+        .collect();
+
+    let layouts = futures::future::try_join_all(futures).await?;
+    Ok(HashMap::from_iter(
+        types.into_iter().zip(layouts.into_iter()),
+    ))
 }
 
-fn try_create_dynamic_field_info(
+/// If `o` is a dynamic `Field<K, V>`, determine whether it represents a Dynamic Field or a Dynamic
+/// Object Field.
+fn try_extract_df_kind(
     o: &Object,
-    struct_tag_to_move_struct_layout: &HashMap<StructTag, MoveStructLayout>,
-    latest_objects: &HashMap<ObjectID, Object>,
-) -> IndexerResult<Option<DynamicFieldInfo>> {
+    layouts: &HashMap<TypeTag, MoveTypeLayout>,
+) -> IndexerResult<Option<DynamicFieldType>> {
     // Skip if not a move object
     let Some(move_object) = o.data.try_as_move().cloned() else {
         return Ok(None);
@@ -762,60 +721,16 @@ fn try_create_dynamic_field_info(
         return Ok(None);
     }
 
-    let struct_tag: StructTag = move_object.type_().clone().into();
-    let move_struct_layout = struct_tag_to_move_struct_layout
-        .get(&struct_tag)
-        .cloned()
-        .ok_or_else(|| {
-            IndexerError::DynamicFieldError(format!(
-                "Cannot find struct layout in mapfor {:?}.",
-                struct_tag
-            ))
-        })?;
-    let move_struct = move_object.to_move_struct(&move_struct_layout)?;
-    let (move_value, type_, object_id) =
-        DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
-    let name_type = move_object.type_().try_extract_field_name(&type_)?;
-    let bcs_name = bcs::to_bytes(&move_value.clone().undecorate()).map_err(|e| {
-        IndexerError::SerdeError(format!(
-            "Failed to serialize dynamic field name {:?}: {e}",
-            move_value
+    let type_: TypeTag = move_object.type_().clone().into();
+    let layout = layouts.get(&type_).ok_or_else(|| {
+        IndexerError::DynamicFieldError(format!(
+            "Cannot find layout for {}.",
+            type_.to_canonical_display(/* with_prefix */ true)
         ))
     })?;
-    let name = DynamicFieldName {
-        type_: name_type,
-        value: SuiMoveValue::from(move_value).to_json_value(),
-    };
-    Ok(Some(match type_ {
-        DynamicFieldType::DynamicObject => {
-            let object = latest_objects
-                .get(&object_id)
-                .ok_or(IndexerError::UncategorizedError(anyhow::anyhow!(
-                    "Failed to find object_id {:?} when trying to create dynamic field info",
-                    object_id
-                )))?;
-            let version = object.version();
-            let digest = object.digest();
-            let object_type = object.data.type_().unwrap().clone();
-            DynamicFieldInfo {
-                name,
-                bcs_name,
-                type_,
-                object_type: object_type.to_canonical_string(/* with_prefix */ true),
-                object_id,
-                version,
-                digest,
-            }
-        }
-        DynamicFieldType::DynamicField => DynamicFieldInfo {
-            name,
-            bcs_name,
-            type_,
-            object_type: move_object.into_type().into_type_params()[1]
-                .to_canonical_string(/* with_prefix */ true),
-            object_id: o.id(),
-            version: o.version(),
-            digest: o.digest(),
-        },
-    }))
+
+    let field =
+        DFV::FieldVisitor::deserialize(move_object.contents(), layout).tap_err(|e| warn!("{e}"))?;
+
+    Ok(Some(field.kind))
 }
