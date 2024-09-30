@@ -725,18 +725,11 @@ impl IndexerReader {
                     ),
                 }
             }
-            Some(TransactionFilter::InputObject(object_id)) => {
+            Some(TransactionFilter::AffectedObject(object_id)) => {
                 let object_id = Hex::encode(object_id.to_vec());
                 (
-                    "tx_input_objects".into(),
-                    format!("object_id = '\\x{}'::bytea", object_id),
-                )
-            }
-            Some(TransactionFilter::ChangedObject(object_id)) => {
-                let object_id = Hex::encode(object_id.to_vec());
-                (
-                    "tx_changed_objects".into(),
-                    format!("object_id = '\\x{}'::bytea", object_id),
+                    "tx_affected_objects".into(),
+                    format!("affected = '\\x{}'::bytea", object_id),
                 )
             }
             Some(TransactionFilter::AffectedObject(object_id)) => {
@@ -834,6 +827,11 @@ impl IndexerReader {
                 return Err(IndexerError::NotSupportedError(
                     "TransactionKind filter is not supported.".into(),
                 ));
+            }
+            Some(TransactionFilter::InputObject(_) | TransactionFilter::ChangedObject(_)) => {
+                return Err(IndexerError::NotSupportedError(
+                    "InputObject and OutputObject filters are not supported, please use AffectedObject instead.".into()
+                ))
             }
             None => {
                 // apply no filter
