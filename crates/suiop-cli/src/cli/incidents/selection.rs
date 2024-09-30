@@ -10,7 +10,7 @@ use tracing::debug;
 use crate::cli::incidents::notion::{Notion, INCIDENT_DB_ID, INCIDENT_DB_NAME};
 use crate::cli::incidents::user::User;
 use crate::cli::lib::utils::day_of_week;
-use crate::cli::slack::{Channel, Slack, SlackUser};
+use crate::cli::slack::{Channel, Slack};
 use crate::DEBUG_MODE;
 
 use super::incident::Incident;
@@ -173,10 +173,10 @@ Please comment in the thread to request an adjustment to the list.",
         debug!("Message sent to #{}", slack_channel);
     }
     let insert_into_db = Confirm::new(&format!(
-        "Insert {} incidents into {} Notion database ({}) for review?",
+        "Insert {} incidents into {:?} Notion database ({:?}) for review?",
         to_review.len(),
-        INCIDENT_DB_NAME.to_string(),
-        INCIDENT_DB_ID.to_string()
+        INCIDENT_DB_NAME,
+        INCIDENT_DB_ID
     ))
     .with_default(false)
     .prompt()

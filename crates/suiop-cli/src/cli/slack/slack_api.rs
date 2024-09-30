@@ -7,7 +7,6 @@ use anyhow::Result;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -79,7 +78,7 @@ pub async fn get_channels(client: &Client) -> Result<Vec<Channel>> {
     let new_channels = result
         .clone()
         .channels
-        .expect(&format!("Expected channels to exist for {:?}", result))
+        .unwrap_or_else(|| panic!("Expected channels to exist for {:?}", result))
         .clone();
     channels.extend(new_channels.into_iter());
     if result.response_metadata.is_none() {
@@ -106,7 +105,7 @@ pub async fn get_channels(client: &Client) -> Result<Vec<Channel>> {
         let extra_channels = result
             .clone()
             .channels
-            .expect(&format!("Expected channels to exist for {:?}", result))
+            .unwrap_or_else(|| panic!("Expected channels to exist for {:?}", result))
             .clone();
         channels.extend(extra_channels.into_iter());
     }

@@ -1,7 +1,6 @@
 use std::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 
 use crate::cli::slack::SlackUser;
 
