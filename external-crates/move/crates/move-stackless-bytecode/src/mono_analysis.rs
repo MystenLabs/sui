@@ -406,6 +406,17 @@ impl<'a> Analyzer<'a> {
                     .get_opaque_spec_by_fun(&callee_env.get_qualified_id())
                 {
                     self.push_todo_fun(spec_qid.clone(), actuals.clone());
+                    if spec_qid == &target.func_env.get_qualified_id()
+                        && !self.targets.no_verify_specs().contains(spec_qid)
+                    {
+                        self.push_todo_fun(callee_env.get_qualified_id(), actuals.clone());
+                    } else {
+                        self.info
+                            .funs
+                            .entry((callee_env.get_qualified_id(), FunctionVariant::Baseline))
+                            .or_default()
+                            .insert(actuals.clone());
+                    }
                 };
 
                 if callee_env.is_native_or_intrinsic() && !actuals.is_empty() {
@@ -423,14 +434,10 @@ impl<'a> Analyzer<'a> {
                         .or_default()
                         .insert(actuals);
                 } else if !callee_env.is_opaque()
-                    && (self
+                    && self
                         .targets
                         .get_opaque_spec_by_fun(&callee_env.get_qualified_id())
                         .is_none()
-                        || self
-                            .targets
-                            .get_opaque_spec_by_fun(&callee_env.get_qualified_id())
-                            == Some(&target.func_env.get_qualified_id()))
                 {
                     // This call needs to be inlined, with targs instantiated by self.inst_opt.
                     // Schedule for later processing if this instance has not been processed yet.

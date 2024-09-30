@@ -270,22 +270,37 @@ impl<'env> BoogieTranslator<'env> {
                 } else {
                     let fun_target = self.targets.get_target(fun_env, &FunctionVariant::Baseline);
 
-                    // This variant is inlined, so translate for all type instantiations.
-                    for type_inst in mono_info
-                        .funs
-                        .get(&(
-                            fun_target.func_env.get_qualified_id(),
-                            FunctionVariant::Baseline,
-                        ))
-                        .unwrap_or(&BTreeSet::new())
+                    if let Some(spec_qid) = self
+                        .targets
+                        .get_opaque_spec_by_fun(&fun_env.get_qualified_id())
                     {
-                        FunctionTranslator {
-                            parent: self,
-                            fun_target: &fun_target,
-                            type_inst,
-                            style: FunctionTranslationStyle::Default,
+                        if !self.targets.no_verify_specs().contains(spec_qid) {
+                            FunctionTranslator {
+                                parent: self,
+                                fun_target: &fun_target,
+                                type_inst: &[],
+                                style: FunctionTranslationStyle::Default,
+                            }
+                            .translate();
                         }
-                        .translate();
+                    } else {
+                        // This variant is inlined, so translate for all type instantiations.
+                        for type_inst in mono_info
+                            .funs
+                            .get(&(
+                                fun_target.func_env.get_qualified_id(),
+                                FunctionVariant::Baseline,
+                            ))
+                            .unwrap_or(&BTreeSet::new())
+                        {
+                            FunctionTranslator {
+                                parent: self,
+                                fun_target: &fun_target,
+                                type_inst,
+                                style: FunctionTranslationStyle::Default,
+                            }
+                            .translate();
+                        }
                     }
                 }
 
