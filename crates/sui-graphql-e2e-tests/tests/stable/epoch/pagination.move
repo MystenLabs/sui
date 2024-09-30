@@ -3,31 +3,15 @@
 
 //# init --protocol-version 51 --simulator --accounts C
 
-// TODO: Short term hack to get around indexer epoch issue
-//# create-checkpoint
+//# advance-epoch
 
 //# advance-epoch
 
-// TODO: Short term hack to get around indexer epoch issue
-//# create-checkpoint
+//# advance-epoch
 
 //# advance-epoch
 
-
-// TODO: Short term hack to get around indexer epoch issue
-//# create-checkpoint
-
 //# advance-epoch
-
-//# create-checkpoint
-
-//# advance-epoch
-
-//# create-checkpoint
-
-//# advance-epoch
-
-//# create-checkpoint
 
 //# advance-epoch
 
@@ -70,7 +54,59 @@
     }
 }
 
+//# run-graphql --cursors {"c":3,"e":4} 
+{
+    epochs(before: "@{cursor_0}") {
+        pageInfo {
+            hasPreviousPage
+            hasNextPage
+        }
+        nodes {
+            epochId
+        }
+    }
+}
+
 //# run-graphql --cursors {"c":11,"e":1}
+{
+    epochs(after: "@{cursor_0}") {
+        pageInfo {
+            hasPreviousPage
+            hasNextPage
+        }
+        nodes {
+            epochId
+        }
+    }
+}
+
+//# run-graphql --cursors {"c":0,"e":5}
+{
+    epochs(before: "@{cursor_0}") {
+        pageInfo {
+            hasPreviousPage
+            hasNextPage
+        }
+        nodes {
+            epochId
+        }
+    }
+}
+
+//# run-graphql --cursors {"c":3,"e":4}
+{
+    epochs(after: "@{cursor_0}") {
+        pageInfo {
+            hasPreviousPage
+            hasNextPage
+        }
+        nodes {
+            epochId
+        }
+    }
+}
+
+//# run-graphql --cursors {"c":0,"e":0}
 {
     epochs(after: "@{cursor_0}") {
         pageInfo {
