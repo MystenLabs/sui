@@ -31,6 +31,7 @@ use sui_types::{
     },
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
+use tokio::time::timeout;
 
 #[tokio::test]
 async fn test_validator_traffic_control_noop() -> Result<(), anyhow::Error> {
@@ -791,6 +792,23 @@ async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), 
     } = response;
     assert_eq!(effects.unwrap().transaction_digest(), tx_digest);
     assert!(!confirmed_local_execution.unwrap());
+
+    // Check that the network is live.
+    timeout(Duration::from_secs(30), async move {
+        loop {
+            let latest_seq = test_cluster
+                .fullnode_handle
+                .sui_node
+                .state()
+                .get_latest_checkpoint_sequence_number()
+                .unwrap();
+            if latest_seq > 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+    .await?;
 
     Ok(())
 }

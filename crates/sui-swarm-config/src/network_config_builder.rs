@@ -84,7 +84,7 @@ impl ConfigBuilder {
             rng: Some(OsRng),
             config_directory: config_directory.as_ref().into(),
             supported_protocol_versions_config: None,
-            committee: CommitteeConfig::Size(NonZeroUsize::new(1).unwrap()),
+            committee: CommitteeConfig::Size(NonZeroUsize::new(4).unwrap()),
             genesis_config: None,
             reference_gas_price: None,
             additional_objects: vec![],
