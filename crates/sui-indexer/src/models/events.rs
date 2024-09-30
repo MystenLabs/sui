@@ -22,32 +22,16 @@ use crate::types::IndexedEvent;
 #[derive(Queryable, QueryableByName, Selectable, Insertable, Debug, Clone)]
 #[diesel(table_name = events)]
 pub struct StoredEvent {
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub tx_sequence_number: i64,
-
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub event_sequence_number: i64,
-
-    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub transaction_digest: Vec<u8>,
-
-    #[diesel(sql_type = diesel::sql_types::Array<diesel::sql_types::Nullable<diesel::pg::sql_types::Bytea>>)]
     pub senders: Vec<Option<Vec<u8>>>,
-
-    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub package: Vec<u8>,
-
-    #[diesel(sql_type = diesel::sql_types::Text)]
     pub module: String,
-
-    #[diesel(sql_type = diesel::sql_types::Text)]
     pub event_type: String,
-
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub timestamp_ms: i64,
-
-    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub bcs: Vec<u8>,
+    pub sender: Option<Vec<u8>>,
 }
 
 pub type SendersType = Vec<Option<Vec<u8>>>;
@@ -58,16 +42,13 @@ impl From<IndexedEvent> for StoredEvent {
             tx_sequence_number: event.tx_sequence_number as i64,
             event_sequence_number: event.event_sequence_number as i64,
             transaction_digest: event.transaction_digest.into_inner().to_vec(),
-            senders: event
-                .senders
-                .into_iter()
-                .map(|sender| Some(sender.to_vec()))
-                .collect(),
+            senders: vec![Some(event.sender.to_vec())],
             package: event.package.to_vec(),
             module: event.module.clone(),
             event_type: event.event_type.clone(),
             bcs: event.bcs.clone(),
             timestamp_ms: event.timestamp_ms as i64,
+            sender: Some(event.sender.to_vec()),
         }
     }
 }
