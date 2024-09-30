@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
-    hash::{Hash, Hasher},
+    collections::{HashMap, HashSet},
+    hash::Hash,
     num::NonZeroUsize,
     sync::Arc,
 };
@@ -168,37 +168,6 @@ impl<C> ConsensusHandler<C> {
     pub fn last_processed_subdag_index(&self) -> u64 {
         self.last_consensus_stats.index.sub_dag_index
     }
-
-    /// Updates the execution indexes based on the provided input.
-    fn update_index_and_hash(&mut self, index: ExecutionIndices, v: &[u8]) {
-        update_index_and_hash(&mut self.last_consensus_stats, index, v)
-    }
-}
-
-fn update_index_and_hash(
-    last_consensus_stats: &mut ExecutionIndicesWithStats,
-    index: ExecutionIndices,
-    v: &[u8],
-) {
-    // The entry point of handle_consensus_output_internal() has filtered out any already processed
-    // consensus output. So we can safely assume that the index is always increasing.
-    assert!(last_consensus_stats.index < index);
-
-    let previous_hash = last_consensus_stats.hash;
-    let mut hasher = DefaultHasher::new();
-    previous_hash.hash(&mut hasher);
-    v.hash(&mut hasher);
-    let hash = hasher.finish();
-    // Log hash every 1000th transaction of the subdag
-    if index.transaction_index % 1000 == 0 {
-        info!(
-            "Integrity hash for consensus output at subdag {} transaction {} is {:016x}",
-            index.sub_dag_index, index.transaction_index, hash
-        );
-    }
-
-    last_consensus_stats.index = index;
-    last_consensus_stats.hash = hash;
 }
 
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
@@ -255,18 +224,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             "Received consensus output"
         );
 
-        // TODO: testing empty commit explicitly.
+        let execution_index = ExecutionIndices {
+            last_committed_round: round,
+            sub_dag_index: commit_sub_dag_index,
+            transaction_index: 0_u64,
+        };
+        // This function has filtered out any already processed consensus output.
+        // So we can safely assume that the index is always increasing.
+        assert!(self.last_consensus_stats.index < execution_index);
+
+        // TODO: test empty commit explicitly.
         // Note that consensus commit batch may contain no transactions, but we still need to record the current
         // round and subdag index in the last_consensus_stats, so that it won't be re-executed in the future.
-        let empty_bytes = vec![];
-        self.update_index_and_hash(
-            ExecutionIndices {
-                last_committed_round: round,
-                sub_dag_index: commit_sub_dag_index,
-                transaction_index: 0_u64,
-            },
-            &empty_bytes,
-        );
+        self.last_consensus_stats.index = execution_index;
 
         // Load all jwks that became active in the previous round, and commit them in this round.
         // We want to delay one round because none of the transactions in the previous round could
@@ -290,7 +260,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             );
 
             transactions.push((
-                empty_bytes.as_slice(),
                 SequencedConsensusTransactionKind::System(authenticator_state_update_transaction),
                 leader_author,
             ));
@@ -320,7 +289,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 self.last_consensus_stats
                     .stats
                     .inc_num_messages(authority_index as usize);
-                for (serialized_transaction, transaction) in authority_transactions {
+                for (transaction, serialized_len) in authority_transactions {
                     let kind = classify(&transaction);
                     self.metrics
                         .consensus_handler_processed
@@ -329,7 +298,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     self.metrics
                         .consensus_handler_transaction_sizes
                         .with_label_values(&[kind])
-                        .observe(serialized_transaction.len() as f64);
+                        .observe(serialized_len as f64);
                     if matches!(
                         &transaction.kind,
                         ConsensusTransactionKind::CertifiedTransaction(_)
@@ -345,7 +314,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         error!("BUG: saw deprecated RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}")
                     } else {
                         let transaction = SequencedConsensusTransactionKind::External(transaction);
-                        transactions.push((serialized_transaction, transaction, authority_index));
+                        transactions.push((transaction, authority_index));
                     }
                 }
             }
@@ -373,9 +342,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             // entries while we're iterating over the sequenced transactions.
             let mut processed_set = HashSet::new();
 
-            for (seq, (serialized, transaction, cert_origin)) in
-                transactions.into_iter().enumerate()
-            {
+            for (seq, (transaction, cert_origin)) in transactions.into_iter().enumerate() {
                 // In process_consensus_transactions_and_commit_boundary(), we will add a system consensus commit
                 // prologue transaction, which will be the first transaction in this consensus commit batch.
                 // Therefore, the transaction sequence number starts from 1 here.
@@ -385,7 +352,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     transaction_index: (seq + 1) as u64,
                 };
 
-                self.update_index_and_hash(current_tx_index, serialized);
+                self.last_consensus_stats.index = current_tx_index;
 
                 let certificate_author = *self
                     .epoch_store
@@ -975,7 +942,7 @@ mod tests {
         );
         assert_eq!(last_consensus_stats_1.index.sub_dag_index, 10_u64);
         assert_eq!(last_consensus_stats_1.index.last_committed_round, 100_u64);
-        assert_ne!(last_consensus_stats_1.hash, 0);
+        assert_eq!(last_consensus_stats_1.hash, 0);
         assert_eq!(
             last_consensus_stats_1.stats.get_num_messages(0),
             num_blocks as u64
@@ -994,31 +961,6 @@ mod tests {
             let last_consensus_stats_2 = consensus_handler.last_consensus_stats.clone();
             assert_eq!(last_consensus_stats_1, last_consensus_stats_2);
         }
-    }
-
-    #[test]
-    pub fn test_update_index_and_hash() {
-        let index0 = ExecutionIndices {
-            sub_dag_index: 0,
-            transaction_index: 5,
-            last_committed_round: 0,
-        };
-        let index1 = ExecutionIndices {
-            sub_dag_index: 1,
-            transaction_index: 2,
-            last_committed_round: 3,
-        };
-
-        let mut last_seen = ExecutionIndicesWithStats {
-            index: index0,
-            hash: 1000,
-            stats: ConsensusStats::default(),
-        };
-
-        let tx = &[0];
-        update_index_and_hash(&mut last_seen, index1, tx);
-        assert_eq!(last_seen.index, index1);
-        assert_ne!(last_seen.hash, 1000);
     }
 
     #[test]
