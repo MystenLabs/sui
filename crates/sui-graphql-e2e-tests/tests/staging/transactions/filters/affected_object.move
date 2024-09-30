@@ -67,17 +67,25 @@ module P::M {
 //> P::M::new(Input(0));
 //> TransferObjects([Result(0)], Input(1))
 
+//# programmable --sender A --inputs 4 @A
+//> P::M::new(Input(0));
+//> P::M::wrap(Result(0));
+//> TransferObjects([Result(1)], Input(1))
+
 //# programmable --sender A --inputs object(2,0)
 //> P::M::inc(Input(0))
+
+//# programmable --sender A --inputs object(5,0)
+//> P::M::incw(Input(0))
 
 //# programmable --sender A --inputs object(2,0) @A
 //> P::M::wrap(Input(0));
 //> TransferObjects([Result(0)], Input(1))
 
-//# programmable --sender A --inputs object(6,0)
+//# programmable --sender A --inputs object(8,0)
 //> P::M::incw(Input(0))
 
-//# programmable --sender A --inputs object(6,0) @A
+//# programmable --sender A --inputs object(8,0) @A
 //> P::M::unwrap(Input(0));
 //> TransferObjects([Result(0)], Input(1))
 
@@ -95,21 +103,48 @@ module P::M {
 //> P::M::receive(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
 
+//# programmable --sender A --inputs object(2,0)
+//> P::M::destroy(Input(0))
+
+//# programmable --sender A --inputs object(3,0)
+//> P::M::destroy(Input(0))
+
+//# programmable --sender A --inputs object(4,0)
+//> P::M::destroy(Input(0))
+
+//# programmable --sender A --inputs object(5,0) @A
+//> P::M::unwrap(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+
+//# programmable --sender A --inputs object(18,0) @A
+//> P::M::wrap(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+
+//# programmable --sender A --inputs object(19,0)
+//> P::M::unwrap(Input(0));
+//> P::M::destroy(Result(0))
+
 //# create-checkpoint
 
 //# run-graphql
 {
-  all: transactionBlocks(last: 11) { nodes { digest } }
+  all: transactionBlocks(last: 19) { nodes { digest } }
 
-  affect2: transactionBlocks(last: 11, filter: { affectedObject: "@{obj_2_0}" }) { nodes { digest } }
-  input2: transactionBlocks(last: 11, filter: { inputObject: "@{obj_2_0}" }) { nodes { digest } }
-  change2: transactionBlocks(last: 11, filter: { changedObject: "@{obj_2_0}" }) { nodes { digest } }
+  affect2: transactionBlocks(last: 19, filter: { affectedObject: "@{obj_2_0}" }) { nodes { digest } }
+  input2: transactionBlocks(last: 19, filter: { inputObject: "@{obj_2_0}" }) { nodes { digest } }
+  change2: transactionBlocks(last: 19, filter: { changedObject: "@{obj_2_0}" }) { nodes { digest } }
 
-  affect3: transactionBlocks(last: 11, filter: { affectedObject: "@{obj_3_0}" }) { nodes { digest } }
-  input3: transactionBlocks(last: 11, filter: { inputObject: "@{obj_3_0}" }) { nodes { digest } }
-  change3: transactionBlocks(last: 11, filter: { changedObject: "@{obj_3_0}" }) { nodes { digest } }
+  affect3: transactionBlocks(last: 19, filter: { affectedObject: "@{obj_3_0}" }) { nodes { digest } }
+  input3: transactionBlocks(last: 19, filter: { inputObject: "@{obj_3_0}" }) { nodes { digest } }
+  change3: transactionBlocks(last: 19, filter: { changedObject: "@{obj_3_0}" }) { nodes { digest } }
 
-  affect4: transactionBlocks(last: 11, filter: { affectedObject: "@{obj_4_0}" }) { nodes { digest } }
-  input4: transactionBlocks(last: 11, filter: { inputObject: "@{obj_4_0}" }) { nodes { digest } }
-  change4: transactionBlocks(last: 11, filter: { changedObject: "@{obj_4_0}" }) { nodes { digest } }
+  affect4: transactionBlocks(last: 19, filter: { affectedObject: "@{obj_4_0}" }) { nodes { digest } }
+  input4: transactionBlocks(last: 19, filter: { inputObject: "@{obj_4_0}" }) { nodes { digest } }
+  change4: transactionBlocks(last: 19, filter: { changedObject: "@{obj_4_0}" }) { nodes { digest } }
+
+  # The object that was first created at transaction 5 was unwrapped at transaction 18, so that's
+  # the variable we refer to it at.
+  affect5: transactionBlocks(last: 19, filter: { affectedObject: "@{obj_18_0}" }) { nodes { digest } }
+  input5: transactionBlocks(last: 19, filter: { inputObject: "@{obj_18_0}" }) { nodes { digest } }
+  change5: transactionBlocks(last: 19, filter: { changedObject: "@{obj_18_0}" }) { nodes { digest } }
 }
