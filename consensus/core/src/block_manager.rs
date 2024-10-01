@@ -432,7 +432,8 @@ impl BlockManager {
         let _s = monitored_scope("BlockManager::try_unsuspend_blocks_for_latest_gc_round");
         let gc_enabled = self.dag_state.read().gc_enabled();
         let gc_round = self.dag_state.read().gc_round();
-        let mut total_blocks_gced = 0;
+        let mut blocks_unsuspended_below_gc_round = 0;
+        let mut blocks_gc_ed = 0;
 
         if !gc_enabled {
             trace!("GC is disabled, no blocks will attempt to get unsuspended.");
@@ -446,7 +447,7 @@ impl BlockManager {
                 return;
             }
 
-            total_blocks_gced += 1;
+            blocks_gc_ed += 1;
 
             assert!(!self.suspended_blocks.contains_key(block_ref), "Block should not be suspended, as we are causally GC'ing and no suspended block should exist for a missing ancestor.");
 
@@ -458,7 +459,7 @@ impl BlockManager {
 
             unsuspended_blocks.iter().for_each(|block| {
                 if block.round() <= gc_round {
-                    total_blocks_gced += 1;
+                    blocks_unsuspended_below_gc_round += 1;
                 }
             });
 
@@ -481,8 +482,8 @@ impl BlockManager {
         }
 
         debug!(
-            "GC'ed {} blocks in gc_round {}",
-            total_blocks_gced, gc_round
+            "Total {} blocks unsuspended and total blocks {} gc'ed <= gc_round {}",
+            blocks_unsuspended_below_gc_round, blocks_gc_ed, gc_round
         );
     }
 
