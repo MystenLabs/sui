@@ -4,6 +4,7 @@
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, LockDetails};
 use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
+use mysten_common::fatal;
 use mysten_common::*;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
@@ -128,7 +129,6 @@ impl ObjectLocks {
 
         let live_digest = live_object.digest();
         if obj_ref.2 != live_digest {
-            debug!("object digest mismatch: {:?} vs {:?}", obj_ref, live_digest);
             return Err(SuiError::UserInputError {
                 error: UserInputError::InvalidObjectDigest {
                     object_id: obj_ref.0,

@@ -847,11 +847,11 @@ macro_rules! implement_passthrough_traits {
 
         impl ExecutionCacheReconfigAPI for $implementor {
             fn insert_genesis_object(&self, object: Object) -> SuiResult {
-                self.store.insert_genesis_object(object)
+                self.insert_genesis_object_impl(object)
             }
 
             fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult {
-                self.store.bulk_insert_genesis_objects(objects)
+                self.bulk_insert_genesis_objects_impl(objects)
             }
 
             fn revert_state_update(&self, digest: &TransactionDigest) -> SuiResult {
