@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::Subcommand;
+use clap::{Subcommand, ValueEnum};
 
 pub mod backfill_instances;
 pub mod backfill_runner;
@@ -17,4 +17,17 @@ pub enum BackfillTaskKind {
         sql: String,
         key_column: String,
     },
+    /// Starts a backfill pipeline from the ingestion engine.
+    /// \remote_store_url is the URL of the remote store to ingest from.
+    /// Any `IngestionBackfillKind` will need to map to a type that
+    /// implements `IngestionBackfillTrait`.
+    Ingestion {
+        kind: IngestionBackfillKind,
+        remote_store_url: String,
+    },
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum IngestionBackfillKind {
+    RawCheckpoints,
 }

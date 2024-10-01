@@ -67,6 +67,7 @@ move-binary-format.workspace = true
 diesel_migrations.workspace = true
 cached.workspace = true
 tokio-stream.workspace = true
+dashmap.workspace = true
 
 [dev-dependencies]
 sui-keys.workspace = true

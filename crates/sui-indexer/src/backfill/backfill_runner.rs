@@ -22,7 +22,7 @@ impl BackfillRunner {
         backfill_config: BackFillConfig,
         total_range: RangeInclusive<usize>,
     ) {
-        let task = get_backfill_task(runner_kind);
+        let task = get_backfill_task(runner_kind, *total_range.start()).await;
         Self::run_impl(pool, backfill_config, total_range, task).await;
     }
 
@@ -59,10 +59,12 @@ impl BackfillRunner {
                     println!("Finished range: {:?}.", range);
                     in_progress_clone.lock().await.remove(range.start());
                     let cur_min_in_progress = in_progress_clone.lock().await.iter().next().cloned();
-                    println!(
-                        "Minimum range start number still in progress: {:?}.",
-                        cur_min_in_progress
-                    );
+                    if let Some(cur_min_in_progress) = cur_min_in_progress {
+                        println!(
+                            "Minimum range start number still in progress: {:?}.",
+                            cur_min_in_progress
+                        );
+                    }
                 }
             })
             .await;
