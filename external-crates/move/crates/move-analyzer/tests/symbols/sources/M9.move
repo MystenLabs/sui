@@ -12,7 +12,7 @@ module Symbols::M9 {
 
     const SOME_CONST: u64 = 42;
 
-    struct SomeStruct has drop, store {
+    public struct SomeStruct has drop, store {
         some_field: u64,
     }
 

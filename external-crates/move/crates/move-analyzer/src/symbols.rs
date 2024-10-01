@@ -73,7 +73,7 @@ use lsp_types::{
 use sha2::{Digest, Sha256};
 use std::{
     cmp,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     fmt,
     path::{Path, PathBuf},
     sync::{Arc, Condvar, Mutex},
@@ -96,11 +96,13 @@ use move_compiler::{
     },
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeName_, Type_, VariantFields},
-    parser::ast::{self as P},
+    parser::{
+        ast::{self as P},
+        comments::CommentMap,
+    },
     shared::{
-        files::{FileId, MappedFiles},
-        unique_map::UniqueMap,
-        Identifier, Name, NamedAddressMap, NamedAddressMaps,
+        files::MappedFiles, unique_map::UniqueMap, Identifier, Name, NamedAddressMap,
+        NamedAddressMaps,
     },
     typing::{
         ast::{
@@ -136,6 +138,7 @@ pub struct CompiledPkgInfo {
     mapped_files: MappedFiles,
     edition: Option<Edition>,
     compiler_info: Option<CompilerInfo>,
+    all_comments: CommentMap,
 }
 
 /// Data used during symbols computation
@@ -1818,13 +1821,14 @@ pub fn get_compiled_pkg(
     };
 
     let mut edition = None;
+    let mut comments = None;
     build_plan.compile_with_driver_and_deps(dependencies, &mut std::io::sink(), |compiler| {
         let compiler = compiler.set_ide_mode();
         // extract expansion AST
         let (files, compilation_result) = compiler
             .set_pre_compiled_lib_opt(compiled_libs.clone())
             .run::<PASS_PARSER>()?;
-        let (_, compiler) = match compilation_result {
+        let (comments_map, compiler) = match compilation_result {
             Ok(v) => v,
             Err((_pass, diags)) => {
                 let failure = true;
@@ -1833,6 +1837,7 @@ pub fn get_compiled_pkg(
                 return Ok((files, vec![]));
             }
         };
+        comments = Some(comments_map);
         eprintln!("compiled to parsed AST");
         let (compiler, parsed_program) = compiler.into_ast();
         parsed_ast = Some(parsed_program.clone());
@@ -1896,6 +1901,10 @@ pub fn get_compiled_pkg(
     // when failing to produce the ASTs
     let parsed_program = parsed_ast.unwrap();
     let typed_program = typed_ast.clone().unwrap();
+    let mut all_comments = comments.unwrap();
+    if let Some(libs) = &compiled_libs {
+        all_comments.extend(libs.comments.clone());
+    }
     let compiled_pkg_info = CompiledPkgInfo {
         parsed_program,
         typed_program,
@@ -1904,6 +1913,7 @@ pub fn get_compiled_pkg(
         mapped_files,
         edition,
         compiler_info,
+        all_comments,
     };
     Ok((Some(compiled_pkg_info), ide_diagnostics))
 }
@@ -1914,17 +1924,6 @@ pub fn compute_symbols_pre_process(
     compiled_pkg_info: &CompiledPkgInfo,
     cursor_info: Option<(&PathBuf, Position)>,
 ) -> Option<CursorContext> {
-    let mut file_id_to_lines = HashMap::new();
-    for file_id in compiled_pkg_info.mapped_files.file_mapping().values() {
-        let Ok(file) = compiled_pkg_info.mapped_files.files().get(*file_id) else {
-            eprintln!("file id without source code");
-            continue;
-        };
-        let source = file.source();
-        let lines: Vec<String> = source.lines().map(String::from).collect();
-        file_id_to_lines.insert(*file_id, lines);
-    }
-
     let mut fields_order_info = FieldOrderInfo::new();
 
     pre_process_parsed_program(&compiled_pkg_info.parsed_program, &mut fields_order_info);
@@ -1935,13 +1934,13 @@ pub fn compute_symbols_pre_process(
         &compiled_pkg_info.typed_program.modules,
         &fields_order_info,
         &compiled_pkg_info.mapped_files,
-        &file_id_to_lines,
         &mut computation_data.mod_outer_defs,
         &mut computation_data.mod_use_defs,
         &mut computation_data.references,
         &mut computation_data.def_info,
         &compiled_pkg_info.edition,
         cursor_context.as_mut(),
+        &compiled_pkg_info.all_comments,
     );
 
     if let Some(libs) = compiled_pkg_info.libs.clone() {
@@ -1949,13 +1948,13 @@ pub fn compute_symbols_pre_process(
             &libs.typing.modules,
             &fields_order_info,
             &compiled_pkg_info.mapped_files,
-            &file_id_to_lines,
             &mut computation_data.mod_outer_defs,
             &mut computation_data.mod_use_defs,
             &mut computation_data.references,
             &mut computation_data.def_info,
             &compiled_pkg_info.edition,
             None, // Cursor can never be in a compiled library(?)
+            &compiled_pkg_info.all_comments,
         );
     }
     cursor_context
@@ -2175,13 +2174,13 @@ fn pre_process_typed_modules(
     typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
     fields_order_info: &FieldOrderInfo,
     files: &MappedFiles,
-    file_id_to_lines: &HashMap<usize, Vec<String>>,
     mod_outer_defs: &mut BTreeMap<String, ModuleDefs>,
     mod_use_defs: &mut BTreeMap<String, UseDefMap>,
     references: &mut References,
     def_info: &mut DefMap,
     edition: &Option<Edition>,
     mut cursor_context: Option<&mut CursorContext>,
+    all_comments: &CommentMap,
 ) {
     for (pos, module_ident, module_def) in typed_modules {
         // If the cursor is in this module, mark that down.
@@ -2199,10 +2198,10 @@ fn pre_process_typed_modules(
             module_def,
             fields_order_info,
             files,
-            file_id_to_lines,
             references,
             def_info,
             edition,
+            all_comments,
         );
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
         mod_use_defs.insert(mod_ident_str, symbols);
@@ -2358,15 +2357,21 @@ pub fn empty_symbols() -> Symbols {
     }
 }
 
+/// Get optional doc comment string at a given location.
+fn get_doc_string(all_comments: &CommentMap, loc: Loc) -> Option<String> {
+    all_comments
+        .get(&loc.file_hash())
+        .and_then(|m| m.get(&loc.start()))
+        .cloned()
+}
+
 fn field_defs_and_types(
     datatype_name: Symbol,
-    datatype_loc: Loc,
     fields: &E::Fields<Type>,
     fields_order_opt: Option<&BTreeMap<Symbol, usize>>,
     mod_ident: &ModuleIdent,
-    files: &MappedFiles,
-    file_id_to_lines: &HashMap<usize, Vec<String>>,
     def_info: &mut DefMap,
+    all_comments: &CommentMap,
 ) -> (Vec<FieldDef>, Vec<Type>) {
     let mut field_defs = vec![];
     let mut field_types = vec![];
@@ -2383,7 +2388,7 @@ fn field_defs_and_types(
             name: *fname,
             loc: floc,
         });
-        let doc_string = extract_doc_string(files, file_id_to_lines, &floc, Some(datatype_loc));
+        let doc_string = get_doc_string(all_comments, floc);
         def_info.insert(
             floc,
             DefInfo::Field(
@@ -2431,10 +2436,10 @@ fn get_mod_outer_defs(
     mod_def: &ModuleDefinition,
     fields_order_info: &FieldOrderInfo,
     files: &MappedFiles,
-    file_id_to_lines: &HashMap<usize, Vec<String>>,
     references: &mut References,
     def_info: &mut DefMap,
     edition: &Option<Edition>,
+    all_comments: &CommentMap,
 ) -> (ModuleDefs, UseDefMap) {
     let mut structs = BTreeMap::new();
     let mut enums = BTreeMap::new();
@@ -2455,13 +2460,11 @@ fn get_mod_outer_defs(
                 .and_then(|s| s.get(name));
             (field_defs, field_types) = field_defs_and_types(
                 *name,
-                name_loc,
                 fields,
                 fields_order_opt,
                 mod_ident,
-                files,
-                file_id_to_lines,
                 def_info,
+                all_comments,
             );
         };
 
@@ -2486,7 +2489,7 @@ fn get_mod_outer_defs(
         } else {
             Visibility::Internal
         };
-        let doc_string = extract_doc_string(files, file_id_to_lines, &name_loc, None);
+        let doc_string = get_doc_string(all_comments, def.loc);
         def_info.insert(
             name_loc,
             DefInfo::Struct(
@@ -2516,13 +2519,11 @@ fn get_mod_outer_defs(
                         .and_then(|v| v.get(vname));
                     let (defs, types) = field_defs_and_types(
                         *name,
-                        name_loc,
                         fields,
                         fields_order_opt,
                         mod_ident,
-                        files,
-                        file_id_to_lines,
                         def_info,
+                        all_comments,
                     );
                     (defs, types, *pos_fields)
                 }
@@ -2536,8 +2537,7 @@ fn get_mod_outer_defs(
             });
             variants_info.insert(*vname, (vname_loc, field_defs, positional));
 
-            let vdoc_string =
-                extract_doc_string(files, file_id_to_lines, &vname_loc, Some(name_loc));
+            let vdoc_string = get_doc_string(all_comments, def.loc);
             def_info.insert(
                 vname_loc,
                 DefInfo::Variant(
@@ -2559,7 +2559,7 @@ fn get_mod_outer_defs(
                 info: MemberDefInfo::Enum { variants_info },
             },
         );
-        let enum_doc_string = extract_doc_string(files, file_id_to_lines, &name_loc, None);
+        let enum_doc_string = get_doc_string(all_comments, def.loc);
         def_info.insert(
             name_loc,
             DefInfo::Enum(
@@ -2582,7 +2582,7 @@ fn get_mod_outer_defs(
                 info: MemberDefInfo::Const,
             },
         );
-        let doc_string = extract_doc_string(files, file_id_to_lines, &name_loc, None);
+        let doc_string = get_doc_string(all_comments, c.loc);
         def_info.insert(
             name_loc,
             DefInfo::Const(
@@ -2606,7 +2606,7 @@ fn get_mod_outer_defs(
         } else {
             FunType::Regular
         };
-        let doc_string = extract_doc_string(files, file_id_to_lines, &name_loc, None);
+        let doc_string = get_doc_string(all_comments, fun.loc);
         let fun_info = DefInfo::Function(
             mod_ident.value,
             fun.visibility,
@@ -2650,7 +2650,7 @@ fn get_mod_outer_defs(
     let mut use_def_map = UseDefMap::new();
 
     let ident = mod_ident.value;
-    let doc_comment = extract_doc_string(files, file_id_to_lines, loc, None);
+    let doc_string = get_doc_string(all_comments, mod_def.loc);
     let mod_defs = ModuleDefs {
         fhash,
         ident,
@@ -2680,7 +2680,7 @@ fn get_mod_outer_defs(
         );
         def_info.insert(
             mod_defs.name_loc,
-            DefInfo::Module(mod_ident_to_ide_string(&ident, None, false), doc_comment),
+            DefInfo::Module(mod_ident_to_ide_string(&ident, None, false), doc_string),
         );
     }
 
@@ -2776,130 +2776,6 @@ pub fn find_datatype(mod_defs: &ModuleDefs, datatype_name: &Symbol) -> Option<Lo
         },
         |struct_def| Some(struct_def.name_loc),
     )
-}
-
-/// Extracts the docstring (/// or /** ... */) for a given definition by traversing up from the line definition
-fn extract_doc_string(
-    files: &MappedFiles,
-    file_id_to_lines: &HashMap<FileId, Vec<String>>,
-    loc: &Loc,
-    outer_def_loc: Option<Loc>,
-) -> Option<String> {
-    let file_hash = loc.file_hash();
-    let file_id = files.file_hash_to_file_id(&file_hash)?;
-    let start_position = files.start_position_opt(loc)?;
-    let file_lines = file_id_to_lines.get(&file_id)?;
-
-    if let Some(outer_loc) = outer_def_loc {
-        if let Some(outer_pos) = files.start_position_opt(&outer_loc) {
-            if outer_pos.line_offset() == start_position.line_offset() {
-                // It's a bit of a hack but due to the way we extract doc strings
-                // we should not do it for a definition if this definition is placed
-                // on the same line as another (outer) one as this way we'd pick
-                // doc comment of the outer definition. For example (where field
-                // of the struct would pick up struct's doc comment)
-                //
-                // /// Struct doc comment
-                // public struct Tmp { field: u64 }
-                return None;
-            }
-        }
-    }
-
-    if start_position.line_offset() == 0 {
-        return None;
-    }
-
-    let mut iter = start_position.line_offset() - 1;
-    let mut line_before = file_lines[iter].trim();
-
-    let mut doc_string = String::new();
-    // Detect the two different types of docstrings
-    if line_before.starts_with("///") {
-        while let Some(stripped_line) = line_before.strip_prefix("///") {
-            doc_string = format!("{}\n{}", stripped_line, doc_string);
-            if iter == 0 {
-                break;
-            }
-            iter -= 1;
-            line_before = file_lines[iter].trim();
-        }
-    } else if line_before.ends_with("*/") {
-        let mut doc_string_found = false;
-        // we need a line with preserved (whitespace) prefix so that
-        // we can trim other lines in the doc comment to the same prefix
-        let mut current_line = file_lines[iter].trim_end();
-        current_line = current_line.strip_suffix("*/").unwrap_or("");
-        let current_line_len = current_line.len();
-        line_before = current_line.trim();
-        let trimmed_len = current_line_len - line_before.len();
-
-        // Loop condition is a safe guard.
-        while !doc_string_found {
-            // We found the start of the multi-line comment/docstring
-            if line_before.starts_with("/*") {
-                let is_doc = line_before.starts_with("/**") && !line_before.starts_with("/***");
-
-                // Invalid doc_string start prefix.
-                if !is_doc {
-                    return None;
-                }
-
-                line_before = line_before.strip_prefix("/**").unwrap_or("").trim();
-                doc_string_found = true;
-            }
-
-            doc_string = format!("{}\n{}", line_before, doc_string);
-
-            if iter == 0 {
-                break;
-            }
-
-            iter -= 1;
-
-            // we need to trim the block comment line the same as
-            // the line containing its ending marker
-            current_line = file_lines[iter].trim_end();
-            let first_non_whitespace = current_line
-                .chars()
-                .position(|c| !c.is_whitespace())
-                .unwrap_or_default();
-            if first_non_whitespace < trimmed_len {
-                // There is not enough whitespace to trim but trim as much as you can.
-                // The reason likely is that the docsting is misformatted, for example:
-                // ```
-                //   /**
-                //     Properly formatted line
-                //     Another properly formatted line
-                // Misformatted line
-                //   */
-                // ```
-                //
-                // This will result in the following doc comment extracted:
-                //     Properly formatted line
-                //```
-                //   Properly formatted line
-                //   Another properly formatted line
-                //Misformatted line
-                //```
-                line_before = current_line.trim_start();
-            } else {
-                line_before = current_line[trimmed_len..].into();
-            }
-        }
-
-        // No doc_string found - return String::new();
-        if !doc_string_found {
-            return None;
-        }
-    }
-
-    // No point in trying to print empty comment
-    if doc_string.is_empty() {
-        return None;
-    }
-
-    Some(doc_string)
 }
 
 /// Handles go-to-def request of the language server

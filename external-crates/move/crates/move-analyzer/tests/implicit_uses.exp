@@ -12,7 +12,6 @@ public struct Option<Element> has copy, drop, store {
  Abstraction of a value that may or may not be present. Implemented with a vector of size
  zero or one because Move bytecode does not have ADTs.
 
-
 -- test 1 -------------------
 use line: 8, use_ndx: 2
 Use: 'option', start: 26, end: 32
@@ -22,5 +21,4 @@ On Hover:
 module option
 
  This module defines the Option type and its methods to represent and handle an optional value.
-
 

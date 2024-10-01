@@ -279,6 +279,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
         index: _,
         macro_: _,
         attributes,
+        loc: _,
         entry,
     } = fdef;
     let prev_in_test = context.in_test;

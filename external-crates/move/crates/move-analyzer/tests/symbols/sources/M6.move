@@ -2,7 +2,7 @@ module Symbols::M6 {
 
     /// This is a documented struct
     /// With a multi-line docstring
-    struct DocumentedStruct has drop, store {
+    public struct DocumentedStruct has drop, store {
         /// A documented field
         documented_field: u64,
     }
@@ -46,7 +46,7 @@ module Symbols::M6 {
     }
 
     /// A documented function with code block
-    /// (should preserved indentation in the code block)
+    /// (should preserve indentation in the code block)
     ///
     /// ```rust
     /// fun foo() {
@@ -57,7 +57,7 @@ module Symbols::M6 {
 
     /**
        A documented function with code block
-       (should preserved indentation in the code block)
+       (should preserve indentation in the code block)
 
        ```rust
        fun foo() {
@@ -78,5 +78,14 @@ Beginning of this string should not disappear either.
 
     */
     fun misformatted_docstring() {}
+
+
+    /// Docstring before attributes
+    #[test_only]
+    fun attributes_after_docstring() {}
+
+    #[test_only]
+    /// Docstring after attributes
+    fun attributes_before_docstring() {}
 
 }

@@ -16,10 +16,10 @@ module Symbols::M4 {
 
     fun while_loop(): u64 {
 
-        let tmp = 7;
+        let mut tmp = 7;
 
         while (tmp > 0) {
-            let tmp2 = 1;
+            let mut tmp2 = 1;
             {
                 let tmp = tmp;
                 tmp2 = tmp - tmp2;
@@ -32,10 +32,10 @@ module Symbols::M4 {
 
     fun loop_loop(): u64 {
 
-        let tmp = 7;
+        let mut tmp = 7;
 
         loop {
-            let tmp2 = 1;
+            let mut tmp2 = 1;
             {
                 let tmp = tmp;
                 tmp2 = tmp - tmp2;
@@ -69,16 +69,13 @@ module Symbols::M5 {
         foo: u64, bar: u64, baz: u64, qux: u64
     ) {}
 
-    public fun stripped_types(opt: std::option::Option<u64>): vector<u64> {
+    public fun stripped_types(mut opt: std::option::Option<u64>): vector<u64> {
         // hovering over `extract` should strip `std::option` from parameter type
         // `std` from the (qualified) function name
         let elem: u64 = std::option::extract(&mut opt);
         // hovering over `singleton` should strip `std` from the (qualified)
         // function name
         std::vector::singleton(elem)
-
-
     }
-
 
 }

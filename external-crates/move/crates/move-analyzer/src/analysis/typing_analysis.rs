@@ -138,18 +138,18 @@ impl TypingAnalysisContext<'_> {
     }
 
     /// Add use of a const identifier
-    fn add_const_use_def(&mut self, module_ident: &E::ModuleIdent, name: &ConstantName) {
+    fn add_const_use_def(&mut self, module_ident: &E::ModuleIdent_, name: &ConstantName) {
         if self.traverse_only {
             return;
         }
         let use_pos = name.loc();
         let use_name = name.value();
-        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
+        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
         };
         // insert use of the const's module
-        let mod_name = module_ident.value.module;
+        let mod_name = module_ident.module;
         if let Some(mod_name_start) = self.file_start_position_opt(&mod_name.loc()) {
             // a module will not be present if a constant belongs to an implicit module
             self.use_defs.insert(
@@ -605,7 +605,7 @@ impl TypingAnalysisContext<'_> {
                     self.process_match_patterm(pat);
                 }
             }
-            UA::Constant(mod_ident, name) => self.add_const_use_def(mod_ident, name),
+            UA::Constant(mod_ident, name) => self.add_const_use_def(&mod_ident.value, name),
             UA::Or(pat1, pat2) => {
                 self.process_match_patterm(pat1);
                 self.process_match_patterm(pat2);
@@ -1019,7 +1019,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     true
                 }
                 TE::Constant(mod_ident, name) => {
-                    visitor.add_const_use_def(mod_ident, name);
+                    visitor.add_const_use_def(&mod_ident.value, name);
                     true
                 }
                 TE::ModuleCall(mod_call) => {
@@ -1085,6 +1085,23 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     v.iter().for_each(|arm| visitor.process_match_arm(arm));
                     true
                 }
+                TE::ErrorConstant {
+                    line_number_loc: _,
+                    error_constant,
+                } => {
+                    // assume that constant is defined in the same module where it's used
+                    // TODO: if above ever changes, we need to update this (presumably
+                    // `ErrorConstant` will carry module ident at this point)
+                    if let Some(name) = error_constant {
+                        if let Some(mod_def) = visitor
+                            .mod_outer_defs
+                            .get(visitor.current_mod_ident_str.as_ref().unwrap())
+                        {
+                            visitor.add_const_use_def(&mod_def.ident.clone(), name);
+                        }
+                    };
+                    true
+                }
                 TE::Unit { .. }
                 | TE::Builtin(_, _)
                 | TE::Vector(_, _, _, _)
@@ -1107,7 +1124,6 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 | TE::TempBorrow(_, _)
                 | TE::Cast(_, _)
                 | TE::Annotate(_, _)
-                | TE::ErrorConstant { .. }
                 | TE::UnresolvedError => false,
             }
         }

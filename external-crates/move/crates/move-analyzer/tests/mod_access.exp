@@ -9,7 +9,6 @@ module Symbols::M9
 
  A module doc comment
 
-
 -- test 1 -------------------
 use line: 20, use_ndx: 0
 Use: 'M9', start: 17, end: 19
@@ -19,7 +18,6 @@ On Hover:
 module Symbols::M9
 
  A module doc comment
-
 
 -- test 2 -------------------
 use line: 20, use_ndx: 3
@@ -31,7 +29,6 @@ module Symbols::M9
 
  A module doc comment
 
-
 -- test 3 -------------------
 use line: 23, use_ndx: 2
 Use: 'M9', start: 34, end: 36
@@ -42,7 +39,6 @@ module Symbols::M9
 
  A module doc comment
 
-
 -- test 4 -------------------
 use line: 24, use_ndx: 0
 Use: 'M9', start: 21, end: 23
@@ -52,7 +48,6 @@ On Hover:
 module Symbols::M9
 
  A module doc comment
-
 
 -- test 5 -------------------
 use line: 28, use_ndx: 2
@@ -87,5 +82,4 @@ On Hover:
 module Symbols::M9
 
  A module doc comment
-
 
