@@ -30,7 +30,7 @@ To securely access randomness:
 ## Limited resources and `Random` dependent flows
 
 Developers must be aware that some resources that are available to transactions are limited.
-If a function that reads `Random` consumes more resources in an unhappy path flow than in a happy path flow, an attacker can use that difference to revert the transaction in the unhappy flow.
+If you are not careful, an attacker can break or exploit your application by deliberately controlling the point where your function runs out of resources.
 
 Concretely, gas is such a resource.
 Consider the following vulnerable code:
@@ -50,11 +50,11 @@ entry fun insecure_play(r: &Random, payment: Coin<SUI>, ...) {
 ```
 
 Observe that the gas costs of a transaction that calls `insecure_play` depends on the value of `win`.
-An attacker could call this function with a gas budget that is sufficient for the happy flow but not the unhappy one, resulting in it either winning or reverting the transaction (but never losing the payment).
+An attacker could call this function with a gas budget that is sufficient for the "happy flow" but not the "unhappy one", resulting in it either winning or reverting the transaction (but never losing the payment).
 
 :::warning
 
-Sui does not prevent this kind of attack, and developers must be aware of this subtlety when designing their contracts.
+The `Random` API does not automatically prevent this kind of attack, and developers must be aware of this subtlety when designing their contracts.
 
 :::
 
@@ -73,11 +73,12 @@ However, in the cases where it can be problematic, you can consider one of the f
 
 - Use two steps:
 Split the logic to two functions that must be called by different transactions.
-The first function, called by transaction `tx1`, fetches a random value and stores it in an object that is unreadable by other commands in `tx1` (e.g., by transferring the object to the caller, or, by storing the tx digest and checking it is different on read).
+The first function, called by transaction `tx1`, fetches a random value and stores it in an object that is unreadable by other commands in `tx1` (for example, by transferring the object to the caller, or, by storing the tx digest and checking it is different on read).
 A second function, called by transaction `tx2`, reads the stored value and completes the operation.
 `tx2` might indeed fail, but now the random value is fixed and cannot be modified using repeated calls.
 It is important that the inputs to the second function are fixed and cannot be modified after `tx1` (otherwise an attacker can modify them after seeing the randomness committed by `tx1`).
-Also, it is important to gracefully handle the case in which the second step is never completed (e.g., charge a fee in the first step).
+Also, it is important to gracefully handle the case in which the second step is never completed (for example, charge a fee in the first step).
+See [this](https://github.com/MystenLabs/sui/blob/main/examples/move/random/random_nft/sources/example.move#L117-L142) for example implementation.
 - Write the function in a way that the happy flow consumes more gas than the unhappy one.
   - Keep in mind that external functions or native ones can change in the future, potentially resulting in different costs compared to the time you conducted your tests.
   - [profile-transaction](../../../references/cli/client.mdx#profile-a-transaction) can be used to profile the costs of a transaction.
