@@ -32,6 +32,7 @@ sui-archival.workspace = true
 sui-storage.workspace = true
 sui-data-ingestion-core.workspace = true
 sui-types.workspace = true
+tempfile.workspace = true
 url.workspace = true
 
 [dev-dependencies]

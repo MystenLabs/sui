@@ -487,12 +487,14 @@ impl FileMetadata {
 }
 
 pub struct Processor {
-    pub processor: Box<dyn Worker>,
+    pub processor: Box<dyn Worker<Result = ()>>,
     pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
 }
 
 #[async_trait::async_trait]
 impl Worker for Processor {
+    type Result = ();
+
     #[inline]
     async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         self.processor.process_checkpoint(checkpoint_data).await
