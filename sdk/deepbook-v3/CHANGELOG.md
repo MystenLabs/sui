@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.8.2
+
+### Patch Changes
+
+- f026ec6: Deepbook Package Upgrade
+
 ## 0.8.1
 
 ### Patch Changes
