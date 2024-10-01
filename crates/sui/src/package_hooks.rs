@@ -112,6 +112,7 @@ impl SuiPackageHooks {
     }
 
     pub fn run_async<F: std::future::Future>(&self, future: F) -> F::Output {
+        #[cfg(not(msim))]
         if Handle::try_current().is_ok() {
             // Inside an existing Tokio runtime
             tokio::task::block_in_place(|| self.handle.block_on(future))
@@ -119,6 +120,8 @@ impl SuiPackageHooks {
             // Outside a Tokio runtime
             self.handle.block_on(future)
         }
+        #[cfg(msim)]
+        self.handle.block_on(future)
     }
 }
 
