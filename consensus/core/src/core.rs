@@ -576,7 +576,7 @@ impl Core {
                 let Some(last_decided) = decided_leaders.last().cloned() else {
                     break;
                 };
-                tracing::info!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", decided_leaders.len());
+                tracing::debug!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", decided_leaders.len());
 
                 let mut sequenced_leaders = decided_leaders
                     .into_iter()
