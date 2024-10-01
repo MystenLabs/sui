@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::{Context, Result};
 use move_binary_format::CompiledModule;
 use move_compiler::editions::Edition;
