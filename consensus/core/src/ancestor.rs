@@ -122,9 +122,9 @@ impl AncestorStateManager {
         network_low_quorum_round: u32,
     ) {
         let block_hostname = &self.context.committee.authority(authority_id).hostname;
-        let ancestor_info = self.state_map.get_mut(&authority_id).expect(&format!(
-            "Expected authority_id {authority_id} to be initialized in state_map",
-        ));
+        let ancestor_info = self.state_map.get_mut(&authority_id).unwrap_or_else(|| {
+            panic!("Expected authority_id {authority_id} to be initialized in state_map")
+        });
 
         // Check if the lock period has expired
         if let Some(expiry) = ancestor_info.lock_expiry_time {

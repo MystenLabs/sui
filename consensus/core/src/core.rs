@@ -12,10 +12,7 @@ use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_macros::fail_point;
-use tokio::{
-    sync::{broadcast, watch},
-    time::Instant,
-};
+use tokio::sync::{broadcast, watch};
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -287,11 +284,34 @@ impl Core {
     /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
     /// pending ancestors list.
     fn add_accepted_blocks(&mut self, accepted_blocks: Vec<VerifiedBlock>) {
-        // Advance the threshold clock. If advanced to a new round then send a signal that a new quorum has been received.
-        if let Some(new_round) = self
-            .threshold_clock
-            .add_blocks(accepted_blocks.iter().map(|b| b.reference()).collect())
+        // Get max round of accepted blocks. This will be equal to the threshold
+        // clock round, either by advancing the threshold clock round by being
+        // greater than current clock round or by equaling the current clock round.
+        let max_accepted_round = accepted_blocks
+            .iter()
+            .map(|b| b.round())
+            .max()
+            .unwrap_or(GENESIS_ROUND);
+        // Therefore the leader round for which proposals will wait will be max accepted round - 1
+        // or saturate to GENESIS_ROUND.
+        let accepted_proposal_leader_round = max_accepted_round.saturating_sub(1);
+
+        // Ignore checking for leader blocks with rounds less than the current
+        // threshold clock round - 1.
+        let proposal_leaders_exist = if accepted_proposal_leader_round
+            >= self.threshold_clock.get_round().saturating_sub(1)
         {
+            self.leaders_exist(accepted_proposal_leader_round)
+        } else {
+            false
+        };
+
+        // Advance the threshold clock. If advanced to a new round then send a
+        // signal that a new quorum has been received.
+        if let Some(new_round) = self.threshold_clock.add_blocks(
+            accepted_blocks.iter().map(|b| b.reference()).collect(),
+            proposal_leaders_exist,
+        ) {
             // notify that threshold clock advanced to new round
             self.signals.new_round(new_round);
         }
@@ -356,17 +376,38 @@ impl Core {
             .start_timer();
 
         let clock_round = self.threshold_clock.get_round();
+        debug!("try_new_block force {force} for round {clock_round}");
         if clock_round <= self.last_proposed_round() {
+            debug!(
+                "try_new_block failed due to clock_round {clock_round} <= last_proposed_round {}",
+                self.last_proposed_round()
+            );
             return None;
         }
 
         // There must be a quorum of blocks from the previous round.
         let quorum_round = self.threshold_clock.get_round().saturating_sub(1);
 
+        let leader_authority = self
+            .context
+            .committee
+            .authority(self.first_leader(quorum_round))
+            .hostname
+            .clone();
+
         // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
         // or because we are actually ready to produce the block (leader exists and min delay has passed).
         if !force {
             if !self.leaders_exist(quorum_round) {
+                debug!(
+                    "try_new_block failed due to leader not exists for quorum_round {quorum_round} for clock_round {clock_round}"
+                );
+                self.context
+                    .metrics
+                    .node_metrics
+                    .block_proposal_leader_wait_count
+                    .with_label_values(&[&leader_authority])
+                    .inc();
                 return None;
             }
 
@@ -377,6 +418,7 @@ impl Core {
                     .saturating_sub(self.last_proposed_timestamp_ms()),
             ) < self.context.parameters.min_round_delay
             {
+                debug!("try_new_block failed due to min round delay for clock_round {clock_round}");
                 return None;
             }
         }
@@ -387,8 +429,7 @@ impl Core {
         // only when the validator was supposed to be the leader of the round - so we bring down the missed leaders.
         // Probably proposing for all the intermediate rounds might not make much sense.
 
-        // Determine the ancestors to be included in proposal
-
+        // Determine the ancestors to be included in proposal.
         // Smart ancestor selection requires distributed scoring to be enabled.
         let ancestors = if self
             .context
@@ -399,38 +440,34 @@ impl Core {
 
             // If we did not find enough good ancestors to propose, continue to wait before proposing.
             if ancestors.is_empty() {
+                debug!("try_new_block failed due to not enough good ancestors for clock_round {clock_round}");
                 assert!(
                     !force,
                     "Ancestors should have been returned if force is true!"
                 );
                 return None;
             }
+            debug!(
+                "try_new_block SAS found {} ancestors for clock_round {clock_round}",
+                ancestors.len()
+            );
             ancestors
         } else {
             self.ancestors_to_propose(clock_round)
         };
 
-        let leader_authority = &self
-            .context
-            .committee
-            .authority(self.first_leader(quorum_round))
-            .hostname;
-        self.context
-            .metrics
-            .node_metrics
-            .block_proposal_leader_wait_ms
-            .with_label_values(&[leader_authority])
-            .inc_by(
-                Instant::now()
-                    .saturating_duration_since(self.threshold_clock.get_quorum_ts())
-                    .as_millis() as u64,
-            );
-        self.context
-            .metrics
-            .node_metrics
-            .block_proposal_leader_wait_count
-            .with_label_values(&[leader_authority])
-            .inc();
+        if let Some(leader_ts) = self.threshold_clock.get_proposal_leaders_ts() {
+            self.context
+                .metrics
+                .node_metrics
+                .block_proposal_leader_wait_ms
+                .with_label_values(&[&leader_authority])
+                .inc_by(
+                    leader_ts
+                        .saturating_duration_since(self.threshold_clock.get_quorum_ts())
+                        .as_millis() as u64,
+                );
+        }
 
         self.context
             .metrics
@@ -510,13 +547,26 @@ impl Core {
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
         self.dag_state.write().flush();
 
+        let current_proposal_duration = Duration::from_millis(verified_block.timestamp_ms());
+        let previous_proposal_duration = Duration::from_millis(self.last_proposed_timestamp_ms());
+        self.context
+            .metrics
+            .node_metrics
+            .block_proposal_interval
+            .observe(
+                current_proposal_duration
+                    .checked_sub(previous_proposal_duration)
+                    .unwrap_or_else(|| Duration::from_millis(0))
+                    .as_secs_f64(),
+            );
+
         // Update internal state.
         self.last_proposed_block = verified_block.clone();
 
         // Now acknowledge the transactions for their inclusion to block
         ack_transactions(verified_block.reference());
 
-        info!("Created block {:?}", verified_block);
+        info!("Created block {verified_block:?} for round {clock_round}");
 
         self.context
             .metrics
@@ -858,6 +908,8 @@ impl Core {
         self.ancestor_state_manager.update_all_ancestors_state();
         let ancestor_state_map = self.ancestor_state_manager.get_ancestor_states();
 
+        let quorum_round = clock_round.saturating_sub(1);
+
         let mut temp_excluded_ancestors = Vec::new();
 
         // Propose only ancestors of higher rounds than what has already been proposed.
@@ -871,16 +923,14 @@ impl Core {
                     .filter(|ancestor| ancestor.author() != self.context.own_index)
                     .flat_map(|ancestor| {
 
-                        let ancestor_state = ancestor_state_map.get(&ancestor.author()).expect(
-                            &format!("Should have ancestor state for {}", ancestor.author()),
-                        );
+                        let ancestor_state = ancestor_state_map.get(&ancestor.author()).unwrap_or_else(|| panic!("Should have ancestor state for {}", ancestor.author()));
 
                         match ancestor_state {
                             AncestorState::Include => {
-                                debug!("Found ancestor {ancestor} with INCLUDE state for round {clock_round}");
+                                info!("Found ancestor {ancestor} with INCLUDE state for round {clock_round}");
                             }
                             AncestorState::Exclude(score) => {
-                                debug!("Added ancestor {ancestor} with EXCLUDE state with score {score} to temporary excluded ancestors for round {clock_round}");
+                                info!("Added ancestor {ancestor} with EXCLUDE state with score {score} to temporary excluded ancestors for round {clock_round}");
                                 temp_excluded_ancestors.push((*score, ancestor));
                                 return None;
                             }
@@ -901,20 +951,21 @@ impl Core {
         // Check total stake of high scoring parent round ancestors
         for ancestor in included_ancestors
             .iter()
-            .filter(|a| a.round() == clock_round - 1)
+            .filter(|a| a.round() == quorum_round)
         {
             parent_round_quorum.add(ancestor.author(), &self.context.committee);
         }
 
         if smart_select && !parent_round_quorum.reached_threshold(&self.context.committee) {
-            debug!("Only found {} stake of good ancestors to include for round {clock_round}, will wait for more.", parent_round_quorum.stake());
+            self.context.metrics.node_metrics.smart_selection_wait.inc();
+            info!("Only found {} stake of good ancestors to include for round {clock_round}, will wait for more.", parent_round_quorum.stake());
             return vec![];
         }
 
         // Now we can update the last included ancestor block refs as there is no way
         // to short circuit ancestor proposal.
         for ancestor in included_ancestors.iter() {
-            debug!(
+            info!(
                 "Included ancestor {ancestor} to propose for round {clock_round}, own_block = {}",
                 ancestor.author() == self.context.own_index
             );
@@ -929,13 +980,20 @@ impl Core {
         let mut excluded_ancestors = Vec::new();
 
         for (score, ancestor) in temp_excluded_ancestors.into_iter() {
+            let block_hostname = &self.context.committee.authority(ancestor.author()).hostname;
             if !parent_round_quorum.reached_threshold(&self.context.committee)
-                && ancestor.round() == clock_round - 1
+                && ancestor.round() == quorum_round
             {
-                debug!("Including temporarily excluded strong link ancestor {ancestor} with score {score} to propose for round {clock_round}");
+                info!("Including temporarily excluded strong link ancestor {ancestor} with score {score} to propose for round {clock_round}");
                 parent_round_quorum.add(ancestor.author(), &self.context.committee);
                 self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
                 ancestors_to_propose.push(ancestor);
+                self.context
+                    .metrics
+                    .node_metrics
+                    .included_excluded_proposal_ancestors_count_by_authority
+                    .with_label_values(&[block_hostname, "strong"])
+                    .inc();
             } else {
                 excluded_ancestors.push((score, ancestor));
             }
@@ -952,7 +1010,7 @@ impl Core {
             // If the network quourum round for this ancestor is greater than or equal
             // to the clock round then we want to make sure to set it to clock_round - 1
             // as that is the max round we can include as an ancestor.
-            network_low_quorum_round = network_low_quorum_round.min(clock_round - 1);
+            network_low_quorum_round = network_low_quorum_round.min(quorum_round);
 
             if let Some(last_block_ref) = self.last_included_ancestors[excluded_author] {
                 if last_block_ref.round < network_low_quorum_round {
@@ -960,12 +1018,12 @@ impl Core {
                         // Include the ancestor block as it has been seen by a strong quorum
                         self.last_included_ancestors[excluded_author] = Some(ancestor.reference());
                         ancestors_to_propose.push(ancestor.clone());
-                        debug!("Included low scoring ancestor {ancestor} with score {score} seen at network quorum round {network_low_quorum_round} to propose for round {clock_round}");
+                        info!("Included low scoring ancestor {ancestor} with score {score} seen at network quorum round {network_low_quorum_round} to propose for round {clock_round}");
                         self.context
                             .metrics
                             .node_metrics
                             .included_excluded_proposal_ancestors_count_by_authority
-                            .with_label_values(&[block_hostname])
+                            .with_label_values(&[block_hostname, "weak"])
                             .inc();
                         continue;
                     }
@@ -982,21 +1040,21 @@ impl Core {
                     if let Some(block) = blocks.first() {
                         self.last_included_ancestors[excluded_author] = Some(block.reference());
                         ancestors_to_propose.push(block.clone());
-                        debug!("Included low scoring ancestor {block} with score {score} seen at network quorum round {network_low_quorum_round} to propose for round {clock_round}");
+                        info!("Included low scoring ancestor {block} with score {score} seen at network quorum round {network_low_quorum_round} to propose for round {clock_round}");
                         self.context
                             .metrics
                             .node_metrics
                             .included_excluded_proposal_ancestors_count_by_authority
-                            .with_label_values(&[block_hostname])
+                            .with_label_values(&[block_hostname, "weak"])
                             .inc();
                         continue;
                     } else {
-                        debug!("No earlier uncommitted block found for low scoring ancestor {ancestor} with score {score} seen at network quorum round {network_low_quorum_round} to propose for round {clock_round}");
+                        info!("No earlier uncommitted block found for low scoring ancestor {ancestor} with score {score} seen at network quorum round {network_low_quorum_round} to propose for round {clock_round}");
                     }
                 }
             }
 
-            debug!("Excluded low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
+            info!("Excluded low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
             self.context
                 .metrics
                 .node_metrics
