@@ -118,7 +118,7 @@ pub fn app(
         // and a 408 Request Timeout response will be sent.
         .layer(TimeoutLayer::new(Duration::from_secs(var!(
             "NODE_CLIENT_TIMEOUT",
-            30
+            20
         ))))
         .layer(Extension(relay))
         .layer(Extension(labels))
