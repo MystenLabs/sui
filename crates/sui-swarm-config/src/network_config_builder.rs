@@ -84,6 +84,8 @@ impl ConfigBuilder {
             rng: Some(OsRng),
             config_directory: config_directory.as_ref().into(),
             supported_protocol_versions_config: None,
+            // FIXME: A network with only 1 validator does not have liveness.
+            // We need to change this. There are some tests that depend on it though.
             committee: CommitteeConfig::Size(NonZeroUsize::new(1).unwrap()),
             genesis_config: None,
             reference_gas_price: None,
