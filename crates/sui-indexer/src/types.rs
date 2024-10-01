@@ -63,10 +63,11 @@ impl IndexedCheckpoint {
             + checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64
             - checkpoint.epoch_rolling_gas_cost_summary.storage_rebate as i64;
         let tx_digests = contents.iter().map(|t| t.transaction).collect::<Vec<_>>();
-        let max_tx_sequence_number = checkpoint.network_total_transactions.saturating_sub(1);
+        // tx_sequence_number range of the current checkpoint is [min_tx_sequence_number, max_tx_sequence_number), which can be empty
+        let max_tx_sequence_number = checkpoint.network_total_transactions;
         let min_tx_sequence_number = checkpoint
             .network_total_transactions
-            .saturating_sub(tx_digests.len() as u64);
+            .saturating_sub(tx_digests.len() as u64); // go back to network_total_transactions of last checkpoint
         let auth_sig = &checkpoint.auth_sig().signature;
         Self {
             sequence_number: checkpoint.sequence_number,

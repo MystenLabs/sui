@@ -14,6 +14,7 @@ use crate::{data::Db, error::Error};
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use cursor::EvLookup;
+use diesel::result::DatabaseErrorKind;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use lookups::{add_bounds, select_emit_module, select_event_type, select_sender};
@@ -136,10 +137,14 @@ impl Event {
         use checkpoints::dsl;
         let (prev, next, results) = db
             .execute(move |conn| async move {
-                let tx_hi: i64 = conn.first(move || {
-                    dsl::checkpoints.select(dsl::network_total_transactions)
+                let tx_hi: Option<i64> = conn.first(move || {
+                    dsl::checkpoints.select(dsl::max_tx_sequence_number)
                         .filter(dsl::sequence_number.eq(checkpoint_viewed_at as i64))
                 }).await?;
+                let tx_hi = tx_hi.ok_or(diesel::result::Error::DatabaseError(
+                    DatabaseErrorKind::Unknown,
+                    Box::new("Checkpoint max_tx_sequence_number should not be null".to_string())
+                ))?;
 
                 let (prev, next, mut events): (bool, bool, Vec<StoredEvent>) =
                     if let Some(filter_query) =  query_constraint {

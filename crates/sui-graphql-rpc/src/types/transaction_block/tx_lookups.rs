@@ -63,7 +63,7 @@ use crate::{
         type_filter::{FqNameFilter, ModuleFilter},
     },
 };
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{result::DatabaseErrorKind, ExpressionMethods, OptionalExtension, QueryDsl};
 use std::fmt::Write;
 use sui_indexer::schema::checkpoints;
 
@@ -160,14 +160,27 @@ impl TxBounds {
 
         use checkpoints::dsl;
         let (tx_lo, tx_hi) = if let Some(cp_prev) = cp_lo.checked_sub(1) {
-            let res: Vec<i64> = conn
+            let res: Vec<Option<i64>> = conn
                 .results(move || {
                     dsl::checkpoints
-                        .select(dsl::network_total_transactions)
+                        .select(dsl::max_tx_sequence_number)
                         .filter(dsl::sequence_number.eq_any([cp_prev as i64, cp_hi as i64]))
-                        .order_by(dsl::network_total_transactions.asc())
+                        .order_by(dsl::sequence_number.asc())
                 })
                 .await?;
+            let res = res
+                .into_iter()
+                .map(|x| {
+                    x.ok_or_else(|| {
+                        diesel::result::Error::DatabaseError(
+                            DatabaseErrorKind::Unknown,
+                            Box::new(
+                                "One or more max_tx_sequence_number values is null".to_string(),
+                            ),
+                        )
+                    })
+                })
+                .collect::<Result<Vec<i64>, diesel::result::Error>>()?;
 
             // If there are not two distinct results, it means that the transaction bounds are
             // empty (lo and hi are the same), or it means that the one or other of the checkpoints
@@ -178,10 +191,10 @@ impl TxBounds {
 
             (lo as u64, hi as u64)
         } else {
-            let res: Option<i64> = conn
+            let res: Option<Option<i64>> = conn
                 .first(move || {
                     dsl::checkpoints
-                        .select(dsl::network_total_transactions)
+                        .select(dsl::max_tx_sequence_number)
                         .filter(dsl::sequence_number.eq(cp_hi as i64))
                 })
                 .await
@@ -193,6 +206,10 @@ impl TxBounds {
                 return Ok(None);
             };
 
+            let hi = hi.ok_or(diesel::result::Error::DatabaseError(
+                DatabaseErrorKind::Unknown,
+                Box::new("Checkpoint max_tx_sequence_number should not be null".to_string()),
+            ))?;
             (0, hi as u64)
         };
 
