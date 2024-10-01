@@ -4041,7 +4041,7 @@ async fn test_on_chain_dep_publish() -> Result<(), anyhow::Error> {
 
     let root_path = tmp.path().join("on_chain_dependency");
 
-    SuiPackageHooks::register_from_ctx(&test_cluster.wallet).await?;
+    SuiPackageHooks::register_from_ctx(&test_cluster.wallet, 1000).await?;
 
     // publish Local dep
     publish_package(

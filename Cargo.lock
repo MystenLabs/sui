@@ -12685,6 +12685,7 @@ dependencies = [
  "insta",
  "jemalloc-ctl",
  "json_to_table",
+ "lru 0.10.0",
  "miette",
  "move-analyzer",
  "move-binary-format",

@@ -28,6 +28,7 @@ im.workspace = true
 inquire.workspace = true
 insta.workspace = true
 json_to_table.workspace = true
+lru.workspace = true
 miette.workspace = true
 num-bigint.workspace = true
 prometheus.workspace = true

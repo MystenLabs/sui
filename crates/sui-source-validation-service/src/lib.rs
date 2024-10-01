@@ -161,7 +161,7 @@ pub async fn verify_package(
     let client = SuiClientBuilder::default().build(network_url).await?;
     let chain_id = client.read_api().get_chain_identifier().await?;
 
-    let package_cache = PackageCache::new(client.clone());
+    let package_cache = PackageCache::new(client.clone(), 1000);
     let hooks = SuiPackageHooks::new(Some(chain_id.clone()), package_cache);
     move_package::package_hooks::register_package_hooks(Box::new(hooks));
 

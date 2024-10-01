@@ -24,7 +24,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let context = WalletContext::new(&config, None, None)?;
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     rt.block_on(async {
-        SuiPackageHooks::register_from_ctx(&context).await.unwrap();
+        SuiPackageHooks::register_from_ctx(&context, 1000)
+            .await
+            .unwrap();
     });
 
     App::parse();
