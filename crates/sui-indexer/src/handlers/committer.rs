@@ -73,9 +73,15 @@ where
                 })?;
             }
         }
-        if !batch.is_empty() && unprocessed.is_empty() {
-            commit_checkpoints(&state, batch, None, &metrics, &commit_notifier).await;
-            batch = vec![];
+        if !batch.is_empty() {
+            commit_checkpoints(
+                &state,
+                std::mem::take(&mut batch),
+                None,
+                &metrics,
+                &commit_notifier,
+            )
+            .await;
         }
     }
     Ok(())
