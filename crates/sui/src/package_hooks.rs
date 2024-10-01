@@ -170,7 +170,7 @@ impl PackageHooks for SuiPackageHooks {
 
         // generate a manifest
         fs::create_dir_all(&out_path)?;
-        fs::create_dir_all(&out_path.join(SourcePackageLayout::Sources.location_str()))?;
+        fs::create_dir_all(out_path.join(SourcePackageLayout::Sources.location_str()))?;
         let mut manifest = format!(
             "[package]\n\
             name = \"{}\"\n\
