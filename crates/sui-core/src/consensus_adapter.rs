@@ -784,15 +784,17 @@ impl ConsensusAdapter {
                     .with_label_values(&[&bucket, tx_type])
                     .observe(ack_start.elapsed().as_secs_f64());
             };
-            match select(processed_waiter, submit_inner.boxed()).await {
-                Either::Left((_processed, _submit_inner)) => (),
+            let observed_via_consensus = match select(processed_waiter, submit_inner.boxed()).await
+            {
+                Either::Left((observed_via_consensus, _submit_inner)) => observed_via_consensus,
                 Either::Right(((), processed_waiter)) => {
                     debug!("Submitted {transaction_keys:?} to consensus");
-                    // if tx has been processed by checkpoint state sync, then exclude from the latency calculations as this can
-                    // introduce to misleading results.
-                    guard.exclude_from_latency_observe = !processed_waiter.await;
+                    processed_waiter.await
                 }
-            }
+            };
+
+            // if tx has been processed by checkpoint state sync, then exclude from the latency calculations as this can introduce to misleading results.
+            guard.exclude_from_latency_observe = !observed_via_consensus;
         }
         debug!("{transaction_keys:?} processed by consensus");
 
