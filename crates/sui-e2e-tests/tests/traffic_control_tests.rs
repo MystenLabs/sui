@@ -11,6 +11,7 @@ use jsonrpsee::{
     rpc_params,
 };
 use std::fs::File;
+use std::num::NonZeroUsize;
 use std::time::Duration;
 use sui_core::authority_client::make_network_authority_clients_with_network_config;
 use sui_core::authority_client::AuthorityAPI;
@@ -45,6 +46,7 @@ async fn test_validator_traffic_control_noop() -> Result<(), anyhow::Error> {
         ..Default::default()
     };
     let network_config = ConfigBuilder::new_with_temp_dir()
+        .committee_size(NonZeroUsize::new(4).unwrap())
         .with_policy_config(Some(policy_config))
         .build();
     let test_cluster = TestClusterBuilder::new()
@@ -88,6 +90,7 @@ async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
         ..Default::default()
     };
     let network_config = ConfigBuilder::new_with_temp_dir()
+        .committee_size(NonZeroUsize::new(4).unwrap())
         .with_policy_config(Some(policy_config))
         .build();
     let test_cluster = TestClusterBuilder::new()
@@ -133,6 +136,7 @@ async fn test_validator_traffic_control_dry_run() -> Result<(), anyhow::Error> {
         ..Default::default()
     };
     let network_config = ConfigBuilder::new_with_temp_dir()
+        .committee_size(NonZeroUsize::new(4).unwrap())
         .with_policy_config(Some(policy_config))
         .build();
     let test_cluster = TestClusterBuilder::new()
@@ -217,6 +221,7 @@ async fn test_validator_traffic_control_error_blocked() -> Result<(), anyhow::Er
         ..Default::default()
     };
     let network_config = ConfigBuilder::new_with_temp_dir()
+        .committee_size(NonZeroUsize::new(4).unwrap())
         .with_policy_config(Some(policy_config))
         .build();
     let committee = network_config.committee_with_network();
@@ -396,6 +401,7 @@ async fn test_validator_traffic_control_error_delegated() -> Result<(), anyhow::
         drain_timeout_secs: 10,
     };
     let network_config = ConfigBuilder::new_with_temp_dir()
+        .committee_size(NonZeroUsize::new(4).unwrap())
         .with_policy_config(Some(policy_config))
         .with_firewall_config(Some(firewall_config))
         .build();
