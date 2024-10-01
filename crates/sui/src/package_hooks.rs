@@ -69,10 +69,10 @@ impl SuiPackageHooks {
         }
     }
 
-    pub async fn register_from_ctx(ctx: &WalletContext) -> Result<()> {
+    pub async fn register_from_ctx(ctx: &WalletContext, lru_capacity: usize) -> Result<()> {
         let client = ctx.get_client().await?;
         let chain_id = client.read_api().get_chain_identifier().await.ok();
-        let package_cache = PackageCache::new(client);
+        let package_cache = PackageCache::new(client, lru_capacity);
         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks::new(
             chain_id,
             package_cache,

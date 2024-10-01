@@ -1,23 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use anyhow::{anyhow, Result};
+use lru::LruCache;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectResponse, SuiRawData, SuiRawMovePackage};
 use sui_sdk::{types::base_types::ObjectID, SuiClient};
 use tokio::sync::RwLock;
 
 pub struct PackageCache {
     rpc_client: SuiClient,
-    cache: Arc<RwLock<BTreeMap<ObjectID, SuiRawMovePackage>>>,
+    cache: Arc<RwLock<LruCache<ObjectID, SuiRawMovePackage>>>,
 }
 
 impl PackageCache {
-    pub fn new(rpc_client: SuiClient) -> Self {
+    pub fn new(rpc_client: SuiClient, lru_capacity: usize) -> Self {
         Self {
             rpc_client,
-            cache: Arc::new(RwLock::new(BTreeMap::new())),
+            cache: Arc::new(RwLock::new(LruCache::new(
+                NonZeroUsize::new(lru_capacity).unwrap(),
+            ))),
         }
     }
 
@@ -41,7 +44,7 @@ impl PackageCache {
         let mut to_fetch = Vec::new();
 
         {
-            let cache = self.cache.read().await;
+            let mut cache = self.cache.write().await;
             for id in ids.iter() {
                 if *id == ObjectID::ZERO {
                     res_map.insert(*id, Err(anyhow!("zero address")));
@@ -69,7 +72,7 @@ impl PackageCache {
             let mut cache = self.cache.write().await;
             for (id, res) in to_fetch.into_iter().zip(fetch_res.into_iter()) {
                 if let Ok(pkg) = &res {
-                    cache.insert(id, pkg.clone());
+                    cache.put(id, pkg.clone());
                 }
                 res_map.insert(id, res);
             }

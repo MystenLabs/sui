@@ -421,7 +421,7 @@ impl SuiCommand {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config, false).await?;
                 let context = WalletContext::new(&config, None, None)?;
-                SuiPackageHooks::register_from_ctx(&context).await?;
+                SuiPackageHooks::register_from_ctx(&context, 1000).await?;
 
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
@@ -435,7 +435,7 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 if let Some(cmd) = cmd {
                     let mut context = WalletContext::new(&config_path, None, None)?;
-                    SuiPackageHooks::register_from_ctx(&context).await?;
+                    SuiPackageHooks::register_from_ctx(&context, 1000).await?;
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
@@ -473,7 +473,7 @@ impl SuiCommand {
                 let config = client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config, false).await?;
                 let context = WalletContext::new(&config, None, None)?;
-                SuiPackageHooks::register_from_ctx(&context).await?;
+                SuiPackageHooks::register_from_ctx(&context, 1000).await?;
 
                 match &mut cmd {
                     sui_move::Command::Build(build) if build.dump_bytecode_as_base64 => {
@@ -570,7 +570,7 @@ impl SuiCommand {
             SuiCommand::Analyzer { client_config } => {
                 let config = client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 let context = WalletContext::new(&config, None, None)?;
-                SuiPackageHooks::register_from_ctx(&context).await?;
+                SuiPackageHooks::register_from_ctx(&context, 1000).await?;
 
                 analyzer::run();
                 Ok(())
