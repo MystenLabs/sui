@@ -1282,7 +1282,7 @@ impl IndexerReader {
         })?;
 
         let sender_signed_data_option = if options.show_input || options.show_object_changes {
-            Some(stored_transaction.try_into_sender_signed_data()?)
+            Some(stored_transaction.try_as_sender_signed_data()?)
         } else {
             None
         };

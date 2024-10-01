@@ -123,7 +123,7 @@ impl StoredTransaction {
         self.events.get(idx).cloned().flatten()
     }
 
-    pub(crate) fn try_into_sender_signed_data(&self) -> IndexerResult<SenderSignedData> {
+    pub(crate) fn try_as_sender_signed_data(&self) -> IndexerResult<SenderSignedData> {
         let sender_signed_data: SenderSignedData =
             bcs::from_bytes(&self.raw_transaction).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
