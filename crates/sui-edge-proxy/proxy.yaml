@@ -1,0 +1,12 @@
+listen-address: '0.0.0.0:6188'
+metrics-address: '0.0.0.0:9191'
+
+execution-peer:
+  address: 'fullnode.testnet.sui.io:443'
+  use-tls: true
+  sni: 'fullnode.testnet.sui.io'
+
+read-peer:
+  address: 'benchmark-rpc.sui-testnet.mystenlabs.com:443'
+  use-tls: true
+  sni: 'benchmark-rpc.sui-testnet.mystenlabs.com'
