@@ -2357,6 +2357,14 @@ pub fn empty_symbols() -> Symbols {
     }
 }
 
+/// Get optional doc comment string at a given location.
+fn get_doc_string(all_comments: &CommentMap, loc: Loc) -> Option<String> {
+    all_comments
+        .get(&loc.file_hash())
+        .and_then(|m| m.get(&loc.start()))
+        .cloned()
+}
+
 fn field_defs_and_types(
     datatype_name: Symbol,
     fields: &E::Fields<Type>,
@@ -2380,10 +2388,7 @@ fn field_defs_and_types(
             name: *fname,
             loc: floc,
         });
-        let doc_string = all_comments
-            .get(&floc.file_hash())
-            .and_then(|m| m.get(&floc.start()))
-            .cloned();
+        let doc_string = get_doc_string(all_comments, floc);
         def_info.insert(
             floc,
             DefInfo::Field(
@@ -2484,10 +2489,7 @@ fn get_mod_outer_defs(
         } else {
             Visibility::Internal
         };
-        let doc_string = all_comments
-            .get(&def.loc.file_hash())
-            .and_then(|m| m.get(&def.loc.start()))
-            .cloned();
+        let doc_string = get_doc_string(all_comments, def.loc);
         def_info.insert(
             name_loc,
             DefInfo::Struct(
@@ -2535,10 +2537,7 @@ fn get_mod_outer_defs(
             });
             variants_info.insert(*vname, (vname_loc, field_defs, positional));
 
-            let vdoc_string = all_comments
-                .get(&def.loc.file_hash())
-                .and_then(|m| m.get(&def.loc.start()))
-                .cloned();
+            let vdoc_string = get_doc_string(all_comments, def.loc);
             def_info.insert(
                 vname_loc,
                 DefInfo::Variant(
@@ -2560,10 +2559,7 @@ fn get_mod_outer_defs(
                 info: MemberDefInfo::Enum { variants_info },
             },
         );
-        let enum_doc_string = all_comments
-            .get(&def.loc.file_hash())
-            .and_then(|m| m.get(&def.loc.start()))
-            .cloned();
+        let enum_doc_string = get_doc_string(all_comments, def.loc);
         def_info.insert(
             name_loc,
             DefInfo::Enum(
@@ -2586,10 +2582,7 @@ fn get_mod_outer_defs(
                 info: MemberDefInfo::Const,
             },
         );
-        let doc_string = all_comments
-            .get(&c.loc.file_hash())
-            .and_then(|m| m.get(&c.loc.start()))
-            .cloned();
+        let doc_string = get_doc_string(all_comments, c.loc);
         def_info.insert(
             name_loc,
             DefInfo::Const(
@@ -2613,10 +2606,7 @@ fn get_mod_outer_defs(
         } else {
             FunType::Regular
         };
-        let doc_string = all_comments
-            .get(&fun.loc.file_hash())
-            .and_then(|m| m.get(&fun.loc.start()))
-            .cloned();
+        let doc_string = get_doc_string(all_comments, fun.loc);
         let fun_info = DefInfo::Function(
             mod_ident.value,
             fun.visibility,
@@ -2660,10 +2650,7 @@ fn get_mod_outer_defs(
     let mut use_def_map = UseDefMap::new();
 
     let ident = mod_ident.value;
-    let doc_comment = all_comments
-        .get(&mod_def.loc.file_hash())
-        .and_then(|m| m.get(&mod_def.loc.start()))
-        .cloned();
+    let doc_string = get_doc_string(all_comments, mod_def.loc);
     let mod_defs = ModuleDefs {
         fhash,
         ident,
@@ -2693,7 +2680,7 @@ fn get_mod_outer_defs(
         );
         def_info.insert(
             mod_defs.name_loc,
-            DefInfo::Module(mod_ident_to_ide_string(&ident, None, false), doc_comment),
+            DefInfo::Module(mod_ident_to_ide_string(&ident, None, false), doc_string),
         );
     }
 
