@@ -8,7 +8,7 @@ use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
 use tokio::{task::JoinHandle, time::sleep};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::{
     block::BlockAPI as _,
@@ -72,7 +72,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         // then do not attempt to fetch any blocks from that point as they will simply be skipped. Instead
         // do attempt to fetch from the gc round.
         if gc_enabled && last_received < gc_round {
-            warn!(
+            info!(
                 "Last received block for peer {peer} is older than GC round, {last_received} < {gc_round}, fetching from GC round"
             );
             last_received = gc_round;
