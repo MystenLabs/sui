@@ -3,14 +3,17 @@
 
 use crate::database::Connection;
 use crate::errors::IndexerError;
+use crate::handlers::pruner::PrunableTable;
 use clap::Args;
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
+use diesel::prelude::QueryableByName;
 use diesel::table;
 use diesel::QueryDsl;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::time::Duration;
+use strum::IntoEnumIterator;
 use tracing::info;
 
 table! {
@@ -132,6 +135,55 @@ async fn check_db_migration_consistency_impl(
         "This binary expected the following migrations to have been run, and they were not: {:?}",
         unapplied_migrations
     )))
+}
+
+/// Check that prunable tables exist in the database.
+pub async fn check_prunable_tables_valid(conn: &mut Connection<'_>) -> Result<(), IndexerError> {
+    info!("Starting compatibility check");
+
+    use diesel_async::RunQueryDsl;
+
+    let select_parent_tables = r#"
+    SELECT c.relname AS table_name
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    LEFT JOIN pg_partitioned_table pt ON pt.partrelid = c.oid
+    WHERE c.relkind IN ('r', 'p')  -- 'r' for regular tables, 'p' for partitioned tables
+        AND n.nspname = 'public'
+        AND (
+            pt.partrelid IS NOT NULL  -- This is a partitioned (parent) table
+            OR NOT EXISTS (  -- This is not a partition (child table)
+                SELECT 1
+                FROM pg_inherits i
+                WHERE i.inhrelid = c.oid
+            )
+        );
+    "#;
+
+    #[derive(QueryableByName)]
+    struct TableName {
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        table_name: String,
+    }
+
+    let result: Vec<TableName> = diesel::sql_query(select_parent_tables)
+        .load(conn)
+        .await
+        .map_err(|e| IndexerError::DbMigrationError(format!("Failed to fetch tables: {e}")))?;
+
+    let parent_tables_from_db: HashSet<_> = result.into_iter().map(|t| t.table_name).collect();
+
+    for key in PrunableTable::iter() {
+        if !parent_tables_from_db.contains(key.as_ref()) {
+            return Err(IndexerError::GenericError(format!(
+                "Invalid retention policy override provided for table {}: does not exist in the database",
+                key
+            )));
+        }
+    }
+
+    info!("Compatibility check passed");
+    Ok(())
 }
 
 pub use setup_postgres::{reset_database, run_migrations};
