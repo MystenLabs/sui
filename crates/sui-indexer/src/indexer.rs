@@ -87,6 +87,8 @@ impl Indexer {
 
         let mut exit_senders = vec![];
         let mut executors = vec![];
+        // Ingestion task watermarks are snapshotted once on indexer startup based on the
+        // corresponding watermark table before being handed off to the ingestion task.
         let progress_store = ShimIndexerProgressStore::new(vec![
             ("primary".to_string(), primary_watermark),
             ("object_snapshot".to_string(), object_snapshot_watermark),

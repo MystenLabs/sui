@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 
 use crate::errors::IndexerError;
+use crate::handlers::pruner::PrunableTable;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
 use crate::models::obj_indices::StoredObjectVersion;
@@ -113,5 +114,13 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
     async fn persist_raw_checkpoints(
         &self,
         checkpoints: Vec<StoredRawCheckpoint>,
+    ) -> Result<(), IndexerError>;
+
+    async fn update_watermarks_upper_bound(
+        &self,
+        tables: Vec<PrunableTable>,
+        epoch: u64,
+        cp: u64,
+        tx: u64,
     ) -> Result<(), IndexerError>;
 }

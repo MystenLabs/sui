@@ -10,9 +10,11 @@ use tracing::{error, info};
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
+use crate::handlers::pruner::PrunableTable;
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
 use crate::types::IndexerResult;
+use strum::IntoEnumIterator;
 
 use super::{CheckpointDataToCommit, EpochToCommit};
 
@@ -57,6 +59,8 @@ where
             batch.push(checkpoint);
             next_checkpoint_sequence_number += 1;
             let epoch_number_option = epoch.as_ref().map(|epoch| epoch.new_epoch.epoch);
+            // The batch will consist of contiguous checkpoints and at most one epoch boundary at
+            // the end.
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
                 commit_checkpoints(&state, batch, epoch, &metrics).await;
                 batch = vec![];
@@ -79,6 +83,10 @@ where
     Ok(())
 }
 
+/// Writes indexed checkpoint data to the database, and then update watermark upper bounds and
+/// metrics. Expects `indexed_checkpoint_batch` to be non-empty, and contain contiguous checkpoints.
+/// There can be at most one epoch boundary at the end. If an epoch boundary is detected,
+/// epoch-partitioned tables must be advanced.
 // Unwrap: Caller needs to make sure indexed_checkpoint_batch is not empty
 #[instrument(skip_all, fields(
     first = indexed_checkpoint_batch.first().as_ref().unwrap().checkpoint.sequence_number,
@@ -130,7 +138,14 @@ async fn commit_checkpoints<S>(
     }
 
     let first_checkpoint_seq = checkpoint_batch.first().as_ref().unwrap().sequence_number;
-    let last_checkpoint_seq = checkpoint_batch.last().as_ref().unwrap().sequence_number;
+    let (epoch_id, last_checkpoint_seq, last_tx_seq) = {
+        let checkpoint = checkpoint_batch.last().unwrap();
+        (
+            checkpoint.epoch,
+            checkpoint.sequence_number,
+            checkpoint.max_tx_sequence_number,
+        )
+    };
 
     let guard = metrics.checkpoint_db_commit_latency.start_timer();
     let tx_batch = tx_batch.into_iter().flatten().collect::<Vec<_>>();
@@ -189,7 +204,8 @@ async fn commit_checkpoints<S>(
 
     let is_epoch_end = epoch.is_some();
 
-    // handle partitioning on epoch boundary
+    // On epoch boundary, we need to modify the existing partitions' upper bound, and introduce a
+    // new partition for incoming data for the upcoming epoch.
     if let Some(epoch_data) = epoch {
         state
             .advance_epoch(epoch_data)
@@ -211,6 +227,22 @@ async fn commit_checkpoints<S>(
             );
         })
         .expect("Persisting data into DB should not fail.");
+
+    state
+        .update_watermarks_upper_bound(
+            PrunableTable::iter().collect(),
+            epoch_id,
+            last_checkpoint_seq,
+            last_tx_seq,
+        )
+        .await
+        .tap_err(|e| {
+            error!(
+                "Failed to update watermark upper bound with error: {}",
+                e.to_string()
+            );
+        })
+        .expect("Updating watermark upper bound in DB should not fail.");
 
     if is_epoch_end {
         // The epoch has advanced so we update the configs for the new protocol version, if it has changed.

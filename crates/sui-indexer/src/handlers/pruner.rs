@@ -69,6 +69,19 @@ pub enum PrunableTable {
     PrunerCpWatermark,
 }
 
+impl PrunableTable {
+    /// Given a committer's report of the latest written checkpoint and tx, return the value that
+    /// corresponds to the variant's unit to be used by readers.
+    pub fn map_to_reader_unit(&self, cp: u64, tx: u64) -> u64 {
+        match self {
+            PrunableTable::ObjectsHistory
+            | PrunableTable::Checkpoints
+            | PrunableTable::PrunerCpWatermark => cp,
+            _ => tx,
+        }
+    }
+}
+
 impl Pruner {
     /// Instantiates a pruner with default retention and overrides. Pruner will finalize the
     /// retention policies so there is a value for every prunable table.

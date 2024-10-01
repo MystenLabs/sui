@@ -27,6 +27,7 @@ use sui_storage::object_store::util::put;
 use crate::config::UploadOptions;
 use crate::database::ConnectionPool;
 use crate::errors::{Context, IndexerError};
+use crate::handlers::pruner::PrunableTable;
 use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
 use crate::metrics::IndexerMetrics;
@@ -44,6 +45,7 @@ use crate::models::objects::{
 };
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
+use crate::models::watermarks::StoredWatermark;
 use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
@@ -51,7 +53,7 @@ use crate::schema::{
     objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
     raw_checkpoints, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
     tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
-    tx_recipients, tx_senders,
+    tx_recipients, tx_senders, watermarks,
 };
 use crate::store::transaction_with_retry;
 use crate::types::{EventIndex, IndexedDeletedObject, IndexedObject};
@@ -1454,6 +1456,63 @@ impl PgIndexerStore {
             .context("Failed to get network total transactions in epoch")
             .map(|v| v as u64)
     }
+
+    async fn update_watermarks_upper_bound(
+        &self,
+        tables: Vec<PrunableTable>,
+        epoch: u64,
+        cp: u64,
+        tx: u64,
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_watermarks
+            .start_timer();
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            let upper_bound_updates = tables
+                .into_iter()
+                .map(|table| {
+                    let reader_upper_bound = table.map_to_reader_unit(cp, tx);
+
+                    StoredWatermark::from_upper_bound_update(
+                        table.as_ref(),
+                        epoch,
+                        cp,
+                        reader_upper_bound,
+                    )
+                })
+                .collect::<Vec<_>>();
+            async {
+                diesel::insert_into(watermarks::table)
+                    .values(upper_bound_updates)
+                    .on_conflict(watermarks::entity)
+                    .do_update()
+                    .set((
+                        watermarks::epoch_hi.eq(excluded(watermarks::epoch_hi)),
+                        watermarks::checkpoint_hi.eq(excluded(watermarks::checkpoint_hi)),
+                        watermarks::reader_hi.eq(excluded(watermarks::reader_hi)),
+                    ))
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed to update watermarks upper bound")?;
+
+                Ok::<(), IndexerError>(())
+            }
+            .scope_boxed()
+        })
+        .await
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted watermarks");
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist watermarks with error: {}", e);
+        })
+    }
 }
 
 #[async_trait]
@@ -2109,6 +2168,17 @@ impl IndexerStore for PgIndexerStore {
         checkpoints: Vec<StoredRawCheckpoint>,
     ) -> Result<(), IndexerError> {
         self.persist_raw_checkpoints_impl(&checkpoints).await
+    }
+
+    async fn update_watermarks_upper_bound(
+        &self,
+        tables: Vec<PrunableTable>,
+        epoch: u64,
+        cp: u64,
+        tx: u64,
+    ) -> Result<(), IndexerError> {
+        self.update_watermarks_upper_bound(tables, epoch, cp, tx)
+            .await
     }
 }
 
