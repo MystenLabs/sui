@@ -179,7 +179,8 @@ impl PgIndexerStore {
             .context("Failed reading chain id from PostgresDB")
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
+    // `pub` is needed for wait_for_checkpoint in tests
+    pub async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         use diesel_async::RunQueryDsl;
 
         let mut connection = self.pool.get().await?;

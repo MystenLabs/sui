@@ -41,6 +41,7 @@ url.workspace = true
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
+simulacrum.workspace = true
 sui-config.workspace = true
 sui-archival.workspace = true
 sui-core.workspace = true
@@ -76,7 +77,6 @@ sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 ntest.workspace = true
 criterion.workspace = true
-simulacrum.workspace = true
 
 [[bin]]
 name = "sui-indexer"
