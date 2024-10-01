@@ -6,7 +6,7 @@ status-level = "skip"
 # Do not cancel the test run on the first failure.
 fail-fast = false
 # Retry failing tests in order to not block builds on flaky tests
-retries = 5
+retries = 3
 # Timeout tests after 4 minutes
 slow-timeout = { period = "60s", terminate-after = 5 }
 
