@@ -34,9 +34,9 @@ With the dependency added, you can use the `emit` function to trigger an event w
 
 {@inject: examples/trading/contracts/escrow/sources/lock.move#fun=lock noComments}
 
-## Query events
+### Query events with RPC
 
-The Sui RPC provides a [queryEvents](/sui-api-ref#suix_queryEvents) method to query on-chain packages and return available events. The following `curl` command queries the Deepbook package on Mainnet:
+The Sui RPC provides a [queryEvents](/sui-api-ref#suix_queryEvents) method to query on-chain packages and return available events. As an example, the following `curl` command queries the Deepbook package on Mainnet for a specific type of event:
 
 ```sh
 curl -X POST https://fullnode.mainnet.sui.io:443 \
@@ -152,53 +152,15 @@ A successful `curl` return
 ```
 </details>
 
-Both the TypeScript and Rust SDKs provide wrappers for the `suix_queryEvents` method.
+The TypeScript SDK provides a wrapper for the `suix_queryEvents` method: [`client.queryEvents`](https://sdk.mystenlabs.com/typedoc/classes/_mysten_sui.client.SuiClient.html#queryEvents).
 
-- TypeScript SDK [`client.queryEvents`](https://sdk.mystenlabs.com/typedoc/classes/_mysten_sui.client.SuiClient.html#queryEvents).
-- Rust SDK [`query_events`](https://mystenlabs.github.io/sui/sui_sdk/apis/struct.EventApi.html#method.query_events).
-
-### Query events with GraphQL
-
-<BetaTag beta="true" slim="true"/>
-
-You can use GraphQL to query events instead of JSON RPC. The following example queries are in the [`sui-graphql-rpc` crate](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/event_connection) in the Sui repo. 
-
-<details>
-<summary>
-Event connection
-</summary>
-{@inject: crates/sui-graphql-rpc/examples/event_connection/event_connection.graphql}
-</details>
-
-<details>
-<summary>
-Filter events by sender
-</summary>
-{@inject: crates/sui-graphql-rpc/examples/event_connection/filter_by_sender.graphql}
-</details>
-
-<details>
-<summary>
-Filter events by emitting package and type
-</summary>
-{@inject: crates/sui-graphql-rpc/examples/event_connection/filter_by_emitting_package_module_and_event_type.graphql}
-</details>
-
-The [TypeScript SDK](https://sdk.mystenlabs.com/typedoc/modules/_mysten_sui.graphql.html) and [Rust SDK](https://mystenlabs.github.io/sui/sui_graphql_rpc_client/index.html) provide functionality to interact with the Sui GraphQL service. 
-
-### Filtering event queries
+#### Filtering event queries
 
 To filter the events returned from your queries, use the following data structures.
 
-:::info
-
-This set of filters applies only to event querying APIs. It differs from the filters offered for the subscriptions API (see following section). In particular, it does not support combinations like `"All": [...]`, `"Any": [...]`, `"And": [_, _]`, `"Or": [_, _]`, and `"Not": _`. 
-
-:::
-
 | Query             | Description                                              | JSON-RPC Parameter Example                                                                            |
 | ----------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `All`             | All events                                               | `{"All"}`                                                                                             |
+| `All`             | All events                                               | `{"All": []}`                                                                                             |
 | `Transaction`     | Events emitted from the specified transaction            | `{"Transaction":"DGUe2TXiJdN3FI6MH1FwghYbiHw+NKu8Nh579zdFtUk="}`                                      |
 | `MoveModule`      | Events emitted from the specified Move module            | `{"MoveModule":{"package":"<PACKAGE-ID>", "module":"nft"}}`                                           |
 | `MoveEventModule` | Events emitted, defined on the specified Move module.    | `{"MoveEventModule": {"package": "<DEFINING-PACKAGE-ID>", "module": "nft"}}`                          |
@@ -207,39 +169,7 @@ This set of filters applies only to event querying APIs. It differs from the fil
 | `Sender`          | Query by sender address                                  | `{"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`                     |
 | `Recipient`       | Query by recipient                                       | `{"Recipient":{"AddressOwner":"0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030"}}` |
 | `Object`          | Return events associated with the given object           | `{"Object":"0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"}`                     |
-| `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  |
-
-## Monitoring events
-
-Firing events is not very useful in a vacuum. You also need the ability to respond to those events. There are to methods from which to choose when you need to monitor on-chain events:
-- Incorporate a [custom indexer](../advanced/custom-indexer.mdx) to take advantage of Sui's micro-data ingestion framework.
-- Poll the Sui network on a schedule to query events.
-
-Using a custom indexer provides a near-real time monitoring of events, so is most useful when your project requires immediate reaction to the firing of events. Polling the network is most useful when the events you're monitoring don't fire often or the need to act on those events are not immediate. The following section provides a polling example.
-
-## Examples
-
-The following examples demonstrate how to query on-chain events.
-
-### Poll events {#poll-events}
-
-To monitor events, you need a database to store checkpoint data. The [Trustless Swap](../app-examples/trustless-swap.mdx) example uses a Prisma database to store checkpoint data from the Sui network. The database is populated from polling the network to retrieve emitted events. 
-
-<details>
-<summary>
-`event-indexer.ts` from Trustless Swap
-</summary>
-{@inject: examples/trading/api/indexer/event-indexer.ts noComments}
-</details>
-
-Trustless Swap incorporates handlers to process each event type that triggers. For the `locked` event, the handler in `locked-handler.ts` fires and updates the Prisma database accordingly.
-
-<details>
-<summary>
-`locked-handler.ts` from Trustless Swap
-</summary>
-{@inject: examples/trading/api/indexer/locked-handler.ts}
-</details>
+| `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  | 
 
 ### Query events in Rust
 
@@ -276,6 +206,63 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 ```
+
+### Query events with GraphQL
+
+<BetaTag beta="true" slim="true"/>
+
+You can use GraphQL to query events instead of JSON RPC. The following example queries are in the [`sui-graphql-rpc` crate](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/event_connection) in the Sui repo. 
+
+<details>
+<summary>
+Event connection
+</summary>
+{@inject: crates/sui-graphql-rpc/examples/event_connection/event_connection.graphql}
+</details>
+
+<details>
+<summary>
+Filter events by sender
+</summary>
+{@inject: crates/sui-graphql-rpc/examples/event_connection/filter_by_sender.graphql}
+</details>
+
+<details>
+<summary>
+Filter events by emitting package and type
+</summary>
+{@inject: crates/sui-graphql-rpc/examples/event_connection/filter_by_emitting_package_module_and_event_type.graphql}
+</details>
+
+The [TypeScript SDK](https://sdk.mystenlabs.com/typedoc/modules/_mysten_sui.graphql.html) provides functionality to interact with the Sui GraphQL service.
+
+## Monitoring events
+
+Firing events is not very useful in a vacuum. You also need the ability to respond to those events. There are two methods from which to choose when you need to monitor on-chain events:
+- Incorporate a [custom indexer](../advanced/custom-indexer.mdx) to take advantage of Sui's micro-data ingestion framework.
+- Poll the Sui network on a schedule to query events.
+
+Using a custom indexer provides a near-real time monitoring of events, so is most useful when your project requires immediate reaction to the firing of events. Polling the network is most useful when the events you're monitoring don't fire often or the need to act on those events are not immediate. The following section provides a polling example.
+
+### Poll events {#poll-events}
+
+To monitor events, you need a database to store checkpoint data. The [Trustless Swap](../app-examples/trustless-swap.mdx) example uses a Prisma database to store checkpoint data from the Sui network. The database is populated from polling the network to retrieve emitted events. 
+
+<details>
+<summary>
+`event-indexer.ts` from Trustless Swap
+</summary>
+{@inject: examples/trading/api/indexer/event-indexer.ts noComments}
+</details>
+
+Trustless Swap incorporates handlers to process each event type that triggers. For the `locked` event, the handler in `locked-handler.ts` fires and updates the Prisma database accordingly.
+
+<details>
+<summary>
+`locked-handler.ts` from Trustless Swap
+</summary>
+{@inject: examples/trading/api/indexer/locked-handler.ts}
+</details>
 
 ## Related links
 
