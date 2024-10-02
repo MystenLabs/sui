@@ -15566,7 +15566,7 @@ dependencies = [
  "prometheus",
  "prost 0.11.9",
  "tokio",
- "tonic 0.9.2",
+ "tonic 0.12.3",
  "tracing",
  "tracing-appender",
  "tracing-opentelemetry",

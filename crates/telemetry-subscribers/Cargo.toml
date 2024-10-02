@@ -30,7 +30,7 @@ bytes-varint = { version = "1" }
 
 # must use same version as opentelemetry for tonic and prost, so we can't use from
 # workspace
-tonic = { version = "0.9" }
+tonic = { version = "0.12.3" }
 prost = "0.11.9"
 
 [features]

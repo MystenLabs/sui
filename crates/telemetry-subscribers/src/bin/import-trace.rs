@@ -10,7 +10,6 @@ use opentelemetry_proto::tonic::{
 };
 use prost::Message;
 use std::io::{self, Cursor, Read};
-use tonic::Request;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -76,7 +75,7 @@ async fn main() {
             }
         }
 
-        trace_exporter.export(Request::new(message)).await.unwrap();
+        trace_exporter.export(message).await.unwrap();
     }
     println!("all spans imported");
 }
