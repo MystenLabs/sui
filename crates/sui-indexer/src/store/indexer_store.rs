@@ -133,6 +133,12 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
         watermarks: Vec<(PrunableTable, u64)>,
     ) -> Result<(), IndexerError>;
 
+    async fn update_watermark_latest_pruned(
+        &self,
+        table: PrunableTable,
+        latest_pruned: u64,
+    ) -> Result<(), IndexerError>;
+
     /// Load all watermark entries from the store, and the latest timestamp from the db.
     async fn get_watermarks(&self) -> Result<(Vec<StoredWatermark>, i64), IndexerError>;
 }
