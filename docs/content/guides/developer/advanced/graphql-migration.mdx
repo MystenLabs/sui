@@ -142,6 +142,47 @@ The cursor is now passed in the `after` (or `before`) fields on the connection, 
 </TabItem>
 </Tabs>
 
+## New features
+
+There are also things that GraphQL can do, which JSON-RPC cannot:
+
+### Example 4: Getting objects by type
+
+This query fetches the latest versions of objects of type `0x2::package::Publisher` that are currently live on-chain.
+
+```graphql
+query {
+  objects(filter: { type: "0x2::package::Publisher" }) {
+    nodes {
+      address
+      digest
+      asMoveObject {
+        contents { json }
+      }
+    }
+  }
+}
+```
+
+### Example 5: Paging through package versions
+
+The goal is to find all versions of the Sui framework, and list their modules:
+
+```graphql
+query {
+  packageVersions(address: "0x2") {
+    nodes {
+      version
+      modules {
+        nodes {
+          name
+        }
+      }
+    }
+  } 
+}
+```
+
 ## Related links
   
 - [GraphQL reference](../../../references/sui-graphql.mdx): Auto-generated GraphQL reference for Sui RPC.
