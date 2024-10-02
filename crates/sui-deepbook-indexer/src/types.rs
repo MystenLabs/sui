@@ -18,7 +18,7 @@ use crate::models::SuiErrorTransactions;
 use crate::models::TradeParamsUpdate as DBTradeParamsUpdate;
 use crate::models::Votes as DBVotes;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ProcessedTxnData {
     Flashloan(Flashloan),
     OrderUpdate(OrderUpdate),
@@ -33,7 +33,7 @@ pub enum ProcessedTxnData {
     Error(SuiTxnError),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum OrderUpdateStatus {
     Placed,
     Modified,
@@ -53,7 +53,7 @@ impl Display for OrderUpdateStatus {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OrderUpdate {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -96,7 +96,7 @@ impl OrderUpdate {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OrderFill {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -147,7 +147,7 @@ impl OrderFill {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Flashloan {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -174,7 +174,7 @@ impl Flashloan {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PoolPrice {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -199,7 +199,7 @@ impl PoolPrice {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Balances {
     pub digest: String,
     pub sender: String,
@@ -226,7 +226,7 @@ impl Balances {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Proposals {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -255,7 +255,7 @@ impl Proposals {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Rebates {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -282,7 +282,7 @@ impl Rebates {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Stakes {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -311,7 +311,7 @@ impl Stakes {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TradeParamsUpdate {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -338,7 +338,7 @@ impl TradeParamsUpdate {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Votes {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -369,7 +369,7 @@ impl Votes {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SuiTxnError {
     pub(crate) tx_digest: TransactionDigest,
     pub(crate) sender: SuiAddress,
