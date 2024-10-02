@@ -31,7 +31,7 @@ use tokio::{
 };
 use tokio_rustls::TlsAcceptor;
 use tokio_stream::{iter, Iter};
-use tonic::{transport::Server, Request, Response, Streaming};
+use tonic::{Request, Response, Streaming};
 use tower_http::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
     ServiceBuilderExt,
@@ -710,30 +710,29 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         let service = TonicServiceProxy::new(self.context.clone(), service);
         let config = &self.context.parameters.tonic;
 
-        let consensus_service = Server::builder()
-            .layer(
-                TraceLayer::new_for_grpc()
-                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
-                    .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
-            )
-            .initial_connection_window_size(64 << 20)
-            .initial_stream_window_size(32 << 20)
-            .http2_keepalive_interval(Some(config.keepalive_interval))
-            .http2_keepalive_timeout(Some(config.keepalive_interval))
-            // tcp keepalive is unsupported by msim
-            .add_service(
-                ConsensusServiceServer::new(service)
-                    .max_encoding_message_size(config.message_size_limit)
-                    .max_decoding_message_size(config.message_size_limit),
-            );
+        let consensus_service = tonic::service::Routes::new(
+            ConsensusServiceServer::new(service)
+                .max_encoding_message_size(config.message_size_limit)
+                .max_decoding_message_size(config.message_size_limit),
+        )
+        .into_axum_router();
 
         let inbound_metrics = self.context.metrics.network_metrics.inbound.clone();
         let excessive_message_size = self.context.parameters.tonic.excessive_message_size;
 
-        let http =
-            hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
-                .http2_only();
-        let http = Arc::new(http);
+        let http = {
+            let mut builder =
+                hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
+                    .http2_only();
+            builder
+                .http2()
+                .initial_connection_window_size(64 << 20)
+                .initial_stream_window_size(32 << 20)
+                .keep_alive_interval(Some(config.keepalive_interval))
+                .keep_alive_timeout(config.keepalive_interval);
+
+            Arc::new(builder)
+        };
 
         let tls_server_config =
             create_rustls_server_config(&self.context, self.network_keypair.clone());
@@ -851,7 +850,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                 trace!("Received TCP connection attempt from {peer_addr}");
 
                 let tls_acceptor = tls_acceptor.clone();
-                //let consensus_service = consensus_service.clone();
+                let consensus_service = consensus_service.clone();
                 let inbound_metrics = inbound_metrics.clone();
                 let http = http.clone();
                 let connections_info = connections_info.clone();
@@ -906,6 +905,11 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                             inbound_metrics,
                             excessive_message_size,
                         )))
+                        .layer(
+                            TraceLayer::new_for_grpc()
+                                .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
+                                .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
+                        )
                         .service(consensus_service);
 
                     pin! {
