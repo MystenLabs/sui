@@ -14,7 +14,7 @@ use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use futures::{stream, Stream, StreamExt as _};
-use hyper_util::rt::tokio::TokioIo;
+use hyper_util::rt::{tokio::TokioIo, TokioTimer};
 use hyper_util::service::TowerToHyperService;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_metrics::monitored_future;
@@ -726,6 +726,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     .http2_only();
             builder
                 .http2()
+                .timer(TokioTimer::new())
                 .initial_connection_window_size(64 << 20)
                 .initial_stream_window_size(32 << 20)
                 .keep_alive_interval(Some(config.keepalive_interval))
