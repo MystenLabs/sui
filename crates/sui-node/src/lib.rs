@@ -2043,6 +2043,10 @@ pub async fn build_http_server(
             software_version,
         );
 
+        if let Some(config) = config.rest.clone() {
+            rest_service.with_config(config);
+        }
+
         rest_service.with_metrics(RestMetrics::new(prometheus_registry));
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {

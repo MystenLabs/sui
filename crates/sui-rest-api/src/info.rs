@@ -21,6 +21,10 @@ impl ApiEndpoint<RestService> for GetNodeInfo {
         "/"
     }
 
+    fn stable(&self) -> bool {
+        true
+    }
+
     fn operation(
         &self,
         generator: &mut schemars::gen::SchemaGenerator,
@@ -44,11 +48,16 @@ impl ApiEndpoint<RestService> for GetNodeInfo {
 
 async fn get_node_info(State(state): State<RestService>) -> Result<Json<NodeInfo>> {
     let latest_checkpoint = state.reader.inner().get_latest_checkpoint()?;
-    let lowest_available_checkpoint = state.reader.inner().get_lowest_available_checkpoint()?;
+    let lowest_available_checkpoint = state
+        .reader
+        .inner()
+        .get_lowest_available_checkpoint()?
+        .pipe(Some);
     let lowest_available_checkpoint_objects = state
         .reader
         .inner()
-        .get_lowest_available_checkpoint_objects()?;
+        .get_lowest_available_checkpoint_objects()?
+        .pipe(Some);
 
     NodeInfo {
         checkpoint_height: latest_checkpoint.sequence_number,
@@ -78,12 +87,12 @@ pub struct NodeInfo {
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
     #[schemars(with = "crate::_schemars::U64")]
     pub timestamp_ms: u64,
-    #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::_schemars::U64")]
-    pub lowest_available_checkpoint: u64,
-    #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
-    #[schemars(with = "crate::_schemars::U64")]
-    pub lowest_available_checkpoint_objects: u64,
+    #[serde_as(as = "Option<sui_types::sui_serde::BigInt<u64>>")]
+    #[schemars(with = "Option<crate::_schemars::U64>")]
+    pub lowest_available_checkpoint: Option<u64>,
+    #[serde_as(as = "Option<sui_types::sui_serde::BigInt<u64>>")]
+    #[schemars(with = "Option<crate::_schemars::U64>")]
+    pub lowest_available_checkpoint_objects: Option<u64>,
     pub software_version: Cow<'static, str>,
     //TODO include current protocol version
 }
