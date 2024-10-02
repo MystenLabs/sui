@@ -87,6 +87,17 @@ const guides = [
 			},
 			{
 				type: 'category',
+				label: 'Stablecoins',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/stablecoins',
+				},
+				items: [
+					'guides/developer/stablecoins/usdc',
+				],
+			},
+			{
+				type: 'category',
 				label: 'NFTs',
 				link: {
 					type: 'doc',

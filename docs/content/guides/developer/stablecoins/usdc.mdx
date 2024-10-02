@@ -1,0 +1,249 @@
+---
+title: USDC on Sui 
+---
+
+
+USDC provides the ability to transfer dollars over public blockchains using smart contracts. The smart contract allows users to send, receive, and store dollars on-chain with a wallet.
+
+Here's a quickstart guide for developers to build an app to perform their first USDC transfer on Sui.
+
+## Contract addresses
+
+[Testnet - 0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC](https://suiscan.xyz/testnet/coin/0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC)
+[Mainnet - 0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC](https://suiscan.xyz/coin/0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC)
+
+## Prerequisites
+
+Before you start building the sample app to perform a USDC transfer, ensure you meet the following prerequisites:
+
+- [**Node.js**](https://nodejs.org/en) **and** [**npm**](https://www.npmjs.com/): Ensure that you have Node.js and npm installed on your machine. You can download and install Node.js from [nodejs.org](http://nodejs.org). npm comes with Node.js.
+- [**Sui Wallet**](https://chromewebstore.google.com/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil): Install the Sui Wallet browser extension and set up your wallet. Ensure that your wallet is funded with:
+  - Some SUI tokens to cover transaction fees.
+  - USDC tokens for the transfer. ([USDC Testnet Faucet](https://faucet.circle.com/))
+
+## Installation
+
+**Project Setup**: Create a new project directory and initialize it with npm:
+
+   ```bash
+   npx create-next-app@latest usdc-transfer-app
+   ```
+When prompted, choose the following options:
+   ```
+   - Use TypeScript: Yes
+   - Use ESLint: Yes 
+   - Use Tailwind CSS: Yes
+   - Use src/ directory: Yes
+   - Use App Router: Yes
+   - Customize the default import alias: No
+   ```
+
+Navigate to the project directory:
+
+   ```bash
+   cd usdc-transfer-app
+   ```
+
+Install additional dependencies:
+
+   ```bash
+   npm install @mysten/dapp-kit @mysten/sui @mysten/wallet-kit @tanstack/react-query
+   ```
+
+## Import Code and Setup
+
+The code provided will be updated in the **src/app/page.tsx** file. This section imports necessary libraries and sets up the network configuration.
+
+   ```typescript
+   "use client";
+   import { useState, useEffect } from 'react';
+   import { ConnectButton, useWalletKit, WalletKitProvider } from '@mysten/wallet-kit';
+   import { SuiClientProvider, useSuiClient } from '@mysten/dapp-kit';
+   import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+   import { TransactionBlock } from '@mysten/sui.js/transactions';
+
+   // Define the network we're connecting to (testnet in this case)
+   const networks = {
+     testnet: { url: 'https://fullnode.testnet.sui.io:443' },
+   };
+
+   // Create a new QueryClient for managing and caching asynchronous queries
+   const queryClient = new QueryClient();
+   ```
+
+   This component handles the main functionality of the application, including wallet connection, defining token, and token transfer.
+
+   **Define USDC testnet token contract**
+
+   ```typescript
+   // Define the USDC token type on Sui testnet
+   // This is the unique identifier for the USDC token on Sui
+   const USDC_TYPE = '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
+   ```
+
+   **State Management**
+
+   Define state variables to manage the connection status, amount, recipient address, and transaction status.
+
+   ```javascript
+   function HomeContent() {
+     // Use the wallet kit to get the current account and transaction signing function
+     const { currentAccount, signAndExecuteTransactionBlock } = useWalletKit();
+     // Get the Sui client for interacting with the Sui network
+     const suiClient = useSuiClient();
+     const [connected, setConnected] = useState(false);
+     const [amount, setAmount] = useState('');
+     const [recipientAddress, setRecipientAddress] = useState('');
+     const [txStatus, setTxStatus] = useState('');
+   ```
+
+**Effect Hook for Connection Status** 
+
+Use useEffect to update the connection status whenever the currentAccount changes.
+
+```typescript
+  // Update the connection status when the current account changes
+  useEffect(() => {
+    setConnected(!!currentAccount);
+  }, [currentAccount]);
+```
+
+**Token Sending Logic**
+
+Define the function to handle sending tokens, including validation and transaction execution.
+
+```typescript
+  const handleSendTokens = async () => {
+    if (!currentAccount || !amount || !recipientAddress) {
+      setTxStatus('Please connect wallet and fill all fields');
+      return;
+    }
+    try {
+      // Fetch USDC coins owned by the current account
+      // This uses the SuiClient to get coins of the specified type owned by the current address
+      const { data: coins } = await suiClient.getCoins({
+        owner: currentAccount.address,
+        coinType: USDC_TYPE,
+      });
+      if (coins.length === 0) {
+        setTxStatus('No USDC coins found in your wallet');
+        return;
+      }
+      // Create a new transaction block
+      // TransactionBlock is used to construct and execute transactions on Sui
+      const tx = new TransactionBlock();
+      // Split the coin and get a new coin with the specified amount
+      // This creates a new coin object with the desired amount to be transferred
+      const [coin] = tx.splitCoins(coins[0].coinObjectId, [tx.pure(BigInt(amount))]);
+      // Transfer the split coin to the recipient
+      // This adds a transfer operation to the transaction block
+      tx.transferObjects([coin], tx.pure(recipientAddress));
+      // Sign and execute the transaction block
+      // This sends the transaction to the network and waits for it to be executed
+      const result = await signAndExecuteTransactionBlock({
+        transactionBlock: tx,
+      });
+      console.log('Transaction result:', result);
+      setTxStatus(`Transaction successful. Digest: ${result.digest}`);
+    } catch (error) {
+      console.error('Error sending tokens:', error);
+      setTxStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+```
+
+**Rendering the UI** 
+
+Render the main UI components, including input fields for amount and recipient address, and a button to send tokens.
+
+```typescript
+   return (
+    <main className="flex min-h-screen flex-col items-center justify-center p-24">
+      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm">
+        <h1 className="text-4xl font-bold mb-8">Sui USDC Sender (Testnet)</h1>
+        <ConnectButton />
+        {connected && currentAccount && (
+          <p className="mt-4">Connected: {currentAccount.address}</p>
+        )}
+        <div className="mt-8">
+          <input
+            type="text"
+            placeholder="Amount (in USDC)"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="p-2 border rounded mr-2 text-black"
+          />
+          <input
+            type="text"
+            placeholder="Recipient Address"
+            value={recipientAddress}
+            onChange={(e) => setRecipientAddress(e.target.value)}
+            className="p-2 border rounded mr-2 text-black"
+          />
+          <button
+            onClick={handleSendTokens}
+            disabled={!connected}
+            className={`p-2 rounded ${
+              connected && amount && recipientAddress
+                ? 'bg-blue-200 text-black hover:bg-blue-300'
+                : 'bg-gray-300 text-gray-500'
+            } transition-colors duration-200`}
+          >
+            Send USDC
+          </button>
+        </div>
+        {txStatus && <p className="mt-4">{txStatus}</p>}
+      </div>
+    </main>
+  );
+}
+```
+
+## Main Application Component
+
+This component wraps the HomeContent with necessary providers for state management and wallet connection.
+
+```typescript
+    export default function Home() {
+      return (
+        // Wrap the app with necessary providers
+        // QueryClientProvider: Provides React Query context for managing async queries
+        // SuiClientProvider: Provides the Sui client context for interacting with the Sui network
+        // WalletKitProvider: Provides wallet connection and interaction capabilities
+        <QueryClientProvider client={queryClient}>
+          <SuiClientProvider networks={networks} defaultNetwork="testnet">
+            <WalletKitProvider>
+              <HomeContent />
+            </WalletKitProvider>
+          </SuiClientProvider>
+        </QueryClientProvider>
+      );
+    }
+```
+
+Start the development server:
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+
+## Connecting Your Wallet
+
+- On the USDC Token Sender app, click the "Connect Wallet" button.
+- Select your wallet from the list of available options. 
+- Approve the connection in your wallet extension.
+
+
+## Performing a USDC Transfer
+
+- Ensure you have USDC tokens in your wallet. You can get testnet tokens from Circle's [faucet](https://faucet.circle.com/) if needed.
+- Click the "Request testnet SUI Tokens" from your Sui Wallet to source gas tokens.
+- In the app, enter the amount of USDC you want to send and the recipient’s address. 
+- Click the "Send Tokens" button.
+- Your wallet will prompt you to approve the transaction. Review the details and confirm.
+- Wait for the transaction to be processed. The app will display the transaction to status.
+
+## Example
+A complete example is available here: [USDC Transfer App](https://github.com/circle-ccooper/SUI-USDC-Transfer).
