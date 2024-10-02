@@ -83,10 +83,10 @@ pub async fn start_test_indexer_impl(
     data_ingestion_path: Option<PathBuf>,
     cancel: CancellationToken,
 ) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
-    // Reduce the connection pool size to 10 for testing
+    // Reduce the connection pool size to 5 for testing
     // to prevent maxing out
     let pool_config = ConnectionPoolConfig {
-        pool_size: 10,
+        pool_size: 5,
         connection_timeout: Duration::from_secs(10),
         statement_timeout: Duration::from_secs(30),
     };

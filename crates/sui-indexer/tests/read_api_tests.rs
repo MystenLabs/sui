@@ -11,7 +11,7 @@ use sui_json_rpc_api::ReadApiServer;
 use tempfile::tempdir;
 
 #[tokio::test]
-async fn test_read_api() -> RpcResult<()> {
+async fn test_checkpoint_apis() -> RpcResult<()> {
     let tempdir = tempdir().unwrap();
     let mut sim = Simulacrum::new();
     let data_ingestion_path = tempdir.path().to_path_buf();
