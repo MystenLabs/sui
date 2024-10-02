@@ -149,7 +149,7 @@ impl RestService {
     pub fn into_router(self) -> Router {
         let metrics = self.metrics.clone();
 
-        let mut api = openapi::Api::new(info());
+        let mut api = openapi::Api::new(info(self.software_version()));
 
         api.register_endpoints(
             ENDPOINTS
@@ -187,7 +187,7 @@ impl RestService {
     }
 }
 
-fn info() -> openapiv3::v3_1::Info {
+fn info(version: &'static str) -> openapiv3::v3_1::Info {
     use openapiv3::v3_1::Contact;
     use openapiv3::v3_1::License;
 
@@ -204,7 +204,7 @@ fn info() -> openapiv3::v3_1::Info {
             url: Some("https://www.apache.org/licenses/LICENSE-2.0.html".to_owned()),
             ..Default::default()
         }),
-        version: "0.0.0".to_owned(),
+        version: version.to_owned(),
         ..Default::default()
     }
 }
@@ -277,7 +277,7 @@ mod test {
             concat!(env!("CARGO_MANIFEST_DIR"), "/openapi/openapi.json");
 
         let openapi = {
-            let mut api = openapi::Api::new(info());
+            let mut api = openapi::Api::new(info("unknown"));
 
             api.register_endpoints(ENDPOINTS.iter().copied());
             api.openapi()
@@ -315,7 +315,7 @@ mod test {
         }
 
         let openapi = {
-            let mut api = openapi::Api::new(info());
+            let mut api = openapi::Api::new(info("unknown"));
             api.register_endpoints(ENDPOINTS.to_owned());
             api.openapi()
         };
