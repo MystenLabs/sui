@@ -17,12 +17,12 @@ use crate::{metrics::IndexerMetrics, store::IndexerStore};
 
 use super::checkpoint_handler::CheckpointHandler;
 use super::TransactionObjectChangesToCommit;
-use super::{CommonHandler, Handler};
+use super::{CommitDataEnvelope, CommonHandler, Handler};
 
 #[derive(Clone)]
 pub struct ObjectsSnapshotHandler {
     pub store: PgIndexerStore,
-    pub cp_sender: Sender<CheckpointData>,
+    pub sender: Sender<ObjectsSnapshotCommitDataEnvelope>,
     snapshot_config: SnapshotLagConfig,
     metrics: IndexerMetrics,
 }
@@ -34,9 +34,14 @@ pub struct CheckpointObjectChanges {
 
 #[async_trait]
 impl Worker for ObjectsSnapshotHandler {
-    // ?? change Worker trait to use Arc<CheckpointData> to avoid clone
     async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
-        self.cp_sender.send(checkpoint.clone()).await?;
+        let transformed_data = CheckpointHandler::index_objects(checkpoint, &self.metrics).await?;
+        self.sender
+            .send(ObjectsSnapshotCommitDataEnvelope {
+                sequence_number: checkpoint.checkpoint_summary.sequence_number,
+                data: transformed_data,
+            })
+            .await?;
         Ok(())
     }
 }
@@ -45,19 +50,6 @@ impl Worker for ObjectsSnapshotHandler {
 impl Handler<TransactionObjectChangesToCommit> for ObjectsSnapshotHandler {
     fn name(&self) -> String {
         "objects_snapshot_handler".to_string()
-    }
-
-    async fn transform(
-        &self,
-        cp_batch: Vec<CheckpointData>,
-    ) -> IndexerResult<Vec<TransactionObjectChangesToCommit>> {
-        futures::future::join_all(cp_batch.into_iter().map(|checkpoint| {
-            let metrics = self.metrics.clone();
-            async move { CheckpointHandler::index_objects(&checkpoint, &metrics).await }
-        }))
-        .await
-        .into_iter()
-        .collect::<Result<Vec<TransactionObjectChangesToCommit>, _>>()
     }
 
     async fn load(
@@ -102,7 +94,7 @@ pub async fn start_objects_snapshot_handler(
     info!("Starting object snapshot handler...");
 
     let global_metrics = get_metrics().unwrap();
-    let (cp_sender, cp_receiver) = mysten_metrics::metered_channel::channel(
+    let (sender, receiver) = mysten_metrics::metered_channel::channel(
         600,
         &global_metrics
             .channel_inflight
@@ -110,26 +102,41 @@ pub async fn start_objects_snapshot_handler(
     );
 
     let objects_snapshot_handler =
-        ObjectsSnapshotHandler::new(store.clone(), cp_sender, metrics.clone(), snapshot_config);
+        ObjectsSnapshotHandler::new(store.clone(), sender, metrics.clone(), snapshot_config);
 
     let watermark_hi = objects_snapshot_handler.get_watermark_hi().await?;
     let common_handler = CommonHandler::new(Box::new(objects_snapshot_handler.clone()));
-    spawn_monitored_task!(common_handler.start_transform_and_load(cp_receiver, cancel));
+    spawn_monitored_task!(common_handler.start_transform_and_load(receiver, cancel));
     Ok((objects_snapshot_handler, watermark_hi.unwrap_or_default()))
 }
 
 impl ObjectsSnapshotHandler {
     pub fn new(
         store: PgIndexerStore,
-        cp_sender: Sender<CheckpointData>,
+        sender: Sender<ObjectsSnapshotCommitDataEnvelope>,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
     ) -> ObjectsSnapshotHandler {
         Self {
             store,
-            cp_sender,
+            sender,
             metrics,
             snapshot_config,
         }
+    }
+}
+
+pub struct ObjectsSnapshotCommitDataEnvelope {
+    pub sequence_number: u64,
+    pub data: TransactionObjectChangesToCommit,
+}
+
+impl CommitDataEnvelope<TransactionObjectChangesToCommit> for ObjectsSnapshotCommitDataEnvelope {
+    fn sequence_number(&self) -> u64 {
+        self.sequence_number
+    }
+
+    fn data(self) -> TransactionObjectChangesToCommit {
+        self.data
     }
 }

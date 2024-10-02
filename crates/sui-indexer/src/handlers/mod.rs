@@ -6,7 +6,6 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use futures::{FutureExt, StreamExt};
 
-use sui_rest_api::CheckpointData;
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -63,11 +62,14 @@ impl<T> CommonHandler<T> {
         Self { handler }
     }
 
-    async fn start_transform_and_load(
+    async fn start_transform_and_load<E>(
         &self,
-        cp_receiver: mysten_metrics::metered_channel::Receiver<CheckpointData>,
+        cp_receiver: mysten_metrics::metered_channel::Receiver<E>,
         cancel: CancellationToken,
-    ) -> IndexerResult<()> {
+    ) -> IndexerResult<()>
+    where
+        E: CommitDataEnvelope<T>,
+    {
         let checkpoint_commit_batch_size = std::env::var("CHECKPOINT_COMMIT_BATCH_SIZE")
             .unwrap_or(CHECKPOINT_COMMIT_BATCH_SIZE.to_string())
             .parse::<usize>()
@@ -76,7 +78,7 @@ impl<T> CommonHandler<T> {
             .ready_chunks(checkpoint_commit_batch_size);
 
         let mut unprocessed = BTreeMap::new();
-        let mut batch: Vec<CheckpointData> = vec![];
+        let mut envelope_batch = vec![];
         let mut next_cp_to_process = self
             .handler
             .get_watermark_hi()
@@ -89,42 +91,35 @@ impl<T> CommonHandler<T> {
                 return Ok(());
             }
 
-            // Try to fetch new checkpoints from the stream
+            // Try to fetch new data envelope from the stream
             match stream.next().now_or_never() {
-                Some(Some(indexed_checkpoint_batch)) => {
+                Some(Some(envelope_chunk)) => {
                     if cancel.is_cancelled() {
                         return Ok(());
                     }
-                    for checkpoint in indexed_checkpoint_batch {
-                        unprocessed
-                            .insert(checkpoint.checkpoint_summary.sequence_number, checkpoint);
+                    for envelope in envelope_chunk {
+                        unprocessed.insert(envelope.sequence_number(), envelope);
                     }
                 }
                 Some(None) => break, // Stream has ended
-                None => {}           // No new checkpoints available right now
+                None => {}           // No new data envelope available right now
             }
 
             // Process unprocessed checkpoints, even no new checkpoints from stream
             let checkpoint_lag_limiter = self.handler.get_checkpoint_lag_limiter().await?;
             while next_cp_to_process <= checkpoint_lag_limiter {
-                if let Some(checkpoint) = unprocessed.remove(&next_cp_to_process) {
-                    batch.push(checkpoint);
+                if let Some(data_envelope) = unprocessed.remove(&next_cp_to_process) {
+                    envelope_batch.push(data_envelope);
                     next_cp_to_process += 1;
                 } else {
                     break;
                 }
             }
 
-            if !batch.is_empty() {
-                let last_checkpoint_seq = batch.last().unwrap().checkpoint_summary.sequence_number;
-                let transformed_data = self.handler.transform(batch).await.map_err(|e| {
-                    IndexerError::DataTransformationError(format!(
-                        "Failed to transform checkpoint batch: {}. Handler: {}",
-                        e,
-                        self.handler.name()
-                    ))
-                })?;
-                self.handler.load(transformed_data).await.map_err(|e| {
+            if !envelope_batch.is_empty() {
+                let last_checkpoint_seq = envelope_batch.last().unwrap().sequence_number();
+                let batch = envelope_batch.into_iter().map(|c| c.data()).collect();
+                self.handler.load(batch).await.map_err(|e| {
                     IndexerError::PostgresWriteError(format!(
                         "Failed to load transformed data into DB for handler {}: {}",
                         self.handler.name(),
@@ -132,7 +127,7 @@ impl<T> CommonHandler<T> {
                     ))
                 })?;
                 self.handler.set_watermark_hi(last_checkpoint_seq).await?;
-                batch = vec![];
+                envelope_batch = vec![];
             }
         }
         Err(IndexerError::ChannelClosed(format!(
@@ -147,11 +142,8 @@ pub trait Handler<T>: Send + Sync {
     /// return handler name
     fn name(&self) -> String;
 
-    /// transform data from `CheckpointData` to .*ToCommit
-    async fn transform(&self, cp_batch: Vec<CheckpointData>) -> IndexerResult<Vec<T>>;
-
-    /// commit .*ToCommit to DB
-    async fn load(&self, tranformed_data: Vec<T>) -> IndexerResult<()>;
+    /// commit batch of transformed data to DB
+    async fn load(&self, batch: Vec<T>) -> IndexerResult<()>;
 
     /// read high watermark of the table DB
     async fn get_watermark_hi(&self) -> IndexerResult<Option<u64>>;
@@ -163,4 +155,9 @@ pub trait Handler<T>: Send + Sync {
     async fn get_checkpoint_lag_limiter(&self) -> IndexerResult<u64> {
         Ok(u64::MAX)
     }
+}
+
+pub trait CommitDataEnvelope<T>: Send + Sync {
+    fn sequence_number(&self) -> u64;
+    fn data(self) -> T;
 }
