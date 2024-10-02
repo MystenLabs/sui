@@ -1,0 +1,13 @@
+Wallet Download Guide
+---
+You have successfully downloaded a copy of the Wallet data you requested.
+---
+Following files are included in the folder:
+
+Cards.csv
+---
+The file contains:
+
+The Cards.csv file includes all the card payment methods saved with us.
+The BankAccounts.csv file includes all the bank account payment methods saved with us.
+You may see both files, or only one file if you don't have data saved with us for either card or bank account.

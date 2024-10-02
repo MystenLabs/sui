@@ -1,0 +1,29 @@
+2023-05-30T11:24:10.6124052Z ##[group]Run actions/setup-node@8c91899e586c5b171469028077307d293428b516
+2023-05-30T11:24:10.6124329Z with:
+2023-05-30T11:24:10.6124515Z   node-version: 18
+2023-05-30T11:24:10.6124873Z   cache: pnpm
+2023-05-30T11:24:10.6125045Z   always-auth: false
+2023-05-30T11:24:10.6125245Z   check-latest: false
+2023-05-30T11:24:10.6125553Z   token: ***
+2023-05-30T11:24:10.6125729Z env:
+2023-05-30T11:24:10.6125959Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2023-05-30T11:24:10.6126197Z ##[endgroup]
+2023-05-30T11:24:10.8524827Z Found in cache @ /opt/hostedtoolcache/node/18.16.0/x64
+2023-05-30T11:24:10.8540416Z ##[group]Environment details
+2023-05-30T11:24:10.9565161Z node: v18.16.0
+2023-05-30T11:24:10.9566515Z 
+2023-05-30T11:24:11.3829659Z yarn: 1.22.19
+2023-05-30T11:24:11.3830439Z 
+2023-05-30T11:24:11.8757542Z npm: 9.5.1
+2023-05-30T11:24:11.8758203Z 
+2023-05-30T11:24:11.8758882Z ##[endgroup]
+2023-05-30T11:24:11.8759534Z [command]/home/runner/setup-pnpm/node_modules/.bin/pnpm store path --silent
+2023-05-30T11:24:12.5229712Z /home/runner/setup-pnpm/node_modules/.bin/store/v3
+2023-05-30T11:24:14.0282607Z Received 0 of 248230293 (0.0%), 0.0 MBs/sec
+2023-05-30T11:24:15.0285783Z Received 83886080 of 248230293 (33.8%), 40.0 MBs/sec
+2023-05-30T11:24:16.0291414Z Received 213909504 of 248230293 (86.2%), 68.0 MBs/sec
+2023-05-30T11:24:16.4830604Z Received 248230293 of 248230293 (100.0%), 68.5 MBs/sec
+2023-05-30T11:24:16.4988056Z Cache Size: ~237 MB (248230293 B)
+2023-05-30T11:24:16.5062919Z [command]/usr/bin/tar -z -xf /home/runner/work/_temp/5973ac44-c16a-41b5-9c1d-32d67a7f0c8d/cache.tgz -P -C /home/runner/work/sui/sui
+2023-05-30T11:24:24.8152767Z Cache restored successfully
+2023-05-30T11:24:24.8511286Z Cache restored from key: node-cache-Linux-pnpm-d763acbacd06b8b81964d05cb9955315f6f1ee21a0c4b31d5b583b6d30da5ccd

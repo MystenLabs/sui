@@ -1,0 +1,35 @@
+2023-05-30T11:24:24.8809985Z ##[group]Run pnpm install --frozen-lockfile
+2023-05-30T11:24:24.8810414Z [36;1mpnpm install --frozen-lockfile[0m
+2023-05-30T11:24:24.8880299Z shell: /usr/bin/bash -e {0}
+2023-05-30T11:24:24.8880580Z env:
+2023-05-30T11:24:24.8880883Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2023-05-30T11:24:24.8881172Z ##[endgroup]
+2023-05-30T11:24:25.6645767Z Scope: all 20 workspace projects
+2023-05-30T11:24:25.8570705Z Lockfile is up to date, resolution step is skipped
+2023-05-30T11:24:26.0181803Z Progress: resolved 1, reused 0, downloaded 0, added 0
+2023-05-30T11:24:26.6492002Z Packages: +2223
+2023-05-30T11:24:26.6492698Z ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+2023-05-30T11:24:27.2959554Z Progress: resolved 2223, reused 0, downloaded 0, added 0
+2023-05-30T11:24:28.0158558Z Packages are hard linked from the content-addressable store to the virtual store.
+2023-05-30T11:24:28.0167316Z   Content-addressable store is at: /home/runner/setup-pnpm/node_modules/.bin/store/v3
+2023-05-30T11:24:28.0168049Z   Virtual store is at:             node_modules/.pnpm
+2023-05-30T11:24:28.2969245Z Progress: resolved 2223, reused 17, downloaded 0, added 16
+2023-05-30T11:24:29.3012647Z Progress: resolved 2223, reused 219, downloaded 0, added 208
+2023-05-30T11:24:30.3017086Z Progress: resolved 2223, reused 389, downloaded 0, added 381
+2023-05-30T11:24:31.3021572Z Progress: resolved 2223, reused 614, downloaded 0, added 617
+2023-05-30T11:24:32.3037561Z Progress: resolved 2223, reused 968, downloaded 0, added 971
+2023-05-30T11:24:33.3048071Z Progress: resolved 2223, reused 1340, downloaded 0, added 1340
+2023-05-30T11:24:34.3045845Z Progress: resolved 2223, reused 1832, downloaded 0, added 1822
+2023-05-30T11:24:35.3078984Z Progress: resolved 2223, reused 2207, downloaded 0, added 2209
+2023-05-30T11:24:36.3083644Z Progress: resolved 2223, reused 2208, downloaded 0, added 2211
+2023-05-30T11:24:37.3093501Z Progress: resolved 2223, reused 2220, downloaded 0, added 2214
+2023-05-30T11:24:38.3089058Z Progress: resolved 2223, reused 2220, downloaded 0, added 2223, done
+2023-05-30T11:24:40.2818920Z .../@napi-rs/simple-git-linux-x64-musl postinstall$ node install.js
+2023-05-30T11:24:40.3735256Z .../@napi-rs/simple-git-linux-x64-musl postinstall: Failed
+2023-05-30T11:24:41.2701465Z 
+2023-05-30T11:24:41.2702293Z devDependencies:
+2023-05-30T11:24:41.2702809Z + @changesets/cli 2.26.1
+2023-05-30T11:24:41.2703223Z + @manypkg/cli 0.20.0
+2023-05-30T11:24:41.2703575Z + turbo 1.9.1
+2023-05-30T11:24:41.2703812Z 
+2023-05-30T11:24:41.2755629Z Done in 16.3s

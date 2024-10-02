@@ -49,3 +49,18 @@ After building the app, the extension needs to be installed to Chrome. Follow th
 ```
 pnpm wallet test
 ```
+
+## Run Wallet e2e tests
+
+Wallet e2e tests are running with lower epoch duration
+Run this in 1 terminal:
+
+```
+cargo run --bin sui-test-validator -- --epoch-duration-ms 10000
+```
+
+Open another terminal and run:
+
+```
+pnpm wallet playwright test
+```
