@@ -417,7 +417,7 @@ async fn main() -> anyhow::Result<()> {
                 let name = names.get(&sui_address).unwrap();
                 if ping {
                     let client_clone = client.clone();
-                    ping_tasks.push(fetch_with_latency(client_clone, url.clone()));
+                    ping_tasks.push(get_with_latency(client_clone, url.clone()));
                 }
                 authorities.push((
                     name,
@@ -589,6 +589,7 @@ struct OutputMember {
     blocklisted: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     latency_ms: Option<u64>,
 }
 
@@ -598,7 +599,7 @@ struct OutputSuiBridgeRegistration {
     committee: Vec<OutputMember>,
 }
 
-async fn fetch_with_latency(
+async fn get_with_latency(
     client: Client,
     url: String,
 ) -> (Result<reqwest::Response, reqwest::Error>, Duration) {
