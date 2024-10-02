@@ -9,8 +9,8 @@ use axum::extract::{Path, State};
 use axum::Json;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use sui_sdk2::types::{ObjectId, StructTag};
-use sui_types::sui_sdk2_conversions::struct_tag_sdk_to_core;
+use sui_sdk_types::types::{ObjectId, StructTag};
+use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 pub struct GetCoinInfo;
 

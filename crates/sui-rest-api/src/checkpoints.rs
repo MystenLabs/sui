@@ -3,7 +3,7 @@
 
 use axum::extract::Query;
 use axum::extract::{Path, State};
-use sui_sdk2::types::{
+use sui_sdk_types::types::{
     CheckpointData, CheckpointDigest, CheckpointSequenceNumber, SignedCheckpointSummary,
 };
 use sui_types::storage::ReadStore;
