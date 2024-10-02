@@ -1,0 +1,14 @@
+# Filtering on package
+{
+  transactionBlocks(filter: { function: "0x3" }) {
+    nodes {
+      sender {
+        address
+      }
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

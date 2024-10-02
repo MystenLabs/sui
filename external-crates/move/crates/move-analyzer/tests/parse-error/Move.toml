@@ -1,0 +1,9 @@
+[package]
+name = "ParseError"
+edition = "legacy"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+
+[addresses]
+ParseError = "0xCAFE"

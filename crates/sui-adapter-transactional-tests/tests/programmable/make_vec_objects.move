@@ -7,18 +7,15 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use std::vector;
 
-    struct Pub has key, store {
+    public struct Pub has key, store {
         id: UID,
         value: u64,
     }
 
-    struct Cap {}
+    public struct Cap {}
 
-    struct Cup<T> has key, store {
+    public struct Cup<T> has key, store {
         id: UID,
         value: T,
     }
@@ -35,7 +32,7 @@ module test::m1 {
         Cap {}
     }
 
-    public fun pubs(v: vector<Pub>) {
+    public fun pubs(mut v: vector<Pub>) {
         while (!vector::is_empty(&v)) {
             let Pub { id, value: _ } = vector::pop_back(&mut v);
             object::delete(id);

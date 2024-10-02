@@ -38,7 +38,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
             std::thread::spawn(|| {
                 use sui_protocol_config::ProtocolConfig;
                 ::sui_simulator::telemetry_subscribers::init_for_testing();
-                ::sui_simulator::sui_adapter::execution_engine::get_denied_certificates();
+                ::sui_simulator::sui_types::execution::get_denied_certificates();
                 ::sui_simulator::sui_framework::BuiltInFramework::all_package_ids();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
 
@@ -56,14 +56,13 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                     use sui_simulator::tempfile::TempDir;
                     use sui_simulator::move_package::package_hooks::register_package_hooks;
 
-                    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
-                    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                    path.extend(["..", "..", "sui_programmability", "examples", "basics"]);
+                    register_package_hooks(Box::new(SuiPackageHooks {}));
+                    let mut path = PathBuf::from(env!("SIMTEST_STATIC_INIT_MOVE"));
                     let mut build_config = BuildConfig::default();
 
                     build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());
                     let _all_module_bytes = build_config
-                        .build(path)
+                        .build(&path)
                         .unwrap()
                         .get_package_bytes(/* with_unpublished_deps */ false);
                 }
@@ -78,8 +77,8 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
 
                 use std::sync::Arc;
                 use ::sui_simulator::fastcrypto::traits::KeyPair;
-                use rand::rngs::{StdRng, OsRng};
-                use rand::SeedableRng;
+                use ::sui_simulator::rand_crate::rngs::{StdRng, OsRng};
+                use ::sui_simulator::rand::SeedableRng;
                 use ::sui_simulator::tower::ServiceBuilder;
 
                 // anemo uses x509-parser, which has many lazy static variables. start a network to
@@ -286,12 +285,9 @@ pub fn with_checked_arithmetic(_attr: TokenStream, item: TokenStream) -> TokenSt
             let transformed_impl = CheckArithmetic.fold_item_impl(input_impl);
             TokenStream::from(quote! { #transformed_impl })
         }
-        _ => {
-            let err = syn::Error::new_spanned(
-                input_item,
-                "The with_checked_arithmetic attribute can only be applied to functions and impl blocks",
-            );
-            err.to_compile_error().into()
+        item => {
+            let transformed_impl = CheckArithmetic.fold_item(item);
+            TokenStream::from(quote! { #transformed_impl })
         }
     }
 }

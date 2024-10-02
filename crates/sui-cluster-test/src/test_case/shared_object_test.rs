@@ -63,8 +63,11 @@ impl TestCaseImpl for SharedCounterTest {
             .mutated()
             .iter()
             .find_map(|obj| {
-                let Owner::Shared { initial_shared_version } = obj.owner else {
-                    return None
+                let Owner::Shared {
+                    initial_shared_version,
+                } = obj.owner
+                else {
+                    return None;
                 };
 
                 if obj.reference.object_id == counter_id

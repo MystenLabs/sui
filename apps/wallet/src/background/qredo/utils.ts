@@ -1,18 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
 import Browser from 'webextension-polyfill';
 
 import {
 	type QredoConnectIdentity,
-	type QredoConnection,
 	type QredoConnectPendingRequest,
 	type UIQredoPendingRequest,
 } from './types';
-import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
 
 export function qredoConnectPageUrl(requestID: string) {
-	return `${Browser.runtime.getURL('ui.html')}#/dapp/qredo-connect/${encodeURIComponent(
+	return `${Browser.runtime.getURL('ui.html')}#/accounts/qredo-connect/${encodeURIComponent(
 		requestID,
 	)}`;
 }
@@ -46,7 +45,7 @@ export function validateInputOrThrow(input: QredoConnectInput) {
 		service,
 		apiUrl: apiUrl.toString(),
 		token,
-		organization: trimString(input.organization),
+		organization: trimString('organization' in input ? input.organization : input.workspace),
 	};
 }
 
@@ -64,10 +63,10 @@ export function toUIQredoPendingRequest(stored: QredoConnectPendingRequest): UIQ
 	};
 }
 
-export function isSameQredoConnection<T1 extends QredoConnectIdentity | string>(
-	a: T1,
-	b: QredoConnectPendingRequest | QredoConnection,
-) {
+export function isSameQredoConnection<
+	T1 extends QredoConnectIdentity | string,
+	T2 extends QredoConnectIdentity & { id: string },
+>(a: T1, b: T2) {
 	return (
 		(typeof a === 'string' && b.id === a) ||
 		(typeof a === 'object' &&

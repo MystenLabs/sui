@@ -1,0 +1,20 @@
+[package]
+name = "sui-verifier-v1"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Move framework for Sui platform"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+move-bytecode-verifier-meter.workspace = true
+move-core-types.workspace = true
+move-vm-config.workspace = true
+move-abstract-stack.workspace = true
+
+move-bytecode-verifier = { path = "../../../external-crates/move/move-execution/v1/crates/move-bytecode-verifier", package = "move-bytecode-verifier-v1" }
+
+sui-types.workspace = true

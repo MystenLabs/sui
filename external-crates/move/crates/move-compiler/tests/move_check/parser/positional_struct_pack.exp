@@ -1,0 +1,29 @@
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/positional_struct_pack.move:7:17
+  │
+7 │         let _ = Foo(0);
+  │                 ^^^^^^ Positional fields are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E03013]: positional call mismatch
+  ┌─ tests/move_check/parser/positional_struct_pack.move:7:17
+  │
+4 │     struct Foo has drop { x: u64 }
+  │            --- 'Foo' is declared here
+  ·
+7 │         let _ = Foo(0);
+  │                 ^^^^^^ Invalid struct instantiation. Named struct declarations require named instantiations
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/parser/positional_struct_pack.move:7:17
+  │
+7 │         let _ = Foo(0);
+  │                 ^^^^^^ Missing argument for field 'x' in '0x42::M::Foo'
+
+error[E03010]: unbound field
+  ┌─ tests/move_check/parser/positional_struct_pack.move:7:17
+  │
+7 │         let _ = Foo(0);
+  │                 ^^^^^^ Unbound field '0' in '0x42::M::Foo'
+

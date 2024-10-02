@@ -1,0 +1,19 @@
+//# run --args @0x1
+module 0x5.m {
+
+entry foo(s: signer) {
+label b0:
+    return;
+}
+
+}// DEPRECATED signers can now be passed in as addrs
+
+//# run --args @0x0 @0x2
+module 0x6.m {
+
+entry foo(s: signer, s2: signer) {
+label b0:
+    return;
+}
+
+}// DEPRECATED signers can now be passed in as addrs

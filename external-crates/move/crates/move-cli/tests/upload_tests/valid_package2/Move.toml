@@ -1,0 +1,6 @@
+[package]
+name = "Package1"
+edition = "2024.beta"
+
+[addresses]
+Std = "0x1"

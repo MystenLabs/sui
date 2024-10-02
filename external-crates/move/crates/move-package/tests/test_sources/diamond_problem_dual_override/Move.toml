@@ -1,0 +1,28 @@
+# Dependency graph and two overrides. This example is very similar to diamond_problem_dep_with_deps
+# with the exception that in Root there is an override for C but also for A. The goal is to make
+# sure that the override's sub-graph is pruned but that we don't apply pruning for a sub-graph of an
+# overridden dependency using the same dependency (that is, for example, that we don't do pruning of
+# C when processing C as a dependency of Root)
+#
+#                                  +----+  v2
+#                            +---->| C1 |-------+
+#                            |     +----+       |
+#                            |                  |
+#                 +----+     |       ov(1)      |
+#           +---->| A  |-----+--------------+   |
+#           |     +----+     |              |   |
+#           |                |              |   +->+----+
+# +----+    |     ov(2)      |   +----+ v1  +----->|    |
+# |Root|----+-------------+  +-->| D  |----------->| E  |
+# +----+    |             |      +----+            |    |
+#           |             |                 +----->+----+
+#           |     +----+  +->+----+    v1   |
+#           +---->| B  |---->| C2 |---------+
+#                 +----+     +----+
+[package]
+name = "Root"
+
+[dependencies]
+A = { local = "./deps_only/A" , override = true}
+B = { local = "./deps_only/B" }
+C = { local = "./deps_only/C2", override = true }

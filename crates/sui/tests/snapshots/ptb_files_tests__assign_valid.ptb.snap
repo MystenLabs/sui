@@ -1,0 +1,27 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────╮
+│ PTB Preview                      │
+├───────────────┬──────────────────┤
+│ command       │ values           │
+├───────────────┼──────────────────┤
+│ assign        │ a @0x0           │
+│ assign        │ b a              │
+│ make-move-vec │ <address> [a, b] │
+│ assign        │ c                │
+│ assign        │ c0 c.0           │
+│ assign        │ c1 c.1           │
+│ assign        │ a @0x0           │
+│ assign        │ b a              │
+│ make-move-vec │ <address> [a, b] │
+│ assign        │ c                │
+│ assign        │ c0 c.0           │
+│ assign        │ c1 c.1           │
+╰───────────────┴──────────────────╯
+ === BUILT PTB === 
+Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Command 0: MakeMoveVec(Someaddress,[Input(0),Input(0)])
+Command 1: MakeMoveVec(Someaddress,[Input(0),Input(0)])

@@ -5,15 +5,15 @@ module sui_system::msim_extra_1 {
     use sui::object::UID;
     use sui::tx_context::TxContext;
 
-    struct Type {
+    public struct Type {
         x: u64,
     }
 
-    struct Obj has key {
+    public struct Obj has key {
         id: UID,
     }
 
-    struct AlmostObj {
+    public struct AlmostObj {
         id: UID,
     }
 

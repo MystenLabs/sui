@@ -12,7 +12,6 @@ bcs.workspace = true
 bincode.workspace = true
 bytes.workspace = true
 config = { path = "../config", package = "narwhal-config" }
-consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
 futures.workspace = true
 primary = { path = "../primary", package = "narwhal-primary" }
@@ -21,7 +20,6 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 tonic.workspace = true
 tracing.workspace = true
-itertools.workspace = true
 prometheus.workspace = true
 storage = { path = "../storage", package = "narwhal-storage" }
 sui-protocol-config.workspace = true
@@ -29,15 +27,10 @@ sui-protocol-config.workspace = true
 types = { path = "../types", package = "narwhal-types" }
 network = { path = "../network", package = "narwhal-network" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
-anyhow.workspace = true
-rand.workspace = true
 mockall.workspace = true
 
 mysten-metrics.workspace = true
 store = { path = "../../crates/typed-store", package = "typed-store" }
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
-
-anemo.workspace = true
 
 [dev-dependencies]
 indexmap.workspace = true

@@ -8,19 +8,21 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use cached::proc_macro::cached;
 use cached::SizedCache;
+use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use tracing::{info, instrument};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::{GovernanceReadApiOpenRpc, GovernanceReadApiServer, JsonRpcMetrics};
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
 use sui_json_rpc_types::{SuiCommittee, ValidatorApy, ValidatorApys};
 use sui_open_rpc::Module;
-use sui_types::base_types::{MoveObjectType, ObjectID, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::dynamic_field::get_dynamic_field_from_store;
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::governance::StakedSui;
 use sui_types::id::ID;
 use sui_types::object::ObjectRead;
@@ -30,13 +32,13 @@ use sui_types::sui_system_state::PoolTokenExchangeRate;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
-use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
-use crate::error::{Error, SuiRpcInputError};
+use crate::authority_state::StateRead;
+use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
 use crate::{with_tracing, ObjectProvider, SuiRpcModule};
 
 #[derive(Clone)]
 pub struct GovernanceReadApi {
-    state: Arc<AuthorityState>,
+    state: Arc<dyn StateRead>,
     pub metrics: Arc<JsonRpcMetrics>,
 }
 
@@ -47,16 +49,12 @@ impl GovernanceReadApi {
 
     async fn get_staked_sui(&self, owner: SuiAddress) -> Result<Vec<StakedSui>, Error> {
         let state = self.state.clone();
-        let result = spawn_monitored_task!(async move {
-            state
-                .get_move_objects(owner, MoveObjectType::staked_sui())
-                .await
-        })
-        .await??;
+        let result =
+            spawn_monitored_task!(async move { state.get_staked_sui(owner).await }).await??;
 
         self.metrics
             .get_stake_sui_result_size
-            .report(result.len() as u64);
+            .observe(result.len() as f64);
         self.metrics
             .get_stake_sui_result_size_total
             .inc_by(result.len() as u64);
@@ -91,20 +89,20 @@ impl GovernanceReadApi {
                         .await?
                     {
                         Some(o) => stakes.push((StakedSui::try_from(&o)?, false)),
-                        None => {
-                            return Err(Error::UserInputError(UserInputError::ObjectNotFound {
+                        None => Err(SuiRpcInputError::UserInputError(
+                            UserInputError::ObjectNotFound {
                                 object_id: oref.0,
                                 version: None,
-                            }));
-                        }
+                            },
+                        ))?,
                     }
                 }
-                ObjectRead::NotExists(id) => {
-                    return Err(Error::UserInputError(UserInputError::ObjectNotFound {
+                ObjectRead::NotExists(id) => Err(SuiRpcInputError::UserInputError(
+                    UserInputError::ObjectNotFound {
                         object_id: id,
                         version: None,
-                    }));
-                }
+                    },
+                ))?,
             }
         }
 
@@ -209,7 +207,7 @@ impl GovernanceReadApi {
     }
 
     fn get_system_state(&self) -> Result<SuiSystemState, Error> {
-        Ok(self.state.database.get_sui_system_state_object()?)
+        Ok(self.state.get_system_state()?)
     }
 }
 
@@ -220,23 +218,21 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> RpcResult<Vec<DelegatedStake>> {
-        with_tracing!(async move { Ok(self.get_stakes_by_ids(staked_sui_ids).await?) })
+        with_tracing!(async move { self.get_stakes_by_ids(staked_sui_ids).await })
     }
 
     #[instrument(skip(self))]
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
-        with_tracing!(async move { Ok(self.get_stakes(owner).await?) })
+        with_tracing!(async move { self.get_stakes(owner).await })
     }
 
     #[instrument(skip(self))]
     async fn get_committee_info(&self, epoch: Option<BigInt<u64>>) -> RpcResult<SuiCommittee> {
         with_tracing!(async move {
-            Ok(self
-                .state
-                .committee_store()
-                .get_or_latest_committee(epoch.map(|e| *e))
+            self.state
+                .get_or_latest_committee(epoch)
                 .map(|committee| committee.into())
-                .map_err(Error::from)?)
+                .map_err(Error::from)
         })
     }
 
@@ -245,8 +241,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         with_tracing!(async move {
             Ok(self
                 .state
-                .database
-                .get_sui_system_state_object()
+                .get_system_state()
                 .map_err(Error::from)?
                 .into_sui_system_state_summary())
         })
@@ -270,43 +265,11 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .await
             .map_err(Error::from)?;
 
-        let mut apys = vec![];
+        let apys = calculate_apys(
+            system_state_summary.stake_subsidy_start_epoch,
+            exchange_rate_table,
+        );
 
-        for rates in exchange_rate_table.into_iter().filter(|r| r.active) {
-            // we start the apy calculation from the epoch when the stake subsidy starts
-            let exchange_rates = rates
-                .rates
-                .into_iter()
-                .filter_map(|(epoch, rate)| {
-                    if epoch >= system_state_summary.stake_subsidy_start_epoch
-                        && (1.0 / rate.rate()) < 1.2
-                    {
-                        Some(rate)
-                    } else {
-                        None
-                    }
-                })
-                // we only need the last 30 + 1 days of data
-                .take(31)
-                .collect::<Vec<_>>();
-
-            // we need at least 2 data points to calculate apy
-            let average_apy = if exchange_rates.len() >= 2 {
-                // rates are sorted by epoch in descending order.
-                let er_e = &exchange_rates[1..];
-                // rate e+1
-                let er_e_1 = &exchange_rates[..exchange_rates.len() - 1];
-                let dp_count = er_e.len();
-                er_e.iter().zip(er_e_1).map(calculate_apy).sum::<f64>() / dp_count as f64
-            } else {
-                0.0
-            };
-
-            apys.push(ValidatorApy {
-                address: rates.address,
-                apy: average_apy,
-            });
-        }
         Ok(ValidatorApys {
             apys,
             epoch: system_state_summary.epoch,
@@ -314,8 +277,82 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 }
 
+pub fn calculate_apys(
+    stake_subsidy_start_epoch: u64,
+    exchange_rate_table: Vec<ValidatorExchangeRates>,
+) -> Vec<ValidatorApy> {
+    let mut apys = vec![];
+
+    for rates in exchange_rate_table.into_iter().filter(|r| r.active) {
+        // we start the apy calculation from the epoch when the stake subsidy starts
+        let exchange_rates = rates.rates.into_iter().filter_map(|(epoch, rate)| {
+            if epoch >= stake_subsidy_start_epoch {
+                Some(rate)
+            } else {
+                None
+            }
+        });
+
+        // we need at least 2 data points to calculate apy
+        let average_apy = if exchange_rates.clone().count() >= 2 {
+            // rates are sorted by epoch in descending order.
+            let er_e = exchange_rates.clone().dropping(1);
+            // rate e+1
+            let er_e_1 = exchange_rates.dropping_back(1);
+            let apys = er_e
+                .zip(er_e_1)
+                .map(calculate_apy)
+                .filter(|apy| *apy > 0.0 && *apy < 0.1)
+                .take(30)
+                .collect::<Vec<_>>();
+
+            let apy_counts = apys.len() as f64;
+            apys.iter().sum::<f64>() / apy_counts
+        } else {
+            0.0
+        };
+        apys.push(ValidatorApy {
+            address: rates.address,
+            apy: average_apy,
+        });
+    }
+    apys
+}
+
+#[test]
+fn test_apys_calculation_filter_outliers() {
+    // staking pool exchange rates extracted from mainnet
+    let file =
+        std::fs::File::open("src/unit_tests/data/validator_exchange_rate/rates.json").unwrap();
+    let rates: BTreeMap<String, Vec<(u64, PoolTokenExchangeRate)>> =
+        serde_json::from_reader(file).unwrap();
+
+    let mut address_map = BTreeMap::new();
+
+    let exchange_rates = rates
+        .into_iter()
+        .map(|(validator, rates)| {
+            let address = SuiAddress::random_for_testing_only();
+            address_map.insert(address, validator);
+            ValidatorExchangeRates {
+                address,
+                pool_id: ObjectID::random(),
+                active: true,
+                rates,
+            }
+        })
+        .collect();
+
+    let apys = calculate_apys(20, exchange_rates);
+
+    for apy in apys {
+        println!("{}: {}", address_map[&apy.address], apy.apy);
+        assert!(apy.apy < 0.07)
+    }
+}
+
 // APY_e = (ER_e+1 / ER_e) ^ 365
-fn calculate_apy((rate_e, rate_e_1): (&PoolTokenExchangeRate, &PoolTokenExchangeRate)) -> f64 {
+fn calculate_apy((rate_e, rate_e_1): (PoolTokenExchangeRate, PoolTokenExchangeRate)) -> f64 {
     (rate_e.rate() / rate_e_1.rate()).powf(365.0) - 1.0
 }
 
@@ -328,10 +365,10 @@ fn calculate_apy((rate_e, rate_e_1): (&PoolTokenExchangeRate, &PoolTokenExchange
     result = true
 )]
 async fn exchange_rates(
-    state: &Arc<AuthorityState>,
+    state: &Arc<dyn StateRead>,
     _current_epoch: EpochId,
-) -> SuiResult<Vec<ValidatorExchangeRates>> {
-    let system_state = state.database.get_sui_system_state_object()?;
+) -> RpcInterimResult<Vec<ValidatorExchangeRates>> {
+    let system_state = state.get_system_state()?;
     let system_state_summary: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
 
     // Get validator rate tables
@@ -358,10 +395,10 @@ async fn exchange_rates(
                 error: e.to_string(),
             })?;
         let validator = get_validator_from_table(
-            state.database.as_ref(),
+            state.get_object_store().as_ref(),
             system_state_summary.inactive_pools_id,
             &pool_id,
-        )?;
+        )?; // TODO(wlmyng): roll this into StateReadError
         tables.push((
             validator.sui_address,
             validator.staking_pool_id,
@@ -384,8 +421,11 @@ async fn exchange_rates(
                     }
                 })?;
 
-                let exchange_rate: PoolTokenExchangeRate =
-                    get_dynamic_field_from_store(state.db().as_ref(), exchange_rates_id, &epoch)?;
+                let exchange_rate: PoolTokenExchangeRate = get_dynamic_field_from_store(
+                    &state.get_object_store().as_ref(),
+                    exchange_rates_id,
+                    &epoch,
+                )?;
 
                 Ok::<_, SuiError>((epoch, exchange_rate))
             })
@@ -405,10 +445,10 @@ async fn exchange_rates(
 
 #[derive(Clone, Debug)]
 pub struct ValidatorExchangeRates {
-    address: SuiAddress,
-    pool_id: ObjectID,
-    active: bool,
-    rates: Vec<(EpochId, PoolTokenExchangeRate)>,
+    pub address: SuiAddress,
+    pub pool_id: ObjectID,
+    pub active: bool,
+    pub rates: Vec<(EpochId, PoolTokenExchangeRate)>,
 }
 
 impl SuiRpcModule for GovernanceReadApi {
@@ -417,6 +457,6 @@ impl SuiRpcModule for GovernanceReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::GovernanceReadApiOpenRpc::module_doc()
+        GovernanceReadApiOpenRpc::module_doc()
     }
 }

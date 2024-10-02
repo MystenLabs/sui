@@ -1,0 +1,103 @@
+//# print-bytecode
+module 0x6.Enums {
+    enum EnumWithThreeVariants<T> {
+        One { },
+        Two { x: T },
+        Three { } 
+    }
+
+    public call_success<T>(t: T): T {
+        let x: Self.EnumWithThreeVariants<T>;
+        label b0:
+            x = EnumWithThreeVariants.Two<T> { x: move(t) };
+            return Self.f<T>(move(x));
+    }
+
+    public call_fail_1<T>(): T {
+        let x: Self.EnumWithThreeVariants<T>;
+        label b0:
+            x = EnumWithThreeVariants.One<T> { };
+            return Self.f<T>(move(x));
+    }
+
+
+    public call_fail_3<T>(): T {
+        let x: Self.EnumWithThreeVariants<T>;
+        label b0:
+            x = EnumWithThreeVariants.Three<T> { };
+            return Self.f<T>(move(x));
+    }
+
+    f<T>(x: Self.EnumWithThreeVariants<T>): T {
+        let y: T;
+        label b0:
+            variant_switch EnumWithThreeVariants (&x) {
+                One : b1,
+                Two : b1,
+                Three : b1,
+            };
+        label b1:
+            EnumWithThreeVariants.Two<T> { x: y } = move(x);
+            return move(y);
+    }
+}
+
+//# publish
+module 0x6.Enums {
+    enum EnumWithThreeVariants<T> {
+        One { },
+        Two { x: T },
+        Three { } 
+    }
+
+    public call_success<T>(t: T): T {
+        let x: Self.EnumWithThreeVariants<T>;
+        label b0:
+            x = EnumWithThreeVariants.Two<T> { x: move(t) };
+            return Self.f<T>(move(x));
+    }
+
+    public call_fail_1<T>(): T {
+        let x: Self.EnumWithThreeVariants<T>;
+        label b0:
+            x = EnumWithThreeVariants.One<T> { };
+            return Self.f<T>(move(x));
+    }
+
+
+    public call_fail_3<T>(): T {
+        let x: Self.EnumWithThreeVariants<T>;
+        label b0:
+            x = EnumWithThreeVariants.Three<T> { };
+            return Self.f<T>(move(x));
+    }
+
+    f<T>(x: Self.EnumWithThreeVariants<T>): T {
+        let y: T;
+        label b0:
+            variant_switch EnumWithThreeVariants (&x) {
+                One : b1,
+                Two : b1,
+                Three : b1,
+            };
+        label b1:
+            EnumWithThreeVariants.Two<T> { x: y } = move(x);
+            return move(y);
+    }
+}
+
+//# run
+module 0x7.m {
+import 0x6.Enums;
+entry foo() {
+    let x: u64;
+    label b0:
+        x = Enums.call_success<u64>(42);
+        assert(move(x) == 42, 100);
+        return;
+}
+}
+
+//# run 0x6::Enums::call_fail_1 --type-args u64
+
+//# run 0x6::Enums::call_fail_3 --type-args u64

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::drivers::Interval;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
@@ -54,7 +55,7 @@ impl Payload for BatchPaymentTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() {
             effects.print_gas_summary();
-            error!("Batch payment failed...");
+            error!("Batch payment failed... Status: {:?}", effects.status());
         }
 
         self.state.update(effects);
@@ -130,6 +131,8 @@ impl BatchPaymentWorkloadBuilder {
         num_workers: u64,
         in_flight_ratio: u64,
         batch_size: u32,
+        duration: Interval,
+        group: u32,
     ) -> Option<WorkloadBuilderInfo> {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
@@ -141,6 +144,8 @@ impl BatchPaymentWorkloadBuilder {
                 target_qps,
                 num_workers,
                 max_ops,
+                duration,
+                group,
             };
             let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
                 BatchPaymentWorkloadBuilder {

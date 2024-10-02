@@ -1,0 +1,57 @@
+//# publish
+module 0x1.M {
+    struct Foo<T> has key { x: T }
+
+    struct Bar<T1, T2: key, T3: copy + drop> { x: T3, y: T2, z: T1 }
+}
+
+//# run
+module 0x1.m {
+import 0x1.M;
+
+entry foo() {
+    let x: M.Foo<u64>;
+label b0:
+    return;
+}
+}
+
+//# run
+module 0x2.m {
+import 0x1.M;
+
+entry foo() {
+    let x: M.Bar<u64, M.Foo<u64>, bool>;
+label b0:
+    return;
+}
+}
+
+//# publish
+module 0x3.M {
+    enum Foo<T> has key { V { x: T } }
+
+    enum Bar<T1, T2: key, T3: copy + drop> { V { x: T3, y: T2, z: T1 } }
+}
+
+//# run
+module 0x3.m {
+import 0x3.M;
+
+entry foo() {
+    let x: M.Foo<u64>;
+label b0:
+    return;
+}
+}
+
+//# run
+module 0x4.m {
+import 0x3.M;
+
+entry foo() {
+    let x: M.Bar<u64, M.Foo<u64>, bool>;
+label b0:
+    return;
+}
+}

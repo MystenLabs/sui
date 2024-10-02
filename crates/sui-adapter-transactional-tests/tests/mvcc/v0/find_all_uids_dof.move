@@ -8,25 +8,21 @@
 //# publish
 
 module test::m {
-    use std::option::{Self, Option};
-    use std::vector;
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
     use sui::dynamic_object_field as ofield;
 
-    struct S has key, store {
+    public struct S has key, store {
         id: UID,
         other: UID,
         wrapped: Wrapped,
         many: vector<Wrapped>,
     }
 
-    struct Wrapped has key, store {
+    public struct Wrapped has key, store {
         id: UID,
         other: UID,
     }
 
-    struct Value has key, store {
+    public struct Value has key, store {
         id: UID,
         value: u64,
     }
@@ -37,7 +33,7 @@ module test::m {
     // new
 
     public fun new(ctx: &mut TxContext): S {
-        let s = S {
+        let mut s = S {
             id: object::new(ctx),
             other: object::new(ctx),
             wrapped: wrapped(ctx),
@@ -49,7 +45,7 @@ module test::m {
     }
 
     fun wrapped(ctx: &mut TxContext): Wrapped {
-        let w = Wrapped {
+        let mut w = Wrapped {
             id: object::new(ctx),
             other: object::new(ctx),
         };

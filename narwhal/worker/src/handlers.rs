@@ -15,9 +15,9 @@ use sui_protocol_config::ProtocolConfig;
 use tracing::{debug, trace};
 use types::{
     now, validate_batch_version, Batch, BatchAPI, BatchDigest, FetchBatchesRequest,
-    FetchBatchesResponse, MetadataAPI, PrimaryToWorker, RequestBatchRequest, RequestBatchResponse,
-    RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage, WorkerOthersBatchMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    FetchBatchesResponse, MetadataAPI, PrimaryToWorker, RequestBatchesRequest,
+    RequestBatchesResponse, WorkerBatchMessage, WorkerOthersBatchMessage, WorkerSynchronizeMessage,
+    WorkerToWorker, WorkerToWorkerClient,
 };
 
 use crate::{batch_fetcher::BatchFetcher, TransactionValidator};
@@ -46,7 +46,6 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         if let Err(err) = self
             .validator
             .validate_batch(&message.batch, &self.protocol_config)
-            .await
         {
             return Err(anemo::rpc::Status::new_with_message(
                 StatusCode::BadRequest,
@@ -57,11 +56,8 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
 
         let mut batch = message.batch.clone();
 
-        // TODO: Remove once we have upgraded to protocol version 12.
-        if self.protocol_config.narwhal_versioned_metadata() {
-            // Set received_at timestamp for remote batch.
-            batch.versioned_metadata_mut().set_received_at(now());
-        }
+        // Set received_at timestamp for remote batch.
+        batch.versioned_metadata_mut().set_received_at(now());
         self.store.insert(&digest, &batch).map_err(|e| {
             anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
         })?;
@@ -73,19 +69,6 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
             .await
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
         Ok(anemo::Response::new(()))
-    }
-
-    async fn request_batch(
-        &self,
-        request: anemo::Request<RequestBatchRequest>,
-    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-        // TODO [issue #7]: Do some accounting to prevent bad actors from monopolizing our resources
-        let batch = request.into_body().batch;
-        let batch = self.store.get(&batch).map_err(|e| {
-            anemo::rpc::Status::internal(format!("failed to read from batch store: {e:?}"))
-        })?;
-
-        Ok(anemo::Response::new(RequestBatchResponse { batch }))
     }
 
     async fn request_batches(
@@ -131,6 +114,7 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
 /// Defines how the network receiver handles incoming primary messages.
 pub struct PrimaryReceiverHandler<V> {
     // The id of this authority.
+    #[allow(unused)]
     pub authority_id: AuthorityIdentifier,
     // The id of this worker.
     pub id: WorkerId,
@@ -141,10 +125,11 @@ pub struct PrimaryReceiverHandler<V> {
     pub worker_cache: WorkerCache,
     // The batch store
     pub store: DBMap<BatchDigest, Batch>,
-    // Timeout on RequestBatch RPC.
-    pub request_batch_timeout: Duration,
+    // Timeout on RequestBatches RPC.
+    pub request_batches_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
-    pub request_batch_retry_nodes: usize,
+    #[allow(unused)]
+    pub request_batches_retry_nodes: usize,
     // Synchronize header payloads from other workers.
     pub network: Option<Network>,
     // Fetch certificate payloads from other workers.
@@ -217,25 +202,15 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         debug!("Sending RequestBatchesRequest to {worker_name}: {request:?}");
 
         let mut response = client
-            .request_batches(anemo::Request::new(request).with_timeout(self.request_batch_timeout))
+            .request_batches(
+                anemo::Request::new(request).with_timeout(self.request_batches_timeout),
+            )
             .await?
             .into_inner();
-        for batch in response.batches.iter_mut() {
-            if !message.is_certified {
-                // This batch is not part of a certificate, so we need to validate it.
-                if let Err(err) = self
-                    .validator
-                    .validate_batch(batch, &self.protocol_config)
-                    .await
-                {
-                    return Err(anemo::rpc::Status::new_with_message(
-                        StatusCode::BadRequest,
-                        format!("Invalid batch: {err}"),
-                    ));
-                }
-            }
 
-            // TODO: Remove once we have upgraded to protocol version 12.
+        let mut write_batch = self.store.batch();
+        for batch in response.batches.iter_mut() {
+            // TODO: Remove once we have removed BatchV1 from the codebase.
             validate_batch_version(batch, &self.protocol_config).map_err(|err| {
                 anemo::rpc::Status::new_with_message(
                     StatusCode::BadRequest,
@@ -243,18 +218,32 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                 )
             })?;
 
+            if !message.is_certified {
+                // This batch is not part of a certificate, so we need to validate it.
+                if let Err(err) = self.validator.validate_batch(batch, &self.protocol_config) {
+                    return Err(anemo::rpc::Status::new_with_message(
+                        StatusCode::BadRequest,
+                        format!("Invalid batch: {err}"),
+                    ));
+                }
+            }
+
             let digest = batch.digest();
             if missing.remove(&digest) {
-                // TODO: Remove once we have upgraded to protocol version 12.
-                if self.protocol_config.narwhal_versioned_metadata() {
-                    // Set received_at timestamp for remote batch.
-                    batch.versioned_metadata_mut().set_received_at(now());
-                }
-                self.store.insert(&digest, batch).map_err(|e| {
-                    anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
-                })?;
+                // Set received_at timestamp for remote batch.
+                batch.versioned_metadata_mut().set_received_at(now());
+                write_batch
+                    .insert_batch(&self.store, [(digest, batch)])
+                    .map_err(|e| {
+                        anemo::rpc::Status::internal(format!(
+                            "failed to batch transaction to commit: {e:?}"
+                        ))
+                    })?;
             }
         }
+        write_batch.write().map_err(|e| {
+            anemo::rpc::Status::internal(format!("failed to commit to batch store: {e:?}"))
+        })?;
 
         if missing.is_empty() {
             return Ok(anemo::Response::new(()));

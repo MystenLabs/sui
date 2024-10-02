@@ -1,22 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 import { useEffect, useState } from 'react';
-import { KioskItem as KioskItemCmp } from './KioskItem';
-import { ListPrice } from '../Modals/ListPrice';
-import { OwnedObjectType } from '../Inventory/OwnedObjects';
-import { Loading } from '../Base/Loading';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
+
 import { useKiosk, useOwnedKiosk } from '../../hooks/kiosk';
+import { Loading } from '../Base/Loading';
+import { OwnedObjectType } from '../Inventory/OwnedObjects';
+import { ListPrice } from '../Modals/ListPrice';
+import { KioskItem as KioskItemCmp } from './KioskItem';
 import { KioskNotFound } from './KioskNotFound';
-import { useWalletKit } from '@mysten/wallet-kit';
-import { normalizeSuiAddress } from '@mysten/sui.js';
 
 export function KioskItems({ kioskId }: { kioskId?: string }) {
 	const location = useLocation();
 	const isKioskPage = location.pathname.startsWith('/kiosk/');
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 
 	const { data: walletKiosk } = useOwnedKiosk(currentAccount?.address);
 
@@ -31,7 +32,7 @@ export function KioskItems({ kioskId }: { kioskId?: string }) {
 
 	const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
 
-	const { data: kioskData, isLoading, isError, refetch: getKioskData } = useKiosk(kioskId);
+	const { data: kioskData, isPending, isError, refetch: getKioskData } = useKiosk(kioskId);
 
 	const navigate = useNavigate();
 
@@ -49,7 +50,7 @@ export function KioskItems({ kioskId }: { kioskId?: string }) {
 
 	if (isError && isKioskPage) return <KioskNotFound />;
 
-	if (isLoading) return <Loading />;
+	if (isPending) return <Loading />;
 
 	if (!kioskId || kioskItems.length === 0)
 		return <div className="py-12">The kiosk you are viewing is empty!</div>;

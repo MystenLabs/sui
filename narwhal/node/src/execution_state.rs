@@ -20,7 +20,7 @@ impl SimpleExecutionState {
 
 #[async_trait]
 impl ExecutionState for SimpleExecutionState {
-    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
+    async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
         for batches in consensus_output.batches {
             for batch in batches {
                 for transaction in batch.transactions().iter() {
@@ -36,7 +36,11 @@ impl ExecutionState for SimpleExecutionState {
         }
     }
 
-    async fn last_executed_sub_dag_index(&self) -> u64 {
+    fn last_executed_sub_dag_round(&self) -> u64 {
+        0
+    }
+
+    fn last_executed_sub_dag_index(&self) -> u64 {
         0
     }
 }

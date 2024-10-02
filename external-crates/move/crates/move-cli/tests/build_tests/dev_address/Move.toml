@@ -1,0 +1,9 @@
+[package]
+name = "A"
+edition = "2024.beta"
+
+[addresses]
+A = "_"
+
+[dev-addresses]
+A = "0x1"

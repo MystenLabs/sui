@@ -7,13 +7,14 @@ use move_binary_format::normalized::Type;
 use move_core_types::language_storage::StructTag;
 use rand::rngs::StdRng;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_move_build::BuildConfig;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::execution_config_utils::to_binary_config;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
 use sui_types::transaction::{CallArg, ObjectArg, TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH};
@@ -30,7 +31,7 @@ pub struct EntryFunction {
     pub parameters: Vec<Type>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SurfStatistics {
     pub num_successful_transactions: u64,
     pub num_failed_transactions: u64,
@@ -103,6 +104,7 @@ pub type ImmObjects = Arc<RwLock<HashMap<StructTag, Vec<ObjectRef>>>>;
 pub type SharedObjects = Arc<RwLock<HashMap<StructTag, Vec<(ObjectID, SequenceNumber)>>>>;
 
 pub struct SurferState {
+    pub id: usize,
     pub cluster: Arc<TestCluster>,
     pub rng: StdRng,
 
@@ -118,6 +120,7 @@ pub struct SurferState {
 
 impl SurferState {
     pub fn new(
+        id: usize,
         cluster: Arc<TestCluster>,
         rng: StdRng,
         address: SuiAddress,
@@ -128,6 +131,7 @@ impl SurferState {
         entry_functions: Arc<RwLock<Vec<EntryFunction>>>,
     ) -> Self {
         Self {
+            id,
             cluster,
             rng,
             address,
@@ -140,6 +144,7 @@ impl SurferState {
         }
     }
 
+    #[tracing::instrument(skip_all, fields(surfer_id = self.id))]
     pub async fn execute_move_transaction(
         &mut self,
         package: ObjectID,
@@ -200,6 +205,7 @@ impl SurferState {
         self.process_tx_effects(&effects).await;
     }
 
+    #[tracing::instrument(skip_all, fields(surfer_id = self.id))]
     async fn process_tx_effects(&mut self, effects: &SuiTransactionBlockEffects) {
         for (owned_ref, write_kind) in effects.all_changed_objects() {
             if matches!(owned_ref.owner, Owner::ObjectOwner(_)) {
@@ -260,13 +266,12 @@ impl SurferState {
 
     async fn discover_entry_functions(&self, package: Object) {
         let package_id = package.id();
-        let move_package = package.data.try_into_package().unwrap();
-        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let move_package = package.into_inner().data.try_into_package().unwrap();
+        let proto_version = self.cluster.highest_protocol_version();
+        let config = ProtocolConfig::get_for_version(proto_version, Chain::Unknown);
+        let binary_config = to_binary_config(&config);
         let entry_functions: Vec<_> = move_package
-            .normalize(
-                config.move_binary_format_version(),
-                config.no_extraneous_module_bytes(),
-            )
+            .normalize(&binary_config)
             .unwrap()
             .into_iter()
             .flat_map(|(module_name, module)| {
@@ -310,9 +315,10 @@ impl SurferState {
         self.entry_functions.write().await.extend(entry_functions);
     }
 
-    pub async fn publish_package(&mut self, path: PathBuf) {
+    #[tracing::instrument(skip_all, fields(surfer_id = self.id))]
+    pub async fn publish_package(&mut self, path: &Path) {
         let rgp = self.cluster.get_reference_gas_price().await;
-        let package = BuildConfig::new_for_testing().build(path.clone()).unwrap();
+        let package = BuildConfig::new_for_testing().build(path).unwrap();
         let modules = package.get_package_bytes(false);
         let tx_data = TransactionData::new_module(
             self.address,

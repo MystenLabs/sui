@@ -1,0 +1,22 @@
+//# publish
+module 0x6.M {
+    struct R has key { data: vector<u8> }
+
+    is_ok_(addr: &address, data: &vector<u8>): bool {
+    label b0:
+        return true;
+    }
+
+    fake(addr: address): &Self.R { label l0: abort(0); }
+
+    public is_ok(addr: address): bool {
+    label b0:
+        // correct stack usage
+        (&addr);
+        (0x1D8);
+        (&Self.fake().R::data);
+        Self.is_ok_();
+        return;
+    }
+
+}

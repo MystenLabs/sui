@@ -1,0 +1,16 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// Incorrect, more than one field means not a OTW
+
+//# publish
+module 0x0.m {
+    import 0x2.tx_context;
+
+    struct M has drop { some_field: bool, some_field2: bool  }
+
+    init(_otw: Self.M, _ctx: &mut tx_context.TxContext) {
+        label l0:
+        return;
+    }
+}

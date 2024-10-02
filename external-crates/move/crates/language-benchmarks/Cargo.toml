@@ -1,0 +1,31 @@
+[package]
+name = "language-benchmarks"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Move language benchmarks"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+criterion.workspace = true
+once_cell.workspace = true
+criterion-cpu-time.workspace = true
+
+move-core-types.workspace = true
+move-compiler.workspace = true
+move-vm-runtime.workspace = true
+move-vm-test-utils.workspace = true
+move-vm-types.workspace = true
+move-binary-format.workspace = true
+move-stdlib.workspace = true
+move-stdlib-natives.workspace = true
+
+[lib]
+bench = false
+
+[[bench]]
+name = "criterion"
+harness = false

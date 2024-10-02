@@ -3,7 +3,9 @@
 
 use crate::object_runtime::LocalProtocolConfig;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{effects::Op, value::MoveTypeLayout, vm_status::StatusCode};
+use move_core_types::{
+    annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
+};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
@@ -17,7 +19,7 @@ use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
     error::VMMemoryLimitExceededSubStatusCode,
     metrics::LimitsMetrics,
-    object::{Data, MoveObject, Owner},
+    object::{Data, MoveObject, Object, Owner},
     storage::ChildObjectResolver,
 };
 
@@ -47,7 +49,7 @@ struct Inner<'a> {
     root_version: BTreeMap<ObjectID, SequenceNumber>,
     // cached objects from the resolver. An object might be in this map but not in the store
     // if it's existence was queried, but the value was not used.
-    cached_objects: BTreeMap<ObjectID, Option<MoveObject>>,
+    cached_objects: BTreeMap<ObjectID, Option<Object>>,
     // whether or not this TX is gas metered
     is_metered: bool,
     // Local protocol config used to enforce limits
@@ -132,7 +134,7 @@ impl<'a> Inner<'a> {
                             ),
                         ))
                     }
-                    Data::Move(mo @ MoveObject { .. }) => Some(mo),
+                    Data::Move(_) => Some(object),
                 }
             } else {
                 None
@@ -159,7 +161,12 @@ impl<'a> Inner<'a> {
 
             e.insert(obj_opt);
         }
-        Ok(self.cached_objects.get(&child).unwrap().as_ref())
+        Ok(self
+            .cached_objects
+            .get(&child)
+            .unwrap()
+            .as_ref()
+            .map(|obj| obj.data.try_as_move().unwrap()))
     }
 
     fn fetch_object_impl(
@@ -167,8 +174,8 @@ impl<'a> Inner<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_ty_layout: &MoveTypeLayout,
-        child_ty_fully_annotated_layout: &MoveTypeLayout,
+        child_ty_layout: &R::MoveTypeLayout,
+        child_ty_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<(Type, MoveObjectType, GlobalValue)>> {
         let obj = match self.get_or_fetch_object_from_store(parent, child)? {
@@ -284,8 +291,8 @@ impl<'a> ObjectStore<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_layout: &MoveTypeLayout,
-        child_fully_annotated_layout: &MoveTypeLayout,
+        child_layout: &R::MoveTypeLayout,
+        child_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut ChildObject>> {
         let store_entries_count = self.store.len() as u64;
@@ -391,7 +398,7 @@ impl<'a> ObjectStore<'a> {
         Ok(())
     }
 
-    pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<MoveObject>> {
+    pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<Object>> {
         &self.inner.cached_objects
     }
 

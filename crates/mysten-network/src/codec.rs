@@ -166,7 +166,7 @@ pub mod anemo {
 
         fn decode(&mut self, buf: bytes::Bytes) -> Result<Self::Item, Self::Error> {
             let compressed_size = buf.len();
-            let mut snappy_decoder = snap::read::FrameDecoder::new(buf.reader());
+            let mut snappy_decoder = snap::read::FrameDecoder::new(buf.reader()).take(1 << 30);
             let mut bytes = Vec::with_capacity(compressed_size);
             snappy_decoder.read_to_end(&mut bytes)?;
             bcs::from_bytes(bytes.as_slice())

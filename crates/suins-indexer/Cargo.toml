@@ -1,0 +1,46 @@
+[package]
+name = "suins-indexer"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+diesel = { workspace = true, features = ["serde_json"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres"] }
+sui-data-ingestion-core.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+backoff.workspace = true
+base64-url.workspace = true
+bcs.workspace = true
+bytes.workspace = true
+futures.workspace = true
+mysten-metrics.workspace = true
+notify.workspace = true
+object_store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+prometheus.workspace = true
+telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+sui-storage.workspace = true
+sui-types.workspace = true
+url.workspace = true
+sui-json-rpc.workspace = true
+dotenvy = "0.15"
+move-core-types.workspace = true
+mysten-service.workspace = true
+rustls.workspace = true
+webpki-roots = "0.26.3"
+tokio-postgres-rustls = "0.12.0"
+tokio-postgres = "0.7.12"
+futures-util = "0.3.30"
+
+[dev-dependencies]
+rand.workspace = true
+tempfile.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }

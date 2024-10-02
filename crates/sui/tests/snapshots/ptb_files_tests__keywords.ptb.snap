@@ -1,0 +1,47 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[1:10]
+ 1 │ --assign some @0x1
+   ·          ──┬─
+   ·            ╰── Expected a variable name but found reserved word 'some'.
+ 2 │ --assign vector @0x1
+   ╰────
+  help: Variable names cannot be 'address', 'bool', 'vector', 'some',
+        'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.
+
+  × Error when processing PTB
+   ╭─[2:10]
+ 1 │ --assign some @0x1
+ 2 │ --assign vector @0x1
+   ·          ───┬──
+   ·             ╰── Expected a variable name but found reserved word 'vector'.
+ 3 │ --assign none @0x1
+   ╰────
+  help: Variable names cannot be 'address', 'bool', 'vector', 'some',
+        'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.
+
+  × Error when processing PTB
+   ╭─[3:10]
+ 2 │ --assign vector @0x1
+ 3 │ --assign none @0x1
+   ·          ──┬─
+   ·            ╰── Expected a variable name but found reserved word 'none'.
+ 4 │ --assign gas @0x1 
+   ╰────
+  help: Variable names cannot be 'address', 'bool', 'vector', 'some',
+        'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.
+
+  × Error when processing PTB
+   ╭─[4:10]
+ 3 │ --assign none @0x1
+ 4 │ --assign gas @0x1 
+   ·          ─┬─
+   ·           ╰── Expected a variable name but found reserved word 'gas'.
+   ╰────
+  help: Variable names cannot be 'address', 'bool', 'vector', 'some',
+        'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.
+

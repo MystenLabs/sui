@@ -1,0 +1,30 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+label b0:
+    _ = vec_pack_0<u64, bool>();
+    return;
+}
+
+}
+//# run
+module 0x42.m {
+
+entry foo() {
+label b0:
+    _ = vec_pack_0<>();
+    return;
+}
+
+}
+//# run
+module 0x42.m {
+
+entry foo() {
+label b0:
+    _ = vec_pack_0<&u64>();
+    return;
+}
+
+}

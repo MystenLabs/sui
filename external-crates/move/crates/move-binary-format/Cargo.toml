@@ -1,0 +1,36 @@
+[package]
+name = "move-binary-format"
+version = "0.0.3"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Move Binary Format"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = ["crates-io"]
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
+ref-cast.workspace = true
+variant_count.workspace = true
+move-core-types.workspace = true
+serde.workspace = true
+arbitrary = { workspace = true, optional = true, features = ["derive"] }
+enum-compat-util.workspace = true
+move-proc-macros.workspace = true
+
+# wasm support (requires js feature of getrandom)
+getrandom = { workspace = true, features = ["js"], optional = true }
+
+[dev-dependencies]
+proptest.workspace = true
+proptest-derive.workspace = true
+move-core-types = { workspace = true, features = ["fuzzing" ] }
+serde_json.workspace = true
+
+[features]
+default = []
+fuzzing = ["proptest", "proptest-derive", "arbitrary", "move-core-types/fuzzing"]
+wasm = ["getrandom"]

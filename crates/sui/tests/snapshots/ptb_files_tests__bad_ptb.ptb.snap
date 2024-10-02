@@ -1,0 +1,50 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[1:14]
+ 1 │ --gas-budget @aa
+   ·              ─┬─
+   ·               ╰── Expected a numerical address but got a named address 'aa'
+ 2 │ --split-coins @0x1 [0xfffffffffu8]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[2:21]
+ 1 │ --gas-budget @aa
+ 2 │ --split-coins @0x1 [0xfffffffffu8]
+   ·                     ──────┬──────
+   ·                           ╰── number too large to fit in target type
+ 3 │ --split-coins 2x2 [1000]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[3:16]
+ 2 │ --split-coins @0x1 [0xfffffffffu8]
+ 3 │ --split-coins 2x2 [1000]
+   ·                ─┬
+   ·                 ╰── Expected '[' but found identifier 'x2'
+ 4 │ --assign X
+   ╰────
+
+  × Error when processing PTB
+   ╭─[6:36]
+ 5 │ --assign Y
+ 6 │ --make-move-vec <vector<address>> [[@0x1],[@0x2]]
+   ·                                    ┬
+   ·                                    ╰── Unexpected '['
+ 7 │ --transfer-objects s @0x1
+   ╰────
+  help: Expected an argument here
+
+  × Error when processing PTB
+   ╭─[7:20]
+ 6 │ --make-move-vec <vector<address>> [[@0x1],[@0x2]]
+ 7 │ --transfer-objects s @0x1
+   ·                    ┬
+   ·                    ╰── Expected '[' but found identifier 's'
+ 8 │ --assign Z none
+   ╰────
+

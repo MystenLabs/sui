@@ -1,0 +1,178 @@
+Command `sandbox publish`:
+Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000042/modules/print_stack_trace.mv print_stack_trace --dry-run`:
+Call Stack:
+    [0] 0000000000000000000000000000000000000000000000000000000000000042::print_stack_trace::print_stack_trace
+
+        Code:
+            [10] LdU64(1)
+            [11] VecImmBorrow(2)
+            [12] StLoc(0)
+          > [13] CallGeneric(0)
+            [14] StLoc(2)
+            [15] ImmBorrowLoc(2)
+            [16] CallGeneric(1)
+
+        Locals:
+            [0] false
+            [1] [true, false]
+            [2] -
+
+
+    [1] 0000000000000000000000000000000000000000000000000000000000000007::N::foo<bool, u64>
+
+        Code:
+            [2] MutBorrowLoc(0)
+            [3] StLoc(1)
+            [4] LdU64(4)
+          > [5] Call(1)
+            [6] StLoc(2)
+            [7] MoveLoc(1)
+            [8] Pop
+
+        Locals:
+            [0] 3
+            [1] 3
+            [2] -
+
+
+    [2] 0000000000000000000000000000000000000000000000000000000000000007::M::sum
+
+        Code:
+            [9] MoveLoc(0)
+            [10] LdU64(1)
+            [11] Sub
+          > [12] Call(0)
+            [13] Add
+            [14] StLoc(1)
+            [15] MoveLoc(1)
+
+        Locals:
+            [0] -
+            [1] -
+
+
+    [3] 0000000000000000000000000000000000000000000000000000000000000007::M::sum
+
+        Code:
+            [9] MoveLoc(0)
+            [10] LdU64(1)
+            [11] Sub
+          > [12] Call(0)
+            [13] Add
+            [14] StLoc(1)
+            [15] MoveLoc(1)
+
+        Locals:
+            [0] -
+            [1] -
+
+
+    [4] 0000000000000000000000000000000000000000000000000000000000000007::M::sum
+
+        Code:
+            [9] MoveLoc(0)
+            [10] LdU64(1)
+            [11] Sub
+          > [12] Call(0)
+            [13] Add
+            [14] StLoc(1)
+            [15] MoveLoc(1)
+
+        Locals:
+            [0] -
+            [1] -
+
+
+Operand Stack:
+    [0] 4
+    [1] 3
+    [2] 2
+
+[debug] 10
+Call Stack:
+    [0] 0000000000000000000000000000000000000000000000000000000000000042::print_stack_trace::print_stack_trace
+
+        Code:
+            [16] CallGeneric(1)
+            [17] MoveLoc(0)
+            [18] Pop
+          > [19] CallGeneric(2)
+            [20] Pop
+            [21] Ret
+
+        Locals:
+            [0] -
+            [1] [true, false]
+            [2] 10
+
+
+    [1] 0000000000000000000000000000000000000000000000000000000000000007::N::foo<u8, bool>
+
+        Code:
+            [2] MutBorrowLoc(0)
+            [3] StLoc(1)
+            [4] LdU64(4)
+          > [5] Call(1)
+            [6] StLoc(2)
+            [7] MoveLoc(1)
+            [8] Pop
+
+        Locals:
+            [0] 3
+            [1] 3
+            [2] -
+
+
+    [2] 0000000000000000000000000000000000000000000000000000000000000007::M::sum
+
+        Code:
+            [9] MoveLoc(0)
+            [10] LdU64(1)
+            [11] Sub
+          > [12] Call(0)
+            [13] Add
+            [14] StLoc(1)
+            [15] MoveLoc(1)
+
+        Locals:
+            [0] -
+            [1] -
+
+
+    [3] 0000000000000000000000000000000000000000000000000000000000000007::M::sum
+
+        Code:
+            [9] MoveLoc(0)
+            [10] LdU64(1)
+            [11] Sub
+          > [12] Call(0)
+            [13] Add
+            [14] StLoc(1)
+            [15] MoveLoc(1)
+
+        Locals:
+            [0] -
+            [1] -
+
+
+    [4] 0000000000000000000000000000000000000000000000000000000000000007::M::sum
+
+        Code:
+            [9] MoveLoc(0)
+            [10] LdU64(1)
+            [11] Sub
+          > [12] Call(0)
+            [13] Add
+            [14] StLoc(1)
+            [15] MoveLoc(1)
+
+        Locals:
+            [0] -
+            [1] -
+
+
+Operand Stack:
+    [0] 4
+    [1] 3
+    [2] 2
+

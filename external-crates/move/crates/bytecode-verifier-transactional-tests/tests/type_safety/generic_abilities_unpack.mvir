@@ -1,0 +1,23 @@
+//# publish
+module 0x1.M {
+    struct Foo<T> { x: T }
+
+    baz<T>(x: Self.Foo<T>) {
+        let y: T;
+    label b0:
+        Foo<T> { x: y } = move(x);
+        return; // unused type parameter value without drop
+    }
+}
+
+//# publish
+module 0x2.M {
+    enum Foo<T> { V{ x: T } }
+
+    baz<T>(x: Self.Foo<T>) {
+        let y: T;
+    label b0:
+        Foo.V<T> { x: y } = move(x);
+        return; // unused type parameter value without drop
+    }
+}

@@ -1,2 +1,0 @@
-Command `sandbox run sources/bad_borrow.move`:
-Execution failed because of an error originated from vector operations (i.e., index out of bound, pop an empty vector, or unpack a vector with a wrong parity) in script at code offset 4

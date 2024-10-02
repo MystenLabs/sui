@@ -2,26 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 /* eslint-disable @tanstack/query/exhaustive-deps */
 
-import { useQuery } from '@tanstack/react-query';
+import { useSuiClient, useSuiClientContext } from '@mysten/dapp-kit';
 import {
-	TANSTACK_KIOSK_DATA_KEY,
-	TANSTACK_KIOSK_KEY,
-	TANSTACK_OWNED_KIOSK_KEY,
-} from '../utils/constants';
-import { useRpc } from '../context/RpcClientContext';
-import { ObjectId, SuiAddress, SuiObjectResponse } from '@mysten/sui.js';
-import {
+	getKioskObject,
 	Kiosk,
 	KioskData,
 	KioskItem,
 	KioskListing,
 	KioskOwnerCap,
-	fetchKiosk,
-	getKioskObject,
-	getOwnedKiosks,
 } from '@mysten/kiosk';
-import { parseObjectDisplays, processKioskListings } from '../utils/utils';
+import { SuiObjectResponse } from '@mysten/sui/client';
+import { useQuery } from '@tanstack/react-query';
+
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
+import { useKioskClient } from '../context/KioskClientContext';
+import {
+	TANSTACK_KIOSK_DATA_KEY,
+	TANSTACK_KIOSK_KEY,
+	TANSTACK_OWNED_KIOSK_KEY,
+} from '../utils/constants';
+import { parseObjectDisplays, processKioskListings } from '../utils/utils';
 
 export type KioskFnType = (item: OwnedObjectType, price?: string) => Promise<void> | void;
 
@@ -29,26 +29,27 @@ export type KioskFnType = (item: OwnedObjectType, price?: string) => Promise<voi
  * A helper to get user's kiosks.
  * If the user doesn't have a kiosk, the return is an object with null values.
  */
-export function useOwnedKiosk(address: SuiAddress | undefined) {
-	const provider = useRpc();
+export function useOwnedKiosk(address: string | undefined) {
+	const kioskClient = useKioskClient();
+	const { network } = useSuiClientContext();
 
 	return useQuery({
-		queryKey: [TANSTACK_OWNED_KIOSK_KEY, address],
+		queryKey: [TANSTACK_OWNED_KIOSK_KEY, address, network],
 		refetchOnMount: false,
 		retry: false,
 		queryFn: async (): Promise<{
 			caps: KioskOwnerCap[];
-			kioskId: SuiAddress | undefined;
-			kioskCap: SuiAddress | undefined;
+			kioskId: string | undefined;
+			kioskCap: KioskOwnerCap;
 		} | null> => {
 			if (!address) return null;
 
-			const { kioskOwnerCaps, kioskIds } = await getOwnedKiosks(provider, address);
+			const { kioskOwnerCaps, kioskIds } = await kioskClient.getOwnedKiosks({ address });
 
 			return {
 				caps: kioskOwnerCaps,
 				kioskId: kioskIds[0],
-				kioskCap: kioskOwnerCaps[0]?.objectId,
+				kioskCap: kioskOwnerCaps[0],
 			};
 		},
 	});
@@ -58,34 +59,28 @@ export function useOwnedKiosk(address: SuiAddress | undefined) {
  * A hook to fetch a kiosk (items, listings, etc) by its id.
  */
 export function useKiosk(kioskId: string | undefined | null) {
-	const provider = useRpc();
+	const kioskClient = useKioskClient();
+	const { network } = useSuiClientContext();
 
 	return useQuery({
-		queryKey: [TANSTACK_KIOSK_KEY, kioskId],
+		queryKey: [TANSTACK_KIOSK_KEY, kioskId, network],
 		queryFn: async (): Promise<{
 			kioskData: KioskData | null;
 			items: SuiObjectResponse[];
 		}> => {
 			if (!kioskId) return { kioskData: null, items: [] };
-			const { data: res } = await fetchKiosk(
-				provider,
-				kioskId,
-				{ limit: 1000 },
-				{
+			const res = await kioskClient.getKiosk({
+				id: kioskId,
+				options: {
 					withKioskFields: true,
 					withListingPrices: true,
+					withObjects: true,
 				},
-			);
-
-			// get the items from rpc.
-			const items = await provider.multiGetObjects({
-				ids: res.itemIds,
-				options: { showDisplay: true, showType: true },
 			});
 
 			return {
 				kioskData: res,
-				items,
+				items: res.items,
 			};
 		},
 		retry: false,
@@ -94,7 +89,7 @@ export function useKiosk(kioskId: string | undefined | null) {
 			kioskData,
 		}): {
 			items: OwnedObjectType[];
-			listings: Record<ObjectId, KioskListing>;
+			listings: Record<string, KioskListing>;
 		} => {
 			if (!kioskData) return { items: [], listings: {} };
 			// parse the displays for FE.
@@ -121,13 +116,14 @@ export function useKiosk(kioskId: string | undefined | null) {
  * A hook to fetch a kiosk's details.
  */
 export function useKioskDetails(kioskId: string | undefined | null) {
-	const provider = useRpc();
+	const client = useSuiClient();
+	const { network } = useSuiClientContext();
 
 	return useQuery({
-		queryKey: [TANSTACK_KIOSK_DATA_KEY, kioskId],
+		queryKey: [TANSTACK_KIOSK_DATA_KEY, kioskId, network],
 		queryFn: async (): Promise<Kiosk | null> => {
 			if (!kioskId) return null;
-			return await getKioskObject(provider, kioskId);
+			return await getKioskObject(client, kioskId);
 		},
 	});
 }

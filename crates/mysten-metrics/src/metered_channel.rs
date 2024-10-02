@@ -17,7 +17,7 @@ use tokio::sync::mpsc::{
 #[path = "tests/metered_channel_tests.rs"]
 mod metered_channel_tests;
 
-/// An [`mpsc::Sender`](tokio::sync::mpsc::Sender) with an [`IntGauge`]
+/// An [`mpsc::Sender`] with an [`IntGauge`]
 /// counting the number of currently queued items.
 #[derive(Debug)]
 pub struct Sender<T> {
@@ -34,7 +34,43 @@ impl<T> Clone for Sender<T> {
     }
 }
 
-/// An [`mpsc::Receiver`](tokio::sync::mpsc::Receiver) with an [`IntGauge`]
+impl<T> Sender<T> {
+    pub fn downgrade(&self) -> WeakSender<T> {
+        let sender = self.inner.downgrade();
+        WeakSender {
+            inner: sender,
+            gauge: self.gauge.clone(),
+        }
+    }
+}
+
+/// An [`mpsc::WeakSender`] with an [`IntGauge`]
+/// counting the number of currently queued items.
+#[derive(Debug)]
+pub struct WeakSender<T> {
+    inner: mpsc::WeakSender<T>,
+    gauge: IntGauge,
+}
+
+impl<T> Clone for WeakSender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            gauge: self.gauge.clone(),
+        }
+    }
+}
+
+impl<T> WeakSender<T> {
+    pub fn upgrade(&self) -> Option<Sender<T>> {
+        self.inner.upgrade().map(|s| Sender {
+            inner: s,
+            gauge: self.gauge.clone(),
+        })
+    }
+}
+
+/// An [`mpsc::Receiver`] with an [`IntGauge`]
 /// counting the number of currently queued items.
 #[derive(Debug)]
 pub struct Receiver<T> {
@@ -63,16 +99,22 @@ impl<T> Receiver<T> {
     /// Attempts to receive the next value for this receiver.
     /// Decrements the gauge in case of a successful `try_recv`.
     pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
-        self.inner.try_recv().map(|val| {
+        self.inner.try_recv().inspect(|_| {
             self.gauge.dec();
             if let Some(total_gauge) = &self.total {
                 total_gauge.inc();
             }
-            val
         })
     }
 
-    // TODO: facade [`blocking_recv`](tokio::mpsc::Receiver::blocking_recv) under the tokio feature flag "sync"
+    pub fn blocking_recv(&mut self) -> Option<T> {
+        self.inner.blocking_recv().inspect(|_| {
+            self.gauge.dec();
+            if let Some(total_gauge) = &self.total {
+                total_gauge.inc();
+            }
+        })
+    }
 
     /// Closes the receiving half of a channel without dropping it.
     pub fn close(&mut self) {
@@ -123,7 +165,9 @@ impl<'a, T> Permit<'a, T> {
 impl<'a, T> Drop for Permit<'a, T> {
     fn drop(&mut self) {
         // in the case the permit is dropped without sending, we still want to decrease the occupancy of the channel
-        self.gauge_ref.dec()
+        if self.permit.is_some() {
+            self.gauge_ref.dec();
+        }
     }
 }
 
@@ -148,9 +192,8 @@ impl<T> Sender<T> {
         self.inner
             .try_send(message)
             // remove this unsightly hack once https://github.com/rust-lang/rust/issues/91345 is resolved
-            .map(|val| {
+            .inspect(|_| {
                 self.gauge.inc();
-                val
             })
     }
 
@@ -274,6 +317,7 @@ impl<T> From<Receiver<T>> for ReceiverStream<T> {
 ////////////////////////////////////////////////////////////////
 
 /// Similar to `mpsc::channel`, `channel` creates a pair of `Sender` and `Receiver`
+/// Deprecated: use `monitored_mpsc::channel` instead.
 #[track_caller]
 pub fn channel<T>(size: usize, gauge: &IntGauge) -> (Sender<T>, Receiver<T>) {
     gauge.set(0);
@@ -291,6 +335,7 @@ pub fn channel<T>(size: usize, gauge: &IntGauge) -> (Sender<T>, Receiver<T>) {
     )
 }
 
+/// Deprecated: use `monitored_mpsc::channel` instead.
 #[track_caller]
 pub fn channel_with_total<T>(
     size: usize,

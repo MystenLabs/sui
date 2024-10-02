@@ -1,0 +1,17 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: result.unwrap_err()
+---
+[
+    PTBError {
+        message: "Unexpected input \"0x\"",
+        span: Span {
+            start: 0,
+            end: 2,
+        },
+        help: Some(
+            "Expected to find a command here",
+        ),
+        severity: Error,
+    },
+]

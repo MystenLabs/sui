@@ -1,0 +1,23 @@
+# A and B depend on ADep, but A and ADep are resolved externally. This does not
+# cause a conflict because ADep-local and ADep are the same version.
+#
+#                             v4                              
+#            +---+       +------------+                       
+#   +------->| A |------>|   ADep     |                       
+#   |        +---+       +------------+                       
+#   |                                                         
+# +----+                                                      
+# |Root|                                                      
+# +----+                                                      
+#   |                          v4                             
+#   |        +---+       +------------+                       
+#   +------->| B |------>| ADep-local |                       
+#            +---+       +------------+ 
+
+[package]
+name = "Root"
+version = "1"
+
+[dependencies]
+A =  { r."../resolvers/successful_version.sh" = "A" }
+B = { local = "./deps_only/B" }

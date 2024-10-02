@@ -1,0 +1,23 @@
+---
+title: Cryptography
+---
+
+Cryptographic agility is core to Sui. The system supports multiple cryptography algorithms and primitives and can switch between them rapidly. With Sui, you can choose the right cryptography solution for your system and implement the latest algorithms as they become available.
+
+Sui defines its cryptography primitives, such as public key, signature, aggregated signature, and hash functions, under one unified type alias or enum wrapper that is shared across the entire repository. Making changes to these primitives affects all of an application's components. You can quickly update application cryptography and be assured of uniform security.
+
+## Transaction Authentication
+
+Transaction authentication features on Sui provide security against unauthorized access to on-chain data. Transaction Authentication provides an overview of related topics.
+
+Go to [Transaction Authentication](./cryptography/transaction-auth.mdx).
+
+## zkLogin
+
+zkLogin is a Sui primitive that enables you to send transactions from a Sui address using an OAuth credential, without publicly linking the two. zkLogin provides a description of the primitive and how to implement it.
+
+Go to [zkLogin](./cryptography/zklogin.mdx).
+
+## Related links
+
+- [Cryptography guides](../guides/developer/cryptography.mdx): See the cryptography guides for instruction on applying these concepts.

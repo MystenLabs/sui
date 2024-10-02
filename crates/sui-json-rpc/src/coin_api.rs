@@ -11,39 +11,37 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_storage::indexes::TotalBalance;
-use sui_types::digests::TransactionDigest;
-use sui_types::transaction::VerifiedTransaction;
 use tap::TapFallible;
 use tracing::{debug, info, instrument};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
-use sui_json_rpc_types::{Balance, Coin as SuiCoin};
+use sui_json_rpc_api::{cap_page_limit, CoinReadApiOpenRpc, CoinReadApiServer, JsonRpcMetrics};
+use sui_json_rpc_types::Balance;
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
+use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::coin::{CoinMetadata, TreasuryCap};
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::gas_coin::GAS;
-use sui_types::object::{Object, ObjectRead};
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_MIST};
+use sui_types::object::Object;
 use sui_types::parse_sui_struct_tag;
-
-use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
-use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
-use crate::{with_tracing, SuiRpcModule};
 
 #[cfg(test)]
 use mockall::automock;
 
-fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, Error> {
-    parse_sui_struct_tag(coin_type).map_err(|e| {
-        Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(format!("{e}")))
-    })
+use crate::authority_state::StateRead;
+use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
+use crate::{with_tracing, SuiRpcModule};
+
+pub fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, SuiRpcInputError> {
+    parse_sui_struct_tag(coin_type)
+        .map_err(|e| SuiRpcInputError::CannotParseSuiStructTag(format!("{e}")))
 }
 
-fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, Error> {
+pub fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, SuiRpcInputError> {
     Ok(TypeTag::Struct(Box::new(match coin_type {
         Some(c) => parse_to_struct_tag(&c)?,
         None => GAS::type_(),
@@ -56,9 +54,17 @@ pub struct CoinReadApi {
 }
 
 impl CoinReadApi {
-    pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
+    pub fn new(
+        state: Arc<AuthorityState>,
+        transaction_kv_store: Arc<TransactionKeyValueStore>,
+        metrics: Arc<JsonRpcMetrics>,
+    ) -> Self {
         Self {
-            internal: Box::new(CoinReadInternalImpl::new(state, metrics)),
+            internal: Box::new(CoinReadInternalImpl::new(
+                state,
+                transaction_kv_store,
+                metrics,
+            )),
         }
     }
 }
@@ -69,7 +75,7 @@ impl SuiRpcModule for CoinReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::CoinReadApiOpenRpc::module_doc()
+        CoinReadApiOpenRpc::module_doc()
     }
 }
 
@@ -93,14 +99,11 @@ impl CoinReadApiServer for CoinReadApi {
                 None => (coin_type_tag.to_string(), ObjectID::ZERO),
             };
 
-            let coins = self
-                .internal
+            self.internal
                 .get_coins_iterator(
                     owner, cursor, limit, true, // only care about one type of coin
                 )
-                .await?;
-
-            Ok(coins)
+                .await
         })
     }
 
@@ -120,16 +123,16 @@ impl CoinReadApiServer for CoinReadApi {
                         Some(obj) => {
                             let coin_type = obj.coin_type_maybe();
                             if coin_type.is_none() {
-                                Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
+                                Err(SuiRpcInputError::GenericInvalid(
                                     "cursor is not a coin".to_string(),
-                                )))
+                                ))
                             } else {
                                 Ok((coin_type.unwrap().to_string(), object_id))
                             }
                         }
-                        None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
+                        None => Err(SuiRpcInputError::GenericInvalid(
                             "cursor not found".to_string(),
-                        ))),
+                        )),
                     }
                 }
                 None => {
@@ -216,7 +219,9 @@ impl CoinReadApiServer for CoinReadApi {
         with_tracing!(async move {
             let coin_struct = parse_to_struct_tag(&coin_type)?;
             Ok(if GAS::is_gas(&coin_struct) {
-                Supply { value: 0 }
+                Supply {
+                    value: TOTAL_SUPPLY_MIST,
+                }
             } else {
                 let treasury_cap_object = self
                     .internal
@@ -235,93 +240,6 @@ impl CoinReadApiServer for CoinReadApi {
     }
 }
 
-/// State trait to capture subset of AuthorityState used by CoinReadApi
-/// This allows us to also mock AuthorityState for testing
-#[cfg_attr(test, automock)]
-#[async_trait]
-pub trait State {
-    fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead>;
-    async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>>;
-    fn find_publish_txn_digest(&self, package_id: ObjectID) -> SuiResult<TransactionDigest>;
-    fn get_owned_coins(
-        &self,
-        owner: SuiAddress,
-        cursor: (String, ObjectID),
-        limit: usize,
-        one_coin_type_only: bool,
-    ) -> SuiResult<Vec<SuiCoin>>;
-    async fn get_executed_transaction_and_effects(
-        &self,
-        digest: TransactionDigest,
-    ) -> SuiResult<(VerifiedTransaction, TransactionEffects)>;
-    async fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> SuiResult<TotalBalance>;
-    async fn get_all_balance(
-        &self,
-        owner: SuiAddress,
-    ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>;
-}
-
-#[async_trait]
-impl State for AuthorityState {
-    fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
-        self.get_object_read(object_id)
-    }
-
-    async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
-        self.get_object(object_id).await
-    }
-
-    fn find_publish_txn_digest(&self, package_id: ObjectID) -> SuiResult<TransactionDigest> {
-        self.find_publish_txn_digest(package_id)
-    }
-
-    fn get_owned_coins(
-        &self,
-        owner: SuiAddress,
-        cursor: (String, ObjectID),
-        limit: usize,
-        one_coin_type_only: bool,
-    ) -> SuiResult<Vec<SuiCoin>> {
-        Ok(self
-            .get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)?
-            .map(|(coin_type, coin_object_id, coin)| SuiCoin {
-                coin_type,
-                coin_object_id,
-                version: coin.version,
-                digest: coin.digest,
-                balance: coin.balance,
-                previous_transaction: coin.previous_transaction,
-            })
-            .collect::<Vec<_>>())
-    }
-
-    async fn get_executed_transaction_and_effects(
-        &self,
-        digest: TransactionDigest,
-    ) -> SuiResult<(VerifiedTransaction, TransactionEffects)> {
-        self.get_executed_transaction_and_effects(digest).await
-    }
-
-    async fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> SuiResult<TotalBalance> {
-        self.indexes
-            .as_ref()
-            .ok_or(SuiError::IndexStoreNotAvailable)?
-            .get_balance(owner, coin_type)
-            .await
-    }
-
-    async fn get_all_balance(
-        &self,
-        owner: SuiAddress,
-    ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
-        self.indexes
-            .as_ref()
-            .ok_or(SuiError::IndexStoreNotAvailable)?
-            .get_all_balance(owner)
-            .await
-    }
-}
-
 #[cached(
     type = "SizedCache<String, ObjectID>",
     create = "{ SizedCache::with_size(10000) }",
@@ -329,22 +247,23 @@ impl State for AuthorityState {
     result = true
 )]
 async fn find_package_object_id(
-    state: Arc<dyn State + Send + Sync>,
+    state: Arc<dyn StateRead>,
     package_id: ObjectID,
     object_struct_tag: StructTag,
+    kv_store: Arc<TransactionKeyValueStore>,
 ) -> RpcInterimResult<ObjectID> {
     spawn_monitored_task!(async move {
         let publish_txn_digest = state.find_publish_txn_digest(package_id)?;
 
         let (_, effect) = state
-            .get_executed_transaction_and_effects(publish_txn_digest)
+            .get_executed_transaction_and_effects(publish_txn_digest, kv_store)
             .await?;
 
         for ((id, _, _), _) in effect.created() {
-            if let Ok(object_read) = state.get_object_read(id) {
+            if let Ok(object_read) = state.get_object_read(&id) {
                 if let Ok(object) = object_read.into_object() {
                     if matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag)) {
-                        return Ok(*id);
+                        return Ok(id);
                     }
                 }
             }
@@ -363,7 +282,7 @@ async fn find_package_object_id(
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait CoinReadInternal {
-    fn get_state(&self) -> Arc<dyn State + Send + Sync>;
+    fn get_state(&self) -> Arc<dyn StateRead>;
     async fn get_object(&self, object_id: &ObjectID) -> RpcInterimResult<Option<Object>>;
     async fn get_balance(
         &self,
@@ -390,19 +309,28 @@ pub trait CoinReadInternal {
 
 pub struct CoinReadInternalImpl {
     // Trait object w/ Arc as we have methods that require sharing this across multiple threads
-    state: Arc<dyn State + Send + Sync>,
+    state: Arc<dyn StateRead>,
+    transaction_kv_store: Arc<TransactionKeyValueStore>,
     pub metrics: Arc<JsonRpcMetrics>,
 }
 
 impl CoinReadInternalImpl {
-    pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
-        Self { state, metrics }
+    pub fn new(
+        state: Arc<AuthorityState>,
+        transaction_kv_store: Arc<TransactionKeyValueStore>,
+        metrics: Arc<JsonRpcMetrics>,
+    ) -> Self {
+        Self {
+            state,
+            transaction_kv_store,
+            metrics,
+        }
     }
 }
 
 #[async_trait]
 impl CoinReadInternal for CoinReadInternalImpl {
-    fn get_state(&self) -> Arc<dyn State + Send + Sync> {
+    fn get_state(&self) -> Arc<dyn StateRead> {
         self.state.clone()
     }
 
@@ -431,7 +359,9 @@ impl CoinReadInternal for CoinReadInternalImpl {
         object_struct_tag: StructTag,
     ) -> RpcInterimResult<Object> {
         let state = self.get_state();
-        let object_id = find_package_object_id(state, *package_id, object_struct_tag).await?;
+        let kv_store = self.transaction_kv_store.clone();
+        let object_id =
+            find_package_object_id(state, *package_id, object_struct_tag, kv_store).await?;
         Ok(self.state.get_object_read(&object_id)?.into_object()?)
     }
 
@@ -443,7 +373,7 @@ impl CoinReadInternal for CoinReadInternalImpl {
         one_coin_type_only: bool,
     ) -> RpcInterimResult<CoinPage> {
         let limit = cap_page_limit(limit);
-        self.metrics.get_coins_limit.report(limit as u64);
+        self.metrics.get_coins_limit.observe(limit as f64);
         let state = self.get_state();
         let mut data = spawn_monitored_task!(async move {
             state.get_owned_coins(owner, cursor, limit + 1, one_coin_type_only)
@@ -453,7 +383,9 @@ impl CoinReadInternal for CoinReadInternalImpl {
         let has_next_page = data.len() > limit;
         data.truncate(limit);
 
-        self.metrics.get_coins_result_size.report(data.len() as u64);
+        self.metrics
+            .get_coins_result_size
+            .observe(data.len() as f64);
         self.metrics
             .get_coins_result_size_total
             .inc_by(data.len() as u64);
@@ -468,26 +400,102 @@ impl CoinReadInternal for CoinReadInternalImpl {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::authority_state::{MockStateRead, StateReadError};
     use expect_test::expect;
     use jsonrpsee::types::ErrorObjectOwned;
+    use mockall::mock;
     use mockall::predicate;
+    use move_core_types::account_address::AccountAddress;
     use move_core_types::language_storage::StructTag;
     use sui_json_rpc_types::Coin;
+    use sui_storage::key_value_store::{
+        KVStoreCheckpointData, KVStoreTransactionData, TransactionKeyValueStoreTrait,
+    };
+    use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
     use sui_types::balance::Supply;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::coin::TreasuryCap;
-    use sui_types::digests::{ObjectDigest, TransactionDigest};
+    use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest};
+    use sui_types::effects::TransactionEffects;
+    use sui_types::error::{SuiError, SuiResult};
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
+    use sui_types::messages_checkpoint::{
+        CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
+    };
     use sui_types::object::Object;
+    use sui_types::utils::create_fake_transaction;
     use sui_types::{parse_sui_struct_tag, TypeTag};
 
+    mock! {
+        pub KeyValueStore {}
+        #[async_trait]
+        impl TransactionKeyValueStoreTrait for KeyValueStore {
+            async fn multi_get(
+                &self,
+                transactions: &[TransactionDigest],
+                effects: &[TransactionDigest],
+                events: &[TransactionEventsDigest],
+            ) -> SuiResult<KVStoreTransactionData>;
+
+            async fn multi_get_checkpoints(
+                &self,
+                checkpoint_summaries: &[CheckpointSequenceNumber],
+                checkpoint_contents: &[CheckpointSequenceNumber],
+                checkpoint_summaries_by_digest: &[CheckpointDigest],
+                checkpoint_contents_by_digest: &[CheckpointContentsDigest],
+            ) -> SuiResult<KVStoreCheckpointData>;
+
+            async fn deprecated_get_transaction_checkpoint(
+                &self,
+                digest: TransactionDigest,
+            ) -> SuiResult<Option<CheckpointSequenceNumber>>;
+
+            async fn get_object(&self, object_id: ObjectID, version: SequenceNumber) -> SuiResult<Option<Object>>;
+
+            async fn multi_get_transaction_checkpoint(
+                &self,
+                digests: &[TransactionDigest],
+            ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>>;
+        }
+    }
+
+    impl CoinReadInternalImpl {
+        pub fn new_for_tests(
+            state: Arc<MockStateRead>,
+            kv_store: Option<Arc<MockKeyValueStore>>,
+        ) -> Self {
+            let kv_store = kv_store.unwrap_or_else(|| Arc::new(MockKeyValueStore::new()));
+            let metrics = KeyValueStoreMetrics::new_for_tests();
+            let transaction_kv_store =
+                Arc::new(TransactionKeyValueStore::new("rocksdb", metrics, kv_store));
+            Self {
+                state,
+                transaction_kv_store,
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            }
+        }
+    }
+
+    impl CoinReadApi {
+        pub fn new_for_tests(
+            state: Arc<MockStateRead>,
+            kv_store: Option<Arc<MockKeyValueStore>>,
+        ) -> Self {
+            let kv_store = kv_store.unwrap_or_else(|| Arc::new(MockKeyValueStore::new()));
+            Self {
+                internal: Box::new(CoinReadInternalImpl::new_for_tests(state, Some(kv_store))),
+            }
+        }
+    }
+
     fn get_test_owner() -> SuiAddress {
-        SuiAddress::random_for_testing_only()
+        AccountAddress::ONE.into()
     }
 
     fn get_test_package_id() -> ObjectID {
-        ObjectID::random()
+        ObjectID::from_hex_literal("0xf").unwrap()
     }
 
     fn get_test_coin_type(package_id: ObjectID) -> String {
@@ -537,7 +545,7 @@ mod tests {
         let input_coin_struct = parse_sui_struct_tag(&coin_name).expect("should not fail");
         let treasury_cap_struct = TreasuryCap::type_(input_coin_struct.clone());
         let treasury_cap = TreasuryCap {
-            id: UID::new(ObjectID::random()),
+            id: UID::new(get_test_package_id()),
             total_supply: Supply { value: 420 },
         };
         let treasury_cap_object =
@@ -555,7 +563,6 @@ mod tests {
         use super::super::*;
         use super::*;
         use jsonrpsee::types::ErrorObjectOwned;
-        use typed_store::TypedStoreError;
 
         // Success scenarios
         #[tokio::test]
@@ -563,7 +570,7 @@ mod tests {
             let owner = get_test_owner();
             let gas_coin = get_test_coin(None, CoinType::Gas);
             let gas_coin_clone = gas_coin.clone();
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_owned_coins()
                 .with(
@@ -573,14 +580,8 @@ mod tests {
                     predicate::eq(true),
                 )
                 .return_once(move |_, _, _, _| Ok(vec![gas_coin_clone]));
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
 
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api.get_coins(owner, None, None, None).await;
             assert!(response.is_ok());
             let result = response.unwrap();
@@ -604,7 +605,7 @@ mod tests {
                 get_test_coin(Some("0xAAA"), CoinType::Gas),
             ];
             let coins_clone = coins.clone();
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_owned_coins()
                 .with(
@@ -614,14 +615,8 @@ mod tests {
                     predicate::eq(true),
                 )
                 .return_once(move |_, _, _, _| Ok(coins_clone));
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
 
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_coins(owner, None, Some(coins[0].coin_object_id), Some(limit))
                 .await;
@@ -647,7 +642,7 @@ mod tests {
 
             let coin_type_tag =
                 TypeTag::Struct(Box::new(parse_sui_struct_tag(&coin.coin_type).unwrap()));
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_owned_coins()
                 .with(
@@ -657,14 +652,8 @@ mod tests {
                     predicate::eq(true),
                 )
                 .return_once(move |_, _, _, _| Ok(vec![coin_clone]));
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
 
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_coins(owner, Some(coin_type), None, None)
                 .await;
@@ -697,7 +686,7 @@ mod tests {
 
             let coin_type_tag =
                 TypeTag::Struct(Box::new(parse_sui_struct_tag(&coins[0].coin_type).unwrap()));
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_owned_coins()
                 .with(
@@ -707,14 +696,8 @@ mod tests {
                     predicate::eq(true),
                 )
                 .return_once(move |_, _, _, _| Ok(coins_clone));
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
 
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_coins(owner, Some(coin_type), Some(cursor), Some(limit))
                 .await;
@@ -736,11 +719,8 @@ mod tests {
         async fn test_invalid_coin_type() {
             let owner = get_test_owner();
             let coin_type = "0x2::invalid::struct::tag";
-            let mock_internal = MockCoinReadInternal::new();
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(mock_internal),
-            };
-
+            let mock_state = MockStateRead::new();
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_coins(owner, Some(coin_type.to_string()), None, None)
                 .await;
@@ -758,11 +738,8 @@ mod tests {
         async fn test_unrecognized_token() {
             let owner = get_test_owner();
             let coin_type = "0x2::sui:🤵";
-            let mock_internal = MockCoinReadInternal::new();
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(mock_internal),
-            };
-
+            let mock_state = MockStateRead::new();
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_coins(owner, Some(coin_type.to_string()), None, None)
                 .await;
@@ -782,18 +759,15 @@ mod tests {
         async fn test_get_coins_iterator_index_store_not_available() {
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_owned_coins()
-                .returning(move |_, _, _, _| Err(SuiError::IndexStoreNotAvailable));
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
-
+                .returning(move |_, _, _, _| {
+                    Err(StateReadError::Client(
+                        SuiError::IndexStoreNotAvailable.into(),
+                    ))
+                });
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_coins(owner, Some(coin_type.to_string()), None, None)
                 .await;
@@ -801,8 +775,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::INVALID_PARAMS_CODE
+            );
             let expected = expect!["Index store not available on this Fullnode."];
             expected.assert_eq(error_object.message());
         }
@@ -811,20 +787,13 @@ mod tests {
         async fn test_get_coins_iterator_typed_store_error() {
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_owned_coins()
                 .returning(move |_, _, _, _| {
-                    Err(TypedStoreError::RocksDBError("mock rocksdb error".to_string()).into())
+                    Err(SuiError::Storage("mock rocksdb error".to_string()).into())
                 });
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
-
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_coins(owner, Some(coin_type.to_string()), None, None)
                 .await;
@@ -832,9 +801,11 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Storage error"];
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::INTERNAL_ERROR_CODE
+            );
+            let expected = expect!["Storage error: mock rocksdb error"];
             expected.assert_eq(error_object.message());
         }
     }
@@ -851,7 +822,7 @@ mod tests {
             let owner = get_test_owner();
             let gas_coin = get_test_coin(None, CoinType::Gas);
             let gas_coin_clone = gas_coin.clone();
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_owned_coins()
                 .with(
@@ -861,13 +832,7 @@ mod tests {
                     predicate::eq(false),
                 )
                 .return_once(move |_, _, _, _| Ok(vec![gas_coin_clone]));
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_all_coins(owner, None, Some(51))
                 .await
@@ -896,7 +861,7 @@ mod tests {
                 Owner::Immutable,
                 coins[0].previous_transaction,
             );
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_object()
                 .return_once(move |_| Ok(Some(coin_object)));
@@ -909,13 +874,7 @@ mod tests {
                     predicate::eq(false),
                 )
                 .return_once(move |_, _, _, _| Ok(coins_clone));
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_all_coins(owner, Some(coins[0].coin_object_id), Some(limit))
                 .await
@@ -930,7 +889,7 @@ mod tests {
             let owner = get_test_owner();
             let object_id = get_test_package_id();
             let (_, _, _, _, treasury_cap_object) = get_test_treasury_cap_peripherals(object_id);
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state.expect_get_object().returning(move |obj_id| {
                 if obj_id == &object_id {
                     Ok(Some(treasury_cap_object.clone()))
@@ -938,14 +897,7 @@ mod tests {
                     panic!("should not be called with any other object id")
                 }
             });
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
-
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_all_coins(owner, Some(object_id), None)
                 .await;
@@ -963,19 +915,11 @@ mod tests {
         #[tokio::test]
         async fn test_object_not_found() {
             let owner = get_test_owner();
-            let object_id = ObjectID::random();
-            let mut mock_state = MockState::new();
+            let object_id = get_test_package_id();
+            let mut mock_state = MockStateRead::new();
             mock_state.expect_get_object().returning(move |_| Ok(None));
 
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
-
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_all_coins(owner, Some(object_id), None)
                 .await;
@@ -994,14 +938,13 @@ mod tests {
         use super::super::*;
         use super::*;
         use jsonrpsee::types::ErrorObjectOwned;
-
         // Success scenarios
         #[tokio::test]
         async fn test_gas_coin() {
             let owner = get_test_owner();
             let gas_coin = get_test_coin(None, CoinType::Gas);
             let gas_coin_clone = gas_coin.clone();
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_balance()
                 .with(
@@ -1014,15 +957,7 @@ mod tests {
                         num_coins: 9,
                     })
                 });
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
-
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api.get_balance(owner, None).await;
 
             assert!(response.is_ok());
@@ -1043,7 +978,7 @@ mod tests {
             let owner = get_test_owner();
             let coin = get_test_coin(None, CoinType::Usdc);
             let coin_clone = coin.clone();
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_balance()
                 .with(
@@ -1056,15 +991,7 @@ mod tests {
                         num_coins: 11,
                     })
                 });
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
-
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_balance(owner, Some(coin.coin_type.clone()))
                 .await;
@@ -1087,11 +1014,8 @@ mod tests {
         async fn test_invalid_coin_type() {
             let owner = get_test_owner();
             let coin_type = "0x2::invalid::struct::tag";
-            let mock_internal = MockCoinReadInternal::new();
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(mock_internal),
-            };
-
+            let mock_state = MockStateRead::new();
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_balance(owner, Some(coin_type.to_string()))
                 .await;
@@ -1110,18 +1034,13 @@ mod tests {
         async fn test_get_balance_index_store_not_available() {
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
-            let mut mock_state = MockState::new();
-            mock_state
-                .expect_get_balance()
-                .returning(move |_, _| Err(SuiError::IndexStoreNotAvailable));
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
-
+            let mut mock_state = MockStateRead::new();
+            mock_state.expect_get_balance().returning(move |_, _| {
+                Err(StateReadError::Client(
+                    SuiError::IndexStoreNotAvailable.into(),
+                ))
+            });
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_balance(owner, Some(coin_type.to_string()))
                 .await;
@@ -1129,8 +1048,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::INVALID_PARAMS_CODE
+            );
             let expected = expect!["Index store not available on this Fullnode."];
             expected.assert_eq(error_object.message());
         }
@@ -1140,18 +1061,11 @@ mod tests {
             // Validate that we handle and return an error message when we encounter an unexpected error
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
-            let mut mock_state = MockState::new();
-            mock_state
-                .expect_get_balance()
-                .returning(move |_, _| Err(SuiError::ExecutionError("mock db error".to_string())));
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
-
+            let mut mock_state = MockStateRead::new();
+            mock_state.expect_get_balance().returning(move |_, _| {
+                Err(SuiError::ExecutionError("mock db error".to_string()).into())
+            });
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
                 .get_balance(owner, Some(coin_type.to_string()))
                 .await;
@@ -1160,8 +1074,10 @@ mod tests {
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
 
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::INTERNAL_ERROR_CODE
+            );
             let expected = expect!["Error executing mock db error"];
             expected.assert_eq(error_object.message());
         }
@@ -1180,7 +1096,7 @@ mod tests {
             let gas_coin_type_tag = get_test_coin_type_tag(gas_coin.coin_type.clone());
             let usdc_coin = get_test_coin(None, CoinType::Usdc);
             let usdc_coin_type_tag = get_test_coin_type_tag(usdc_coin.coin_type.clone());
-            let mut mock_state = MockState::new();
+            let mut mock_state = MockStateRead::new();
             mock_state
                 .expect_get_all_balance()
                 .with(predicate::eq(owner))
@@ -1202,13 +1118,7 @@ mod tests {
                     );
                     Ok(Arc::new(hash_map))
                 });
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api.get_all_balances(owner).await;
 
             assert!(response.is_ok());
@@ -1242,25 +1152,22 @@ mod tests {
         #[tokio::test]
         async fn test_index_store_not_available() {
             let owner = get_test_owner();
-            let mut mock_state = MockState::new();
-            mock_state
-                .expect_get_all_balance()
-                .returning(move |_| Err(SuiError::IndexStoreNotAvailable));
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
-            let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
-            };
-
+            let mut mock_state = MockStateRead::new();
+            mock_state.expect_get_all_balance().returning(move |_| {
+                Err(StateReadError::Client(
+                    SuiError::IndexStoreNotAvailable.into(),
+                ))
+            });
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api.get_all_balances(owner).await;
 
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::INVALID_PARAMS_CODE
+            );
             let expected = expect!["Index store not available on this Fullnode."];
             expected.assert_eq(error_object.message());
         }
@@ -1280,7 +1187,7 @@ mod tests {
             let input_coin_struct = parse_sui_struct_tag(&coin_name).expect("should not fail");
             let coin_metadata_struct = CoinMetadata::type_(input_coin_struct.clone());
             let coin_metadata = CoinMetadata {
-                id: UID::new(ObjectID::random()),
+                id: UID::new(get_test_package_id()),
                 decimals: 2,
                 name: "test_coin".to_string(),
                 symbol: "TEST".to_string(),
@@ -1302,6 +1209,7 @@ mod tests {
                         panic!("should not be called with any other object id")
                     }
                 });
+
             let coin_read_api = CoinReadApi {
                 internal: Box::new(mock_internal),
             };
@@ -1313,13 +1221,36 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_object_not_found() {
+            let transaction_digest = TransactionDigest::from([0; 32]);
+            let transaction_effects = TransactionEffects::default();
+
+            let mut mock_state = MockStateRead::new();
+            mock_state
+                .expect_find_publish_txn_digest()
+                .return_once(move |_| Ok(transaction_digest));
+            mock_state
+                .expect_get_executed_transaction_and_effects()
+                .return_once(move |_, _| Ok((create_fake_transaction(), transaction_effects)));
+
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
+            let response = coin_read_api
+                .get_coin_metadata("0x2::sui::SUI".to_string())
+                .await;
+
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(result, None);
+        }
+
+        #[tokio::test]
         async fn test_find_package_object_not_sui_coin_metadata() {
             let package_id = get_test_package_id();
             let coin_name = get_test_coin_type(package_id);
             let input_coin_struct = parse_sui_struct_tag(&coin_name).expect("should not fail");
             let coin_metadata_struct = CoinMetadata::type_(input_coin_struct.clone());
             let treasury_cap = TreasuryCap {
-                id: UID::new(ObjectID::random()),
+                id: UID::new(get_test_package_id()),
                 total_supply: Supply { value: 420 },
             };
             let treasury_cap_object =
@@ -1336,6 +1267,7 @@ mod tests {
                         panic!("should not be called with any other object id")
                     }
                 });
+
             let coin_read_api = CoinReadApi {
                 internal: Box::new(mock_internal),
             };
@@ -1364,7 +1296,7 @@ mod tests {
             let response = coin_read_api.get_total_supply(coin_type.to_string()).await;
 
             let supply = response.unwrap();
-            let expected = expect!["0"];
+            let expected = expect!["10000000000000000000"];
             expected.assert_eq(&supply.value.to_string());
         }
 
@@ -1397,12 +1329,39 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_object_not_found() {
+            let package_id = get_test_package_id();
+            let (coin_name, _, _, _, _) = get_test_treasury_cap_peripherals(package_id);
+            let transaction_digest = TransactionDigest::from([0; 32]);
+            let transaction_effects = TransactionEffects::default();
+
+            let mut mock_state = MockStateRead::new();
+            mock_state
+                .expect_find_publish_txn_digest()
+                .return_once(move |_| Ok(transaction_digest));
+            mock_state
+                .expect_get_executed_transaction_and_effects()
+                .return_once(move |_, _| Ok((create_fake_transaction(), transaction_effects)));
+
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
+            let response = coin_read_api.get_total_supply(coin_name.clone()).await;
+
+            assert!(response.is_err());
+            let error_result = response.unwrap_err();
+            let error_object: ErrorObjectOwned = error_result.into();
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Cannot find object [0x2::coin::TreasuryCap<0xf::test_coin::TEST_COIN>] from [0x000000000000000000000000000000000000000000000000000000000000000f] package event."];
+            expected.assert_eq(error_object.message());
+        }
+
+        #[tokio::test]
         async fn test_find_package_object_not_treasury_cap() {
             let package_id = get_test_package_id();
             let (coin_name, input_coin_struct, treasury_cap_struct, _, _) =
                 get_test_treasury_cap_peripherals(package_id);
             let coin_metadata = CoinMetadata {
-                id: UID::new(ObjectID::random()),
+                id: UID::new(get_test_package_id()),
                 decimals: 2,
                 name: "test_coin".to_string(),
                 symbol: "TEST".to_string(),
@@ -1422,6 +1381,7 @@ mod tests {
                         panic!("should not be called with any other object id")
                     }
                 });
+
             let coin_read_api = CoinReadApi {
                 internal: Box::new(mock_internal),
             };
@@ -1429,8 +1389,10 @@ mod tests {
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            let expected = expect!["-32000"];
-            expected.assert_eq(&error_object.code().to_string());
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
+            );
             let expected = expect!["Failure deserializing object in the requested format: \"Unable to deserialize TreasuryCap object: remaining input\""];
             expected.assert_eq(error_object.message());
         }

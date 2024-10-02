@@ -9,18 +9,17 @@ publish = false
 
 [dependencies]
 tempfile.workspace = true
-dashmap.workspace = true
 fastcrypto.workspace = true
+fastcrypto-tbls.workspace = true
 mysten-common.workspace = true
+mysten-metrics.workspace = true
 futures.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tracing.workspace = true
-crypto = { path = "../crypto", package = "narwhal-crypto" }
 types = { path = "../types", package = "narwhal-types" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 sui-macros.workspace = true
 config = { path = "../config", package = "narwhal-config" }
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 prometheus.workspace = true
 lru.workspace = true
 parking_lot.workspace = true

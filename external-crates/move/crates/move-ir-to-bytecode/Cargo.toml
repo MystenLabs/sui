@@ -1,0 +1,26 @@
+[package]
+name = "move-ir-to-bytecode"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem ir to bytecode"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+move-ir-to-bytecode-syntax.workspace = true
+move-command-line-common.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-binary-format.workspace = true
+move-symbol-pool.workspace = true
+move-bytecode-source-map.workspace = true
+log.workspace = true
+codespan-reporting.workspace = true
+ouroboros.workspace = true
+
+[features]
+default = []

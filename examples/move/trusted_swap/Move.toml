@@ -1,0 +1,10 @@
+[package]
+name = "trusted_swap"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+trusted_swap = "0x0"

@@ -11,21 +11,25 @@ A simple CLI application written in NodeJS to showcase Kiosk usage and basic app
 ## Install and use
 
 Export a mnemonic phrase
+
 ```
 export MNEMONIC="..."
 ```
 
 Create a Kiosk
+
 ```
 pnpm cli new
 ```
 
 Mint a TestItem
+
 ```
 pnpm cli mint-to-kiosk
 ```
 
 View Kiosk contents
+
 ```
 pnpm cli contents
 
@@ -37,6 +41,7 @@ pnpm cli contents
 ```
 
 List an item in the Kiosk
+
 ```
 # list an item in the Kiosk
 pnpm list <item_id> <price>

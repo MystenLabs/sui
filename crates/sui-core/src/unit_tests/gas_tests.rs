@@ -130,8 +130,12 @@ where
     F: FnOnce(&GasCostSummary, u64, u64) -> SuiResult,
 {
     // initial system with given gas coins
-    const GAS_AMOUNT: u64 = 10_000_000_000;
-    let gas_coins = make_gas_coins(sender, GAS_AMOUNT, coin_num);
+    let gas_amount: u64 = if budget < 10_000_000_000 {
+        10_000_000_000
+    } else {
+        budget
+    };
+    let gas_coins = make_gas_coins(sender, gas_amount, coin_num);
     let gas_coin_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
     let authority_state = TestAuthorityBuilder::new().build().await;
     for obj in gas_coins {
@@ -139,7 +143,7 @@ where
     }
 
     let gas_object_id = ObjectID::random();
-    let gas_coin = Object::with_id_owner_gas_for_testing(gas_object_id, sender, GAS_AMOUNT);
+    let gas_coin = Object::with_id_owner_gas_for_testing(gas_object_id, sender, gas_amount);
     authority_state.insert_genesis_object(gas_coin).await;
     // touch gas coins so that `storage_rebate` is set (not 0 as in genesis)
     touch_gas_coins(
@@ -216,7 +220,7 @@ where
     let summary = effects.gas_cost_summary();
 
     // call checker
-    checker(summary, GAS_AMOUNT, final_value)
+    checker(summary, gas_amount, final_value)
 }
 
 // make a `coin_num` coins distributing `gas_amount` across them
@@ -279,19 +283,17 @@ async fn touch_gas_coins(
 }
 
 // - OOG computation, storage ok
-#[ignore]
 #[tokio::test]
-async fn test_oog_computation_storage_ok() -> SuiResult {
-    const MAX_BUDGET: u64 = 10_000_000;
-    const GAS_PRICE: u64 = 30;
-    const BUDGET: u64 = MAX_BUDGET * GAS_PRICE;
+async fn test_oog_computation_storage_ok_one_coin() -> SuiResult {
+    const GAS_PRICE: u64 = 1_000;
+    let budget: u64 = ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
     let (sender, sender_key) = get_key_pair();
     check_oog_transaction(
         sender,
         sender_key,
         "loopy",
         vec![],
-        BUDGET,
+        budget,
         GAS_PRICE,
         1,
         |summary, initial_value, final_value| {
@@ -309,14 +311,38 @@ async fn test_oog_computation_storage_ok() -> SuiResult {
     .await
 }
 
-// OOG for computation, OOG for minimal storage (e.g. computation is entire budget)
-#[ignore]
 #[tokio::test]
-async fn test_oog_computation_oog_storage() -> SuiResult {
-    const GAS_PRICE: u64 = 30;
-    // WARNING: this value is taken from gas_v2.rs::MAX_BUCKET_COST and when
-    // that value changes this test will break!
-    // TODO: when buckets move to ProtocolConfig change this value to use ProtocolConfig
+async fn test_oog_computation_storage_ok_multi_coins() -> SuiResult {
+    const GAS_PRICE: u64 = 1_000;
+    let budget: u64 = ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
+    let (sender, sender_key) = get_key_pair();
+    check_oog_transaction(
+        sender,
+        sender_key,
+        "loopy",
+        vec![],
+        budget,
+        GAS_PRICE,
+        5,
+        |summary, initial_value, final_value| {
+            let gas_used = summary.net_gas_usage() as u64;
+            assert!(
+                summary.computation_cost > 0
+                    && summary.storage_cost > 0
+                    && summary.storage_rebate > 0
+                    && summary.non_refundable_storage_fee > 0
+            );
+            assert!(initial_value - gas_used == final_value);
+            Ok(())
+        },
+    )
+    .await
+}
+
+// OOG for computation, OOG for minimal storage (e.g. computation is entire budget)
+#[tokio::test]
+async fn test_oog_computation_oog_storage_final_one_coin() -> SuiResult {
+    const GAS_PRICE: u64 = 1000;
     const MAX_UNIT_BUDGET: u64 = 5_000_000;
     const BUDGET: u64 = MAX_UNIT_BUDGET * GAS_PRICE;
     let (sender, sender_key) = get_key_pair();
@@ -344,7 +370,7 @@ async fn test_oog_computation_oog_storage() -> SuiResult {
 
 // - computation ok, OOG for storage, minimal storage ok
 #[tokio::test]
-async fn test_computation_ok_oog_storage_minimal_ok() -> SuiResult {
+async fn test_computation_ok_oog_storage_minimal_ok_one_coin() -> SuiResult {
     const GAS_PRICE: u64 = 1001;
     const BUDGET: u64 = 1_100_000;
     let (sender, sender_key) = get_key_pair();
@@ -374,9 +400,41 @@ async fn test_computation_ok_oog_storage_minimal_ok() -> SuiResult {
     .await
 }
 
+// - computation ok, OOG for storage, minimal storage ok
+#[tokio::test]
+async fn test_computation_ok_oog_storage_minimal_ok_multi_coins() -> SuiResult {
+    const GAS_PRICE: u64 = 1001;
+    const BUDGET: u64 = 1_100_000;
+    let (sender, sender_key) = get_key_pair();
+    check_oog_transaction(
+        sender,
+        sender_key,
+        "storage_heavy",
+        vec![
+            CallArg::Pure(bcs::to_bytes(&(100_u64)).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+        ],
+        BUDGET,
+        GAS_PRICE,
+        5,
+        |summary, initial_value, final_value| {
+            let gas_used = summary.net_gas_usage();
+            assert!(
+                summary.computation_cost > 0
+                    && summary.storage_cost > 0
+                    && summary.storage_rebate > 0
+                    && summary.non_refundable_storage_fee > 0
+            );
+            assert_eq!(initial_value as i64 - gas_used, final_value as i64);
+            Ok(())
+        },
+    )
+    .await
+}
+
 // - computation ok, OOG for storage, OOG for minimal storage (e.g. computation is entire budget)
 #[tokio::test]
-async fn test_computation_ok_oog_storage() -> SuiResult {
+async fn test_computation_ok_oog_storage_final_one_coin() -> SuiResult {
     const GAS_PRICE: u64 = 1001;
     const BUDGET: u64 = 1_002_000;
     let (sender, sender_key) = get_key_pair();
@@ -399,36 +457,6 @@ async fn test_computation_ok_oog_storage() -> SuiResult {
             assert_eq!(summary.storage_rebate, 0);
             assert_eq!(summary.non_refundable_storage_fee, 0);
             assert_eq!(initial_value - gas_used, final_value);
-            Ok(())
-        },
-    )
-    .await
-}
-
-#[ignore]
-#[tokio::test]
-async fn test_oog_computation_storage_ok_multi_coins() -> SuiResult {
-    const MAX_BUDGET: u64 = 4_000_000;
-    const GAS_PRICE: u64 = 30;
-    const BUDGET: u64 = MAX_BUDGET * GAS_PRICE;
-    let (sender, sender_key) = get_key_pair();
-    check_oog_transaction(
-        sender,
-        sender_key,
-        "loopy",
-        vec![],
-        BUDGET,
-        GAS_PRICE,
-        5,
-        |summary, initial_value, final_value| {
-            let gas_used = summary.net_gas_usage() as u64;
-            assert!(
-                summary.computation_cost > 0
-                    && summary.storage_cost > 0
-                    && summary.storage_rebate > 0
-                    && summary.non_refundable_storage_fee > 0
-            );
-            assert!(initial_value - gas_used == final_value);
             Ok(())
         },
     )
@@ -714,9 +742,9 @@ async fn test_native_transfer_insufficient_gas_execution() {
     assert_eq!(gas_coin.value(), 0);
     // After a failed transfer, the version should have been incremented,
     // but the owner of the object should remain the same, unchanged.
-    let ((_, version, _), owner) = effects.mutated_excluding_gas().first().unwrap();
-    assert_eq!(version, &gas_object.version());
-    assert_eq!(owner, &gas_object.owner);
+    let ((_, version, _), owner) = effects.mutated_excluding_gas()[0];
+    assert_eq!(version, gas_object.version());
+    assert_eq!(owner, gas_object.owner);
 
     assert_eq!(
         effects.into_status().unwrap_err().0,
@@ -885,6 +913,83 @@ async fn test_tx_gas_price_less_than_reference_gas_price() {
     ));
 }
 
+#[tokio::test]
+async fn test_tx_gas_coins_input_coins() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let authority_state = TestAuthorityBuilder::new().build().await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+
+    // create coins for transaction
+    let gas_coins = (0..250)
+        .map(|_| Object::with_owner_for_testing(sender))
+        .collect::<Vec<_>>();
+    let gas_coin_refs = gas_coins
+        .iter()
+        .map(|obj| obj.compute_object_reference())
+        .collect::<Vec<_>>();
+    authority_state.insert_genesis_objects(&gas_coins).await;
+    let coins = (0..260)
+        .map(|_| Object::with_owner_for_testing(sender))
+        .collect::<Vec<_>>();
+    let coin_refs = coins
+        .iter()
+        .map(|obj| obj.compute_object_reference())
+        .collect::<Vec<_>>();
+    authority_state.insert_genesis_objects(&coins).await;
+    let coin = Object::with_owner_for_testing(sender);
+    let coin_ref = coin.compute_object_reference();
+    authority_state.insert_genesis_object(coin).await;
+
+    async fn run_merge(
+        authority_state: &AuthorityState,
+        sender: SuiAddress,
+        sender_key: &AccountKeyPair,
+        gas_coin_refs: Vec<ObjectRef>,
+        coin_ref: ObjectRef,
+        coin_refs: Vec<ObjectRef>,
+        rgp: u64,
+    ) -> TransactionEffects {
+        // build the programmale transaction
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let coin_arg = builder.obj(ObjectArg::ImmOrOwnedObject(coin_ref)).unwrap();
+            let coin_args = coin_refs
+                .iter()
+                .map(|obj_ref| builder.obj(ObjectArg::ImmOrOwnedObject(*obj_ref)).unwrap())
+                .collect::<Vec<_>>();
+            builder.command(Command::MergeCoins(coin_arg, coin_args));
+            builder.finish()
+        };
+        let kind = TransactionKind::ProgrammableTransaction(pt);
+        let data = TransactionData::new_with_gas_coins(
+            kind,
+            sender,
+            gas_coin_refs.clone(),
+            // use a reasonable about of gas to make the transaction succeed
+            *MIN_GAS_BUDGET_PRE_RGP * 100 * rgp,
+            rgp,
+        );
+        let tx = to_sender_signed_transaction(data, sender_key);
+        send_and_confirm_transaction(authority_state, tx)
+            .await
+            .unwrap()
+            .1
+            .into_data()
+    }
+
+    let effects = run_merge(
+        &authority_state,
+        sender,
+        &sender_key,
+        gas_coin_refs.clone(),
+        coin_ref,
+        coin_refs.clone(),
+        rgp,
+    )
+    .await;
+    assert!(effects.status().is_ok());
+}
+
 struct TransferResult {
     pub authority_state: Arc<AuthorityState>,
     pub gas_object_id: ObjectID,
@@ -951,7 +1056,7 @@ async fn execute_transfer_with_price(
                 )
             })
     } else {
-        let tx = authority_state.verify_transaction(tx).unwrap();
+        let tx = epoch_store.verify_transaction(tx).unwrap();
 
         authority_state
             .handle_transaction(&epoch_store, tx)

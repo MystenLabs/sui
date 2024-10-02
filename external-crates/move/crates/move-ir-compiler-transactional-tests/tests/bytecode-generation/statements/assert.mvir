@@ -1,0 +1,10 @@
+//# print-bytecode
+module 0x6.m {
+entry foo() {
+    let x: u64;
+label b0:
+    x = 3;
+    assert(copy(x) > 2, 42);
+    return;
+}
+}

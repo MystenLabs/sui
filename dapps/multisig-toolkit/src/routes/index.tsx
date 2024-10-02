@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createBrowserRouter, Navigate } from 'react-router-dom';
+
+import MultiSigCombinedSignatureGenerator from './combine-sigs';
+import ExecuteTransaction from './execute-transaction';
+import MultiSigAddressGenerator from './multisig-address';
 import OfflineSigner from './offline-signer';
-import SignatureAnalyzer from './signature-analyzer';
 import { Root } from './root';
+import SignatureAnalyzer from './signature-analyzer';
 
 export const router = createBrowserRouter([
 	{
@@ -22,6 +26,18 @@ export const router = createBrowserRouter([
 			{
 				path: 'signature-analyzer',
 				element: <SignatureAnalyzer />,
+			},
+			{
+				path: 'multisig-address',
+				element: <MultiSigAddressGenerator />,
+			},
+			{
+				path: 'combine-signatures',
+				element: <MultiSigCombinedSignatureGenerator />,
+			},
+			{
+				path: 'execute-transaction',
+				element: <ExecuteTransaction />,
 			},
 		],
 	},

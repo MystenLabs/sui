@@ -1,0 +1,41 @@
+//# publish
+module 0x5.Test {
+    public foo(v: u64): u64 * u64 {
+        let one_less: u64;
+        let one_more: u64;
+    label b0:
+        one_less = copy(v) - 1;
+        one_more = move(v) + 1;
+        return move(one_less), move(one_more);
+    }
+
+    public baz(k: u64, l: u64, m: u64) : u64 {
+        let z: u64;
+    label b0:
+        z =  move(k) + move(l) + move(m);
+        return move(z);
+    }
+}
+
+
+//# run
+module 0x43.m {
+import 0x5.Test;
+
+entry foo() {
+    let x: u64;
+    let y: u64;
+    let x0: u64;
+    let x1 : u64;
+label b0:
+    x = 7;
+    x0, x1 = Test.foo(copy(x));
+    assert(move(x0) == 6, 42);
+    assert(move(x1) == 8, 42);
+
+    y = Test.baz(Test.foo(move(x)), 0);
+    assert(move(y) == 14, 42);
+
+    return;
+}
+}

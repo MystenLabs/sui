@@ -1,0 +1,9 @@
+[package]
+name = "Foo"
+edition = "2024.beta"
+
+[addresses]
+A = "_"
+
+[dependencies]
+Bar = { local = "../bar" }

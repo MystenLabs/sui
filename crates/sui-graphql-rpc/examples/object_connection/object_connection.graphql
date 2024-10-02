@@ -1,0 +1,20 @@
+{
+  objects {
+    nodes {
+      version
+      digest
+      storageRebate
+      previousTransactionBlock {
+        digest
+        sender { defaultSuinsName }
+        gasInput {
+          gasPrice
+          gasBudget
+        }
+      }
+    }
+    pageInfo {
+      endCursor
+    }
+  }
+}

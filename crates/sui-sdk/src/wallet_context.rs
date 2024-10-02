@@ -16,6 +16,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::crypto::SuiKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 use tokio::sync::RwLock;
@@ -29,11 +30,11 @@ pub struct WalletContext {
 }
 
 impl WalletContext {
-    pub async fn new(
+    pub fn new(
         config_path: &Path,
         request_timeout: Option<std::time::Duration>,
         max_concurrent_requests: Option<u64>,
-    ) -> clap::Result<Self, anyhow::Error> {
+    ) -> Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             anyhow!(
                 "Cannot open wallet config file at {:?}. Err: {err}",
@@ -55,7 +56,7 @@ impl WalletContext {
         self.config.keystore.addresses()
     }
 
-    pub async fn get_client(&self) -> clap::Result<SuiClient, anyhow::Error> {
+    pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
         let read = self.client.read().await;
 
         Ok(if let Some(client) = read.as_ref() {
@@ -76,7 +77,7 @@ impl WalletContext {
     }
 
     // TODO: Ger rid of mut
-    pub fn active_address(&mut self) -> clap::Result<SuiAddress, anyhow::Error> {
+    pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
         if self.config.keystore.addresses().is_empty() {
             return Err(anyhow!(
                 "No managed addresses. Create new address with `new-address` command."
@@ -88,17 +89,14 @@ impl WalletContext {
         self.config.active_address = Some(
             self.config
                 .active_address
-                .unwrap_or(*self.config.keystore.addresses().get(0).unwrap()),
+                .unwrap_or(*self.config.keystore.addresses().first().unwrap()),
         );
 
         Ok(self.config.active_address.unwrap())
     }
 
     /// Get the latest object reference given a object id
-    pub async fn get_object_ref(
-        &self,
-        object_id: ObjectID,
-    ) -> clap::Result<ObjectRef, anyhow::Error> {
+    pub async fn get_object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, anyhow::Error> {
         let client = self.get_client().await?;
         Ok(client
             .read_api()
@@ -112,7 +110,7 @@ impl WalletContext {
     pub async fn gas_objects(
         &self,
         address: SuiAddress,
-    ) -> clap::Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
+    ) -> Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
         let client = self.get_client().await?;
 
         let mut objects: Vec<SuiObjectResponse> = Vec::new();
@@ -154,7 +152,7 @@ impl WalletContext {
         Ok(values_objects)
     }
 
-    pub async fn get_object_owner(&self, id: &ObjectID) -> clap::Result<SuiAddress, anyhow::Error> {
+    pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
         let client = self.get_client().await?;
         let object = client
             .read_api()
@@ -170,7 +168,7 @@ impl WalletContext {
     pub async fn try_get_object_owner(
         &self,
         id: &Option<ObjectID>,
-    ) -> clap::Result<Option<SuiAddress>, anyhow::Error> {
+    ) -> Result<Option<SuiAddress>, anyhow::Error> {
         if let Some(id) = id {
             Ok(Some(self.get_object_owner(id).await?))
         } else {
@@ -184,14 +182,14 @@ impl WalletContext {
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> clap::Result<(u64, SuiObjectData), anyhow::Error> {
-        for o in self.gas_objects(address).await.unwrap() {
+    ) -> Result<(u64, SuiObjectData), anyhow::Error> {
+        for o in self.gas_objects(address).await? {
             if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.object_id) {
                 return Ok((o.0, o.1));
             }
         }
         Err(anyhow!(
-            "No non-argument gas objects found with value >= budget {budget}"
+            "No non-argument gas objects found for this address with value >= budget {budget}. Run sui client gas to check for gas objects."
         ))
     }
 
@@ -275,10 +273,15 @@ impl WalletContext {
         Ok(result)
     }
 
-    pub async fn get_reference_gas_price(&self) -> clap::Result<u64, anyhow::Error> {
+    pub async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
         let client = self.get_client().await?;
         let gas_price = client.governance_api().get_reference_gas_price().await?;
         Ok(gas_price)
+    }
+
+    /// Add an account
+    pub fn add_account(&mut self, alias: Option<String>, keypair: SuiKeyPair) {
+        self.config.keystore.add_key(alias, keypair).unwrap();
     }
 
     /// Sign a transaction with a key currently managed by the WalletContext
@@ -289,7 +292,7 @@ impl WalletContext {
             .sign_secure(&data.sender(), data, Intent::sui_transaction())
             .unwrap();
         // TODO: To support sponsored transaction, we should also look at the gas owner.
-        Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![sig])
+        Transaction::from_data(data.clone(), vec![sig])
     }
 
     /// Execute a transaction and wait for it to be locally executed on the fullnode.
@@ -298,8 +301,13 @@ impl WalletContext {
         &self,
         tx: Transaction,
     ) -> SuiTransactionBlockResponse {
+        tracing::debug!("Executing transaction: {:?}", tx);
         let response = self.execute_transaction_may_fail(tx).await.unwrap();
-        assert!(response.status_ok().unwrap());
+        assert!(
+            response.status_ok().unwrap(),
+            "Transaction failed: {:?}",
+            response
+        );
         response
     }
 
@@ -317,7 +325,6 @@ impl WalletContext {
                 tx,
                 SuiTransactionBlockResponseOptions::new()
                     .with_effects()
-                    .with_events()
                     .with_input()
                     .with_events()
                     .with_object_changes()

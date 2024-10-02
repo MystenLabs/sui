@@ -5,7 +5,7 @@ module base::base_module {
 
     const B: u64 = 0;
 
-    struct X {
+    public struct X {
         field0: u64,
         field1: u64,
     }

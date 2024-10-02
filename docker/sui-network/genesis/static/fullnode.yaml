@@ -1,0 +1,23 @@
+---
+db-path: /opt/sui/db
+network-address: /ip4/0.0.0.0/tcp/8080/http
+json-rpc-address: "0.0.0.0:9000"
+metrics-address: "0.0.0.0:9184"
+admin-interface-port: 1337
+enable-event-processing: true
+grpc-load-shed: ~
+grpc-concurrency-limit: ~
+p2p-config:
+  listen-address: "0.0.0.0:8084"
+genesis:
+  genesis-file-location: /opt/sui/config/genesis.blob
+authority-store-pruning-config:
+  num-latest-epoch-dbs-to-retain: 3
+  epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 18446744073709551615
+  max-checkpoints-in-batch: 5
+  max-transactions-in-batch: 1000
+  use-range-deletion: true
+  pruning-run-delay-seconds: 60
+state-debug-dump-config:
+  dump-file-directory: /opt/sui/state_debug_dump

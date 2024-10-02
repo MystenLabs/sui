@@ -1,20 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Permission } from '_messages/payloads/permissions';
+import type { RootState } from '_redux/RootReducer';
+import type { AppThunkConfig } from '_store/thunk-extras';
 import {
 	createAsyncThunk,
 	createEntityAdapter,
 	createSelector,
 	createSlice,
 } from '@reduxjs/toolkit';
-
-import { activeAddressSelector } from '../account';
-
-import type { SuiAddress } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
-import type { Permission } from '_messages/payloads/permissions';
-import type { RootState } from '_redux/RootReducer';
-import type { AppThunkConfig } from '_store/thunk-extras';
 
 const permissionsAdapter = createEntityAdapter<Permission>({
 	sortComparer: (a, b) => {
@@ -27,11 +23,11 @@ const permissionsAdapter = createEntityAdapter<Permission>({
 export const respondToPermissionRequest = createAsyncThunk<
 	{
 		id: string;
-		accounts: SuiAddress[];
+		accounts: string[];
 		allowed: boolean;
 		responseDate: string;
 	},
-	{ id: string; accounts: SuiAddress[]; allowed: boolean },
+	{ id: string; accounts: string[]; allowed: boolean },
 	AppThunkConfig
 >('respond-to-permission-request', ({ id, accounts, allowed }, { extra: { background } }) => {
 	const responseDate = new Date().toISOString();
@@ -71,23 +67,17 @@ export const permissionsSelectors = permissionsAdapter.getSelectors(
 	(state: RootState) => state.permissions,
 );
 
-export function createDappStatusSelector(origin: string | null) {
-	if (!origin) {
+export function createDappStatusSelector(origin: string | null, activeAddress: string | null) {
+	if (!origin || !activeAddress) {
 		return () => false;
 	}
-	return createSelector(
-		permissionsSelectors.selectAll,
-		activeAddressSelector,
-		(permissions, activeAddress) => {
-			const originPermission = permissions.find((aPermission) => aPermission.origin === origin);
-			if (!originPermission) {
-				return false;
-			}
-			return (
-				originPermission.allowed &&
-				activeAddress &&
-				originPermission.accounts.includes(activeAddress)
-			);
-		},
-	);
+	return createSelector(permissionsSelectors.selectAll, (permissions) => {
+		const originPermission = permissions.find((aPermission) => aPermission.origin === origin);
+		if (!originPermission) {
+			return false;
+		}
+		return (
+			originPermission.allowed && activeAddress && originPermission.accounts.includes(activeAddress)
+		);
+	});
 }

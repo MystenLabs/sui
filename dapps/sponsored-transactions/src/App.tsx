@@ -1,10 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignedTransaction, SuiTransactionBlockResponse, TransactionBlock } from '@mysten/sui.js';
-import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
+import {
+	ConnectButton,
+	useCurrentAccount,
+	useSignTransaction,
+	useSuiClient,
+} from '@mysten/dapp-kit';
+import { SuiTransactionBlockResponse } from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
 import { ComponentProps, ReactNode, useMemo, useState } from 'react';
-import { provider } from './utils/rpc';
+
 import { sponsorTransaction } from './utils/sponsorTransaction';
 
 const Button = (props: ComponentProps<'button'>) => (
@@ -33,17 +39,23 @@ const CodePanel = ({
 );
 
 export function App() {
-	const { currentAccount, signTransactionBlock } = useWalletKit();
+	const client = useSuiClient();
+	const currentAccount = useCurrentAccount();
+	const { mutateAsync: signTransaction } = useSignTransaction();
 	const [loading, setLoading] = useState(false);
-	const [sponsoredTx, setSponsoredTx] = useState<SignedTransaction | null>(null);
-	const [signedTx, setSignedTx] = useState<SignedTransaction | null>(null);
+	const [sponsoredTx, setSponsoredTx] = useState<Awaited<
+		ReturnType<typeof sponsorTransaction>
+	> | null>(null);
+	const [signedTx, setSignedTx] = useState<Awaited<ReturnType<typeof signTransaction>> | null>(
+		null,
+	);
 	const [executedTx, setExecutedTx] = useState<SuiTransactionBlockResponse | null>(null);
 
 	const tx = useMemo(() => {
 		if (!currentAccount) return null;
-		const tx = new TransactionBlock();
-		const [coin] = tx.splitCoins(tx.gas, [tx.pure(1)]);
-		tx.transferObjects([coin], tx.pure(currentAccount.address));
+		const tx = new Transaction();
+		const [coin] = tx.splitCoins(tx.gas, [1]);
+		tx.transferObjects([coin], currentAccount.address);
 		return tx;
 	}, [currentAccount]);
 
@@ -52,7 +64,7 @@ export function App() {
 			<div className="grid grid-cols-4 gap-8">
 				<CodePanel
 					title="Transaction details"
-					json={tx?.blockData}
+					json={tx?.getData()}
 					action={<ConnectButton className="!bg-indigo-600 !text-white" />}
 				/>
 
@@ -66,7 +78,7 @@ export function App() {
 								setLoading(true);
 								try {
 									const bytes = await tx!.build({
-										provider,
+										client,
 										onlyTransactionKind: true,
 									});
 									const sponsoredBytes = await sponsorTransaction(currentAccount!.address, bytes);
@@ -90,8 +102,8 @@ export function App() {
 							onClick={async () => {
 								setLoading(true);
 								try {
-									const signed = await signTransactionBlock({
-										transactionBlock: TransactionBlock.from(sponsoredTx!.transactionBlockBytes),
+									const signed = await signTransaction({
+										transaction: Transaction.from(sponsoredTx!.bytes),
 									});
 									setSignedTx(signed);
 								} finally {
@@ -112,8 +124,8 @@ export function App() {
 							onClick={async () => {
 								setLoading(true);
 								try {
-									const executed = await provider.executeTransactionBlock({
-										transactionBlock: signedTx!.transactionBlockBytes,
+									const executed = await client.executeTransactionBlock({
+										transactionBlock: signedTx!.bytes,
 										signature: [signedTx!.signature, sponsoredTx!.signature],
 										options: {
 											showEffects: true,

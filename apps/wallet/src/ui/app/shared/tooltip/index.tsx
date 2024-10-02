@@ -2,25 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-	useFloating,
-	autoUpdate,
-	offset,
-	flip,
-	shift,
-	useHover,
-	useFocus,
-	useDismiss,
-	useRole,
-	useInteractions,
-	FloatingPortal,
 	arrow,
+	autoUpdate,
+	flip,
+	FloatingPortal,
+	offset,
+	shift,
+	useDismiss,
+	useFloating,
+	useFocus,
+	useHover,
+	useInteractions,
+	useRole,
 } from '@floating-ui/react';
+import type { Placement } from '@floating-ui/react';
 import { Info16 } from '@mysten/icons';
+import clsx from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRef, useState } from 'react';
-
-import type { Placement } from '@floating-ui/react';
-import type { ReactNode, CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 const TOOLTIP_DELAY = 150;
 
@@ -28,17 +28,17 @@ interface TooltipProps {
 	tip: ReactNode;
 	children: ReactNode;
 	placement?: Placement;
+	noFullWidth?: boolean;
 }
 
-export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
+export function Tooltip({ tip, children, noFullWidth, placement = 'top' }: TooltipProps) {
 	const [open, setOpen] = useState(false);
 	const arrowRef = useRef(null);
 
 	const {
 		x,
 		y,
-		reference,
-		floating,
+		refs,
 		strategy,
 		context,
 		middlewareData,
@@ -86,7 +86,11 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
 
 	return (
 		<>
-			<div tabIndex={0} className="w-fit" {...getReferenceProps({ ref: reference })}>
+			<div
+				tabIndex={0}
+				className={clsx('flex', !noFullWidth && 'w-full')}
+				{...getReferenceProps({ ref: refs.setReference })}
+			>
 				{children}
 			</div>
 			<FloatingPortal>
@@ -120,7 +124,7 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
 								width: 'max-content',
 								maxWidth: '200px',
 							}}
-							{...getFloatingProps({ ref: floating })}
+							{...getFloatingProps({ ref: refs.setFloating })}
 						>
 							<div className="flex flex-col flex-nowrap gap-px rounded-md bg-gray-100 p-2">
 								{tip}

@@ -14,6 +14,11 @@ CHANGELOG.md
 # When native functions change, so we can evaluate cost impact
 /crates/sui-framework/src/natives/ @oxade
 
+# GraphQL RPC working group
+/crates/sui-graphql-rpc/ @oxade @amnn @wlmyng @stefan-mysten @emmazzz @suiwombat
+/crates/sui-graphql-e2e-tests/ @oxade @amnn @wlmyng @stefan-mysten @emmazzz @suiwombat
+
+
 # Notify Narwhal changes to interested folks.
 /narwhal/crypto/ @joyqvq @kchalkias
 /narwhal/executor/ @asonnino @akichidis @laura-makdah
@@ -25,4 +30,4 @@ CHANGELOG.md
 apps/ @MystenLabs/fe-and-apps
 sdk/ @MystenLabs/sdk-reviewers
 sdk/kiosk @MystenLabs/kiosk-sdk-reviewers
-sdk/wallet-adapter @MystenLabs/wallet-kit-reviewers
+sdk/wallet-standard @MystenLabs/wallet-kit-reviewers

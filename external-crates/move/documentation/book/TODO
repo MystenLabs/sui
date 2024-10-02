@@ -1,0 +1,10 @@
+# TODO
+
+## Long term
+
+- Grammar examples aren't readable
+- We don't describe the associativity of conditionals or other control flow constructions and {}
+- We don't describe identifier rules in a single place
+- We don't describe rules for namespaces and uses
+- attributes/annotations in general
+- describe paths/places more like the compiler thinks about them in 2024

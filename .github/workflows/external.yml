@@ -38,10 +38,10 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isRust: ${{ steps.diff.outputs.isRust }} 
+      isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
@@ -62,7 +62,7 @@ jobs:
           - [ubuntu-ghcloud]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -74,39 +74,6 @@ jobs:
       - name: External crates tests
         run: |
           cargo xtest
-
-  move-prover:
-    name: move-prover
-    needs: diff
-    timeout-minutes: 20
-    if: needs.diff.outputs.isMove == 'true'
-    runs-on: [ubuntu-ghcloud]
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Prover Setup
-        run: |
-          crates/sui-move/scripts/prover_setup.sh
-      - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-
-      - name: Prover Run
-        working-directory: crates/sui-framework/packages
-        run: |
-          set -o pipefail
-          DOTNET_ROOT="$HOME/.dotnet"
-          BIN_DIR="$HOME/bin"
-          export DOTNET_ROOT="${DOTNET_ROOT}"
-          export PATH="${DOTNET_ROOT}/tools:\$PATH"
-          export Z3_EXE="${BIN_DIR}/z3"
-          export CVC5_EXE="${BIN_DIR}/cvc5"
-          export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
-          ../../../target/debug/sui move prove -p sui-framework
-          ../../../target/debug/sui move prove -p sui-system
-
 
   # This is a no-op job that allows the resulting action names to line up when
   # there are no rust changes in a given PR/commit. This ensures that we can
@@ -131,35 +98,27 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-ghcloud]
     steps:
-      - uses: arduino/setup-protoc@v1
-        # this avoids rate-limiting
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - run: rustup component add clippy
-      # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
-      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
-      # 'librocksdb-sys' src directory which is managed by cargo
-      # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-      #   with:
-      #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
 
       # See '.cargo/config' for list of enabled/disappled clippy lints
-      - name: cargo clippy
-        run: cargo xclippy -D warnings
+      - name: cargo move-clippy
+        run: |
+          cd external-crates/move
+          cargo move-clippy -D warnings
 
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - run: rustup component add rustfmt
       - name: rustfmt
-        uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # pin@v1.0.3
         with:
           command: fmt
-          args: --all --check
+          args: --check --all
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)
@@ -167,5 +126,6 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v3
-      - uses: mystenlabs/cargo-deny-action@main
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: taiki-e/install-action@cargo-deny
+      - run: cargo deny check

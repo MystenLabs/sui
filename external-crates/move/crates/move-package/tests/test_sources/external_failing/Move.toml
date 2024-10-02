@@ -1,0 +1,7 @@
+[package]
+name = "Root"
+
+[dependencies]
+# This resolver returns a non-zero exit code, which should cause
+# resolution to fail.
+A = { r."../resolvers/failing.sh" = "A" }

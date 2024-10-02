@@ -8,17 +8,14 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use std::vector;
 
-    struct R has key, store { id: UID }
+    public struct R has key, store { id: UID }
     public fun r(ctx: &mut TxContext): R { R { id: object::new(ctx) } }
 
     public entry fun clean(_: &mut R) {}
     public entry fun clean_u64(_: u64) {}
     entry fun priv1(_: &mut R) {}
-    entry fun priv2(v: vector<R>) {
+    entry fun priv2(mut v: vector<R>) {
         while (!vector::is_empty(&v)) {
             let R { id } = vector::pop_back(&mut v);
             object::delete(id);

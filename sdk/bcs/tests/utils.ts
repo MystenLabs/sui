@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS } from '../src/index';
+import type { BCS } from '../src/index.js';
 
 /** Serialize and deserialize the result. */
 export function serde(bcs: BCS, type: any, data: any): any {

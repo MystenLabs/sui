@@ -1,6 +1,7 @@
 [package]
 name = "DependsOnBasics"
 version = "0.0.0"
+edition = "2024.beta"
 
 [dependencies]
 Examples = { local = "../object_basics" }

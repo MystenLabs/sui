@@ -7,7 +7,7 @@
 module 0x0.m {
     import 0x2.tx_context;
 
-    struct M has drop { value: u64 }
+    struct M has store, drop { value: u64 }
 
     init(_ctx: &mut tx_context.TxContext) {
         label l0:
@@ -18,6 +18,26 @@ module 0x0.m {
         label l0:
         _ = M { value: 7 };
         _ = M { value: 42 };
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.tx_context;
+
+    struct Other has drop { value: bool }
+    struct M has drop { value: Self.Other }
+
+    init(_ctx: &mut tx_context.TxContext) {
+        label l0:
+        return;
+    }
+
+    foo() {
+        label l0:
+        _ = M { value: Other { value: false } };
+        _ = M { value: Other { value: false } };
         return;
     }
 }

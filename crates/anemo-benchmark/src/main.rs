@@ -46,11 +46,11 @@ struct Args {
     tick_secs: u64,
 
     /// UDP socket send buffer size.
-    #[arg(short, long)]
+    #[arg(long)]
     socket_send_buffer_size: Option<usize>,
 
     /// UDP socket receive buffer size.
-    #[arg(short, long)]
+    #[arg(long)]
     socket_receive_buffer_size: Option<usize>,
 }
 

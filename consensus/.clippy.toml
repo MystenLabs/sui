@@ -1,0 +1,19 @@
+# cyclomatic complexity is not always useful
+cognitive-complexity-threshold = 100
+# types are used for safety encoding
+type-complexity-threshold = 10000
+# big constructors
+too-many-arguments-threshold = 20
+
+disallowed-methods = [
+    { path = "anyhow", reason = "we prefer to use eyre" },
+    # we use tracing with the log feature instead of the log crate.
+    { path = "log::info", reason = "use tracing::info instead" },
+    { path = "log::debug", reason = "use tracing::debug instead" },
+    { path = "log::error", reason = "use tracing::error instead" },
+    { path = "log::warn", reason = "use tracing::warn instead" },
+    # known to cause blocking issues
+    { path = "futures::executor::block_on", reason = "use tokio::runtime::runtime::Runtime::block_on instead" },
+    # bincode::deserialize_from is easy to shoot your foot with
+    { path = "bincode::deserialize_from", reason = "use bincode::deserialize instead" },
+]

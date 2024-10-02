@@ -7,7 +7,7 @@ use bincode::Options;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::Direction;
 
-use super::{be_fix_int_ser, errors::TypedStoreError, RocksDBRawIter};
+use super::{be_fix_int_ser, RocksDBRawIter, TypedStoreError};
 use crate::metrics::RocksDBPerfContext;
 use crate::DBMetrics;
 use serde::{de::DeserializeOwned, Serialize};
@@ -132,6 +132,13 @@ impl<'a, K: Serialize, V> Iter<'a, K, V> {
     pub fn skip_to_last(mut self) -> Self {
         self.is_initialized = true;
         self.db_iter.seek_to_last();
+        self
+    }
+
+    /// Seeks to the first key in the database (at this column family).
+    pub fn seek_to_first(mut self) -> Self {
+        self.is_initialized = true;
+        self.db_iter.seek_to_first();
         self
     }
 

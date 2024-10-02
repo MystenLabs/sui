@@ -1,0 +1,98 @@
+// Tests dot completions
+{
+  "Hint": {
+    "project": "tests/inlay-hints",
+    "file_tests": {
+      // tests inlay type hints
+      "type_hints.move": [
+        // local vars
+        {
+          "use_line": 8,
+          "use_col": 23
+        },
+        {
+          "use_line": 9,
+          "use_col": 25
+        },
+        // lambdas
+        {
+          "use_line": 25,
+          "use_col": 24
+        },
+        {
+          "use_line": 26,
+          "use_col": 26
+        },
+        {
+          "use_line": 27,
+          "use_col": 28
+        },
+        {
+          "use_line": 28,
+          "use_col": 30
+        },
+        // struct unpacks
+        {
+          "use_line": 42,
+          "use_col": 36
+        },
+        {
+          "use_line": 44,
+          "use_col": 39
+        },
+        // variant unpacks
+        {
+          "use_line": 48,
+          "use_col": 43
+        },
+        {
+          "use_line": 48,
+          "use_col": 46
+        },
+        {
+          "use_line": 51,
+          "use_col": 37
+        },
+        {
+          "use_line": 51,
+          "use_col": 40
+        },
+        {
+          "use_line": 69,
+          "use_col": 44
+        },
+        {
+          "use_line": 69,
+          "use_col": 71
+        },
+        {
+          "use_line": 70,
+          "use_col": 71
+        }
+      ],
+      // tests inlay param hints
+      "param_hints.move": [
+        // first arg, same line
+        {
+          "use_line": 11,
+          "use_col": 13
+        },
+        // second arg, same line
+        {
+          "use_line": 11,
+          "use_col": 17
+        },
+        // first arg, first line
+        {
+          "use_line": 15,
+          "use_col": 13
+        },
+        // second arg, second line
+        {
+          "use_line": 16,
+          "use_col": 13
+        }
+      ]
+    }
+  }
+}

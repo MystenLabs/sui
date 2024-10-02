@@ -1,0 +1,9 @@
+{
+	"extends": ["//"],
+	"tasks": {
+		"build:prod": {
+			"dependsOn": ["^build"],
+			"outputs": ["dist/**"]
+		}
+	}
+}

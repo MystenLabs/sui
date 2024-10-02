@@ -1,0 +1,63 @@
+//# print-bytecode
+module 0x6.m {
+// This is roughly equivalent to the following Move program:
+// ```
+// let x: u64 = 0;
+// while (x < 5) { x = x + 1; }
+// return;
+// ```
+entry foo() {
+    let x: u64;
+label b0:
+    x = 0;
+label b1:
+    jump_if_false (copy(x) < 5) b2;
+    x = copy(x) + 1;
+    jump b1;
+label b2:
+    return;
+}
+}
+
+//# print-bytecode
+module 0x7.m {
+// `return` statements can appear anywhere, even within a loop.
+entry foo() {
+    let x: u64;
+label b0:
+    x = 0;
+label b1:
+    jump_if_false (true) b2;
+    return;
+    jump b1;
+label b2:
+    return;
+}
+}
+
+//# print-bytecode
+module 0x8.m {
+// This is roughly equivalent to the following Move code: `while (true) { break; }`.
+entry foo() {
+label b0:
+    jump_if_false (true) b2;
+    jump b2;
+label b2:
+    return;
+}
+}
+
+//# print-bytecode
+module 0x9.m {
+// This is roughly equivalent to the following Move code: `loop { loop { break; } break; }`.
+entry foo() {
+label b0:
+    jump b1;
+    jump b0;
+label b1:
+    jump b2;
+    jump b0;
+label b2:
+    return;
+}
+}

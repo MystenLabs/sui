@@ -1,19 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect } from 'vitest';
-import {
-	Ed25519Keypair,
-	fromB64,
-	IntentScope,
-	messageWithIntent,
-	Secp256k1Keypair,
-	toB64,
-	toSingleSignaturePubkeyPair,
-	verifyMessage,
-} from '../../src';
-
 import { blake2b } from '@noble/hashes/blake2b';
+import { describe, expect, it } from 'vitest';
+
+import { messageWithIntent, parseSerializedSignature } from '../../src/cryptography';
+import { Ed25519Keypair } from '../../src/keypairs/ed25519';
+import { Secp256k1Keypair } from '../../src/keypairs/secp256k1';
+import { fromBase64, toBase64 } from '../../src/utils';
 
 const TX_BYTES =
 	'AAACAQDMdYtdFSLGe6VbgpuIsMksv9Ypzpvkq2jiYq0hAjUpOQIAAAAAAAAAIHGwPza+lUm6RuJV1vn9pA4y0PwVT7k/KMMbUViQS5ydACAMVn/9+BYsttUa90vgGZRDuS6CPUumztJN5cbEY3l9RgEBAQEAAAEBAHUFfdk1Tg9l6STLBoSBJbbUuehTDUlLH7p81kpqCKsaBCiJ034Ac84f1oqgmpz79O8L/UeLNDUpOUMa+LadeX93AgAAAAAAAAAgs1e67e789jSlrzOJUXq0bb7Bn/hji+3F5UoMAbze595xCSZCVjU1ItUC9G7KQjygNiBbzZe8t7YLPjRAQyGTzAIAAAAAAAAAIAujHFcrkJJhZfCmxmCHsBWxj5xkviUqB479oupdgMZu07b+hkrjyvCcX50dO30v3PszXFj7+lCNTUTuE4UI3eoCAAAAAAAAACBIv39dyVELUFTkNv72mat5R1uHFkQdViikc1lTMiSVlOD+eESUq3neyciBatafk9dHuhhrS37RaSflqKwFlwzPAgAAAAAAAAAg8gqL3hCkAho8bb0PoqshJdqQFoRP8ZmQMZDFvsGBqa11BX3ZNU4PZekkywaEgSW21LnoUw1JSx+6fNZKagirGgEAAAAAAAAAKgQAAAAAAAAA';
@@ -75,25 +69,23 @@ const TEST_CASES_SECP256K1 = [
 
 describe('Keypairs', () => {
 	it('Ed25519 keypair signData', async () => {
-		const tx_bytes = fromB64(TX_BYTES);
-		const intentMessage = messageWithIntent(IntentScope.TransactionData, tx_bytes);
+		const tx_bytes = fromBase64(TX_BYTES);
+		const intentMessage = messageWithIntent('TransactionData', tx_bytes);
+
 		const digest = blake2b(intentMessage, { dkLen: 32 });
-		expect(toB64(digest)).toEqual(DIGEST);
+		expect(toBase64(digest)).toEqual(DIGEST);
 
 		for (const t of TEST_CASES) {
 			const keypair = Ed25519Keypair.deriveKeypair(t[0], DERIVATION_PATH);
 			expect(keypair.getPublicKey().toBase64()).toEqual(t[1]);
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-			const { signature: serializedSignature } = await keypair.signTransactionBlock(tx_bytes);
-			const { signature } = toSingleSignaturePubkeyPair(serializedSignature);
-			expect(toB64(signature)).toEqual(t[3]);
+			const { signature: serializedSignature } = await keypair.signTransaction(tx_bytes);
+			const { signature } = parseSerializedSignature(serializedSignature);
 
-			const isValid = await verifyMessage(
-				tx_bytes,
-				serializedSignature,
-				IntentScope.TransactionData,
-			);
+			expect(toBase64(signature!)).toEqual(t[3]);
+
+			const isValid = await keypair.getPublicKey().verifyTransaction(tx_bytes, serializedSignature);
 			expect(isValid).toBeTruthy();
 		}
 	});
@@ -102,8 +94,8 @@ describe('Keypairs', () => {
 		const keypair = new Ed25519Keypair();
 		const signData = new TextEncoder().encode('hello world');
 
-		const { signature } = await keypair.signMessage(signData);
-		const isValid = await verifyMessage(signData, signature, IntentScope.PersonalMessage);
+		const { signature } = await keypair.signPersonalMessage(signData);
+		const isValid = await keypair.getPublicKey().verifyPersonalMessage(signData, signature);
 		expect(isValid).toBe(true);
 	});
 
@@ -111,35 +103,30 @@ describe('Keypairs', () => {
 		const keypair = new Ed25519Keypair();
 		const signData = new TextEncoder().encode('hello world');
 
-		const { signature } = await keypair.signMessage(signData);
-		const isValid = await verifyMessage(
-			new TextEncoder().encode('hello worlds'),
-			signature,
-			IntentScope.PersonalMessage,
-		);
+		const { signature } = await keypair.signPersonalMessage(signData);
+		const isValid = await keypair
+			.getPublicKey()
+			.verifyPersonalMessage(new TextEncoder().encode('hello worlds'), signature);
 		expect(isValid).toBe(false);
 	});
 
 	it('Secp256k1 keypair signData', async () => {
-		const tx_bytes = fromB64(TX_BYTES);
-		const intentMessage = messageWithIntent(IntentScope.TransactionData, tx_bytes);
+		const tx_bytes = fromBase64(TX_BYTES);
+		const intentMessage = messageWithIntent('TransactionData', tx_bytes);
 		const digest = blake2b(intentMessage, { dkLen: 32 });
-		expect(toB64(digest)).toEqual(DIGEST);
+		expect(toBase64(digest)).toEqual(DIGEST);
 
 		for (const t of TEST_CASES_SECP256K1) {
 			const keypair = Secp256k1Keypair.deriveKeypair(t[0], DERIVATION_PATH_SECP256K1);
 			expect(keypair.getPublicKey().toBase64()).toEqual(t[1]);
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-			const { signature: serializedSignature } = await keypair.signTransactionBlock(tx_bytes);
-			const { signature } = toSingleSignaturePubkeyPair(serializedSignature);
-			expect(toB64(signature)).toEqual(t[3]);
+			const { signature: serializedSignature } = await keypair.signTransaction(tx_bytes);
+			const { signature } = parseSerializedSignature(serializedSignature);
 
-			const isValid = await verifyMessage(
-				tx_bytes,
-				serializedSignature,
-				IntentScope.TransactionData,
-			);
+			expect(toBase64(signature!)).toEqual(t[3]);
+
+			const isValid = await keypair.getPublicKey().verifyTransaction(tx_bytes, serializedSignature);
 			expect(isValid).toBeTruthy();
 		}
 	});
@@ -148,9 +135,9 @@ describe('Keypairs', () => {
 		const keypair = new Secp256k1Keypair();
 		const signData = new TextEncoder().encode('hello world');
 
-		const { signature } = await keypair.signMessage(signData);
+		const { signature } = await keypair.signPersonalMessage(signData);
 
-		const isValid = await verifyMessage(signData, signature, IntentScope.PersonalMessage);
+		const isValid = await keypair.getPublicKey().verifyPersonalMessage(signData, signature);
 		expect(isValid).toBe(true);
 	});
 });

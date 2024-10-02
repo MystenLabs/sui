@@ -1,65 +1,60 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::str::FromStr;
+use std::collections::HashSet;
 use std::sync::Arc;
 
+use anyhow::bail;
 use async_trait::async_trait;
-use futures::Stream;
-use jsonrpsee::core::error::SubscriptionClosed;
-use jsonrpsee::core::RpcResult;
-use jsonrpsee::types::SubscriptionResult;
-use jsonrpsee::{RpcModule, SubscriptionSink};
+use futures::{future, Stream};
+use jsonrpsee::{
+    core::{error::SubscriptionClosed, RpcResult},
+    types::SubscriptionResult,
+    RpcModule, SubscriptionSink,
+};
 use move_bytecode_utils::layout::TypeLayoutBuilder;
-use move_core_types::account_address::AccountAddress;
-use serde::Serialize;
-use sui_json::SuiJsonValue;
-use sui_types::error::SuiObjectResponseError;
-use tracing::{debug, instrument, warn};
-
-use move_core_types::ident_str;
-use move_core_types::identifier::IdentStr;
-use move_core_types::language_storage::{StructTag, TypeTag};
+use move_core_types::language_storage::TypeTag;
 use mysten_metrics::spawn_monitored_task;
+use serde::Serialize;
 use sui_core::authority::AuthorityState;
+use sui_json::SuiJsonValue;
+use sui_json_rpc_api::{
+    cap_page_limit, validate_limit, IndexerApiOpenRpc, IndexerApiServer, JsonRpcMetrics,
+    ReadApiServer, QUERY_MAX_RESULT_LIMIT,
+};
 use sui_json_rpc_types::{
-    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiMoveValue,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
-    TransactionFilter,
+    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataOptions,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage, TransactionFilter,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::digests::TransactionDigest;
-use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::event::EventID;
-
-use crate::api::{
-    cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
-    QUERY_MAX_RESULT_LIMIT,
+use sui_storage::key_value_store::TransactionKeyValueStore;
+use sui_types::{
+    base_types::{ObjectID, SuiAddress},
+    digests::TransactionDigest,
+    dynamic_field::{DynamicFieldName, Field},
+    error::SuiObjectResponseError,
+    event::EventID,
 };
-use crate::error::{Error, SuiRpcInputError};
-use crate::name_service::Domain;
-use crate::with_tracing;
-use crate::SuiRpcModule;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tracing::{debug, instrument, warn};
 
-const NAME_SERVICE_VALUE: &str = "value";
-const NAME_SERVICE_TARGET_ADDRESS: &str = "target_address";
-const NAME_SERVICE_DOMAIN_MODULE: &IdentStr = ident_str!("domain");
-const NAME_SERVICE_DOMAIN_STRUCT: &IdentStr = ident_str!("Domain");
-const NAME_SERVICE_DEFAULT_PACKAGE_ADDRESS: &str =
-    "0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0";
-const NAME_SERVICE_DEFAULT_REGISTRY: &str =
-    "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106";
-const NAME_SERVICE_DEFAULT_REVERSE_REGISTRY: &str =
-    "0x2fd099e17a292d2bc541df474f9fafa595653848cbabb2d7a4656ec786a1969f";
+use crate::{
+    authority_state::{StateRead, StateReadResult},
+    error::{Error, SuiRpcInputError},
+    name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError},
+    with_tracing, SuiRpcModule,
+};
 
-pub fn spawn_subscription<S, T>(mut sink: SubscriptionSink, rx: S)
-where
+pub fn spawn_subscription<S, T>(
+    mut sink: SubscriptionSink,
+    rx: S,
+    permit: Option<OwnedSemaphorePermit>,
+) where
     S: Stream<Item = T> + Unpin + Send + 'static,
     T: Serialize,
 {
     spawn_monitored_task!(async move {
+        let _permit = permit;
         match sink.pipe_from_stream(rx).await {
             SubscriptionClosed::Success => {
                 debug!("Subscription completed.");
@@ -76,32 +71,67 @@ where
         };
     });
 }
+const DEFAULT_MAX_SUBSCRIPTIONS: usize = 100;
+
 pub struct IndexerApi<R> {
-    state: Arc<AuthorityState>,
+    state: Arc<dyn StateRead>,
     read_api: R,
-    ns_package_addr: Option<SuiAddress>,
-    ns_registry_id: Option<ObjectID>,
-    ns_reverse_registry_id: Option<ObjectID>,
+    transaction_kv_store: Arc<TransactionKeyValueStore>,
+    name_service_config: NameServiceConfig,
     pub metrics: Arc<JsonRpcMetrics>,
+    subscription_semaphore: Arc<Semaphore>,
 }
 
 impl<R: ReadApiServer> IndexerApi<R> {
     pub fn new(
         state: Arc<AuthorityState>,
         read_api: R,
-        ns_package_addr: Option<SuiAddress>,
-        ns_registry_id: Option<ObjectID>,
-        ns_reverse_registry_id: Option<ObjectID>,
+        transaction_kv_store: Arc<TransactionKeyValueStore>,
+        name_service_config: NameServiceConfig,
         metrics: Arc<JsonRpcMetrics>,
+        max_subscriptions: Option<usize>,
     ) -> Self {
+        let max_subscriptions = max_subscriptions.unwrap_or(DEFAULT_MAX_SUBSCRIPTIONS);
         Self {
             state,
+            transaction_kv_store,
             read_api,
-            ns_registry_id,
-            ns_package_addr,
-            ns_reverse_registry_id,
+            name_service_config,
             metrics,
+            subscription_semaphore: Arc::new(Semaphore::new(max_subscriptions)),
         }
+    }
+
+    fn extract_values_from_dynamic_field_name(
+        &self,
+        name: DynamicFieldName,
+    ) -> Result<(TypeTag, Vec<u8>), SuiRpcInputError> {
+        let DynamicFieldName {
+            type_: name_type,
+            value,
+        } = name;
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let layout = TypeLayoutBuilder::build_with_types(&name_type, epoch_store.module_cache())?;
+        let sui_json_value = SuiJsonValue::new(value)?;
+        let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+        Ok((name_type, name_bcs_value))
+    }
+
+    fn acquire_subscribe_permit(&self) -> anyhow::Result<OwnedSemaphorePermit> {
+        match self.subscription_semaphore.clone().try_acquire_owned() {
+            Ok(p) => Ok(p),
+            Err(_) => bail!("Resources exhausted"),
+        }
+    }
+
+    fn get_latest_checkpoint_timestamp_ms(&self) -> StateReadResult<u64> {
+        let latest_checkpoint = self.state.get_latest_checkpoint_sequence_number()?;
+
+        let checkpoint = self
+            .state
+            .get_verified_checkpoint_by_sequence_number(latest_checkpoint)?;
+
+        Ok(checkpoint.timestamp_ms)
     }
 }
 
@@ -116,13 +146,14 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         with_tracing!(async move {
-            let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
-            self.metrics.get_owned_objects_limit.report(limit as u64);
+            let limit =
+                validate_limit(limit, *QUERY_MAX_RESULT_LIMIT).map_err(SuiRpcInputError::from)?;
+            self.metrics.get_owned_objects_limit.observe(limit as f64);
             let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
             let options = options.unwrap_or_default();
             let mut objects = self
                 .state
-                .get_owner_objects(address, cursor, limit + 1, filter)
+                .get_owner_objects_with_limit(address, cursor, limit + 1, filter)
                 .map_err(Error::from)?;
 
             // objects here are of size (limit + 1), where the last one is the cursor for the next page
@@ -148,7 +179,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             self.metrics
                 .get_owned_objects_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .get_owned_objects_result_size_total
                 .inc_by(data.len() as u64);
@@ -171,15 +202,26 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     ) -> RpcResult<TransactionBlocksPage> {
         with_tracing!(async move {
             let limit = cap_page_limit(limit);
-            self.metrics.query_tx_blocks_limit.report(limit as u64);
+            self.metrics.query_tx_blocks_limit.observe(limit as f64);
             let descending = descending_order.unwrap_or_default();
             let opts = query.options.unwrap_or_default();
 
             // Retrieve 1 extra item for next cursor
             let mut digests = self
                 .state
-                .get_transactions(query.filter, cursor, Some(limit + 1), descending)
+                .get_transactions(
+                    &self.transaction_kv_store,
+                    query.filter,
+                    cursor,
+                    Some(limit + 1),
+                    descending,
+                )
+                .await
                 .map_err(Error::from)?;
+            // De-dup digests, duplicate digests are possible, for example,
+            // when get_transactions_by_move_function with module or function being None.
+            let mut seen = HashSet::new();
+            digests.retain(|digest| seen.insert(*digest));
 
             // extract next cursor
             let has_next_page = digests.len() > limit;
@@ -199,7 +241,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             self.metrics
                 .query_tx_blocks_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .query_tx_blocks_result_size_total
                 .inc_by(data.len() as u64);
@@ -222,18 +264,25 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         with_tracing!(async move {
             let descending = descending_order.unwrap_or_default();
             let limit = cap_page_limit(limit);
-            self.metrics.query_events_limit.report(limit as u64);
+            self.metrics.query_events_limit.observe(limit as f64);
             // Retrieve 1 extra item for next cursor
             let mut data = self
                 .state
-                .query_events(query, cursor.clone(), limit + 1, descending)
+                .query_events(
+                    &self.transaction_kv_store,
+                    query,
+                    cursor,
+                    limit + 1,
+                    descending,
+                )
+                .await
                 .map_err(Error::from)?;
             let has_next_page = data.len() > limit;
             data.truncate(limit);
-            let next_cursor = data.last().map_or(cursor, |e| Some(e.id.clone()));
+            let next_cursor = data.last().map_or(cursor, |e| Some(e.id));
             self.metrics
                 .query_events_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .query_events_result_size_total
                 .inc_by(data.len() as u64);
@@ -247,9 +296,13 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
     #[instrument(skip(self))]
     fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
+        let permit = self.acquire_subscribe_permit()?;
         spawn_subscription(
             sink,
-            self.state.subscription_handler.subscribe_events(filter),
+            self.state
+                .get_subscription_handler()
+                .subscribe_events(filter),
+            Some(permit),
         );
         Ok(())
     }
@@ -259,11 +312,13 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         sink: SubscriptionSink,
         filter: TransactionFilter,
     ) -> SubscriptionResult {
+        let permit = self.acquire_subscribe_permit()?;
         spawn_subscription(
             sink,
             self.state
-                .subscription_handler
+                .get_subscription_handler()
                 .subscribe_transactions(filter),
+            Some(permit),
         );
         Ok(())
     }
@@ -278,7 +333,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     ) -> RpcResult<DynamicFieldPage> {
         with_tracing!(async move {
             let limit = cap_page_limit(limit);
-            self.metrics.get_dynamic_fields_limit.report(limit as u64);
+            self.metrics.get_dynamic_fields_limit.observe(limit as f64);
             let mut data = self
                 .state
                 .get_dynamic_fields(parent_object_id, cursor, limit + 1)
@@ -288,7 +343,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.0));
             self.metrics
                 .get_dynamic_fields_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .get_dynamic_fields_result_size_total
                 .inc_by(data.len() as u64);
@@ -307,13 +362,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse> {
         with_tracing!(async move {
-            let DynamicFieldName {
-                type_: name_type,
-                value,
-            } = name.clone();
-            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
-            let sui_json_value = SuiJsonValue::new(value)?;
-            let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+            let (name_type, name_bcs_value) = self.extract_values_from_dynamic_field_name(name)?;
+
             let id = self
                 .state
                 .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
@@ -323,6 +373,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 self.read_api
                     .get_object(id, Some(SuiObjectDataOptions::full_content()))
                     .await
+                    .map_err(Error::from)
             } else {
                 Ok(SuiObjectResponse::new_with_error(
                     SuiObjectResponseError::DynamicFieldNotFound { parent_object_id },
@@ -334,93 +385,67 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     #[instrument(skip(self))]
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
         with_tracing!(async move {
-            let pkg_addr = match self.ns_package_addr {
-                Some(addr) => addr,
-                None => SuiAddress::from_str(NAME_SERVICE_DEFAULT_PACKAGE_ADDRESS)?,
-            };
-            let registry_id = match self.ns_registry_id {
-                Some(id) => id,
-                None => ObjectID::from_str(NAME_SERVICE_DEFAULT_REGISTRY).map_err(|e| {
-                    Error::UnexpectedError(format!(
-                        "Parsing name service default registry ID failed with error: {:?}",
-                        e
-                    ))
-                })?,
-            };
-            let package_addr = AccountAddress::new(pkg_addr.to_inner());
-            let name_type_tag = TypeTag::Struct(Box::new(StructTag {
-                address: package_addr,
-                module: NAME_SERVICE_DOMAIN_MODULE.to_owned(),
-                name: NAME_SERVICE_DOMAIN_STRUCT.to_owned(),
-                type_params: vec![],
-            }));
-            let domain = Domain::from_str(&name).map_err(|e| {
-                Error::UnexpectedError(format!(
-                    "Failed to parse NameService Domain with error: {:?}",
-                    e
-                ))
-            })?;
-            let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
-                    "Unable to serialize name: {:?} with error: {:?}",
-                    domain, e
-                )))
-            })?;
-            let record_object_id_option = self
-                .state
-                .get_dynamic_field_object_id(registry_id, name_type_tag, &domain_bcs_value)
-                .map_err(|e| {
-                    Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
-                        "Unable to lookup name in name service registry with error: {:?}",
-                        e
-                    )))
-                })?;
-            if let Some(record_object_id) = record_object_id_option {
-                let record_object_read =
-                    self.state.get_object_read(&record_object_id).map_err(|e| {
-                        Error::UnexpectedError(format!(
-                            "Failed to get object read of name with error {:?}",
-                            e
-                        ))
-                    })?;
-                let record_parsed_move_object =
-                    SuiParsedMoveObject::try_from_object_read(record_object_read)?;
-                // NOTE: "value" is the field name to get the address info
-                let address_info_move_value = record_parsed_move_object
-                    .read_dynamic_field_value(NAME_SERVICE_VALUE)
-                    .ok_or_else(|| {
-                        Error::UnexpectedError(
-                            "Cannot find value field in record Move struct".to_string(),
-                        )
-                    })?;
-                let address_info_move_struct = match address_info_move_value {
-                    SuiMoveValue::Struct(a) => Ok(a),
-                    _ => Err(Error::UnexpectedError(
-                        "value field is not found.".to_string(),
-                    )),
-                }?;
-                // NOTE: "target_address" is the field name to get the address
-                let address_str_move_value = address_info_move_struct
-                    .read_dynamic_field_value(NAME_SERVICE_TARGET_ADDRESS)
-                    .ok_or_else(|| {
-                        Error::UnexpectedError(format!(
-                            "Cannot find target_address field in address info Move struct: {:?}",
-                            address_info_move_struct
-                        ))
-                    })?;
-                let addr_opt = match &address_str_move_value {
-                    SuiMoveValue::Option(boxed_addr) => match **boxed_addr {
-                        Some(SuiMoveValue::Address(ref addr)) => Ok(Some(*addr)),
-                        _ => Ok(None),
-                    },
-                    _ => Err(Error::UnexpectedError(format!(
-                        "No SuiAddress found in: {:?}",
-                        address_str_move_value
-                    ))),
-                }?;
-                return Ok(addr_opt);
+            // prepare the requested domain's field id.
+            let domain = name.parse::<Domain>().map_err(Error::from)?;
+            let record_id = self.name_service_config.record_field_id(&domain);
+
+            // prepare the parent's field id.
+            let parent_domain = domain.parent();
+            let parent_record_id = self.name_service_config.record_field_id(&parent_domain);
+
+            let current_timestamp_ms = self.get_latest_checkpoint_timestamp_ms()?;
+
+            // Do these two reads in parallel.
+            let mut requests = vec![self.state.get_object(&record_id)];
+
+            // Also add the parent in the DB reads if the requested domain is a subdomain.
+            if domain.is_subdomain() {
+                requests.push(self.state.get_object(&parent_record_id));
             }
-            Ok(None)
+
+            // Couldn't find a `multi_get_object` for this crate (looks like it uses a k,v db)
+            // Always fetching both parent + child at the same time (even for node subdomains),
+            // to avoid sequential db reads. We do this because we do not know if the requested
+            // domain is a node subdomain or a leaf subdomain, and we can save a trip to the db.
+            let mut results = future::try_join_all(requests).await?;
+
+            // Removing without checking vector len, since it is known (== 1 or 2 depending on whether
+            // it is a subdomain or not).
+            let Some(object) = results.remove(0) else {
+                return Ok(None);
+            };
+
+            let name_record = NameRecord::try_from(object)?;
+
+            // Handling SLD names & node subdomains is the same (we handle them as `node` records)
+            // We check their expiration, and if not expired, return the target address.
+            if !name_record.is_leaf_record() {
+                return if !name_record.is_node_expired(current_timestamp_ms) {
+                    Ok(name_record.target_address)
+                } else {
+                    Err(Error::from(NameServiceError::NameExpired))
+                };
+            }
+
+            // == Handle leaf subdomains case ==
+            // We can remove since we know that if we're here, we have a parent
+            // (which also means we queried it in the future above).
+            let Some(parent_object) = results.remove(0) else {
+                return Err(Error::from(NameServiceError::NameExpired));
+            };
+
+            let parent_name_record = NameRecord::try_from(parent_object)?;
+
+            // For a leaf record, we check that:
+            // 1. The parent is a valid parent for that leaf record
+            // 2. The parent is not expired
+            if parent_name_record.is_valid_leaf_parent(&name_record)
+                && !parent_name_record.is_node_expired(current_timestamp_ms)
+            {
+                Ok(name_record.target_address)
+            } else {
+                Err(Error::from(NameServiceError::NameExpired))
+            }
         })
     }
 
@@ -432,107 +457,45 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         _limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
         with_tracing!(async move {
-            let reverse_registry_id = match self.ns_reverse_registry_id {
-                Some(id) => id,
-                None => ObjectID::from_str(NAME_SERVICE_DEFAULT_REVERSE_REGISTRY).map_err(|e| {
-                    Error::UnexpectedError(format!(
-                        "Parsing name service default reverse registry ID failed with error: {:?}",
-                        e
-                    ))
-                })?,
+            let reverse_record_id = self
+                .name_service_config
+                .reverse_record_field_id(address.as_ref());
+
+            let mut result = Page {
+                data: vec![],
+                next_cursor: None,
+                has_next_page: false,
             };
 
-            let name_type_tag = TypeTag::Address;
-            let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
-                    "Unable to serialize address: {:?} with error: {:?}",
-                    address, e
-                )))
-            })?;
+            let Some(field_reverse_record_object) =
+                self.state.get_object(&reverse_record_id).await?
+            else {
+                return Ok(result);
+            };
 
-            let addr_object_id_opt = self
-                .state
-                .get_dynamic_field_object_id(reverse_registry_id, name_type_tag, &addr_bcs_value)
-                .map_err(|e| {
-                    Error::UnexpectedError(format!(
-                        "Read name service reverse dynamic field table failed with error: {:?}",
-                        e
-                    ))
-                })?;
+            let domain = field_reverse_record_object
+                .to_rust::<Field<SuiAddress, Domain>>()
+                .ok_or_else(|| {
+                    Error::UnexpectedError(format!("Malformed Object {reverse_record_id}"))
+                })?
+                .value;
 
-            if let Some(addr_object_id) = addr_object_id_opt {
-                let addr_object_read =
-                    self.state.get_object_read(&addr_object_id).map_err(|e| {
-                        warn!(
-                            "Failed to get object read of address {:?} with error: {:?}",
-                            addr_object_id, e
-                        );
-                        Error::UnexpectedError(format!(
-                            "Failed to get object read of address with err: {:?}",
-                            e
-                        ))
-                    })?;
-                let addr_parsed_move_object =
-                    SuiParsedMoveObject::try_from_object_read(addr_object_read)?;
-                let address_info_move_value = addr_parsed_move_object
-                    .read_dynamic_field_value(NAME_SERVICE_VALUE)
-                    .ok_or_else(|| {
-                        Error::UnexpectedError(
-                            "Cannot find value field in record Move struct".to_string(),
-                        )
-                    })?;
-                let domain_info_move_struct = match address_info_move_value {
-                    SuiMoveValue::Struct(a) => Ok(a),
-                    _ => Err(Error::UnexpectedError(
-                        "value field is not found.".to_string(),
-                    )),
-                }?;
-                let labels_move_value = domain_info_move_struct
-                    .read_dynamic_field_value("labels")
-                    .ok_or_else(|| {
-                        Error::UnexpectedError(format!(
-                            "Cannot find labels field in address info Move struct: {:?}",
-                            domain_info_move_struct
-                        ))
-                    })?;
-                let primary_domain_opt = match labels_move_value {
-                    SuiMoveValue::Vector(labels) => {
-                        let label_strs: Vec<String> = labels
-                            .iter()
-                            .rev()
-                            .filter_map(|label| match label {
-                                SuiMoveValue::String(label_str) => Some(label_str.clone()),
-                                _ => None,
-                            })
-                            .collect();
-                        Ok(if label_strs.is_empty() {
-                            None
-                        } else {
-                            Some(label_strs.join("."))
-                        })
-                    }
-                    _ => Err(Error::UnexpectedError(format!(
-                        "No string field for primary name is found in {:?}",
-                        labels_move_value
-                    ))),
-                }?;
+            let domain_name = domain.to_string();
 
-                Ok(Page {
-                    data: if let Some(primary_domain) = primary_domain_opt {
-                        vec![primary_domain]
-                    } else {
-                        vec![]
-                    },
-                    next_cursor: Some(addr_object_id),
-                    has_next_page: false,
-                })
-            } else {
-                Ok(Page {
-                    data: vec![],
-                    next_cursor: None,
-                    has_next_page: false,
-                })
+            let resolved_address = self
+                .resolve_name_service_address(domain_name.clone())
+                .await?;
+
+            // If looking up the domain returns an empty result, we return an empty result.
+            if resolved_address.is_none() {
+                return Ok(result);
             }
+
+            // TODO(manos): Discuss why is this even a paginated response.
+            // This API is always going to return a single domain name.
+            result.data.push(domain_name);
+
+            Ok(result)
         })
     }
 }
@@ -543,6 +506,6 @@ impl<R: ReadApiServer> SuiRpcModule for IndexerApi<R> {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::IndexerApiOpenRpc::module_doc()
+        IndexerApiOpenRpc::module_doc()
     }
 }

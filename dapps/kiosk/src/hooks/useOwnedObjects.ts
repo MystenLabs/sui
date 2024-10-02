@@ -2,22 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 /* eslint-disable @tanstack/query/exhaustive-deps */
 
+import { useSuiClient } from '@mysten/dapp-kit';
+import { PaginatedObjectsResponse } from '@mysten/sui/client';
 import { useQuery } from '@tanstack/react-query';
-import { useRpc } from '../context/RpcClientContext';
-import { PaginatedObjectsResponse, SuiAddress, getObjectId, getObjectType } from '@mysten/sui.js';
-import { parseObjectDisplays } from '../utils/utils';
+
 import { TANSTACK_OWNED_OBJECTS_KEY } from '../utils/constants';
+import { parseObjectDisplays } from '../utils/utils';
 
 export function useOwnedObjects({
 	address,
 	cursor = undefined,
 	limit = 50,
 }: {
-	address: SuiAddress;
-	cursor?: SuiAddress;
+	address: string;
+	cursor?: string;
 	limit?: number;
 }) {
-	const provider = useRpc();
+	const provider = useSuiClient();
 
 	return useQuery({
 		queryKey: [TANSTACK_OWNED_OBJECTS_KEY, address],
@@ -39,10 +40,13 @@ export function useOwnedObjects({
 
 			// Simple mapping to OwnedObject style.
 			return data.map((item) => ({
-				display: displays[getObjectId(item)] || {},
-				type: getObjectType(item) || '',
+				display: displays[item.data?.objectId!] || {},
+				type:
+					item.data?.type ??
+					(item?.data?.content?.dataType === 'package' ? 'package' : item?.data?.content?.type) ??
+					'',
 				isLocked: false,
-				objectId: getObjectId(item),
+				objectId: item.data?.objectId,
 			}));
 		},
 	});

@@ -52,6 +52,8 @@ pub struct SimpleFaucet {
     active_address: SuiAddress,
     producer: Mutex<Sender<ObjectID>>,
     consumer: Mutex<Receiver<ObjectID>>,
+    batch_producer: Mutex<Sender<ObjectID>>,
+    batch_consumer: Mutex<Receiver<ObjectID>>,
     pub metrics: FaucetMetrics,
     pub wal: Mutex<WriteAheadLog>,
     request_producer: Sender<(Uuid, SuiAddress, Vec<u64>)>,
@@ -120,10 +122,20 @@ impl SimpleFaucet {
         let mut pending = vec![];
 
         let (producer, consumer) = mpsc::channel(coins.len());
+        let (batch_producer, batch_consumer) = mpsc::channel(coins.len());
+
         let (sender, mut receiver) =
             mpsc::channel::<(Uuid, SuiAddress, Vec<u64>)>(config.max_request_queue_length as usize);
 
-        for coin in &coins {
+        // This is to handle the case where there is only 1 coin, we want it to go to the normal queue
+        let split_point = if coins.len() > 10 {
+            coins.len() / 2
+        } else {
+            coins.len()
+        };
+        // Put half of the coins in the old faucet impl queue, and put half in the other queue for batch coins.
+        // In the test cases we create an account with 5 coins so we just let this run with a minimum of 5 coins
+        for (coins_processed, coin) in coins.iter().enumerate() {
             let coin_id = *coin.id();
             if let Some(write_ahead_log::Entry {
                 uuid,
@@ -136,7 +148,7 @@ impl SimpleFaucet {
                 let uuid = Uuid::from_bytes(uuid);
                 info!(?uuid, ?recipient, ?coin_id, "Retrying txn from WAL.");
                 pending.push((uuid, recipient, coin_id, tx));
-            } else {
+            } else if coins_processed < split_point {
                 producer
                     .send(coin_id)
                     .await
@@ -145,6 +157,16 @@ impl SimpleFaucet {
                         metrics.total_available_coins.inc();
                     })
                     .tap_err(|e| error!(?coin_id, "Failed to add coin to gas pools: {e:?}"))
+                    .unwrap();
+            } else {
+                batch_producer
+                    .send(coin_id)
+                    .await
+                    .tap_ok(|_| {
+                        info!(?coin_id, "Adding coin to batch gas pool");
+                        metrics.total_available_coins.inc();
+                    })
+                    .tap_err(|e| error!(?coin_id, "Failed to add coin to batch gas pools: {e:?}"))
                     .unwrap();
             }
         }
@@ -155,10 +177,11 @@ impl SimpleFaucet {
             active_address,
             producer: Mutex::new(producer),
             consumer: Mutex::new(consumer),
+            batch_producer: Mutex::new(batch_producer),
+            batch_consumer: Mutex::new(batch_consumer),
             metrics,
             wal: Mutex::new(wal),
             request_producer: sender,
-            // request_consumer: Mutex::new(receiver),
             batch_request_size: config.batch_request_size,
             // Max faucet requests times 10 minutes worth of requests to hold onto at max.
             // Note that the cache holds onto a Uuid for [ttl_expiration] in from every update in status with both INPROGRESS and SUCCEEDED
@@ -200,7 +223,7 @@ impl SimpleFaucet {
         // values -- if the executions failed, the pending coins will simply remain in the WAL, and
         // not recycled.
         futures::future::join_all(pending.into_iter().map(|(uuid, recipient, coin_id, tx)| {
-            arc_faucet.sign_and_execute_txn(uuid, recipient, coin_id, tx)
+            arc_faucet.sign_and_execute_txn(uuid, recipient, coin_id, tx, false)
         }))
         .await;
 
@@ -213,7 +236,8 @@ impl SimpleFaucet {
         // If the gas candidate queue is exhausted, the request will be suspended indefinitely until
         // a producer puts in more candidate gas objects. At the same time, other requests will be
         // blocked by the lock acquisition as well.
-        let Ok(mut consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.consumer.lock()).await else {
+        let Ok(mut consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.consumer.lock()).await
+        else {
             error!(?uuid, "Timeout when getting consumer lock");
             return None;
         };
@@ -232,10 +256,48 @@ impl SimpleFaucet {
         Some(coin)
     }
 
+    /// Take the consumer lock and pull a Coin ID from the queue, without checking whether it is
+    /// valid or not.
+    async fn pop_gas_coin_for_batch(&self, uuid: Uuid) -> Option<ObjectID> {
+        // If the gas candidate queue is exhausted, the request will be suspended indefinitely until
+        // a producer puts in more candidate gas objects. At the same time, other requests will be
+        // blocked by the lock acquisition as well.
+        let Ok(mut batch_consumer) =
+            tokio::time::timeout(LOCK_TIMEOUT, self.batch_consumer.lock()).await
+        else {
+            error!(?uuid, "Timeout when getting batch consumer lock");
+            return None;
+        };
+
+        info!(?uuid, "Got consumer lock, pulling coins.");
+        let Ok(coin) = tokio::time::timeout(RECV_TIMEOUT, batch_consumer.recv()).await else {
+            error!(?uuid, "Timeout when getting gas coin from the queue");
+            return None;
+        };
+
+        let Some(coin) = coin else {
+            unreachable!("channel is closed");
+        };
+
+        self.metrics.total_available_coins.dec();
+        Some(coin)
+    }
+
     /// Pulls a coin from the queue and makes sure it is fit for use (belongs to the faucet, has
     /// sufficient balance).
-    async fn prepare_gas_coin(&self, total_amount: u64, uuid: Uuid) -> GasCoinResponse {
-        let Some(coin_id) = self.pop_gas_coin(uuid).await else {
+    async fn prepare_gas_coin(
+        &self,
+        total_amount: u64,
+        uuid: Uuid,
+        for_batch: bool,
+    ) -> GasCoinResponse {
+        let coin_id = if for_batch {
+            self.pop_gas_coin_for_batch(uuid).await
+        } else {
+            self.pop_gas_coin(uuid).await
+        };
+
+        let Some(coin_id) = coin_id else {
             warn!("Failed getting gas coin, try later!");
             return GasCoinResponse::NoGasCoinAvailable;
         };
@@ -246,9 +308,15 @@ impl SimpleFaucet {
                 GasCoinResponse::ValidGasCoin(coin_id)
             }
 
-            Ok(Some(_)) => GasCoinResponse::GasCoinWithInsufficientBalance(coin_id),
+            Ok(Some(_)) => {
+                info!(?uuid, ?coin_id, "insufficient balance",);
+                GasCoinResponse::GasCoinWithInsufficientBalance(coin_id)
+            }
 
-            Ok(None) => GasCoinResponse::InvalidGasCoin(coin_id),
+            Ok(None) => {
+                info!(?uuid, ?coin_id, "No gas coin returned.",);
+                GasCoinResponse::InvalidGasCoin(coin_id)
+            }
 
             Err(e) => {
                 error!(?uuid, ?coin_id, "Fullnode read error: {e:?}");
@@ -260,6 +328,7 @@ impl SimpleFaucet {
     /// Check if the gas coin is still valid. A valid gas coin
     /// 1. Exists presently
     /// 2. is a gas coin
+    ///
     /// If the coin is valid, return Ok(Some(GasCoin))
     /// If the coin invalid, return Ok(None)
     /// If the fullnode returns an unexpected error, returns Err(e)
@@ -294,6 +363,7 @@ impl SimpleFaucet {
         coin_id: ObjectID,
     ) -> anyhow::Result<Option<GasCoin>> {
         let gas_obj = self.get_coin(coin_id).await?;
+        info!(?coin_id, "Reading gas coin object: {:?}", gas_obj);
         Ok(gas_obj.and_then(|(owner_opt, coin)| match owner_opt {
             Some(Owner::AddressOwner(owner_addr)) if owner_addr == self.active_address => {
                 Some(coin)
@@ -328,7 +398,7 @@ impl SimpleFaucet {
         drop(wal);
 
         futures::future::join_all(pending.into_iter().map(|(uuid, recipient, coin_id, tx)| {
-            self.sign_and_execute_txn(uuid, recipient, coin_id, tx)
+            self.sign_and_execute_txn(uuid, recipient, coin_id, tx, false)
         }))
         .await;
 
@@ -343,6 +413,7 @@ impl SimpleFaucet {
         recipient: SuiAddress,
         coin_id: ObjectID,
         tx_data: TransactionData,
+        for_batch: bool,
     ) -> Result<SuiTransactionBlockResponse, FaucetError> {
         let signature = self
             .wallet
@@ -350,7 +421,7 @@ impl SimpleFaucet {
             .keystore
             .sign_secure(&self.active_address, &tx_data, Intent::sui_transaction())
             .map_err(FaucetError::internal)?;
-        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
+        let tx = Transaction::from_data(tx_data, vec![signature]);
         let tx_digest = *tx.digest();
         info!(
             ?tx_digest,
@@ -377,6 +448,7 @@ impl SimpleFaucet {
 
                 // We set the inflight status to false so that the async thread that
                 // retries this transactions will attempt to try again.
+                // We should only set this inflight if we see that it's not a client error
                 if let Err(err) = self.wal.lock().await.set_in_flight(coin_id, false) {
                     error!(
                         ?recipient,
@@ -405,7 +477,11 @@ impl SimpleFaucet {
                 if self.wal.lock().await.commit(coin_id).is_err() {
                     error!(?coin_id, "Failed to remove coin from WAL");
                 }
-                self.recycle_gas_coin(coin_id, uuid).await;
+                if for_batch {
+                    self.recycle_gas_coin_for_batch(coin_id, uuid).await;
+                } else {
+                    self.recycle_gas_coin(coin_id, uuid).await;
+                }
                 Ok(result)
             }
         }
@@ -422,7 +498,9 @@ impl SimpleFaucet {
         let total_amount: u64 = amounts.iter().sum();
         let gas_cost = self.get_gas_cost().await?;
 
-        let gas_coin_response = self.prepare_gas_coin(total_amount + gas_cost, uuid).await;
+        let gas_coin_response = self
+            .prepare_gas_coin(total_amount + gas_cost, uuid, false)
+            .await;
         match gas_coin_response {
             GasCoinResponse::ValidGasCoin(coin_id) => {
                 let tx_data = self
@@ -439,7 +517,7 @@ impl SimpleFaucet {
                         .map_err(FaucetError::internal)?;
                 }
                 let response = self
-                    .sign_and_execute_txn(uuid, recipient, coin_id, tx_data)
+                    .sign_and_execute_txn(uuid, recipient, coin_id, tx_data, false)
                     .await?;
                 self.metrics.total_coin_requests_succeeded.inc();
                 self.check_and_map_transfer_gas_result(response, number_of_coins, recipient)
@@ -477,6 +555,19 @@ impl SimpleFaucet {
         let producer = self.producer.lock().await;
         info!(?uuid, ?coin_id, "Got producer lock and recycling coin");
         producer
+            .try_send(coin_id)
+            .expect("unexpected - queue is large enough to hold all coins");
+        self.metrics.total_available_coins.inc();
+        info!(?uuid, ?coin_id, "Recycled coin");
+    }
+
+    async fn recycle_gas_coin_for_batch(&self, coin_id: ObjectID, uuid: Uuid) {
+        // Once transactions are done, in despite of success or failure,
+        // we put back the coins. The producer should never wait indefinitely,
+        // in that the channel is initialized with big enough capacity.
+        let batch_producer = self.batch_producer.lock().await;
+        info!(?uuid, ?coin_id, "Got producer lock and recycling coin");
+        batch_producer
             .try_send(coin_id)
             .expect("unexpected - queue is large enough to hold all coins");
         self.metrics.total_available_coins.inc();
@@ -673,7 +764,7 @@ impl SimpleFaucet {
             // Insert the coins into the map based on the destination address
             address_coins_map
                 .entry(owner.get_owner_address().unwrap())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(coin_obj_ref);
         });
 
@@ -688,7 +779,7 @@ impl SimpleFaucet {
             let index = *request_count.entry(addy).or_insert(0);
 
             // The address coin map should contain the coins transferred in the given request.
-            let coins_created_for_address = address_coins_map.entry(addy).or_insert_with(Vec::new);
+            let coins_created_for_address = address_coins_map.entry(addy).or_default();
 
             if number_of_coins as u64 + index > coins_created_for_address.len() as u64 {
                 return Err(FaucetError::CoinAmountTransferredIncorrect(format!(
@@ -863,7 +954,7 @@ pub async fn batch_gather(
 ) -> Result<(), FaucetError> {
     // Gather the rest of the batch after the first item has been taken.
     for _ in 1..batch_request_size {
-        let Some(req)  = request_consumer.recv().await else {
+        let Some(req) = request_consumer.recv().await else {
             error!("Request consumer queue closed");
             return Err(FaucetError::ChannelClosed);
         };
@@ -925,7 +1016,7 @@ pub async fn batch_transfer_gases(
     // This loop is utilized to grab a coin that is large enough for the request
     loop {
         let gas_coin_response = faucet
-            .prepare_gas_coin(total_sui_needed + gas_cost, uuid)
+            .prepare_gas_coin(total_sui_needed + gas_cost, uuid, true)
             .await;
 
         match gas_coin_response {
@@ -952,7 +1043,7 @@ pub async fn batch_transfer_gases(
                         .map_err(FaucetError::internal)?;
                 }
                 let response = faucet
-                    .sign_and_execute_txn(uuid, recipient, coin_id, tx_data)
+                    .sign_and_execute_txn(uuid, recipient, coin_id, tx_data, true)
                     .await?;
 
                 faucet
@@ -996,30 +1087,85 @@ pub async fn batch_transfer_gases(
 
 #[cfg(test)]
 mod tests {
-    use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+    use super::*;
+    use anyhow::*;
+    use shared_crypto::intent::Intent;
     use sui_json_rpc_types::SuiExecutionStatus;
+    use sui_json_rpc_types::SuiTransactionBlockEffects;
     use sui_sdk::wallet_context::WalletContext;
+    use sui_types::transaction::SenderSignedData;
+    use sui_types::transaction::TransactionDataAPI;
     use test_cluster::TestClusterBuilder;
 
-    use super::*;
+    async fn execute_tx(
+        ctx: &mut WalletContext,
+        tx_data: TransactionData,
+    ) -> Result<SuiTransactionBlockEffects, anyhow::Error> {
+        let signature = ctx.config.keystore.sign_secure(
+            &tx_data.sender(),
+            &tx_data,
+            Intent::sui_transaction(),
+        )?;
+        let sender_signed_data = SenderSignedData::new_from_sender_signature(tx_data, signature);
+        let transaction = Transaction::new(sender_signed_data);
+        let response = ctx.execute_transaction_may_fail(transaction).await?;
+        let result_effects = response.clone().effects;
+
+        if let Some(effects) = result_effects {
+            if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+                Err(anyhow!(
+                    "Error executing transaction: {:#?}",
+                    effects.status()
+                ))
+            } else {
+                Ok(effects)
+            }
+        } else {
+            Err(anyhow!(
+                "Effects from SuiTransactionBlockResult should not be empty"
+            ))
+        }
+    }
 
     #[tokio::test]
     async fn simple_faucet_basic_interface_should_work() {
         telemetry_subscribers::init_for_testing();
         let test_cluster = TestClusterBuilder::new().build().await;
-
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
         let config = FaucetConfig::default();
+
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gas_coins = context
+            .get_all_gas_objects_owned_by_address(address)
+            .await
+            .unwrap();
+        let client = context.get_client().await.unwrap();
+        let tx_kind = client
+            .transaction_builder()
+            .split_coin_tx_kind(gas_coins.first().unwrap().0, None, Some(10))
+            .await
+            .unwrap();
+        let gas_budget = 50_000_000;
+        let rgp = context.get_reference_gas_price().await.unwrap();
+        let tx_data = client
+            .transaction_builder()
+            .tx_data(address, tx_kind, gas_budget, rgp, vec![], None)
+            .await
+            .unwrap();
+
+        execute_tx(&mut context, tx_data).await.unwrap();
+
         let faucet = SimpleFaucet::new(
-            test_cluster.wallet,
+            context,
             &prom_registry,
             &tmp.path().join("faucet.wal"),
             config,
         )
         .await
         .unwrap();
-        faucet.shutdown_batch_send_task();
+        // faucet.shutdown_batch_send_task();
 
         let faucet = Arc::try_unwrap(faucet).unwrap();
 
@@ -1037,9 +1183,12 @@ mod tests {
     async fn test_init_gas_queue() {
         let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
-        let mut context = test_cluster.wallet;
-        let gases = get_current_gases(address, &mut context).await;
-        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        let context = test_cluster.wallet;
+        let gas_coins = context
+            .get_all_gas_objects_owned_by_address(address)
+            .await
+            .unwrap();
+        let gas_coins = HashSet::from_iter(gas_coins.into_iter().map(|gas| gas.0));
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
@@ -1056,13 +1205,13 @@ mod tests {
         let available = faucet.metrics.total_available_coins.get();
         let faucet_unwrapped = &mut Arc::try_unwrap(faucet).unwrap();
 
-        let candidates = faucet_unwrapped.drain_gas_queue(gases.len()).await;
+        let candidates = faucet_unwrapped.drain_gas_queue(gas_coins.len()).await;
 
         assert_eq!(available as usize, candidates.len());
         assert_eq!(
-            candidates, gases,
+            candidates, gas_coins,
             "gases: {:?}, candidates: {:?}",
-            gases, candidates
+            gas_coins, candidates
         );
     }
 
@@ -1070,10 +1219,12 @@ mod tests {
     async fn test_transfer_state() {
         let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
-        let mut context = test_cluster.wallet;
-        let gases = get_current_gases(address, &mut context).await;
-
-        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        let context = test_cluster.wallet;
+        let gas_coins = context
+            .get_all_gas_objects_owned_by_address(address)
+            .await
+            .unwrap();
+        let gas_coins = HashSet::from_iter(gas_coins.into_iter().map(|gas| gas.0));
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
@@ -1087,9 +1238,9 @@ mod tests {
         .await
         .unwrap();
 
-        let number_of_coins = gases.len();
+        let number_of_coins = gas_coins.len();
         let amounts = &vec![1; number_of_coins];
-        let _ = futures::future::join_all((0..30).map(|_| {
+        let _ = futures::future::join_all((0..number_of_coins).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
                 SuiAddress::random_for_testing_only(),
@@ -1106,23 +1257,44 @@ mod tests {
         faucet.shutdown_batch_send_task();
 
         let faucet_unwrapped: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
-        let candidates = faucet_unwrapped.drain_gas_queue(gases.len()).await;
+        let candidates = faucet_unwrapped.drain_gas_queue(gas_coins.len()).await;
         assert_eq!(available as usize, candidates.len());
         assert_eq!(
-            candidates, gases,
+            candidates, gas_coins,
             "gases: {:?}, candidates: {:?}",
-            gases, candidates
+            gas_coins, candidates
         );
     }
 
     #[tokio::test]
     async fn test_batch_transfer_interface() {
         let test_cluster = TestClusterBuilder::new().build().await;
-        let context = test_cluster.wallet;
         let config: FaucetConfig = Default::default();
         let coin_amount = config.amount;
         let prom_registry = Registry::new();
         let tmp = tempfile::tempdir().unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gas_coins = context
+            .get_all_gas_objects_owned_by_address(address)
+            .await
+            .unwrap();
+        let client = context.get_client().await.unwrap();
+        let tx_kind = client
+            .transaction_builder()
+            .split_coin_tx_kind(gas_coins.first().unwrap().0, None, Some(10))
+            .await
+            .unwrap();
+        let gas_budget = 50_000_000;
+        let rgp = context.get_reference_gas_price().await.unwrap();
+        let tx_data = client
+            .transaction_builder()
+            .tx_data(address, tx_kind, gas_budget, rgp, vec![], None)
+            .await
+            .unwrap();
+
+        execute_tx(&mut context, tx_data).await.unwrap();
+
         let faucet = SimpleFaucet::new(
             context,
             &prom_registry,
@@ -1132,7 +1304,7 @@ mod tests {
         .await
         .unwrap();
 
-        let amounts = &vec![coin_amount];
+        let amounts = &[coin_amount];
 
         // Create a vector containing five randomly generated addresses
         let target_addresses: Vec<SuiAddress> = (0..5)
@@ -1213,7 +1385,7 @@ mod tests {
         .await
         .unwrap();
 
-        let amounts = &vec![1; 1];
+        let amounts = &[1; 1];
         // Create a vector containing five randomly generated addresses
         let target_addresses: Vec<SuiAddress> = (0..5)
             .map(|_| SuiAddress::random_for_testing_only())
@@ -1247,15 +1419,20 @@ mod tests {
     async fn test_discard_invalid_gas() {
         let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
-        let mut context = test_cluster.wallet;
-        let mut gases = get_current_gases(address, &mut context).await;
+        let context = test_cluster.wallet;
+        let mut gas_coins = context
+            .get_all_gas_objects_owned_by_address(address)
+            .await
+            .unwrap();
 
-        let bad_gas = gases.swap_remove(0);
-        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        let bad_gas = gas_coins.swap_remove(0);
+        let gas_coins = HashSet::from_iter(gas_coins.into_iter().map(|gas| gas.0));
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
         let config = FaucetConfig::default();
+
+        let client = context.get_client().await.unwrap();
         let faucet = SimpleFaucet::new(
             context,
             &prom_registry,
@@ -1265,33 +1442,25 @@ mod tests {
         .await
         .unwrap();
         faucet.shutdown_batch_send_task();
-
         let faucet: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
 
         // Now we transfer one gas out
-        let res = SuiClientCommands::PayAllSui {
-            input_coins: vec![*bad_gas.id()],
-            recipient: SuiAddress::random_for_testing_only(),
-            gas_budget: 2_000_000,
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
-        }
-        .execute(faucet.wallet_mut())
-        .await
-        .unwrap();
+        let gas_budget = 50_000_000;
+        let tx_data = client
+            .transaction_builder()
+            .pay_all_sui(
+                address,
+                vec![bad_gas.0],
+                SuiAddress::random_for_testing_only(),
+                gas_budget,
+            )
+            .await
+            .unwrap();
+        execute_tx(faucet.wallet_mut(), tx_data).await.unwrap();
 
-        if let SuiClientCommandResult::PayAllSui(response) = res {
-            assert!(matches!(
-                response.effects.unwrap().status(),
-                SuiExecutionStatus::Success
-            ));
-        } else {
-            panic!("PayAllSui command did not return SuiClientCommandResult::PayAllSui");
-        };
-
-        let number_of_coins = gases.len();
+        let number_of_coins = gas_coins.len();
         let amounts = &vec![1; number_of_coins];
-        // We traverse the the list twice, which must trigger the transferred gas to be kicked out
+        // We traverse the list twice, which must trigger the transferred gas to be kicked out
         futures::future::join_all((0..2).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
@@ -1305,17 +1474,13 @@ mod tests {
         // Note `gases` does not contain the bad gas.
         let available = faucet.metrics.total_available_coins.get();
         let discarded = faucet.metrics.total_discarded_coins.get();
-        println!(
-            "gases: {:?}, avail: {available:?} disc: {discarded:?}",
-            gases
-        );
-        let candidates = faucet.drain_gas_queue(gases.len()).await;
+        let candidates = faucet.drain_gas_queue(gas_coins.len()).await;
         assert_eq!(available as usize, candidates.len());
         assert_eq!(discarded, 1);
         assert_eq!(
-            candidates, gases,
+            candidates, gas_coins,
             "gases: {:?}, candidates: {:?}",
-            gases, candidates
+            gas_coins, candidates
         );
     }
 
@@ -1343,7 +1508,9 @@ mod tests {
         let faucet_address = faucet.active_address;
         let uuid = Uuid::new_v4();
 
-        let GasCoinResponse::ValidGasCoin(coin_id) = faucet.prepare_gas_coin(100, uuid).await else {
+        let GasCoinResponse::ValidGasCoin(coin_id) =
+            faucet.prepare_gas_coin(100, uuid, false).await
+        else {
             panic!("prepare_gas_coin did not give a valid coin.")
         };
 
@@ -1388,42 +1555,45 @@ mod tests {
         let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
-        let gases = get_current_gases(address, &mut context).await;
+        let gas_coins = context
+            .get_all_gas_objects_owned_by_address(address)
+            .await
+            .unwrap();
 
         // split out a coin that has a very small balance such that
         // this coin will be not used later on. This is the new default amount for faucet due to gas changes
         let config = FaucetConfig::default();
         let tiny_value = (config.num_coins as u64 * config.amount) + 1;
-        let res = SuiClientCommands::SplitCoin {
-            coin_id: *gases[0].id(),
-            amounts: Some(vec![tiny_value]),
-            gas_budget: 50000000,
-            gas: None,
-            count: None,
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
-        }
-        .execute(&mut context)
-        .await;
+        let client = context.get_client().await.unwrap();
+        let tx_kind = client
+            .transaction_builder()
+            .split_coin_tx_kind(gas_coins.first().unwrap().0, Some(vec![tiny_value]), None)
+            .await
+            .unwrap();
+        let gas_budget = 50_000_000;
+        let rgp = context.get_reference_gas_price().await.unwrap();
+        let tx_data = client
+            .transaction_builder()
+            .tx_data(address, tx_kind, gas_budget, rgp, vec![], None)
+            .await
+            .unwrap();
 
-        let tiny_coin_id = if let SuiClientCommandResult::SplitCoin(resp) = res.unwrap() {
-            resp.effects.as_ref().unwrap().created()[0]
-                .reference
-                .object_id
-        } else {
-            panic!("split command did not return SuiClientCommandResult::SplitCoin");
-        };
+        let effects = execute_tx(&mut context, tx_data).await.unwrap();
+
+        let tiny_coin_id = effects.created()[0].reference.object_id;
 
         // Get the latest list of gas
-        let gases = get_current_gases(address, &mut context).await;
-        let tiny_amount = gases
+        let gas_coins = context.gas_objects(address).await.unwrap();
+
+        let tiny_amount = gas_coins
             .iter()
-            .find(|gas| gas.id() == &tiny_coin_id)
+            .find(|gas| gas.1.object_id == tiny_coin_id)
             .unwrap()
-            .value();
+            .0;
         assert_eq!(tiny_amount, tiny_value);
 
-        let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        let gas_coins: HashSet<ObjectID> =
+            HashSet::from_iter(gas_coins.into_iter().map(|gas| gas.1.object_id));
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
@@ -1440,9 +1610,9 @@ mod tests {
         let faucet: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
 
         // Ask for a value higher than tiny coin + DEFAULT_GAS_COMPUTATION_BUCKET
-        let number_of_coins = gases.len();
+        let number_of_coins = gas_coins.len();
         let amounts = &vec![tiny_value + 1; number_of_coins];
-        // We traverse the the list ten times, which must trigger the tiny gas to be examined and then discarded
+        // We traverse the list ten times, which must trigger the tiny gas to be examined and then discarded
         futures::future::join_all((0..10).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
@@ -1463,10 +1633,10 @@ mod tests {
         let discarded = faucet.metrics.total_discarded_coins.get();
 
         info!("discarded: {:?}", discarded);
-        let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
+        let candidates = faucet.drain_gas_queue(gas_coins.len() - 1).await;
 
         assert_eq!(discarded, 1);
-        assert!(candidates.get(&tiny_coin_id).is_none());
+        assert!(!candidates.contains(&tiny_coin_id));
     }
 
     #[tokio::test]
@@ -1474,42 +1644,50 @@ mod tests {
         let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
-        let gases = get_current_gases(address, &mut context).await;
+        let gas_coins = context
+            .get_all_gas_objects_owned_by_address(address)
+            .await
+            .unwrap();
         let config = FaucetConfig::default();
 
+        // The coin that is split off stays because we don't try to refresh the coin vector
         let reasonable_value = (config.num_coins as u64 * config.amount) * 10;
-        SuiClientCommands::SplitCoin {
-            coin_id: *gases[0].id(),
-            amounts: Some(vec![reasonable_value]),
-            gas_budget: 50000000,
-            gas: None,
-            count: None,
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
-        }
-        .execute(&mut context)
-        .await
-        .expect("split failed");
+        let client = context.get_client().await.unwrap();
+        let tx_kind = client
+            .transaction_builder()
+            .split_coin_tx_kind(
+                gas_coins.first().unwrap().0,
+                Some(vec![reasonable_value]),
+                None,
+            )
+            .await
+            .unwrap();
+        let gas_budget = 50_000_000;
+        let rgp = context.get_reference_gas_price().await.unwrap();
+        let tx_data = client
+            .transaction_builder()
+            .tx_data(address, tx_kind, gas_budget, rgp, vec![], None)
+            .await
+            .unwrap();
+        execute_tx(&mut context, tx_data).await.unwrap();
 
         let destination_address = SuiAddress::random_for_testing_only();
         // Transfer all valid gases away except for 1
-        for gas in gases.iter().take(gases.len() - 1) {
-            SuiClientCommands::TransferSui {
-                to: destination_address,
-                sui_coin_object_id: *gas.id(),
-                gas_budget: 50000000,
-                amount: None,
-                serialize_unsigned_transaction: false,
-                serialize_signed_transaction: false,
-            }
-            .execute(&mut context)
-            .await
-            .expect("transfer failed");
+        for gas in gas_coins.iter().take(gas_coins.len() - 1) {
+            let tx_data = client
+                .transaction_builder()
+                .transfer_sui(address, gas.0, gas_budget, destination_address, None)
+                .await
+                .unwrap();
+            execute_tx(&mut context, tx_data).await.unwrap();
         }
 
         // Assert that the coins were transferred away successfully to destination address
-        let gases = get_current_gases(destination_address, &mut context).await;
-        assert!(!gases.is_empty());
+        let gas_coins = context
+            .get_all_gas_objects_owned_by_address(address)
+            .await
+            .unwrap();
+        assert!(!gas_coins.is_empty());
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
@@ -1523,7 +1701,7 @@ mod tests {
         .await
         .unwrap();
 
-        // We traverse the the list twice, which must trigger the transferred gas to be kicked out
+        // We traverse the list twice, which must trigger the split gas to be kicked out
         futures::future::join_all((0..2).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
@@ -1547,42 +1725,49 @@ mod tests {
         let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
-        let gases = get_current_gases(address, &mut context).await;
+        let gas_coins = context
+            .get_all_gas_objects_owned_by_address(address)
+            .await
+            .unwrap();
         let config = FaucetConfig::default();
 
         let tiny_value = (config.num_coins as u64 * config.amount) + 1;
-        let _res = SuiClientCommands::SplitCoin {
-            coin_id: *gases[0].id(),
-            amounts: Some(vec![tiny_value]),
-            gas_budget: 50000000,
-            gas: None,
-            count: None,
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
-        }
-        .execute(&mut context)
-        .await;
+        let client = context.get_client().await.unwrap();
+        let tx_kind = client
+            .transaction_builder()
+            .split_coin_tx_kind(gas_coins.first().unwrap().0, Some(vec![tiny_value]), None)
+            .await
+            .unwrap();
+
+        let gas_budget = 50_000_000;
+        let rgp = context.get_reference_gas_price().await.unwrap();
+
+        let tx_data = client
+            .transaction_builder()
+            .tx_data(address, tx_kind, gas_budget, rgp, vec![], None)
+            .await
+            .unwrap();
+
+        execute_tx(&mut context, tx_data).await.unwrap();
 
         let destination_address = SuiAddress::random_for_testing_only();
 
         // Transfer all valid gases away
-        for gas in gases {
-            SuiClientCommands::TransferSui {
-                to: destination_address,
-                sui_coin_object_id: *gas.id(),
-                gas_budget: 50000000,
-                amount: None,
-                serialize_unsigned_transaction: false,
-                serialize_signed_transaction: false,
-            }
-            .execute(&mut context)
-            .await
-            .expect("transfer failed");
+        for gas in gas_coins {
+            let tx_data = client
+                .transaction_builder()
+                .transfer_sui(address, gas.0, gas_budget, destination_address, None)
+                .await
+                .unwrap();
+            execute_tx(&mut context, tx_data).await.unwrap();
         }
 
         // Assert that the coins were transferred away successfully to destination address
-        let gases = get_current_gases(destination_address, &mut context).await;
-        assert!(!gases.is_empty());
+        let gas_coins = context
+            .get_all_gas_objects_owned_by_address(destination_address)
+            .await
+            .unwrap();
+        assert!(!gas_coins.is_empty());
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
@@ -1626,7 +1811,9 @@ mod tests {
         let faucet_address = faucet.active_address;
         let uuid = Uuid::new_v4();
 
-        let GasCoinResponse::ValidGasCoin(coin_id) = faucet.prepare_gas_coin(100, uuid).await else {
+        let GasCoinResponse::ValidGasCoin(coin_id) =
+            faucet.prepare_gas_coin(100, uuid, false).await
+        else {
             panic!("prepare_gas_coin did not give a valid coin.")
         };
 
@@ -1678,8 +1865,27 @@ mod tests {
     #[tokio::test]
     async fn test_amounts_transferred_on_batch() {
         let test_cluster = TestClusterBuilder::new().build().await;
-        let context = test_cluster.wallet;
         let config: FaucetConfig = Default::default();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gas_coins = context
+            .get_all_gas_objects_owned_by_address(address)
+            .await
+            .unwrap();
+        let client = context.get_client().await.unwrap();
+        let tx_kind = client
+            .transaction_builder()
+            .split_coin_tx_kind(gas_coins.first().unwrap().0, None, Some(10))
+            .await
+            .unwrap();
+        let gas_budget = 50_000_000;
+        let rgp = context.get_reference_gas_price().await.unwrap();
+        let tx_data = client
+            .transaction_builder()
+            .tx_data(address, tx_kind, gas_budget, rgp, vec![], None)
+            .await
+            .unwrap();
+        execute_tx(&mut context, tx_data).await.unwrap();
 
         let prom_registry = Registry::new();
         let tmp = tempfile::tempdir().unwrap();
@@ -1779,19 +1985,5 @@ mod tests {
         let mut actual_amounts: Vec<u64> = sent.iter().map(|c| c.amount).collect();
         actual_amounts.sort_unstable();
         assert_eq!(actual_amounts, amounts);
-    }
-
-    async fn get_current_gases(address: SuiAddress, context: &mut WalletContext) -> Vec<GasCoin> {
-        // Get the latest list of gas
-        let results = SuiClientCommands::Gas {
-            address: Some(address),
-        }
-        .execute(context)
-        .await
-        .unwrap();
-        match results {
-            SuiClientCommandResult::Gas(gases) => gases,
-            other => panic!("Expect SuiClientCommandResult::Gas, but got {:?}", other),
-        }
     }
 }

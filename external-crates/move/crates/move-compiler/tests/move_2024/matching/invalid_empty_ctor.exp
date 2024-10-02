@@ -1,0 +1,22 @@
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/matching/invalid_empty_ctor.move:8:18
+  │
+4 │         None
+  │         ---- 'None' is declared here
+  ·
+8 │         let _x = Empty::None { };
+  │                  ^^^^^^^^^^^^^^^ Invalid variant instantiation. Empty variant declarations require empty instantiations
+  │
+  = Remove '{ }' arguments from this instantiation
+
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/matching/invalid_empty_ctor.move:9:18
+  │
+4 │         None
+  │         ---- 'None' is declared here
+  ·
+9 │         let _x = Empty::None();
+  │                  ^^^^^^^^^^^^^ Invalid variant instantiation. Empty variant declarations require empty instantiations
+  │
+  = Remove '()' arguments from this instantiation
+

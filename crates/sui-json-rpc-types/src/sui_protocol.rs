@@ -15,6 +15,11 @@ use sui_types::sui_serde::{AsProtocolVersion, BigInt};
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "ProtocolConfigValue")]
 pub enum SuiProtocolConfigValue {
+    U16(
+        #[schemars(with = "BigInt<u16>")]
+        #[serde_as(as = "BigInt<u16>")]
+        u16,
+    ),
     U32(
         #[schemars(with = "BigInt<u32>")]
         #[serde_as(as = "BigInt<u32>")]
@@ -30,14 +35,20 @@ pub enum SuiProtocolConfigValue {
         #[serde_as(as = "DisplayFromStr")]
         f64,
     ),
+    Bool(
+        #[schemars(with = "String")]
+        #[serde_as(as = "DisplayFromStr")]
+        bool,
+    ),
 }
 
 impl From<ProtocolConfigValue> for SuiProtocolConfigValue {
     fn from(value: ProtocolConfigValue) -> Self {
         match value {
+            ProtocolConfigValue::u16(y) => SuiProtocolConfigValue::U16(y),
             ProtocolConfigValue::u32(y) => SuiProtocolConfigValue::U32(y),
             ProtocolConfigValue::u64(x) => SuiProtocolConfigValue::U64(x),
-            ProtocolConfigValue::f64(z) => SuiProtocolConfigValue::F64(z),
+            ProtocolConfigValue::bool(z) => SuiProtocolConfigValue::Bool(z),
         }
     }
 }

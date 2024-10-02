@@ -1,0 +1,5 @@
+[package]
+name = "A-rename"
+
+[dependencies]
+C-rename = { local = "../C", addr_subst = { "AA" = "A" } }

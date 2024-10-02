@@ -1,0 +1,3 @@
+[package]
+name = "publish_then_run"
+edition = "2024.beta"

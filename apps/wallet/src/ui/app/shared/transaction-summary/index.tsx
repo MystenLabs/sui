@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { type TransactionSummary as TransactionSummaryType } from '@mysten/core';
-import clsx from 'classnames';
+import clsx from 'clsx';
 
+import LoadingIndicator from '../../components/loading/LoadingIndicator';
+import { Heading } from '../heading';
 import { BalanceChanges } from './cards/BalanceChanges';
 import { ExplorerLinkCard } from './cards/ExplorerLink';
 import { GasSummary } from './cards/GasSummary';
 import { ObjectChanges } from './cards/ObjectChanges';
-import LoadingIndicator from '../../components/loading/LoadingIndicator';
-import { Heading } from '../heading';
 
 export function TransactionSummary({
 	summary,
@@ -26,7 +26,7 @@ export function TransactionSummary({
 }) {
 	if (isError) return null;
 	return (
-		<section className="-mx-5 bg-sui/10 min-h-full">
+		<section className="-mx-6 bg-sui/10 min-h-full">
 			{isLoading ? (
 				<div className="flex items-center justify-center p-10">
 					<LoadingIndicator />
@@ -45,7 +45,10 @@ export function TransactionSummary({
 							<BalanceChanges changes={summary?.balanceChanges} />
 							<ObjectChanges changes={summary?.objectSummary} />
 							{showGasSummary && <GasSummary gasSummary={summary?.gas} />}
-							<ExplorerLinkCard digest={summary?.digest} timestamp={summary?.timestamp} />
+							<ExplorerLinkCard
+								digest={summary?.digest}
+								timestamp={summary?.timestamp ?? undefined}
+							/>
 						</div>
 					</div>
 				</div>

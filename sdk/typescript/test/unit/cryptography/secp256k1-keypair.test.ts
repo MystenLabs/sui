@@ -1,15 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromBase64, toBase58, toBase64 } from '@mysten/bcs';
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { sha256 } from '@noble/hashes/sha256';
+import { describe, expect, it } from 'vitest';
+
+import { decodeSuiPrivateKey } from '../../../src/cryptography/keypair';
 import {
 	DEFAULT_SECP256K1_DERIVATION_PATH,
-	PRIVATE_KEY_SIZE,
 	Secp256k1Keypair,
-} from '../../../src';
-import { describe, it, expect } from 'vitest';
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { fromB64, toB64 } from '@mysten/bcs';
-import { sha256 } from '@noble/hashes/sha256';
+} from '../../../src/keypairs/secp256k1';
+import { Transaction } from '../../../src/transactions';
+import { verifyPersonalMessageSignature, verifyTransactionSignature } from '../../../src/verify';
+
+const PRIVATE_KEY_SIZE = 32;
 
 // Test case from https://github.com/rust-bitcoin/rust-secp256k1/blob/master/examples/sign_verify.rs#L26
 const VALID_SECP256K1_SECRET_KEY = [
@@ -33,17 +38,17 @@ export const INVALID_SECP256K1_PUBLIC_KEY = Uint8Array.from(Array(PRIVATE_KEY_SI
 const TEST_CASES = [
 	[
 		'film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm',
-		'AQA9EYZoLXirIahsXHQMDfdi5DPQ72wLA79zke4EY6CP',
+		'suiprivkey1qyqr6yvxdqkh32ep4pk9caqvphmk9epn6rhkczcrhaeermsyvwsg783y9am',
 		'0x9e8f732575cc5386f8df3c784cd3ed1b53ce538da79926b2ad54dcc1197d2532',
 	],
 	[
 		'require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level',
-		'Ae+TTptXI6WaJfzplSrphnrbTD5qgftfMX5kTyca7unQ',
+		'suiprivkey1q8hexn5m2u36tx39ln5e22hfseadknp7d2qlkhe30ejy7fc6am5aqkqpqsj',
 		'0x9fd5a804ed6b46d36949ff7434247f0fd594673973ece24aede6b86a7b5dae01',
 	],
 	[
 		'organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake',
-		'AY2iJpGSDMhvGILPjjpyeM1bV4Jky979nUenB5kvQeSj',
+		'suiprivkey1qxx6yf53jgxvsmccst8cuwnj0rx4k4uzvn9aalvag7ns0xf0g8j2x246jst',
 		'0x60287d7c38dee783c2ab1077216124011774be6b0764d62bd05f32c88979d5c5',
 	],
 ];
@@ -54,23 +59,23 @@ const TEST_MNEMONIC =
 describe('secp256k1-keypair', () => {
 	it('new keypair', () => {
 		const keypair = new Secp256k1Keypair();
-		expect(keypair.getPublicKey().toBytes().length).toBe(33);
+		expect(keypair.getPublicKey().toRawBytes().length).toBe(33);
 		expect(2).toEqual(2);
 	});
 
 	it('create keypair from secret key', () => {
 		const secret_key = new Uint8Array(VALID_SECP256K1_SECRET_KEY);
 		const pub_key = new Uint8Array(VALID_SECP256K1_PUBLIC_KEY);
-		let pub_key_base64 = toB64(pub_key);
+		let pub_key_base64 = toBase64(pub_key);
 		const keypair = Secp256k1Keypair.fromSecretKey(secret_key);
-		expect(keypair.getPublicKey().toBytes()).toEqual(new Uint8Array(pub_key));
+		expect(keypair.getPublicKey().toRawBytes()).toEqual(new Uint8Array(pub_key));
 		expect(keypair.getPublicKey().toBase64()).toEqual(pub_key_base64);
 	});
 
 	it('creating keypair from invalid secret key throws error', () => {
 		const secret_key = new Uint8Array(INVALID_SECP256K1_SECRET_KEY);
-		let secret_key_base64 = toB64(secret_key);
-		const secretKey = fromB64(secret_key_base64);
+		let secret_key_base64 = toBase64(secret_key);
+		const secretKey = fromBase64(secret_key_base64);
 		expect(() => {
 			Secp256k1Keypair.fromSecretKey(secretKey);
 		}).toThrow('private key must be 32 bytes, hex or bigint, not object');
@@ -88,12 +93,12 @@ describe('secp256k1-keypair', () => {
 		const signData = new TextEncoder().encode('hello world');
 
 		const msgHash = sha256(signData);
-		const sig = keypair.signData(signData);
+		const sig = await keypair.sign(signData);
 		expect(
 			secp256k1.verify(
 				secp256k1.Signature.fromCompact(sig),
 				msgHash,
-				keypair.getPublicKey().toBytes(),
+				keypair.getPublicKey().toRawBytes(),
 			),
 		).toBeTruthy();
 	});
@@ -104,7 +109,7 @@ describe('secp256k1-keypair', () => {
 		const signData = new TextEncoder().encode('Hello, world!');
 
 		const msgHash = sha256(signData);
-		const sig = keypair.signData(signData);
+		const sig = await keypair.sign(signData);
 
 		// Assert the signature is the same as the rust implementation. See https://github.com/MystenLabs/fastcrypto/blob/0436d6ef11684c291b75c930035cb24abbaf581e/fastcrypto/src/tests/secp256k1_tests.rs#L115
 		expect(Buffer.from(sig).toString('hex')).toEqual(
@@ -114,7 +119,7 @@ describe('secp256k1-keypair', () => {
 			secp256k1.verify(
 				secp256k1.Signature.fromCompact(sig),
 				msgHash,
-				keypair.getPublicKey().toBytes(),
+				keypair.getPublicKey().toRawBytes(),
 			),
 		).toBeTruthy();
 	});
@@ -131,18 +136,14 @@ describe('secp256k1-keypair', () => {
 			const keypair = Secp256k1Keypair.deriveKeypair(t[0]);
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-			// Keypair derived from 32-byte secret key
-			const raw = fromB64(t[1]);
-			// The secp256k1 flag is 0x01. See more at [enum SignatureScheme].
-			if (raw[0] !== 1 || raw.length !== PRIVATE_KEY_SIZE + 1) {
-				throw new Error('invalid key');
-			}
-			const imported = Secp256k1Keypair.fromSecretKey(raw.slice(1));
-			expect(imported.getPublicKey().toSuiAddress()).toEqual(t[2]);
+			// Keypair derived from Bech32 string.
+			const parsed = decodeSuiPrivateKey(t[1]);
+			const kp = Secp256k1Keypair.fromSecretKey(parsed.secretKey);
+			expect(kp.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-			// Exported secret key matches the 32-byte secret key.
-			const exported = imported.export();
-			expect(exported.privateKey).toEqual(toB64(raw.slice(1)));
+			// Exported keypair matches the Bech32 encoded secret key.
+			const exported = kp.getSecretKey();
+			expect(exported).toEqual(t[1]);
 		}
 	});
 
@@ -156,5 +157,52 @@ describe('secp256k1-keypair', () => {
 		expect(() => {
 			Secp256k1Keypair.deriveKeypair(TEST_MNEMONIC, `m/54'/784'/0'/0'/0'`);
 		}).toThrow('Invalid derivation path');
+	});
+
+	it('signs Transactions', async () => {
+		const keypair = new Secp256k1Keypair();
+		const tx = new Transaction();
+		tx.setSender(keypair.getPublicKey().toSuiAddress());
+		tx.setGasPrice(5);
+		tx.setGasBudget(100);
+		tx.setGasPayment([
+			{
+				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
+				version: String((Math.random() * 10000).toFixed(0)),
+				digest: toBase58(
+					new Uint8Array([
+						0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+						9, 1, 2,
+					]),
+				),
+			},
+		]);
+
+		const bytes = await tx.build();
+
+		const serializedSignature = (await keypair.signTransaction(bytes)).signature;
+
+		expect(await keypair.getPublicKey().verifyTransaction(bytes, serializedSignature)).toEqual(
+			true,
+		);
+		expect(await keypair.getPublicKey().verifyTransaction(bytes, serializedSignature)).toEqual(
+			true,
+		);
+		expect(!!(await verifyTransactionSignature(bytes, serializedSignature))).toEqual(true);
+	});
+
+	it('signs PersonalMessages', async () => {
+		const keypair = new Secp256k1Keypair();
+		const message = new TextEncoder().encode('hello world');
+
+		const serializedSignature = (await keypair.signPersonalMessage(message)).signature;
+
+		expect(
+			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
+		).toEqual(true);
+		expect(
+			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
+		).toEqual(true);
+		expect(!!(await verifyPersonalMessageSignature(message, serializedSignature))).toEqual(true);
 	});
 });

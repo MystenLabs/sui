@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect } from 'vitest';
-import { Ed25519PublicKey } from '../../../src';
+import { describe, expect, it } from 'vitest';
+
+import { Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 
 // Test case generated against CLI:
 // cargo build --bin sui
@@ -62,13 +63,12 @@ describe('Ed25519PublicKey', () => {
 	it('toBase64', () => {
 		const key = new Ed25519PublicKey(VALID_KEY_BASE64);
 		expect(key.toBase64()).toEqual(VALID_KEY_BASE64);
-		expect(key.toString()).toEqual(VALID_KEY_BASE64);
 	});
 
 	it('toBuffer', () => {
 		const key = new Ed25519PublicKey(VALID_KEY_BASE64);
-		expect(key.toBytes().length).toBe(32);
-		expect(new Ed25519PublicKey(key.toBytes()).equals(key)).toBe(true);
+		expect(key.toRawBytes().length).toBe(32);
+		expect(new Ed25519PublicKey(key.toRawBytes()).equals(key)).toBe(true);
 	});
 
 	TEST_CASES.forEach(({ rawPublicKey, suiPublicKey, suiAddress }) => {

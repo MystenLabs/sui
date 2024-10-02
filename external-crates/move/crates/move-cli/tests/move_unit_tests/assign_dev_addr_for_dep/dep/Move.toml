@@ -1,0 +1,9 @@
+[package]
+name = "Bar"
+edition = "2024.beta"
+
+[addresses]
+B = "_"
+
+[dev-dependencies]
+MoveStdlib = { local = "../../../../../move-stdlib" }

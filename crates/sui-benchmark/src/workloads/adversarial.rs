@@ -5,6 +5,7 @@ use super::{
     workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING},
     WorkloadBuilderInfo, WorkloadParams,
 };
+use crate::drivers::Interval;
 use crate::in_memory_wallet::move_call_pt_impl;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
@@ -14,7 +15,6 @@ use crate::ProgrammableTransactionBuilder;
 use crate::{convert_move_call_args, BenchMoveCallArg, ExecutionEffects, ValidatorProxy};
 use anyhow::anyhow;
 use async_trait::async_trait;
-use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
@@ -143,7 +143,7 @@ impl FromStr for AdversarialPayloadCfg {
         if !re.is_match(s) {
             return Err(anyhow!("invalid load config"));
         };
-        let toks = s.split('-').collect_vec();
+        let toks = s.split('-').collect::<Vec<_>>();
         let payload_type = AdversarialPayloadType::from_str(toks[0])?;
         let load_factor = toks[1].parse::<f32>().unwrap();
 
@@ -405,6 +405,8 @@ impl AdversarialWorkloadBuilder {
         num_workers: u64,
         in_flight_ratio: u64,
         adversarial_payload_cfg: AdversarialPayloadCfg,
+        duration: Interval,
+        group: u32,
     ) -> Option<WorkloadBuilderInfo> {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
@@ -416,6 +418,8 @@ impl AdversarialWorkloadBuilder {
                 target_qps,
                 num_workers,
                 max_ops,
+                duration,
+                group,
             };
             let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
                 AdversarialWorkloadBuilder {

@@ -1,0 +1,8 @@
+[package]
+name = "Symbols"
+
+[dependencies]
+MoveStdlib = { local = "../../../../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+
+[addresses]
+Symbols = "0xCAFE"

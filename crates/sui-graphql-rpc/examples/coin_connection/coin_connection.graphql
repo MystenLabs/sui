@@ -1,0 +1,16 @@
+# Get last 3 coins owned by `0x0`.
+{
+  address(
+    address: "0x0000000000000000000000000000000000000000000000000000000000000000"
+  ) {
+    coins(last: 3) {
+      nodes {
+        coinBalance
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+}

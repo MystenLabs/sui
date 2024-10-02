@@ -1,0 +1,8 @@
+[package]
+name = "S"
+version = "0.0.1"
+published-at = "0x1"
+edition = "development"
+
+[addresses]
+s = "0x1"

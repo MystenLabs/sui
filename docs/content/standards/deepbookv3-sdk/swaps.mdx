@@ -1,0 +1,63 @@
+---
+title: Swaps
+---
+
+DeepBookV3 provides a swap-like interface commonly seen in automatic market makers (AMMs). The DeepBookV3 SDK provides functions to leverage the features of this interface. See [Swaps](../deepbookv3/swaps.mdx) in the API section for more details.
+
+## Swap functions
+
+The SDK provides the following functions to perform swaps between the base and quote asset.
+
+### swapExactBaseForQuote
+
+Use `swapExactBaseForQuote` to swap exact base amount for quote amount. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `params`: `SwapParams` object that represents the parameters for the swap.
+
+```tsx
+swapExactBaseForQuote({ params: SwapParams });
+```
+
+### swapExactQuoteForBase
+
+Use `swapExactQuoteForBase` to swap exact quote amount for base amount. The call returns a function that takes a `Transaction` object. 
+
+**Parameters**
+
+- `params`: `SwapParams` object that represents the parameters for the swap.
+
+```tsx
+swapExactQuoteForBase({ params: SwapParams });
+```
+
+### Examples
+
+The following examples demonstrate custom swap functions that you can place into the `DeepBookMarketMaker` class. Base coin, quote coin, and deep coin are automatically determined by the coin available in the user address unless you explicitly pass one in as an argument. You can transfer the coin outputs to their address or execute other operations using the outputs.
+
+```tsx
+swapExactBaseForQuote = (tx: Transaction) => {
+  const [baseOut, quoteOut, deepOut] = this.deepBook.swapExactBaseForQuote({
+    poolKey: 'SUI_DBUSDC',
+    amount: 1, // amount of SUI to swap
+    deepAmount: 1, // amount of DEEP to pay as fees, excess is returned
+    minOut: 0.1, // minimum amount of DBUSDC to receive or transactionf fails
+  })(tx);
+
+  // Transfer received coins to own address
+  tx.transferObjects([baseOut, quoteOut, deepOut], this.getActiveAddress());
+};
+
+swapExactQuoteForBase = (tx: Transaction) => {
+  const [baseOut, quoteOut, deepOut] = this.deepBook.swapExactQuoteForBase({
+    poolKey: 'SUI_DBUSDC',
+    amount: 1, // amount of DBUSDC to swap
+    deepAmount: 1, // amount of DEEP to pay as fees, excess is returned
+    minOut: 0.1, // minimum amount of SUI to receive or transactionf fails
+  })(tx);
+
+  // Transfer received coins to own address
+  tx.transferObjects([baseOut, quoteOut, deepOut], this.getActiveAddress());
+};
+```

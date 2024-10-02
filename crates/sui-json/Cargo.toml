@@ -9,22 +9,19 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 bcs.workspace = true
-once_cell.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 schemars.workspace = true
 
-sui-framework.workspace = true
-sui-protocol-config.workspace = true
 sui-types.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 fastcrypto = { workspace = true }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 test-fuzz.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 sui-move-build.workspace = true
+sui-framework.workspace = true

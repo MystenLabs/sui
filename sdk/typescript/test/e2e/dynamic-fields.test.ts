@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
-import { SuiObjectData } from '../../src';
+import { resolve } from 'path';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import { SuiObjectData } from '../../src/client';
+import { setup, TestToolbox } from './utils/setup';
 
 describe('Dynamic Fields Reading API', () => {
 	let toolbox: TestToolbox;
@@ -12,8 +14,7 @@ describe('Dynamic Fields Reading API', () => {
 
 	beforeAll(async () => {
 		toolbox = await setup();
-		const packagePath = __dirname + '/./data/dynamic_fields';
-		({ packageId } = await publishPackage(packagePath, toolbox));
+		packageId = await toolbox.getPackage(resolve(__dirname, './data/dynamic_fields'));
 
 		await toolbox.client
 			.getOwnedObjects({

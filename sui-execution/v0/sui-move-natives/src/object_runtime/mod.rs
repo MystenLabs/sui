@@ -5,11 +5,8 @@ use better_any::{Tid, TidAble};
 use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
-    account_address::AccountAddress,
-    effects::Op,
-    language_storage::StructTag,
-    value::{MoveStruct, MoveTypeLayout, MoveValue},
-    vm_status::StatusCode,
+    account_address::AccountAddress, annotated_value as A, annotated_visitor as AV, effects::Op,
+    language_storage::StructTag, runtime_value as R, vm_status::StatusCode,
 };
 use move_vm_types::{
     loaded_data::runtime_types::Type,
@@ -23,6 +20,7 @@ use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolC
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
+    execution::DynamicallyLoadedObjectMetadata,
     id::UID,
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
@@ -223,9 +221,10 @@ impl<'a> ObjectRuntime<'a> {
 
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
         // and then re-added in a single transaction
-        self.state.deleted_ids.remove(&id);
-        // mark the id as new
-        self.state.new_ids.insert(id, ());
+        if self.state.deleted_ids.remove(&id).is_none() {
+            // mark the id as new
+            self.state.new_ids.insert(id, ());
+        }
         Ok(())
     }
 
@@ -343,8 +342,8 @@ impl<'a> ObjectRuntime<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_layout: &MoveTypeLayout,
-        child_fully_annotated_layout: &MoveTypeLayout,
+        child_layout: &R::MoveTypeLayout,
+        child_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut GlobalValue>> {
         let res = self.object_store.get_or_fetch_object(
@@ -399,11 +398,24 @@ impl<'a> ObjectRuntime<'a> {
         self.object_store.all_active_objects()
     }
 
-    pub fn loaded_child_objects(&self) -> BTreeMap<ObjectID, SequenceNumber> {
+    pub fn loaded_child_objects(&self) -> BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata> {
         self.object_store
             .cached_objects()
             .iter()
-            .filter_map(|(id, obj_opt)| Some((*id, obj_opt.as_ref()?.version())))
+            .filter_map(|(id, obj_opt)| {
+                obj_opt.as_ref().map(|obj| {
+                    (
+                        *id,
+                        DynamicallyLoadedObjectMetadata {
+                            version: obj.version(),
+                            digest: obj.digest(),
+                            storage_rebate: obj.storage_rebate,
+                            owner: obj.owner,
+                            previous_transaction: obj.previous_transaction,
+                        },
+                    )
+                })
+            })
             .collect()
     }
 }
@@ -450,11 +462,6 @@ impl ObjectRuntimeState {
                 ty,
                 effect,
             } = child_object_effect;
-            if loaded_child_objects.contains_key(&child) {
-                // remove if from new_ids if it was loaded for case in dynamic fields where the
-                // Field object was removed and then re-added in a single transaction
-                self.new_ids.remove(&child);
-            }
 
             match effect {
                 // was modified, so mark it as mutated and transferred
@@ -601,54 +608,52 @@ fn update_owner_map(
     Ok(())
 }
 
-// TODO use a custom DeserializerSeed and improve this performance
 /// WARNING! This function assumes that the bcs bytes have already been validated,
 /// and it will give an invariant violation otherwise.
 /// In short, we are relying on the invariant that the bytes are valid for objects
 /// in storage.  We do not need this invariant for dev-inspect, as the programmable
 /// transaction execution will validate the bytes before we get to this point.
 pub fn get_all_uids(
-    fully_annotated_layout: &MoveTypeLayout,
+    fully_annotated_layout: &A::MoveTypeLayout,
     bcs_bytes: &[u8],
 ) -> Result<BTreeSet<ObjectID>, /* invariant violation */ String> {
     let mut ids = BTreeSet::new();
-    let v = MoveValue::simple_deserialize(bcs_bytes, fully_annotated_layout)
-        .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
-    get_all_uids_in_value(&mut ids, &v)?;
-    Ok(ids)
-}
+    struct UIDTraversal<'i>(&'i mut BTreeSet<ObjectID>);
+    struct UIDCollector<'i>(&'i mut BTreeSet<ObjectID>);
 
-fn get_all_uids_in_value(
-    acc: &mut BTreeSet<ObjectID>,
-    v: &MoveValue,
-) -> Result<(), /* invariant violation */ String> {
-    let mut stack = vec![v];
-    while let Some(cur) = stack.pop() {
-        let s = match cur {
-            MoveValue::Struct(s) => s,
-            MoveValue::Vector(vec) => {
-                stack.extend(vec);
-                continue;
+    impl<'i, 'b, 'l> AV::Traversal<'b, 'l> for UIDTraversal<'i> {
+        type Error = AV::Error;
+
+        fn traverse_struct(
+            &mut self,
+            driver: &mut AV::StructDriver<'_, 'b, 'l>,
+        ) -> Result<(), Self::Error> {
+            if driver.struct_layout().type_ == UID::type_() {
+                while driver.next_field(&mut UIDCollector(self.0))?.is_some() {}
+            } else {
+                while driver.next_field(self)?.is_some() {}
             }
-            _ => continue,
-        };
-        match s {
-            MoveStruct::WithTypes { type_, fields } => {
-                if type_ == &UID::type_() {
-                    let inner = match &fields[0].1 {
-                        MoveValue::Struct(MoveStruct::WithTypes { fields, .. }) => fields,
-                        v => return Err(format!("Unexpected UID layout. {v:?}")),
-                    };
-                    match &inner[0].1 {
-                        MoveValue::Address(id) => acc.insert((*id).into()),
-                        v => return Err(format!("Unexpected ID layout. {v:?}")),
-                    };
-                } else {
-                    stack.extend(fields.iter().map(|(_, v)| v));
-                }
-            }
-            v => return Err(format!("Unexpected struct layout. {v:?}")),
+            Ok(())
         }
     }
-    Ok(())
+
+    impl<'i, 'b, 'l> AV::Traversal<'b, 'l> for UIDCollector<'i> {
+        type Error = AV::Error;
+        fn traverse_address(
+            &mut self,
+            _driver: &AV::ValueDriver<'_, 'b, 'l>,
+            value: AccountAddress,
+        ) -> Result<(), Self::Error> {
+            self.0.insert(value.into());
+            Ok(())
+        }
+    }
+
+    A::MoveValue::visit_deserialize(
+        bcs_bytes,
+        fully_annotated_layout,
+        &mut UIDTraversal(&mut ids),
+    )
+    .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
+    Ok(ids)
 }

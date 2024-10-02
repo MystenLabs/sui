@@ -1,0 +1,10 @@
+[package]
+name = "Root"
+
+[dependencies]
+A = { r."../resolvers/successful.sh" = "A" }
+
+[dev-dependencies]
+# External resolvers can be used for dev dependencies as well as
+# regular dependencies
+B = { r."../resolvers/successful.sh" = "B" }

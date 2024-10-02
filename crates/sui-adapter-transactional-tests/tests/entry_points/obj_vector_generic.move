@@ -3,26 +3,21 @@
 
 // tests vector of objects where operations involve generics (type parameters)
 
-//# init --addresses Test=0x0 --accounts A
+//# init --addresses Test=0x0 --accounts A --shared-object-deletion true
 
 //# publish
 module Test::M {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use std::vector;
-
-    struct ObjAny<phantom Any> has key, store {
+    public struct ObjAny<phantom Any> has key, store {
         id: UID,
         value: u64
     }
 
-    struct AnotherObjAny<phantom Any> has key {
+    public struct AnotherObjAny<phantom Any> has key {
         id: UID,
         value: u64
     }
 
-    struct Any {}
+    public struct Any {}
 
     public entry fun mint_any<Any>(v: u64, ctx: &mut TxContext) {
         transfer::public_transfer(
@@ -64,7 +59,7 @@ module Test::M {
         )
     }
 
-    public entry fun obj_vec_destroy_any<Any>(v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun obj_vec_destroy_any<Any>(mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         assert!(vector::length(&v) == 1, 0);
         let ObjAny<Any> {id, value} = vector::pop_back(&mut v);
         assert!(value == 42, 0);
@@ -72,7 +67,7 @@ module Test::M {
         vector::destroy_empty(v);
     }
 
-    public entry fun two_obj_vec_destroy_any<Any>(v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun two_obj_vec_destroy_any<Any>(mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         assert!(vector::length(&v) == 2, 0);
         let ObjAny<Any> {id, value} = vector::pop_back(&mut v);
         assert!(value == 42, 0);
@@ -83,7 +78,7 @@ module Test::M {
         vector::destroy_empty(v);
     }
 
-    public entry fun same_objects_any<Any>(o: ObjAny<Any>, v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun same_objects_any<Any>(o: ObjAny<Any>, mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         let ObjAny<Any> {id, value} = o;
         assert!(value == 42, 0);
         object::delete(id);
@@ -93,14 +88,14 @@ module Test::M {
         vector::destroy_empty(v);
     }
 
-    public entry fun same_objects_ref_any<Any>(o: &ObjAny<Any>, v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun same_objects_ref_any<Any>(o: &ObjAny<Any>, mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         assert!(o.value == 42, 0);
         let ObjAny<Any> {id, value: _} = vector::pop_back(&mut v);
         object::delete(id);
         vector::destroy_empty(v);
     }
 
-    public entry fun child_access_any<Any>(child: ObjAny<Any>, v: vector<ObjAny<Any>>, _: &mut TxContext) {
+    public entry fun child_access_any<Any>(child: ObjAny<Any>, mut v: vector<ObjAny<Any>>, _: &mut TxContext) {
         let ObjAny<Any> {id, value} = child;
         assert!(value == 42, 0);
         object::delete(id);
@@ -146,14 +141,14 @@ module Test::M {
 //# run Test::M::two_obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(9,0),object(10,0)]
 
 
-// create a shared object and try to pass it as a single element of a vector (failure)
+// create a shared object and try to pass it as a single element of a vector
 
 //# run Test::M::mint_shared_any --sender A --type-args Test::M::Any --args 42
 
 //# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(12,0)]
 
 
-// create an object and pass it both by-value and as element of a vector (failure)
+// create an object and pass it both by-value and as element of a vector
 
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 

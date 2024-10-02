@@ -1,20 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
-import { X12, QrCode } from '@mysten/icons';
-import { isValidSuiAddress } from '@mysten/sui.js';
+import { Text } from '_app/shared/text';
+import Alert from '_src/ui/app/components/alert';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { QrCode, X12 } from '@mysten/icons';
+import { isValidSuiAddress } from '@mysten/sui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
 import { useField, useFormikContext } from 'formik';
 import { useCallback, useMemo } from 'react';
+import type { ChangeEventHandler } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 
 import { useSuiAddressValidation } from './validation';
-import { Text } from '_app/shared/text';
-import Alert from '_src/ui/app/components/alert';
-
-import type { ChangeEventHandler } from 'react';
 
 export interface AddressInputProps {
 	disabled?: boolean;
@@ -34,7 +33,7 @@ export function AddressInput({
 }: AddressInputProps) {
 	const [field, meta] = useField(name);
 
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	const { data: warningData } = useQuery({
 		queryKey: ['address-input-warning', field.value],
 		queryFn: async () => {
@@ -43,18 +42,18 @@ export function AddressInput({
 				return null;
 			}
 
-			const object = await rpc.getObject({ id: field.value });
+			const object = await client.getObject({ id: field.value });
 
 			if (object && 'data' in object) {
 				return RecipientWarningType.OBJECT;
 			}
 
 			const [fromAddr, toAddr] = await Promise.all([
-				rpc.queryTransactionBlocks({
+				client.queryTransactionBlocks({
 					filter: { FromAddress: field.value },
 					limit: 1,
 				}),
-				rpc.queryTransactionBlocks({
+				client.queryTransactionBlocks({
 					filter: { ToAddress: field.value },
 					limit: 1,
 				}),
@@ -67,13 +66,13 @@ export function AddressInput({
 			return null;
 		},
 		enabled: !!field.value,
-		cacheTime: 10 * 1000,
+		gcTime: 10 * 1000,
 		refetchOnMount: false,
 		refetchOnWindowFocus: false,
 		refetchInterval: false,
 	});
 
-	const { isSubmitting, setFieldValue } = useFormikContext();
+	const { isSubmitting, setFieldValue, isValidating } = useFormikContext();
 	const suiAddressValidation = useSuiAddressValidation();
 
 	const disabled = forcedDisabled !== undefined ? forcedDisabled : isSubmitting;
@@ -93,7 +92,7 @@ export function AddressInput({
 		setFieldValue('to', '');
 	}, [setFieldValue]);
 
-	const hasWarningOrError = meta.touched && (meta.error || warningData);
+	const hasWarningOrError = meta.touched && (meta.error || warningData) && !isValidating;
 
 	return (
 		<>
@@ -133,7 +132,7 @@ export function AddressInput({
 				</div>
 			</div>
 
-			{meta.touched ? (
+			{field.value && !isValidating ? (
 				<div className="mt-2.5 w-full">
 					<Alert noBorder rounded="lg" mode={meta.error || warningData ? 'issue' : 'success'}>
 						{warningData === RecipientWarningType.OBJECT ? (

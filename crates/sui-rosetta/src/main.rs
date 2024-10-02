@@ -12,17 +12,17 @@ use std::time::Duration;
 use anyhow::anyhow;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::traits::EncodeDecodeBase64;
 use serde_json::{json, Value};
-use tracing::info;
-use tracing::log::warn;
-
 use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KEYSTORE_FILENAME};
-use sui_node::{metrics, SuiNode};
+use sui_node::SuiNode;
 use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, SuiKeyPair, ToFromBytes};
+use sui_types::crypto::{KeypairTraits, SuiKeyPair, ToFromBytes};
+use tracing::info;
+use tracing::log::warn;
 
 #[derive(Parser)]
 #[clap(name = "sui-rosetta", rename_all = "kebab-case", author, version)]
@@ -129,7 +129,7 @@ impl RosettaServerCommand {
             RosettaServerCommand::StartOfflineServer { env, addr } => {
                 info!("Starting Rosetta Offline Server.");
                 let server = RosettaOfflineServer::new(env);
-                server.serve(addr).await??;
+                server.serve(addr).await;
             }
             RosettaServerCommand::StartOnlineRemoteServer {
                 env,
@@ -144,7 +144,7 @@ impl RosettaServerCommand {
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
                 let rosetta = RosettaOnlineServer::new(env, sui_client);
-                rosetta.serve(addr).await??;
+                rosetta.serve(addr).await;
             }
 
             RosettaServerCommand::StartOnlineServer {
@@ -166,17 +166,18 @@ impl RosettaServerCommand {
                 config.db_path = data_path.join("sui_db");
                 info!("Overriding Sui db path to : {:?}", config.db_path);
 
-                let registry_service = metrics::start_prometheus_server(config.metrics_address);
+                let registry_service =
+                    mysten_metrics::start_prometheus_server(config.metrics_address);
                 // Staring a full node for the rosetta server.
                 let rpc_address = format!("http://127.0.0.1:{}", config.json_rpc_address.port());
-                let _node = SuiNode::start(&config, registry_service, None).await?;
+                let _node = SuiNode::start(config, registry_service, None).await?;
 
                 let sui_client = wait_for_sui_client(rpc_address).await;
 
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
                 let rosetta = RosettaOnlineServer::new(env, sui_client);
-                rosetta.serve(addr).await??;
+                rosetta.serve(addr).await;
             }
         };
         Ok(())
@@ -209,7 +210,7 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
         .iter()
         .map(|kpstr| {
             let key = SuiKeyPair::decode_base64(kpstr);
-            key.map(|k| (Into::<SuiAddress>::into(&k.public()), k))
+            key.map(|k| (SuiAddress::from(&k.public()), k))
         })
         .collect::<Result<BTreeMap<_, _>, _>>()
         .unwrap();
@@ -247,10 +248,10 @@ fn test_read_keystore() {
     let path = temp_dir.path().join("sui.keystore");
     let mut ks = Keystore::from(FileBasedKeystore::new(&path).unwrap());
     let key1 = ks
-        .generate_and_add_new_key(SignatureScheme::ED25519, None, None)
+        .generate_and_add_new_key(SignatureScheme::ED25519, None, None, None)
         .unwrap();
     let key2 = ks
-        .generate_and_add_new_key(SignatureScheme::Secp256k1, None, None)
+        .generate_and_add_new_key(SignatureScheme::Secp256k1, None, None, None)
         .unwrap();
 
     let accounts = read_prefunded_account(&path).unwrap();

@@ -16,15 +16,15 @@ use sui_metric_checker::{
 
 #[derive(Parser)]
 pub struct Opts {
-    #[clap(long, required = true)]
+    #[arg(long, required = true)]
     api_user: String,
-    #[clap(long, required = true)]
+    #[arg(long, required = true)]
     api_key: String,
     // Path to the config file
-    #[clap(long, required = true)]
+    #[arg(long, required = true)]
     config: String,
     // URL of the Prometheus server
-    #[clap(long, required = true)]
+    #[arg(long, required = true)]
     url: String,
 }
 
@@ -78,7 +78,12 @@ async fn main() -> Result<(), anyhow::Error> {
                 })
                 .await
             }
-            QueryType::Range { start, end, step } => {
+            QueryType::Range {
+                start,
+                end,
+                step,
+                percentile,
+            } => {
                 retry(backoff.clone(), || async {
                     range_query(
                         &auth_header,
@@ -87,6 +92,7 @@ async fn main() -> Result<(), anyhow::Error> {
                         timestamp_string_to_unix_seconds::<UtcNowOnceProvider>(&start)?,
                         timestamp_string_to_unix_seconds::<UtcNowOnceProvider>(&end)?,
                         step,
+                        percentile,
                     )
                     .await
                     .map_err(backoff::Error::transient)

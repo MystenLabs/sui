@@ -148,8 +148,7 @@ fn encode_compress(request: &WriteRequest) -> Result<Vec<u8>, (StatusCode, &'sta
             timer.observe_duration();
         }
     }();
-    let mut buf = Vec::new();
-    buf.reserve(request.encoded_len());
+    let mut buf = Vec::with_capacity(request.encoded_len());
     if request.encode(&mut buf).is_err() {
         observe();
         CONSUMER_OPS
@@ -197,7 +196,6 @@ async fn check_response(
             Ok(())
         }
         reqwest::StatusCode::BAD_REQUEST => {
-            error!("TRIED: {:?}", request);
             let body = response
                 .text()
                 .await
@@ -225,7 +223,6 @@ async fn check_response(
             ))
         }
         code => {
-            error!("TRIED: {:?}", request);
             let body = response
                 .text()
                 .await
@@ -245,7 +242,7 @@ async fn check_response(
 async fn convert(
     mfs: Vec<MetricFamily>,
 ) -> Result<impl Iterator<Item = WriteRequest>, (StatusCode, &'static str)> {
-    let result = match tokio::task::spawn_blocking(|| {
+    let result = tokio::task::spawn_blocking(|| {
         let timer = CONSUMER_OPERATION_DURATION
             .with_label_values(&["convert_to_remote_write_task"])
             .start_timer();
@@ -253,8 +250,9 @@ async fn convert(
         timer.observe_duration();
         result.into_iter()
     })
-    .await
-    {
+    .await;
+
+    let result = match result {
         Ok(v) => v,
         Err(err) => {
             error!("unable to convert to remote_write; {err}");

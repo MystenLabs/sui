@@ -1,23 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress, type SuiAddress, type TransactionBlock } from '@mysten/sui.js';
+import { useTransactionData, useTransactionGasBudget } from '_src/ui/app/hooks';
+import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
+import { type Transaction } from '@mysten/sui/transactions';
+import { formatAddress } from '@mysten/sui/utils';
 
 import { DescriptionItem, DescriptionList } from './DescriptionList';
 import { SummaryCard } from './SummaryCard';
-import { useTransactionData, useTransactionGasBudget } from '_src/ui/app/hooks';
-import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 
 interface Props {
-	sender?: SuiAddress;
-	transaction: TransactionBlock;
+	sender?: string;
+	transaction: Transaction;
 }
 
 export function GasFees({ sender, transaction }: Props) {
 	const { data: transactionData } = useTransactionData(sender, transaction);
-	const { data: gasBudget, isLoading, isError } = useTransactionGasBudget(sender, transaction);
+	const { data: gasBudget, isPending, isError } = useTransactionGasBudget(sender, transaction);
 	const isSponsored =
-		transactionData?.gasConfig.owner && transactionData.sender !== transactionData.gasConfig.owner;
+		transactionData?.gasData.owner && transactionData.sender !== transactionData.gasData.owner;
 	return (
 		<SummaryCard
 			header="Estimated Gas Fees"
@@ -32,11 +33,11 @@ export function GasFees({ sender, transaction }: Props) {
 		>
 			<DescriptionList>
 				<DescriptionItem title="You Pay">
-					{isLoading
+					{isPending
 						? 'Estimating...'
 						: isError
-						? 'Gas estimation failed'
-						: `${isSponsored ? 0 : gasBudget} ${GAS_SYMBOL}`}
+							? 'Gas estimation failed'
+							: `${isSponsored ? 0 : gasBudget} ${GAS_SYMBOL}`}
 				</DescriptionItem>
 				{isSponsored && (
 					<>
@@ -44,7 +45,7 @@ export function GasFees({ sender, transaction }: Props) {
 							{gasBudget ? `${gasBudget} ${GAS_SYMBOL}` : '-'}
 						</DescriptionItem>
 						<DescriptionItem title="Sponsor">
-							{formatAddress(transactionData!.gasConfig.owner!)}
+							{formatAddress(transactionData!.gasData.owner!)}
 						</DescriptionItem>
 					</>
 				)}

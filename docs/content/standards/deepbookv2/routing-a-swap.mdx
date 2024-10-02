@@ -1,0 +1,178 @@
+---
+title: Routing a Swap
+---
+
+{@include: ../../snippets/deepbook.mdx}
+
+Follow these instructions to construct and execute a trade using a smart-routing swap.
+
+## Find the best route to swap {#swap-route}
+
+To use the smart routing functionality, one should first find the best route. The route uses a Depth-First-Search (DFS) algorithm to find all the routes in the swap pools and use dry-run to simulate how much token one can get from each route. The function will return the best route which can provide maximum tokens.
+
+**Typescript SDK for invoking `findBestRoute`**
+
+```ts
+/**
+ * @param tokenInObject: the tokenObject you want to swap
+ * @param tokenOut: the token you want to swap to
+ * @param amountIn: the amount of token you want to swap
+ * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
+ */
+public async findBestRoute(tokenInObject: string, tokenOut: string, amountIn: number): Promise<smartRouteResult> {
+    // const tokenTypeIn: string = convertToTokenType(tokenIn, this.records);
+    // should get the tokenTypeIn from tokenInObject
+    const tokenInfo = await this.suiClient.getObject({
+        id: tokenInObject,
+        options: {
+            showType: true,
+        },
+    });
+    const tokenTypeIn = tokenInfo.data.type.split('<')[1].split('>')[0];
+    const tokenTypeOut: string = convertToTokenType(tokenOut, this.records);
+    const paths: string[][] = this.dfs(tokenTypeIn, tokenTypeOut, this.records);
+    let maxSwapTokens = 0;
+    let smartRoute: string[] = [];
+    for (const path of paths) {
+        const smartRouteResultWithExactPath = await this.placeMarketOrderWithSmartRouting(
+            tokenInObject,
+            tokenTypeOut,
+            amountIn,
+            this.currentAddress,
+            path,
+        );
+        if (smartRouteResultWithExactPath && smartRouteResultWithExactPath.amount > maxSwapTokens) {
+            maxSwapTokens = smartRouteResultWithExactPath.amount;
+            smartRoute = path;
+        }
+    }
+    return {maxSwapTokens, smartRoute};
+}
+```
+
+## Place a market order with a given routing path {#market-order}
+
+After users find the best route to swap the tokens, they can place the market order using this route. In this function, users input the path as one of the parameters to build a transaction for execution.
+
+**Typescript SDK for invoking `placeMarketOrderWithSmartRouting`**
+
+```ts
+/**
+ * @param tokenInObject: the tokenObject you want to swap
+ * @param tokenTypeOut: the token type you want to swap to
+ * @param amountIn: the amount of token you want to swap
+ * @param currentAddress: your own address
+ * @param path: the path you want to swap through
+ * @param overrides: overriders for gas budget and transaction block, default we will set to the max gas budget, and create a new transaction block
+ * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
+ */
+public async placeMarketOrderWithSmartRouting(
+    tokenInObject: string,
+    tokenTypeOut: string,
+    amountIn: number,
+    currentAddress: string,
+    path: string[],
+    overrides: Overrides = new Overrides(),
+): Promise<smartRouteResultWithExactPath> {
+    const tokenIn = overrides.txb.object(tokenInObject);
+    overrides.txb.setGasBudget(overrides.gasBudget);
+    overrides.txb.setSenderIfNotSet(currentAddress);
+    let i = 0;
+    let base_coin_ret, quote_coin_ret, amount;
+    let lastBid: boolean;
+    while (path[i]) {
+        const nextPath = path[i + 1] ? path[i + 1] : tokenTypeOut;
+        const poolInfo: PoolInfo = getPoolInfoByRecords(path[i], nextPath, this.records);
+        let _isBid, _tokenIn, _tokenOut, _amount;
+        if (i == 0) {
+            if (!poolInfo.needChange) {
+                _isBid = false;
+                _tokenIn = tokenIn;
+                _tokenOut = this.mint(nextPath, 0, {
+                    txb: overrides.txb,
+                });
+                _amount = overrides.txb.object(String(amountIn));
+            } else {
+                _isBid = true;
+                // _tokenIn = this.mint(txb, nextPath, 0)
+                _tokenOut = tokenIn;
+                _amount = overrides.txb.object(String(amountIn));
+            }
+        } else {
+            if (!poolInfo.needChange) {
+                overrides.txb.transferObjects(
+                    [lastBid ? quote_coin_ret : base_coin_ret],
+                    overrides.txb.pure(currentAddress),
+                );
+                _isBid = false;
+                _tokenIn = lastBid ? base_coin_ret : quote_coin_ret;
+                _tokenOut = this.mint(nextPath, 0, {
+                    txb: overrides.txb,
+                });
+                _amount = amount;
+            } else {
+                overrides.txb.transferObjects(
+                    [lastBid ? quote_coin_ret : base_coin_ret],
+                    overrides.txb.pure(currentAddress),
+                );
+                _isBid = true;
+                // _tokenIn = this.mint(txb, nextPath, 0)
+                _tokenOut = lastBid ? base_coin_ret : quote_coin_ret;
+                _amount = amount;
+            }
+        }
+        lastBid = _isBid;
+        // in this moveCall we will change to swap_exact_base_for_quote
+        // if isBid, we will use swap_exact_quote_for_base
+        // is !isBid, we will use swap_exact_base_for_quote
+        if (_isBid) {
+            // here swap_exact_quote_for_base
+            [base_coin_ret, quote_coin_ret, amount] = overrides.txb.moveCall({
+                typeArguments: [poolInfo.needChange ? nextPath : path[i], poolInfo.needChange ? path[i] : nextPath],
+                target: `${this.configs.swapPackageId}::clob::swap_exact_quote_for_base`,
+                arguments: [
+                    overrides.txb.object(String(poolInfo.clob)),
+                    _amount,
+                    overrides.txb.object(normalizeSuiObjectId(this.configs.clock)),
+                    _tokenOut,
+                ],
+            });
+        } else {
+            // here swap_exact_base_for_quote
+            [base_coin_ret, quote_coin_ret, amount] = overrides.txb.moveCall({
+                typeArguments: [poolInfo.needChange ? nextPath : path[i], poolInfo.needChange ? path[i] : nextPath],
+                target: `${this.configs.swapPackageId}::clob::swap_exact_base_for_quote`,
+                arguments: [
+                    overrides.txb.object(String(poolInfo.clob)),
+                    _amount,
+                    _tokenIn,
+                    _tokenOut,
+                    overrides.txb.object(normalizeSuiObjectId(this.configs.clock)),
+                ],
+            });
+        }
+        if (nextPath == tokenTypeOut) {
+            overrides.txb.transferObjects([base_coin_ret], overrides.txb.pure(currentAddress));
+            overrides.txb.transferObjects([quote_coin_ret], overrides.txb.pure(currentAddress));
+            break;
+        } else {
+            i += 1;
+        }
+    }
+    const r = await this.suiClient.dryRunTransactionBlock({
+        transactionBlock: await overrides.txb.build({
+            client: this.suiClient,
+        }),
+    });
+    if (r.effects.status.status === 'success') {
+        for (const ele of r.balanceChanges) {
+            if (ele.coinType == tokenTypeOut) {
+                return {
+                    txb: overrides.txb,
+                    amount: Number(ele.amount),
+                };
+            }
+        }
+    }
+}
+```

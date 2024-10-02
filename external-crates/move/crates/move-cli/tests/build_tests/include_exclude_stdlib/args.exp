@@ -1,0 +1,17 @@
+Command `build -v`:
+BUILDING build_include_exclude_stdlib
+error[E03002]: unbound module
+  ┌─ ./sources/UseSigner.move:2:9
+  │
+2 │     use std::address;
+  │         ^^^^^^^^^^^^ Invalid 'use'. Unbound module: 'std::address'
+
+error[E03006]: unexpected name in this position
+  ┌─ ./sources/UseSigner.move:5:9
+  │
+5 │         address::length()
+  │         ^^^^^^^ Could not resolve the name 'address'
+
+Command `-d -v build`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING build_include_exclude_stdlib

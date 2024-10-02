@@ -1,0 +1,126 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    PTBError {
+        message: "number too large to fit in target type",
+        span: Span {
+            start: 0,
+            end: 7,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected a numerical address but got a named address 'n'",
+        span: Span {
+            start: 0,
+            end: 2,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected '(' but found end of input",
+        span: Span {
+            start: 4,
+            end: 4,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Unexpected end of input",
+        span: Span {
+            start: 5,
+            end: 5,
+        },
+        help: Some(
+            "Expected an argument here",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected ')' but found end of input",
+        span: Span {
+            start: 6,
+            end: 6,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected '[' but found end of input",
+        span: Span {
+            start: 6,
+            end: 6,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Unexpected end of input",
+        span: Span {
+            start: 7,
+            end: 7,
+        },
+        help: Some(
+            "Expected an array here",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Unexpected end of input",
+        span: Span {
+            start: 9,
+            end: 9,
+        },
+        help: Some(
+            "Expected an array here",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Unexpected number '2'",
+        span: Span {
+            start: 9,
+            end: 10,
+        },
+        help: Some(
+            "Expected ']' or ','",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Unexpected ','",
+        span: Span {
+            start: 7,
+            end: 8,
+        },
+        help: Some(
+            "Expected an argument here",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected a field name after '.'",
+        span: Span {
+            start: 4,
+            end: 4,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Unexpected '.'",
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        help: Some(
+            "Expected an argument here",
+        ),
+        severity: Error,
+    },
+]

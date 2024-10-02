@@ -1,0 +1,109 @@
+---
+title: Sui Archives
+description: The archive is a historical record of all transactions on Sui. Enable archiving on your Full nodes as a best practice.
+---
+
+A Sui archive is a history of all transaction data on Sui, trailing behind the latest checkpoint by 10 minutes. As a Sui node operator, you can write this history to an object store like S3, GCS, or similar for safe keeping. Saving this archive data is considered a best practice because Sui prunes transactions on Full nodes to remove historical transactions and their effects. Peer nodes, for example, might not catch up with all transactions and effects through synchronization if they lag behind the current epoch by more than the latest few epochs. Instead of relying on synchronization, peer nodes can fallback to downloading this information from an archive.
+
+Sui Archival nodes (Full nodes that write to an archive) don't store historical state on local storage and don't help query historical data. They serve the purpose of enabling peer nodes to catch up to the latest checkpoint and are useful for auditing and verifying the complete history of all transactions on the network.
+
+## Create an Archival node
+
+To start storing transaction history as an archive, you need to modify your node configuration. Open your fullnode.yaml file and add the following configuration. By default, the fullnode.yaml file is located in your `~/.sui/sui_config` directory.
+
+```yaml
+state-archive-write-config:
+  object-store-config:
+    object-store: "S3"
+    bucket: "<bucket_name>"
+    aws-access-key-id: "<AWS_ACCESS_KEY_ID>"
+    aws-secret-access-key: "<AWS_SECRET_ACCESS_KEY>"
+    aws-region: "<aws_region>"
+    object-store-connection-limit: 20
+  concurrency: 5
+  use-for-pruning-watermark: false
+state-archive-read-config:
+  - object-store-config:
+      object-store: "S3"
+      # Use the same bucket which is being used in `state-archive-write-config`
+      bucket: "<bucket_name>"
+      aws-access-key-id: "<AWS_ACCESS_KEY_ID>"
+      aws-secret-access-key: "<AWS_SECRET_ACCESS_KEY>"
+      aws-region: "<aws_region>"
+      object-store-connection-limit: 20
+    concurrency: 5
+    # This should be set to true in this case. Setting this to true
+    # would prevent pruning of local transaction data until it is archived
+    # in the bucket
+    use-for-pruning-watermark: true
+```
+
+## Set up archival fallback {#set-up-archival-fallback}
+
+To enable your node to fallback to an archive in case of lag, add this to your fullnode.yaml file:
+
+<Tabs groupId="object-store">
+<TabItem value="s3" label="Amazon S3">
+
+```yaml
+state-archive-read-config:
+  - object-store-config:
+      object-store: "S3"
+      # Use mysten-testnet-archives for testnet 
+      # Use mysten-mainnet-archives for mainnet
+      bucket: "mysten-<testnet|mainnet>-archives"
+      # you can either provide your own aws credentials via "aws-secret-access-key" and
+      # "aws-access-key-id" or set no-sign-request: true
+      no-sign-request: true
+      aws-region: "us-west-2"
+      object-store-connection-limit: 20
+    # How many objects to read ahead when catching up  
+    concurrency: 5
+    # Whether to prune local state based on latest checkpoint in archive.
+    # This should stay false for most use cases
+    use-for-pruning-watermark: false
+```
+
+</TabItem>
+<TabItem value="gcs" label="Google Cloud Storage">
+
+```yaml
+state-archive-read-config:
+  - object-store-config:
+      object-store: "GCS"
+      # Use mysten-mainnet-archives for mainnet
+      # Notice there is no archive bucket setup for testnet in GCS
+      bucket: "mysten-<testnet|mainnet>-archives"
+      # Use your gcloud service account credentials
+      google-service-account: "</path/to/service/account/credentials>"
+      object-store-connection-limit: 20
+    # How many objects to read ahead when catching up  
+    concurrency: 5
+    # Whether to prune local state based on latest checkpoint in archive.
+    # This should stay false for most use cases
+    use-for-pruning-watermark: false
+```
+
+</TabItem>
+</Tabs>
+
+
+Even though these buckets are publicly readable, you need to make sure to properly grant the correct policies to read them via AWS, for example:
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetObject",
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::mysten-mainnet-archives/*",
+                "arn:aws:s3:::mysten-mainnet-archives"
+            ]
+        }
+    ]
+}
+```

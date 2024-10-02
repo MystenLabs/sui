@@ -2,8 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use crate::consensus::LeaderSwapTable;
 use crate::NUM_SHUTDOWN_RECEIVERS;
-use consensus::consensus::LeaderSwapTable;
 use indexmap::IndexMap;
 use prometheus::Registry;
 use test_utils::{fixture_payload, latest_protocol_version, CommitteeFixture};
@@ -30,6 +30,7 @@ async fn propose_empty() {
     let _proposer_handle = Proposer::spawn(
         name,
         committee.clone(),
+        &latest_protocol_version(),
         ProposerStore::new_for_tests(),
         /* header_num_of_batches_threshold */ 32,
         /* max_header_num_of_batches */ 100,
@@ -77,6 +78,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
     let _proposer_handle = Proposer::spawn(
         name,
         committee.clone(),
+        &latest_protocol_version(),
         ProposerStore::new_for_tests(),
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ max_num_of_batches,
@@ -147,13 +149,13 @@ async fn propose_payload_and_repropose_after_n_seconds() {
 
     // AND send some parents to advance the round
     let parents: Vec<_> = fixture
-        .headers()
+        .headers(&latest_protocol_version())
         .iter()
         .take(4)
-        .map(|h| fixture.certificate(h))
+        .map(|h| fixture.certificate(&latest_protocol_version(), h))
         .collect();
 
-    let result = tx_parents.send((parents, 1, 0)).await;
+    let result = tx_parents.send((parents, 1)).await;
     assert!(result.is_ok());
 
     // THEN the header should contain max_num_of_batches
@@ -199,6 +201,7 @@ async fn equivocation_protection() {
     let proposer_handle = Proposer::spawn(
         authority_id,
         committee.clone(),
+        &latest_protocol_version(),
         proposer_store.clone(),
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ 10,
@@ -238,13 +241,13 @@ async fn equivocation_protection() {
 
     // Create and send parents
     let parents: Vec<_> = fixture
-        .headers()
+        .headers(&latest_protocol_version())
         .iter()
         .take(3)
-        .map(|h| fixture.certificate(h))
+        .map(|h| fixture.certificate(&latest_protocol_version(), h))
         .collect();
 
-    let result = tx_parents.send((parents, 1, 0)).await;
+    let result = tx_parents.send((parents, 1)).await;
     assert!(result.is_ok());
     assert!(rx_ack.await.is_ok());
 
@@ -271,6 +274,7 @@ async fn equivocation_protection() {
     let _proposer_handle = Proposer::spawn(
         authority_id,
         committee.clone(),
+        &latest_protocol_version(),
         proposer_store,
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ 10,
@@ -309,13 +313,13 @@ async fn equivocation_protection() {
 
     // Create and send a superset parents, same round but different set from before
     let parents: Vec<_> = fixture
-        .headers()
+        .headers(&latest_protocol_version())
         .iter()
         .take(4)
-        .map(|h| fixture.certificate(h))
+        .map(|h| fixture.certificate(&latest_protocol_version(), h))
         .collect();
 
-    let result = tx_parents.send((parents, 1, 0)).await;
+    let result = tx_parents.send((parents, 1)).await;
     assert!(result.is_ok());
     assert!(rx_ack.await.is_ok());
 

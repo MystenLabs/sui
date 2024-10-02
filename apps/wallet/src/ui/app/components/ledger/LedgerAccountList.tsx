@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { LedgerAccountRow } from './LedgerAccountRow';
-import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import { type DerivedLedgerAccount } from './useDeriveLedgerAccounts';
 
-export type SelectableLedgerAccount = SerializedLedgerAccount & {
+export type SelectableLedgerAccount = DerivedLedgerAccount & {
 	isSelected: boolean;
 };
 

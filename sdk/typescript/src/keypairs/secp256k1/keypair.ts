@@ -1,18 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ExportedKeypair } from '../../cryptography/keypair.js';
-import { Keypair } from '../../cryptography/keypair.js';
-import type { PublicKey } from '../../cryptography/publickey.js';
-import { sha256 } from '@noble/hashes/sha256';
-import { Secp256k1PublicKey } from './publickey.js';
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { isValidBIP32Path, mnemonicToSeed } from '../../cryptography/mnemonics.js';
-import { HDKey } from '@scure/bip32';
-import { toB64 } from '@mysten/bcs';
-import type { SignatureScheme } from '../../cryptography/signature.js';
-import { bytesToHex } from '@noble/hashes/utils';
 import { blake2b } from '@noble/hashes/blake2b';
+import { sha256 } from '@noble/hashes/sha256';
+import { bytesToHex } from '@noble/hashes/utils';
+import { HDKey } from '@scure/bip32';
+
+import { decodeSuiPrivateKey, encodeSuiPrivateKey, Keypair } from '../../cryptography/keypair.js';
+import { isValidBIP32Path, mnemonicToSeed } from '../../cryptography/mnemonics.js';
+import type { PublicKey } from '../../cryptography/publickey.js';
+import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
+import { Secp256k1PublicKey } from './publickey.js';
 
 export const DEFAULT_SECP256K1_DERIVATION_PATH = "m/54'/784'/0'/0/0";
 
@@ -71,14 +70,24 @@ export class Secp256k1Keypair extends Keypair {
 	 *
 	 * @throws error if the provided secret key is invalid and validation is not skipped.
 	 *
-	 * @param secretKey secret key byte array
+	 * @param secretKey secret key byte array  or Bech32 secret key string
 	 * @param options: skip secret key validation
 	 */
 
 	static fromSecretKey(
-		secretKey: Uint8Array,
+		secretKey: Uint8Array | string,
 		options?: { skipValidation?: boolean },
 	): Secp256k1Keypair {
+		if (typeof secretKey === 'string') {
+			const decoded = decodeSuiPrivateKey(secretKey);
+
+			if (decoded.schema !== 'Secp256k1') {
+				throw new Error(`Expected a Secp256k1 keypair, got ${decoded.schema}`);
+			}
+
+			return this.fromSecretKey(decoded.secretKey, options);
+		}
+
 		const publicKey: Uint8Array = secp256k1.getPublicKey(secretKey, true);
 		if (!options || !options.skipValidation) {
 			const encoder = new TextEncoder();
@@ -108,15 +117,17 @@ export class Secp256k1Keypair extends Keypair {
 	getPublicKey(): PublicKey {
 		return new Secp256k1PublicKey(this.keypair.publicKey);
 	}
-
-	async sign(data: Uint8Array) {
-		return this.signData(data);
+	/**
+	 * The Bech32 secret key string for this Secp256k1 keypair
+	 */
+	getSecretKey(): string {
+		return encodeSuiPrivateKey(this.keypair.secretKey, this.getKeyScheme());
 	}
 
 	/**
 	 * Return the signature for the provided data.
 	 */
-	signData(data: Uint8Array): Uint8Array {
+	async sign(data: Uint8Array) {
 		const msgHash = sha256(data);
 		const sig = secp256k1.sign(msgHash, this.keypair.secretKey, {
 			lowS: true,
@@ -146,12 +157,5 @@ export class Secp256k1Keypair extends Keypair {
 			publicKey: key.publicKey,
 			secretKey: key.privateKey,
 		});
-	}
-
-	export(): ExportedKeypair {
-		return {
-			schema: 'Secp256k1',
-			privateKey: toB64(this.keypair.secretKey),
-		};
 	}
 }

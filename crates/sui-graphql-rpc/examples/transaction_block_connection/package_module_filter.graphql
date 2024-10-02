@@ -1,0 +1,18 @@
+# Filtering on package and module
+{
+  transactionBlocks(
+    filter: {
+      function: "0x3::sui_system"
+    }
+  ) {
+    nodes {
+      sender {
+        address
+      }
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

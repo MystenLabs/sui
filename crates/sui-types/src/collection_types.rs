@@ -12,6 +12,14 @@ pub struct VecMap<K, V> {
     pub contents: Vec<Entry<K, V>>,
 }
 
+impl<K: PartialEq, V> VecMap<K, V> {
+    pub fn get(&self, key: &K) -> Option<&V> {
+        self.contents
+            .iter()
+            .find_map(|entry| (&entry.key == key).then_some(&entry.value))
+    }
+}
+
 /// Rust version of the Move sui::vec_map::Entry type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Entry<K, V> {
@@ -78,6 +86,14 @@ impl<K> Default for LinkedTable<K> {
     }
 }
 
+/// Rust version of the Move sui::linked_table::Node type.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct LinkedTableNode<K, V> {
+    pub prev: Option<K>,
+    pub next: Option<K>,
+    pub value: V,
+}
+
 /// Rust version of the Move sui::bag::Bag type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Bag {
@@ -91,5 +107,33 @@ impl Default for Bag {
             id: UID::new(ObjectID::ZERO),
             size: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::VecMap;
+
+    #[test]
+    fn test_vec_map() {
+        let vec_map = VecMap {
+            contents: vec![
+                ("key1".to_string(), "value1".to_string()),
+                ("key2".to_string(), "value2".to_string()),
+            ]
+            .into_iter()
+            .map(|(key, value)| super::Entry { key, value })
+            .collect(),
+        };
+
+        assert_eq!(
+            vec_map.get(&"key1".to_string()),
+            Some(&"value1".to_string())
+        );
+        assert_eq!(
+            vec_map.get(&"key2".to_string()),
+            Some(&"value2".to_string())
+        );
+        assert_eq!(vec_map.get(&"key3".to_string()), None);
     }
 }

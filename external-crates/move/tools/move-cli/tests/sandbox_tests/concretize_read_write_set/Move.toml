@@ -1,9 +1,0 @@
-[package]
-name = "concretize_read_write_set"
-version = "0.0.0"
-
-[addresses]
-std = "0x1"
-
-[dependencies]
-MoveStdlib = { local = "../../../../../move-stdlib" }

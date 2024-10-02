@@ -1,0 +1,27 @@
+# Get data for the first two transaction blocks of checkpoint at sequence number 10
+{
+  checkpoint(id: { sequenceNumber: 10 }) {
+    transactionBlocks(first: 2) {
+      edges {
+        node {
+          kind {
+            __typename
+          }
+          digest
+          sender {
+            address
+          }
+          expiration {
+            epochId
+          }
+        }
+      }
+      pageInfo {
+        startCursor
+        hasNextPage
+        hasPreviousPage
+        endCursor
+      }
+    }
+  }
+}

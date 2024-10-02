@@ -6,7 +6,7 @@
 	"background": {
 		"service_worker": "background.js"
 	},
-	"permissions": ["storage", "tabs", "alarms"],
+	"permissions": ["storage", "tabs", "alarms", "unlimitedStorage", "identity"],
 	"action": {
 		"default_popup": "ui.html?type=popup"
 	},
@@ -32,6 +32,10 @@
 		{
 			"resources": ["dapp-interface.js"],
 			"matches": ["<all_urls>"]
+		},
+		{
+			"resources": ["ui.html"],
+			"matches": ["https://*.banxa.com/*"]
 		}
 	],
 	"content_security_policy": {

@@ -3,14 +3,15 @@
 use crate::{consumer::ProtobufDecoder, peers::SuiNodeProvider};
 use axum::{
     async_trait,
+    body::Body,
     body::Bytes,
     extract::{Extension, FromRequest},
-    headers::{ContentLength, ContentType},
     http::{Request, StatusCode},
     middleware::Next,
     response::Response,
-    BoxError, TypedHeader,
 };
+use axum_extra::headers::{ContentLength, ContentType};
+use axum_extra::typed_header::TypedHeader;
 use bytes::Buf;
 use hyper::header::CONTENT_ENCODING;
 use once_cell::sync::Lazy;
@@ -38,20 +39,20 @@ static MIDDLEWARE_HEADERS: Lazy<CounterVec> = Lazy::new(|| {
 });
 
 /// we expect sui-node to send us an http header content-length encoding.
-pub async fn expect_content_length<B>(
+pub async fn expect_content_length(
     TypedHeader(content_length): TypedHeader<ContentLength>,
-    request: Request<B>,
-    next: Next<B>,
+    request: Request<Body>,
+    next: Next,
 ) -> Result<Response, (StatusCode, &'static str)> {
     MIDDLEWARE_HEADERS.with_label_values(&["content-length", &format!("{}", content_length.0)]);
     Ok(next.run(request).await)
 }
 
 /// we expect sui-node to send us an http header content-type encoding.
-pub async fn expect_mysten_proxy_header<B>(
+pub async fn expect_mysten_proxy_header(
     TypedHeader(content_type): TypedHeader<ContentType>,
-    request: Request<B>,
-    next: Next<B>,
+    request: Request<Body>,
+    next: Next,
 ) -> Result<Response, (StatusCode, &'static str)> {
     match format!("{content_type}").as_str() {
         prometheus::PROTOBUF_FORMAT => Ok(next.run(request).await),
@@ -67,17 +68,27 @@ pub async fn expect_mysten_proxy_header<B>(
 
 /// we expect that calling sui-nodes are known on the blockchain and we enforce
 /// their pub key tls creds here
-pub async fn expect_valid_public_key<B>(
+pub async fn expect_valid_public_key(
     Extension(allower): Extension<Arc<SuiNodeProvider>>,
     Extension(tls_connect_info): Extension<TlsConnectionInfo>,
-    mut request: Request<B>,
-    next: Next<B>,
+    mut request: Request<Body>,
+    next: Next,
 ) -> Result<Response, (StatusCode, &'static str)> {
-    let Some(peer) = allower.get(tls_connect_info.public_key().unwrap()) else {
-        error!("node with unknown pub key tried to connect");
+    let Some(public_key) = tls_connect_info.public_key() else {
+        error!("unable to obtain public key from connecting client");
         MIDDLEWARE_OPS
-        .with_label_values(&["expect_valid_public_key", "unknown-validator-connection-attempt"])
-        .inc();
+            .with_label_values(&["expect_valid_public_key", "missing-public-key"])
+            .inc();
+        return Err((StatusCode::FORBIDDEN, "unknown clients are not allowed"));
+    };
+    let Some(peer) = allower.get(public_key) else {
+        error!("node with unknown pub key tried to connect {}", public_key);
+        MIDDLEWARE_OPS
+            .with_label_values(&[
+                "expect_valid_public_key",
+                "unknown-validator-connection-attempt",
+            ])
+            .inc();
         return Err((StatusCode::FORBIDDEN, "unknown clients are not allowed"));
     };
     request.extensions_mut().insert(peer);
@@ -89,16 +100,16 @@ pub async fn expect_valid_public_key<B>(
 pub struct LenDelimProtobuf(pub Vec<MetricFamily>);
 
 #[async_trait]
-impl<S, B> FromRequest<S, B> for LenDelimProtobuf
+impl<S> FromRequest<S> for LenDelimProtobuf
 where
     S: Send + Sync,
-    B: http_body::Body + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<BoxError>,
 {
     type Rejection = (StatusCode, String);
 
-    async fn from_request(req: Request<B>, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(
+        req: Request<axum::body::Body>,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
         let should_be_snappy = req
             .headers()
             .get(CONTENT_ENCODING)

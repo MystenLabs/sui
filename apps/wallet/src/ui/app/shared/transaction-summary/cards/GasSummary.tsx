@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { type GasSummaryType, useFormatCoin } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js';
-
-import { Text } from '../../text';
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { useActiveAddress } from '_src/ui/app/hooks';
 import { GAS_TYPE_ARG } from '_src/ui/app/redux/slices/sui-objects/Coin';
+import { useFormatCoin, type GasSummaryType } from '@mysten/core';
+import { formatAddress } from '@mysten/sui/utils';
+
+import { Text } from '../../text';
 
 export function GasSummary({ gasSummary }: { gasSummary?: GasSummaryType }) {
 	const [gas, symbol] = useFormatCoin(gasSummary?.totalGas, GAS_TYPE_ARG);
@@ -16,7 +16,7 @@ export function GasSummary({ gasSummary }: { gasSummary?: GasSummaryType }) {
 	if (!gasSummary) return null;
 
 	return (
-		<div className="bg-white relative flex flex-col shadow-summary-card rounded-2xl">
+		<div className="bg-white relative flex flex-col shadow-card-soft rounded-2xl">
 			<div className="bg-gray-40 rounded-t-2xl py-2.5 px-4">
 				<Text color="steel-darker" variant="captionSmall" weight="semibold">
 					Gas Fees

@@ -9,6 +9,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use byteorder::{BigEndian, ByteOrder};
+use fastcrypto::hash::MultisetHash;
 use futures::StreamExt;
 use integer_encoding::VarInt;
 use object_store::path::Path;
@@ -16,18 +17,21 @@ use object_store::DynObjectStore;
 use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
 use std::fs;
-use std::fs::{read_dir, File, OpenOptions};
+use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
+use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_core::authority::CHAIN_IDENTIFIER;
+use sui_core::state_accumulator::StateAccumulator;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::blob::{Blob, BlobEncoding, BLOB_ENCODING_BYTES};
 use sui_storage::object_store::util::{copy_file, delete_recursively, path_to_filesystem};
-use sui_storage::object_store::ObjectStoreConfig;
+use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::mpsc;
@@ -36,7 +40,7 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
 
-/// LiveObjectSetWriterV1 writes live object set. It creates multiple *.obj files and one REFERENCE file
+/// LiveObjectSetWriterV1 writes live object set. It creates multiple *.obj files and *.ref file
 struct LiveObjectSetWriterV1 {
     dir_path: PathBuf,
     bucket_num: u32,
@@ -56,8 +60,9 @@ impl LiveObjectSetWriterV1 {
         file_compression: FileCompression,
         sender: Sender<FileMetadata>,
     ) -> Result<Self> {
-        let (n, obj_file, part_num) = Self::next_object_file(dir_path.clone(), bucket_num)?;
-        let ref_file = Self::ref_file(dir_path.clone(), bucket_num)?;
+        let part_num = 1;
+        let (n, obj_file) = Self::object_file(dir_path.clone(), bucket_num, part_num)?;
+        let ref_file = Self::ref_file(dir_path.clone(), bucket_num, part_num)?;
         Ok(LiveObjectSetWriterV1 {
             dir_path,
             bucket_num,
@@ -82,8 +87,7 @@ impl LiveObjectSetWriterV1 {
         self.sender = None;
         Ok(self.files.clone())
     }
-    fn next_object_file(dir_path: PathBuf, bucket_num: u32) -> Result<(usize, File, u32)> {
-        let part_num = Self::next_object_file_number(dir_path.clone(), bucket_num)?;
+    fn object_file(dir_path: PathBuf, bucket_num: u32, part_num: u32) -> Result<(usize, File)> {
         let next_part_file_path = dir_path.join(format!("{bucket_num}_{part_num}.obj"));
         let next_part_file_tmp_path = dir_path.join(format!("{bucket_num}_{part_num}.obj.tmp"));
         let mut f = File::create(next_part_file_tmp_path.clone())?;
@@ -95,36 +99,11 @@ impl LiveObjectSetWriterV1 {
         fs::rename(next_part_file_tmp_path, next_part_file_path.clone())?;
         let mut f = OpenOptions::new().append(true).open(next_part_file_path)?;
         f.seek(SeekFrom::Start(n as u64))?;
-        Ok((n, f, part_num))
+        Ok((n, f))
     }
-    fn next_object_file_number(dir: PathBuf, bucket: u32) -> Result<u32> {
-        let files = read_dir(&dir)?;
-        let mut max = 0u32;
-        for file_path in files {
-            let entry = file_path?;
-            let file_name = format!("{:?}", entry.file_name());
-            if !file_name.ends_with(".obj") {
-                continue;
-            }
-            let (bucket_num, part_num) = file_name
-                .strip_suffix(".obj")
-                .context(format!("Invalid object file {file_name} in snapshot dir {}, should be named <bucket_num>_<part_num>.obj", dir.display()))?
-                .split_once('_')
-                .map(|(b, p)| (b.parse::<u32>(), (p.parse::<u32>())))
-                .ok_or(anyhow!("Failed to parse object file name: {file_name} in dir {}", dir.display()))?;
-            if bucket_num? != bucket {
-                continue;
-            }
-            let part_num = part_num?;
-            if part_num > max {
-                max = part_num;
-            }
-        }
-        Ok(max + 1)
-    }
-    fn ref_file(dir_path: PathBuf, bucket_num: u32) -> Result<File> {
-        let ref_path = dir_path.join(format!("REFERENCE-{bucket_num}"));
-        let ref_tmp_path = dir_path.join(format!("REFERENCE-{bucket_num}.tmp"));
+    fn ref_file(dir_path: PathBuf, bucket_num: u32, part_num: u32) -> Result<File> {
+        let ref_path = dir_path.join(format!("{bucket_num}_{part_num}.ref"));
+        let ref_tmp_path = dir_path.join(format!("{bucket_num}_{part_num}.ref.tmp"));
         let mut f = File::create(ref_tmp_path.clone())?;
         f.rewind()?;
         let mut metab = [0u8; MAGIC_BYTES];
@@ -162,13 +141,15 @@ impl LiveObjectSetWriterV1 {
         self.ref_wbuf.get_ref().sync_data()?;
         let off = self.ref_wbuf.get_ref().stream_position()?;
         self.ref_wbuf.get_ref().set_len(off)?;
-        let file_path = self.dir_path.join(format!("REFERENCE-{}", self.bucket_num));
+        let file_path = self
+            .dir_path
+            .join(format!("{}_{}.ref", self.bucket_num, self.current_part_num));
         let file_metadata = create_file_metadata(
             &file_path,
             self.file_compression,
             FileType::Reference,
             self.bucket_num,
-            0,
+            self.current_part_num,
         )?;
         self.files.push(file_metadata.clone());
         if let Some(sender) = &self.sender {
@@ -178,12 +159,23 @@ impl LiveObjectSetWriterV1 {
     }
     fn cut(&mut self) -> Result<()> {
         self.finalize()?;
-        let delim = [0u8; OBJECT_REF_BYTES];
-        self.ref_wbuf.write_all(&delim)?;
-        let (n, f, part_num) = Self::next_object_file(self.dir_path.clone(), self.bucket_num)?;
+        let (n, f) = Self::object_file(
+            self.dir_path.clone(),
+            self.bucket_num,
+            self.current_part_num + 1,
+        )?;
         self.n = n;
-        self.current_part_num = part_num;
         self.wbuf = BufWriter::new(f);
+        Ok(())
+    }
+    fn cut_reference_file(&mut self) -> Result<()> {
+        self.finalize_ref()?;
+        let f = Self::ref_file(
+            self.dir_path.clone(),
+            self.bucket_num,
+            self.current_part_num + 1,
+        )?;
+        self.ref_wbuf = BufWriter::new(f);
         Ok(())
     }
     fn write_object(&mut self, object: &LiveObject) -> Result<()> {
@@ -194,6 +186,8 @@ impl LiveObjectSetWriterV1 {
         let cut_new_part_file = (self.n + blob_size) > FILE_MAX_BYTES;
         if cut_new_part_file {
             self.cut()?;
+            self.cut_reference_file()?;
+            self.current_part_num += 1;
         }
         self.n += blob.write(&mut self.wbuf)?;
         Ok(())
@@ -261,9 +255,13 @@ impl StateSnapshotWriterV1 {
         })
     }
 
-    pub async fn write(self, perpetual_db: Arc<AuthorityPerpetualTables>) -> Result<()> {
+    pub async fn write(
+        self,
+        epoch: u64,
+        perpetual_db: Arc<AuthorityPerpetualTables>,
+        root_state_hash: ECMHLiveObjectSetDigest,
+    ) -> Result<()> {
         let system_state_object = get_sui_system_state(&perpetual_db)?;
-        let epoch = system_state_object.epoch();
 
         let protocol_version = system_state_object.protocol_version();
         let chain_identifier = CHAIN_IDENTIFIER
@@ -274,8 +272,13 @@ impl StateSnapshotWriterV1 {
             chain_identifier.chain(),
         );
         let include_wrapped_tombstone = !protocol_config.simplified_unwrap_then_delete();
-        self.write_internal(epoch, include_wrapped_tombstone, perpetual_db)
-            .await
+        self.write_internal(
+            epoch,
+            include_wrapped_tombstone,
+            perpetual_db,
+            root_state_hash,
+        )
+        .await
     }
 
     pub(crate) async fn write_internal(
@@ -283,6 +286,7 @@ impl StateSnapshotWriterV1 {
         epoch: u64,
         include_wrapped_tombstone: bool,
         perpetual_db: Arc<AuthorityPerpetualTables>,
+        root_state_hash: ECMHLiveObjectSetDigest,
     ) -> Result<()> {
         self.setup_epoch_dir(epoch).await?;
 
@@ -300,6 +304,7 @@ impl StateSnapshotWriterV1 {
                 sender,
                 Self::bucket_func,
                 include_wrapped_tombstone,
+                root_state_hash,
             )
         });
         write_handler.await?.context(format!(
@@ -368,6 +373,7 @@ impl StateSnapshotWriterV1 {
         sender: Sender<FileMetadata>,
         bucket_func: F,
         include_wrapped_tombstone: bool,
+        root_state_hash: ECMHLiveObjectSetDigest,
     ) -> Result<()>
     where
         F: Fn(&LiveObject) -> u32,
@@ -375,7 +381,9 @@ impl StateSnapshotWriterV1 {
         let mut object_writers: HashMap<u32, LiveObjectSetWriterV1> = HashMap::new();
         let local_staging_dir_path =
             path_to_filesystem(self.local_staging_dir.clone(), &self.epoch_dir(epoch))?;
+        let mut acc = Accumulator::default();
         for object in perpetual_db.iter_live_object_set(include_wrapped_tombstone) {
+            StateAccumulator::accumulate_live_object(&mut acc, &object);
             let bucket_num = bucket_func(&object);
             if let Vacant(entry) = object_writers.entry(bucket_num) {
                 entry.insert(LiveObjectSetWriterV1::new(
@@ -390,6 +398,11 @@ impl StateSnapshotWriterV1 {
                 .context("Unexpected missing bucket writer")?;
             writer.write(&object)?;
         }
+        assert_eq!(
+            ECMHLiveObjectSetDigest::from(acc.digest()),
+            root_state_hash,
+            "Root state hash mismatch!"
+        );
         let mut files = vec![];
         for (_, writer) in object_writers.into_iter() {
             files.extend(writer.done()?);
@@ -457,7 +470,7 @@ impl StateSnapshotWriterV1 {
         // Delete remote epoch dir if it exists
         delete_recursively(
             &epoch_dir,
-            self.remote_object_store.clone(),
+            &self.remote_object_store,
             NonZeroUsize::new(self.concurrency).unwrap(),
         )
         .await?;
@@ -477,7 +490,7 @@ impl StateSnapshotWriterV1 {
         to: Arc<DynObjectStore>,
     ) -> Result<()> {
         debug!("Syncing snapshot file to remote: {:?}", path);
-        copy_file(path.clone(), path.clone(), from, to).await?;
+        copy_file(&path, &path, &from, &to).await?;
         fs::remove_file(path_to_filesystem(local_path, &path)?)?;
         Ok(())
     }

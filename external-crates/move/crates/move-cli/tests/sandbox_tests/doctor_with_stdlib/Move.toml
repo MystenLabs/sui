@@ -1,0 +1,9 @@
+[package]
+name = "doctor_with_stdlib"
+edition = "2024.beta"
+
+[addresses]
+std = "0x1"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }

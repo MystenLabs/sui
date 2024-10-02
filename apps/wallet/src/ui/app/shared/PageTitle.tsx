@@ -24,7 +24,7 @@ function PageTitle({ title = '', back, after }: PageTitleProps) {
 						return;
 					}
 					navigate(-1);
-			  }
+				}
 			: undefined;
 	return (
 		<div className="flex items-center relative gap-5 w-full">
@@ -34,7 +34,7 @@ function PageTitle({ title = '', back, after }: PageTitleProps) {
 					<Button
 						to={typeof back === 'string' ? back : undefined}
 						onClick={backOnClick}
-						size="tiny"
+						size="xs"
 						before={<ArrowLeft16 className="text-base leading-none" />}
 						variant="plain"
 					/>

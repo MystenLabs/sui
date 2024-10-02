@@ -4,14 +4,13 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use fastcrypto::encoding::Encoding;
-use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
-    IntCounterVec, Registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry, Histogram,
+    HistogramVec, IntCounterVec, Registry,
 };
-use std::collections::HashSet;
+use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
@@ -19,8 +18,9 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponse, HandleCertificateResponseV2, ObjectInfoRequest, ObjectInfoResponse,
-    SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
+    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
+    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionStatus, VerifiedObjectInfoResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::SuiSystemState;
@@ -30,7 +30,7 @@ use sui_types::{
     transaction::*,
 };
 use tap::TapFallible;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, instrument};
 
 macro_rules! check_error {
     ($address:expr, $cond:expr, $msg:expr) => {
@@ -49,7 +49,6 @@ pub struct SafeClientMetricsBase {
     total_requests_by_address_method: IntCounterVec,
     total_responses_by_address_method: IntCounterVec,
     latency: HistogramVec,
-    potentially_temporarily_invalid_signatures: IntCounter,
 }
 
 impl SafeClientMetricsBase {
@@ -69,15 +68,11 @@ impl SafeClientMetricsBase {
                 registry,
             )
             .unwrap(),
-            latency: HistogramVec::new_in_registry(
+            latency: register_histogram_vec_with_registry!(
                 "safe_client_latency",
                 "RPC latency observed by safe client aggregator, group by address and method",
                 &["address", "method"],
-                registry,
-            ),
-            potentially_temporarily_invalid_signatures: register_int_counter_with_registry!(
-                "safe_client_potentially_temporarily_invalid_signatures",
-                "Number of PotentiallyTemporarilyInvalidSignature errors",
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -96,7 +91,6 @@ pub struct SafeClientMetrics {
     handle_certificate_latency: Histogram,
     handle_obj_info_latency: Histogram,
     handle_tx_info_latency: Histogram,
-    potentially_temporarily_invalid_signatures: IntCounter,
 }
 
 impl SafeClientMetrics {
@@ -129,9 +123,6 @@ impl SafeClientMetrics {
         let handle_tx_info_latency = metrics_base
             .latency
             .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
-        let potentially_temporarily_invalid_signatures = metrics_base
-            .potentially_temporarily_invalid_signatures
-            .clone();
 
         Self {
             total_requests_handle_transaction_info_request,
@@ -142,7 +133,6 @@ impl SafeClientMetrics {
             handle_certificate_latency,
             handle_obj_info_latency,
             handle_tx_info_latency,
-            potentially_temporarily_invalid_signatures,
         }
     }
 
@@ -266,31 +256,12 @@ impl<C: Clone> SafeClient<C> {
                             transaction.into_data(),
                             cert,
                         );
-                        ct.verify_signature(&committee)
-                            .tap_err(|e| {
-                                // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
-                                warn!(?digest, ?ct, "Received invalid tx cert: {}", e);
-                                let ct_bytes = fastcrypto::encoding::Base64::encode(
-                                    bcs::to_bytes(&ct).unwrap(),
-                                );
-                                warn!(
-                                    ?digest,
-                                    ?ct_bytes,
-                                    "Received invalid tx cert (serialized): {}",
-                                    e
-                                );
-                            })
-                            .map_err(|e| match e {
-                                // TODO: Remove as well once incident #267 is resolved.
-                                SuiError::InvalidSignature { error } => {
-                                    self.metrics
-                                        .potentially_temporarily_invalid_signatures
-                                        .inc();
-                                    SuiError::PotentiallyTemporarilyInvalidSignature { error }
-                                }
-                                _ => e,
-                            })?;
-                        let ct = VerifiedCertificate::new_from_verified(ct);
+                        ct.verify_committee_sigs_only(&committee).map_err(|e| {
+                            SuiError::FailedToVerifyTxCertWithExecutedEffects {
+                                validator_name: self.address,
+                                error: e.to_string(),
+                            }
+                        })?;
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
                             ct,
                             signed_effects,
@@ -342,12 +313,13 @@ where
     pub async fn handle_transaction(
         &self,
         transaction: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<PlainTransactionInfoResponse, SuiError> {
         let _timer = self.metrics.handle_transaction_latency.start_timer();
         let digest = *transaction.digest();
         let response = self
             .authority_client
-            .handle_transaction(transaction.clone())
+            .handle_transaction(transaction.clone(), client_addr)
             .await?;
         let response = check_error!(
             self.address,
@@ -355,21 +327,6 @@ where
             "Client error in handle_transaction"
         )?;
         Ok(response)
-    }
-
-    fn verify_certificate_response(
-        &self,
-        digest: &TransactionDigest,
-        response: HandleCertificateResponse,
-    ) -> SuiResult<HandleCertificateResponse> {
-        Ok(HandleCertificateResponse {
-            signed_effects: self.check_signed_effects_plain(
-                digest,
-                response.signed_effects,
-                None,
-            )?,
-            events: response.events,
-        })
     }
 
     fn verify_certificate_response_v2(
@@ -380,38 +337,10 @@ where
         let signed_effects =
             self.check_signed_effects_plain(digest, response.signed_effects, None)?;
 
-        // For now, validators only pass back input shared object.
-        let fastpath_input_objects = if !response.fastpath_input_objects.is_empty() {
-            let input_shared_objects = signed_effects
-                .input_shared_objects()
-                .into_iter()
-                .map(|(obj_ref, _kind)| obj_ref)
-                .collect::<HashSet<_>>();
-            for object in &response.fastpath_input_objects {
-                let obj_ref = object.compute_object_reference();
-                if !input_shared_objects.contains(&obj_ref) {
-                    error!(tx_digest=?digest, name=?self.address, ?obj_ref, "Object returned from HandleCertificateResponseV2 is not in the input shared objects of the transaction");
-                    return Err(SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: format!(
-                            "Object {:?} returned from HandleCertificateResponseV2 is not in the input shared objects of tx: {:?}",
-                            obj_ref, digest
-                        ),
-                    });
-                }
-            }
-            response
-                .fastpath_input_objects
-                .into_iter()
-                .collect::<Vec<_>>()
-        } else {
-            vec![]
-        };
-
         Ok(HandleCertificateResponseV2 {
             signed_effects,
             events: response.events,
-            fastpath_input_objects,
+            fastpath_input_objects: vec![], // unused field
         })
     }
 
@@ -419,12 +348,13 @@ where
     pub async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
         let digest = *certificate.digest();
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let response = self
             .authority_client
-            .handle_certificate_v2(certificate)
+            .handle_certificate_v2(certificate, client_addr)
             .await?;
 
         let verified = check_error!(
@@ -435,20 +365,114 @@ where
         Ok(verified)
     }
 
-    pub async fn handle_certificate(
+    fn verify_certificate_response_v3(
         &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        let digest = *certificate.digest();
+        digest: &TransactionDigest,
+        HandleCertificateResponseV3 {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        }: HandleCertificateResponseV3,
+    ) -> SuiResult<HandleCertificateResponseV3> {
+        let effects = self.check_signed_effects_plain(digest, effects, None)?;
+
+        // Check Events
+        match (&events, effects.events_digest()) {
+            (None, None) | (None, Some(_)) => {}
+            (Some(events), None) => {
+                if !events.data.is_empty() {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned events but no event digest present in the signed effects"
+                            .to_string(),
+                    });
+                }
+            }
+            (Some(events), Some(events_digest)) => {
+                fp_ensure!(
+                    &events.digest() == events_digest,
+                    SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned events don't match events digest in the signed effects"
+                            .to_string()
+                    }
+                );
+            }
+        }
+
+        // Check Input Objects
+        if let Some(input_objects) = &input_objects {
+            let expected: HashMap<_, _> = effects
+                .old_object_metadata()
+                .into_iter()
+                .map(|(object_ref, _owner)| (object_ref.0, object_ref))
+                .collect();
+
+            for object in input_objects {
+                let object_ref = object.compute_object_reference();
+                if !expected
+                    .get(&object_ref.0)
+                    .is_some_and(|expect| &object_ref == expect)
+                {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned input object that wasn't present in the signed effects"
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        // Check Output Objects
+        if let Some(output_objects) = &output_objects {
+            let expected: HashMap<_, _> = effects
+                .all_changed_objects()
+                .into_iter()
+                .map(|(object_ref, _, _)| (object_ref.0, object_ref))
+                .collect();
+
+            for object in output_objects {
+                let object_ref = object.compute_object_reference();
+                if !expected
+                    .get(&object_ref.0)
+                    .is_some_and(|expect| &object_ref == expect)
+                {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned output object that wasn't present in the signed effects"
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(HandleCertificateResponseV3 {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        })
+    }
+
+    /// Execute a certificate.
+    pub async fn handle_certificate_v3(
+        &self,
+        request: HandleCertificateRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<HandleCertificateResponseV3, SuiError> {
+        let digest = *request.certificate.digest();
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let response = self
             .authority_client
-            .handle_certificate(certificate)
+            .handle_certificate_v3(request, client_addr)
             .await?;
 
         let verified = check_error!(
             self.address,
-            self.verify_certificate_response(&digest, response),
+            self.verify_certificate_response_v3(&digest, response),
             "Client error in handle_certificate"
         )?;
         Ok(verified)
@@ -476,6 +500,7 @@ where
     }
 
     /// Handle Transaction information requests for a given digest.
+    #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
@@ -562,6 +587,7 @@ where
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
@@ -577,6 +603,7 @@ where
         Ok(resp)
     }
 
+    #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn handle_system_state_object(&self) -> Result<SuiSystemState, SuiError> {
         self.authority_client
             .handle_system_state_object(SystemStateRequest { _unused: false })

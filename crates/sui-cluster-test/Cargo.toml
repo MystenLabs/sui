@@ -1,37 +1,36 @@
 [package]
 name = "sui-cluster-test"
-version = "0.1.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
 
 [dependencies]
-serde.workspace = true
 futures.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-util.workspace = true
 jsonrpsee.workspace = true
 tracing.workspace = true
 clap.workspace = true
 reqwest.workspace = true
 async-trait.workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
-bcs.workspace = true
 uuid.workspace = true
 prometheus.workspace = true
 fastcrypto.workspace = true
 shared-crypto.workspace = true
-mysten-metrics.workspace = true
+derivative.workspace = true
+regex.workspace = true
 
 sui-indexer.workspace = true
 sui-faucet.workspace = true
+sui-graphql-rpc.workspace = true
 sui-swarm.workspace = true
-sui.workspace = true
 sui-swarm-config.workspace = true
 sui-json-rpc-types.workspace = true
-sui-move-build.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true
 sui-types.workspace = true
@@ -42,5 +41,4 @@ sui-test-transaction-builder.workspace = true
 telemetry-subscribers.workspace = true
 
 test-cluster.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 move-core-types.workspace = true

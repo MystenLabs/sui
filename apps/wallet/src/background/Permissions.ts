@@ -1,20 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ALL_PERMISSION_TYPES, isValidPermissionTypes } from '_payloads/permissions';
+import type { Permission, PermissionResponse, PermissionType } from '_payloads/permissions';
 import mitt from 'mitt';
 import { catchError, concatMap, filter, from, mergeWith, share, Subject } from 'rxjs';
+import type { Observable } from 'rxjs';
 import { v4 as uuidV4 } from 'uuid';
 import Browser from 'webextension-polyfill';
 
+import type { ContentScriptConnection } from './connections/ContentScriptConnection';
 import Tabs from './Tabs';
 import { Window } from './Window';
-import { type Account } from './keyring/Account';
-import { ALL_PERMISSION_TYPES, isValidPermissionTypes } from '_payloads/permissions';
-
-import type { ContentScriptConnection } from './connections/ContentScriptConnection';
-import type { SuiAddress } from '@mysten/sui.js';
-import type { Permission, PermissionResponse, PermissionType } from '_payloads/permissions';
-import type { Observable } from 'rxjs';
 
 const PERMISSIONS_STORAGE_KEY = 'permissions';
 const PERMISSION_UI_URL = `${Browser.runtime.getURL('ui.html')}#/dapp/connect/`;
@@ -23,7 +20,7 @@ const PERMISSION_UI_URL_REGEX = new RegExp(`${PERMISSION_UI_URL}([0-9a-f-]+$)`, 
 type PermissionEvents = {
 	connectedAccountsChanged: {
 		origin: string;
-		accounts: SuiAddress[];
+		accounts: string[];
 	};
 };
 
@@ -195,7 +192,7 @@ class Permissions {
 		origin: string,
 		permissionTypes: readonly PermissionType[],
 		permission?: Permission | null,
-		address?: SuiAddress,
+		address?: string,
 	): Promise<boolean> {
 		const existingPermission = await this.getPermission(origin, permission);
 		return Boolean(
@@ -208,7 +205,7 @@ class Permissions {
 		);
 	}
 
-	public async delete(origin: string, specificAccounts: SuiAddress[] = []) {
+	public async delete(origin: string, specificAccounts: string[] = []) {
 		const allPermissions = await this.getPermissions();
 		const thePermission = allPermissions[origin];
 		if (thePermission) {
@@ -230,7 +227,7 @@ class Permissions {
 		}
 	}
 
-	public async ensurePermissionAccountsUpdated(accounts: Account[]) {
+	public async ensurePermissionAccountsUpdated(accounts: { address: string }[]) {
 		const allPermissions = await this.getPermissions();
 		const availableAccountsIndex = accounts.reduce<Record<string, boolean>>((acc, { address }) => {
 			acc[address] = true;

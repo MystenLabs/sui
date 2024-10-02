@@ -2,15 +2,17 @@
 version: "3.9"
 services:
   fullnode:
-    image: mysten/sui-node:stable
+    # Note: Update the tag to the latest version of mysten/sui-node for mainnet or testnet.
+    image: mysten/sui-node:mainnet-v1.19.1
     ports:
+    - "8080:8080"
     - "8084:8084/udp"
     - "9000:9000"
     - "9184:9184"
     volumes:
-    - ./fullnode-template.yaml:/sui/fullnode.yaml:ro
-    - ./genesis.blob:/sui/genesis.blob:ro
-    - suidb:/sui/suidb:rw
-    command: ["/usr/local/bin/sui-node", "--config-path", "fullnode.yaml"]
+    - ./fullnode-template.yaml:/opt/sui/config/fullnode.yaml:ro
+    - ./genesis.blob:/opt/sui/config/genesis.blob:ro
+    - ./suidb:/opt/sui/db:rw
+    command: ["/opt/sui/bin/sui-node", "--config-path", "/opt/sui/config/fullnode.yaml"]
 volumes:
   suidb:

@@ -6,19 +6,25 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 integer-encoding.workspace = true
 async-trait.workspace = true
 futures.workspace = true
 num_enum.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tokio = { workspace = true, features = ["full", "tracing"] }
-rocksdb.workspace = true
 tracing.workspace = true
 byteorder.workspace = true
 anyhow.workspace = true
 tempfile.workspace = true
 tap.workspace = true
+reqwest.workspace = true
+percent-encoding = "2.2.0"
+chrono.workspace = true
 object_store.workspace = true
 backoff.workspace = true
 bytes.workspace = true
@@ -30,15 +36,20 @@ zstd.workspace = true
 url.workspace = true
 fastcrypto.workspace = true
 clap = "4.3.2"
+hyper.workspace = true
+hyper-rustls.workspace = true
+base64-url.workspace = true
+telemetry-subscribers.workspace = true
+indicatif.workspace = true
+moka.workspace = true
 
 sui-types.workspace = true
 mysten-metrics.workspace = true
 move-core-types.workspace = true
 sui-json-rpc-types.workspace = true
 sui-protocol-config.workspace = true
+sui-config.workspace = true
 typed-store.workspace = true
-typed-store-derive.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 eyre.workspace = true
 lru.workspace = true
 
@@ -46,9 +57,14 @@ move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 
 [dev-dependencies]
+axum.workspace = true
 anyhow.workspace = true
 criterion.workspace = true
 tempfile.workspace = true
 num_cpus.workspace = true
 pretty_assertions.workspace = true
 once_cell.workspace = true
+sui-test-transaction-builder.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }
+sui-macros = { workspace = true }
+sui-simulator = { workspace = true }

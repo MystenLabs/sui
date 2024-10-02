@@ -1,0 +1,202 @@
+---
+title: Orders SDK
+sidebar_label: Orders
+---
+
+Placing orders is a main function of any DeepBook integration. Before you can place orders, though, you must first set up a balance manager. See [DeepBookV3 SDK](../deepbookv3-sdk.mdx) for information on setting up a balance manager.
+
+## Order functions
+
+The DeepBookV3 SDK provides the following functions for leveraging orders against pools.
+
+### placeLimitOrder
+
+Use `placeLimitOrder` to place limit orders. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `params`: `SwapParams` object that represents the parameters for the swap.
+
+```tsx
+placeLimitOrder({ params: PlaceLimitOrderParams });
+```
+
+### placeMarketOrder
+
+Use `placeMarketOrder` to place market orders. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `params`: `SwapParams` object that represents the parameters for the swap.
+
+```tsx
+placeMarketOrder({ params: PlaceMarketOrderParams });
+```
+
+### cancelOrder
+
+Use `cancelOrder` to cancel an existing order that is identified by the `orderId` thqt you provide. The call returns a function that takes a `Transaction` object.
+
+::: warn
+
+The `orderId` is the protocol `orderId` generated during order placement, which is different from the client `orderId`.
+
+:::
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool from which to borrow.
+- `balanceManagerKey`: String that identifies the `BalanceManager`.
+- `orderId`: String of the protocol order ID that identifies the order to cancel. 
+
+```tsx
+cancelOrder(poolKey: string, balanceManagerKey: string, orderId: string);
+```
+
+### cancelAllOrders
+
+Use `cancelAllOrders` to cancel every order for the balance manager whose key you provide. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool from which to borrow.
+- `balanceManagerKey`: String that identifies the `BalanceManager`.
+
+```tsx
+cancelAllOrders(poolKey: string, balanceManagerKey: string);
+```
+
+## Examples
+
+The following examples demonstrate some custom functions for DeepBookV3 orders.
+
+### Limit orders
+
+See the [Order API](../deepbookv3/orders) for the different order types and self matching options.
+    
+```tsx
+// Params for limit order
+interface PlaceLimitOrderParams {
+    poolKey: string;
+    balanceManagerKey: string;
+    clientOrderId: string;
+    price: number;
+    quantity: number;
+    isBid: boolean;
+    expiration?: number | bigint; // Default no expiration
+    orderType?: OrderType; // Default no restrictions
+    selfMatchingOption?: SelfMatchingOptions; // Default self matching allowed
+    payWithDeep?: boolean; // Default true
+}
+
+/**
+  * @description Place a limit order
+  * @param {PlaceLimitOrderParams} params Parameters for placing a limit order
+  * @returns A function that takes a Transaction object
+  */
+placeLimitOrder = (params: PlaceLimitOrderParams) => (tx: Transaction) => {}
+
+// Example usage in DeepBookMarketMaker class
+// Place a bid of 10 DEEP at $0.1
+customPlaceLimitOrder = (tx: Transaction) => {
+  const poolKey = 'DEEP_DBUSDC'; // Pool key, check constants.ts for more
+  const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
+  tx.add(
+    this.deepBook.placeLimitOrder({
+      poolKey: poolKey,
+      balanceManagerKey: managerKey,
+      clientOrderId: '1',
+      price: 0.1,
+      quantity: 10,
+      isBid: true,
+      payWithDeep: true,
+    }),
+  );
+};
+```
+
+### Place market order
+
+Example of placing a market order.
+
+```tsx
+// Params for market order
+interface PlaceMarketOrderParams {
+    poolKey: string;
+    balanceManagerKey: string;
+    clientOrderId: string;
+    quantity: number;
+    isBid: boolean;
+    selfMatchingOption?: SelfMatchingOptions;
+    payWithDeep?: boolean;
+}
+
+// Example usage in DeepBookMarketMaker class
+// Place a market sell of 10 SUI in the SUI_DBUSDC pool
+customPlaceMarketOrder = (tx: Transaction) => {
+  const poolKey = 'SUI_DBUSDC'; // Pool key, check constants.ts for more
+  const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
+  tx.add(
+    this.deepBook.placeMarketOrder({
+      poolKey: poolKey,
+      balanceManagerKey: managerKey,
+      clientOrderId: '2',
+      quantity: 10,
+      isBid: true,
+      payWithDeep: true,
+    }),
+  );
+};
+```
+    
+### Cancel an order
+
+Example of canceling a single order in a pool for a balance manager. 
+    
+```tsx
+/**
+  * @description Cancel an existing order
+  * @param {string} poolKey The key to identify the pool
+  * @param {string} balanceManagerKey The key to identify the BalanceManager
+  * @param {number} orderId Order ID to cancel
+  * @returns A function that takes a Transaction object
+  */
+cancelOrder = (
+  poolKey: string, 
+  balanceManagerKey: string, 
+  orderId: number
+) => (tx: Transaction) => {}
+
+// Example usage in DeepBookMarketMaker class
+// Cancel order 12345678 in SUI_DBUSDC pool
+cancelOrder = (tx: Transaction) => {
+  const poolKey = 'SUI_DBUSDC'; // Pool key, check constants.ts for more
+  const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
+  tx.add(this.deepBook.cancelOrder(poolKey, managerKey, 12345678));
+};
+```
+
+### Cancel all orders
+
+Example of canceling all orders in a pool for a balance manager.
+    
+```tsx
+/**
+  * @description Cancel all open orders for a balance manager
+  * @param {string} poolKey The key to identify the pool
+  * @param {string} balanceManagerKey The key to identify the BalanceManager
+  * @returns A function that takes a Transaction object
+  */
+cancelAllOrders = (
+  poolKey: string, 
+  balanceManagerKey: string
+) => (tx: Transaction) => {}
+
+// Example usage in DeepBookMarketMaker class
+// Cancel order 12345678 in SUI_DBUSDC pool
+cancelOrder = (tx: Transaction) => {
+  const poolKey = 'SUI_DBUSDC'; // Pool key, check constants.ts for more
+  const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
+  tx.add(this.deepBook.cancelAllOrders(poolKey, managerKey));
+};
+```

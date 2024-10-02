@@ -1,0 +1,26 @@
+//# publish
+module 0x6.Test {
+    public t(): u64 {
+        let x: u64;
+    label b0:
+        jump_if (true) b2;
+    label b1:
+        x = 0;
+        return copy(x);
+    label b2:
+        return 100;
+    }
+}
+
+//# run
+module 0x42.m {
+import 0x6.Test;
+
+entry foo() {
+    let x: u64;
+label b0:
+    x = Test.t();
+    assert(copy(x) == 100, 42);
+    return;
+}
+}

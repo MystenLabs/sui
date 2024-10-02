@@ -4,11 +4,11 @@
 import { useEffect, useState } from 'react';
 import { v4 as uuidV4 } from 'uuid';
 
-import { QredoEvents, type QredoEventsType } from '../QredoSigner';
 import Alert from '../components/alert';
 import LoadingIndicator from '../components/loading/LoadingIndicator';
+import { QredoEvents, type QredoEventsType } from '../QredoSigner';
 import { Button } from '../shared/ButtonUI';
-import { ModalDialog } from '../shared/ModalDialog';
+import { Dialog, DialogContent } from '../shared/Dialog';
 import { Heading } from '../shared/heading';
 import { Text } from '../shared/text';
 
@@ -16,10 +16,18 @@ export function useQredoTransaction(preventModalDismiss?: boolean) {
 	const [clientIdentifier, setClientIdentifier] = useState(() => uuidV4());
 	const [qredoTransactionID, setQredoTransactionID] = useState<string | null>(null);
 	const notificationModal = (
-		<ModalDialog
-			isOpen={!!qredoTransactionID}
-			preventClose={preventModalDismiss}
-			body={
+		<Dialog
+			open={!!qredoTransactionID}
+			onOpenChange={(open) => {
+				if (!open && !preventModalDismiss) {
+					QredoEvents.emit('clientIgnoredUpdates', {
+						clientIdentifier,
+					});
+					setQredoTransactionID(null);
+				}
+			}}
+		>
+			<DialogContent>
 				<div className="flex flex-col gap-2.5 text-center items-center relative">
 					{preventModalDismiss ? (
 						<Alert mode="warning">Don't close this window until the transaction is completed</Alert>
@@ -47,14 +55,8 @@ export function useQredoTransaction(preventModalDismiss?: boolean) {
 						/>
 					) : null}
 				</div>
-			}
-			onClose={() => {
-				QredoEvents.emit('clientIgnoredUpdates', {
-					clientIdentifier,
-				});
-				setQredoTransactionID(null);
-			}}
-		/>
+			</DialogContent>
+		</Dialog>
 	);
 	useEffect(() => {
 		function qredoTransactionCreated(event: QredoEventsType['qredoTransactionCreated']) {

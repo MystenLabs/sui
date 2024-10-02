@@ -7,10 +7,7 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
-    struct R has key, store { id: UID }
+    public struct R has key, store { id: UID }
     public fun r(ctx: &mut TxContext): R { R { id: object::new(ctx) } }
 
     public fun dirty(_: &mut R) {}

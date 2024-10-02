@@ -1,17 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use dashmap::DashMap;
+use parking_lot::Mutex;
+use prometheus::core::{AtomicI64, GenericGauge};
+use simple_server_timing_header::Timer;
 use std::future::Future;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Instant;
 
 use once_cell::sync::OnceCell;
-use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
+use prometheus::{
+    register_histogram_with_registry, register_int_gauge_vec_with_registry, Histogram, IntGaugeVec,
+    Registry, TextEncoder,
+};
 use tap::TapFallible;
-use tracing::warn;
+use tracing::{warn, Span};
 
 pub use scopeguard;
 use uuid::Uuid;
@@ -19,19 +27,48 @@ use uuid::Uuid;
 mod guards;
 pub mod histogram;
 pub mod metered_channel;
+pub mod monitored_mpsc;
+pub mod thread_stall_monitor;
 pub use guards::*;
 
 pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
 pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
 
+pub const SUBSECOND_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.5, 0.7, 1.,
+];
+
+pub const COARSE_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.2, 0.3, 0.5, 0.7, 1., 2., 3., 5., 10., 20., 30., 60.,
+];
+
+pub const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6,
+    0.7, 0.8, 0.9, 1., 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2., 2.5, 3., 3.5, 4., 4.5, 5.,
+    6., 7., 8., 9., 10., 15., 20., 25., 30., 60., 90.,
+];
+
+pub const COUNT_BUCKETS: &[f64] = &[
+    2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000.,
+];
+
+pub const BYTES_BUCKETS: &[f64] = &[
+    1024., 4096., 16384., 65536., 262144., 524288., 1048576., 2097152., 4194304., 8388608.,
+    16777216., 33554432., 67108864.,
+];
+
 #[derive(Debug)]
 pub struct Metrics {
     pub tasks: IntGaugeVec,
     pub futures: IntGaugeVec,
-    pub channels: IntGaugeVec,
+    pub channel_inflight: IntGaugeVec,
+    pub channel_sent: IntGaugeVec,
+    pub channel_received: IntGaugeVec,
+    pub future_active_duration_ns: IntGaugeVec,
     pub scope_iterations: IntGaugeVec,
     pub scope_duration_ns: IntGaugeVec,
     pub scope_entrance: IntGaugeVec,
+    pub thread_stall_duration_sec: Histogram,
 }
 
 impl Metrics {
@@ -51,9 +88,30 @@ impl Metrics {
                 registry,
             )
             .unwrap(),
-            channels: register_int_gauge_vec_with_registry!(
-                "monitored_channels",
-                "Size of channels.",
+            channel_inflight: register_int_gauge_vec_with_registry!(
+                "monitored_channel_inflight",
+                "Inflight items in channels.",
+                &["name"],
+                registry,
+            )
+            .unwrap(),
+            channel_sent: register_int_gauge_vec_with_registry!(
+                "monitored_channel_sent",
+                "Sent items in channels.",
+                &["name"],
+                registry,
+            )
+            .unwrap(),
+            channel_received: register_int_gauge_vec_with_registry!(
+                "monitored_channel_received",
+                "Received items in channels.",
+                &["name"],
+                registry,
+            )
+            .unwrap(),
+            future_active_duration_ns: register_int_gauge_vec_with_registry!(
+                "monitored_future_active_duration_ns",
+                "Total duration in nanosecs where the monitored future is active (consuming CPU time)",
                 &["name"],
                 registry,
             )
@@ -79,6 +137,12 @@ impl Metrics {
                 registry,
             )
             .unwrap(),
+            thread_stall_duration_sec: register_histogram_with_registry!(
+                "thread_stall_duration_sec",
+                "Duration of thread stalls in seconds.",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -96,6 +160,60 @@ pub fn get_metrics() -> Option<&'static Metrics> {
     METRICS.get()
 }
 
+tokio::task_local! {
+    static SERVER_TIMING: Arc<Mutex<Timer>>;
+}
+
+/// Create a new task-local ServerTiming context and run the provided future within it.
+/// Should be used at the top-most level of a request handler. Can be added to an axum router
+/// as a layer by using mysten_service::server_timing_middleware.
+pub async fn with_new_server_timing<T>(fut: impl Future<Output = T> + Send + 'static) -> T {
+    let timer = Arc::new(Mutex::new(Timer::new()));
+
+    let mut ret = None;
+    SERVER_TIMING
+        .scope(timer, async {
+            ret = Some(fut.await);
+        })
+        .await;
+
+    ret.unwrap()
+}
+
+/// Create a new task-local ServerTiming context and run the provided future within it.
+/// Only intended for use by macros within this module.
+pub async fn with_server_timing<T>(
+    timer: Arc<Mutex<Timer>>,
+    fut: impl Future<Output = T> + Send + 'static,
+) -> T {
+    let mut ret = None;
+    SERVER_TIMING
+        .scope(timer, async {
+            ret = Some(fut.await);
+        })
+        .await;
+
+    ret.unwrap()
+}
+
+/// Get the currently active ServerTiming context. Only intended for use by macros within this module.
+pub fn get_server_timing() -> Option<Arc<Mutex<Timer>>> {
+    SERVER_TIMING.try_with(|timer| timer.clone()).ok()
+}
+
+/// Add a new entry to the ServerTiming header.
+/// If the caller is not currently in a ServerTiming context (created with `with_new_server_timing`),
+/// an error is logged.
+pub fn add_server_timing(name: &str) {
+    let res = SERVER_TIMING.try_with(|timer| {
+        timer.lock().add(name);
+    });
+
+    if res.is_err() {
+        tracing::error!("Server timing context not found");
+    }
+}
+
 #[macro_export]
 macro_rules! monitored_future {
     ($fut: expr) => {{
@@ -110,18 +228,18 @@ macro_rules! monitored_future {
         };
 
         async move {
-            let metrics = mysten_metrics::get_metrics();
+            let metrics = $crate::get_metrics();
 
             let _metrics_guard = if let Some(m) = metrics {
                 m.$metric.with_label_values(&[location]).inc();
-                Some(mysten_metrics::scopeguard::guard(m, |metrics| {
+                Some($crate::scopeguard::guard(m, |_| {
                     m.$metric.with_label_values(&[location]).dec();
                 }))
             } else {
                 None
             };
             let _logging_guard = if $logging_enabled {
-                Some(mysten_metrics::scopeguard::guard((), |_| {
+                Some($crate::scopeguard::guard((), |_| {
                     tracing::event!(
                         tracing::Level::$logging_level,
                         "Future {} completed",
@@ -146,9 +264,20 @@ macro_rules! monitored_future {
 }
 
 #[macro_export]
+macro_rules! forward_server_timing_and_spawn {
+    ($fut: expr) => {
+        if let Some(timing) = $crate::get_server_timing() {
+            tokio::task::spawn(async move { $crate::with_server_timing(timing, $fut).await })
+        } else {
+            tokio::task::spawn($fut)
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! spawn_monitored_task {
     ($fut: expr) => {
-        tokio::task::spawn(mysten_metrics::monitored_future!(
+        $crate::forward_server_timing_and_spawn!($crate::monitored_future!(
             tasks, $fut, "", INFO, false
         ))
     };
@@ -157,19 +286,19 @@ macro_rules! spawn_monitored_task {
 #[macro_export]
 macro_rules! spawn_logged_monitored_task {
     ($fut: expr) => {
-        tokio::task::spawn(mysten_metrics::monitored_future!(
+        $crate::forward_server_timing_and_spawn!($crate::monitored_future!(
             tasks, $fut, "", INFO, true
         ))
     };
 
     ($fut: expr, $name: expr) => {
-        tokio::task::spawn(mysten_metrics::monitored_future!(
+        $crate::forward_server_timing_and_spawn!($crate::monitored_future!(
             tasks, $fut, $name, INFO, true
         ))
     };
 
     ($fut: expr, $name: expr, $logging_level: ident) => {
-        tokio::task::spawn(mysten_metrics::monitored_future!(
+        $crate::forward_server_timing_and_spawn!($crate::monitored_future!(
             tasks,
             $fut,
             $name,
@@ -229,6 +358,8 @@ impl<F: Future> MonitoredFutureExt for F {
     fn in_monitored_scope(self, name: &'static str) -> MonitoredScopeFuture<Self> {
         MonitoredScopeFuture {
             f: Box::pin(self),
+            active_duration_metric: get_metrics()
+                .map(|m| m.future_active_duration_ns.with_label_values(&[name])),
             _scope: monitored_scope(name),
         }
     }
@@ -236,6 +367,7 @@ impl<F: Future> MonitoredFutureExt for F {
 
 pub struct MonitoredScopeFuture<F: Sized> {
     f: Pin<Box<F>>,
+    active_duration_metric: Option<GenericGauge<AtomicI64>>,
     _scope: Option<MonitoredScopeGuard>,
 }
 
@@ -243,7 +375,76 @@ impl<F: Future> Future for MonitoredScopeFuture<F> {
     type Output = F::Output;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.f.as_mut().poll(cx)
+        let active_timer = Instant::now();
+        let ret = self.f.as_mut().poll(cx);
+        if let Some(m) = &self.active_duration_metric {
+            m.add(active_timer.elapsed().as_nanos() as i64);
+        }
+        ret
+    }
+}
+
+pub struct CancelMonitor<F: Sized> {
+    finished: bool,
+    inner: Pin<Box<F>>,
+}
+
+impl<F> CancelMonitor<F>
+where
+    F: Future,
+{
+    pub fn new(inner: F) -> Self {
+        Self {
+            finished: false,
+            inner: Box::pin(inner),
+        }
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.finished
+    }
+}
+
+impl<F> Future for CancelMonitor<F>
+where
+    F: Future,
+{
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.inner.as_mut().poll(cx) {
+            Poll::Ready(output) => {
+                self.finished = true;
+                Poll::Ready(output)
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl<F: Sized> Drop for CancelMonitor<F> {
+    fn drop(&mut self) {
+        if !self.finished {
+            Span::current().record("cancelled", true);
+        }
+    }
+}
+
+/// MonitorCancellation records a cancelled = true span attribute if the future it
+/// is decorating is dropped before completion. The cancelled attribute must be added
+/// at span creation, as you cannot add new attributes after the span is created.
+pub trait MonitorCancellation {
+    fn monitor_cancellation(self) -> CancelMonitor<Self>
+    where
+        Self: Sized + Future;
+}
+
+impl<T> MonitorCancellation for T
+where
+    T: Future,
+{
+    fn monitor_cancellation(self) -> CancelMonitor<Self> {
+        CancelMonitor::new(self)
     }
 }
 
@@ -317,13 +518,17 @@ impl RegistryService {
 }
 
 /// Create a metric that measures the uptime from when this metric was constructed.
-/// The metric is labeled with the provided 'version' label (this should generally be of the
-/// format: 'semver-gitrevision') and the provided 'chain_identifier' label.
+/// The metric is labeled with:
+/// - 'process': the process type, differentiating between validator and fullnode
+/// - 'version': binary version, generally be of the format: 'semver-gitrevision'
+/// - 'chain_identifier': the identifier of the network which this process is part of
 pub fn uptime_metric(
+    process: &str,
     version: &'static str,
     chain_identifier: &str,
 ) -> Box<dyn prometheus::core::Collector> {
     let opts = prometheus::opts!("uptime", "uptime of the node service in seconds")
+        .variable_label("process")
         .variable_label("version")
         .variable_label("chain_identifier");
 
@@ -333,11 +538,96 @@ pub fn uptime_metric(
         opts,
         prometheus_closure_metric::ValueType::Counter,
         uptime,
-        &[version, chain_identifier],
+        &[process, version, chain_identifier],
     )
     .unwrap();
 
     Box::new(metric)
+}
+
+/// Similar to `uptime_metric`, but for the bridge node with different labels.
+/// Create a metric that measures the uptime from when this metric was constructed.
+/// The metric is labeled with:
+/// - 'process': the process type. We keep this label to be able to distinguish between different binaries.
+/// - 'version': binary version, generally be of the format: 'semver-gitrevision'
+/// - 'sui_chain_identifier': the identifier of sui network which this process is part of
+/// - 'eth_chain_identifier': the identifier of eth network which this process is part of
+/// - 'client_enabled': whether the bridge node is running as a client
+pub fn bridge_uptime_metric(
+    process: &str,
+    version: &'static str,
+    sui_chain_identifier: &str,
+    eth_chain_identifier: &str,
+    client_enabled: bool,
+) -> Box<dyn prometheus::core::Collector> {
+    let opts = prometheus::opts!("uptime", "uptime of the node service in seconds")
+        .variable_label("process")
+        .variable_label("version")
+        .variable_label("sui_chain_identifier")
+        .variable_label("eth_chain_identifier")
+        .variable_label("client_enabled");
+
+    let start_time = std::time::Instant::now();
+    let uptime = move || start_time.elapsed().as_secs();
+    let metric = prometheus_closure_metric::ClosureMetric::new(
+        opts,
+        prometheus_closure_metric::ValueType::Counter,
+        uptime,
+        &[
+            process,
+            version,
+            sui_chain_identifier,
+            eth_chain_identifier,
+            if client_enabled { "true" } else { "false" },
+        ],
+    )
+    .unwrap();
+
+    Box::new(metric)
+}
+
+pub const METRICS_ROUTE: &str = "/metrics";
+
+// Creates a new http server that has as a sole purpose to expose
+// and endpoint that prometheus agent can use to poll for the metrics.
+// A RegistryService is returned that can be used to get access in prometheus Registries.
+pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
+    let registry = Registry::new();
+
+    let registry_service = RegistryService::new(registry);
+
+    if cfg!(msim) {
+        // prometheus uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
+        // can't yet run it in the simulator.
+        warn!("not starting prometheus server in simulator");
+        return registry_service;
+    }
+
+    let app = Router::new()
+        .route(METRICS_ROUTE, get(metrics))
+        .layer(Extension(registry_service.clone()));
+
+    tokio::spawn(async move {
+        let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+        axum::serve(listener, app.into_make_service())
+            .await
+            .unwrap();
+    });
+
+    registry_service
+}
+
+pub async fn metrics(
+    Extension(registry_service): Extension<RegistryService>,
+) -> (StatusCode, String) {
+    let metrics_families = registry_service.gather_all();
+    match TextEncoder.encode_to_string(&metrics_families) {
+        Ok(metrics) => (StatusCode::OK, metrics),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("unable to encode metrics: {error}"),
+        ),
+    }
 }
 
 #[cfg(test)]

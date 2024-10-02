@@ -5,16 +5,13 @@
 
 //# publish --upgradeable --sender A
 module V0::base_module {
-    use sui::object::UID;
-    struct Object has key, store { 
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
     }
 
-    friend V0::friend_module;
-
-    public(friend) entry fun friend_fun(): u64 { 0 }
+    public(package) entry fun friend_fun(): u64 { 0 }
 }
 module V0::friend_module {
     public fun call_friend(): u64 { V0::base_module::friend_fun() }
@@ -23,16 +20,13 @@ module V0::friend_module {
 // Change the friend function signature -- should work
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A
 module V1::base_module {
-    use sui::object::UID;
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
     }
 
-    friend V1::friend_module;
-
-    public(friend) entry fun friend_fun(x: u64): u64 { x }
+    public(package) entry fun friend_fun(x: u64): u64 { x }
 }
 module V1::friend_module {
     public fun call_friend(): u64 { V1::base_module::friend_fun(10) }
@@ -41,18 +35,13 @@ module V1::friend_module {
 // Change the friend entry to a friend -- should work
 //# upgrade --package V1 --upgrade-capability 1,1 --sender A
 module V2::base_module {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
     }
 
-    friend V2::friend_module;
-
-    public fun public_fun(x: u64, recipient: address, ctx: &mut TxContext): u64 { 
+    public fun public_fun(x: u64, recipient: address, ctx: &mut TxContext): u64 {
         transfer::public_transfer(
             Object { id: object::new(ctx), field0: x, field1: x},
             recipient
@@ -62,7 +51,7 @@ module V2::base_module {
 
     public fun public_fun2(x: u64): u64 { x }
 
-    public(friend) fun friend_fun(x: u64): u64 { x }
+    public(package) fun friend_fun(x: u64): u64 { x }
 }
 module V2::friend_module {
     public fun call_friend(): u64 { V1::base_module::friend_fun(10) }
@@ -71,17 +60,13 @@ module V2::friend_module {
 // Remove a friend function -- and replace with a call to a public function at a previous version should also be fine
 //# upgrade --package V2 --upgrade-capability 1,1 --sender A
 module V3::base_module {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
     }
 
-    friend V3::friend_module;
-    public fun public_fun(x: u64, recipient: address, ctx: &mut TxContext): u64 { 
+    public fun public_fun(x: u64, recipient: address, ctx: &mut TxContext): u64 {
         transfer::public_transfer(
             Object { id: object::new(ctx), field0: x, field1: x},
             recipient
@@ -91,7 +76,6 @@ module V3::base_module {
     public fun public_fun2(x: u64): u64 { x }
 }
 module V3::friend_module {
-    use sui::tx_context::TxContext;
     public fun call_friend(): u64 { V2::base_module::public_fun2(10) }
 
     // Cross-version package call
@@ -102,4 +86,4 @@ module V3::friend_module {
 
 //# run V3::friend_module::call_public
 
-//# view-object 6,0 
+//# view-object 6,0

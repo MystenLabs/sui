@@ -9,6 +9,20 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/labeler@v4
+    - uses: actions/labeler@9fd24f1f9d6ceb64ba34d181b329ee72f99978a0
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
+
+  notify-prs:
+    name: Dispatch workflow to notify slack channel on PRs
+    runs-on: ubuntu-latest
+    if: ${{ github.event.action == 'opened' }}
+    steps:
+      - name: Dispatch github-issues-external-prs-monitor in MystenLabs/sui-operations
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with: 
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: github-issues-external-prs-monitor
+          client-payload: '{"author": "${{github.event.pull_request.user.login}}", "event_name": "pull_request", "pull_request_number": "${{github.event.pull_request.number}}"}'
+

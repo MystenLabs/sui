@@ -1,0 +1,32 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────╮
+│ PTB Preview                              │
+├─────────────┬────────────────────────────┤
+│ command     │ values                     │
+├─────────────┼────────────────────────────┤
+│ split-coins │ gas [1, 2, 3]              │
+│ assign      │ coins                      │
+│ assign      │ c0 coins.0                 │
+│ assign      │ c1 coins.1                 │
+│ assign      │ c2 coins.2                 │
+│ merge-coins │ c0 [c1, c2]                │
+│ merge-coins │ gas [c0]                   │
+│ split-coins │ gas [1, 2, 3]              │
+│ assign      │ coins                      │
+│ merge-coins │ coins.0 [coins.1, coins.2] │
+│ merge-coins │ gas [coins.0]              │
+╰─────────────┴────────────────────────────╯
+ === BUILT PTB === 
+Input 0: Pure([1, 0, 0, 0, 0, 0, 0, 0])
+Input 1: Pure([2, 0, 0, 0, 0, 0, 0, 0])
+Input 2: Pure([3, 0, 0, 0, 0, 0, 0, 0])
+Command 0: SplitCoins(GasCoinInput(0),Input(1),Input(2))
+Command 1: MergeCoins(NestedResult(0,0),NestedResult(0,1),NestedResult(0,2))
+Command 2: MergeCoins(GasCoin,NestedResult(0,0))
+Command 3: SplitCoins(GasCoinInput(0),Input(1),Input(2))
+Command 4: MergeCoins(NestedResult(3,0),NestedResult(3,1),NestedResult(3,2))
+Command 5: MergeCoins(GasCoin,NestedResult(3,0))

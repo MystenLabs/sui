@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use parking_lot::RwLock;
-use rocksdb::Options;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -10,10 +9,11 @@ use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::error::{SuiError, SuiResult};
 use typed_store::rocks::{default_db_options, DBMap, DBOptions, MetricConf};
+use typed_store::rocksdb::Options;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
+use typed_store::DBMapUtils;
 use typed_store::Map;
-use typed_store_derive::DBMapUtils;
 
 use sui_macros::nondeterministic;
 
@@ -38,7 +38,7 @@ impl CommitteeStore {
     pub fn new(path: PathBuf, genesis_committee: &Committee, db_options: Option<Options>) -> Self {
         let tables = CommitteeStoreTables::open_tables_read_write(
             path,
-            MetricConf::default(),
+            MetricConf::new("committee"),
             db_options,
             None,
         );
@@ -122,7 +122,7 @@ impl CommitteeStore {
         self.tables
             .committee_map
             .checkpoint_db(path)
-            .map_err(SuiError::StorageError)
+            .map_err(Into::into)
     }
 
     fn database_is_empty(&self) -> bool {

@@ -5,7 +5,6 @@
 
 //# publish --upgradeable
 module Test::M1 {
-    use sui::tx_context::TxContext;
     fun init(_ctx: &mut TxContext) { }
 }
 

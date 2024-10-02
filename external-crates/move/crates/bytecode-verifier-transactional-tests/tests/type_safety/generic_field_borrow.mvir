@@ -1,0 +1,23 @@
+//# publish
+module 0x1.M {
+    struct X has drop { v: u64 }
+    struct S<T> has drop { f: T }
+    t(s: Self.S<Self.X>): u64 {
+    label b0:
+        return *(&(&(&s).S<Self.X>::f).X::v);
+    }
+}
+
+//# publish
+module 0x2.M {
+    enum X has drop { V { v: u64 } }
+    enum S<T> has drop { V { f: T } }
+    t(s: Self.S<Self.X>): u64 {
+    let v: &u64;
+    let f: &Self.X;
+    label b0:
+        &S.V<Self.X> { f } = &s;
+        &X.V { v } = move(f);
+        return *move(v);
+    }
+}

@@ -1,0 +1,228 @@
+---
+title: Action Request
+---
+
+The main difference between tokens and coins is that tokens do not allow transfers, conversions, or spends by default. There is an authorization mechanism, however, that allows these actions. This mechanism is called an `ActionRequest`. You can choose to allow or disallow any of the actions independently (see the [Request confirmation](#request-confirmation) section).
+
+## Protected actions
+
+Tokens have four protected actions that create an `ActionRequest`:
+
+| Function           | Action name | Description                     | Special fields in `ActionRequest` |
+| ------------------ | ----------- | ------------------------------- | --------------------------------- |
+| `token::from_coin` | `from_coin` | Convert a coin into a token     | -                                 |
+| `token::to_coin`   | `to_coin`   | Convert a token into a coin     | -                                 |
+| `token::transfer`  | `transfer`  | Transfer a token to a recipient | Contains `recipient` field        |
+| `token::spend`     | `spend`     | Spend a token                   | Contains `spent_balance` field    |
+
+## ActionRequest structure
+
+`ActionRequest` is defined in the `sui::token` module and contains the following fields:
+
+- `name`: Name of the performed action, standard ones are `transfer`, `spend`, `to_coin` and `from_coin`, and you can create custom actions.
+- `amount`: The amount of the token that is being transferred, spent, converted, and so on.
+- `sender`: The account that initiated the action.
+- `recipient`: The account that receives the token in `transfer` action (use for custom actions).
+- `spent_balance`: The balance of a spent token in the [`spend` action](./spending.mdx) (use in custom actions).
+
+Rules can use these fields to determine whether the action should be allowed or not. Rules are custom modules that implement restriction logic. See [Rules](./rules.mdx) for more details.
+
+An example of a function creating an `ActionRequest`:
+
+```move
+// module: sui::token
+public fun transfer<T>(
+    t: Token<T>, recipient: address, ctx: &mut TxContext
+): ActionRequest<T>;
+```
+
+## Request confirmation {#request-confirmation}
+
+There are three ways to confirm an `ActionRequest` using a:
+
+1. `TreasuryCap` - you (or an application storing the `TreasuryCap`) can call the `token::confirm_with_treasury_cap` function to confirm any request. This method is useful for applications that store the `TreasuryCap` and implement custom logic; it also allows you to `mint` and `transfer` tokens, bypassing the restrictions.
+2. [`TokenPolicy`](./token-policy.mdx) - create a shared `TokenPolicy` and set up allowed actions and requirements for each action. This way, applications or wallets know which actions are considered `public` and so they are able to perform them.
+3. `TokenPolicyCap` - use the capability managing the `TokenPolicy` to confirm requests. This can be useful for applications that have the `TreasuryCap` wrapped and inaccessible; and you need to authorize some administrator action.
+
+:::info
+
+You can't use `TokenPolicyCap` to confirm `spend` requests.
+
+:::
+
+### Confirming with TreasuryCap
+
+Use the `TreasuryCap` to confirm any action request for the token. It's useful for administrator actions (like `mint` and `transfer`), as well as for simple applications that don't require a token policy and wrap the `TreasuryCap` into the main object.
+
+The signature for the `token::confirm_with_treasury_cap` function is:
+
+```move
+// module: sui::token
+public fun confirm_with_treasury_cap<T>(
+    treasury_cap: &mut TreasuryCap<T>,
+    request: ActionRequest<T>,
+    ctx: &mut TxContext
+): (String, u64, address, Option<address>);
+```
+
+An example of a transaction implemented in TypeScript with sui.js, confirming an action request with a `TreasuryCap`. Here the admin account owns the `TreasuryCap`, which is used to mint and confirm the transfer request for the token:
+
+```js
+let tx = new Transaction();
+let tokenType = '0x....::my_token::MY_TOKEN';
+let treasuryCapArg = tx.object('0x....');
+
+// mint 10 tokens using the `TreasuryCap`
+let token = tx.moveCall({
+	target: '0x2::token::mint',
+	arguments: [treasuryCapArg, tx.pure.u64(10)],
+	typeArguments: [tokenType],
+});
+
+// transfer the token to a recipient; receive an `ActionRequest`
+let request = tx.moveCall({
+	target: '0x2::token::transfer',
+	arguments: [token, tx.pure.address('0x...')],
+	typeArguments: [tokenType],
+});
+
+// confirm the request with the `TreasuryCap`
+tx.moveCall({
+	target: '0x2::token::confirm_with_treasury_cap',
+	arguments: [treasuryCapArg, request],
+	typeArguments: [tokenType],
+});
+
+// submit the transaction
+// ...
+```
+
+### Confirming with TokenPolicy
+
+`TokenPolicy` is a way of enabling certain actions network-wide. After sharing, the `TokenPolicy` is available to everyone. Hence, wallets or other clients can use it to confirm allowed operations.
+
+The signature for the `token::confirm_request` function is:
+
+```move
+// module: sui::token
+public fun confirm_request<T>(
+    treasury_cap: &TokenPolicy<T>,
+    request: ActionRequest<T>,
+    ctx: &mut TxContext
+): (String, u64, address, Option<address>);
+```
+
+:::info
+
+If it's a `spend` request, use the `confirm_request_mut` function instead.
+
+:::
+
+An example of a client transfer request confirmation in JavaScript:
+
+```js
+let tx = new Transaction();
+let tokenType = '0x....::my_token::MY_TOKEN';
+let myTokenArg = tx.object('0x...token_object');
+let receiverArg = tx.pure.address('0x...receiver');
+let tokenPolicyArg = tx.object('0x...token_policy');
+
+let request = tx.moveCall({
+	target: '0x2::token::transfer',
+	arguments: [myTokenArg, receiverArg],
+	typeArguments: [tokenType],
+});
+
+// expecting the `TokenPolicy` to have the `transfer` operation allowed
+tx.moveCall({
+	target: '0x2::token::confirm_request',
+	arguments: [tokenPolicyArg, request],
+	typeArguments: [tokenType],
+});
+
+// submit the transaction
+// ...
+```
+
+### Confirming with TokenPolicyCap
+
+Use `TokenPolicyCap` to confirm action requests. A convenient approach when the `TreasuryCap` is wrapped in another object, and `TokenPolicy` does not allow certain action or has rules that make the default way of confirming impossible.
+
+:::info
+
+You can't use `TokenPolicyCap` to confirm `spend` requests.
+
+:::
+
+```move
+// module: sui::token
+
+public fun confirm_with_policy_cap<T>(
+    token_policy_cap: &TokenPolicyCap<T>,
+    request: ActionRequest<T>,
+    ctx: &mut TxContext
+): (String, u64, address, Option<address>);
+```
+
+An example of a client transfer request confirmation in JavaScript:
+
+```js
+let tx = new Transaction();
+let tokenType = '0x....::my_token::MY_TOKEN';
+let myTokenArg = tx.object('0x...token_object');
+let receiverArg = tx.pure.address('0x...receiver');
+let tokenPolicyCapArg = tx.object('0x...token_policy_cap');
+
+let request = tx.moveCall({
+	target: '0x2::token::transfer',
+	arguments: [myTokenArg, receiverArg],
+	typeArguments: [tokenType],
+});
+
+// confirming the request with the TokenPolicyCap
+tx.moveCall({
+	target: '0x2::token::confirm_with_policy_cap',
+	arguments: [tokenPolicyCapArg, request],
+	typeArguments: [tokenType],
+});
+
+// submit the transaction
+// ...
+```
+
+## Approving actions
+
+`ActionRequest`s can collect approvals - witness stamps from applications or rules. They carry the confirmation that a certain module or a rule has approved the action. This mechanic allows gating actions behind certain requirements.
+
+The signature for the `token::add_approval` function is:
+
+```move
+// module: sui::token
+public fun add_approval<T, W: drop>(
+    _t: W, request: &mut ActionRequest<T>, _ctx: &mut TxContext
+);
+```
+
+Approvals are mostly used for rules, but they can carry confirmations from any module.
+
+## Creating a custom request
+
+Anyone can create a new `ActionRequest` using the `token::new_request` function. You can use it to create custom actions and rules, not necessarily related to the token itself.
+
+:::info
+
+Because you can create an `ActionRequest` freely for any type `T`, you can't use them as a proof of the action. Their purpose is **authorization**, not proof.
+
+:::
+
+The signature for the `token::new_request` function is:
+
+```move
+public fun new_request<T>(
+    name: vector<u8>,
+    amount: u64,
+    recipient: option<address>,
+    spent_balance: option<Balance<T>>,
+    ctx: &mut TxContext
+): ActionRequest<T>;
+```

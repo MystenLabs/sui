@@ -1,0 +1,3 @@
+[package]
+name = "module_publish_view"
+edition = "2024.beta"

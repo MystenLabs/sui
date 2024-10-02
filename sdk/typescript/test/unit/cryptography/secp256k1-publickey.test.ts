@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64, toHEX } from '@mysten/bcs';
-import { describe, it, expect } from 'vitest';
+import { toBase64, toHex } from '@mysten/bcs';
+import { describe, expect, it } from 'vitest';
+
 import { Secp256k1PublicKey } from '../../../src/keypairs/secp256k1/publickey';
 import { INVALID_SECP256K1_PUBLIC_KEY, VALID_SECP256K1_PUBLIC_KEY } from './secp256k1-keypair.test';
 
@@ -41,13 +42,13 @@ describe('Secp256k1PublicKey', () => {
 
 		expect(() => {
 			const invalid_pubkey_buffer = new Uint8Array(INVALID_SECP256K1_PUBLIC_KEY);
-			let invalid_pubkey_base64 = toB64(invalid_pubkey_buffer);
+			let invalid_pubkey_base64 = toBase64(invalid_pubkey_buffer);
 			new Secp256k1PublicKey(invalid_pubkey_base64);
 		}).toThrow();
 
 		expect(() => {
 			const pubkey_buffer = new Uint8Array(VALID_SECP256K1_PUBLIC_KEY);
-			let wrong_encode = toHEX(pubkey_buffer);
+			let wrong_encode = toHex(pubkey_buffer);
 			new Secp256k1PublicKey(wrong_encode);
 		}).toThrow();
 
@@ -58,18 +59,17 @@ describe('Secp256k1PublicKey', () => {
 
 	it('toBase64', () => {
 		const pub_key = new Uint8Array(VALID_SECP256K1_PUBLIC_KEY);
-		let pub_key_base64 = toB64(pub_key);
+		let pub_key_base64 = toBase64(pub_key);
 		const key = new Secp256k1PublicKey(pub_key_base64);
 		expect(key.toBase64()).toEqual(pub_key_base64);
-		expect(key.toString()).toEqual(pub_key_base64);
 	});
 
 	it('toBuffer', () => {
 		const pub_key = new Uint8Array(VALID_SECP256K1_PUBLIC_KEY);
-		let pub_key_base64 = toB64(pub_key);
+		let pub_key_base64 = toBase64(pub_key);
 		const key = new Secp256k1PublicKey(pub_key_base64);
-		expect(key.toBytes().length).toBe(33);
-		expect(new Secp256k1PublicKey(key.toBytes()).equals(key)).toBe(true);
+		expect(key.toRawBytes().length).toBe(33);
+		expect(new Secp256k1PublicKey(key.toRawBytes()).equals(key)).toBe(true);
 	});
 
 	TEST_CASES.forEach(({ rawPublicKey, suiPublicKey, suiAddress }) => {

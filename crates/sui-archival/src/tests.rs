@@ -17,8 +17,8 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::node::ArchiveReaderConfig;
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::object_store::util::path_to_filesystem;
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::{FileCompression, StorageFormat};
 use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
 use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointContents};
@@ -235,6 +235,7 @@ async fn test_archive_reader_e2e() -> Result<(), anyhow::Error> {
             0..(latest_archived_checkpoint_seq_num + 1),
             tx_counter,
             checkpoint_counter,
+            true,
         )
         .await?;
     ma::assert_ge!(

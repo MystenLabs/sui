@@ -8,7 +8,7 @@ use crate::{
 };
 use sui_types::{
     base_types::{dbg_addr, dbg_object_id},
-    object::ObjectFormatOptions,
+    messages_grpc::LayoutGenerationOption,
 };
 
 //This is the most basic example of how to test the server logic
@@ -19,13 +19,7 @@ async fn test_simple_request() {
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-
-    let server = AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority_state,
-        consensus_address,
-    );
+    let server = AuthorityServer::new_for_test(authority_state);
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
@@ -33,10 +27,8 @@ async fn test_simple_request() {
         .await
         .unwrap();
 
-    let req = ObjectInfoRequest::latest_object_info_request(
-        object_id,
-        Some(ObjectFormatOptions::default()),
-    );
+    let req =
+        ObjectInfoRequest::latest_object_info_request(object_id, LayoutGenerationOption::Generate);
 
     client.handle_object_info_request(req).await.unwrap();
 }

@@ -18,8 +18,8 @@ build/
 coverage/
 dist/
 out/
+generated/
 playwright-report/
 storybook-static/
-sdk/wallet-adapter/site/pages/
 CHANGELOG.md
 

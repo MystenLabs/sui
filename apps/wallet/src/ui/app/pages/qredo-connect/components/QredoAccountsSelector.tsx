@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type Wallet } from '_src/shared/qredo-api';
 import { Search16 } from '@mysten/icons';
 import { useState } from 'react';
 
 import { QredoAccountItem } from './QredoAccountItem';
-import { type Wallet } from '_src/shared/qredo-api';
 
 function matchesSearchTerm({ walletID, address, labels }: Wallet, searchTerm: string) {
 	const term = searchTerm.trim().toLowerCase();

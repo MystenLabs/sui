@@ -1,0 +1,28 @@
+//# publish
+module 0x6.M {
+    struct T has drop {
+        b: u64,
+        a: u64
+    }
+    public error(code: u64): u64 {
+    label b0:
+        abort(move(code));
+        return 0;
+    }
+    public new(): Self.T {
+    label b0:
+        return T { b: Self.error(42), a: Self.error(100) };
+    }
+}
+
+
+//# run
+module 0x42.m {
+import 0x6.M;
+entry foo() {
+  let m: M.T;
+label b0:
+  m = M.new();
+  return;
+}
+}

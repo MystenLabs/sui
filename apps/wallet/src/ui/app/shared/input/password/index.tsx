@@ -3,7 +3,7 @@
 
 import { EyeClose16, EyeOpen16 } from '@mysten/icons';
 import { useField } from 'formik';
-import { type ComponentProps, useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 
 export interface PasswordInputProps
 	extends Omit<ComponentProps<'input'>, 'className' | 'type' | 'name'> {

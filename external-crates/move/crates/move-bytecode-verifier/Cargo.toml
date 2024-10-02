@@ -1,0 +1,27 @@
+[package]
+name = "move-bytecode-verifier"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Move bytecode verifier"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+petgraph.workspace = true
+
+move-borrow-graph.workspace = true
+move-binary-format.workspace = true
+move-bytecode-verifier-meter.workspace = true
+move-core-types.workspace = true
+move-vm-config.workspace = true
+move-abstract-stack.workspace = true
+move-abstract-interpreter.workspace = true
+
+[dev-dependencies]
+hex-literal.workspace = true
+
+[features]
+default = []

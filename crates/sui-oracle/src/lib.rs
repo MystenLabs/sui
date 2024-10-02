@@ -43,6 +43,7 @@ mod metrics;
 // TODO: allow more flexible decimals
 const DECIMAL: u8 = 6;
 const METRICS_MULTIPLIER: f64 = 10u64.pow(DECIMAL as u32) as f64;
+const UPLOAD_FAILURE_RECOVER_SEC: u64 = 10;
 static STALE_OBJ_ERROR: OnceCell<String> = OnceCell::new();
 
 pub struct OracleNode {
@@ -358,10 +359,17 @@ impl OnChainDataUploader {
             read_interval.tick().await;
             let data_points = self.collect().await;
             if !data_points.is_empty() {
-                let _ = self
-                    .upload(data_points)
-                    .await
-                    .tap_err(|err| error!("Failed to submit tx: {err}"));
+                if let Err(err) = self.upload(data_points).await {
+                    error!("Upload failure: {err}. About to resting for {UPLOAD_FAILURE_RECOVER_SEC} sec.");
+                    tokio::time::sleep(Duration::from_secs(UPLOAD_FAILURE_RECOVER_SEC)).await;
+                    self.gas_obj_ref = get_gas_obj_ref(
+                        self.client.read_api(),
+                        self.gas_obj_ref.0,
+                        self.signer_address,
+                    )
+                    .await;
+                    error!("Updated gas object reference: {:?}", self.gas_obj_ref);
+                }
             }
         }
     }
@@ -517,7 +525,7 @@ impl OnChainDataUploader {
                 self.metrics
                     .uploaded_values
                     .with_label_values(&[&data_point.feed_name])
-                    .observe(data_point.value);
+                    .observe(data_point.value as f64);
             } else {
                 self.metrics
                     .upload_data_errors
@@ -530,7 +538,9 @@ impl OnChainDataUploader {
         let storage_rebate = effects.gas_cost_summary().storage_rebate;
         let computation_cost = effects.gas_cost_summary().computation_cost;
         let net_gas_usage = effects.gas_cost_summary().net_gas_usage();
-        self.metrics.computation_gas_used.observe(computation_cost);
+        self.metrics
+            .computation_gas_used
+            .observe(computation_cost as f64);
         self.metrics.total_gas_cost.inc_by(gas_usage);
         self.metrics.total_gas_rebate.inc_by(storage_rebate);
 
@@ -652,7 +662,7 @@ impl OnChainDataReader {
                         self.metrics
                             .downloaded_values
                             .with_label_values(&[feed_name])
-                            .observe((value * METRICS_MULTIPLIER) as u64);
+                            .observe(value * METRICS_MULTIPLIER);
                         self.metrics
                             .download_successes
                             .with_label_values(&[feed_name, &object_id.to_string()])

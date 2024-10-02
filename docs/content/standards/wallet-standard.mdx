@@ -1,0 +1,333 @@
+---
+title: Wallet Standard
+description: The Wallet standard defines how wallets can automatically be discovered and interacted with from dApps.
+---
+
+Browser extension wallets built for Sui use the [Wallet standard](https://github.com/wallet-standard/wallet-standard/). This is a cross-chain standard that defines how dApps can automatically discover and interact with wallets.
+
+If you are building a wallet, the helper library `@mysten/wallet-standard` provides types and utilities to help get started.
+
+## Working with wallets
+
+The Wallet standard includes features to help build wallets.
+
+### Creating a wallet interface
+
+Create a class that represents your wallet. Use the `Wallet` interface from
+`@mysten/wallet-standard` to help ensure your class adheres to the standard.
+
+```tsx
+import { SUI_DEVNET_CHAIN, Wallet } from '@mysten/wallet-standard';
+
+class YourWallet implements Wallet {
+	get version() {
+		// Return the version of the Wallet Standard this implements (in this case, 1.0.0).
+		return '1.0.0';
+	}
+	get name() {
+		return 'Wallet Name';
+	}
+	get icon() {
+		return 'some-icon-data-url';
+	}
+	// Return the Sui chains that your wallet supports.
+	get chains() {
+		return [SUI_DEVNET_CHAIN];
+	}
+}
+```
+
+### Implementing features
+
+Features are standard methods consumers can use to interact with a wallet. To be listed in the Sui
+wallet adapter, you must implement the following features in your wallet:
+
+- `standard:connect` - Use to initiate a connection to the wallet.
+- `standard:events` - Use to listen for changes that happen within the wallet, such as accounts
+  being added or removed.
+- `sui:signPersonalMessage` - Use to prompt the user to sign a personal message and return the
+  message signature back to the dApp. Use this to verify the user’s public key.
+- `sui:signTransaction` - Use to prompt the user to sign a transaction and return the serialized
+  transaction and signature back to the dApp. This method does not submit the transaction for
+  execution.
+- `sui:signAndExecuteTransaction` - Use to prompt the user to sign a transaction, then submit it
+  for execution to the blockchain.
+- `sui:reportTransactionEffects` - Use to report the effects of a transaction executed in the dApp
+  to the wallet. This allows the wallet to update its internal state to reflect the changes the transaction makes.
+- `sui:signTransactionBlock` - The previous version of `sui:signTransaction`. Still
+  implemented for compatibility with dApps that have not updated to the new feature.
+- `sui:signAndExecuteTransactionBlock` - The previous version of `sui:signAndExecuteTransaction`. Still implemented for compatibility with dApps that have not updated to the new feature.
+
+Implement these features in your wallet class under the `features` property:
+
+```tsx
+import {
+  ConnectFeature,
+  ConnectMethod,
+  EventsFeature,
+  EventsOnMethod,
+  SuiFeatures,
+  SuiSignPersonalMessageMethod,
+  SuiSignTransactionMethod,
+  SuiSignAndExecuteTransactionMethod,
+  SuiReportTransactionEffectsMethod
+} from "@mysten/wallet-standard";
+
+class YourWallet implements Wallet {
+	/* ... existing code from above ... */
+
+  get features(): ConnectFeature & EventsFeature & SuiFeatures {
+    return {
+      "standard:connect": {
+        version: "1.0.0",
+        connect: this.#connect,
+      },
+      "standard:events": {
+        version: "1.0.0",
+        on: this.#on,
+      },
+			"sui:signPersonalMessage": {
+        version: "1.0.0",
+				signPersonalMessage: this.#signPersonalMessage,
+			},
+      "sui:signTransaction": {
+        version: "2.0.0",
+        signTransaction: this.#signTransaction,
+      },
+      "sui:signAndExecuteTransaction": {
+        version: "2.0.0",
+        signAndExecuteTransaction: this.#signAndExecuteTransactionBlock,
+      },
+      "sui:reportTransactionEffects": {
+        version: "1.0.0",
+        reportTransactionEffects: this.#reportTransactionEffects,
+    };
+  },
+
+  #on: EventsOnMethod = () => {
+    // Your wallet's events on implementation.
+  };
+
+  #connect: ConnectMethod = () => {
+    // Your wallet's connect implementation
+  };
+
+	#signPersonalMessage: SuiSignPersonalMessageMethod = () => {
+    // Your wallet's signTransaction implementation
+  };
+
+  #signTransaction: SuiSignTransactionMethod = () => {
+    // Your wallet's signTransaction implementation
+  };
+
+  #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = () => {
+    // Your wallet's signAndExecuteTransaction implementation
+  };
+
+  #reportTransactionEffects: SuiReportTransactionEffectsMethod = () => {
+    // Your wallet's reportTransactionEffects implementation
+  };
+}
+```
+
+### Exposing accounts
+
+The last requirement of the wallet interface is to expose an `accounts` interface. This should
+expose all of the accounts that a connected dApp has access to. It can be empty prior to initiating
+a connection through the `standard:connect` feature.
+
+The accounts use the `ReadonlyWalletAccount` class to construct an account matching the
+required interface.
+
+```tsx
+import { ReadonlyWalletAccount } from '@mysten/wallet-standard';
+
+class YourWallet implements Wallet {
+	get accounts() {
+		// Assuming we already have some internal representation of accounts:
+		return someWalletAccounts.map(
+			(walletAccount) =>
+				// Return
+				new ReadonlyWalletAccount({
+					address: walletAccount.suiAddress,
+					publicKey: walletAccount.pubkey,
+					// The Sui chains that your wallet supports.
+					chains: [SUI_DEVNET_CHAIN],
+					// The features that this account supports. This can be a subset of the wallet's supported features.
+					// These features must exist on the wallet as well.
+					features: [
+						'sui:signPersonalMessage',
+						'sui:signTransactionBlock',
+						'sui:signAndExecuteTransactionBlock',
+					],
+				}),
+		);
+	}
+}
+```
+
+### Registering in the window
+
+After you have a compatible interface for your wallet, use the `registerWallet`
+function to register it.
+
+```tsx
+import { registerWallet } from '@mysten/wallet-standard';
+
+registerWallet(new YourWallet());
+```
+
+### Best practices for efficient transaction execution
+
+The Wallet standard has been updated from its original design to better support changes in the Sui ecosystem. For example, the GraphQL service was introduced after Mainnet launched. The `sui:signAndExecuteTransactionBlock` feature is closely tied to the JSON RPC options and data structures, so its continued maintenance becomes increasingly difficult as the GraphQL service becomes more ubiquitous.
+
+Consequently, the Wallet standard introduced the `sui:signAndExecuteTransaction` feature. The features of this method are more useful, regardless of which API you use to execute transactions. This usefulness comes at the expense
+of flexibility in what `sui:signAndExecuteTransaction` returns.
+
+To solve this problem, use the `sui:signTransaction` feature to sign transactions, and
+leave transaction execution to the dApp. The dApp can query for additional data during
+execution using whichever API it chooses. This is consistent with the default `@mysten/dapp-kit` uses for the `useSignAndExecuteTransaction` hook, and enables dApps to take
+advantage of read-after-write consistency when interacting with the Full-node based JSON RPC.
+
+The downside of this strategy is that wallets often use different RPC nodes than the dApp,
+and might not have indexed the previous transaction when executing multiple transactions in rapid
+succession. This leads to building transactions using stale data that fail upon execution.
+
+To mitigate this, wallets can use the `sui:reportTransactionEffects` feature so that dApps can report
+the effects of transactions to the wallet. Transaction effects contain the updated versions and
+digests of any objects that a transaction uses or creates. By caching these values, wallets can build
+transactions without needing to resolve the most recent versions through an API call.
+
+The `@mysten/sui/transaction` SDK exports the `SerialTransactionExecutor` class, which you can use
+to build transactions using an object cache. The class has a method to update its internal cache using the
+effects of a transaction.
+
+Using the combination of `sui:signTransaction` and `sui:reportTransactionEffects`, dApps can use
+either API to execute transactions and query for any data the API exposes. The dApp can then report the effects of the transaction to the wallet, and the wallet can then execute transactions without running into issues caused by a lagging indexer.
+
+## Managing wallets
+
+The Wallet standard includes features to help your apps interact with wallets.
+
+### Wallet data
+
+To query the installed wallets in a user's browser, use the `get` function of `getWallets`.
+
+```tsx
+import { getWallets } from '@mysten/wallet-standard';
+
+const availableWallets = getWallets().get();
+```
+
+The return from this call (`availableWallets` in the previous code) is an array of `Wallet` types.
+
+Use the `Wallet.icon` and `Wallet.name` attributes to display the wallet details on your web page.
+
+The `Wallet.accounts` is an array of `WalletAccount`s. Each `WalletAccount` type has `address` and `publicKey` properties, which are most useful during development. This data fills and caches after connection.
+
+### Features
+
+Both the `Wallet` type and the `WalletAccount` type have a property called `features`. The main wallet functionality is found here. The mandatory features that wallets must implement are listed in the previous code.
+
+Many wallets choose to omit some non-mandatory features or add some custom features, so be sure to check the relevant wallet documentation if you intend to integrate a specific wallet.
+
+### Connecting a wallet
+
+Connecting in the context of a wallet refers to a user that joins the web site for the first time and has to choose the wallet and addresses to use.
+
+The feature that provides this functionality is called `standard:connect`. To connect using this feature, make the following call:
+
+```tsx
+wallet.features['standard:connect'].connect(); // connect call
+```
+
+This call results in the wallet opening a pop-up dialog for the user to continue the connection process.
+
+### Disconnecting a wallet
+
+Similar to the connecting feature, the Wallet standard also includes `standard:disconnect`. The following example calls this feature:
+
+```tsx
+wallet.features['standard:disconnect'].disconnect();
+```
+
+### Transactions - suggested approach
+
+Upon wallet connection, your app has the necessary information to execute transactions, such as address and method.
+
+Construct the transaction separately with the `@mysten/sui` library and then sign it with the private key of the user. Use the `sui:signTransaction` feature to achieve this:
+
+```tsx
+wallet.features[sui:signTransaction].singTransaction(<Transaction>, <WalletAccount>);
+```
+
+Similar to connections, this process opens a pop-up dialog for the user to either accept or decline the transaction. Upon accepting, the function returns an object in the form `{bytes: String, signature: Uint8Array}`. The `bytes` value is the `b64` encoding of the transaction and the `signature` value is the transaction signature.
+
+To execute the transaction, use `SuiClient` from `@mysten/sui`:
+
+```tsx
+const client: SuiClient
+client.executeTransactionBlock({
+    transactionBlock: bytes,
+    signature: signature,
+    options: {}
+})
+```
+
+Your app then sends the transaction effects back to the wallet, which reports results to the user. The wallet expects the effects to be `b64` encoded.
+
+```tsx
+import { toBase64 } from '@mysten/sui/utils';
+
+wallet.features['sui:reportTransactionEffects'].reportTransactionEffects(
+    effects: Array.isArray(transactionResponse.effects) ? toBase64(
+        Uint8Array.from(transactionResponse.effects) : transactionResponse.effects,
+        account: wallet.accounts[0], // for example
+        chain: wallet.chains[0]
+    )
+```
+
+### Transactions - abbreviated approach
+
+Many wallets abstract the above flow into one feature: `sui:signAndExecuteTransaction`. The required arguments for this feature are the raw transaction and the options with the desired information to be included in the response:
+
+- `showEffects`: Include the transaction effects.
+- `showEvents`: Include the transaction events.
+- `showObjectChanges`: Include all the objects that were deleted, created, or mutated.
+- `showBalanceChanges`: Include any coin transfer that took place.
+- `showInput`: Include the transaction's input.
+- `showRawInput`: Same as `showInput` but the format is raw.
+
+### Events wallets emit
+
+The wallet emits events on certain user actions that apps can listen to. These events allow your app to be responsive to user actions on their wallets.
+
+The wallet standard only defines the change event that can apply to chains, features, or accounts.
+
+- `chains`: A change event on the chains means the user switched the wallet's active network, such as from Devnet to Testnet.
+- `features`: The user added or removed permission for your app to access certain wallet features.
+- `accounts`: The user added or removed an account (address) to interact with your app.
+
+To subscribe your apps to events with the following call:
+
+```tsx
+const unsubscribe = wallet.features['standard:events'].on('change', callback);
+```
+
+This call returns a function that can be called to unsubscribe from listening to the events.
+
+The callback is the handler that contains the logic to perform when the event fires. The input to the callback function is an object with the following type:
+
+```tsx
+{
+    accounts: WalletAccount[],
+    chains: IdentifierArray,
+    features: IdentifierRecord<unknown>
+}
+```
+
+These values are all arrays containing the new or changed items. Consequently, every event populates only one array in most cases, the rest are empty.
+
+### Implementation example
+
+Mysten Labs offers a bare bones scaffold for React-based applications called `@mysten/dapp-kit`. See the [dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit) for more informqtion.

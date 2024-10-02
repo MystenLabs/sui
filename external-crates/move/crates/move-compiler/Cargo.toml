@@ -1,0 +1,46 @@
+[package]
+name = "move-compiler"
+version = "0.0.1"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "The definition of the Move source language, and its compiler"
+publish = false
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+anyhow.workspace = true
+codespan-reporting.workspace = true
+dunce.workspace = true
+hex.workspace = true
+regex.workspace = true
+clap.workspace = true
+petgraph.workspace = true
+tempfile.workspace = true
+once_cell.workspace = true
+lsp-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+similar.workspace = true
+stacker.workspace = true
+vfs.workspace = true
+
+bcs.workspace = true
+
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-bytecode-verifier.workspace = true
+move-symbol-pool.workspace = true
+move-ir-types.workspace = true
+move-ir-to-bytecode.workspace = true
+move-borrow-graph.workspace = true
+move-bytecode-source-map.workspace = true
+move-command-line-common.workspace = true
+move-proc-macros.workspace = true
+
+[dev-dependencies]
+move-stdlib.workspace = true
+datatest-stable.workspace = true
+
+[[test]]
+name = "move_check_testsuite"
+harness = false

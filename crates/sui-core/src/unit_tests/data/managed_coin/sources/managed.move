@@ -10,14 +10,14 @@ module fungible_tokens::managed {
     use sui::table_vec::{Self, TableVec};
     use sui::tx_context::{Self, TxContext};
 
-    struct PublicRedEnvelope has key, store {
+    public struct PublicRedEnvelope has key, store {
         id: UID,
         coins: TableVec<Coin<MANAGED>>,
     }
 
     /// Name of the coin. By convention, this type has the same name as its parent module
     /// and has no fields. The full type of the coin defined by this module will be `COIN<MANAGED>`.
-    struct MANAGED has drop {}
+    public struct MANAGED has drop {}
 
     /// Register the managed currency to acquire its `TreasuryCap`. Because
     /// this is a module initializer, it ensures the currency only gets
@@ -41,7 +41,7 @@ module fungible_tokens::managed {
     public entry fun mint_multi(
         treasury_cap: &mut TreasuryCap<MANAGED>, amount: u64, num: u64, recipient: address, ctx: &mut TxContext
     ) {
-        let i = 0;
+        let mut i = 0;
         while (i < num) {
             coin::mint_and_transfer(treasury_cap, amount, recipient, ctx);
             i = i + 1;

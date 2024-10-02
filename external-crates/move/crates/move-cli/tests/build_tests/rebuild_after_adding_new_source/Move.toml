@@ -1,0 +1,3 @@
+[package]
+name = "Foo"
+edition = "2024.beta"

@@ -9,35 +9,46 @@ use std::{
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 fn main() -> Result<()> {
-    #[cfg(not(target_env = "msvc"))]
-    std::env::set_var("PROTOC", protobuf_src::protoc());
-
     let out_dir = if env::var("DUMP_GENERATED_GRPC").is_ok() {
         PathBuf::from("")
     } else {
         PathBuf::from(env::var("OUT_DIR")?)
     };
 
-    let proto_files = &["proto/narwhal.proto"];
-    let dirs = &["proto"];
+    let codec_path = "tonic::codec::ProstCodec";
 
-    // Use `Bytes` instead of `Vec<u8>` for bytes fields
-    let mut config = prost_build::Config::new();
-    config.bytes(["."]);
+    let service = tonic_build::manual::Service::builder()
+        .name("Transactions")
+        .package("narwhal")
+        .method(
+            tonic_build::manual::Method::builder()
+                .name("submit_transaction")
+                .route_name("SubmitTransaction")
+                .input_type("crate::proto::narwhal::Transaction")
+                .output_type("crate::proto::narwhal::Empty")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            tonic_build::manual::Method::builder()
+                .name("submit_transaction_stream")
+                .route_name("SubmitTransactionStream")
+                .input_type("crate::proto::narwhal::Transaction")
+                .output_type("crate::proto::narwhal::Empty")
+                .codec_path(codec_path)
+                .client_streaming()
+                .build(),
+        )
+        .build();
 
-    tonic_build::configure()
+    tonic_build::manual::Builder::new()
         .out_dir(&out_dir)
-        .compile_with_config(config, proto_files, dirs)?;
+        .compile(&[service]);
 
     build_anemo_services(&out_dir);
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=proto");
     println!("cargo:rerun-if-env-changed=DUMP_GENERATED_GRPC");
-
-    nightly();
-    beta();
-    stable();
 
     Ok(())
 }
@@ -67,24 +78,6 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("RequestVote")
                 .request_type("crate::RequestVoteRequest")
                 .response_type("crate::RequestVoteResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("get_payload_availability")
-                .route_name("GetPayloadAvailability")
-                .request_type("crate::PayloadAvailabilityRequest")
-                .response_type("crate::PayloadAvailabilityResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("get_certificates")
-                .route_name("GetCertificates")
-                .request_type("crate::GetCertificatesRequest")
-                .response_type("crate::GetCertificatesResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -127,16 +120,6 @@ fn build_anemo_services(out_dir: &Path) {
         .name("WorkerToPrimary")
         .package("narwhal")
         .attributes(automock_attribute.clone())
-        // TODO: Remove once we have upgraded to protocol version 12.
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("report_our_batch")
-                .route_name("ReportOurBatch")
-                .request_type("crate::WorkerOurBatchMessage")
-                .response_type("()")
-                .codec_path(codec_path)
-                .build(),
-        )
         .method(
             anemo_build::manual::Method::builder()
                 .name("report_own_batch")
@@ -172,15 +155,6 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
-                .name("request_batch")
-                .route_name("RequestBatch")
-                .request_type("crate::RequestBatchRequest")
-                .response_type("crate::RequestBatchResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
                 .name("request_batches")
                 .route_name("RequestBatches")
                 .request_type("crate::RequestBatchesRequest")
@@ -199,27 +173,3 @@ fn build_anemo_services(out_dir: &Path) {
             worker_to_worker,
         ]);
 }
-
-#[rustversion::nightly]
-fn nightly() {
-    println!("cargo:rustc-cfg=nightly");
-}
-
-#[rustversion::not(nightly)]
-fn nightly() {}
-
-#[rustversion::beta]
-fn beta() {
-    println!("cargo:rustc-cfg=beta");
-}
-
-#[rustversion::not(beta)]
-fn beta() {}
-
-#[rustversion::stable]
-fn stable() {
-    println!("cargo:rustc-cfg=stable");
-}
-
-#[rustversion::not(stable)]
-fn stable() {}

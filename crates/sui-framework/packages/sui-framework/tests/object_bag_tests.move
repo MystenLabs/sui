@@ -3,26 +3,15 @@
 
 #[test_only]
 module sui::object_bag_tests {
-    use std::option;
-    use sui::object_bag::{
-        Self,
-        add,
-        contains,
-        contains_with_type,
-        borrow,
-        borrow_mut,
-        remove,
-        value_id,
-    };
-    use sui::object::{Self, UID};
-    use sui::test_scenario as ts;
+    use sui::object_bag;
+    use sui::test_scenario;
 
-    struct Counter has key, store {
+    public struct Counter has key, store {
         id: UID,
         count: u64,
     }
 
-    struct Fake has key, store {
+    public struct Fake has key, store {
         id: UID,
     }
 
@@ -30,50 +19,50 @@ module sui::object_bag_tests {
     #[test]
     fun simple_all_functions() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let bag = object_bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = object_bag::new(scenario.ctx());
         let counter1 = new(&mut scenario);
         let id1 = object::id(&counter1);
         let counter2 = new(&mut scenario);
         let id2 = object::id(&counter2);
         // add fields
-        add(&mut bag, b"hello", counter1);
-        add(&mut bag, 1, counter2);
+        bag.add(b"hello", counter1);
+        bag.add(1u64, counter2);
         // check they exist
-        assert!(contains(&bag, b"hello"), 0);
-        assert!(contains(&bag, 1), 0);
-        assert!(contains_with_type<vector<u8>, Counter>(&bag, b"hello"), 0);
-        assert!(contains_with_type<u64, Counter>(&bag, 1), 0);
+        assert!(bag.contains(b"hello"));
+        assert!(bag.contains(1));
+        assert!(bag.contains_with_type<vector<u8>, Counter>(b"hello"));
+        assert!(bag.contains_with_type<u64, Counter>(1));
         // check the IDs
-        assert!(option::borrow(&value_id(&bag, b"hello")) == &id1, 0);
-        assert!(option::borrow(&value_id(&bag, 1)) == &id2, 0);
+        assert!(bag.value_id(b"hello").borrow() == &id1);
+        assert!(bag.value_id(1).borrow() == &id2);
         // check the values
-        assert!(count(borrow(&bag, b"hello")) == 0, 0);
-        assert!(count(borrow(&bag, 1)) == 0, 0);
+        assert!((&bag[b"hello"] : &Counter).count() == 0);
+        assert!((&bag[1] : &Counter).count() == 0);
         // mutate them
-        bump(borrow_mut(&mut bag, b"hello"));
-        bump(bump(borrow_mut(&mut bag, 1)));
+        bump(&mut bag[b"hello"]);
+        bump(bump(&mut bag[1]));
         // check the new value
-        assert!(count(borrow(&bag, b"hello")) == 1, 0);
-        assert!(count(borrow(&bag, 1)) == 2, 0);
+        assert!((&bag[b"hello"] : &Counter).count() == 1);
+        assert!((&bag[1] : &Counter).count() == 2);
         // remove the value and check it
-        assert!(destroy(remove(&mut bag, b"hello")) == 1, 0);
-        assert!(destroy(remove(&mut bag, 1)) == 2, 0);
+        assert!(bag.remove<vector<u8>, Counter>(b"hello").destroy() == 1);
+        assert!(bag.remove<u64, Counter>(1).destroy() == 2);
         // verify that they are not there
-        assert!(!contains(&bag, b"hello"), 0);
-        assert!(!contains(&bag, 1), 0);
-        ts::end(scenario);
-        object_bag::destroy_empty(bag);
+        assert!(!bag.contains(b"hello"));
+        assert!(!bag.contains(1));
+        scenario.end();
+        bag.destroy_empty();
     }
 
     #[test]
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun add_duplicate() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let bag = object_bag::new(ts::ctx(&mut scenario));
-        add(&mut bag, b"hello", new(&mut scenario));
-        add(&mut bag, b"hello", new(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = object_bag::new(scenario.ctx());
+        bag.add(b"hello", new(&mut scenario));
+        bag.add(b"hello", new(&mut scenario));
         abort 42
     }
 
@@ -81,9 +70,9 @@ module sui::object_bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_missing() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let bag = object_bag::new(ts::ctx(&mut scenario));
-        borrow<u64, Counter>(&bag, 0);
+        let mut scenario = test_scenario::begin(sender);
+        let bag = object_bag::new(scenario.ctx());
+        let _ : &Counter = &bag[0];
         abort 42
     }
 
@@ -91,9 +80,9 @@ module sui::object_bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_mut_missing() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let bag = object_bag::new(ts::ctx(&mut scenario));
-        borrow_mut<u64, Counter>(&mut bag, 0);
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = object_bag::new(scenario.ctx());
+        let _ : &mut Counter = &mut bag[0];
         abort 42
     }
 
@@ -101,9 +90,9 @@ module sui::object_bag_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun remove_missing() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let bag = object_bag::new(ts::ctx(&mut scenario));
-        destroy(remove<u64, Counter>(&mut bag, 0));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = object_bag::new(scenario.ctx());
+        bag.remove<u64, Counter>(0).destroy();
         abort 42
     }
 
@@ -111,92 +100,92 @@ module sui::object_bag_tests {
     #[expected_failure(abort_code = sui::object_bag::EBagNotEmpty)]
     fun destroy_non_empty() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let bag = object_bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = object_bag::new(scenario.ctx());
         let counter = new(&mut scenario);
-        add(&mut bag, 0, counter);
-        object_bag::destroy_empty(bag);
-        ts::end(scenario);
+        bag.add(0, counter);
+        bag.destroy_empty();
+        scenario.end();
     }
 
     #[test]
     fun sanity_check_contains() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let bag = object_bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = object_bag::new(scenario.ctx());
         let counter = new(&mut scenario);
-        assert!(!contains(&mut bag, 0), 0);
-        add(&mut bag, 0, counter);
-        assert!(contains(&mut bag, 0), 0);
-        assert!(!contains(&mut bag, 1), 0);
-        ts::end(scenario);
-        destroy(remove(&mut bag, 0));
-        object_bag::destroy_empty(bag)
+        assert!(!bag.contains(0));
+        bag.add(0, counter);
+        assert!(bag.contains(0));
+        assert!(!bag.contains(1));
+        scenario.end();
+        bag.remove<u64, Counter>(0).destroy();
+        bag.destroy_empty()
     }
 
     #[test]
     fun sanity_check_contains_with_type() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let bag = object_bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = object_bag::new(scenario.ctx());
         let counter = new(&mut scenario);
-        assert!(!contains_with_type<u64, Counter>(&mut bag, 0), 0);
-        assert!(!contains_with_type<u64, Fake>(&mut bag, 0), 0);
-        add(&mut bag, 0, counter);
-        assert!(contains_with_type<u64, Counter>(&bag, 0), 0);
-        assert!(!contains_with_type<u8, Counter>(&bag, 0), 0);
-        assert!(!contains_with_type<u8, Fake>(&bag, 0), 0);
-        ts::end(scenario);
-        destroy(remove(&mut bag, 0));
-        object_bag::destroy_empty(bag)
+        assert!(!bag.contains_with_type<u64, Counter>(0));
+        assert!(!bag.contains_with_type<u64, Fake>(0));
+        bag.add(0, counter);
+        assert!(bag.contains_with_type<u64, Counter>(0));
+        assert!(!bag.contains_with_type<u8, Counter>(0));
+        assert!(!bag.contains_with_type<u8, Fake>(0));
+        scenario.end();
+        bag.remove<u64, Counter>(0).destroy();
+        bag.destroy_empty()
     }
 
     #[test]
     fun sanity_check_size() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let bag = object_bag::new(ts::ctx(&mut scenario));
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag = object_bag::new(scenario.ctx());
         let counter1 = new(&mut scenario);
         let counter2 = new(&mut scenario);
-        assert!(object_bag::is_empty(&bag), 0);
-        assert!(object_bag::length(&bag) == 0, 0);
-        add(&mut bag, 0, counter1);
-        assert!(!object_bag::is_empty(&bag), 0);
-        assert!(object_bag::length(&bag) == 1, 0);
-        add(&mut bag, 1, counter2);
-        assert!(!object_bag::is_empty(&bag), 0);
-        assert!(object_bag::length(&bag) == 2, 0);
-        ts::end(scenario);
-        destroy(remove(&mut bag, 0));
-        destroy(remove(&mut bag, 1));
-        object_bag::destroy_empty(bag);
+        assert!(bag.is_empty());
+        assert!(bag.length() == 0);
+        bag.add(0, counter1);
+        assert!(!bag.is_empty());
+        assert!(bag.length() == 1);
+        bag.add(1, counter2);
+        assert!(!bag.is_empty());
+        assert!(bag.length() == 2);
+        scenario.end();
+        bag.remove<u64, Counter>(0).destroy();
+        bag.remove<u64, Counter>(1).destroy();
+        bag.destroy_empty();
     }
 
     // transfer an object field from one "parent" to another
     #[test]
     fun transfer_object() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let bag1 = object_bag::new(ts::ctx(&mut scenario));
-        let bag2 = object_bag::new(ts::ctx(&mut scenario));
-        add(&mut bag1, 0, new(&mut scenario));
-        assert!(contains(&bag1, 0), 0);
-        assert!(!contains(&bag2, 0), 0);
-        bump(borrow_mut(&mut bag1, 0));
-        let c = remove<u64, Counter>(&mut bag1, 0);
-        add(&mut bag2, 0, c);
-        assert!(!contains(&bag1, 0), 0);
-        assert!(contains(&bag2, 0), 0);
-        bump(borrow_mut(&mut bag2, 0));
-        assert!(count(borrow(&bag2, 0)) == 2, 0);
-        ts::end(scenario);
-        destroy(remove(&mut bag2, 0));
-        object_bag::destroy_empty(bag1);
-        object_bag::destroy_empty(bag2);
+        let mut scenario = test_scenario::begin(sender);
+        let mut bag1 = object_bag::new(scenario.ctx());
+        let mut bag2 = object_bag::new(scenario.ctx());
+        bag1.add(0, new(&mut scenario));
+        assert!(bag1.contains(0));
+        assert!(!bag2.contains(0));
+        bump(&mut bag1[0]);
+        let c = bag1.remove<u64, Counter>(0);
+        bag2.add(0, c);
+        assert!(!bag1.contains(0));
+        assert!(bag2.contains(0));
+        bump(&mut bag2[0]);
+        assert!((&bag2[0] : &Counter).count() == 2);
+        scenario.end();
+        (bag2.remove(0) : Counter).destroy();
+        bag1.destroy_empty();
+        bag2.destroy_empty();
     }
 
-    fun new(scenario: &mut ts::Scenario): Counter {
-        Counter { id: ts::new_object(scenario), count: 0 }
+    fun new(scenario: &mut test_scenario::Scenario): Counter {
+        Counter { id: scenario.new_object(), count: 0 }
     }
 
     fun count(counter: &Counter): u64 {
@@ -210,7 +199,7 @@ module sui::object_bag_tests {
 
     fun destroy(counter: Counter): u64 {
         let Counter { id, count } = counter;
-        object::delete(id);
+        id.delete();
         count
     }
 }

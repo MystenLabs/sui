@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
-
-import { DelegationDetailCard } from './DelegationDetailCard';
-import { useActiveAddress } from '../../hooks/useActiveAddress';
-import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
-import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { ValidatorLogo } from '../validators/ValidatorLogo';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import Overlay from '_components/overlay';
+import { useGetDelegatedStake } from '@mysten/core';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+
+import { useActiveAddress } from '../../hooks/useActiveAddress';
+import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
+import { ValidatorLogo } from '../validators/ValidatorLogo';
+import { DelegationDetailCard } from './DelegationDetailCard';
 
 export function DelegationDetail() {
 	const [searchParams] = useSearchParams();
@@ -17,13 +17,15 @@ export function DelegationDetail() {
 	const stakeIdParams = searchParams.get('staked');
 	const navigate = useNavigate();
 	const accountAddress = useActiveAddress();
-	const { data, isLoading } = useGetDelegatedStake(accountAddress || '');
+	const { data, isPending } = useGetDelegatedStake({
+		address: accountAddress || '',
+	});
 
 	if (!validatorAddressParams || !stakeIdParams) {
 		return <Navigate to={'/stake'} replace={true} />;
 	}
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />

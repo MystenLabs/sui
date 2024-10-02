@@ -95,7 +95,7 @@ impl Worker {
             keypair,
             id,
             committee: committee.clone(),
-            worker_cache,
+            worker_cache: worker_cache.clone(),
             protocol_config: protocol_config.clone(),
             parameters: parameters.clone(),
             store,
@@ -126,13 +126,13 @@ impl Worker {
                 ),
             ));
         }
-        if let Some(limit) = parameters.anemo.request_batch_rate_limit {
-            worker_service = worker_service.add_layer_for_request_batch(InboundRequestLayer::new(
-                rate_limit::RateLimitLayer::new(
+        if let Some(limit) = parameters.anemo.request_batches_rate_limit {
+            worker_service = worker_service.add_layer_for_request_batches(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
                     governor::Quota::per_second(limit),
                     rate_limit::WaitMode::Block,
-                ),
-            ));
+                )),
+            );
         }
 
         // Legacy RPC interface, only used by delete_batches() for external consensus.
@@ -143,8 +143,8 @@ impl Worker {
             protocol_config: protocol_config.clone(),
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
-            request_batch_timeout: worker.parameters.sync_retry_delay,
-            request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+            request_batches_timeout: worker.parameters.sync_retry_delay,
+            request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
             network: None,
             batch_fetcher: None,
             validator: validator.clone(),
@@ -175,8 +175,15 @@ impl Worker {
                 epoch_string.clone(),
             )));
 
+        let worker_peer_ids = worker_cache
+            .all_workers()
+            .into_iter()
+            .map(|(worker_name, _)| PeerId(worker_name.0.to_bytes()));
         let routes = anemo::Router::new()
             .add_rpc_service(worker_service)
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
+                worker_peer_ids,
+            )))
             .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
                 epoch_string.clone(),
             )))
@@ -235,9 +242,9 @@ impl Worker {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
-            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // Set the max_frame_size to be 1 GB to work around the issue of there being too many
             // delegation events in the epoch change txn.
-            config.max_frame_size = Some(2 << 30);
+            config.max_frame_size = Some(1 << 30);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
@@ -250,7 +257,6 @@ impl Worker {
 
         let network;
         let mut retries_left = 90;
-
         loop {
             let network_result = anemo::Network::bind(addr.clone())
                 .server_name("narwhal")
@@ -263,20 +269,20 @@ impl Worker {
                     network = n;
                     break;
                 }
-                Err(_) => {
+                Err(e) => {
                     retries_left -= 1;
 
                     if retries_left <= 0 {
                         panic!();
                     }
                     error!(
-                        "Address {} should be available for the primary Narwhal service, retrying in one second",
-                        addr
+                        "Address {addr} should be available for the primary Narwhal service, retrying in one second: {e:#?}",
                     );
                     sleep(Duration::from_secs(1));
                 }
             }
         }
+        client.set_worker_network(id, network.clone());
 
         info!("Worker {} listening to worker messages on {}", id, address);
 
@@ -296,8 +302,8 @@ impl Worker {
                 protocol_config,
                 worker_cache: worker.worker_cache.clone(),
                 store: worker.store.clone(),
-                request_batch_timeout: worker.parameters.sync_retry_delay,
-                request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+                request_batches_timeout: worker.parameters.sync_retry_delay,
+                request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
                 network: Some(network.clone()),
                 batch_fetcher: Some(batch_fetcher),
                 validator: validator.clone(),
@@ -472,8 +478,11 @@ impl Worker {
             .expect("Our public key or worker id is not in the worker cache")
             .transactions;
         let address = address
-            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
-            .unwrap();
+            .replace(0, |protocol| match protocol {
+                Protocol::Ip4(ip) if ip.is_loopback() => None,
+                _ => Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)),
+            })
+            .unwrap_or(address);
 
         let tx_server_handle = TxServer::spawn(
             address.clone(),

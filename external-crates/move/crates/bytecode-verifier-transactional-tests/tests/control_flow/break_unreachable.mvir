@@ -1,0 +1,19 @@
+//# run
+module 0x42.m {
+// simple breaks for control flow check
+entry foo() {
+    let x: u64;
+label b0:
+    x = 1;
+label while:
+    jump_if_false (true) while_cont;
+label while_b0:
+    x = 3;
+    jump while_cont;
+    x = 5;
+    jump while_cont;
+label while_cont:
+    assert(move(x) == 3, 42);
+    return;
+}
+}

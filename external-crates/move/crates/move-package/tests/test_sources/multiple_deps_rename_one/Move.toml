@@ -1,0 +1,11 @@
+# Test that address stays in scope if you don't rename it away
+
+[package]
+name = "test"
+
+[addresses]
+A = "0x1"
+
+[dependencies]
+C = { local = "./deps_only/C" }
+D = { local = "./deps_only/D" , addr_subst = {"DA" = "A" } }

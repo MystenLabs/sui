@@ -11,6 +11,7 @@
 mod aggregators;
 mod certificate_fetcher;
 mod certifier;
+pub mod consensus;
 mod primary;
 mod proposer;
 mod state_handler;
@@ -24,6 +25,10 @@ mod metrics;
 #[cfg(test)]
 #[path = "tests/certificate_tests.rs"]
 mod certificate_tests;
+
+#[cfg(test)]
+#[path = "tests/rpc_tests.rs"]
+mod rpc_tests;
 
 pub use crate::{
     metrics::PrimaryChannelMetrics,

@@ -1,22 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '../api/RpcClientContext';
-import { type SuiObjectDataFilter, type SuiAddress } from '@mysten/sui.js';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { PaginatedObjectsResponse, type SuiObjectDataFilter } from '@mysten/sui/client';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 const MAX_OBJECTS_PER_REQ = 6;
 
 export function useGetOwnedObjects(
-	address?: SuiAddress | null,
+	address?: string | null,
 	filter?: SuiObjectDataFilter,
 	maxObjectRequests = MAX_OBJECTS_PER_REQ,
 ) {
-	const rpc = useRpcClient();
-	return useInfiniteQuery(
-		['get-owned-objects', address, filter, maxObjectRequests],
-		({ pageParam }) =>
-			rpc.getOwnedObjects({
+	const client = useSuiClient();
+	return useInfiniteQuery<PaginatedObjectsResponse>({
+		initialPageParam: null,
+		queryKey: ['get-owned-objects', address, filter, maxObjectRequests],
+		queryFn: ({ pageParam }) =>
+			client.getOwnedObjects({
 				owner: address!,
 				filter,
 				options: {
@@ -25,12 +26,11 @@ export function useGetOwnedObjects(
 					showDisplay: true,
 				},
 				limit: maxObjectRequests,
-				cursor: pageParam,
+				cursor: pageParam as string | null,
 			}),
-		{
-			staleTime: 10 * 1000,
-			enabled: !!address,
-			getNextPageParam: (lastPage) => (lastPage?.hasNextPage ? lastPage.nextCursor : null),
-		},
-	);
+
+		staleTime: 10 * 1000,
+		enabled: !!address,
+		getNextPageParam: ({ hasNextPage, nextCursor }) => (hasNextPage ? nextCursor : null),
+	});
 }

@@ -1,102 +1,14 @@
-// Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::error::SuiError;
-use fastcrypto_zkp::bn254::zk_login::OAuthProvider;
-use once_cell::sync::Lazy;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, hash::Hash};
 
-/// A whitelist of client_ids (i.e. the value of "aud" in cliams) for each provider
-pub static DEFAULT_WHITELIST: Lazy<HashMap<&str, Vec<&str>>> = Lazy::new(|| {
-    let mut map = HashMap::new();
-    map.insert(
-        OAuthProvider::Google.get_config().0,
-        vec!["946731352276-pk5glcg8cqo38ndb39h7j093fpsphusu.apps.googleusercontent.com"],
-    );
-    map.insert(
-        OAuthProvider::Twitch.get_config().0,
-        vec!["d31icql6l8xzpa7ef31ztxyss46ock"],
-    );
-    map
-});
+use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 
-/// Parameters for generating an address.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AddressParams {
-    iss: String,
-    key_claim_name: String,
-}
+// Used in tests or anywhere that fetching up to date JWKs is not possible. This is an example response from https://id.twitch.tv/oauth2/keys
+pub const DEFAULT_JWK_BYTES: &[u8] = r#"{"keys":[{"alg":"RS256","e":"AQAB","kid":"1","kty":"RSA","n":"6lq9MQ-q6hcxr7kOUp-tHlHtdcDsVLwVIw13iXUCvuDOeCi0VSuxCCUY6UmMjy53dX00ih2E4Y4UvlrmmurK0eG26b-HMNNAvCGsVXHU3RcRhVoHDaOwHwU72j7bpHn9XbP3Q3jebX6KIfNbei2MiR0Wyb8RZHE-aZhRYO8_-k9G2GycTpvc-2GBsP8VHLUKKfAs2B6sW3q3ymU6M0L-cFXkZ9fHkn9ejs-sqZPhMJxtBPBxoUIUQFTgv4VXTSv914f_YkNw-EjuwbgwXMvpyr06EyfImxHoxsZkFYB-qBYHtaMxTnFsZBr6fn8Ha2JqT1hoP7Z5r5wxDu3GQhKkHw","use":"sig"}]}"#.as_bytes();
 
-impl AddressParams {
-    pub fn new(iss: String, key_claim_name: String) -> Self {
-        Self {
-            iss,
-            key_claim_name,
-        }
-    }
-}
-
-/// Struct that contains all the OAuth provider information. A list of them can
-/// be retrieved from the JWK endpoint (e.g. <https://www.googleapis.com/oauth2/v3/certs>)
-/// and published on the bulletin along with a trusted party's signature.
-#[derive(Debug, Clone, PartialEq, Eq, JsonSchema, Hash, Serialize, Deserialize)]
-pub struct OAuthProviderContent {
-    kty: String,
-    kid: String,
-    pub e: String,
-    pub n: String,
-    alg: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, JsonSchema, Hash, Serialize, Deserialize)]
-pub struct OAuthProviderContentReader {
-    e: String,
-    n: String,
-    #[serde(rename = "use")]
-    my_use: String,
-    kid: String,
-    kty: String,
-    alg: String,
-}
-
-impl OAuthProviderContent {
-    pub fn from_reader(reader: OAuthProviderContentReader) -> Self {
-        Self {
-            kty: reader.kty,
-            kid: reader.kid,
-            e: trim(reader.e),
-            n: trim(reader.n),
-            alg: reader.alg,
-        }
-    }
-}
-
-/// Trim trailing '=' so that it is considered a valid base64 url encoding string by base64ct library.
-fn trim(str: String) -> String {
-    str.trim_end_matches(|c: char| c == '=').to_owned()
-}
-
-/// Parse the bytes as JSON and find the keys that has the expected kid.
-/// Return the OAuthProviderContentReader if valid.
-pub fn find_jwk_by_kid(kid: &str, json_bytes: &[u8]) -> Result<OAuthProviderContent, SuiError> {
-    let json_str = String::from_utf8_lossy(json_bytes);
-    let parsed_list: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&json_str);
-    if let Ok(parsed_list) = parsed_list {
-        if let Some(keys) = parsed_list["keys"].as_array() {
-            for k in keys {
-                let parsed: OAuthProviderContentReader =
-                    serde_json::from_value(k.clone()).map_err(|_| SuiError::JWKRetrievalError)?;
-                if parsed.kid == kid
-                    && parsed.alg == "RS256"
-                    && parsed.my_use == "sig"
-                    && parsed.kty == "RSA"
-                {
-                    return Ok(OAuthProviderContent::from_reader(parsed));
-                }
-            }
-        }
-    }
-    Err(SuiError::JWKRetrievalError)
+/// Returns a valid ZkLoginInputs based on a fixed key, for testing only.
+pub fn get_zklogin_inputs() -> ZkLoginInputs {
+    thread_local! {
+    static ZKLOGIN_INPUTS: ZkLoginInputs = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"17318089125952421736342263717932719437717844282410187957984751939942898251250\",\"11373966645469122582074082295985388258840681618268593976697325892280915681207\",\"1\"],\"b\":[[\"5939871147348834997361720122238980177152303274311047249905942384915768690895\",\"4533568271134785278731234570361482651996740791888285864966884032717049811708\"],[\"10564387285071555469753990661410840118635925466597037018058770041347518461368\",\"12597323547277579144698496372242615368085801313343155735511330003884767957854\"],[\"1\",\"0\"]],\"c\":[\"15791589472556826263231644728873337629015269984699404073623603352537678813171\",\"4547866499248881449676161158024748060485373250029423904113017422539037162527\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", "20794788559620669596206457022966176986688727876128223628113916380927502737911").unwrap(); }
+    ZKLOGIN_INPUTS.with(|a| a.clone())
 }

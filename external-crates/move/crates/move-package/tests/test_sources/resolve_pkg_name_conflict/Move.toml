@@ -1,0 +1,18 @@
+#                                                             
+#             +----------+      2                               
+#    +------->|    B     |-------------+                        
+#    |        +----------+             |                        
+#    |                                 |                        
+#    |                                 v                        
+#  +----+     +----------+   3   +----------+                   
+#  |Root|---->| A-rename | ----->| C-rename |                   
+#  +----+     +----------+       +----------+                   
+#
+#
+
+[package]
+name = "Root-rename"
+
+[dependencies]
+A-rename = { local = "./deps_only/A-rename" }
+B = { local = "./deps_only/B" }

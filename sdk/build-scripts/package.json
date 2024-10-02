@@ -6,10 +6,11 @@
 	"version": "0.0.0",
 	"license": "Apache-2.0",
 	"engines": {
-		"node": ">=16"
+		"node": ">=18"
 	},
 	"bin": {
-		"build-package": "./src/build-package.ts"
+		"build-package": "./src/build-package.ts",
+		"build-dapp-kit": "./src/build-dapp-kit.ts"
 	},
 	"scripts": {
 		"prettier:check": "prettier -c --ignore-unknown .",
@@ -21,10 +22,15 @@
 		"build": "tsc --build"
 	},
 	"devDependencies": {
-		"esbuild": "^0.18.5",
-		"typescript": "^5.0.4"
+		"@types/postcss-prefix-selector": "^1.16.3",
+		"@vanilla-extract/esbuild-plugin": "^2.3.8",
+		"autoprefixer": "^10.4.19",
+		"esbuild": "^0.23.0",
+		"postcss": "^8.4.39",
+		"postcss-prefix-selector": "^1.16.1",
+		"typescript": "^5.5.3"
 	},
 	"dependencies": {
-		"@types/node": "^18.15.11"
+		"@types/node": "^20.14.10"
 	}
 }

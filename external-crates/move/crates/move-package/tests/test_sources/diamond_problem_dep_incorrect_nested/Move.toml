@@ -1,0 +1,25 @@
+# Dependency graph and an override (ov) - technically, override in the root is capable of resolving
+# a conflict in the sub-graph for A but becase we expect sub-graphs to be correct as standalone
+# entities (and our algorithm proceeds by constructing sub-graphs independently), this will result
+# in a failure.
+#
+#                                 +----+ v1
+#                           +---->| B  |--------+
+#                           |     +----+        |
+#                 +----+    |                   +-------->+----+
+#           +---->| A  |----+               +------------>| D  |
+#           |     +----+    |               |       +---->+----+
+#           |               |     +----+ v2 |       |
+#           |               +---->| C  |----+       |
+#           |                     +----+            |
+# +----+----+                                       |
+# |Root|           ov(3)                            |
+# +----+--------------------------------------------+
+#
+
+[package]
+name = "Root"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+D = { local = "./deps_only/D-v3", override = true }

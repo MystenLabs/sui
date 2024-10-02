@@ -32,6 +32,25 @@ pub mod utils;
 /// The epoch number.
 pub type Epoch = u64;
 
+// Opaque bytes uniquely identifying the current chain. Analogue of the
+// type in `sui-types` crate.
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct ChainIdentifier([u8; 32]);
+
+impl ChainIdentifier {
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    pub fn unknown() -> Self {
+        Self([0; 32])
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("Node {0} is not in the committee")]
@@ -80,7 +99,11 @@ impl<D: DeserializeOwned> Import for D {}
 pub trait Export: Serialize {
     fn export(&self, path: &str) -> Result<(), ConfigError> {
         let writer = || -> Result<(), std::io::Error> {
-            let file = OpenOptions::new().create(true).write(true).open(path)?;
+            let file = OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(path)?;
             let mut writer = BufWriter::new(file);
             let data = serde_json::to_string_pretty(self).unwrap();
             writer.write_all(data.as_ref())?;
@@ -96,10 +119,8 @@ pub trait Export: Serialize {
 
 impl<S: Serialize> Export for S {}
 
-// TODO: the stake and voting power of a validator can be different so
-// in some places when we are actually referring to the voting power, we
-// should use a different type alias, field name, etc.
-// Also, consider unify this with `StakeUnit` on Sui side.
+// TODO: This actually represents voting power (out of 10,000) and not amount staked.
+// Consider renaming to `VotingPower`.
 pub type Stake = u64;
 pub type WorkerId = u32;
 
@@ -172,6 +193,8 @@ pub struct Parameters {
 }
 
 impl Parameters {
+    pub const DEFAULT_FILENAME: &'static str = "parameters.json";
+
     fn default_header_num_of_batches_threshold() -> usize {
         32
     }
@@ -181,7 +204,7 @@ impl Parameters {
     }
 
     fn default_max_header_delay() -> Duration {
-        Duration::from_secs(2)
+        Duration::from_secs(1)
     }
 
     fn default_min_header_delay() -> Duration {
@@ -246,12 +269,10 @@ impl NetworkAdminServerParameters {
 pub struct AnemoParameters {
     /// Per-peer rate-limits (in requests/sec) for the PrimaryToPrimary service.
     pub send_certificate_rate_limit: Option<NonZeroU32>,
-    pub get_payload_availability_rate_limit: Option<NonZeroU32>,
-    pub get_certificates_rate_limit: Option<NonZeroU32>,
 
     /// Per-peer rate-limits (in requests/sec) for the WorkerToWorker service.
     pub report_batch_rate_limit: Option<NonZeroU32>,
-    pub request_batch_rate_limit: Option<NonZeroU32>,
+    pub request_batches_rate_limit: Option<NonZeroU32>,
 
     /// Size in bytes above which network messages are considered excessively large. Excessively
     /// large messages will still be handled, but logged and reported in metrics for debugging.
@@ -262,6 +283,28 @@ pub struct AnemoParameters {
 }
 
 impl AnemoParameters {
+    // By default, at most 10 certificates can be sent concurrently to a peer.
+    pub fn send_certificate_rate_limit(&self) -> u32 {
+        self.send_certificate_rate_limit
+            .unwrap_or(NonZeroU32::new(20).unwrap())
+            .get()
+    }
+
+    // By default, at most 100 batches can be broadcasted concurrently.
+    pub fn report_batch_rate_limit(&self) -> u32 {
+        self.report_batch_rate_limit
+            .unwrap_or(NonZeroU32::new(200).unwrap())
+            .get()
+    }
+
+    // As of 11/02/2023, when one worker is actively fetching, each peer receives
+    // 20~30 requests per second.
+    pub fn request_batches_rate_limit(&self) -> u32 {
+        self.request_batches_rate_limit
+            .unwrap_or(NonZeroU32::new(100).unwrap())
+            .get()
+    }
+
     pub fn excessive_message_size(&self) -> usize {
         const EXCESSIVE_MESSAGE_SIZE: usize = 8 << 20;
 
@@ -288,6 +331,8 @@ impl Default for PrometheusMetricsParameters {
 }
 
 impl PrometheusMetricsParameters {
+    pub const DEFAULT_PORT: usize = 9184;
+
     fn with_available_port(&self) -> Self {
         let mut params = self.clone();
         let default = Self::default();
@@ -427,6 +472,8 @@ impl std::fmt::Display for WorkerCache {
 }
 
 impl WorkerCache {
+    pub const DEFAULT_FILENAME: &'static str = "workers.json";
+
     /// Returns the current epoch.
     pub fn epoch(&self) -> Epoch {
         self.epoch

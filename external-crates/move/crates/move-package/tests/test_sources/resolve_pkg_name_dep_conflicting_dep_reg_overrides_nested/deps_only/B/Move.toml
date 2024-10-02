@@ -1,0 +1,8 @@
+[package]
+name = "B"
+
+[dependencies]
+C-rename = { local = "../C-v1", override = true }
+
+[dev-dependencies]
+C-rename = { local = "../C-v2", override = true }

@@ -1,0 +1,6 @@
+[package]
+name = "PreTypeError"
+edition = "legacy"
+
+[addresses]
+PreTypeError = "0xCAFE"

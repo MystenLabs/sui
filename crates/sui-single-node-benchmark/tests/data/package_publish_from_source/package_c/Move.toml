@@ -1,0 +1,8 @@
+[package]
+name = "C"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+A = { local = "../package_a" }
+B = { local = "../package_b" }

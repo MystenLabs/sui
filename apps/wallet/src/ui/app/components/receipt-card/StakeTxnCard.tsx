@@ -1,14 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	formatPercentageDisplay,
-	useGetValidatorsApy,
-	useGetTimeBeforeEpochNumber,
-} from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
-
-import { Card } from '../../shared/transaction-summary/Card';
 import { ValidatorLogo } from '_app/staking/validators/ValidatorLogo';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import {
@@ -18,8 +10,15 @@ import {
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
+import {
+	formatPercentageDisplay,
+	useGetTimeBeforeEpochNumber,
+	useGetValidatorsApy,
+} from '@mysten/core';
+import type { SuiEvent } from '@mysten/sui/client';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 
-import type { SuiEvent } from '@mysten/sui.js';
+import { Card } from '../../shared/transaction-summary/Card';
 
 type StakeTxnCardProps = {
 	event: SuiEvent;
@@ -27,9 +26,10 @@ type StakeTxnCardProps = {
 
 // For Staked Transaction use moveEvent Field to get the validator address, delegation amount, epoch
 export function StakeTxnCard({ event }: StakeTxnCardProps) {
-	const validatorAddress = event.parsedJson?.validator_address;
-	const stakedAmount = event.parsedJson?.amount;
-	const stakedEpoch = Number(event.parsedJson?.epoch || 0);
+	const json = event.parsedJson as { amount: string; validator_address: string; epoch: string };
+	const validatorAddress = json?.validator_address;
+	const stakedAmount = json?.amount;
+	const stakedEpoch = Number(json?.epoch || '0');
 
 	const { data: rollingAverageApys } = useGetValidatorsApy();
 
@@ -60,7 +60,7 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
 							showAddress
 							iconSize="md"
 							size="body"
-							activeEpoch={event.parsedJson?.epoch}
+							activeEpoch={json?.epoch}
 						/>
 					</div>
 				)}

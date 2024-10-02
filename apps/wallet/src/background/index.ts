@@ -1,21 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { lte, coerce } from 'semver';
+import { openInNewTab } from '_shared/utils';
+import { growthbook, setAttributes } from '_src/shared/experimentation/features';
+import { coerce, lte } from 'semver';
 import Browser from 'webextension-polyfill';
 
-import Alarms, { CLEAN_UP_ALARM_NAME, LOCK_ALARM_NAME } from './Alarms';
+import { lockAllAccountSources } from './account-sources';
+import { accountSourcesEvents } from './account-sources/events';
+import { getAccountsStatusData, getAllAccounts, lockAllAccounts } from './accounts';
+import { accountsEvents } from './accounts/events';
+import Alarms, { autoLockAlarmName, cleanUpAlarmName } from './Alarms';
+import { Connections } from './connections';
 import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
-import Transactions from './Transactions';
-import { Connections } from './connections';
-import Keyring from './keyring';
-import { deleteAccountsPublicInfo, getStoredAccountsPublicInfo } from './keyring/accounts';
 import * as Qredo from './qredo';
-import { isSessionStorageSupported } from './storage-utils';
-import { openInNewTab } from '_shared/utils';
-import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
-import { setAttributes } from '_src/shared/experimentation/features';
+import { initSentry } from './sentry';
+import Transactions from './Transactions';
+
+growthbook.loadFeatures().catch(() => {
+	// silence the error
+});
+initSentry();
 
 Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
 	// Skip automatically opening the onboarding in end-to-end tests.
@@ -65,60 +71,45 @@ Permissions.permissionReply.subscribe((permission) => {
 });
 
 Permissions.on('connectedAccountsChanged', async ({ origin, accounts }) => {
-	const allAccountPublicInfo = await getStoredAccountsPublicInfo();
 	connections.notifyContentScript({
 		event: 'walletStatusChange',
 		origin,
 		change: {
-			accounts: accounts.map((address) => ({
-				address,
-				publicKey: allAccountPublicInfo[address]?.publicKey || null,
-			})),
+			accounts: await getAccountsStatusData(accounts),
 		},
 	});
 });
 
-const keyringStatusCallback = () => {
-	connections.notifyUI({
-		event: 'lockStatusUpdate',
-		isLocked: Keyring.isLocked,
-	});
-};
-Keyring.on('lockedStatusUpdate', keyringStatusCallback);
-Keyring.on('accountsChanged', keyringStatusCallback);
-Keyring.on('activeAccountChanged', keyringStatusCallback);
-
-Keyring.on('accountsChanged', async (accounts) => {
-	await deleteAccountsPublicInfo({
-		toKeep: accounts.map(({ address }) => address),
-	});
-	await Permissions.ensurePermissionAccountsUpdated(accounts);
+accountsEvents.on('accountsChanged', async () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accounts' });
+	await Permissions.ensurePermissionAccountsUpdated(
+		await Promise.all(
+			(await getAllAccounts()).map(async (anAccount) => ({ address: await anAccount.address })),
+		),
+	);
+});
+accountsEvents.on('accountStatusChanged', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accounts' });
+});
+accountsEvents.on('activeAccountChanged', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accounts' });
+});
+accountSourcesEvents.on('accountSourceStatusUpdated', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accountSources' });
+});
+accountSourcesEvents.on('accountSourcesChanged', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accountSources' });
 });
 
 Browser.alarms.onAlarm.addListener((alarm) => {
-	if (alarm.name === LOCK_ALARM_NAME) {
-		Keyring.reviveDone.finally(() => Keyring.lock());
-	} else if (alarm.name === CLEAN_UP_ALARM_NAME) {
+	if (alarm.name === autoLockAlarmName) {
+		lockAllAccounts();
+		lockAllAccountSources();
+	} else if (alarm.name === cleanUpAlarmName) {
 		Transactions.clearStaleTransactions();
 	}
 });
 
-if (!isSessionStorageSupported()) {
-	Keyring.on('lockedStatusUpdate', async (isLocked) => {
-		if (!isLocked) {
-			const allTabs = await Browser.tabs.query({});
-			for (const aTab of allTabs) {
-				if (aTab.id) {
-					try {
-						await Browser.tabs.sendMessage(aTab.id, MSG_CONNECT);
-					} catch (e) {
-						// not all tabs have the cs installed
-					}
-				}
-			}
-		}
-	});
-}
 NetworkEnv.getActiveNetwork().then(async ({ env, customRpcUrl }) => {
 	setAttributes({
 		apiEnv: env,

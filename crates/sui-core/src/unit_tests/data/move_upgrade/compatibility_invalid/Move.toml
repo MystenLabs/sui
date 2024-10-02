@@ -1,6 +1,7 @@
 [package]
 name = "compatibility_invalid"
 version = "0.0.2"
+edition = "2024.beta"
 
 [addresses]
 base_addr = "0x0"

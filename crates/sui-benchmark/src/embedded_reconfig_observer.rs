@@ -23,6 +23,7 @@ use tracing::{error, info, trace};
 ///    and we happen to have a big committee rotation, it may
 ///    fail to get quorum on the latest committee info from
 ///    demissioned validators and then stop working.
+///
 /// Background: this is a temporary solution for stress before
 /// we see fullnode reconfiguration stabilizes.
 #[derive(Clone, Default)]
@@ -50,7 +51,7 @@ impl EmbeddedReconfigObserver {
             Err(err) => Err(err),
             Ok(committee_info) => {
                 let network_config = default_mysten_network_config();
-                let new_epoch = committee_info.committee.epoch;
+                let new_epoch = committee_info.epoch();
                 if new_epoch <= cur_epoch {
                     trace!(
                         cur_epoch,

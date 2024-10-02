@@ -72,6 +72,17 @@ impl Blob {
         blob_size += self.data.len();
         blob_size
     }
+    pub fn to_bytes(&self) -> Vec<u8> {
+        [vec![self.encoding.into()], self.data.clone()].concat()
+    }
+    pub fn from_bytes<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
+        let (encoding, data) = bytes.split_first().ok_or(anyhow!("empty bytes"))?;
+        Blob {
+            data: data.to_vec(),
+            encoding: BlobEncoding::try_from(*encoding)?,
+        }
+        .decode()
+    }
 }
 
 /// An iterator over blobs in a blob file.

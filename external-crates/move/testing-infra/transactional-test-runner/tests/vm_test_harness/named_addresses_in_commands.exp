@@ -1,6 +1,0 @@
-processed 5 tasks
-
-task 4 'view'. lines 41-41:
-key 0x2a::M::Foo {
-    x: 500
-}

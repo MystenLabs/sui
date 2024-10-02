@@ -1,0 +1,546 @@
+---
+title: Sui Validator CLI
+---
+
+The Sui CLI `validator` command provides command-level access to validator features of the Sui network.
+
+## Commands
+
+Typing `sui validator --help` into your terminal or console displays the following information on available commands.
+
+```shell
+Usage: sui validator [OPTIONS] [COMMAND]
+
+Commands:
+  make-validator-info          	 
+  become-candidate             	 
+  join-committee               	 
+  leave-committee              	 
+  display-metadata             	 
+  update-metadata              	 
+  update-gas-price              	Update gas price that is used to calculate Reference Gas Price
+  report-validator              	Report or un-report a validator
+  serialize-payload-pop         	Serialize the payload that is used to generate Proof of Possession. This is useful to take the payload offline for an Authority protocol
+                                    	keypair to sign
+  display-gas-price-update-raw-txn  Print out the serialized data of a transaction that sets the gas price quote for a validator
+  help                          	Print this message or the help of the given subcommand(s)
+
+Options:
+  	--client.config <CONFIG>  Sets the file storing the state of our user accounts (an empty one will be created if missing)
+  	--json                	Return command outputs in json format
+  -y, --yes                	 
+  -h, --help                	Print help
+```
+
+## Examples
+
+The following examples demonstrate some of the most often used commands. 
+
+### Update gas price for next epoch
+
+```shell
+$ sui validator  update-gas-price 500
+```
+
+
+<details>
+  <summary>
+  Toggle output
+  </summary>
+
+```shell
+----- Transaction Digest ----
+A8z83EqjmgwRNFV6sme6A5tTTTQPjiLgiW76neyvhLud
+
+----- Transaction Data ----
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Data                                                                                                                                                                                                                                                                                                                                                                                                                   	 │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Sender: 0xf...3d9                                                                                                                                                                                                                                                                                                                                                         	                                                         │
+│ Gas Owner: 0xf...3d9                                                                                                                                                                                                                                                                                                                                                      	                                                         │
+│ Gas Budget: 200000000 MIST                                                                                                                                                                                                                                                                                                                                                                                                         	 │
+│ Gas Price: 1000 MIST                                                                                                                                                                                                                                                                                                                                                                                                               	 │
+│ Gas Payment:                                                                                                                                                                                                                                                                                                                                                                                                                       	 │
+│  ┌──                                                                                                                                                                                                                                                                                                                                                                                                                               	 │
+│  │ ID: 0x8...19e                                                                                                                                                                                                                                                                                                                                                          	                                                         │
+│  │ Version: 1                                                                                                                                                                                                                                                                                                                                                                                                                      	 │
+│  │ Digest: 8UEiGYe3KL3S6JPs8uP2sbbx7sMCtzi8yJJ6SyTe9V1x                                                                                                                                                                                                                                                                                                                                                                            	 │
+│  └──                                                                                                                                                                                                                                                                                                                                                                                                                               	 │
+│                                                                                                                                                                                                                                                                                                                                                                                                                                    	 │
+│ Transaction Kind : Programmable                                                                                                                                                                                                                                                                                                                                                                                                    	 │
+│ Inputs: [Object(SharedObject { object_id: 0x0...005, initial_shared_version: SequenceNumber(1), mutable: true }), Object(ImmOrOwnedObject { object_id: 0x4...dbe, version: SequenceNumber(1), digest: o#82z9UUX9iD2Mq9zvciD56kmmDYqjF3iwaFadi3Mk16eJ }), Pure(SuiPureValue { value_type: Some(U64), value: "500" })]                                                                                                                   │
+│ Commands: [                                                                                                                                                                                                                                                                                                                                                                                                                        	 │
+│   MoveCall(0x0...003::sui_system::request_set_gas_price(Input(0),Input(1),Input(2))),                                                                                                                                                                                                                                                                                     	                                                         │
+│ ]                                                                                                                                                                                                                                                                                                                                                                                                                                  	 │
+│                                                                                                                                                                                                                                                                                                                                                                                                                                    	 │
+│                                                                                                                                                                                                                                                                                                                                                                                                                                    	 │
+│ Signatures:                                                                                                                                                                                                                                                                                                                                                                                                                        	 │
+│	j2FE7GNkHm9+ey0zTQrgfaTXJgGu1vYWmivrVxbUfP56vIrxMFA4XxqEyw7Q8pM1FR+JDPgCsE1kgZRGH6TZDg==                                                                                                                                                                                                                                                                                                                                        	 │
+│                                                                                                                                                                                                                                                                                                                                                                                                                                    	 │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+----- Transaction Effects ----
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                           	│
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: A8z83EqjmgwRNFV6sme6A5tTTTQPjiLgiW76neyvhLud                                          	│
+│ Status: Success                                                                               	│
+│ Executed Epoch: 5                                                                             	│
+│                                                                                               	│
+│ Mutated Objects:                                                                              	│
+│  ┌──                                                                                          	│
+│  │ ID: 0x0...005                     	                                                            │
+│  │ Owner: Shared                                                                              	│
+│  │ Version: 16                                                                                	│
+│  │ Digest: ER2L6MxrqKNAsaRd9pWdMwvLzXG3ocGQnytnP9s5QLeh                                       	│
+│  └──                                                                                          	│
+│  ┌──                                                                                          	│
+│  │ ID: 0x4...dbe                     	                                                            │
+│  │ Owner: Account Address ( 0xf45...3d9 )                                                         │
+│  │ Version: 16                                                                                	│
+│  │ Digest: 4yDkecsKPe8SnacWdECmq1yVDt7MzvpXCxbRGs74PGaB                                       	│
+│  └──                                                                                          	│
+│  ┌──                                                                                          	│
+│  │ ID: 0x5...8d1                     	                                                            │
+│  │ Owner: Object ID: ( 0x000...005 )   	                                                        │
+│  │ Version: 16                                                                                	│
+│  │ Digest: BBu5zHWWX7nnb1XcFu5VLVnKZEU6AqRRarDDjEeBtqWy                                       	│
+│  └──                                                                                          	│
+│  ┌──                                                                                          	│
+│  │ ID: 0x8...19e                     	                                                            │
+│  │ Owner: Account Address ( 0xf45...3d9 )                                                         │
+│  │ Version: 16                                                                                	│
+│  │ Digest: 4WQp6FYctutMFzf6f2EX68xut71AMubewJ6c7GxpzX7e                                       	│
+│  └──                                                                                          	│
+│                                                                                               	│
+│ Shared Objects:                                                                               	│
+│  ┌──                                                                                          	│
+│  │ ID: 0x0...005                     	                                                            │ 
+│  │ Version: 15                                                                                	│
+│  │ Digest: 6vdobiuiDQpJguDxVbbMNW5ddRqEFkP67C3FWrAVYYuZ                                       	│
+│  └──                                                                                          	│
+│                                                                                               	│
+│ Gas Object:                                                                                   	│
+│  ┌──                                                                                          	│
+│  │ ID: 0x8...19e                     	                                                            │
+│  │ Owner: Account Address ( 0xf45...3d9 )                                                         │
+│  │ Version: 16                                                                                	│
+│  │ Digest: 4WQp6FYctutMFzf6f2EX68xut71AMubewJ6c7GxpzX7e                                       	│
+│  └──                                                                                          	│
+│                                                                                               	│
+│ Gas Cost Summary:                                                                             	│
+│	Storage Cost: 31479200                                                                     	    │
+│	Computation Cost: 1000000                                                                  	    │
+│	Storage Rebate: 0                                                                          	    │
+│	Non-refundable Storage Fee: 0                                                              	    │
+│                                                                                               	│
+│ Transaction Dependencies:                                                                     	│
+│	2gqHgPZbjTkDWM9GnVuWU5kT9z2SWN2ggwK3ryxf8aUX                                               	    │
+│	EmW6DhJWRACNZAvupiTNVacZFLoZxbNJ88mrKVv9DeiJ                                               	    │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+</details>
+
+
+### Set gas price for the next epoch
+
+{@include: ../../snippets/info-gas-budget.mdx}
+
+```shell
+$ sui validator request_set_gas_price --args 0x5 \"42\" --gas-budget GAS-BUDGET-AMOUNT>
+```
+
+### Display the validator information
+
+```shell
+$ sui validator display-metadata 0x3...de5
+```
+
+
+<details>
+  <summary>
+  Toggle output
+  </summary>
+
+```shell
+0x3...de5's valdiator status: Active
+SuiValidatorSummary {
+	sui_address: 0x3...de5,
+	protocol_pubkey_bytes: [
+    	167,
+    	93,
+    	42,
+    	177,
+    	79,
+    	244,
+    	192,
+    	168,
+    	26,
+    	242,
+    	55,
+    	119,
+    	232,
+    	131,
+    	191,
+    	112,
+    	92,
+    	219,
+    	204,
+    	109,
+    	234,
+    	107,
+    	124,
+    	116,
+    	79,
+    	200,
+    	221,
+    	159,
+    	185,
+    	142,
+    	173,
+    	161,
+    	122,
+    	214,
+    	113,
+    	183,
+    	240,
+    	124,
+    	205,
+    	8,
+    	157,
+    	110,
+    	31,
+    	85,
+    	16,
+    	106,
+    	16,
+    	34,
+    	9,
+    	254,
+    	125,
+    	36,
+    	83,
+    	125,
+    	35,
+    	231,
+    	245,
+    	203,
+    	204,
+    	43,
+    	137,
+    	70,
+    	229,
+    	201,
+    	64,
+    	157,
+    	189,
+    	203,
+    	220,
+    	222,
+    	1,
+    	121,
+    	138,
+    	139,
+    	41,
+    	108,
+    	106,
+    	57,
+    	116,
+    	212,
+    	208,
+    	249,
+    	215,
+    	18,
+    	22,
+    	237,
+    	214,
+    	179,
+    	71,
+    	192,
+    	93,
+    	89,
+    	255,
+    	51,
+    	56,
+    	158,
+	],
+	network_pubkey_bytes: [
+    	118,
+    	14,
+    	165,
+    	223,
+    	145,
+    	150,
+    	130,
+    	74,
+    	212,
+    	160,
+    	218,
+    	170,
+    	134,
+    	2,
+    	206,
+    	72,
+    	228,
+    	87,
+    	35,
+    	114,
+    	40,
+    	217,
+    	206,
+    	35,
+    	29,
+    	194,
+    	81,
+    	61,
+    	186,
+    	215,
+    	56,
+    	215,
+	],
+	worker_pubkey_bytes: [
+    	84,
+    	171,
+    	204,
+    	100,
+    	81,
+    	92,
+    	16,
+    	207,
+    	151,
+    	167,
+    	70,
+    	138,
+    	104,
+    	92,
+    	100,
+    	75,
+    	53,
+    	47,
+    	212,
+    	209,
+    	92,
+    	2,
+    	109,
+    	120,
+    	66,
+    	146,
+    	180,
+    	116,
+    	144,
+    	22,
+    	139,
+    	57,
+	],
+	proof_of_possession_bytes: [
+    	137,
+    	134,
+    	236,
+    	79,
+    	232,
+    	146,
+    	206,
+    	45,
+    	136,
+    	245,
+    	8,
+    	42,
+    	114,
+    	154,
+    	128,
+    	148,
+    	60,
+    	137,
+    	214,
+    	92,
+    	177,
+    	46,
+    	118,
+    	246,
+    	37,
+    	159,
+    	183,
+    	233,
+    	122,
+    	49,
+    	121,
+    	227,
+    	136,
+    	76,
+    	48,
+    	122,
+    	119,
+    	187,
+    	194,
+    	169,
+    	114,
+    	7,
+    	16,
+    	225,
+    	104,
+    	211,
+    	100,
+    	198,
+	],
+	name: "Staked",
+	description: "The leading provider of staking infrastructure",
+	image_url: "https://avatars.githubusercontent.com/u/38704373",
+	project_url: "https://staked.us/",
+	net_address: "/dns/sui-mainnet.prod-eks-eu-west-1.staked.cloud/tcp/8080/http",
+	p2p_address: "/dns/sui-mainnet-udp.prod-eks-eu-west-1.staked.cloud/udp/8084",
+	primary_address: "/dns/sui-mainnet-udp.prod-eks-eu-west-1.staked.cloud/udp/8081",
+	worker_address: "/dns/sui-mainnet-udp.prod-eks-eu-west-1.staked.cloud/udp/8082",
+	next_epoch_protocol_pubkey_bytes: None,
+	next_epoch_proof_of_possession: None,
+	next_epoch_network_pubkey_bytes: None,
+	next_epoch_worker_pubkey_bytes: None,
+	next_epoch_net_address: None,
+	next_epoch_p2p_address: None,
+	next_epoch_primary_address: None,
+	next_epoch_worker_address: None,
+	voting_power: 53,
+	operation_cap_id: 0x4...217,
+	gas_price: 1000,
+	commission_rate: 1000,
+	next_epoch_stake: 42223548570491465,
+	next_epoch_gas_price: 1000,
+	next_epoch_commission_rate: 1000,
+	staking_pool_id: 0xc...932,
+	staking_pool_activation_epoch: Some(
+    	0,
+	),
+	staking_pool_deactivation_epoch: None,
+	staking_pool_sui_balance: 42926894529549497,
+	rewards_pool: 1047712965206377,
+	pool_token_balance: 41704322845739375,
+	pending_stake: 0,
+	pending_total_sui_withdraw: 703345959058032,
+	pending_pool_token_withdraw: 683314441220777,
+	exchange_rates_id: 0x5...65d,
+	exchange_rates_size: 231,
+```
+</details>
+
+### Report a bad / non-performant validator
+
+```shell
+$ sui validator report-validator  0xf...3d9
+```
+
+
+<details>
+  <summary>
+  Toggle output
+  </summary>
+
+
+```shell
+----- Transaction Digest ----
+8jVYrpuRBmdSLP37MsQGRqUqE3kE2m8XiSS4TG4aJwXf
+
+----- Transaction Data ----
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        	 │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Sender: 0xf...3d9                                                                                                                                                                                                                                                                                                                                                                                                                             	                                                         │
+│ Gas Owner: 0xf...3d9                                                                                                                                                                                                                                                                                                                                                                                                                          	                                                         │
+│ Gas Budget: 200000000 MIST                                                                                                                                                                                                                                                                                                                                                                                                                                                                             	 │
+│ Gas Price: 1000 MIST                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   	 │
+│ Gas Payment:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           	 │
+│  ┌──                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   	 │
+│  │ ID: 0x8...19e                                                                                                                                                                                                                                                                                                                                                                                                                              	                                                         │
+│  │ Version: 16                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         	 │
+│  │ Digest: 4WQp6FYctutMFzf6f2EX68xut71AMubewJ6c7GxpzX7e                                                                                                                                                                                                                                                                                                                                                                                                                                                	 │
+│  └──                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   	 │
+│                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        	 │
+│ Transaction Kind : Programmable                                                                                                                                                                                                                                                                                                                                                                                                                                                                        	 │
+│ Inputs: [Object(SharedObject { object_id: 0x0...005, initial_shared_version: SequenceNumber(1), mutable: true }), Object(ImmOrOwnedObject { object_id: 0x4...dbe, version: SequenceNumber(16), digest: o#4yDkecsKPe8SnacWdECmq1yVDt7MzvpXCxbRGs74PGaB }), Pure(SuiPureValue { value_type: Some(Address), value: "0xf...3d9" })]                                                                                                                                                                            │
+│ Commands: [                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            	 │
+│   MoveCall(0x0...003::sui_system::report_validator(Input(0),Input(1),Input(2))),                                                                                                                                                                                                                                                                                                                                                              	                                                         │
+│ ]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      	 │
+│                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        	 │
+│                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        	 │
+│ Signatures:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            	 │
+│	7lJ9ezA1qjGk7nyFCESgLlg/tkVSy46dDkRgJzwgWP3qA+kAjJV8YVWFjJf2r6aLgWgCZCKnka9bkcp1V5jBAA==                                                                                                                                                                                                                                                                                                                                                                                                            	 │
+│                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        	 │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+----- Transaction Effects ----
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                                                                                                                                                                                                                              	   │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: 8jVYrpuRBmdSLP37MsQGRqUqE3kE2m8XiSS4TG4aJwXf                                                                                                                                                                                                                                             	   │
+│ Status: Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000003, name: Identifier(\"sui_system_state_inner\") }, function: 16, instruction: 12, function_name: Some(\"report_validator_impl\") }, 3) in command 0" } │
+│ Executed Epoch: 8                                                                                                                                                                                                                                                                                	   │
+│                                                                                                                                                                                                                                                                                                  	   │
+│ Mutated Objects:                                                                                                                                                                                                                                                                                 	   │
+│  ┌──                                                                                                                                                                                                                                                                                             	   │
+│  │ ID: 0x0...005                                                                                                                                                                                                                        	                                                           │
+│  │ Owner: Shared                                                                                                                                                                                                                                                                                 	   │
+│  │ Version: 25                                                                                                                                                                                                                                                                                   	   │
+│  │ Digest: 5N5zyTyFCqAkyz44FGrpr6cYdXcwk4eUCHKzyAZqehMB                                                                                                                                                                                                                                          	   │
+│  └──                                                                                                                                                                                                                                                                                             	   │
+│  ┌──                                                                                                                                                                                                                                                                                             	   │
+│  │ ID: 0x4...dbe                                                                                                                                                                                                                        	                                                           │
+│  │ Owner: Account Address ( 0xf...3d9 )                                                                                                                                                                                                 	                                                           │
+│  │ Version: 25                                                                                                                                                                                                                                                                                       │
+│  │ Digest: HCEr5bcJhKo5jfRx2gsXxGSkpcq6tm8nFGSxxwoPpkNz                                                                                                                                                                                                                                          	   │
+│  └──                                                                                                                                                                                                                                                                                             	   │
+│  ┌──                                                                                                                                                                                                                                                                                             	   │
+│  │ ID: 0x8...19e                                                                                                                                                                                                                        	                                                           │
+│  │ Owner: Account Address ( 0xf...3d9 )                                                                                                                                                                                                 	                                                           │
+│  │ Version: 25                                                                                                                                                                                                                                                                                   	   │
+│  │ Digest: BTzMmVABwEKXoiLsTZ79Li97Eo6HPtNtWTvib8Eq1yrH                                                                                                                                                                                                                                          	   │
+│  └──                                                                                                                                                                                                                                                                                             	   │
+│                                                                                                                                                                                                                                                                                                  	   │
+│ Shared Objects:                                                                                                                                                                                                                                                                                  	   │
+│  ┌──                                                                                                                                                                                                                                                                                             	   │
+│  │ ID: 0x0...005                                                                                                                                                                                                                        	                                                      	   │
+│  │ Version: 24                                                                                                                                                                                                                                                                                   	   │
+│  │ Digest: BiS4pKAX3KGXbJrk4oZijy6ggKHDZJd9qPUDWxLEoNR1                                                                                                                                                                                                                                          	   │
+│  └──                                                                                                                                                                                                                                                                                             	   │
+│                                                                                                                                                                                                                                                                                                  	   │
+│ Gas Object:                                                                                                                                                                                                                                                                                      	   │
+│  ┌──                                                                                                                                                                                                                                                                                             	   │
+│  │ ID: 0x8...19e                                                                                                                                                                                                                        	                                                      	   │
+│  │ Owner: Account Address ( 0xf...3d9 )                                                                                                                                                                                                 	                                                      	   │
+│  │ Version: 25                                                                                                                                                                                                                                                                                   	   │
+│  │ Digest: BTzMmVABwEKXoiLsTZ79Li97Eo6HPtNtWTvib8Eq1yrH                                                                                                                                                                                                                                          	   │
+│  └──                                                                                                                                                                                                                                                                                             	   │
+│                                                                                                                                                                                                                                                                                                  	   │
+│ Gas Cost Summary:                                                                                                                                                                                                                                                                                	   │
+│	Storage Cost: 4195200                                                                                                                                                                                                                                                                         	   │
+│	Computation Cost: 1000000                                                                                                                                                                                                                                                                     	   │
+│	Storage Rebate: 31164408                                                                                                                                                                                                                                                                      	   │
+│	Non-refundable Storage Fee: 314792                                                                                                                                                                                                                                                            	   │
+│                                                                                                                                                                                                                                                                                                  	   │
+│ Transaction Dependencies:                                                                                                                                                                                                                                                                        	   │
+│	2gqHgPZbjTkDWM9GnVuWU5kT9z2SWN2ggwK3ryxf8aUX                                                                                                                                                                                                                                                  	   │
+│	A8z83EqjmgwRNFV6sme6A5tTTTQPjiLgiW76neyvhLud                                                                                                                                                                                                                                                  	   │
+│	B8p4pVC5pzFQRVpZ73nZfAWMt7sL4iH4x4AbDviYWuzF                                                                                                                                                                                                                                                  	   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+</details>
+
+
+## Help
+
+Each command has its own help section. For example `sui validator report-validator --help` will display the following prompt:
+
+```shell
+$ sui validator report-validator --help
+Report or un-report a validator
+
+Usage: sui validator report-validator [OPTIONS] <reportee-address>
+
+Arguments:
+  <reportee-address>  The Sui Address of the validator is being reported or un-reported
+
+Options:
+  	--operation-cap-id <operation-cap-id>  Optional when sender is reporter validator itself and it holds the Cap object. Required when sender is not the reporter validator itself.
+                                         	Validator's OperationCap ID can be found by using the `display-metadata` subcommand
+  	--undo-report <undo-report>        	If true, undo an existing report [possible values: true, false]
+  	--gas-budget <gas-budget>          	Gas budget for this transaction
+  	--json                             	Return command outputs in json format
+  -h, --help                             	Print help
+```

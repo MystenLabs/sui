@@ -1,20 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import {
-	SIGNATURE_SCHEME_TO_FLAG,
-	SignaturePubkeyPair,
-	publicKeyFromSerialized,
-	toB64,
-	toParsedSignaturePubkeyPair,
-} from '@mysten/sui.js';
+import { parseSerializedSignature, PublicKey, SignatureScheme } from '@mysten/sui/cryptography';
+import { parsePartialSignatures } from '@mysten/sui/multisig';
+import { toBase64 } from '@mysten/sui/utils';
+import { publicKeyFromRawBytes } from '@mysten/sui/verify';
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
+
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+
+interface SignaturePubkeyPair {
+	signatureScheme: SignatureScheme;
+	publicKey: PublicKey;
+	signature: Uint8Array;
+}
 
 /*
 MultiSig (v1)
@@ -31,35 +35,19 @@ Single Sig
 AIYbCXAhPmILpWq6xsEY/Nu310Kednlb60Qcd/nD+u2WCXE/FvSXNRUQW9OQKGqt2CeskPyv2SEhaKMZ8gLkdQ8mmO01tDJz7vn6/2dqh+WEcmx7I/NKn8H6ornbk+HM4g==
 */
 
-function mergeBuffers(buffer1: Uint8Array, buffer2: Uint8Array) {
-	var tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
-	tmp.set(buffer1, 0);
-	tmp.set(buffer2, buffer1.byteLength);
-	return tmp;
-}
-
-function getSuiPubKey(signature: SignaturePubkeyPair): string {
-	const key_flag = new Uint8Array(1);
-	key_flag[0] = SIGNATURE_SCHEME_TO_FLAG[signature.signatureScheme];
-	const flag_and_pk = mergeBuffers(key_flag, signature.pubKey.toBytes());
-	const pubkey_base64_sui_format = toB64(flag_and_pk);
-	return pubkey_base64_sui_format;
-}
-
 function Signature({ signature, index }: { signature: SignaturePubkeyPair; index: number }) {
-	const suiPubkey = publicKeyFromSerialized(signature.signatureScheme, signature.pubKey.toString());
-	const suiAddress = suiPubkey.toSuiAddress();
+	const suiAddress = signature.publicKey.toSuiAddress();
 
-	const pubkey_base64_sui_format = getSuiPubKey(signature);
+	const pubkey_base64_sui_format = signature.publicKey.toSuiPublicKey();
 
-	const pubkey = signature.pubKey.toBase64();
+	const pubkey = signature.publicKey.toBase64();
 	const scheme = signature.signatureScheme.toString();
 
 	const details = [
 		{ label: 'Signature Public Key', value: pubkey },
 		{ label: 'Sui Format Public Key ( flag | pk )', value: pubkey_base64_sui_format },
 		{ label: 'Sui Address', value: suiAddress },
-		{ label: 'Signature', value: toB64(signature.signature) },
+		{ label: 'Signature', value: toBase64(signature.signature) },
 	];
 
 	return (
@@ -110,8 +98,32 @@ export default function SignatureAnalyzer() {
 					setError(null);
 
 					try {
-						const parsedSignature = toParsedSignaturePubkeyPair(signature);
-						setListSignaturePubkeys(parsedSignature);
+						const parsedSignature = parseSerializedSignature(signature);
+
+						if (parsedSignature.signatureScheme === 'MultiSig') {
+							const partialSignatures = parsePartialSignatures(parsedSignature.multisig);
+
+							setListSignaturePubkeys(
+								partialSignatures.map((signature) => {
+									return {
+										signatureScheme: signature.signatureScheme,
+										publicKey: signature.publicKey,
+										signature: signature.signature,
+									};
+								}),
+							);
+						} else {
+							setListSignaturePubkeys([
+								{
+									signatureScheme: parsedSignature.signatureScheme,
+									publicKey: publicKeyFromRawBytes(
+										parsedSignature.signatureScheme,
+										parsedSignature.publicKey,
+									),
+									signature: parsedSignature.signature,
+								},
+							]);
+						}
 					} catch (e) {
 						setError(e as Error);
 					}

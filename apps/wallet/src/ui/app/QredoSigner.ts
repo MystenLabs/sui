@@ -1,24 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type QredoSerializedUiAccount } from '_src/background/accounts/QredoAccount';
+import { API_ENV, networkNames } from '_src/shared/api-env';
 import {
-	type SerializedSignature,
-	type SuiAddress,
-	type JsonRpcProvider,
-	toB64,
-	IntentScope,
-	messageWithIntent,
-} from '@mysten/sui.js';
+	type NetworkType,
+	type QredoAPI,
+	type TransactionInfoResponse,
+} from '_src/shared/qredo-api';
+import { type SuiClient } from '@mysten/sui/client';
+import { messageWithIntent } from '@mysten/sui/cryptography';
+import { toBase64 } from '@mysten/sui/utils';
 import mitt from 'mitt';
 
 import { WalletSigner } from './WalletSigner';
-import { type SerializedQredoAccount } from '_src/background/keyring/QredoAccount';
-import { API_ENV, networkNames } from '_src/shared/api-env';
-import {
-	type TransactionInfoResponse,
-	type NetworkType,
-	type QredoAPI,
-} from '_src/shared/qredo-api';
 
 export class QredoActionIgnoredByUser extends Error {}
 
@@ -34,29 +29,29 @@ export const API_ENV_TO_QREDO_NETWORK: Partial<Record<API_ENV, NetworkType>> = {
 	[API_ENV.devNet]: 'devnet',
 };
 export class QredoSigner extends WalletSigner {
-	#qredoAccount: SerializedQredoAccount;
+	#qredoAccount: QredoSerializedUiAccount;
 	#qredoAPI: QredoAPI;
 	#network: NetworkType | null;
 	#apiEnv: API_ENV;
 
 	constructor(
-		provider: JsonRpcProvider,
-		account: SerializedQredoAccount,
+		client: SuiClient,
+		account: QredoSerializedUiAccount,
 		qredoAPI: QredoAPI,
 		apiEnv: API_ENV,
 	) {
-		super(provider);
+		super(client);
 		this.#qredoAccount = account;
 		this.#qredoAPI = qredoAPI;
 		this.#apiEnv = apiEnv;
 		this.#network = API_ENV_TO_QREDO_NETWORK[apiEnv] || null;
 	}
 
-	async getAddress(): Promise<SuiAddress> {
+	async getAddress(): Promise<string> {
 		return this.#qredoAccount.address;
 	}
 
-	async signData(data: Uint8Array, clientIdentifier?: string): Promise<SerializedSignature> {
+	async signData(data: Uint8Array, clientIdentifier?: string): Promise<string> {
 		let txInfo = await this.#createQredoTransaction(data, false, clientIdentifier);
 		try {
 			txInfo = await this.#pollForQredoTransaction(
@@ -87,11 +82,11 @@ export class QredoSigner extends WalletSigner {
 
 	signMessage: WalletSigner['signMessage'] = async (input, clientIdentifier) => {
 		const signature = await this.signData(
-			messageWithIntent(IntentScope.PersonalMessage, input.message),
+			messageWithIntent('PersonalMessage', input.message),
 			clientIdentifier,
 		);
 		return {
-			messageBytes: toB64(input.message),
+			messageBytes: toBase64(input.message),
 			signature,
 		};
 	};
@@ -99,11 +94,11 @@ export class QredoSigner extends WalletSigner {
 	signTransactionBlock: WalletSigner['signTransactionBlock'] = async (input, clientIdentifier) => {
 		const transactionBlockBytes = await this.prepareTransactionBlock(input.transactionBlock);
 		const signature = await this.signData(
-			messageWithIntent(IntentScope.TransactionData, transactionBlockBytes),
+			messageWithIntent('TransactionData', transactionBlockBytes),
 			clientIdentifier,
 		);
 		return {
-			transactionBlockBytes: toB64(transactionBlockBytes),
+			transactionBlockBytes: toBase64(transactionBlockBytes),
 			signature,
 		};
 	};
@@ -113,10 +108,7 @@ export class QredoSigner extends WalletSigner {
 		clientIdentifier,
 	) => {
 		let txInfo = await this.#createQredoTransaction(
-			messageWithIntent(
-				IntentScope.TransactionData,
-				await this.prepareTransactionBlock(transactionBlock),
-			),
+			messageWithIntent('TransactionData', await this.prepareTransactionBlock(transactionBlock)),
 			true,
 			clientIdentifier,
 		);
@@ -150,14 +142,14 @@ export class QredoSigner extends WalletSigner {
 		if (!txInfo.txHash) {
 			throw new Error(`Digest is not set in Qredo transaction ${txInfo.txID}`);
 		}
-		return this.provider.waitForTransactionBlock({
+		return this.client.waitForTransaction({
 			digest: txInfo.txHash,
 			options: options,
 		});
 	};
 
-	connect(provider: JsonRpcProvider): WalletSigner {
-		return new QredoSigner(provider, this.#qredoAccount, this.#qredoAPI, this.#apiEnv);
+	connect(client: SuiClient): WalletSigner {
+		return new QredoSigner(client, this.#qredoAccount, this.#qredoAPI, this.#apiEnv);
 	}
 
 	async #createQredoTransaction(intent: Uint8Array, broadcast: boolean, clientIdentifier?: string) {
@@ -165,7 +157,7 @@ export class QredoSigner extends WalletSigner {
 			throw new Error(`Unsupported network ${networkNames[this.#apiEnv]}`);
 		}
 		const qredoTransaction = await this.#qredoAPI.createTransaction({
-			messageWithIntent: toB64(intent),
+			messageWithIntent: toBase64(intent),
 			network: this.#network,
 			broadcast,
 			from: await this.getAddress(),

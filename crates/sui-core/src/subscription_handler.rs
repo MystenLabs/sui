@@ -75,7 +75,7 @@ impl SubscriptionHandler {
 }
 
 impl SubscriptionHandler {
-    #[instrument(level = "debug", skip_all, fields(tx_digest = ? effects.transaction_digest()), err)]
+    #[instrument(level = "trace", skip_all, fields(tx_digest =? effects.transaction_digest()), err)]
     pub async fn process_tx(
         &self,
         input: &TransactionData,

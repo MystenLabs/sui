@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use crate::traits::{PrimaryToPrimaryRpc, WorkerRpc};
 use crate::{traits::ReliableNetwork, CancelOnDropHandler, RetryConfig};
 use anemo::PeerId;
@@ -8,10 +10,8 @@ use anyhow::format_err;
 use anyhow::Result;
 use async_trait::async_trait;
 use crypto::NetworkPublicKey;
-use std::time::Duration;
 use types::{
-    Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, PrimaryToPrimaryClient, RequestBatchRequest,
+    FetchCertificatesRequest, FetchCertificatesResponse, PrimaryToPrimaryClient,
     RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage, WorkerToWorkerClient,
 };
 
@@ -63,22 +63,6 @@ where
 
 #[async_trait]
 impl PrimaryToPrimaryRpc for anemo::Network {
-    async fn get_certificates(
-        &self,
-        peer: &NetworkPublicKey,
-        request: impl anemo::types::request::IntoRequest<GetCertificatesRequest> + Send,
-    ) -> Result<GetCertificatesResponse> {
-        let peer_id = PeerId(peer.0.to_bytes());
-        let peer = self
-            .peer(peer_id)
-            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
-        let response = PrimaryToPrimaryClient::new(peer)
-            .get_certificates(request)
-            .await
-            .map_err(|e| format_err!("Network error {:?}", e))?;
-        Ok(response.into_body())
-    }
-
     async fn fetch_certificates(
         &self,
         peer: &NetworkPublicKey,
@@ -105,8 +89,9 @@ impl ReliableNetwork<WorkerBatchMessage> for anemo::Network {
     ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
         let message = message.to_owned();
         let f = move |peer| {
-            let message = message.clone();
-            async move { WorkerToWorkerClient::new(peer).report_batch(message).await }
+            // Timeout will be retried in send().
+            let req = anemo::Request::new(message.clone()).with_timeout(Duration::from_secs(15));
+            async move { WorkerToWorkerClient::new(peer).report_batch(req).await }
         };
 
         send(self.clone(), peer, f)
@@ -115,30 +100,9 @@ impl ReliableNetwork<WorkerBatchMessage> for anemo::Network {
 
 #[async_trait]
 impl WorkerRpc for anemo::Network {
-    async fn request_batch(
-        &self,
-        peer: NetworkPublicKey,
-        batch: BatchDigest,
-    ) -> Result<Option<Batch>> {
-        const BATCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-
-        let peer_id = PeerId(peer.0.to_bytes());
-
-        let peer = self
-            .peer(peer_id)
-            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
-        let request =
-            anemo::Request::new(RequestBatchRequest { batch }).with_timeout(BATCH_REQUEST_TIMEOUT);
-        let response = WorkerToWorkerClient::new(peer)
-            .request_batch(request)
-            .await
-            .map_err(|e| format_err!("Network error {:?}", e))?;
-        Ok(response.into_body().batch)
-    }
-
     async fn request_batches(
         &self,
-        peer: NetworkPublicKey,
+        peer: &NetworkPublicKey,
         request: impl anemo::types::request::IntoRequest<RequestBatchesRequest> + Send,
     ) -> Result<RequestBatchesResponse> {
         let peer_id = PeerId(peer.0.to_bytes());

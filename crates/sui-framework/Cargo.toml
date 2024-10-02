@@ -17,13 +17,15 @@ sui-types.workspace = true
 
 move-binary-format.workspace = true
 move-core-types.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
-[build-dependencies]
+[dev-dependencies]
 anyhow.workspace = true
 bcs.workspace = true
-
-sui-move-build.workspace = true
+regex.workspace = true
+tempfile.workspace = true
 
 move-binary-format.workspace = true
+move-compiler.workspace = true
 move-package.workspace = true
+sui-move-build.workspace = true
+sui-config.workspace = true

@@ -1,0 +1,21 @@
+//# publish
+module 0x6.Test {
+    public baz(k: u64, l: u64, m: u64) : u64 {
+        let z: u64;
+    label b0:
+        z =  move(k) + move(l) + move(m);
+        return move(z);
+    }
+}
+
+//# run
+module 0x42.m {
+import 0x6.Test;
+
+entry foo() {
+label b0:
+    // negative stack
+    Test.baz();
+    return;
+}
+}

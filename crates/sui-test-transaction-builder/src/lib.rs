@@ -2,23 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::ident_str;
-use shared_crypto::intent::Intent;
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
-use sui_move_build::BuildConfig;
+use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_sdk::rpc_types::{
-    get_new_package_obj_from_response, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    get_new_package_obj_from_response, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse,
 };
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair, Signature, Signer};
 use sui_types::digests::TransactionDigest;
+use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
+use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::object::Owner;
+use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
     CallArg, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
-    DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
+use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
 
 pub struct TestTransactionBuilder {
@@ -26,6 +32,7 @@ pub struct TestTransactionBuilder {
     sender: SuiAddress,
     gas_object: ObjectRef,
     gas_price: u64,
+    gas_budget: Option<u64>,
 }
 
 impl TestTransactionBuilder {
@@ -35,9 +42,19 @@ impl TestTransactionBuilder {
             sender,
             gas_object,
             gas_price,
+            gas_budget: None,
         }
     }
 
+    pub fn sender(&self) -> SuiAddress {
+        self.sender
+    }
+
+    pub fn gas_object(&self) -> ObjectRef {
+        self.gas_object
+    }
+
+    // Use `with_type_args` below to provide type args if any
     pub fn move_call(
         mut self,
         package_id: ObjectID,
@@ -53,6 +70,21 @@ impl TestTransactionBuilder {
             args,
             type_args: vec![],
         });
+        self
+    }
+
+    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
+        if let TestTransactionData::Move(data) = &mut self.test_data {
+            assert!(data.type_args.is_empty());
+            data.type_args = type_args;
+        } else {
+            panic!("Cannot set type args for non-move call");
+        }
+        self
+    }
+
+    pub fn with_gas_budget(mut self, gas_budget: u64) -> Self {
+        self.gas_budget = Some(gas_budget);
         self
     }
 
@@ -78,11 +110,47 @@ impl TestTransactionBuilder {
         )
     }
 
+    pub fn call_counter_read(
+        self,
+        package_id: ObjectID,
+        counter_id: ObjectID,
+        counter_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        self.move_call(
+            package_id,
+            "counter",
+            "value",
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: counter_id,
+                initial_shared_version: counter_initial_shared_version,
+                mutable: false,
+            })],
+        )
+    }
+
+    pub fn call_counter_delete(
+        self,
+        package_id: ObjectID,
+        counter_id: ObjectID,
+        counter_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        self.move_call(
+            package_id,
+            "counter",
+            "delete",
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: counter_id,
+                initial_shared_version: counter_initial_shared_version,
+                mutable: true,
+            })],
+        )
+    }
+
     pub fn call_nft_create(self, package_id: ObjectID) -> Self {
         self.move_call(
             package_id,
-            "devnet_nft",
-            "mint",
+            "testnet_nft",
+            "mint_to_sender",
             vec![
                 CallArg::Pure(bcs::to_bytes("example_nft_name").unwrap()),
                 CallArg::Pure(bcs::to_bytes("example_nft_description").unwrap()),
@@ -96,7 +164,7 @@ impl TestTransactionBuilder {
     pub fn call_nft_delete(self, package_id: ObjectID, nft_to_delete: ObjectRef) -> Self {
         self.move_call(
             package_id,
-            "devnet_nft",
+            "testnet_nft",
             "burn",
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(nft_to_delete))],
         )
@@ -112,6 +180,23 @@ impl TestTransactionBuilder {
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(stake_coin)),
                 CallArg::Pure(bcs::to_bytes(&validator).unwrap()),
             ],
+        )
+    }
+
+    pub fn call_emit_random(
+        self,
+        package_id: ObjectID,
+        randomness_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        self.move_call(
+            package_id,
+            "random",
+            "new",
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                initial_shared_version: randomness_initial_shared_version,
+                mutable: false,
+            })],
         )
     }
 
@@ -161,16 +246,6 @@ impl TestTransactionBuilder {
         )
     }
 
-    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
-        if let TestTransactionData::Move(data) = &mut self.test_data {
-            assert!(data.type_args.is_empty());
-            data.type_args = type_args;
-        } else {
-            panic!("Cannot set type args for non-move call");
-        }
-        self
-    }
-
     pub fn transfer(mut self, object: ObjectRef, recipient: SuiAddress) -> Self {
         self.test_data = TestTransactionData::Transfer(TransferData { object, recipient });
         self
@@ -183,19 +258,19 @@ impl TestTransactionBuilder {
 
     pub fn publish(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData {
-            path,
-            with_unpublished_deps: false,
-        });
+        self.test_data = TestTransactionData::Publish(PublishData::Source(path, false));
         self
     }
 
     pub fn publish_with_deps(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData {
-            path,
-            with_unpublished_deps: true,
-        });
+        self.test_data = TestTransactionData::Publish(PublishData::Source(path, true));
+        self
+    }
+
+    pub fn publish_with_data(mut self, data: PublishData) -> Self {
+        assert!(matches!(self.test_data, TestTransactionData::Empty));
+        self.test_data = TestTransactionData::Publish(data);
         self
     }
 
@@ -206,7 +281,7 @@ impl TestTransactionBuilder {
             path
         } else {
             let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.extend(["..", "..", "sui_programmability", "examples", subpath]);
+            path.extend(["..", "..", "examples", "move", subpath]);
             path
         };
         self.publish(path)
@@ -227,7 +302,8 @@ impl TestTransactionBuilder {
                 data.type_args,
                 self.gas_object,
                 data.args,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+                self.gas_budget
+                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
                 self.gas_price,
             )
             .unwrap(),
@@ -236,7 +312,8 @@ impl TestTransactionBuilder {
                 data.object,
                 self.sender,
                 self.gas_object,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+                self.gas_budget
+                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
                 self.gas_price,
             ),
             TestTransactionData::TransferSui(data) => TransactionData::new_transfer_sui(
@@ -244,21 +321,35 @@ impl TestTransactionBuilder {
                 self.sender,
                 data.amount,
                 self.gas_object,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+                self.gas_budget
+                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
                 self.gas_price,
             ),
             TestTransactionData::Publish(data) => {
-                let compiled_package = BuildConfig::new_for_testing().build(data.path).unwrap();
-                let all_module_bytes =
-                    compiled_package.get_package_bytes(data.with_unpublished_deps);
-                let dependencies = compiled_package.get_dependency_original_package_ids();
+                let (all_module_bytes, dependencies) = match data {
+                    PublishData::Source(path, with_unpublished_deps) => {
+                        let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
+                        let all_module_bytes =
+                            compiled_package.get_package_bytes(with_unpublished_deps);
+                        let dependencies = compiled_package.get_dependency_storage_package_ids();
+                        (all_module_bytes, dependencies)
+                    }
+                    PublishData::ModuleBytes(bytecode) => (bytecode, vec![]),
+                    PublishData::CompiledPackage(compiled_package) => {
+                        let all_module_bytes = compiled_package.get_package_bytes(false);
+                        let dependencies = compiled_package.get_dependency_storage_package_ids();
+                        (all_module_bytes, dependencies)
+                    }
+                };
 
                 TransactionData::new_module(
                     self.sender,
                     self.gas_object,
                     all_module_bytes,
                     dependencies,
-                    self.gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+                    self.gas_budget.unwrap_or(
+                        self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+                    ),
                     self.gas_price,
                 )
             }
@@ -266,7 +357,8 @@ impl TestTransactionBuilder {
                 self.sender,
                 vec![self.gas_object],
                 pt,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+                self.gas_budget
+                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
                 self.gas_price,
             ),
             TestTransactionData::Empty => {
@@ -276,7 +368,52 @@ impl TestTransactionBuilder {
     }
 
     pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> Transaction {
-        Transaction::from_data_and_signer(self.build(), Intent::sui_transaction(), vec![signer])
+        Transaction::from_data_and_signer(self.build(), vec![signer])
+    }
+
+    pub fn build_and_sign_multisig(
+        self,
+        multisig_pk: MultiSigPublicKey,
+        signers: &[&dyn Signer<Signature>],
+        bitmap: BitmapUnit,
+    ) -> Transaction {
+        let data = self.build();
+        let intent_msg = IntentMessage::new(Intent::sui_transaction(), data.clone());
+
+        let mut signatures = Vec::with_capacity(signers.len());
+        for signer in signers {
+            signatures.push(
+                GenericSignature::from(Signature::new_secure(&intent_msg, *signer))
+                    .to_compressed()
+                    .unwrap(),
+            );
+        }
+
+        let multisig =
+            GenericSignature::MultiSig(MultiSig::insecure_new(signatures, bitmap, multisig_pk));
+
+        Transaction::from_generic_sig_data(data, vec![multisig])
+    }
+
+    pub fn build_and_sign_multisig_legacy(
+        self,
+        multisig_pk: MultiSigPublicKeyLegacy,
+        signers: &[&dyn Signer<Signature>],
+    ) -> Transaction {
+        let data = self.build();
+        let intent = Intent::sui_transaction();
+        let intent_msg = IntentMessage::new(intent.clone(), data.clone());
+
+        let mut signatures = Vec::with_capacity(signers.len());
+        for signer in signers {
+            signatures.push(Signature::new_secure(&intent_msg, *signer).into());
+        }
+
+        let multisig = GenericSignature::MultiSigLegacy(
+            MultiSigLegacy::combine(signatures, multisig_pk).unwrap(),
+        );
+
+        Transaction::from_generic_sig_data(data, vec![multisig])
     }
 }
 
@@ -297,10 +434,12 @@ struct MoveData {
     type_args: Vec<TypeTag>,
 }
 
-struct PublishData {
-    path: PathBuf,
-    /// Whether to publish unpublished dependencies in the same transaction or not.
-    with_unpublished_deps: bool,
+pub enum PublishData {
+    /// Path to source code directory and with_unpublished_deps.
+    /// with_unpublished_deps indicates whether to publish unpublished dependencies in the same transaction or not.
+    Source(PathBuf, bool),
+    ModuleBytes(Vec<Vec<u8>>),
+    CompiledPackage(CompiledPackage),
 }
 
 struct TransferData {
@@ -327,7 +466,8 @@ pub async fn batch_make_transfer_transactions(
     max_txn_num: usize,
 ) -> Vec<Transaction> {
     let recipient = get_key_pair::<AccountKeyPair>().0;
-    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
+    let result = context.get_all_accounts_and_gas_objects().await;
+    let accounts_and_objs = result.unwrap();
     let mut res = Vec::with_capacity(max_txn_num);
 
     let gas_price = context.get_reference_gas_price().await.unwrap();
@@ -485,6 +625,49 @@ pub async fn increment_counter(
     context.execute_transaction_must_succeed(txn).await
 }
 
+/// Executes a transaction that generates a new random u128 using Random and emits it as an event.
+pub async fn emit_new_random_u128(
+    context: &WalletContext,
+    package_id: ObjectID,
+) -> SuiTransactionBlockResponse {
+    let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+    let rgp = context.get_reference_gas_price().await.unwrap();
+
+    let client = context.get_client().await.unwrap();
+    let random_obj = client
+        .read_api()
+        .get_object_with_options(
+            SUI_RANDOMNESS_STATE_OBJECT_ID,
+            SuiObjectDataOptions::new().with_owner(),
+        )
+        .await
+        .unwrap()
+        .into_object()
+        .unwrap();
+    let random_obj_owner = random_obj
+        .owner
+        .expect("Expect Randomness object to have an owner");
+
+    let Owner::Shared {
+        initial_shared_version,
+    } = random_obj_owner
+    else {
+        panic!("Expect Randomness to be shared object")
+    };
+    let random_call_arg = CallArg::Object(ObjectArg::SharedObject {
+        id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+        initial_shared_version,
+        mutable: false,
+    });
+
+    let txn = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas_object, rgp)
+            .move_call(package_id, "random", "new", vec![random_call_arg])
+            .build(),
+    );
+    context.execute_transaction_must_succeed(txn).await
+}
+
 /// Executes a transaction to publish the `nfts` package and returns the package id, id of the gas
 /// object used, and the digest of the transaction.
 pub async fn publish_nfts_package(
@@ -495,7 +678,7 @@ pub async fn publish_nfts_package(
     let gas_price = context.get_reference_gas_price().await.unwrap();
     let txn = context.sign_transaction(
         &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .publish_examples("nfts")
+            .publish_examples("nft")
             .build(),
     );
     let resp = context.execute_transaction_must_succeed(txn).await;
@@ -506,7 +689,7 @@ pub async fn publish_nfts_package(
 /// Pre-requisite: `publish_nfts_package` must be called before this function.  Executes a
 /// transaction to create an NFT and returns the sender address, the object id of the NFT, and the
 /// digest of the transaction.
-pub async fn create_devnet_nft(
+pub async fn create_nft(
     context: &WalletContext,
     package_id: ObjectID,
 ) -> (SuiAddress, ObjectID, TransactionDigest) {
@@ -534,7 +717,7 @@ pub async fn create_devnet_nft(
 }
 
 /// Executes a transaction to delete the given NFT.
-pub async fn delete_devnet_nft(
+pub async fn delete_nft(
     context: &WalletContext,
     sender: SuiAddress,
     package_id: ObjectID,

@@ -7,7 +7,15 @@ description = "Runs Move tests for sui-framework"
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
+[[test]]
+name = "move_tests"
+harness = false
+
 [dev-dependencies]
+datatest-stable.workspace = true
 prometheus.workspace = true
 
 sui-framework.workspace = true
@@ -16,13 +24,14 @@ sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 
-move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
+move-bytecode-verifier = { path = "../../external-crates/move/crates/move-bytecode-verifier" }
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 
+move-bytecode-verifier-meter.workspace = true
 move-cli.workspace = true
 move-package.workspace = true
 move-unit-test.workspace = true
+sui-config.workspace = true
 
 [dependencies]
-workspace-hack = { version = "0.1", path = "../workspace-hack" }

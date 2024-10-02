@@ -16,20 +16,21 @@ eyre.workspace = true
 fdlimit.workspace = true
 once_cell.workspace = true
 tap.workspace = true
-num_cpus.workspace = true
 prometheus.workspace = true
 hdrhistogram.workspace = true
-rocksdb.workspace = true
+rocksdb = { version = "0.21.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing.workspace = true
+typed-store-error.workspace = true
+typed-store-derive = { path = "../typed-store-derive" }
+typed-store-workspace-hack = { path = "../typed-store-workspace-hack" }
 sui-macros.workspace = true
 ouroboros.workspace = true
 rand.workspace = true
 async-trait.workspace = true
 itertools.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -39,7 +40,6 @@ quote.workspace = true
 rstest.workspace = true
 rand.workspace = true
 syn.workspace = true
-typed-store-derive.workspace = true
 uint.workspace = true
 
 # Most packages should depend on sui-simulator instead of directly on msim, but for typed-store

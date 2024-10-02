@@ -1,0 +1,10 @@
+[package]
+name = "ObjectBound"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+obo = "0x0"

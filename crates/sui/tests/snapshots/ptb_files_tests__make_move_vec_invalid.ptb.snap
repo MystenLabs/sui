@@ -1,0 +1,22 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────╮
+│ PTB Preview                                          │
+├───────────────┬──────────────────────────────────────┤
+│ command       │ values                               │
+├───────────────┼──────────────────────────────────────┤
+│ make-move-vec │ <vector<address>> [@0x1, @0x2, @0x3] │
+│ make-move-vec │ <address> [true, false]              │
+╰───────────────┴──────────────────────────────────────╯
+ === BUILDING PTB ERRORS === 
+  × Error when processing PTB
+   ╭─[2:28]
+ 1 │ --make-move-vec <vector<address>> [@0x1, @0x2, @0x3]
+ 2 │ --make-move-vec <address> [true, false] 
+   ·                            ──┬─
+   ·                              ╰── Unable to serialize 'true' as a address value
+   ╰────
+

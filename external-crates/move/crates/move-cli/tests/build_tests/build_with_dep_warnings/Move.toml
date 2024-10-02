@@ -1,0 +1,6 @@
+[package]
+name = "Test"
+edition = "2024.beta"
+
+[dependencies]
+SomeDep = { local = "dep" }

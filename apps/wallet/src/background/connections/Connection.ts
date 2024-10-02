@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { map, take } from 'rxjs';
-
-import { PortStream } from '_messaging/PortStream';
-
 import type { Message } from '_messages';
+import { PortStream } from '_messaging/PortStream';
+import { map, take } from 'rxjs';
 import type { Runtime } from 'webextension-polyfill';
 
 export abstract class Connection {

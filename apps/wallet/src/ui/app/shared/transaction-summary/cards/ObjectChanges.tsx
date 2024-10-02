@@ -1,29 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import ExplorerLink from '_src/ui/app/components/explorer-link';
+import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
+import { Text } from '_src/ui/app/shared/text';
 import { Disclosure } from '@headlessui/react';
 import {
 	getObjectChangeLabel,
 	type ObjectChangesByOwner,
 	type ObjectChangeSummary,
-	type SuiObjectChangeWithDisplay,
 	type SuiObjectChangeTypes,
+	type SuiObjectChangeWithDisplay,
 } from '@mysten/core';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
-import {
-	SuiObjectChangeTransferred,
-	formatAddress,
-	is,
-	SuiObjectChangePublished,
-} from '@mysten/sui.js';
-import cx from 'classnames';
+import { formatAddress } from '@mysten/sui/utils';
+import cx from 'clsx';
 
-import { ObjectChangeDisplay } from './objectSummary/ObjectChangeDisplay';
 import { ExpandableList } from '../../ExpandableList';
 import { Card } from '../Card';
 import { OwnerFooter } from '../OwnerFooter';
-import ExplorerLink from '_src/ui/app/components/explorer-link';
-import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
-import { Text } from '_src/ui/app/shared/text';
+import { ObjectChangeDisplay } from './objectSummary/ObjectChangeDisplay';
 
 function ChevronDown({ expanded }: { expanded: boolean }) {
 	return expanded ? (
@@ -41,9 +36,10 @@ export function ObjectDetail({
 	ownerKey: string;
 	display?: boolean;
 }) {
-	if (is(change, SuiObjectChangeTransferred) || is(change, SuiObjectChangePublished)) {
+	if (change.type === 'transferred' || change.type === 'published') {
 		return null;
 	}
+
 	const [packageId, moduleName, typeName] = change.objectType?.split('<')[0]?.split('::') || [];
 
 	return (
@@ -176,7 +172,7 @@ export function ObjectChangeEntry({ changes, type }: ObjectChangeEntryProps) {
 															open
 																? changes.changesWithDisplay.map((change) => (
 																		<ObjectChangeDisplay change={change} />
-																  ))
+																	))
 																: []
 														}
 													/>
@@ -190,7 +186,7 @@ export function ObjectChangeEntry({ changes, type }: ObjectChangeEntryProps) {
 														open
 															? changes.changes.map((change) => (
 																	<ObjectDetail ownerKey={owner} change={change} />
-															  ))
+																))
 															: []
 													}
 												/>

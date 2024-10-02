@@ -7,6 +7,7 @@ use axum_server::{
     tls_rustls::{RustlsAcceptor, RustlsConfig},
 };
 use fastcrypto::ed25519::Ed25519PublicKey;
+use rustls::pki_types::CertificateDer;
 use std::{io, sync::Arc};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_rustls::server::TlsStream;
@@ -15,7 +16,7 @@ use tower_layer::Layer;
 #[derive(Debug, Clone)]
 pub struct TlsConnectionInfo {
     sni_hostname: Option<Arc<str>>,
-    peer_certificates: Option<Arc<[rustls::Certificate]>>,
+    peer_certificates: Option<Arc<[CertificateDer<'static>]>>,
     public_key: Option<Ed25519PublicKey>,
 }
 
@@ -24,7 +25,7 @@ impl TlsConnectionInfo {
         self.sni_hostname.as_deref()
     }
 
-    pub fn peer_certificates(&self) -> Option<&[rustls::Certificate]> {
+    pub fn peer_certificates(&self) -> Option<&[CertificateDer<'static>]> {
         self.peer_certificates.as_deref()
     }
 
@@ -73,7 +74,7 @@ where
 
             let tls_connect_info = TlsConnectionInfo {
                 peer_certificates: server_conn.peer_certificates().map(From::from),
-                sni_hostname: server_conn.sni_hostname().map(From::from),
+                sni_hostname: server_conn.server_name().map(From::from),
                 public_key,
             };
             let service = Extension(tls_connect_info).layer(service);

@@ -27,12 +27,12 @@ pub struct EpochMetrics {
     // An active validator reconfigures through the following steps:
     // 1. Halt validator (a.k.a. close epoch) and stop accepting user transaction certs.
     // 2. Finishes processing all pending certificates and then send EndOfPublish message.
-    // 3. Stop accepting messages from Narwhal after seeing 2f+1 EndOfPublish messages.
+    // 3. Stop accepting messages from consensus after seeing 2f+1 EndOfPublish messages.
     // 4. Creating the last checkpoint of the epoch by augmenting it with AdvanceEpoch transaction.
     // 5. CheckpointExecutor finishes executing the last checkpoint, and triggers reconfiguration.
-    // 6. During reconfiguration, we tear down Narwhal, reconfigure state (at which point we opens
-    //    up user certs), and start Narwhal again.
-    // 7. After reconfiguration, and eventually Narwhal starts successfully, at some point the first
+    // 6. During reconfiguration, we tear down consensus, reconfigure state (at which point we opens
+    //    up user certs), and start consensus again.
+    // 7. After reconfiguration, and eventually consensus starts successfully, at some point the first
     //    checkpoint of the new epoch will be created.
     // We introduce various metrics to cover the latency of above steps.
     /// The duration from when the epoch is closed (i.e. validator halted) to when all pending
@@ -64,7 +64,7 @@ pub struct EpochMetrics {
     /// This is (7) above, and is a good proxy to how long it takes for the validator
     /// to become useful in the network after reconfiguration.
     // TODO: This needs to be reported properly.
-    pub epoch_first_checkpoint_ready_time_since_epoch_begin_ms: IntGauge,
+    pub epoch_first_checkpoint_created_time_since_epoch_begin_ms: IntGauge,
 
     /// Whether we are running in safe mode where reward distribution and tokenomics are disabled.
     pub is_safe_mode: IntGauge,
@@ -76,6 +76,28 @@ pub struct EpochMetrics {
 
     /// Buffer stake current in effect for this epoch
     pub effective_buffer_stake: IntGauge,
+
+    /// Set to 1 if the random beacon DKG protocol failed for the most recent epoch.
+    pub epoch_random_beacon_dkg_failed: IntGauge,
+
+    /// The number of shares held by this node after the random beacon DKG protocol completed.
+    pub epoch_random_beacon_dkg_num_shares: IntGauge,
+
+    /// The amount of time taken from epoch start to completion of random beacon DKG protocol,
+    /// for the most recent epoch.
+    pub epoch_random_beacon_dkg_epoch_start_completion_time_ms: IntGauge,
+
+    /// The amount of time taken to complete random beacon DKG protocol from the time it was
+    /// started (which may be a bit after the epcoh began), for the most recent epoch.
+    pub epoch_random_beacon_dkg_completion_time_ms: IntGauge,
+
+    /// The amount of time taken to start first phase of the random beacon DKG protocol,
+    /// at which point the node has submitted a DKG Message, for the most recent epoch.
+    pub epoch_random_beacon_dkg_message_time_ms: IntGauge,
+
+    /// The amount of time taken to complete first phase of the random beacon DKG protocol,
+    /// at which point the node has submitted a DKG Confirmation, for the most recent epoch.
+    pub epoch_random_beacon_dkg_confirmation_time_ms: IntGauge,
 }
 
 impl EpochMetrics {
@@ -138,7 +160,7 @@ impl EpochMetrics {
                 "Total time duration when the validator was halted (i.e. epoch closed)",
                 registry
             ).unwrap(),
-            epoch_first_checkpoint_ready_time_since_epoch_begin_ms: register_int_gauge_with_registry!(
+            epoch_first_checkpoint_created_time_since_epoch_begin_ms: register_int_gauge_with_registry!(
                 "epoch_first_checkpoint_created_time_since_epoch_begin_ms",
                 "Time interval from when the epoch opens at new epoch to the first checkpoint is created locally",
                 registry
@@ -158,6 +180,42 @@ impl EpochMetrics {
                 "Buffer stake current in effect for this epoch",
                 registry,
             ).unwrap(),
+            epoch_random_beacon_dkg_failed: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_failed",
+                "Set to 1 if the random beacon DKG protocol failed for the most recent epoch.",
+                registry
+            )
+            .unwrap(),
+            epoch_random_beacon_dkg_num_shares: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_num_shares",
+                "The number of shares held by this node after the random beacon DKG protocol completed",
+                registry
+            )
+            .unwrap(),
+            epoch_random_beacon_dkg_epoch_start_completion_time_ms: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_epoch_start_completion_time_ms",
+                "The amount of time taken from epoch start to completion of random beacon DKG protocol, for the most recent epoch",
+                registry
+            )
+            .unwrap(),
+            epoch_random_beacon_dkg_completion_time_ms: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_completion_time_ms",
+                "The amount of time taken to complete random beacon DKG protocol from the time it was started (which may be a bit after the epoch began), for the most recent epoch",
+                registry
+            )
+            .unwrap(),
+            epoch_random_beacon_dkg_message_time_ms: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_message_time_ms",
+                "The amount of time taken to start first phase of the random beacon DKG protocol, at which point the node has submitted a DKG Message, for the most recent epoch",
+                registry
+            )
+            .unwrap(),
+            epoch_random_beacon_dkg_confirmation_time_ms: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_confirmation_time_ms",
+                "The amount of time taken to complete first phase of the random beacon DKG protocol, at which point the node has submitted a DKG Confirmation, for the most recent epoch",
+                registry
+            )
+            .unwrap(),
         };
         Arc::new(this)
     }

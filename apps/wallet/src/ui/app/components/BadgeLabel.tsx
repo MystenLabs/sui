@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ReactNode } from 'react';
-
 import { Text } from '_src/ui/app/shared/text';
+import { type ReactNode } from 'react';
 
 type BadgeLabelProps = {
 	label: ReactNode;

@@ -1,0 +1,20 @@
+//# publish
+module 0x5.M {
+    public foo() {
+    label b0:
+        abort 22;
+    }
+
+}
+
+//# run
+module 0x42.m {
+import 0x5.M;
+
+entry foo() {
+label b0:
+    // should abort and point to the module
+    M.foo();
+    return;
+}
+}

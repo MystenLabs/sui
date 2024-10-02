@@ -1,0 +1,20 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getAllBalances($owner: SuiAddress!, $limit: Int, $cursor: String) {
+	address(address: $owner) {
+		balances(first: $limit, after: $cursor) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				coinType {
+					repr
+				}
+				coinObjectCount
+				totalBalance
+			}
+		}
+	}
+}

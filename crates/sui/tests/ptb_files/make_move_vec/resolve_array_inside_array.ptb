@@ -1,0 +1,3 @@
+# Nested array inside an array
+# This is caught statically since from the shape of it we know this is wrong.
+--make-move-vec <vector<address>> [[@0x1], [@0x2], [@0x3]]

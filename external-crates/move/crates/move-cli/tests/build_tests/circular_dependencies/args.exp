@@ -1,0 +1,7 @@
+Command `build -v`:
+Error: Failed to resolve dependencies for package 'Foo'
+
+Caused by:
+    0: Failed to resolve dependencies for package 'Bar'
+    1: Failed to resolve dependencies for package 'Foo'
+    2: Found cycle between packages: Bar -> Foo -> Bar

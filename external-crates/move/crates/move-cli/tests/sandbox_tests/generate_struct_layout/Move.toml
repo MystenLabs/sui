@@ -1,0 +1,3 @@
+[package]
+name = "generate_struct_layout"
+edition = "2024.beta"

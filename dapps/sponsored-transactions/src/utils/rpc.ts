@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { JsonRpcProvider, localnetConnection } from '@mysten/sui.js';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 
-export const provider = new JsonRpcProvider(localnetConnection);
+export const client = new SuiClient({ url: getFullnodeUrl('testnet') });

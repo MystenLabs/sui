@@ -22,6 +22,75 @@ impl MallocSizeOf for fastcrypto::ed25519::Ed25519AggregateSignature {
         self.sigs.size_of(ops)
     }
 }
+malloc_size_of_is_0!(fastcrypto::groups::ristretto255::RistrettoPoint);
+impl<G> MallocSizeOf for fastcrypto_tbls::dkg::Complaint<G>
+where
+    G: fastcrypto::groups::GroupElement,
+{
+    fn size_of(&self, _ops: &mut crate::MallocSizeOfOps) -> usize {
+        0
+    }
+}
+impl<G> MallocSizeOf for fastcrypto_tbls::dkg::Confirmation<G>
+where
+    G: fastcrypto::groups::GroupElement,
+{
+    fn size_of(&self, ops: &mut crate::MallocSizeOfOps) -> usize {
+        self.complaints.size_of(ops)
+    }
+}
+impl<G, EG> MallocSizeOf for fastcrypto_tbls::dkg_v0::Message<G, EG>
+where
+    G: fastcrypto::groups::GroupElement,
+    EG: fastcrypto::groups::GroupElement,
+{
+    fn size_of(&self, ops: &mut crate::MallocSizeOfOps) -> usize {
+        self.encrypted_shares.size_of(ops)
+    }
+}
+impl<G, EG> MallocSizeOf for fastcrypto_tbls::dkg_v1::Message<G, EG>
+where
+    G: fastcrypto::groups::GroupElement,
+    EG: fastcrypto::groups::GroupElement,
+{
+    fn size_of(&self, ops: &mut crate::MallocSizeOfOps) -> usize {
+        self.encrypted_shares.size_of(ops)
+    }
+}
+impl<G> MallocSizeOf for fastcrypto_tbls::ecies_v0::Encryption<G>
+where
+    G: fastcrypto::groups::GroupElement,
+{
+    fn size_of(&self, _ops: &mut crate::MallocSizeOfOps) -> usize {
+        // Can't measure size of internal Vec<u8> here because it's private.
+        0
+    }
+}
+impl<G> MallocSizeOf for fastcrypto_tbls::ecies_v0::MultiRecipientEncryption<G>
+where
+    G: fastcrypto::groups::GroupElement,
+{
+    fn size_of(&self, _ops: &mut crate::MallocSizeOfOps) -> usize {
+        // Can't measure size of internal Vec<Vec<u8>> here because it's private.
+        0
+    }
+}
+impl<G> MallocSizeOf for fastcrypto_tbls::ecies_v1::MultiRecipientEncryption<G>
+where
+    G: fastcrypto::groups::GroupElement,
+{
+    fn size_of(&self, _ops: &mut crate::MallocSizeOfOps) -> usize {
+        // Can't measure size of internal Vec<Vec<u8>> here because it's private.
+        0
+    }
+}
+impl MallocSizeOf for fastcrypto_tbls::polynomial::Poly<fastcrypto::groups::bls12381::G2Element> {
+    fn size_of(&self, _ops: &mut crate::MallocSizeOfOps) -> usize {
+        (self.degree() as usize + 1)
+            * std::mem::size_of::<fastcrypto::groups::bls12381::G2Element>()
+    }
+}
+malloc_size_of_is_0!(fastcrypto::groups::bls12381::G1Element);
 
 // hash_map
 malloc_size_of_is_0!(std::collections::hash_map::RandomState);

@@ -1,0 +1,13 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+    let x: u64;
+    let y: u64;
+label b0:
+    // positive stack
+    x, y = (1, 2, 4);
+    return;
+}
+
+}

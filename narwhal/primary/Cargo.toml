@@ -8,14 +8,12 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
-arc-swap.workspace = true
 async-trait.workspace = true
 backoff.workspace = true
-base64 = "0.13.0"
 bcs.workspace = true
-bincode.workspace = true
 bytes.workspace = true
 config = { path = "../config", package = "narwhal-config" }
+cfg-if.workspace = true
 futures.workspace = true
 governor.workspace = true
 itertools.workspace = true
@@ -25,13 +23,11 @@ prometheus.workspace = true
 rand = { workspace = true, features = ["small_rng"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "test-util"] }
-tonic.workspace = true
+tokio-stream.workspace = true
 tower.workspace = true
 tracing.workspace = true
 tap.workspace = true
 
-
-consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
@@ -40,7 +36,6 @@ storage = { path = "../storage", package = "narwhal-storage" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 sui-macros.workspace = true
 mysten-network.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 sui-protocol-config.workspace = true
 
 mysten-common.workspace = true
@@ -53,6 +48,9 @@ anemo-tower.workspace = true
 dashmap.workspace = true
 arc-swap.workspace = true
 async-trait.workspace = true
+bincode.workspace = true
+criterion.workspace = true
+futures.workspace = true
 executor = { path = "../executor", package = "narwhal-executor" }
 indexmap.workspace = true
 itertools.workspace = true
@@ -61,7 +59,6 @@ node = { path = "../node", package = "narwhal-node" }
 proptest.workspace = true
 tempfile.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
-thiserror.workspace = true
 tracing.workspace = true
 worker = { path = "../worker", package = "narwhal-worker" }
 storage = { path = "../storage", package = "narwhal-storage" }
@@ -70,3 +67,11 @@ telemetry-subscribers.workspace = true
 
 [features]
 benchmark = []
+
+[lib]
+bench = false
+
+[[bench]]
+name = "process_certificates"
+harness = false
+required-features = ["benchmark"]

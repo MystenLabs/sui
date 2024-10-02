@@ -38,12 +38,14 @@ const currentWalletMnemonic = [
 const COIN_TO_SEND = 20;
 
 test('request SUI from local faucet', async ({ page, extensionUrl }) => {
+	const timeout = 30_000;
+	test.setTimeout(timeout);
 	await createWallet(page, extensionUrl);
-	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
+	await page.getByRole('navigation').getByRole('link', { name: 'Home' }).click();
 
 	const originalBalance = await page.getByTestId('coin-balance').textContent();
 	await page.getByTestId('faucet-request-button').click();
-	await expect(page.getByText(/SUI Received/i)).toBeVisible();
+	await expect(page.getByText(/SUI Received/i)).toBeVisible({ timeout });
 	await expect(page.getByTestId('coin-balance')).not.toHaveText(`${originalBalance}SUI`);
 });
 
@@ -55,7 +57,7 @@ test('send 20 SUI to an address', async ({ page, extensionUrl }) => {
 	const originAddress = originKeypair.getPublicKey().toSuiAddress();
 
 	await importWallet(page, extensionUrl, currentWalletMnemonic);
-	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
+	await page.getByRole('navigation').getByRole('link', { name: 'Home' }).click();
 
 	await requestSuiFromFaucet(originAddress);
 	await expect(page.getByTestId('coin-balance')).not.toHaveText('0SUI');
@@ -79,7 +81,7 @@ test('check balance changes in Activity', async ({ page, extensionUrl }) => {
 	const originAddress = originKeypair.getPublicKey().toSuiAddress();
 
 	await importWallet(page, extensionUrl, currentWalletMnemonic);
-	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
+	await page.getByRole('navigation').getByRole('link', { name: 'Home' }).click();
 
 	await requestSuiFromFaucet(originAddress);
 	await page.getByTestId('nav-activity').click();
@@ -87,5 +89,5 @@ test('check balance changes in Activity', async ({ page, extensionUrl }) => {
 		.getByText(/Transaction/i)
 		.first()
 		.click();
-	await expect(page.getByText(`Amount+${COIN_TO_SEND} SUI`)).toBeVisible();
+	await expect(page.getByText(`${COIN_TO_SEND} SUI`, { exact: false })).toBeVisible();
 });

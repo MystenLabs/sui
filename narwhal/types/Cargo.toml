@@ -7,8 +7,7 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 publish = false
 
 [dependencies]
-async-trait.workspace = true
-base64 = "0.13.0"
+base64.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 derive_builder.workspace = true
@@ -34,7 +33,6 @@ config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 anemo.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 sui-protocol-config.workspace = true
 once_cell.workspace = true
 
@@ -49,12 +47,7 @@ criterion.workspace = true
 serde_test.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
-[target.'cfg(not(target_env = "msvc"))'.build-dependencies]
-protobuf-src.workspace = true
-
 [build-dependencies]
-prost-build.workspace = true
-rustversion.workspace = true
 tonic-build.workspace = true
 anemo-build.workspace = true
 

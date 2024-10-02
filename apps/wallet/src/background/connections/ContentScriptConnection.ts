@@ -1,35 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	type SignedTransaction,
-	type SuiAddress,
-	type SuiTransactionBlockResponse,
-} from '@mysten/sui.js';
-import Browser from 'webextension-polyfill';
-
-import { Connection } from './Connection';
-import NetworkEnv from '../NetworkEnv';
-import { Window } from '../Window';
-import { getStoredAccountsPublicInfo } from '../keyring/accounts';
-import { requestUserApproval } from '../qredo';
 import { createMessage } from '_messages';
-import { type ErrorPayload, isBasePayload } from '_payloads';
+import type { Message } from '_messages';
+import type { PortChannelName } from '_messaging/PortChannelName';
+import { isBasePayload, type ErrorPayload } from '_payloads';
 import { isGetAccount } from '_payloads/account/GetAccount';
+import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
+import type { SetNetworkPayload } from '_payloads/network';
 import {
 	isAcquirePermissionsRequest,
 	isHasPermissionRequest,
-	type PermissionType,
-	type HasPermissionsResponse,
 	type AcquirePermissionsResponse,
+	type HasPermissionsResponse,
 	type Permission,
+	type PermissionType,
 } from '_payloads/permissions';
 import {
 	isExecuteTransactionRequest,
 	isSignTransactionRequest,
-	isStakeRequest,
-	type SignTransactionResponse,
 	type ExecuteTransactionResponse,
+	type SignTransactionResponse,
 } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
@@ -39,12 +30,14 @@ import {
 	isSignMessageRequest,
 	type SignMessageRequest,
 } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
-
-import type { Message } from '_messages';
-import type { PortChannelName } from '_messaging/PortChannelName';
-import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
-import type { SetNetworkPayload } from '_payloads/network';
+import { type SignedTransaction } from '_src/ui/app/WalletSigner';
+import { type SuiTransactionBlockResponse } from '@mysten/sui/client';
 import type { Runtime } from 'webextension-polyfill';
+
+import { getAccountsStatusData } from '../accounts';
+import NetworkEnv from '../NetworkEnv';
+import { requestUserApproval } from '../qredo';
+import { Connection } from './Connection';
 
 export class ContentScriptConnection extends Connection {
 	public static readonly CHANNEL: PortChannelName = 'sui_content<->background';
@@ -128,12 +121,6 @@ export class ContentScriptConnection extends Connection {
 						msg.id,
 					),
 				);
-			} else if (isStakeRequest(payload)) {
-				const window = new Window(
-					Browser.runtime.getURL('ui.html') +
-						`#/stake/new?address=${encodeURIComponent(payload.validatorAddress)}`,
-				);
-				await window.show();
 			} else if (isBasePayload(payload) && payload.type === 'get-network') {
 				this.send(
 					createMessage<SetNetworkPayload>(
@@ -228,23 +215,19 @@ export class ContentScriptConnection extends Connection {
 		this.send(createMessage(error, responseForID));
 	}
 
-	private async sendAccounts(accounts: SuiAddress[], responseForID?: string) {
-		const allAccountsPublicInfo = await getStoredAccountsPublicInfo();
+	private async sendAccounts(accounts: string[], responseForID?: string) {
 		this.send(
 			createMessage<GetAccountResponse>(
 				{
 					type: 'get-account-response',
-					accounts: accounts.map((anAddress) => ({
-						address: anAddress,
-						publicKey: allAccountsPublicInfo[anAddress]?.publicKey || null,
-					})),
+					accounts: await getAccountsStatusData(accounts),
 				},
 				responseForID,
 			),
 		);
 	}
 
-	private async ensurePermissions(permissions: PermissionType[], account?: SuiAddress) {
+	private async ensurePermissions(permissions: PermissionType[], account?: string) {
 		const existingPermission = await Permissions.getPermission(this.origin);
 		const allowed = await Permissions.hasPermissions(
 			this.origin,

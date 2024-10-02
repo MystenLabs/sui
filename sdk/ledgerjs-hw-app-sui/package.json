@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/ledgerjs-hw-app-sui",
-	"version": "0.2.0",
+	"version": "0.4.1",
 	"description": "Ledger Hardware Wallet Sui Application API",
 	"keywords": [
 		"Ledger",
@@ -24,13 +24,20 @@
 	},
 	"homepage": "https://github.com/MystenLabs/sui/sdk/ledgerjs-hw-app-sui/#readme",
 	"files": [
+		"CHANGELOG.md",
 		"dist",
-		"src",
-		"CHANGELOG.md"
+		"src"
 	],
-	"main": "dist/Sui.js",
-	"module": "dist/Sui.mjs",
-	"types": "dist/Sui.d.ts",
+	"type": "commonjs",
+	"main": "./dist/cjs/Sui.js",
+	"module": "./dist/esm/Sui.js",
+	"types": "./dist/cjs/Sui.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/esm/Sui.js",
+			"require": "./dist/cjs/Sui.js"
+		}
+	},
 	"size-limit": [
 		{
 			"path": "dist/Sui.js",
@@ -40,8 +47,7 @@
 	"scripts": {
 		"analyze": "size-limit",
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-		"build": "pnpm build:types && tsup ./src/Sui.ts --format esm,cjs --sourcemap",
-		"build:types": "tsc --build",
+		"build": "build-package",
 		"eslint:check": "eslint --max-warnings=0 .",
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
@@ -57,16 +63,16 @@
 		"test:watch": "vitest"
 	},
 	"dependencies": {
-		"@ledgerhq/hw-transport": "^6.28.2",
+		"@ledgerhq/hw-transport": "^6.31.0",
 		"fast-sha256": "^1.3.0"
 	},
 	"devDependencies": {
-		"@ledgerhq/hw-transport-mocker": "^6.27.13",
-		"@size-limit/preset-small-lib": "^8.2.4",
-		"@types/node": "^18.15.11",
-		"size-limit": "^8.2.4",
-		"tsup": "^6.7.0",
-		"typescript": "^5.0.4",
-		"vitest": "^0.33.0"
+		"@ledgerhq/hw-transport-mocker": "^6.29.0",
+		"@mysten/build-scripts": "workspace:*",
+		"@size-limit/preset-small-lib": "^11.1.4",
+		"@types/node": "^20.14.10",
+		"size-limit": "^11.1.4",
+		"typescript": "^5.5.3",
+		"vitest": "^2.0.1"
 	}
 }

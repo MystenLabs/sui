@@ -3,21 +3,16 @@
 
 // tests vector of objects
 
-//# init --addresses Test=0x0 --accounts A
+//# init --addresses Test=0x0 --accounts A --shared-object-deletion true
 
 //# publish
 module Test::M {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use std::vector;
-
-    struct Obj has key, store {
+    public struct Obj has key, store {
         id: UID,
         value: u64
     }
 
-    struct AnotherObj has key {
+    public struct AnotherObj has key {
         id: UID,
         value: u64
     }
@@ -65,7 +60,7 @@ module Test::M {
         assert!(vector::length(&v) == 2, 0);
     }
 
-    public entry fun obj_vec_destroy(v: vector<Obj>, _: &mut TxContext) {
+    public entry fun obj_vec_destroy(mut v: vector<Obj>, _: &mut TxContext) {
         assert!(vector::length(&v) == 1, 0);
         let Obj {id, value} = vector::pop_back(&mut v);
         assert!(value == 42, 0);
@@ -73,7 +68,7 @@ module Test::M {
         vector::destroy_empty(v);
     }
 
-    public entry fun two_obj_vec_destroy(v: vector<Obj>, _: &mut TxContext) {
+    public entry fun two_obj_vec_destroy(mut v: vector<Obj>, _: &mut TxContext) {
         assert!(vector::length(&v) == 2, 0);
         let Obj {id, value} = vector::pop_back(&mut v);
         assert!(value == 42, 0);
@@ -84,7 +79,7 @@ module Test::M {
         vector::destroy_empty(v);
     }
 
-    public entry fun same_objects(o: Obj, v: vector<Obj>, _: &mut TxContext) {
+    public entry fun same_objects(o: Obj, mut v: vector<Obj>, _: &mut TxContext) {
         let Obj {id, value} = o;
         assert!(value == 42, 0);
         object::delete(id);
@@ -94,14 +89,14 @@ module Test::M {
         vector::destroy_empty(v);
     }
 
-    public entry fun same_objects_ref(o: &Obj, v: vector<Obj>, _: &mut TxContext) {
+    public entry fun same_objects_ref(o: &Obj, mut v: vector<Obj>, _: &mut TxContext) {
         assert!(o.value == 42, 0);
         let Obj {id, value: _} = vector::pop_back(&mut v);
         object::delete(id);
         vector::destroy_empty(v);
     }
 
-    public entry fun child_access(child: Obj, v: vector<Obj>, _: &mut TxContext) {
+    public entry fun child_access(child: Obj, mut v: vector<Obj>, _: &mut TxContext) {
         let Obj {id, value} = child;
         assert!(value == 42, 0);
         object::delete(id);
@@ -149,7 +144,7 @@ module Test::M {
 //# run Test::M::two_obj_vec_destroy --sender A --args vector[object(10,0),object(11,0)]
 
 
-// create a shared object and try to pass it as a single element of a vector (failure)
+// create a shared object and try to pass it as a single element of a vector
 
 //# run Test::M::mint_shared --sender A --args 42
 

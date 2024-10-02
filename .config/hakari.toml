@@ -1,9 +1,11 @@
 # This file contains settings for `cargo hakari`.
 # See https://docs.rs/cargo-hakari/latest/cargo_hakari/config for a full list of options.
 
-hakari-package = "workspace-hack"
+# Right now we're only using hakari in a sort of hybrid manually managed mode
+# to enforce that rocksdb is built only a single time in the workspace
+hakari-package = "typed-store-workspace-hack"
 
-# Format for `workspace-hack = ...` lines in other Cargo.tomls.
+# Format version for hakari's output. Version 4 requires cargo-hakari 0.9.22 or above.
 dep-format-version = "4"
 
 # Setting workspace.resolver = "2" in the root Cargo.toml is HIGHLY recommended.
@@ -15,24 +17,12 @@ resolver = "2"
 # Add triples corresponding to platforms commonly used by developers here.
 # https://doc.rust-lang.org/rustc/platform-support.html
 platforms = [
-    "aarch64-apple-darwin",
     "x86_64-unknown-linux-gnu",
-    "x86_64-pc-windows-msvc",
-    # "x86_64-apple-darwin",
+    "x86_64-apple-darwin",
+    # "x86_64-pc-windows-msvc",
 ]
 
 # Write out exact versions rather than a semver range. (Defaults to false.)
 # exact-versions = true
-
 output-single-feature = true
-
-[traversal-excludes]
-workspace-members = [ "sui-move" ]
-third-party = [
-    { name = "object_store" },
-]
-
-[final-excludes]
-workspace-members = [
-    "x",
-]
+unify-target-host = "unify-if-both"

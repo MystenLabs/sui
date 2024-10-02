@@ -38,3 +38,17 @@ module 0x0.m {
         return;
     }
 }
+
+//# publish
+module 0x0.m {
+    import 0x2.clock;
+    import 0x2.transfer;
+    import 0x2.object;
+
+    t(uid: &mut object.UID, clock: transfer.Receiving<clock.Clock>): clock.Clock {
+        let c: clock.Clock;
+        label l0:
+        c = transfer.receive<clock.Clock>(move(uid), move(clock));
+        return move(c);
+    }
+}

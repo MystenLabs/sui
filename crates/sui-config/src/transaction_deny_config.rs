@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use sui_types::base_types::{ObjectID, SuiAddress};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct TransactionDenyConfig {
     /// A list of object IDs that are not allowed to be accessed/used in transactions.
     /// Note that since this is checked during transaction signing, only root object ids
@@ -58,6 +59,18 @@ pub struct TransactionDenyConfig {
 
     #[serde(skip)]
     address_deny_set: OnceCell<HashSet<SuiAddress>>,
+
+    /// Whether receiving objects transferred to other objects is allowed
+    #[serde(default)]
+    receiving_objects_disabled: bool,
+
+    /// Whether zklogin transaction is disabled
+    #[serde(default)]
+    zklogin_sig_disabled: bool,
+
+    /// A list of disabled OAuth providers for zkLogin
+    #[serde(default)]
+    zklogin_disabled_providers: HashSet<String>,
     // TODO: We could consider add a deny list for types that we want to disable public transfer.
     // TODO: We could also consider disable more types of commands, such as transfer, split and etc.
 }
@@ -92,6 +105,18 @@ impl TransactionDenyConfig {
 
     pub fn user_transaction_disabled(&self) -> bool {
         self.user_transaction_disabled
+    }
+
+    pub fn receiving_objects_disabled(&self) -> bool {
+        self.receiving_objects_disabled
+    }
+
+    pub fn zklogin_sig_disabled(&self) -> bool {
+        self.zklogin_sig_disabled
+    }
+
+    pub fn zklogin_disabled_providers(&self) -> &HashSet<String> {
+        &self.zklogin_disabled_providers
     }
 }
 
@@ -129,6 +154,11 @@ impl TransactionDenyConfigBuilder {
         self
     }
 
+    pub fn disable_receiving_objects(mut self) -> Self {
+        self.config.receiving_objects_disabled = true;
+        self
+    }
+
     pub fn add_denied_object(mut self, id: ObjectID) -> Self {
         self.config.object_deny_list.push(id);
         self
@@ -141,6 +171,16 @@ impl TransactionDenyConfigBuilder {
 
     pub fn add_denied_package(mut self, id: ObjectID) -> Self {
         self.config.package_deny_list.push(id);
+        self
+    }
+
+    pub fn disable_zklogin_sig(mut self) -> Self {
+        self.config.zklogin_sig_disabled = true;
+        self
+    }
+
+    pub fn add_zklogin_disabled_provider(mut self, provider: String) -> Self {
+        self.config.zklogin_disabled_providers.insert(provider);
         self
     }
 }

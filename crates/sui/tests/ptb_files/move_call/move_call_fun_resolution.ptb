@@ -1,0 +1,18 @@
+# Try to use identifier/address that is not in scope
+--move-call zero_x_zero::option::is_none<u64> none
+--assign a none 
+--assign zero_x_zero @0x0
+# Invalid package ID (and test that we resolve zero_x_zero to 0x0)
+--move-call zero_x_zero::option::is_none<u64> a
+# Valid package ID, but invalid/misspelled module name
+--move-call std::Option::is_none<u64> a
+# Valid package ID and module name, but fn name misspelled
+--move-call std::option::isnone<u64> a
+# Missing argument
+--move-call std::option::is_none<u64>
+# Too many arguments
+--move-call std::option::is_none<u64> "a b"
+# Missing type argument -- we 
+--move-call sui::coin::destroy_zero @0x1
+# Too many type args -- won't catch this until we run
+--move-call std::option::is_none<u64, bool> a

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::faucet::{FaucetClient, FaucetClientFactory};
 use async_trait::async_trait;
-use clap::*;
 use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -22,7 +21,6 @@ use sui_types::object::Owner;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
-use shared_crypto::intent::Intent;
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
@@ -33,7 +31,8 @@ use test_case::{
     coin_index_test::CoinIndexTest, coin_merge_split_test::CoinMergeSplitTest,
     fullnode_build_publish_transaction_test::FullNodeBuildPublishTransactionTest,
     fullnode_execute_transaction_test::FullNodeExecuteTransactionTest,
-    native_transfer_test::NativeTransferTest, shared_object_test::SharedCounterTest,
+    native_transfer_test::NativeTransferTest, random_beacon_test::RandomBeaconTest,
+    shared_object_test::SharedCounterTest,
 };
 use tokio::time::{self, Duration};
 use tracing::{error, info};
@@ -154,7 +153,7 @@ impl TestContext {
             .get_fullnode_client()
             .quorum_driver_api()
             .execute_transaction_block(
-                Transaction::from_data(txn_data, Intent::sui_transaction(), vec![signature]),
+                Transaction::from_data(txn_data, vec![signature]),
                 SuiTransactionBlockResponseOptions::new()
                     .with_object_changes()
                     .with_balance_changes()
@@ -310,6 +309,7 @@ impl ClusterTest {
             TestCase::new(FullNodeExecuteTransactionTest {}),
             TestCase::new(FullNodeBuildPublishTransactionTest {}),
             TestCase::new(CoinIndexTest {}),
+            TestCase::new(RandomBeaconTest {}),
         ];
 
         // TODO: improve the runner parallelism for efficiency

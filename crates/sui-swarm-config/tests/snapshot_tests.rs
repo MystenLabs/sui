@@ -52,7 +52,7 @@ fn genesis_config_snapshot_matches() {
 fn populated_genesis_snapshot_matches() {
     let genesis_config = GenesisConfig::for_local_testing();
     let (_account_keys, allocations) = genesis_config
-        .generate_accounts(&mut StdRng::from_seed([0; 32]))
+        .generate_accounts(StdRng::from_seed([0; 32]))
         .unwrap();
     let mut rng = StdRng::from_seed([0; 32]);
     let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rng).1;
@@ -118,7 +118,7 @@ fn network_config_snapshot_matches() {
         .rng(rng)
         .build();
     // TODO: Inject static temp path and port numbers, instead of clearing them.
-    for mut validator_config in &mut network_config.validator_configs {
+    for validator_config in &mut network_config.validator_configs {
         validator_config.db_path = PathBuf::from("/tmp/foo/");
         validator_config.network_address = Multiaddr::empty();
         let fake_socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 1);
@@ -133,7 +133,6 @@ fn network_config_snapshot_matches() {
         if let Some(consensus_config) = validator_config.consensus_config.as_mut() {
             consensus_config.address = Multiaddr::empty();
             consensus_config.db_path = PathBuf::from("/tmp/foo/");
-            consensus_config.internal_worker_address = Some(Multiaddr::empty());
             consensus_config
                 .narwhal_config
                 .prometheus_metrics

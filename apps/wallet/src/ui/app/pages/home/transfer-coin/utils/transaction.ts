@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type CoinStruct, SUI_TYPE_ARG, TransactionBlock } from '@mysten/sui.js';
-
 import { parseAmount } from '_src/ui/app/helpers';
+import { type CoinStruct } from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 
 interface Options {
 	coinType: string;
@@ -22,10 +23,10 @@ export function createTokenTransferTransaction({
 	coinDecimals,
 	isPayAllSui,
 }: Options) {
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 
 	if (isPayAllSui && coinType === SUI_TYPE_ARG) {
-		tx.transferObjects([tx.gas], tx.pure(to));
+		tx.transferObjects([tx.gas], to);
 		tx.setGasPayment(
 			coins
 				.filter((coin) => coin.coinType === coinType)
@@ -43,8 +44,8 @@ export function createTokenTransferTransaction({
 	const [primaryCoin, ...mergeCoins] = coins.filter((coin) => coin.coinType === coinType);
 
 	if (coinType === SUI_TYPE_ARG) {
-		const coin = tx.splitCoins(tx.gas, [tx.pure(bigIntAmount)]);
-		tx.transferObjects([coin], tx.pure(to));
+		const coin = tx.splitCoins(tx.gas, [bigIntAmount]);
+		tx.transferObjects([coin], to);
 	} else {
 		const primaryCoinInput = tx.object(primaryCoin.coinObjectId);
 		if (mergeCoins.length) {
@@ -54,8 +55,8 @@ export function createTokenTransferTransaction({
 				mergeCoins.map((coin) => tx.object(coin.coinObjectId)),
 			);
 		}
-		const coin = tx.splitCoins(primaryCoinInput, [tx.pure(bigIntAmount)]);
-		tx.transferObjects([coin], tx.pure(to));
+		const coin = tx.splitCoins(primaryCoinInput, [bigIntAmount]);
+		tx.transferObjects([coin], to);
 	}
 
 	return tx;

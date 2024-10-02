@@ -10,7 +10,9 @@ pub mod query;
 
 #[derive(Debug, Display, Deserialize, PartialEq)]
 pub enum QueryType {
+    // Checks the last instant value of the query.
     Instant,
+    // Checks the median value of the query over time.
     Range {
         // Both start & end accepts specific time formats
         //  - "%Y-%m-%d %H:%M:%S" (UTC)
@@ -22,6 +24,9 @@ pub enum QueryType {
         end: String,
         // Query resolution step width as float number of seconds
         step: f64,
+        // The result of the query is the percentile of the data points.
+        // Valid values are [1, 100].
+        percentile: u8,
     },
 }
 
@@ -108,7 +113,7 @@ pub fn timestamp_string_to_unix_seconds<N: NowProvider>(
     }
 
     if let Ok(datetime) = NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d %H:%M:%S") {
-        let utc_datetime = DateTime::<Utc>::from_utc(datetime, Utc);
+        let utc_datetime: DateTime<Utc> = DateTime::from_naive_utc_and_offset(datetime, Utc);
         Ok(utc_datetime.timestamp())
     } else {
         Err(anyhow!("Invalid timestamp format"))
@@ -128,9 +133,9 @@ pub fn fails_threshold_condition(
 }
 
 fn unix_seconds_to_timestamp_string(unix_seconds: i64) -> String {
-    let datetime = NaiveDateTime::from_timestamp_opt(unix_seconds, 0);
-    let timestamp = DateTime::<Utc>::from_utc(datetime.unwrap(), Utc);
-    timestamp.to_string()
+    DateTime::from_timestamp(unix_seconds, 0)
+        .unwrap()
+        .to_string()
 }
 
 #[cfg(test)]
@@ -184,6 +189,7 @@ mod tests {
                   start: "now-1h"
                   end: "now"
                   step: 60.0
+                  percentile: 50
                 validate_result:
                   threshold: 3.0
                   failure_condition: Greater
@@ -197,6 +203,7 @@ mod tests {
                 start: "now-1h".to_string(),
                 end: "now".to_string(),
                 step: 60.0,
+                percentile: 50,
             },
             validate_result: Some(QueryResultValidation {
                 threshold: 3.0,

@@ -1,0 +1,19 @@
+//# run
+module 0x42.m {
+
+
+entry foo(b: bool) {
+  let x: u64;
+label b0:
+  jump_if (move(b)) b2;
+label b1:
+  x = 3;
+  jump b3;
+label b2:
+  x = 2;
+label b3:
+  x = true; // type error here
+  return;
+}
+
+}

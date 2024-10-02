@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cx } from 'class-variance-authority';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
+import { useAccounts } from '../hooks/useAccounts';
+import { Link } from '../shared/Link';
 import { SummaryCard } from './SummaryCard';
 import { WalletListSelectItem, type WalletListSelectItemProps } from './WalletListSelectItem';
-import { useAccounts } from '../hooks/useAccounts';
-import { useDeriveNextAccountMutation } from '../hooks/useDeriveNextAccountMutation';
-import { Link } from '../shared/Link';
 
 export type WalletListSelectProps = {
 	title: string;
@@ -29,15 +28,16 @@ export function WalletListSelect({
 	onChange,
 	boxShadow = false,
 }: WalletListSelectProps) {
-	const [newAccounts, setNewAccounts] = useState<string[]>([]);
-	const accounts = useAccounts();
+	const { data: accounts } = useAccounts();
 	const filteredAccounts = useMemo(() => {
+		if (!accounts) {
+			return [];
+		}
 		if (visibleValues) {
 			return accounts.filter(({ address }) => visibleValues.includes(address));
 		}
 		return accounts;
 	}, [accounts, visibleValues]);
-	const deriveNextAccount = useDeriveNextAccountMutation();
 	return (
 		<SummaryCard
 			header={title}
@@ -75,7 +75,6 @@ export function WalletListSelect({
 								selected={values.includes(address)}
 								mode={mode}
 								disabled={disabled}
-								isNew={newAccounts.includes(address)}
 							/>
 						</li>
 					))}
@@ -94,22 +93,6 @@ export function WalletListSelect({
 									onClick={() => onChange(filteredAccounts.map(({ address }) => address))}
 								/>
 							) : null}
-						</div>
-						<div>
-							<Link
-								color="heroDark"
-								weight="medium"
-								text="New account"
-								disabled={disabled}
-								loading={deriveNextAccount.isLoading}
-								onClick={async () => {
-									const newAccountAddress = await deriveNextAccount.mutateAsync();
-									setNewAccounts([...newAccounts, newAccountAddress]);
-									if (!visibleValues || visibleValues.includes(newAccountAddress)) {
-										onChange([...values, newAccountAddress]);
-									}
-								}}
-							/>
 						</div>
 					</div>
 				) : null

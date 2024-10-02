@@ -1,0 +1,435 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    [
+        PTBError {
+            message: "Unexpected end of input",
+            span: Span {
+                start: 9,
+                end: 9,
+            },
+            help: Some(
+                "Expected to find a command here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of input",
+            span: Span {
+                start: 9,
+                end: 9,
+            },
+            help: Some(
+                "Expected to find a command here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of input",
+            span: Span {
+                start: 11,
+                end: 11,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '[' but found identifier 'a'",
+            span: Span {
+                start: 19,
+                end: 20,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of input",
+            span: Span {
+                start: 22,
+                end: 22,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '[' but found end of input",
+            span: Span {
+                start: 18,
+                end: 18,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '['",
+            span: Span {
+                start: 23,
+                end: 24,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '[' but found end of input",
+            span: Span {
+                start: 15,
+                end: 15,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '['",
+            span: Span {
+                start: 14,
+                end: 15,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of input",
+            span: Span {
+                start: 13,
+                end: 13,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '[' but found identifier 'b'",
+            span: Span {
+                start: 16,
+                end: 17,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected identifier 'c'",
+            span: Span {
+                start: 20,
+                end: 21,
+            },
+            help: Some(
+                "Expected to find a command here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '[' but found end of input",
+            span: Span {
+                start: 15,
+                end: 15,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '['",
+            span: Span {
+                start: 14,
+                end: 15,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of input",
+            span: Span {
+                start: 13,
+                end: 13,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '[' but found identifier 'b'",
+            span: Span {
+                start: 16,
+                end: 17,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected identifier 'c'",
+            span: Span {
+                start: 20,
+                end: 21,
+            },
+            help: Some(
+                "Expected to find a command here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '<' but found end of input",
+            span: Span {
+                start: 15,
+                end: 15,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '<' but found '['",
+            span: Span {
+                start: 16,
+                end: 17,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '[' but found end of input",
+            span: Span {
+                start: 21,
+                end: 21,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of input",
+            span: Span {
+                start: 11,
+                end: 11,
+            },
+            help: Some(
+                "Value addresses can either be a variable in-scope, or a numerical address, e.g., 0xc0ffee",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '['",
+            span: Span {
+                start: 37,
+                end: 38,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected an identifier but found end of input",
+            span: Span {
+                start: 8,
+                end: 8,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected identifier 'c'",
+            span: Span {
+                start: 13,
+                end: 14,
+            },
+            help: Some(
+                "Expected to find a command here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected a variable name but found reserved word 'none'.",
+            span: Span {
+                start: 9,
+                end: 13,
+            },
+            help: Some(
+                "Variable names cannot be 'address', 'bool', 'vector', 'some', 'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected a variable name but found reserved word 'some'.",
+            span: Span {
+                start: 9,
+                end: 13,
+            },
+            help: Some(
+                "Variable names cannot be 'address', 'bool', 'vector', 'some', 'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '.'",
+            span: Span {
+                start: 10,
+                end: 11,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Value does not fit within a u64",
+            span: Span {
+                start: 13,
+                end: 75,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '['",
+            span: Span {
+                start: 13,
+                end: 14,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected a u64 value",
+            span: Span {
+                start: 13,
+                end: 17,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected a u64 value",
+            span: Span {
+                start: 13,
+                end: 17,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected an address",
+            span: Span {
+                start: 11,
+                end: 15,
+            },
+            help: Some(
+                "Addresses or object IDs require the character '@' in front",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected an address",
+            span: Span {
+                start: 10,
+                end: 10,
+            },
+            help: Some(
+                "Addresses or object IDs require the character '@' in front",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '@'",
+            span: Span {
+                start: 16,
+                end: 17,
+            },
+            help: Some(
+                "Expected to find a command here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected an address",
+            span: Span {
+                start: 11,
+                end: 12,
+            },
+            help: Some(
+                "Addresses or object IDs require the character '@' in front",
+            ),
+            severity: Error,
+        },
+    ],
+]

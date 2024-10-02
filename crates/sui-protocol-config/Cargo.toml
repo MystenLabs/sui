@@ -6,14 +6,19 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 serde.workspace = true
 tracing.workspace = true
 serde_with.workspace = true
 sui-protocol-config-macros.workspace = true
 schemars.workspace = true
 insta.workspace = true
+clap.workspace = true
+move-vm-config.workspace = true
+serde-env.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

@@ -1,0 +1,23 @@
+[package]
+name = "module-generation"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem binary module generation"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+rand.workspace = true
+
+move-bytecode-verifier.workspace = true
+move-ir-to-bytecode.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-binary-format.workspace = true
+move-symbol-pool.workspace = true
+
+[features]
+default = []

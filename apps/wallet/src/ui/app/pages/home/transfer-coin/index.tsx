@@ -1,9 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
+import { Button } from '_app/shared/ButtonUI';
+import { Text } from '_app/shared/text';
+import { ActiveCoinsCard } from '_components/active-coins-card';
+import Overlay from '_components/overlay';
+import { ampli } from '_src/shared/analytics/ampli';
+import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
+import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
+import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
+import { useSigner } from '_src/ui/app/hooks/useSigner';
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
+import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { useCoinMetadata } from '@mysten/core';
-import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
-import { getTransactionDigest } from '@mysten/sui.js';
+import { ArrowLeft16, ArrowRight16 } from '@mysten/icons';
 import * as Sentry from '@sentry/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -12,20 +23,8 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { PreviewTransfer } from './PreviewTransfer';
 import { SendTokenForm } from './SendTokenForm';
-import { createTokenTransferTransaction } from './utils/transaction';
-import { Button } from '_app/shared/ButtonUI';
-import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
-import { Text } from '_app/shared/text';
-import { ActiveCoinsCard } from '_components/active-coins-card';
-import Overlay from '_components/overlay';
-import { ampli } from '_src/shared/analytics/ampli';
-import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
-import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
-import { useSigner } from '_src/ui/app/hooks';
-import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
-import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
-
 import type { SubmitProps } from './SendTokenForm';
+import { createTokenTransferTransaction } from './utils/transaction';
 
 function TransferCoinPage() {
 	const [searchParams] = useSearchParams();
@@ -34,8 +33,9 @@ function TransferCoinPage() {
 	const [formData, setFormData] = useState<SubmitProps>();
 	const navigate = useNavigate();
 	const { data: coinMetadata } = useCoinMetadata(coinType);
-	const signer = useSigner();
-	const address = useActiveAddress();
+	const activeAccount = useActiveAccount();
+	const signer = useSigner(activeAccount);
+	const address = activeAccount?.address;
 	const queryClient = useQueryClient();
 	const { clientIdentifier, notificationModal } = useQredoTransaction();
 
@@ -80,15 +80,15 @@ function TransferCoinPage() {
 			}
 		},
 		onSuccess: (response) => {
-			queryClient.invalidateQueries(['get-coins']);
-			queryClient.invalidateQueries(['coin-balance']);
+			queryClient.invalidateQueries({ queryKey: ['get-coins'] });
+			queryClient.invalidateQueries({ queryKey: ['coin-balance'] });
 
 			ampli.sentCoins({
 				coinType: coinType!,
 			});
 
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-				getTransactionDigest(response),
+				response.digest,
 			)}&from=transactions`;
 			return navigate(receiptUrl);
 		},
@@ -107,6 +107,10 @@ function TransferCoinPage() {
 		},
 	});
 
+	if (useUnlockedGuard()) {
+		return null;
+	}
+
 	if (!coinType) {
 		return <Navigate to="/" replace={true} />;
 	}
@@ -117,7 +121,7 @@ function TransferCoinPage() {
 			title={showTransactionPreview ? 'Review & Send' : 'Send Coins'}
 			closeOverlay={() => navigate('/')}
 		>
-			<div className="flex flex-col w-full mt-2.5">
+			<div className="flex flex-col w-full h-full">
 				{showTransactionPreview && formData ? (
 					<BottomMenuLayout>
 						<Content>
@@ -145,7 +149,7 @@ function TransferCoinPage() {
 								text="Send Now"
 								disabled={coinType === null}
 								after={<ArrowRight16 />}
-								loading={executeTransfer.isLoading}
+								loading={executeTransfer.isPending}
 							/>
 						</Menu>
 					</BottomMenuLayout>

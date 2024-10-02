@@ -23,6 +23,7 @@ use sui_types::dynamic_field::DynamicFieldInfo;
 mod rpc_types_tests;
 
 mod balance_changes;
+mod displays;
 mod object_changes;
 mod sui_checkpoint;
 mod sui_coin;
@@ -44,4 +45,14 @@ pub struct Page<T, C> {
     pub data: Vec<T>,
     pub next_cursor: Option<C>,
     pub has_next_page: bool,
+}
+
+impl<T, C> Page<T, C> {
+    pub fn empty() -> Self {
+        Self {
+            data: vec![],
+            next_cursor: None,
+            has_next_page: false,
+        }
+    }
 }

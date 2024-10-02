@@ -1,0 +1,3 @@
+[package]
+name = "multi_module_publish"
+edition = "2024.beta"

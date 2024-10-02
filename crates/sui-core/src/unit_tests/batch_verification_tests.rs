@@ -9,12 +9,14 @@ use prometheus::Registry;
 use rand::{thread_rng, Rng};
 use std::sync::Arc;
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
 };
+use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::CertifiedTransaction;
 
 // TODO consolidate with `gen_certs` in batch_verification_bench.rs
@@ -51,17 +53,19 @@ fn gen_ckpts(
             SignedCheckpointSummary::new(
                 committee.epoch,
                 CheckpointSummary::new(
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
                     committee.epoch,
                     // insert different data for each checkpoint so that we can swap sigs later
                     // and get a failure. (otherwise every checkpoint is the same so the
                     // AuthoritySignInfos are interchangeable).
                     i as u64,
                     0,
-                    &CheckpointContents::new_with_causally_ordered_transactions(vec![]),
+                    &CheckpointContents::new_with_digests_only_for_tests(vec![]),
                     None,
                     GasCostSummary::default(),
                     None,
                     0,
+                    Vec::new(),
                 ),
                 k,
                 name,
@@ -96,7 +100,11 @@ async fn test_batch_verify() {
         *certs[i].auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
         batch_verify_all_certificates_and_checkpoints(&committee, &certs, &ckpts).unwrap_err();
 
-        let results = batch_verify_certificates(&committee, &certs);
+        let results = batch_verify_certificates(
+            &committee,
+            &certs,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        );
         results[i].as_ref().unwrap_err();
         for (_, r) in results.iter().enumerate().filter(|(j, _)| *j != i) {
             r.as_ref().unwrap();
@@ -106,13 +114,23 @@ async fn test_batch_verify() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_async_verifier() {
+    use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+
     let (committee, key_pairs) = Committee::new_simple_test_committee();
     let committee = Arc::new(committee);
     let key_pairs = Arc::new(key_pairs);
 
     let registry = Registry::new();
     let metrics = SignatureVerifierMetrics::new(&registry);
-    let verifier = Arc::new(SignatureVerifier::new(committee.clone(), metrics));
+    let verifier = Arc::new(SignatureVerifier::new(
+        committee.clone(),
+        metrics,
+        vec![],
+        ZkLoginEnv::Test,
+        true,
+        true,
+        Some(30),
+    ));
 
     let tasks: Vec<_> = (0..32)
         .map(|_| {

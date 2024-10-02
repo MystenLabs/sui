@@ -1,0 +1,35 @@
+[package]
+name = "move-command-line-common"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Move shared command line and file tools"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+difference.workspace = true
+walkdir.workspace = true
+sha2.workspace = true
+hex.workspace = true
+num-bigint.workspace = true
+once_cell.workspace = true
+serde.workspace = true
+dirs-next.workspace = true
+vfs.workspace = true
+bcs.workspace = true
+
+move-core-types.workspace = true
+move-binary-format.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+# Ok to do this since:
+# edition = 2021 ==> resolver = 2
+# * https://doc.rust-lang.org/edition-guide/rust-2021/default-cargo-resolver.html#summary
+# resolver = 2 ==> feature-resolver-version-2 which allows dev-dependencies to set features
+# * https://doc.rust-lang.org/cargo/reference/resolver.html#feature-resolver-version-2
+move-core-types = { workspace = true, features = ["fuzzing"] }

@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{
         Bytecode, FunctionDefinition, FunctionHandle, FunctionInstantiation, ModuleHandle,
         SignatureToken,
@@ -12,6 +10,7 @@ use move_binary_format::{
 };
 use move_bytecode_utils::format_signature_token;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
+use move_vm_config::verifier::VerifierConfig;
 use sui_types::{error::ExecutionError, SUI_FRAMEWORK_ADDRESS};
 
 use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
@@ -19,20 +18,25 @@ use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
 pub const EVENT_FUNCTION: &IdentStr = ident_str!("emit");
+pub const GET_EVENTS_TEST_FUNCTION: &IdentStr = ident_str!("events_by_type");
 pub const PUBLIC_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("public_transfer"),
     ident_str!("public_freeze_object"),
     ident_str!("public_share_object"),
+    ident_str!("public_receive"),
+    ident_str!("receiving_object_id"),
 ];
 pub const PRIVATE_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("transfer"),
     ident_str!("freeze_object"),
     ident_str!("share_object"),
+    ident_str!("receive"),
 ];
 pub const TRANSFER_IMPL_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("transfer_impl"),
     ident_str!("freeze_object_impl"),
     ident_str!("share_object_impl"),
+    ident_str!("receive_impl"),
 ];
 
 /// All transfer functions (the functions in `sui::transfer`) are "private" in that they are
@@ -45,7 +49,10 @@ pub const TRANSFER_IMPL_FUNCTIONS: &[&IdentStr] = &[
 /// is no relaxation for `store`
 /// Concretely, with `event::emit<T>(...)`:
 /// - `T` must be a type declared in the current module
-pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
+pub fn verify_module(
+    module: &CompiledModule,
+    verifier_config: &VerifierConfig,
+) -> Result<(), ExecutionError> {
     if *module.address() == SUI_FRAMEWORK_ADDRESS
         && module.name() == IdentStr::new(TEST_SCENARIO_MODULE_NAME).unwrap()
     {
@@ -53,22 +60,27 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
         // transactional execution and needs to allow test code to bypass private generics
         return Ok(());
     }
-    let view = &BinaryIndexedView::Module(module);
     // do not need to check the sui::transfer module itself
     for func_def in &module.function_defs {
-        verify_function(view, func_def).map_err(|error| {
-            verification_failure(format!(
-                "{}::{}. {}",
-                module.self_id(),
-                module.identifier_at(module.function_handle_at(func_def.function).name),
-                error
-            ))
-        })?;
+        verify_function(module, func_def, verifier_config.allow_receiving_object_id).map_err(
+            |error| {
+                verification_failure(format!(
+                    "{}::{}. {}",
+                    module.self_id(),
+                    module.identifier_at(module.function_handle_at(func_def.function).name),
+                    error
+                ))
+            },
+        )?;
     }
     Ok(())
 }
 
-fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Result<(), String> {
+fn verify_function(
+    view: &CompiledModule,
+    fdef: &FunctionDefinition,
+    allow_receiving_object_id: bool,
+) -> Result<(), String> {
     let code = match &fdef.code {
         None => return Ok(()),
         Some(code) => code,
@@ -86,7 +98,7 @@ fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Resul
             let type_arguments = &view.signature_at(*type_parameters).0;
             let ident = addr_module(view, mhandle);
             if ident == (SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
-                verify_private_transfer(view, fhandle, type_arguments)?
+                verify_private_transfer(view, fhandle, type_arguments, allow_receiving_object_id)?
             } else if ident == (SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
                 verify_private_event_emit(view, fhandle, type_arguments)?
             }
@@ -96,17 +108,24 @@ fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Resul
 }
 
 fn verify_private_transfer(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     fhandle: &FunctionHandle,
     type_arguments: &[SignatureToken],
+    allow_receiving_object_id: bool,
 ) -> Result<(), String> {
-    let self_handle = view.module_handle_at(view.self_handle_idx().unwrap());
+    let public_transfer_functions = if allow_receiving_object_id {
+        PUBLIC_TRANSFER_FUNCTIONS
+    } else {
+        // Before protocol version 33, the `receiving_object_id` function was not public
+        &PUBLIC_TRANSFER_FUNCTIONS[..PUBLIC_TRANSFER_FUNCTIONS.len() - 1]
+    };
+    let self_handle = view.module_handle_at(view.self_handle_idx());
     if addr_module(view, self_handle) == (SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
         return Ok(());
     }
     let fident = view.identifier_at(fhandle.name);
     // public transfer functions require `store` and have no additional rules
-    if PUBLIC_TRANSFER_FUNCTIONS.contains(&fident) {
+    if public_transfer_functions.contains(&fident) {
         return Ok(());
     }
     if !PRIVATE_TRANSFER_FUNCTIONS.contains(&fident) {
@@ -137,13 +156,17 @@ fn verify_private_transfer(
 }
 
 fn verify_private_event_emit(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     fhandle: &FunctionHandle,
     type_arguments: &[SignatureToken],
 ) -> Result<(), String> {
     let fident = view.identifier_at(fhandle.name);
+    if fident == GET_EVENTS_TEST_FUNCTION {
+        // test-only function witn no params--no need to verify
+        return Ok(());
+    }
     if fident != EVENT_FUNCTION {
-        debug_assert!(false, "unknown transfer function {}", fident);
+        debug_assert!(false, "unknown event function {}", fident);
         return Err(format!("Calling unknown event function, {}", fident));
     };
 
@@ -166,11 +189,16 @@ fn verify_private_event_emit(
     Ok(())
 }
 
-fn is_defined_in_current_module(view: &BinaryIndexedView, type_arg: &SignatureToken) -> bool {
+fn is_defined_in_current_module(view: &CompiledModule, type_arg: &SignatureToken) -> bool {
     match type_arg {
-        SignatureToken::Struct(idx) | SignatureToken::StructInstantiation(idx, _) => {
-            let shandle = view.struct_handle_at(*idx);
-            view.self_handle_idx() == Some(shandle.module)
+        SignatureToken::Datatype(_) | SignatureToken::DatatypeInstantiation(_) => {
+            let idx = match type_arg {
+                SignatureToken::Datatype(idx) => *idx,
+                SignatureToken::DatatypeInstantiation(s) => s.0,
+                _ => unreachable!(),
+            };
+            let shandle = view.datatype_handle_at(idx);
+            view.self_handle_idx() == shandle.module
         }
         SignatureToken::TypeParameter(_)
         | SignatureToken::Bool
@@ -189,7 +217,7 @@ fn is_defined_in_current_module(view: &BinaryIndexedView, type_arg: &SignatureTo
 }
 
 fn addr_module<'a>(
-    view: &'a BinaryIndexedView,
+    view: &'a CompiledModule,
     mhandle: &ModuleHandle,
 ) -> (AccountAddress, &'a IdentStr) {
     let maddr = view.address_identifier_at(mhandle.address);

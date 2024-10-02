@@ -1,14 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import {
-	getObjectType,
-	normalizeSuiAddress,
-	SUI_TYPE_ARG,
-	SuiObjectData,
-	TransactionBlock,
-} from '../../src';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import { Transaction } from '../../src/transactions';
+import { normalizeSuiAddress, SUI_TYPE_ARG } from '../../src/utils';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Object Reading API', () => {
@@ -27,27 +23,25 @@ describe('Object Reading API', () => {
 
 	it('Get Object', async () => {
 		const gasObjects = await toolbox.getGasObjectsOwnedByAddress();
-		expect(gasObjects.length).to.greaterThan(0);
+		expect(gasObjects.data.length).to.greaterThan(0);
 		const objectInfos = await Promise.all(
-			gasObjects.map((gasObject) => {
-				const details = gasObject.data as SuiObjectData;
+			gasObjects.data.map((gasObject) => {
 				return toolbox.client.getObject({
-					id: details.objectId,
+					id: gasObject.coinObjectId,
 					options: { showType: true },
 				});
 			}),
 		);
-		objectInfos.forEach((objectInfo) =>
-			expect(getObjectType(objectInfo)).to.equal('0x2::coin::Coin<0x2::sui::SUI>'),
-		);
+		objectInfos.forEach((objectInfo) => {
+			expect(objectInfo.data?.type).to.equal('0x2::coin::Coin<0x2::sui::SUI>');
+		});
 	});
 
 	it('Get Objects', async () => {
 		const gasObjects = await toolbox.getGasObjectsOwnedByAddress();
-		expect(gasObjects.length).to.greaterThan(0);
-		const gasObjectIds = gasObjects.map((gasObject) => {
-			const details = gasObject.data as SuiObjectData;
-			return details.objectId;
+		expect(gasObjects.data.length).to.greaterThan(0);
+		const gasObjectIds = gasObjects.data.map((gasObject) => {
+			return gasObject.coinObjectId;
 		});
 		const objectInfos = await toolbox.client.multiGetObjects({
 			ids: gasObjectIds,
@@ -56,11 +50,11 @@ describe('Object Reading API', () => {
 			},
 		});
 
-		expect(gasObjects.length).to.equal(objectInfos.length);
+		expect(gasObjects.data.length).to.equal(objectInfos.length);
 
-		objectInfos.forEach((objectInfo) =>
-			expect(getObjectType(objectInfo)).to.equal('0x2::coin::Coin<0x2::sui::SUI>'),
-		);
+		objectInfos.forEach((objectInfo) => {
+			expect(objectInfo.data?.type).to.equal('0x2::coin::Coin<0x2::sui::SUI>');
+		});
 	});
 
 	it('handles trying to get non-existent old objects', async () => {
@@ -121,14 +115,15 @@ describe('Object Reading API', () => {
 			coinType: SUI_TYPE_ARG,
 		});
 
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		// Transfer the entire gas object:
-		tx.transferObjects([tx.gas], tx.pure(normalizeSuiAddress('0x2')));
+		tx.transferObjects([tx.gas], normalizeSuiAddress('0x2'));
 
-		await toolbox.client.signAndExecuteTransactionBlock({
+		const { digest } = await toolbox.client.signAndExecuteTransaction({
 			signer: toolbox.keypair,
-			transactionBlock: tx,
+			transaction: tx,
 		});
+		await toolbox.client.waitForTransaction({ digest });
 
 		const res = await toolbox.client.tryGetPastObject({
 			id: data[0].coinObjectId,

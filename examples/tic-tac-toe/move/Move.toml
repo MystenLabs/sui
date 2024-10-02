@@ -1,0 +1,9 @@
+[package]
+name = "tic_tac_toe"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+tic_tac_toe = "0x0"

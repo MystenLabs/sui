@@ -1,0 +1,23 @@
+[package]
+name = "custom-indexer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.81"
+tokio = { version = "1.38.0", features = ["full"]}
+sui_types = { git = "https://github.com/mystenlabs/sui", package = "sui-types"}
+sui_data_ingestion_core = { git = "https://github.com/mystenlabs/sui", package = "sui-data-ingestion-core"}
+prometheus = "0.13.3"
+anyhow = "1.0.86"
+
+[[bin]]
+name = "local_reader"
+path = "local_reader.rs"
+
+[[bin]]
+name = "remote_reader"
+path = "remote_reader.rs"
+
+[workspace]
+

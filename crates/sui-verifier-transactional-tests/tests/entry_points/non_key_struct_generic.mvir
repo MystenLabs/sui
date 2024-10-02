@@ -18,7 +18,7 @@ module 0x0.m {
 
 }
 
-// valid, while T doesn't have store, and might it later, we require it to be annotated
+// invalid, T doesn't have store so Obj is not an object
 
 //# publish
 module 0x0.m {

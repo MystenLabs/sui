@@ -1,0 +1,13 @@
+{
+  "committeeMemberStake": [2500, 2500, 2500, 2500],
+  "committeeMembers": ["0x68b43fd906c0b8f024a18c56e06744f7c6157c65", "0xacaef39832cb995c4e049437a3e2ec6a7bad1ab5", "0x8061f127910e8ef56f16a2c411220bad25d61444", "0x508f3f1ff45f4ca3d8e86cdcc91445f00acc59fc"],
+  "minCommitteeStakeRequired": 10000,
+  "sourceChainId": 12,
+  "supportedChainIds": [1, 2, 3],
+  "supportedChainLimitsInDollars": [1000000000000000, 1000000000000000, 1000000000000000],
+  "supportedTokens": [],
+  "tokenPrices": [128000000, 4325189000000, 259696000000, 100000000, 100000000],
+  "tokenIds": [],
+  "suiDecimals": [],
+  "weth": "0x0000000000000000000000000000000000000000"
+}

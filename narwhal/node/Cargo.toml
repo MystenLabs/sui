@@ -11,7 +11,8 @@ arc-swap.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
-clap = "2.34"
+# clap.workspace = true
+clap = { version = "4", features = ["derive"] }
 futures.workspace = true
 rand.workspace = true
 thiserror.workspace = true
@@ -23,7 +24,6 @@ url.workspace = true
 axum.workspace = true
 
 config = { path = "../config", package = "narwhal-config" }
-consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 executor = { path = "../executor", package = "narwhal-executor" }
@@ -41,7 +41,6 @@ sui-protocol-config.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 anemo.workspace = true
 reqwest.workspace = true
@@ -50,11 +49,10 @@ reqwest.workspace = true
 pretty_assertions.workspace = true
 serde-reflection.workspace = true
 serde_yaml.workspace = true
-structopt.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
 [features]
-benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
+benchmark = ["worker/benchmark", "primary/benchmark"]
 trace_transaction = ["worker/trace_transaction"]
 
 [[bin]]

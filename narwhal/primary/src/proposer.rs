@@ -1,15 +1,17 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use crate::consensus::LeaderSchedule;
 use crate::metrics::PrimaryMetrics;
-use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
-use consensus::consensus::LeaderSchedule;
+use config::{AuthorityIdentifier, Committee, WorkerId};
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
+use sui_protocol_config::ProtocolConfig;
 use tokio::time::{sleep_until, Instant};
 use tokio::{
     sync::{oneshot, watch},
@@ -21,7 +23,7 @@ use types::{
     error::{DagError, DagResult},
     BatchDigest, Certificate, CertificateAPI, Header, HeaderAPI, Round, TimestampMs,
 };
-use types::{now, ConditionalBroadcastReceiver};
+use types::{now, ConditionalBroadcastReceiver, HeaderV1};
 
 /// Messages sent to the proposer about our own batch digests
 #[derive(Debug)]
@@ -64,7 +66,7 @@ pub struct Proposer {
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives the parents to include in the next header (along with their round number) from core.
-    rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
+    rx_parents: Receiver<(Vec<Certificate>, Round)>,
     /// Receives the batches' digests from our workers.
     rx_our_digests: Receiver<OurDigestMessage>,
     /// Sends newly created headers to the `Certifier`.
@@ -106,6 +108,7 @@ impl Proposer {
     pub fn spawn(
         authority_id: AuthorityIdentifier,
         committee: Committee,
+        protocol_config: &ProtocolConfig,
         proposer_store: ProposerStore,
         header_num_of_batches_threshold: usize,
         max_header_num_of_batches: usize,
@@ -113,7 +116,7 @@ impl Proposer {
         min_header_delay: Duration,
         header_resend_timeout: Option<Duration>,
         rx_shutdown: ConditionalBroadcastReceiver,
-        rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
+        rx_parents: Receiver<(Vec<Certificate>, Round)>,
         rx_our_digests: Receiver<OurDigestMessage>,
         tx_headers: Sender<Header>,
         tx_narwhal_round_updates: watch::Sender<Round>,
@@ -121,7 +124,7 @@ impl Proposer {
         metrics: Arc<PrimaryMetrics>,
         leader_schedule: LeaderSchedule,
     ) -> JoinHandle<()> {
-        let genesis = Certificate::genesis(&committee);
+        let genesis = Certificate::genesis(protocol_config, &committee);
         spawn_logged_monitored_task!(
             async move {
                 Self {
@@ -203,7 +206,7 @@ impl Proposer {
         // Make a new header.
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
         let header_digests: VecDeque<_> = self.digests.drain(..num_of_digests).collect();
-        let parents: Vec<_> = self.last_parents.drain(..).collect();
+        let parents = std::mem::take(&mut self.last_parents);
 
         // Here we check that the timestamp we will include in the header is consistent with the
         // parents, ie our current time is *after* the timestamp in all the included headers. If
@@ -224,7 +227,7 @@ impl Proposer {
             sleep(Duration::from_millis(drift_ms)).await;
         }
 
-        let header = Header::new(
+        let header: Header = HeaderV1::new(
             self.authority_id,
             this_round,
             this_epoch,
@@ -234,17 +237,18 @@ impl Proposer {
                 .collect(),
             parents.iter().map(|x| x.digest()).collect(),
         )
-        .await;
+        .await
+        .into();
 
         let leader_and_support = if this_round % 2 == 0 {
-            let authority = self.committee.leader(this_round);
+            let authority = self.leader_schedule.leader(this_round);
             if self.authority_id == authority.id() {
                 "even_round_is_leader"
             } else {
                 "even_round_not_leader"
             }
         } else {
-            let authority = self.committee.leader(this_round - 1);
+            let authority = self.leader_schedule.leader(this_round - 1);
             if parents.iter().any(|c| c.origin() == authority.id()) {
                 "odd_round_gives_support"
             } else {
@@ -305,7 +309,7 @@ impl Proposer {
         );
 
         // Register the header by the current round, to remember that we need to commit
-        // it, or re-include the batch digests that it contains.
+        // it, or re-include the batch digests and system messages that it contains.
         self.proposed_headers
             .insert(this_round, (header.clone(), header_digests));
 
@@ -314,8 +318,11 @@ impl Proposer {
 
     fn max_delay(&self) -> Duration {
         // If this node is going to be the leader of the next round, we set a lower max
-        // timeout value to increase its chance of being included in the dag.
-        if self.committee.leader(self.round + 1).id() == self.authority_id {
+        // timeout value to increase its chance of being included in the dag. As leaders are elected
+        // on even rounds only we apply the reduced max delay only for those ones.
+        if (self.round + 1) % 2 == 0
+            && self.leader_schedule.leader(self.round + 1).id() == self.authority_id
+        {
             self.max_header_delay / 2
         } else {
             self.max_header_delay
@@ -323,16 +330,31 @@ impl Proposer {
     }
 
     fn min_delay(&self) -> Duration {
+        // TODO: consider even out the boost provided by the even/odd rounds so we avoid perpetually
+        // boosting the nodes and affect the scores.
         // If this node is going to be the leader of the next round and there are more than
         // 1 primary in the committee, we use a lower min delay value to increase the chance
-        // of committing the leader.
+        // of committing the leader. Pay attention that we use here the leader_schedule to figure out
+        // the next leader.
+        let next_round = self.round + 1;
         if self.committee.size() > 1
-            && self.committee.leader(self.round + 1).id() == self.authority_id
+            && next_round % 2 == 0
+            && self.leader_schedule.leader(next_round).id() == self.authority_id
         {
-            Duration::ZERO
-        } else {
-            self.min_header_delay
+            return Duration::ZERO;
         }
+
+        // Give a boost on the odd rounds to a node by using the whole committee here, not just the
+        // nodes of the leader_schedule. By doing this we keep the proposal rate as high as possible
+        // which leads to higher round rate and also acting as a score booster to the less strong nodes
+        // as well.
+        if self.committee.size() > 1
+            && next_round % 2 != 0
+            && self.committee.leader(next_round).id() == self.authority_id
+        {
+            return Duration::ZERO;
+        }
+        self.min_header_delay
     }
 
     /// Update the last leader certificate.
@@ -550,15 +572,15 @@ impl Proposer {
                         if *header_round > max_committed_round {
                             break;
                         }
-                        // Add payloads from oldest to newest.
+                        // Add payloads and system messages from oldest to newest.
                         digests_to_resend.append(included_digests);
                         retransmit_rounds.push(*header_round);
                     }
 
                     if !retransmit_rounds.is_empty() {
-                        let num_to_resend = digests_to_resend.len();
-                        // Since all of digests_to_resend are roughly newer than self.digests,
-                        // prepend digests_to_resend to the digests for the next header.
+                        let num_digests_to_resend = digests_to_resend.len();
+                        // Since all of the values are roughly newer than existing stored values,
+                        // prepend for the next header.
                         digests_to_resend.append(&mut self.digests);
                         self.digests = digests_to_resend;
 
@@ -568,35 +590,22 @@ impl Proposer {
                         }
 
                         debug!(
-                            "Retransmit {} batches in undelivered headers {:?} at commit round {:?}, remaining headers {}",
-                            num_to_resend,
-                            retransmit_rounds,
-                            commit_round,
+                            "Retransmit {num_digests_to_resend} batches in undelivered headers {retransmit_rounds:?} at commit round {commit_round:?}, remaining headers {}",
                             self.proposed_headers.len()
                         );
 
                         self.metrics.proposer_resend_headers.inc_by(retransmit_rounds.len() as u64);
-                        self.metrics.proposer_resend_batches.inc_by(num_to_resend as u64);
+                        self.metrics.proposer_resend_batches.inc_by(num_digests_to_resend as u64);
                     }
                 },
 
-                Some((parents, round, epoch)) = self.rx_parents.recv() => {
+                Some((parents, round)) = self.rx_parents.recv() => {
                     debug!("Proposer received parents, round={} parent.round={} num_parents={}", self.round, round, parents.len());
-
-                    // If the core already moved to the next epoch we should pull the next
-                    // committee as well.
-
-                    match epoch.cmp(&self.committee.epoch()) {
-                        Ordering::Equal => {
-                            // we can proceed.
-                        }
-                        _ => continue
-                    }
 
                     // Sanity check: verify provided certs are of the correct round & epoch.
                     for parent in parents.iter() {
-                        if parent.round() != round || parent.epoch() != epoch {
-                            error!("Proposer received certificate {parent:?} that failed to match expected round {round} or epoch {epoch}. This should not be possible.");
+                        if parent.round() != round {
+                            error!("Proposer received certificate {parent:?} that failed to match expected round {round}. This should not be possible.");
                         }
                     }
 
@@ -640,7 +649,16 @@ impl Proposer {
                         Ordering::Equal => {
                             // The core gives us the parents the first time they are enough to form a quorum.
                             // Then it keeps giving us all the extra parents.
-                            self.last_parents.extend(parents)
+                            self.last_parents.extend(parents);
+
+                            // As the schedule can change after an odd round proposal - when the new schedule algorithm is
+                            // enabled - make sure that the timer is reset correctly for the round leader. No harm doing
+                            // this here as well.
+                            if self.min_delay() == Duration::ZERO {
+                                min_delay_timer
+                                .as_mut()
+                                .reset(Instant::now());
+                            }
                         }
                     }
 

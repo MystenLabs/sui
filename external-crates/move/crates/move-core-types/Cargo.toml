@@ -1,0 +1,43 @@
+[package]
+name = "move-core-types"
+version = "0.0.4"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Core types for Move"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = ["crates-io"]
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+hex.workspace = true
+once_cell.workspace = true
+proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
+rand.workspace = true
+ref-cast.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+primitive-types.workspace = true
+uint.workspace = true
+num.workspace = true
+ethnum.workspace = true
+arbitrary = { workspace = true, optional = true }
+enum-compat-util.workspace = true
+move-proc-macros.workspace = true
+bcs.workspace = true
+leb128.workspace = true
+thiserror.workspace = true
+serde_with.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+proptest-derive.workspace = true
+regex.workspace = true
+serde_json.workspace = true
+arbitrary = { workspace = true, features = ["derive_arbitrary"] }
+
+[features]
+default = []
+fuzzing = ["proptest", "proptest-derive", "arbitrary"]

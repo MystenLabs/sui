@@ -33,19 +33,14 @@ async fn test_response_error_after_shutdown_internal_consensus() {
     let tx_str = "test transaction".to_string();
     let tx = bcs::to_bytes(&tx_str).unwrap();
     let txn = TransactionProto {
-        transaction: Bytes::from(tx),
+        transactions: vec![Bytes::from(tx)],
     };
 
     // Should fail submitting to consensus.
     let Err(e) = client.submit_transaction(txn).await else {
         panic!("Submitting transactions after Narwhal shutdown should fail!");
     };
-    assert!(
-        e.message()
-            .contains("error trying to connect: tcp connect error:"),
-        "Actual: {}",
-        e
-    );
+    assert!(e.message().contains("tcp connect error:"), "Actual: {}", e);
 }
 
 /// Nodes will be started in a staggered fashion. This is simulating
@@ -104,6 +99,8 @@ async fn test_node_staggered_starts() {
 #[ignore]
 #[tokio::test]
 async fn test_full_outage_and_recovery() {
+    let _guard = setup_tracing();
+
     let stop_and_start_delay = Duration::from_secs(12);
     let node_advance_delay = Duration::from_secs(60);
 
@@ -292,7 +289,7 @@ async fn test_loss_of_liveness_with_recovery() {
 
     // wait and fetch the latest commit round
     tokio::time::sleep(node_advance_delay).await;
-    let rounds_3 = cluster.assert_progress(4, 0).await;
+    let rounds_3 = cluster.assert_progress(4, 2).await;
 
     let round_2_max = rounds_2.values().max().unwrap();
     assert!(

@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import clsx from 'classnames';
+import clsx from 'clsx';
+import type { ReactNode } from 'react';
 
 import { Text } from '../shared/text';
-
-import type { ReactNode } from 'react';
 
 export type SummaryCardProps = {
 	header?: string;
@@ -29,7 +28,7 @@ export function SummaryCard({
 	return (
 		<div
 			className={clsx(
-				{ 'border border-solid border-gray-45': !noBorder, 'shadow-summary-card': boxShadow },
+				{ 'border border-solid border-gray-45': !noBorder, 'shadow-card-soft': boxShadow },
 				'bg-white flex flex-col flex-nowrap rounded-2xl w-full',
 			)}
 		>

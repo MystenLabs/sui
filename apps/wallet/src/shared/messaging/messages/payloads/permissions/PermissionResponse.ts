@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isBasePayload } from '_payloads';
-
-import type { SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 
 export interface PermissionResponse extends BasePayload {
 	type: 'permission-response';
 	id: string;
-	accounts: SuiAddress[];
+	accounts: string[];
 	allowed: boolean;
 	responseDate: string;
 }

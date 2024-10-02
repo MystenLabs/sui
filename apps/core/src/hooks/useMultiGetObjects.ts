@@ -1,19 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectId, SuiObjectDataOptions } from '@mysten/sui.js';
-import { useRpcClient } from '../api/RpcClientContext';
-import { useQuery } from '@tanstack/react-query';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { SuiObjectDataOptions, SuiObjectResponse } from '@mysten/sui/client';
+import { useQuery, UseQueryOptions } from '@tanstack/react-query';
+
 import { chunkArray } from '../utils/chunkArray';
 
-export function useMultiGetObjects(ids: ObjectId[], options: SuiObjectDataOptions) {
-	const rpc = useRpcClient();
+export function useMultiGetObjects(
+	ids: string[],
+	options: SuiObjectDataOptions,
+	queryOptions?: Omit<UseQueryOptions<SuiObjectResponse[]>, 'queryKey' | 'queryFn'>,
+) {
+	const client = useSuiClient();
 	return useQuery({
+		...queryOptions,
 		queryKey: ['multiGetObjects', ids],
 		queryFn: async () => {
 			const responses = await Promise.all(
 				chunkArray(ids, 50).map((chunk) =>
-					rpc.multiGetObjects({
+					client.multiGetObjects({
 						ids: chunk,
 						options,
 					}),

@@ -1,0 +1,10 @@
+//# run
+module 0x42.m {
+// missing dep
+import 0x42.M;
+
+entry foo() {
+label b0:
+    return;
+}
+}

@@ -1,0 +1,60 @@
+---
+title: In-Game Currency
+---
+
+Using the Sui [Closed-Loop Token](../../../standards/closed-loop-token.mdx) standard, you can create in-game currency (such as gems or diamonds in mobile games) that you can grant to players for their actions or make available to purchase. You mint the tokens on Sui, but players can only use the tokens within the economy of the game itself. These types of tokens are usually not transferrable and you would typically mint them in predefined amounts to maintain scarcity and game balance.
+
+The following example creates an in-game currency called a GEM, which represents a certain number of SUI. In the example, the user can buy fungible GEMs using SUI, which can then be used as currency within the game. Use the code comments to follow the logic of the example.
+
+## Example 
+
+The Sui repo hosts a basic example of creating in-game currency. The Move modules that create the economy of the example are in the gems.move source file.
+
+### Module examples::sword
+
+The `examples::sword` module creates one of the objects, a `sword`, that has in-game value. The module assigns a value in GEMs (the other valuable in-game item) to the sword. The module also provides the logic for trading GEMs to receive a sword. 
+
+{@inject: examples/move/token/sources/gems.move#module=examples::sword noComments}
+
+### Module examples::gem
+
+The `examples::gem` module creates the in-game currency, GEMs. Users spend SUI to purchase GEMs, which can then be traded for swords. The module defines three groups of GEMs (small, medium, and large), with each group representing a different in-game value. Constants hold both the value of each package and the actual number of GEMs the groups contain. 
+
+The module's `init` function uses `coin::create_currency` to create the GEM. The `init` function, which runs only the one time when the module publishes, also sets the policies for the in-game currency, freezes the metadata for the coin, and transfers the policy capability to the publisher of the package. 
+
+{@inject: examples/move/token/sources/gems.move#fun=init noComments}
+
+The module handles the purchase of GEMs with the `buy_gems` function. 
+
+{@inject: examples/move/token/sources/gems.move#fun=buy_gems noComments}
+
+Use the following toggle to control the display of the complete module. 
+
+<details>
+<summary>
+`examples::gem` module in `gems.move`
+</summary>
+
+{@inject: examples/move/token/sources/gems.move#module=examples::gem noComments}
+
+</details>
+
+### Complete code 
+
+Toggle display of the complete source for this example, including comments, or use the link in the [Related links](#related-links) section to view the project source on GitHub.
+
+<details>
+<summary>
+`gems.move`
+</summary>
+
+{@inject: examples/move/token/sources/gems.move}
+
+</details>
+
+## Related links
+
+- [Closed Loop Token standard](../../../standards/closed-loop-token.mdx): Details for the standard used to create tokens on Sui.
+- [Source code](https://github.com/MystenLabs/sui/blob/main/examples/move/token/sources/gems.move): The source code in GitHub for this example.
+- [Loyalty Tokens](./loyalty.mdx): Example of how to create tokens that are valid only for a specific service, useful in loyalty reward programs.
+- [Regulated Coin and Deny List](./regulated.mdx): Example of how to create regulated coins on the Sui network.

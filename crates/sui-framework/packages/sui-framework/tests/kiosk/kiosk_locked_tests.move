@@ -4,18 +4,15 @@
 #[test_only]
 /// Test illustrating how an asset can be forever locked in the Kiosk.
 module sui::kiosk_locked_test {
-    use sui::kiosk;
     use sui::item_locked_policy as locked_policy;
     use sui::kiosk_test_utils::{Self as test, Asset};
-    use sui::transfer_policy as policy;
-    use sui::transfer;
 
     #[test]
     fun test_item_always_locked() {
         let ctx = &mut test::ctx();
         let (_, _, carl) = test::folks();
-        let (policy, policy_cap) = test::get_policy(ctx);
-        let (kiosk, kiosk_cap) = test::get_kiosk(ctx);
+        let (mut policy, policy_cap) = test::get_policy(ctx);
+        let (mut kiosk, kiosk_cap) = test::get_kiosk(ctx);
         let (item, item_id) = test::get_asset(ctx);
         let payment = test::get_sui(1000, ctx);
 
@@ -24,19 +21,19 @@ module sui::kiosk_locked_test {
         // - require "PlacedWitness" on purchase
         // - place an asset into the Kiosk so it can only be sold
         locked_policy::set(&mut policy, &policy_cap);
-        kiosk::lock(&mut kiosk, &kiosk_cap, &policy, item);
-        kiosk::list<Asset>(&mut kiosk, &kiosk_cap, item_id, 1000);
+        kiosk.lock(&kiosk_cap, &policy, item);
+        kiosk.list<Asset>(&kiosk_cap, item_id, 1000);
 
         // Bob the Buyer
         // - places the item into his Kiosk and gets the proof
         // - prove placing and confirm request
-        let (bob_kiosk, bob_kiosk_cap) = test::get_kiosk(ctx);
-        let (item, request) = kiosk::purchase<Asset>(&mut kiosk, item_id, payment);
-        kiosk::lock(&mut bob_kiosk, &bob_kiosk_cap, &policy, item);
+        let (mut bob_kiosk, bob_kiosk_cap) = test::get_kiosk(ctx);
+        let (item, mut request) = kiosk.purchase<Asset>(item_id, payment);
+        bob_kiosk.lock(&bob_kiosk_cap, &policy, item);
 
         // The difference!
-        locked_policy::prove(&mut request, &mut bob_kiosk);
-        policy::confirm_request(&policy, request);
+        locked_policy::prove(&mut request, &bob_kiosk);
+        policy.confirm_request(request);
 
         // Carl the Cleaner;
         // - cleans up and transfer Kiosk to himself

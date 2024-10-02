@@ -73,6 +73,9 @@ impl ReplayFuzzer {
                 config.expensive_safety_check_config.clone(),
                 false,
                 None,
+                None,
+                None,
+                None,
             )
             .await?;
 
@@ -114,7 +117,7 @@ impl ReplayFuzzer {
         transaction_kind: &TransactionKind,
     ) -> Result<ExecutionSandboxState, ReplayFuzzError> {
         let sandbox_state = self.execute_tx(transaction_kind).await?;
-        if let Err(e) = &sandbox_state.local_exec_status {
+        if let Some(Err(e)) = &sandbox_state.local_exec_status {
             let stat = e.to_execution_status().0;
             match &stat {
                 ExecutionFailureStatus::InvariantViolation

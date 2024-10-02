@@ -1,0 +1,12 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --addresses test=0x0 --protocol-version 48
+
+//# publish 
+module 0x0.f {
+    enum X has key {
+        A { } 
+    }
+}
+

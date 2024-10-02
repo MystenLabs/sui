@@ -2,9 +2,21 @@ name: Rust
 
 on:
   push:
-    branches: [main, extensions, devnet]
+    branches:
+      - 'main'
+      - 'devnet'
+      - 'testnet'
+      - 'mainnet'
+      - 'releases/sui-*-release'
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [ opened, synchronize, reopened, ready_for_review ]
+  workflow_dispatch:
+    inputs:
+      sui_repo_ref:
+        description: "Branch / commit to test"
+        type: string
+        required: false
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -36,56 +48,60 @@ env:
 
 jobs:
   diff:
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
-      isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
+      isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Detect Changes
-        uses: "./.github/actions/diffs"
+        uses: './.github/actions/diffs'
         id: diff
 
   license-check:
     name: license-check
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
       - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
         with:
           crate: cargo-hakari
           locked: true
       - run: cargo xlint
-      - run: |
-          cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-          cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
-  release-notes-description-check:
-    name: release-notes-check
+  move-auto-formatter-ci-test:
     needs: diff
-    if: needs.diff.outputs.isReleaseNotesEligible == 'true'
-    runs-on: [ubuntu-latest]
+    if: needs.diff.outputs.isMoveAutoFormatter == 'true'
+    runs-on: [ ubuntu-latest ]
+    strategy:
+      matrix:
+        node-version: [ 20 ]
     steps:
-      - uses: actions/checkout@v3
-      - name: Check Pull Request Description
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
+        with:
+          version: 9.1.1
+      - name: Setup Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
+        with:
+          node-version: '20.x'
+          cache: 'pnpm'
+      - name: Install dependencies
+        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
+        run: npm install && npm i web-tree-sitter
+      - name: Run npm test
+        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
         shell: bash
-        run: |
-          export PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-          export DESCRIPTION=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/MystenLabs/sui/pulls/${PR_NUMBER}" \
-            | jq --raw-output .body)
-
-          if [[ "${DESCRIPTION}" == *"[x]"*  ]]; then
-            if [[ "${DESCRIPTION}" =~ Release[[:space:]]notes[[:space:]]+.* ]]; then
-              exit 0
-            else
-              echo "At least one '[x]' was checked under 'Type of Change (Check all that apply)', you need to add a blob under the 'Release Notes' section."
-              exit 1
-            fi
-          fi
+        run: npm run test
 
   test:
     needs: diff
@@ -100,35 +116,82 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ubuntu-ghcloud]
+          - [ ubuntu-ghcloud ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
-      - name: Install python dependencies
-        run: |
-          pip install pyopenssl --upgrade
-          if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
       - name: cargo test
         run: |
-          cargo nextest run --profile ci
+          cargo nextest run --profile ci -E '!package(sui-bridge)'
+      - name: cargo test (sui-graphql staging)
+        run: |
+          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)'
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
+        shell: bash
+
+  test-extra:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    env:
+      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
+      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
+      # non-deterministic `test` job.
+      SUI_SKIP_SIMTESTS: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ ubuntu-ghcloud ]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@nextest
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
       - name: benchmark (smoke)
         run: |
           cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
-          pushd narwhal/benchmark && fab smoke && popd
       - name: doctests
         run: |
           cargo test --doc
       - name: rustdoc
         run: |
           cargo doc --workspace --no-deps
+      - name: Install cargo-hakari, and cache the binary
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
+        with:
+          crate: cargo-hakari
+          locked: true
+      - name: Install rustfmt
+        run: rustup component add rustfmt
       - name: sui-execution
         run: |
           ./scripts/execution_layer.py generate-lib
+      - name: Install diesel CLI, and cache the binary
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
+        with:
+          crate: diesel_cli
+          locked: true
+      - name: Indexer schema
+        run: |
+          ./scripts/generate_indexer_schema.sh
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -141,15 +204,15 @@ jobs:
     strategy:
       matrix:
         os:
-          - [windows-ghcloud]
+          - [ windows-ghcloud ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
-      - uses: taiki-e/install-action@nextest
-      - uses: arduino/setup-protoc@v1
-        # this avoids rate-limiting
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+
+      - uses: taiki-e/install-action@nextest
+
       - name: Install postgres (Windows)
         shell: bash
         run: |
@@ -159,71 +222,98 @@ jobs:
           echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
+
       - name: cargo build
+        shell: bash
         run: |
           cargo build --all-features
-        shell: bash
 
   simtest:
     needs: diff
-    if: needs.diff.outputs.isRust == 'true'
+    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ ubuntu-ghcloud ]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 60000
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          scripts/simtest/cargo-simtest simtest
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
 
-  rosetta-validation:
+  # This job ensures that Move unit tests are run if there are changes
+  # to Move code but not Rust code (If there are Rust changes, they
+  # will be run as part of a larger test suite).
+  move-test:
     needs: diff
-    if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 45
-    runs-on: [ubuntu-ghcloud]
+    if: needs.diff.outputs.isRust == 'false' && needs.diff.outputs.isMove == 'true'
+    timeout-minutes: 10
+    runs-on: [ ubuntu-ghcloud ]
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup environment
-        run: .github/scripts/rosetta/setup.sh
-        shell: bash
-
-      - name: Start local Sui network
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@nextest
+      - name: Run move tests
         run: |
-          sui start --no-full-node &
-        shell: bash
+          cargo nextest run -p sui-framework-tests --test move_tests
 
-      - name: Start Rosetta servers
-        run: .github/scripts/rosetta/start_rosetta.sh
-        shell: bash
+  # # Disabled
+  # rosetta-validation:
+  #   needs: diff
+  #   if: needs.diff.outputs.isRust == 'true'
+  #   timeout-minutes: 45
+  #   runs-on: [ubuntu-ghcloud]
+  #   steps:
+  #     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+  #       with:
+  #         ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
 
-      - name: Sleep for 20 seconds
-        run: sleep 20s
-        shell: bash
+  #     - name: Setup environment
+  #       run: .github/scripts/rosetta/setup.sh
+  #       shell: bash
 
-      - name: Run check:construction test
-        run: |
-          ./bin/rosetta-cli --configuration-file rosetta_cli.json check:construction
-        shell: bash
+  #     - name: Start local Sui network
+  #       run: |
+  #         sui start --no-full-node &
+  #       shell: bash
 
-      - name: Run check:data test
-        run: |
-          ./bin/rosetta-cli --configuration-file rosetta_cli.json check:data
-        shell: bash
+  #     - name: Start Rosetta servers
+  #       run: .github/scripts/rosetta/start_rosetta.sh
+  #       shell: bash
+
+  #     - name: Sleep for 20 seconds
+  #       run: sleep 20s
+  #       shell: bash
+
+  #     - name: Run check:construction test
+  #       run: |
+  #         ./bin/rosetta-cli --configuration-file rosetta_cli.json check:construction
+  #       shell: bash
+
+  #     - name: Run check:data test
+  #       run: |
+  #         ./bin/rosetta-cli --configuration-file rosetta_cli.json check:data
+  #       shell: bash
 
   # This is a no-op job that allows the resulting action names to line up when
   # there are no rust changes in a given PR/commit. This ensures that we can
   # continue to block on the rust tests passing in the case of rust changes and
   # otherwise not block pushes to main.
+  # Note that this no-op job is only when there is a strategy matrix.
+  # Other required jobs without strategy matrix do not need a no-op counterpart.
   test-notrust:
     name: test
     needs: diff
@@ -232,8 +322,28 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ubuntu-ghcloud]
-          - [windows-ghcloud]
+          - [ ubuntu-ghcloud ]
+          - [ windows-ghcloud ]
+      fail-fast: false
+    steps:
+      - run: 'echo "No build required" '
+
+  # This is a no-op job that allows the resulting action names to line up when
+  # there are no rust changes in a given PR/commit. This ensures that we can
+  # continue to block on the rust tests passing in the case of rust changes and
+  # otherwise not block pushes to main.
+  # Note that this no-op job is needed when there is a strategy matrix.
+  # Other required jobs without strategy matrix do not need a no-op counterpart.
+  test-extra-notrust:
+    name: test-extra
+    needs: diff
+    if: needs.diff.outputs.isRust == 'false'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ ubuntu-ghcloud ]
+          - [ windows-ghcloud ]
       fail-fast: false
     steps:
       - run: 'echo "No build required" '
@@ -241,13 +351,11 @@ jobs:
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ ubuntu-ghcloud ]
     steps:
-      - uses: arduino/setup-protoc@v1
-        # this avoids rate-limiting
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/checkout@v3
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - run: rustup component add clippy
       # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
@@ -263,67 +371,48 @@ jobs:
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - run: rustup component add rustfmt
       - name: rustfmt
-        uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # pin@v1.0.3
         with:
           command: fmt
-          args: --all --check
+          args: --check
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@v3
-      - uses: mystenlabs/cargo-deny-action@main
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@cargo-deny
+      - run: cargo deny check
 
   sui-excution-cut:
     name: cutting a new execution layer
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ ubuntu-ghcloud ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
         with:
           crate: cargo-hakari
           locked: true
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Make cut
         run: ./scripts/execution_layer.py cut for_ci_test
       - name: Check execution builds
         run: cargo build -p sui-execution
-
-
-  #indexer:
-  #  name: indexer
-  #  needs: diff
-  #  if: needs.diff.outputs.isRust == 'true'
-  #  timeout-minutes: 45
-  #  runs-on: [ubuntu-ghcloud]
-  #  services:
-  #    postgres:
-  #      image: postgres
-  #      env:
-  #        POSTGRES_PASSWORD: postgrespw
-  #      options: >-
-  #        --health-cmd pg_isready
-  #        --health-interval 10s
-  #        --health-timeout 5s
-  #        --health-retries 5
-  #      ports:
-  #        - 5432:5432
-  #  steps:
-  #    - uses: actions/checkout@v3
-  #    - name: integration-test-with-postgres
-  #      #We only have 1 instance of postgres DB, can only run test in single thread
-  #      run: |
-  #        cargo test --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
-  #      env:
-  #        POSTGRES_HOST: localhost
-  #        POSTGRES_PORT: 5432

@@ -1,0 +1,35 @@
+# Raw assign with no value
+--assign "a"
+--assign "b" "3"
+# Can't assign to previous command
+--assign "c"
+--assign "d"
+
+# Too many args
+--assign "a" "b" "c"
+--assign "a" "b" "c" "e" "f"
+
+# Too few args
+--assign
+
+# Keywords
+--assign "gas" "1"
+--assign "none" "2"
+
+## Now the same without quotes
+
+# Raw assign with no value
+--assign a
+--assign b 3
+# Can't assign to previous command
+--assign c
+--assign d
+
+# Too many args
+--assign a b c
+--assign a b c e f
+
+# Keywords
+--assign gas 1
+--assign none 2
+

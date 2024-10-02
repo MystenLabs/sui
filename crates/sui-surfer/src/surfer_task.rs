@@ -19,15 +19,17 @@ use crate::{
 
 pub struct SurferTask {
     pub state: SurferState,
-    pub surf_strategy: Box<dyn SurfStrategy>,
+    pub surf_strategy: SurfStrategy,
     pub exit_rcv: watch::Receiver<()>,
 }
 
 impl SurferTask {
-    pub async fn create_surfer_tasks<S: Default + SurfStrategy>(
+    pub async fn create_surfer_tasks(
         cluster: Arc<TestCluster>,
         seed: u64,
         exit_rcv: watch::Receiver<()>,
+        skip_accounts: usize,
+        surf_strategy: SurfStrategy,
     ) -> Vec<SurferTask> {
         let mut rng = StdRng::seed_from_u64(seed);
         let immutable_objects: ImmObjects = Arc::new(RwLock::new(HashMap::new()));
@@ -36,17 +38,21 @@ impl SurferTask {
         let mut accounts: HashMap<SuiAddress, (Option<ObjectRef>, OwnedObjects)> = cluster
             .get_addresses()
             .iter()
+            .skip(skip_accounts)
             .map(|address| (*address, (None, HashMap::new())))
             .collect();
-        let validator = cluster
+        let node = cluster
             .swarm
-            .validator_nodes()
+            .all_nodes()
+            .flat_map(|node| node.get_node_handle())
             .next()
-            .unwrap()
-            .get_node_handle()
             .unwrap();
-        let all_live_objects: Vec<_> =
-            validator.with(|node| node.state().db().iter_live_object_set(false).collect());
+        let all_live_objects: Vec<_> = node.with(|node| {
+            node.state()
+                .get_accumulator_store()
+                .iter_cached_live_object_set_for_testing(false)
+                .collect()
+        });
         for obj in all_live_objects {
             match obj {
                 LiveObject::Normal(obj) => {
@@ -95,10 +101,12 @@ impl SurferTask {
         let entry_functions = Arc::new(RwLock::new(vec![]));
         accounts
             .into_iter()
-            .map(|(address, (gas_object, owned_objects))| {
+            .enumerate()
+            .map(|(id, (address, (gas_object, owned_objects)))| {
                 let seed = rng.gen::<u64>();
                 let state_rng = StdRng::seed_from_u64(seed);
                 let state = SurferState::new(
+                    id,
                     cluster.clone(),
                     state_rng,
                     address,
@@ -110,7 +118,7 @@ impl SurferTask {
                 );
                 SurferTask {
                     state,
-                    surf_strategy: Box::<S>::default(),
+                    surf_strategy: surf_strategy.clone(),
                     exit_rcv: exit_rcv.clone(),
                 }
             })
@@ -120,11 +128,16 @@ impl SurferTask {
     pub async fn surf(mut self) -> SurfStatistics {
         loop {
             let entry_functions = self.state.entry_functions.read().await.clone();
-            self.surf_strategy
-                .surf_for_a_while(&mut self.state, entry_functions, &self.exit_rcv)
-                .await;
-            if self.exit_rcv.has_changed().unwrap() {
-                return self.state.stats;
+
+            tokio::select! {
+                _ = self.surf_strategy
+                .surf_for_a_while(&mut self.state, entry_functions) => {
+                    continue;
+                }
+
+                _ = self.exit_rcv.changed() => {
+                    return self.state.stats;
+                }
             }
         }
     }

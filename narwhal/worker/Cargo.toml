@@ -6,6 +6,9 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 arc-swap.workspace = true
 async-trait.workspace = true
@@ -32,12 +35,10 @@ store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../crates/mysten-network"}
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 sui-protocol-config = { path = "../../crates/sui-protocol-config" }
-consensus = { path = "../consensus", package = "narwhal-consensus" }
 
 anemo.workspace = true
 anemo-tower.workspace = true
 anyhow.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 eyre.workspace = true
 
 [dev-dependencies]
@@ -47,7 +48,6 @@ tempfile.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 reqwest.workspace = true
 node = { path = "../node", package = "narwhal-node" }
-consensus = { path = "../consensus", package = "narwhal-consensus" }
 primary = { path = "../primary", package = "narwhal-primary" }
 telemetry-subscribers.workspace = true
 storage = { path = "../storage", package = "narwhal-storage" }

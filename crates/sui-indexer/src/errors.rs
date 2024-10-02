@@ -4,13 +4,33 @@
 use fastcrypto::error::FastCryptoError;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
+use sui_json_rpc::name_service::NameServiceError;
 use thiserror::Error;
 
 use sui_types::base_types::ObjectIDParseError;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 
 #[derive(Debug, Error)]
+pub struct DataDownloadError {
+    pub error: IndexerError,
+    pub next_checkpoint_sequence_number: u64,
+}
+
+impl std::fmt::Display for DataDownloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "next_checkpoint_seq: {}, error: {}",
+            self.next_checkpoint_sequence_number, self.error
+        )
+    }
+}
+
+#[derive(Debug, Error)]
 pub enum IndexerError {
+    #[error("Indexer failed to read from archives store with error: `{0}`")]
+    ArchiveReaderError(String),
+
     #[error("Indexer failed to convert timestamp to NaiveDateTime with error: `{0}`")]
     DateTimeParsingError(String),
 
@@ -19,6 +39,9 @@ pub enum IndexerError {
 
     #[error("Fullnode returns unexpected responses, which may block indexers from proceeding, with error: `{0}`")]
     UnexpectedFullnodeResponseError(String),
+
+    #[error("Indexer failed to transform data with error: `{0}`")]
+    DataTransformationError(String),
 
     #[error("Indexer failed to read fullnode with error: `{0}`")]
     FullNodeReadingError(String),
@@ -56,14 +79,32 @@ pub enum IndexerError {
     #[error("Indexer failed to serialize/deserialize with error: `{0}`")]
     SerdeError(String),
 
+    #[error("Indexer error related to dynamic field: `{0}`")]
+    DynamicFieldError(String),
+
     #[error("Indexer does not support the feature with error: `{0}`")]
     NotSupportedError(String),
+
+    #[error("Indexer read corrupted/incompatible data from persistent storage: `{0}`")]
+    PersistentStorageDataCorruptionError(String),
+
+    #[error("Indexer generic error: `{0}`")]
+    GenericError(String),
+
+    #[error("GCS error: `{0}`")]
+    GcsError(String),
+
+    #[error("Indexer failed to resolve object to move struct with error: `{0}`")]
+    ResolveMoveStructError(String),
 
     #[error(transparent)]
     UncategorizedError(#[from] anyhow::Error),
 
     #[error(transparent)]
     ObjectIdParseError(#[from] ObjectIDParseError),
+
+    #[error("Invalid transaction digest with error: `{0}`")]
+    InvalidTransactionDigestError(String),
 
     #[error(transparent)]
     SuiError(#[from] SuiError),
@@ -77,6 +118,9 @@ pub enum IndexerError {
     #[error(transparent)]
     UserInputError(#[from] UserInputError),
 
+    #[error("Indexer failed to resolve module with error: `{0}`")]
+    ModuleResolutionError(String),
+
     #[error(transparent)]
     ObjectResponseError(#[from] SuiObjectResponseError),
 
@@ -88,6 +132,12 @@ pub enum IndexerError {
 
     #[error("Indexer failed to send item to channel with error: `{0}`")]
     MpscChannelError(String),
+
+    #[error(transparent)]
+    NameServiceError(#[from] NameServiceError),
+
+    #[error("Inconsistent migration records: {0}")]
+    DbMigrationError(String),
 }
 
 pub trait Context<T> {
@@ -109,5 +159,11 @@ impl From<IndexerError> for RpcError {
 impl From<tokio::task::JoinError> for IndexerError {
     fn from(value: tokio::task::JoinError) -> Self {
         IndexerError::UncategorizedError(anyhow::Error::from(value))
+    }
+}
+
+impl From<diesel_async::pooled_connection::bb8::RunError> for IndexerError {
+    fn from(value: diesel_async::pooled_connection::bb8::RunError) -> Self {
+        Self::PgPoolConnectionError(value.to_string())
     }
 }

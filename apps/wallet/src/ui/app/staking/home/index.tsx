@@ -3,11 +3,15 @@
 
 import { Route, Routes } from 'react-router-dom';
 
+import { useUnlockedGuard } from '../../hooks/useUnlockedGuard';
 import { DelegationDetail } from '../delegation-detail';
 import StakePage from '../stake';
 import { Validators } from '../validators';
 
 export function Staking() {
+	if (useUnlockedGuard()) {
+		return null;
+	}
 	return (
 		<Routes>
 			<Route path="/*" element={<Validators />} />

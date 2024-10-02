@@ -2,118 +2,112 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
+use std::sync::Arc;
 
-use crate::signature::{AuthenticatorTrait, AuxVerifyData};
-use crate::utils::{make_transaction, make_zklogin_tx};
+use crate::crypto::{PublicKey, SignatureScheme, ZkLoginPublicIdentifier};
+
+use crate::signature::VerifyParams;
+use crate::signature_verification::VerifiedDigestCache;
+use crate::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_personal_msg};
+use crate::utils::{load_test_vectors, SHORT_ADDRESS_SEED};
 use crate::{
-    base_types::SuiAddress,
-    crypto::{get_key_pair_from_rng, DefaultHash, SignatureScheme, SuiKeyPair},
-    signature::GenericSignature,
-    zk_login_authenticator::{AddressParams, PublicInputs, ZkLoginAuthenticator, ZkLoginProof},
+    base_types::SuiAddress, signature::GenericSignature, zk_login_util::DEFAULT_JWK_BYTES,
 };
-use fastcrypto::encoding::{Base64, Encoding};
-use fastcrypto::hash::HashFunction;
+use fastcrypto::encoding::Base64;
 use fastcrypto::traits::ToFromBytes;
-use fastcrypto_zkp::bn254::zk_login::{
-    big_int_str_to_bytes, AuxInputs, OAuthProvider, SupportedKeyClaim,
-};
-use rand::{rngs::StdRng, SeedableRng};
-use shared_crypto::intent::{Intent, IntentMessage};
 
-pub const TEST_JWK_BYTES: &[u8] = r#"{
-    "keys": [
-        {
-          "kty": "RSA",
-          "e": "AQAB",
-          "alg": "RS256",
-          "kid": "2d9a5ef5b12623c91671a7093cb323333cd07d09",
-          "use": "sig",
-          "n": "0NDRXWtH6_HnmuSuTAisgYVZ3Z67PQjHbRFz4XNYuD95BKx0wQr0GWOi_UCGLfI0col3i6J3_AF-b1YrTFTMEr_bL8CYDdK2CYLcGUzc5bLRDAySsqnKdlhWkneqfFdr3J66mHu11KUaIIRWiLsCkR9QFF-8o2PtZzv3F-3Uh7L4q7i_Evs1s7SJlO0OAnI4ew4rP2HbRaO0Q2zK0DL_d1eoAC72apQuEzz-2aXfQ-QYSTlVK74McBhP1MRtgD6zGF2lwg4uhgb55fDDQQh0VHWQSxwbvAL0Oox69zzpkFgpjJAJUqaxegzETU1jf3iKs1vyFIB0C4N-Jr__zwLQZw=="
-        },
-        {
-          "alg": "RS256",
-          "use": "sig",
-          "n": "1qrQCTst3RF04aMC9Ye_kGbsE0sftL4FOtB_WrzBDOFdrfVwLfflQuPX5kJ-0iYv9r2mjD5YIDy8b-iJKwevb69ISeoOrmL3tj6MStJesbbRRLVyFIm_6L7alHhZVyqHQtMKX7IaNndrfebnLReGntuNk76XCFxBBnRaIzAWnzr3WN4UPBt84A0KF74pei17dlqHZJ2HB2CsYbE9Ort8m7Vf6hwxYzFtCvMCnZil0fCtk2OQ73l6egcvYO65DkAJibFsC9xAgZaF-9GYRlSjMPd0SMQ8yU9i3W7beT00Xw6C0FYA9JAYaGaOvbT87l_6ZkAksOMuvIPD_jNVfTCPLQ==",
-          "e": "AQAB",
-          "kty": "RSA",
-          "kid": "6083dd5981673f661fde9dae646b6f0380a0145c"
-        }
-      ]
-  }"#.as_bytes();
-
-#[test]
-fn zklogin_authenticator_scenarios() {
-    let (user_address, tx, authenticator) = make_zklogin_tx();
-
-    let intent_msg = IntentMessage::new(
-        Intent::sui_transaction(),
-        tx.into_data().transaction_data().clone(),
-    );
-
-    // Construct the required info required to verify a zk login authenticator
-    // in authority server (i.e. epoch and default JWK).
-    let aux_verify_data = AuxVerifyData::new(Some(0), Some(TEST_JWK_BYTES.to_vec()));
-
-    // Verify passes.
-    assert!(authenticator
-        .verify_secure_generic(&intent_msg, user_address, aux_verify_data)
-        .is_ok());
-    // Malformed JWK in aux verify data.
-    let aux_verify_data = AuxVerifyData::new(Some(9999), Some(vec![0, 0, 0]));
-
-    // Verify fails.
-    assert!(authenticator
-        .verify_secure_generic(&intent_msg, user_address, aux_verify_data)
-        .is_err());
-}
+use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK};
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
+use im::hashmap::HashMap as ImHashMap;
+use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 
 #[test]
 fn test_serde_zk_login_signature() {
-    let user_key: SuiKeyPair =
-        SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
-
-    let proof = ZkLoginProof::from_json("{\"pi_a\":[\"14773032106069856668972396672350797076055861237383576052493955423994116090912\",\"10256481106886434602492891208282170223983625600287748851653074125391248309014\",\"1\"],\"pi_b\":[[\"11279307737533893899063186106984511177705318223976679158125470783510400431153\",\"10750728891610181825635823254337402092259745577964933136615591108170079085462\"],[\"5103373414836661910221794877118021615720837981629628049907178132389261290989\",\"14681020929085169399218842877266984710651553119645243809601357658254293671214\"],[\"1\",\"0\"]],\"pi_c\":[\"9289872310426503554963895690721473724352074264768900407255162398689856598144\",\"11987870476480102771637928245246115838352121746691800889675428205478757122604\",\"1\"],\"protocol\":\"groth16\"}").unwrap();
-    let aux_inputs = AuxInputs::from_json("{\"addr_seed\":\"15604334753912523265015800787270404628529489918817818174033741053550755333691\",\"eph_public_key\":[\"17932473587154777519561053972421347139\",\"134696963602902907403122104327765350261\"],\"jwt_sha2_hash\":[\"148180057555400281455088754634676539629\",\"30382506788089954741979818497634535051\"],\"jwt_signature\":\"V9T2LoplvaMzyGFhOVxlUEIrp8iWIqPNFfE_h8GQKxutQc_MDY5KsKpGsTmfp9Qec1r6ojWDJplu6jw95BEHGJ-uyUlioUJyRR3v7GF5FkqD-eKkKSoFFWL34_mBjZV5vz2TmyY6ZjrQHyGIXH3X228wjO_8hDnAV1Hb8r1bUAKc0GA2CnWaDgP8SkL8-IbhE9KUeOWeOAAIoYbcBDf5QoyVLgMiB7f8-k7Phd_cTMDTco0rnOObh8BKFsud21ia5L6gA_OxjBHD3F0Xo36GGRd49i6XeXD5BXENJTCuHTVE42T8GsgwsslPaV8e1itfhVGOvB9aK5kmCXMmfgAr9A\",\"key_claim_name\":\"sub\",\"masked_content\":[101,121,74,104,98,71,99,105,79,105,74,83,85,122,73,49,78,105,73,115,73,109,116,112,90,67,73,54,73,106,103,121,77,106,103,122,79,71,77,120,89,122,104,105,90,106,108,108,90,71,78,109,77,87,89,49,77,68,85,119,78,106,89,121,90,84,85,48,89,109,78,105,77,87,70,107,89,106,86,105,78,87,89,105,76,67,74,48,101,88,65,105,79,105,74,75,86,49,81,105,102,81,46,61,121,74,112,99,51,77,105,79,105,74,111,100,72,82,119,99,122,111,118,76,50,70,106,89,50,57,49,98,110,82,122,76,109,100,118,98,50,100,115,90,83,53,106,98,50,48,105,76,67,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,67,74,104,100,87,81,105,79,105,73,49,78,122,85,49,77,84,107,121,77,68,81,121,77,122,99,116,98,88,78,118,99,68,108,108,99,68,81,49,100,84,74,49,98,122,107,52,97,71,70,119,99,87,49,117,90,51,89,52,90,68,103,48,99,87,82,106,79,71,115,117,89,88,66,119,99,121,53,110,98,50,57,110,98,71,86,49,99,50,86,121,89,50,57,117,100,71,86,117,100,67,53,106,98,50,48,105,76,67,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,18,120,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],\"max_epoch\":10000,\"num_sha2_blocks\":10,\"payload_len\":488,\"payload_start_index\":103}").unwrap();
-    let public_inputs = PublicInputs::from_json(
-        "[\"17502604849978740802263989016661989438644629010996707199169450653073498463837\"]",
-    )
-    .unwrap();
-
-    let mut hasher = DefaultHash::default();
-    hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
-    let address_params = AddressParams::new(
-        OAuthProvider::Google.get_config().0.to_owned(),
-        SupportedKeyClaim::Sub.to_string(),
-    );
-    hasher.update(bcs::to_bytes(&address_params).unwrap());
-    hasher.update(big_int_str_to_bytes(aux_inputs.get_address_seed()));
-    let user_address = SuiAddress::from_bytes(hasher.finalize().digest).unwrap();
-
-    // Sign the user transaction with the user's ephemeral key.
-    let tx = make_transaction(user_address, &user_key, Intent::sui_transaction());
-    let s = match tx.inner().tx_signatures.first().unwrap() {
-        GenericSignature::Signature(s) => s,
-        _ => panic!("Expected a signature"),
-    };
-
-    // Construct the authenticator with all user submitted components.
-    let authenticator = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
-        proof,
-        public_inputs,
-        aux_inputs,
-        s.clone(),
-    ));
-
+    // consistency test with typescript: sdk/typescript/test/unit/zklogin/signature.test.ts
+    use fastcrypto::encoding::Encoding;
+    let (user_address, _tx, authenticator) = make_zklogin_tx(get_zklogin_user_address(), false);
     let serialized = authenticator.as_ref();
-    println!("serialized: {:?}", serialized);
+    assert_eq!(serialized, &Base64::decode("BQNNMTczMTgwODkxMjU5NTI0MjE3MzYzNDIyNjM3MTc5MzI3MTk0Mzc3MTc4NDQyODI0MTAxODc5NTc5ODQ3NTE5Mzk5NDI4OTgyNTEyNTBNMTEzNzM5NjY2NDU0NjkxMjI1ODIwNzQwODIyOTU5ODUzODgyNTg4NDA2ODE2MTgyNjg1OTM5NzY2OTczMjU4OTIyODA5MTU2ODEyMDcBMQMCTDU5Mzk4NzExNDczNDg4MzQ5OTczNjE3MjAxMjIyMzg5ODAxNzcxNTIzMDMyNzQzMTEwNDcyNDk5MDU5NDIzODQ5MTU3Njg2OTA4OTVMNDUzMzU2ODI3MTEzNDc4NTI3ODczMTIzNDU3MDM2MTQ4MjY1MTk5Njc0MDc5MTg4ODI4NTg2NDk2Njg4NDAzMjcxNzA0OTgxMTcwOAJNMTA1NjQzODcyODUwNzE1NTU0Njk3NTM5OTA2NjE0MTA4NDAxMTg2MzU5MjU0NjY1OTcwMzcwMTgwNTg3NzAwNDEzNDc1MTg0NjEzNjhNMTI1OTczMjM1NDcyNzc1NzkxNDQ2OTg0OTYzNzIyNDI2MTUzNjgwODU4MDEzMTMzNDMxNTU3MzU1MTEzMzAwMDM4ODQ3Njc5NTc4NTQCATEBMANNMTU3OTE1ODk0NzI1NTY4MjYyNjMyMzE2NDQ3Mjg4NzMzMzc2MjkwMTUyNjk5ODQ2OTk0MDQwNzM2MjM2MDMzNTI1Mzc2Nzg4MTMxNzFMNDU0Nzg2NjQ5OTI0ODg4MTQ0OTY3NjE2MTE1ODAyNDc0ODA2MDQ4NTM3MzI1MDAyOTQyMzkwNDExMzAxNzQyMjUzOTAzNzE2MjUyNwExMXdpYVhOeklqb2lhSFIwY0hNNkx5OXBaQzUwZDJsMFkyZ3VkSFl2YjJGMWRHZ3lJaXcCMmV5SmhiR2NpT2lKU1V6STFOaUlzSW5SNWNDSTZJa3BYVkNJc0ltdHBaQ0k2SWpFaWZRTTIwNzk0Nzg4NTU5NjIwNjY5NTk2MjA2NDU3MDIyOTY2MTc2OTg2Njg4NzI3ODc2MTI4MjIzNjI4MTEzOTE2MzgwOTI3NTAyNzM3OTExCgAAAAAAAABhAG6Bf8BLuaIEgvF8Lx2jVoRWKKRIlaLlEJxgvqwq5nDX+rvzJxYAUFd7KeQBd9upNx+CHpmINkfgj26jcHbbqAy5xu4WMO8+cRFEpkjbBruyKE9ydM++5T/87lA8waSSAA==").unwrap());
     let deserialized = GenericSignature::from_bytes(serialized).unwrap();
     assert_eq!(deserialized, authenticator);
 
-    let sig = GenericSignature::from_bytes(&Base64::decode("BQNNMjA0ODE2ODc4ODk1NzQ2NDg1NjY0MjgwMTk4NTQxMDc0MjI2NjYyNTE1NjM2MDA3OTA1MDY2ODU2OTQ5MTEyNTk4MjMzNTcyMTAyMzNNMTEwMzM3NjUyNTU1NjExOTEyMTQ5NDgwNjAyNDUzOTQ3Nzc3NjQ1MDYxMjQ3Njk1MDk1Nzg4NDc2Nzg4NTgyNTQxOTg1ODcxOTU5ODgBMQMCTTEzODQ5OTAzNzExNTYxMzEzODI5OTM0OTE3OTY5NjUyMDkyODM4OTc4MTU2NzY5NDA0Njk5NTExMjk5MDg5MzEyMTYwNjYzNDk4MDM2TTE3MTY1MDgzOTQyNDQ5MjU0MTk5MjgzMTY5MDU4NTU0MjExMTkwMTAzMjQyNjg3MjEzMzY0NzM5MDYwNTIxMzk1ODE1NjE1MzIxMTYzAk0xMzkxMTE5MzgwODEzMzI3MTk5MTgyMjk5NDYwOTEyMDQzMTQ4NTM2NTMyNjEyODI2NTg4NTc1Njk4MzQxMTYyNDIzMDM1MTk4NTM2Nk0xODI5NDUwMzI3NzU4ODgwODYzMjMyNzIxNTYxMTg0MDI0MjMxOTQxNTAyNjIyNDQzODE5NTIzOTgxNzgyODg2NTMxMzkxNjc5ODkwMAIBMQEwA0wyNzQ1MTA0NTk0MTg1NjU0Mjg2ODIzMjIyNDYyNDQ4Mzc3OTAyNTkyMzkzNDY3NTE2ODUzMzg3MzUxNjE4NTkxMDM0NTI0MDgwMjUwTDYwNjEyODQ3NDIwMDA5MDA5NDIzMzA2MTAxNTU1NzQ5MTk5OTk5NTUxODI1NjQ4ODMxMDUwODE3MjEwNTc2MjI5Mjg3NzExNzY3MjQBMQdncm90aDE2AU0xNzk0MzY2NzcyOTYxNzYzNzQ0MDUwOTA2MjcyMTYwNTE2NDI3OTQ3OTYxMzI0MjgzNDMwOTEwOTc0NzQ5OTUyOTYzOTY2NjE3NjM5Nk0xNTk4MTg1NzUzNzkxNDAwMzE4OTg4Nzg2MDExODM2MzIzMzU3MTU3NTIxMDA0NjMwNzU5MjM4NjYwODQ0NDgxMzU0OTY2Mzc2MTkyNwInMTY2OTY1MDA0OTAwMDAxOTY5Mjg4OTM1NzU3MzIwMzQ0Nzg5MjAzJzMwNTA5MTE5MTEzODgyMzM1MjU1MTQ2MzEzMTk3OTAyNDQ5NzM2MAInMjEyNDg4MjE2MTkzNzM4NDA0Njk4NzMxNzA1OTc2NzY4ODc2MjI2JzI2NTY4NDg5MzExNTIyMjg5MTM4NDc5ODY4MzUwMDM2NzY0NzgwOdYCYmZISGx2STFXbVUtV2Z2UTlXZExRVGJFUlhJbFZVWW45MmhjTWxQNW1NaHNvNGw1U1Z3aDI5RFJRdV9DSjBDbm1pMWdTZFV0em4xS0Z1MWMyZUZhRlZXNUFwYkdXZEF3azdlOXBPcGkzQW9JZF9XOUdOOE5uanA5RW9nc3FURlF3SFl6MlBiejdLV1lOSUdMd3ExS1pBc2swY2l4QTNQd3RKUFpIbkI0dFhGOUJHQVM0WFdEcEs0aGpxR0NKWWlRVjFsYWJuY2VkYmp4YnhsN2owSnRFRS1KZ3hBNHltZ3hfT1I0YXpLSWpSUG9HZlQtdWZJaEVPS0FEN3BfYXVXNkNORS04djhWRVgyMFJFV05WM2l3MldZVHFwQ0dScVZUbDkycHNseFJkVTJlRWNDYS1YMFA2X3h0dkZaVnMzQXdjUmpiZVBTMWl2cC1NRnFybmhteFN3A3N1YoAGZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklqWXdPRE5rWkRVNU9ERTJOek5tTmpZeFptUmxPV1JoWlRZME5tSTJaakF6T0RCaE1ERTBOV01pTENKMGVYQWlPaUpLVjFRaWZRLj15SnBjM01pT2lKb2RIUndjem92TDJGalkyOTFiblJ6TG1kdmIyZHNaUzVqYjIwaUxDPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT1DSmhkV1FpT2lJNU5EWTNNekV6TlRJeU56WXRjR3MxWjJ4alp6aGpjVzh6T0c1a1lqTTVhRGRxTURrelpuQnpjR2gxYzNVdVlYQndjeTVuYjI5bmJHVjFjMlZ5WTI5dWRHVnVkQzVqYjIwaUxDPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09gAAAAAAAAAAAFagAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAxQAAAAAAAAALTgJnAGEAuMkTd7vlBccNSDSMWlzC59+JG5NOborYmJVW9Ta5WAR8IXunloWEiaXlwx04taR9x6P/W/lXIiJlu8q0oCg0DH2cSk59huVthLdyL3A/YNPlhm0Td7i/8cGw3f2RHPrQ").unwrap()).unwrap();
-    let user_address: SuiAddress = (&sig).try_into().unwrap();
+    let addr: SuiAddress = (&authenticator).try_into().unwrap();
+    assert_eq!(addr, user_address);
+}
+
+#[test]
+fn test_serde_zk_public_identifier() {
+    let (_, _, inputs) = &load_test_vectors("./src/unit_tests/zklogin_test_vectors.json")[0];
+    let modified_inputs =
+        ZkLoginInputs::from_json(&serde_json::to_string(&inputs).unwrap(), SHORT_ADDRESS_SEED)
+            .unwrap();
+
+    let mut bytes = Vec::new();
+    let binding = OIDCProvider::Twitch.get_config();
+    let iss_bytes = binding.iss.as_bytes();
+    bytes.extend([iss_bytes.len() as u8]);
+    bytes.extend(iss_bytes);
+    // length here is 31 bytes and left unpadded.
+    let address_seed = Bn254FrElement::from_str(SHORT_ADDRESS_SEED).unwrap();
+    bytes.extend(address_seed.unpadded());
+
+    let pk1 = PublicKey::ZkLogin(ZkLoginPublicIdentifier(bytes));
     assert_eq!(
-        user_address,
-        SuiAddress::from_str("0xd5cb3a8f365cf9e0486df1675538fa7b95875e1ef3ebbe1d392e163f0aa12a11")
-            .unwrap()
+        pk1.scheme().flag(),
+        SignatureScheme::ZkLoginAuthenticator.flag()
     );
+    let serialized = bcs::to_bytes(&pk1).unwrap();
+    let deserialized: PublicKey = bcs::from_bytes(&serialized).unwrap();
+    assert_eq!(deserialized, pk1);
+    assert_eq!(
+        SuiAddress::try_from_unpadded(&modified_inputs).unwrap(),
+        SuiAddress::from(&pk1)
+    );
+
+    let pk2 = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(
+            &binding.iss,
+            &Bn254FrElement::from_str(SHORT_ADDRESS_SEED).unwrap(),
+        )
+        .unwrap(),
+    );
+    assert_eq!(
+        pk2.scheme().flag(),
+        SignatureScheme::ZkLoginAuthenticator.flag()
+    );
+    let serialized2 = bcs::to_bytes(&pk2).unwrap();
+    let deserialized2: PublicKey = bcs::from_bytes(&serialized2).unwrap();
+    assert_eq!(deserialized2, pk2);
+    assert_eq!(
+        SuiAddress::try_from_padded(&modified_inputs).unwrap(),
+        SuiAddress::from(&pk2)
+    );
+
+    assert_eq!(serialized.len() + 1, serialized2.len());
+}
+
+#[test]
+fn zklogin_sign_personal_message() {
+    let data = PersonalMessage {
+        message: b"hello world".to_vec(),
+    };
+    let (user_address, authenticator) = sign_zklogin_personal_msg(data.clone());
+    let intent_msg = IntentMessage::new(Intent::personal_message(), data);
+    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch)
+        .unwrap()
+        .into_iter()
+        .collect();
+
+    // Construct the required info to verify a zk login authenticator, jwks, supported providers list and env (prod/test).
+    let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true, Some(30));
+    let res = authenticator.verify_authenticator(
+        &intent_msg,
+        user_address,
+        0,
+        &aux_verify_data,
+        Arc::new(VerifiedDigestCache::new_empty()),
+    );
+    // Verify passes.
+    assert!(res.is_ok());
 }

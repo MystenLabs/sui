@@ -14,6 +14,8 @@ use network::client::NetworkClient;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::{sync::Arc, time::Duration, vec};
+use tracing::warn;
+use types::error::LocalClientError;
 use types::FetchBatchesRequest;
 
 use fastcrypto::hash::Hash;
@@ -43,7 +45,7 @@ struct Inner {
     authority_id: AuthorityIdentifier,
     worker_cache: WorkerCache,
     committee: Committee,
-    protocol_config: ProtocolConfig,
+    _protocol_config: ProtocolConfig,
     client: NetworkClient,
     metrics: Arc<ExecutorMetrics>,
 }
@@ -99,7 +101,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
 }
 
 async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
-    state: State,
+    mut state: State,
     mut rx_notify: metered_channel::Receiver<ConsensusOutput>,
     mut rx_shutdown: ConditionalBroadcastReceiver,
 ) {
@@ -112,7 +114,6 @@ async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
             _ = rx_shutdown.receiver.recv() => {
                 return
             }
-
         }
     }
 }
@@ -121,7 +122,7 @@ async fn create_and_run_subscriber(
     authority_id: AuthorityIdentifier,
     worker_cache: WorkerCache,
     committee: Committee,
-    protocol_config: ProtocolConfig,
+    _protocol_config: ProtocolConfig,
     rx_shutdown: ConditionalBroadcastReceiver,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     client: NetworkClient,
@@ -136,7 +137,7 @@ async fn create_and_run_subscriber(
         inner: Arc::new(Inner {
             authority_id,
             committee,
-            protocol_config,
+            _protocol_config,
             worker_cache,
             client,
             metrics,
@@ -220,7 +221,8 @@ impl Subscriber {
             debug!("No batches to fetch, payload is empty");
             return ConsensusOutput {
                 sub_dag: Arc::new(deliver),
-                batches: vec![],
+                // Length of `batches` must match certificate count in `sub_dag` even if empty.
+                batches: vec![Vec::new(); num_certs],
             };
         }
 
@@ -269,6 +271,13 @@ impl Subscriber {
         let fetched_batches =
             Self::fetch_batches_from_workers(&inner, batch_digests_and_workers).await;
         drop(fetched_batches_timer);
+
+        for batch in fetched_batches.values() {
+            inner
+                .metrics
+                .consensus_output_transactions
+                .inc_by(batch.transactions().len() as u64);
+        }
 
         // Map all fetched batches to their respective certificates and submit as
         // consensus output
@@ -359,7 +368,9 @@ impl Subscriber {
                 {
                     Ok(resp) => break resp.batches,
                     Err(e) => {
-                        error!("Failed to fetch batches from worker {worker_name}: {e:?}");
+                        if !matches!(e, LocalClientError::ShuttingDown) {
+                            warn!("Failed to fetch batches from worker {worker_name}: {e:?}");
+                        }
                         // Loop forever on failure. During shutdown, this should get cancelled.
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
@@ -376,63 +387,49 @@ impl Subscriber {
     }
 
     fn record_fetched_batch_metrics(inner: &Inner, batch: &Batch, digest: &BatchDigest) {
-        // TODO: Remove once we have upgraded to protocol version 12.
-        if inner.protocol_config.narwhal_versioned_metadata() {
-            let metadata = batch.versioned_metadata();
-            if let Some(received_at) = metadata.received_at() {
-                let remote_duration = received_at.elapsed().as_secs_f64();
-                debug!(
-                    "Batch was fetched for execution after being received from another worker {}s ago.",
-                    remote_duration
-                );
-                inner
-                    .metrics
-                    .batch_execution_local_latency
-                    .with_label_values(&["other"])
-                    .observe(remote_duration);
-            } else {
-                let local_duration = batch
-                    .versioned_metadata()
-                    .created_at()
-                    .elapsed()
-                    .as_secs_f64();
-                debug!(
-                    "Batch was fetched for execution after being created locally {}s ago.",
-                    local_duration
-                );
-                inner
-                    .metrics
-                    .batch_execution_local_latency
-                    .with_label_values(&["own"])
-                    .observe(local_duration);
-            };
-
-            let batch_fetch_duration = batch
+        let metadata = batch.versioned_metadata();
+        if let Some(received_at) = metadata.received_at() {
+            let remote_duration = received_at.elapsed().as_secs_f64();
+            debug!(
+                "Batch was fetched for execution after being received from another worker {}s ago.",
+                remote_duration
+            );
+            inner
+                .metrics
+                .batch_execution_local_latency
+                .with_label_values(&["other"])
+                .observe(remote_duration);
+        } else {
+            let local_duration = batch
                 .versioned_metadata()
                 .created_at()
                 .elapsed()
                 .as_secs_f64();
+            debug!(
+                "Batch was fetched for execution after being created locally {}s ago.",
+                local_duration
+            );
             inner
                 .metrics
-                .batch_execution_latency
-                .observe(batch_fetch_duration);
-            debug!(
-                "Batch {:?} took {} seconds since it has been created to when it has been fetched for execution",
-                digest,
-                batch_fetch_duration,
-            );
-        } else {
-            let batch_fetch_duration = batch.metadata().created_at.elapsed().as_secs_f64();
-            inner
-                .metrics
-                .batch_execution_latency
-                .observe(batch_fetch_duration);
-            debug!(
-                "Batch {:?} took {} seconds since it has been created to when it has been fetched for execution",
-                digest,
-                batch_fetch_duration,
-            );
-        }
+                .batch_execution_local_latency
+                .with_label_values(&["own"])
+                .observe(local_duration);
+        };
+
+        let batch_fetch_duration = batch
+            .versioned_metadata()
+            .created_at()
+            .elapsed()
+            .as_secs_f64();
+        inner
+            .metrics
+            .batch_execution_latency
+            .observe(batch_fetch_duration);
+        debug!(
+            "Batch {:?} took {} seconds since it has been created to when it has been fetched for execution",
+            digest,
+            batch_fetch_duration,
+        );
     }
 }
 

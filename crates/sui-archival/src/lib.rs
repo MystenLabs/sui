@@ -17,9 +17,9 @@ use indicatif::{ProgressBar, ProgressStyle};
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
-use object_store::DynObjectStore;
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
 use std::num::NonZeroUsize;
 use std::ops::Range;
@@ -28,15 +28,17 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::genesis::Genesis;
 use sui_config::node::ArchiveReaderConfig;
+use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::util::{get, put};
-use sui_storage::object_store::ObjectStoreConfig;
-use sui_storage::{compute_sha3_checksum, SHA3_BYTES};
+use sui_storage::object_store::{ObjectStoreGetExt, ObjectStorePutExt};
+use sui_storage::{compute_sha3_checksum, compute_sha3_checksum_for_bytes, SHA3_BYTES};
 use sui_types::base_types::ExecutionData;
 use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
-use sui_types::storage::{ReadStore, SingleCheckpointSharedInMemoryStore, WriteStore};
-use tracing::info;
+use sui_types::storage::{SingleCheckpointSharedInMemoryStore, WriteStore};
+use tracing::{error, info};
 
+#[allow(rustdoc::invalid_html_tags)]
 /// Checkpoints and summaries are persisted as blob files. Files are committed to local store
 /// by duration or file size. Committed files are synced with the remote store continuously. Files are
 /// optionally compressed with the zstd compression format. Filenames follow the format
@@ -59,6 +61,7 @@ use tracing::info;
 ///     - epoch_1/
 ///        - 101000.chk
 ///        - ...
+///
 /// Blob File Disk Format
 ///┌──────────────────────────────┐
 ///│       magic <4 byte>         │
@@ -88,8 +91,8 @@ use tracing::info;
 ///├──────────────────────────────┤
 ///│      sha3 <32 bytes>         │
 ///└──────────────────────────────┘
-const CHECKPOINT_FILE_MAGIC: u32 = 0x0000DEAD;
-const SUMMARY_FILE_MAGIC: u32 = 0x0000CAFE;
+pub const CHECKPOINT_FILE_MAGIC: u32 = 0x0000DEAD;
+pub const SUMMARY_FILE_MAGIC: u32 = 0x0000CAFE;
 const MANIFEST_FILE_MAGIC: u32 = 0x00C0FFEE;
 const MAGIC_BYTES: usize = 4;
 const CHECKPOINT_FILE_SUFFIX: &str = "chk";
@@ -167,6 +170,28 @@ impl Manifest {
             Manifest::V1(manifest) => manifest.next_checkpoint_seq_num,
         }
     }
+    pub fn next_checkpoint_after_epoch(&self, epoch_num: u64) -> u64 {
+        match self {
+            Manifest::V1(manifest) => {
+                let mut summary_files: Vec<_> = manifest
+                    .file_metadata
+                    .clone()
+                    .into_iter()
+                    .filter(|f| f.file_type == FileType::CheckpointSummary)
+                    .collect();
+                summary_files.sort_by_key(|f| f.checkpoint_seq_range.start);
+                assert!(summary_files
+                    .windows(2)
+                    .all(|w| w[1].checkpoint_seq_range.start == w[0].checkpoint_seq_range.end));
+                assert_eq!(summary_files.first().unwrap().checkpoint_seq_range.start, 0);
+                summary_files
+                    .iter()
+                    .find(|f| f.epoch_num > epoch_num)
+                    .map(|f| f.checkpoint_seq_range.start)
+                    .unwrap_or(u64::MAX)
+            }
+        }
+    }
     pub fn update(
         &mut self,
         epoch_num: u64,
@@ -240,9 +265,29 @@ pub fn create_file_metadata(
     Ok(file_metadata)
 }
 
-pub async fn read_manifest(remote_store: Arc<DynObjectStore>) -> Result<Manifest> {
+pub fn create_file_metadata_from_bytes(
+    bytes: Bytes,
+    file_type: FileType,
+    epoch_num: u64,
+    checkpoint_seq_range: Range<u64>,
+) -> Result<FileMetadata> {
+    let sha3_digest = compute_sha3_checksum_for_bytes(bytes)?;
+    let file_metadata = FileMetadata {
+        file_type,
+        epoch_num,
+        checkpoint_seq_range,
+        sha3_digest,
+    };
+    Ok(file_metadata)
+}
+
+pub async fn read_manifest<S: ObjectStoreGetExt>(remote_store: S) -> Result<Manifest> {
     let manifest_file_path = Path::from(MANIFEST_FILENAME);
-    let vec = get(&manifest_file_path, remote_store).await?.to_vec();
+    let vec = get(&remote_store, &manifest_file_path).await?.to_vec();
+    read_manifest_from_bytes(vec)
+}
+
+pub fn read_manifest_from_bytes(vec: Vec<u8>) -> Result<Manifest> {
     let manifest_file_size = vec.len();
     let mut manifest_reader = Cursor::new(vec);
     manifest_reader.rewind()?;
@@ -271,8 +316,7 @@ pub async fn read_manifest(remote_store: Arc<DynObjectStore>) -> Result<Manifest
     Blob::read(&mut manifest_reader)?.decode()
 }
 
-pub async fn write_manifest(manifest: Manifest, remote_store: Arc<DynObjectStore>) -> Result<()> {
-    let path = Path::from(MANIFEST_FILENAME);
+pub fn finalize_manifest(manifest: Manifest) -> Result<Bytes> {
     let mut buf = BufWriter::new(vec![]);
     buf.write_u32::<BigEndian>(MANIFEST_FILE_MAGIC)?;
     let blob = Blob::encode(&manifest, BlobEncoding::Bcs)?;
@@ -282,8 +326,40 @@ pub async fn write_manifest(manifest: Manifest, remote_store: Arc<DynObjectStore
     hasher.update(buf.get_ref());
     let computed_digest = hasher.finalize().digest;
     buf.write_all(&computed_digest)?;
-    let bytes = Bytes::from(buf.into_inner()?);
-    put(&path, bytes, remote_store).await?;
+    Ok(Bytes::from(buf.into_inner()?))
+}
+
+pub async fn write_manifest<S: ObjectStorePutExt>(
+    manifest: Manifest,
+    remote_store: S,
+) -> Result<()> {
+    let path = Path::from(MANIFEST_FILENAME);
+    let bytes = finalize_manifest(manifest)?;
+    put(&remote_store, &path, bytes).await?;
+    Ok(())
+}
+
+pub async fn read_manifest_as_json(remote_store_config: ObjectStoreConfig) -> Result<String> {
+    let metrics = ArchiveReaderMetrics::new(&Registry::default());
+    let config = ArchiveReaderConfig {
+        remote_store_config,
+        download_concurrency: NonZeroUsize::new(1).unwrap(),
+        use_for_pruning_watermark: false,
+    };
+    let archive_reader = ArchiveReader::new(config, &metrics)?;
+    archive_reader.sync_manifest_once().await?;
+    let manifest = archive_reader.get_manifest().await?;
+    let json = serde_json::to_string(&manifest).expect("Failed to serialize object");
+    Ok(json)
+}
+
+pub async fn write_manifest_from_json(
+    remote_store_config: ObjectStoreConfig,
+    json_manifest_path: std::path::PathBuf,
+) -> Result<()> {
+    let manifest: Manifest = serde_json::from_str(&fs::read_to_string(json_manifest_path)?)?;
+    let store = remote_store_config.make()?;
+    write_manifest(manifest, store).await?;
     Ok(())
 }
 
@@ -292,6 +368,7 @@ pub async fn verify_archive_with_genesis_config(
     remote_store_config: ObjectStoreConfig,
     concurrency: usize,
     interactive: bool,
+    num_retries: u32,
 ) -> Result<()> {
     let genesis = Genesis::load(genesis).unwrap();
     let genesis_committee = genesis.committee()?;
@@ -309,7 +386,57 @@ pub async fn verify_archive_with_genesis_config(
         VerifiedCheckpointContents::new_unchecked(fullcheckpoint_contents),
         genesis_committee,
     );
-    verify_archive_with_local_store(store, remote_store_config, concurrency, interactive).await
+
+    let num_retries = std::cmp::max(num_retries, 1);
+    for _ in 0..num_retries {
+        match verify_archive_with_local_store(
+            store.clone(),
+            remote_store_config.clone(),
+            concurrency,
+            interactive,
+        )
+        .await
+        {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                error!("Error while verifying archive: {}", e);
+                tokio::time::sleep(Duration::from_secs(10)).await;
+            }
+        }
+    }
+
+    Err::<(), anyhow::Error>(anyhow!(
+        "Failed to verify archive after {} retries",
+        num_retries
+    ))
+}
+
+pub async fn verify_archive_with_checksums(
+    remote_store_config: ObjectStoreConfig,
+    concurrency: usize,
+) -> Result<()> {
+    let metrics = ArchiveReaderMetrics::new(&Registry::default());
+    let config = ArchiveReaderConfig {
+        remote_store_config,
+        download_concurrency: NonZeroUsize::new(concurrency).unwrap(),
+        use_for_pruning_watermark: false,
+    };
+    let archive_reader = ArchiveReader::new(config, &metrics)?;
+    archive_reader.sync_manifest_once().await?;
+    let manifest = archive_reader.get_manifest().await?;
+    info!(
+        "Next checkpoint in archive store: {}",
+        manifest.next_checkpoint_seq_num()
+    );
+
+    let file_metadata = archive_reader.verify_manifest(manifest).await?;
+    // Account for both summary and content files
+    let num_files = file_metadata.len() * 2;
+    archive_reader
+        .verify_file_consistency(file_metadata)
+        .await?;
+    info!("All {} files are valid", num_files);
+    Ok(())
 }
 
 pub async fn verify_archive_with_local_store<S>(
@@ -320,7 +447,6 @@ pub async fn verify_archive_with_local_store<S>(
 ) -> Result<()>
 where
     S: WriteStore + Clone + Send + 'static,
-    <S as ReadStore>::Error: std::error::Error,
 {
     let metrics = ArchiveReaderMetrics::new(&Registry::default());
     let config = ArchiveReaderConfig {
@@ -368,10 +494,32 @@ where
         });
         Some(progress_bar)
     } else {
+        let cloned_store = store.clone();
+        tokio::spawn(async move {
+            loop {
+                let latest_checkpoint = cloned_store
+                    .get_highest_synced_checkpoint()
+                    .map_err(|_| anyhow!("Failed to read highest synced checkpoint"))?
+                    .sequence_number;
+                let percent = (latest_checkpoint * 100) / latest_checkpoint_in_archive;
+                info!("done = {percent}%");
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                if percent >= 100 {
+                    break;
+                }
+            }
+            Ok::<(), anyhow::Error>(())
+        });
         None
     };
     archive_reader
-        .read(store.clone(), 1..u64::MAX, txn_counter, checkpoint_counter)
+        .read(
+            store.clone(),
+            (latest_checkpoint + 1)..u64::MAX,
+            txn_counter,
+            checkpoint_counter,
+            true,
+        )
         .await?;
     progress_bar.iter().for_each(|p| p.finish_and_clear());
     let end = store

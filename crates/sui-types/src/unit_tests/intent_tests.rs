@@ -5,6 +5,7 @@ use fastcrypto::traits::KeyPair;
 
 use crate::{
     base_types::{dbg_addr, ObjectID},
+    committee::EpochId,
     crypto::{
         AccountKeyPair, AuthorityKeyPair, AuthoritySignature, Signature, SignatureScheme,
         SuiAuthoritySignature, SuiSignature,
@@ -58,6 +59,7 @@ fn test_personal_message_intent() {
 
 #[test]
 fn test_authority_signature_intent() {
+    let epoch: EpochId = 0;
     let kp: AuthorityKeyPair = get_key_pair().1;
 
     // Create a signed user transaction.
@@ -78,9 +80,11 @@ fn test_authority_signature_intent() {
         &IntentMessage::new(Intent::sui_transaction(), data.clone()),
         &sender_key,
     );
-    let tx = Transaction::from_data(data, Intent::sui_transaction(), vec![signature]);
+    let tx = Transaction::from_data(data, vec![signature]);
     let tx1 = tx.clone();
-    assert!(tx.verify().is_ok());
+    assert!(tx
+        .try_into_verified_for_testing(epoch, &Default::default())
+        .is_ok());
 
     // Create an intent with signed data.
     let intent_bcs = bcs::to_bytes(tx1.intent_message()).unwrap();
@@ -100,7 +104,7 @@ fn test_authority_signature_intent() {
     assert_eq!(&intent_bcs[3..], signed_data_bcs);
 
     // Let's ensure we can sign and verify intents.
-    let s = AuthoritySignature::new_secure(tx1.data().intent_message(), &0, &kp);
+    let s = AuthoritySignature::new_secure(tx1.data().intent_message(), &epoch, &kp);
     let verification = s.verify_secure(tx1.data().intent_message(), 0, kp.public().into());
     assert!(verification.is_ok())
 }

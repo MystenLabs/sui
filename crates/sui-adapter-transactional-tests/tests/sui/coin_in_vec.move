@@ -6,14 +6,10 @@
 //# publish --sender A
 
 module test::coin_in_vec {
-    use std::vector;
     use sui::coin::Coin;
-    use sui::object::{Self, UID};
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
-    struct Wrapper has key {
+    public struct Wrapper has key {
         id: UID,
         coins: vector<Coin<SUI>>,
     }
@@ -35,6 +31,6 @@ module test::coin_in_vec {
 //> SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
 
-//# run test::coin_in_vec::deposit --args --args object(1,0) object(2,0) --sender A
+//# run test::coin_in_vec::deposit --args object(1,0) object(2,0) --sender A
 
 //# run test::coin_in_vec::withdraw --args object(1,0) --sender A

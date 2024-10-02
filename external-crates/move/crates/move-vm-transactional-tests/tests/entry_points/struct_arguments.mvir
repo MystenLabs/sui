@@ -1,0 +1,38 @@
+//# publish
+
+// struct and struct ref arguments are now allowed
+
+module 0x42.M {
+    struct S has drop { f: u64 }
+
+    public entry foo(s: Self.S, i: &Self.S, m: &mut Self.S) {
+        label l0:
+        return;
+    }
+
+    public entry foo_gen<T: drop>(s:T, i: &T, m: &mut T) {
+        label l0:
+        return;
+    }
+}
+
+//# run --args 0 0 0
+module 0x5.m {
+import 0x42.M;
+entry foo(s: M.S, i: &M.S, m: &mut M.S) {
+    label l0:
+    return;
+}
+}
+
+//# run --type-args 0x42::M::S --args 0 0 0
+module 0x6.m {
+entry foo<T:drop>(s: T, i: &T, m: &mut T) {
+    label l0:
+    return;
+}
+}
+
+//# run 0x42::M::foo --args 0 0 0
+
+//# run 0x42::M::foo_gen --type-args 0x42::M::S --args 0 0 0

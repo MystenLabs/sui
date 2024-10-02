@@ -1,0 +1,12 @@
+--assign bar "'('"
+--assign bar "\"(\""
+
+--assign bar "')'"
+--assign bar "\")\""
+
+--assign bar "'['"
+--assign bar "\"[\""
+
+--assign bar "']'"
+--assign bar "\"]\""
+

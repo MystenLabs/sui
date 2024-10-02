@@ -24,14 +24,14 @@ export type PayloadType =
 	| 'disconnect-app'
 	| 'done'
 	| 'keyring'
-	| 'stake-request'
 	| 'wallet-status-changed'
 	| 'get-features'
 	| 'features-response'
 	| 'get-network'
 	| 'set-network'
 	| 'sign-message-request'
-	| 'qredo-connect';
+	| 'qredo-connect'
+	| 'method-payload';
 
 export interface BasePayload {
 	type: PayloadType;

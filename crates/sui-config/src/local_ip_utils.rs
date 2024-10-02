@@ -84,7 +84,11 @@ pub fn get_available_port(host: &str) -> u16 {
         }
     }
 
-    panic!("Error: could not find an available port");
+    panic!(
+        "Error: could not find an available port on {}: {:?}",
+        host,
+        get_ephemeral_port(host)
+    );
 }
 
 #[cfg(not(msim))]
@@ -137,4 +141,12 @@ pub fn new_local_tcp_address_for_testing() -> Multiaddr {
 /// Returns a new unique UDP address for localhost, by finding a new available port.
 pub fn new_local_udp_address_for_testing() -> Multiaddr {
     new_udp_address_for_testing(&localhost_for_testing())
+}
+
+pub fn new_deterministic_tcp_address_for_testing(host: &str, port: u16) -> Multiaddr {
+    format!("/ip4/{host}/tcp/{port}/http").parse().unwrap()
+}
+
+pub fn new_deterministic_udp_address_for_testing(host: &str, port: u16) -> Multiaddr {
+    format!("/ip4/{host}/udp/{port}/http").parse().unwrap()
 }

@@ -1,0 +1,16 @@
+{
+	"extends": "../build-scripts/tsconfig.shared.json",
+	"include": ["src"],
+	"compilerOptions": {
+		"module": "CommonJS",
+		"outDir": "dist/cjs",
+		"isolatedModules": true,
+		"jsx": "react-jsx",
+		"rootDir": "src"
+	},
+	"references": [
+		{ "path": "../typescript" },
+		{ "path": "../wallet-standard" },
+		{ "path": "../zksend" }
+	]
+}

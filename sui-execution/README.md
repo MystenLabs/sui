@@ -3,7 +3,7 @@
 The `sui-execution` crate is responsible for abstracting access to the
 execution layer.  It allows us to isolate big changes to the execution
 layer that need to be gated behind protocol config changes, to
-minimise the risk of inadvertantly changing behaviour that is relevant
+minimise the risk of inadvertently changing behaviour that is relevant
 for state sync (which would cause a fork).
 
 The Execution Layer include:
@@ -18,7 +18,7 @@ The specific versions of crates in the execution layer are found in:
 
 - `./sui-execution`, (latest version and cuts/copies of sui-specific
   crates).
-- `./external-crates/move-execution` (cuts/copies of move-specific
+- `./external-crates/move/move-execution` (cuts/copies of move-specific
   crates).
 - `./external-crates/move` (the latest versions of move-specific
   crates).
@@ -85,7 +85,7 @@ on creating such a cut.
 Versioned snapshots, such as `v0`, found at:
 
 - `./sui-execution/v0`
-- `./external-crates/move-execution/v0`
+- `./external-crates/move/move-execution/v0`
 
 preserve the existing behaviour of execution.  These should generally
 not be modified, because doing so risks changing the effects produced

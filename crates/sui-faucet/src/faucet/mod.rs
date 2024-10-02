@@ -10,7 +10,7 @@ mod simple_faucet;
 mod write_ahead_log;
 pub use self::simple_faucet::SimpleFaucet;
 use clap::Parser;
-use std::{net::Ipv4Addr, path::PathBuf};
+use std::{net::Ipv4Addr, path::PathBuf, sync::Arc};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FaucetReceipt {
@@ -42,6 +42,17 @@ pub enum BatchSendStatusType {
     INPROGRESS,
     SUCCEEDED,
     DISCARDED,
+}
+
+pub struct AppState<F = Arc<SimpleFaucet>> {
+    pub faucet: F,
+    pub config: FaucetConfig,
+}
+
+impl<F> AppState<F> {
+    pub fn new(faucet: F, config: FaucetConfig) -> Self {
+        Self { faucet, config }
+    }
 }
 
 #[async_trait]
@@ -112,7 +123,7 @@ pub struct FaucetConfig {
     #[clap(long, default_value_t = 300)]
     pub ttl_expiration: u64,
 
-    #[clap(long, default_value_t = false)]
+    #[clap(long, action = clap::ArgAction::Set, default_value_t = false)]
     pub batch_enabled: bool,
 }
 

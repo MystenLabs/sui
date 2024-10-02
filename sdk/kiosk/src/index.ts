@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export * from './tx/kiosk';
-export * from './tx/transfer-policy';
-export * from './query/kiosk';
-export * from './bcs';
-export * from './utils';
-export * from './query/transfer-policy';
-export * from './types';
-export * from './constants';
+export * from './utils.js';
+export * from './types/index.js';
+export * from './constants.js';
+export * from './client/kiosk-client.js';
+export * from './client/tp-transaction.js';
+export * from './client/kiosk-transaction.js';

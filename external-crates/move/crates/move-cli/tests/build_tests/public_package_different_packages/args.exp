@@ -1,0 +1,14 @@
+Command `build -v`:
+INCLUDING DEPENDENCY Defn
+BUILDING Usage
+error[E04001]: restricted visibility
+  ┌─ ./sources/A.move:3:31
+  │
+3 │     public fun usage(): u64 { defn::definition() }
+  │                               ^^^^^^^^^^^^^^^^^^ Invalid call to 'public(package)' visible function 'A::defn::definition'
+  │
+  ┌─ ./defn/sources/A.move:2:5
+  │
+2 │     public(package) fun definition(): u64 { 0 }
+  │     --------------- A 'public(package)' function can only be called from the same address and package as module 'A::defn' in package 'Defn'. This call is from address 'A' in package 'Usage'
+

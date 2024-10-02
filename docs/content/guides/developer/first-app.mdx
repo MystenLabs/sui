@@ -1,0 +1,56 @@
+---
+title: Your First Sui dApp
+description: Build your first dApp and publish it on chain. These guides demonstrate the basics you need to know to start your development journey on Sui.
+---
+
+Before you can create your first dApp, you must have [Sui installed](./getting-started/sui-install.mdx).
+
+You use Move to write packages that live on chain, meaning they exist on the Sui network you publish them to. The instructions in this section walk you through writing a basic package, debugging and testing your code, and publishing. You need to follow these instructions in order to complete the exercise.
+
+You use the `move` Sui CLI command for some instructions. The Sui CLI installs with the binaries, so you have it on your system if you follow the install instructions. To verify you have it installed, run the following command in a terminal or console.
+
+```shell
+$ sui --version
+```
+
+If the console does not respond with a version number similar to the following, see the instructions to install Sui.
+
+```shell
+$ sui 1.xx.x-abc123xyz
+```
+
+## Connecting to a network
+
+After installing Sui, you can connect to a network. Sui has three public networks (Devnet, Testnet, Mainnet), and you can also run and connect to a local Sui network. For each network, you need an on-chain address specific to that network. The address is an object with a unique ID in the form `0x8bd4613c004aac53d06bb7ceb7f46832c9ae69bdc105dfc5fcac225d2061fcac`. In addition to that address, you need SUI to pay for the gas fees associated with your on-chain activity, like publishing packages and making Move calls to those packages. For all networks besides Mainnet, you can get free SUI coins for your account to facilitate package development. For the purposes of this example, connect to the Testnet network.
+
+### Connect to Testnet
+
+If you already have a network config set up, switch your active environment to Testnet. The following instruction is for the initial set up. 
+
+1. In your terminal or console, use the following command to begin the configuration:
+    ```shell
+    $ sui client
+    ```
+1. At the prompt, type <kbd>y</kbd> and press <kbd>Enter</kbd> to connect to a Sui Full node server.
+1. At the following prompt, type the address of the Testnet server (`https://fullnode.testnet.sui.io:443`) and press <kbd>Enter</kbd>.
+1. At the following prompt, type `testnet` to give the network an alias and press <kbd>Enter</kbd>. You can use the alias in subsequent commands instead of typing the complete URL.
+1. At the following prompt, type `0` and press <kbd>Enter</kbd>. The selection creates an address in the `ed25519` signing scheme.
+1. The response provides an alias for your address, the actual address ID, and a secret recovery phrase. Be sure to save this information for later reference. Because this is on the Testnet network, the security of this information is not as important as if it were on Mainnet.
+1. In your terminal or console, use the following command to get SUI for your account.
+    ```shell
+    $ sui client faucet
+    ```
+1. You can confirm that you received SUI by using the following command. There may be a delay in receiving coins depending on the activity of the network.
+    ```shell
+    $ sui client gas
+    ```
+You are now connected to the Sui Testnet network and should have an account with available SUI.  
+
+
+## Related links
+
+- [Write a Move Package](./first-app/write-package.mdx): Continue this example by creating the necessary Move code for your package.
+- [Connect to a Sui Network](./getting-started/connect.mdx): Connect to an available Sui network.
+- [Connect to a Local Network](./getting-started/local-network.mdx): Start and connect to a local Sui network.
+- [Get Sui Address](./getting-started/get-address.mdx): Get an address for the current Sui network.
+- [Get SUI Tokens](./getting-started/get-coins.mdx): Get SUI for the active address on Devnet, Testnet, or a local network.
