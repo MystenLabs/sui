@@ -1,0 +1,5 @@
+# Type mismatches -- we don't do any type of type checking, so if you mess
+# these types up you'll get a runtime error from executing the PTB.
+# In the future we may want to add (simple!) type checking to the PTB creation.
+--make-move-vec <vector<address>> [@0x1, @0x2, @0x3]
+--make-move-vec <address> [true, false]

@@ -1,0 +1,6 @@
+[package]
+name = "C"
+
+[dependencies]
+E = { local = "../E" }
+F = { local = "../F" }

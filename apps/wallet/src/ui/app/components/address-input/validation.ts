@@ -1,29 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiNSName, useRpcClient, useSuiNSEnabled } from '@mysten/core';
-import { type JsonRpcProvider, isValidSuiAddress } from '@mysten/sui.js';
+import { useSuiNSEnabled } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { type SuiClient } from '@mysten/sui/client';
+import { isValidSuiAddress, isValidSuiNSName } from '@mysten/sui/utils';
 import { useMemo } from 'react';
 import * as Yup from 'yup';
 
-export function createSuiAddressValidation(rpc: JsonRpcProvider, suiNSEnabled: boolean) {
-	const resolveCache = new Map<string, boolean>();
+const CACHE_EXPIRY_TIME = 60 * 1000; // 1 minute in milliseconds
 
+export function createSuiAddressValidation(client: SuiClient, suiNSEnabled: boolean) {
+	const resolveCache = new Map<string, { valid: boolean; expiry: number }>();
+
+	const currentTime = Date.now();
 	return Yup.string()
 		.ensure()
 		.trim()
 		.required()
 		.test('is-sui-address', 'Invalid address. Please check again.', async (value) => {
-			if (suiNSEnabled && isSuiNSName(value)) {
+			if (suiNSEnabled && isValidSuiNSName(value)) {
 				if (resolveCache.has(value)) {
-					return resolveCache.get(value)!;
+					const cachedEntry = resolveCache.get(value)!;
+					if (currentTime < cachedEntry.expiry) {
+						return cachedEntry.valid;
+					} else {
+						resolveCache.delete(value); // Remove expired entry
+					}
 				}
 
-				const address = await rpc.resolveNameServiceAddress({
+				const address = await client.resolveNameServiceAddress({
 					name: value,
 				});
 
-				resolveCache.set(value, !!address);
+				resolveCache.set(value, {
+					valid: !!address,
+					expiry: currentTime + CACHE_EXPIRY_TIME,
+				});
 
 				return !!address;
 			}
@@ -34,10 +47,10 @@ export function createSuiAddressValidation(rpc: JsonRpcProvider, suiNSEnabled: b
 }
 
 export function useSuiAddressValidation() {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	const suiNSEnabled = useSuiNSEnabled();
 
 	return useMemo(() => {
-		return createSuiAddressValidation(rpc, suiNSEnabled);
-	}, [rpc, suiNSEnabled]);
+		return createSuiAddressValidation(client, suiNSEnabled);
+	}, [client, suiNSEnabled]);
 }

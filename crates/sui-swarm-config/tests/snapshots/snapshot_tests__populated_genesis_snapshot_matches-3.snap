@@ -1,8 +1,8 @@
 ---
-source: crates/sui-config/tests/snapshot_tests.rs
+source: crates/sui-swarm-config/tests/snapshot_tests.rs
 expression: genesis.clock()
 ---
 id:
   id: "0x0000000000000000000000000000000000000000000000000000000000000006"
-timestamp_ms: 0
+timestamp_ms: 10
 

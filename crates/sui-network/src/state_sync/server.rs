@@ -14,7 +14,6 @@ use sui_types::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, FullCheckpointContents,
         VerifiedCheckpoint,
     },
-    storage::ReadStore,
     storage::WriteStore,
 };
 use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
@@ -42,7 +41,6 @@ pub(super) struct Server<S> {
 impl<S> StateSync for Server<S>
 where
     S: WriteStore + Send + Sync + 'static,
-    <S as ReadStore>::Error: std::error::Error,
 {
     async fn push_checkpoint_summary(
         &self,
@@ -223,10 +221,12 @@ where
                 }
             })?;
 
-            struct SemaphoreExtension(OwnedSemaphorePermit);
+            struct SemaphoreExtension(#[allow(unused)] OwnedSemaphorePermit);
             inner.call(req).await.map(move |mut response| {
                 // Insert permit as extension so it's not dropped until the response is sent.
-                response.extensions_mut().insert(SemaphoreExtension(permit));
+                response
+                    .extensions_mut()
+                    .insert(Arc::new(SemaphoreExtension(permit)));
                 response
             })
         };

@@ -1,0 +1,48 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+    let v: vector<bool>;
+label b0:
+    v = vec_pack_0<bool>(true);
+    return;
+}
+
+}
+//# run
+module 0x43.m {
+
+entry foo() {
+    let v: vector<bool>;
+label b0:
+    v = vec_pack_1<bool>();
+    return;
+}
+
+}
+//# run
+module 0x44.m {
+
+entry foo() {
+    let v: vector<bool>;
+    let x: bool;
+label b0:
+    v = vec_pack_1<bool>(true);
+    x = vec_unpack_2<bool>(move(v));
+    return;
+}
+
+}
+//# run
+module 0x45.m {
+
+entry foo() {
+    let v: vector<bool>;
+    let x: bool;
+label b0:
+    v = vec_pack_1<bool>(true);
+    x = vec_unpack_0<bool>(move(v));
+    return;
+}
+
+}

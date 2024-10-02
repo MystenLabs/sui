@@ -16,7 +16,6 @@ use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use move_core_types::ident_str;
-use shared_crypto::intent::Intent;
 use std::path::{Path, PathBuf};
 use sui_config::node::{AuthorityKeyPairWithPath, KeyPairWithPath};
 use sui_config::{local_ip_utils, Config, NodeConfig, PersistedConfig};
@@ -337,9 +336,7 @@ async fn execute_tx(
     tx_data: TransactionData,
     action: &str,
 ) -> anyhow::Result<()> {
-    let tx =
-        Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![account_key])
-            .verify()?;
+    let tx = Transaction::from_data_and_signer(tx_data, vec![account_key]);
     info!("Executing {:?}", tx.digest());
     let tx_digest = *tx.digest();
     let resp = sui_client

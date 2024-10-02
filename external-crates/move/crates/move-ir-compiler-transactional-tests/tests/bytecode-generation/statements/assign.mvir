@@ -1,0 +1,9 @@
+//# print-bytecode
+module 0x6.m {
+// Un-declared locals cannot be assigned to.
+entry foo() {
+label b0:
+    x = 0;
+    return;
+}
+}

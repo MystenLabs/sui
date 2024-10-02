@@ -2,12 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui_system::msim_extra_1 {
-    struct Type has drop {
+    use sui::object::{Self, UID};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
+
+    public struct Type has drop {
         x: u64,
+    }
+
+    public struct Obj has key {
+        id: UID,
+    }
+
+    public struct AlmostObj {
+        id: UID,
     }
 
     public fun canary(): u64 {
         private_function(41)
+    }
+
+    entry fun mint(ctx: &mut TxContext) {
+        transfer::transfer(
+            Obj { id: object::new(ctx) },
+            tx_context::sender(ctx),
+        )
     }
 
     entry fun entry_fun() {}

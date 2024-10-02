@@ -1,0 +1,828 @@
+---
+title: Style Guide
+slug: /style-guide
+---
+
+This document defines the styles, vocabulary usage, and content formatting for Sui documentation. Entries are in alphabetical order. A style guide is never finished. Expect continued iterations to add additional styles, additional information to existing styles, and infrequently a change to an existing style.
+
+## Accessibility {#accessibility}
+
+Reference works for making content accessible:
+
+- [A11Y Style Guide](https://a11y-style-guide.com/style-guide/)
+- [Bitsofcode Accessibility Cheatsheet](https://bitsofco.de/the-accessibility-cheatsheet/)
+- [Atlassian Design System - Inclusive writing reference](https://atlassian.design/content/inclusive-writing)
+- [MailChimp's writing style guide](https://styleguide.mailchimp.com/writing-for-accessibility/)
+- [Microsoft Style Guide Accessibility Terms](https://learn.microsoft.com/en-us/style-guide/a-z-word-list-term-collections/term-collections/accessibility-terms)
+- [Writing for All Abilities](https://learn.microsoft.com/en-us/style-guide/accessibility/writing-all-abilities) (Microsoft Style Guide)
+
+### Formatting {#formatting}
+
+Don't use color or special symbols to add emphasis to text. Screen readers are designed to interpret bold (`<strong>`) and italic (`<em>`) in web pages.
+
+### Images {#images}
+
+Add captions and alt text that describe the image for someone using a screen reader. What are the important details in the image that someone using a screen reader can't see?
+
+Use alt text to describe what the image shows. Use the caption to explain why the image is meaningful in the context of the page.
+
+An image is not a substitute for text; images should only supplement text. Do not rely on an image to convey information not in text form. For example, an image of a table of values does no one any good if the image fails to display for a host of possible reasons.
+
+## Acronyms {#acronyms}
+
+Spell out a term or phrase on first use in a topic, followed by the acronym in parentheses. Then use the acronym for subsequent mentions.
+
+**Example**
+
+> You can mint non-fungible tokens (NFTs) using your Sui Wallet. To view an NFT after you mint it, click the NFTs tab of your wallet.
+
+## Alerts {#alerts}
+
+Alerts add emphasis to information. Use Admonitions, a Docusaurus feature, to indicate the alert is a Note, Tip, or Caution. The explanation in the alert must be a complete sentence and use sentence case.
+
+### Note {#note}
+
+Use Note to add emphasis to information that the reader should know, but could be overlooked when scanning a topic or document. Provide information that prevents users from getting stuck.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+:::note
+
+The system processes updates only once every 24 hours at UTC 00:00.
+
+:::
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+:::note
+
+The system processes updates only once every 24 hours at UTC 00:00.
+
+:::
+
+```
+
+</TabItem>
+</Tabs>
+
+### Tip {#tip}
+
+Use Tip to give the reader advice that might be helpful, such as a best practice.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+:::tip
+
+Change your home directory after installing the IDE.
+
+:::
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+:::tip
+
+Change your home directory after installing the IDE.
+
+:::
+
+```
+
+</TabItem>
+</Tabs>
+
+### Caution {#caution}
+
+Use Caution when the information could cause the user to lose data or to start over. If you instruct a user to delete something, warn them about what happens when they delete it.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+:::caution
+
+Backup your configuration files before you delete your network.
+
+:::
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+:::caution
+
+Backup your configuration files before you delete your network.
+
+:::
+
+```
+
+</TabItem>
+</Tabs>
+
+## Capitalization {#capitalization}
+
+**Do:**
+
+Use sentence capitalization for section headings, table cells/headers, list items, captions, alt text, and error messages.
+
+Capitalize proper nouns. [Proper nouns](#proper-nouns).
+
+Always capitalize the first word of a new sentence, even when the word is normally lower case, such as Web3 vs web3.
+
+**Don't:**
+
+Don't use all uppercase for emphasis, use bold instead. (IMPORTANT vs Important)
+
+Don't use bi-capitalization / internal capitalization unless it is part of a brand, such as YouTube or DreamWorks.
+
+Don't capitalize the spelled-out form of an acronym unless it's a proper noun, such as HyperText Markup Language (HTML).
+
+When words are joined by a slash, capitalize the word after the slash if the word before the slash is capitalized.
+
+**Example**
+
+> Country/Region
+
+> Turn on the On/Off toggle.
+
+### Title capitalization {#title-capitalization}
+
+For title capitalization, follow these guidelines:
+
+- Don't capitalize a, an, and, but, for, in, or, so, to, with, yet , or other short conjunctions and prepositions unless it's the first or last word
+- Capitalize all other words (including Is and Be as they are verbs)
+- Capitalize the word after a hyphen
+- Match casing for commands or special terms, such as cURL or dApp.
+- Match the casing for API elements and programming language keywords
+
+## Code {#code}
+
+Use inline code in a sentence to refer to functions and other code pieces. Use codeblocks to show larger sections of a program. All code should be written exactly as it appears in a code editor, so that other people can copy and paste it from documentation directly into a code editor. Do not use images to show code.
+
+### Inline code {#inline-code}
+
+Use backticks (\`) around individual code within a sentence, which will format it as code in markdown. Do not use quotes, emphasis, or any other formatting to distinguish code from surrounding text.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+> The `display::new<T>` call creates a `Display`.
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+The `display::new<T>` call creates a `Display`.
+
+```
+
+</TabItem>
+</Tabs>
+
+### Codeblocks {#codeblocks}
+
+Use the text before a codeblock to describe what the codeblock does. Use text after the codeblock to point out particular elements in the code and how they work. Do not use codeblocks as a substitute for descriptive text. Codeblocks help readers understand descriptive text in the documentation.
+
+Initiate a codeblock in markdown with three backticks (\`\`\`).
+
+**Example**
+
+```
+module sui::display {
+/// Sets multiple fields at once
+public fun add*multiple(
+self: &mut Display,
+keys: vector`<String>`,
+values: vector`<String>`
+) { /* ... \*/ }
+```
+
+## Grammar {#grammar}
+
+### Active voice {#active-voice}
+
+Use Active voice whenever possible. Active voice is direct, clear, and uses fewer words. Passive voice is often less clear, awkward, and uses more words.
+
+**Example**
+
+> **Active:** She installed the software.
+
+> **Passive:** The software was installed by her.
+
+### Verbs {#verbs}
+
+Use present tense verbs with the appropriate mood.
+
+There are three grammatical moods:
+
+- **Indicative –** used to deliver facts
+- **Imperative –** used to provide directions
+- **Subjunctive –** used to convey a wish or possibility
+
+#### Verb moods {#verb-moods}
+
+Use indicative verbs most of the time in conceptual content.
+
+Use imperative verbs for tasks, procedures, and instructions.
+
+**Example**
+
+- **Indicative –** Sui network explorers display transactions on the network.
+- **Imperative –** Open a Sui network explorer to view transactions on the network.
+- **Subjunctive –** We suggest that you view your transaction in a Sui network explorer after you complete a transfer.
+
+### Person {#person}
+
+Use second person in most cases.
+
+**Example**
+
+> You used to could view transaction history in Sui Explorer.
+
+**Rather than:**
+
+> We used to could view transaction history in Sui Explorer.
+
+### Present tense {#present-tense}
+
+Use present tense whenever possible. Use future tense (something will happen) only for events that occur on a future date, such as a product release or trade show.
+
+Do not use future tense when describing a product, or providing guidance in tasks. From the user perspective, it is the present for them when they follow the steps in a task. Consider the example of saving a file.
+
+**Example present tense**
+
+> Click Save to save the updated file.
+
+> When you click Save, your device writes the changes to disk.
+
+> To save a file after you modify it, click Save.
+
+**Example future tense**
+
+> Your changes will be saved when you click Save.
+
+While this is technically accurate, it separates the person from the object of the action. This makes it more difficult to parse the sentence for ESL speakers, and is harder to localize.
+
+> When you click Save, the file will be written to disk.
+
+In this example, when will the file be written to disk? It happens immediately upon clicking Save. If you check the timestamp on the file, the time reflects the moment at which you clicked Save, not a time after that moment.
+
+### Oxford / serial commas {#oxford-serial-commas}
+
+Do use serial commas.
+
+**Example**
+
+> Rachael Ray finds inspiration in cooking, her family and her dog.
+
+**It is much more clear to use:**
+
+> Rachael Ray finds inspiration in cooking, her family, and her dog.
+
+**Example**
+
+> You must install Cargo, Rust, Docker, and the Sui CLI to create a Sui node.
+
+## Headings and titles {#headings-titles}
+
+Use descriptive titles that include keywords to help readers find the information. Use shorter titles in the navigation pane.
+
+### Optimize for discoverability {#optimize-discoverability}
+
+Use enough words in headings and titles to make it easy to know which link to click on a search results page. One word titles (Installing) do not provide enough information to determine the contents of a topic.
+
+### Topic titles {#topic-titles}
+
+Users search for information to complete a specific task, so help them identify the topic that helps them by using descriptive titles. For example, _Get Started_. Get started with what? If there are multiple products or programs available it could be anything.
+
+_Get Started with Sui_ is better, but users want to get started with a specific task or user journey with Sui. Instead of _Get Started with Sui_, describe the specific task or journey, such as _Create a Sui Full Node_ or _Sui Validator Guide_. Use Get Started as a heading on the Documentation landing page to categorize tasks for new users.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+> This is a Topic Title
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+## title: This is a Topic Title
+
+```
+
+</TabItem>
+</Tabs>
+
+### Section headings {#section-headings}
+
+Use sentence casing for section headers.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+> This is a section heading
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+## This is a section heading
+
+```
+
+</TabItem>
+</Tabs>
+
+### Code elements in section headings
+
+Do not use code styling in section headings. Instead, use regular font in the heading and code styling in the content.
+
+**Example:**
+
+```
+## ObjectName
+
+`ObjectName` is an object.
+```
+
+## Images / Graphics {#images-graphics}
+
+Only use images and screenshots to supplement and help explain text. Images do not replace text. Readers should be able to understand the documentation without the images. However, images can help readers understand the text more clearly.
+
+### Image format {#image-format}
+
+Use .png when possible, otherwise use .jpg
+
+### Image resolution {#image-resolution}
+
+Images should be at least 400 pixels wide. If an image looks blurry when uploaded, try making a new image in higher resolution.
+
+### Captions {#captions}
+
+Use alt text to describe what the image shows. Use the caption to explain why the image is meaningful in the context of the page.
+See Accessibility considerations for captions.
+
+### Mermaid for images in Markdown {#mermaid}
+
+You can create flowcharts and similar images directly in Markdown.
+
+[https://github.blog/2022-02-14-include-diagrams-markdown-files-mermaid/](https://github.blog/2022-02-14-include-diagrams-markdown-files-mermaid/)
+
+Use [Snagit](https://www.techsmith.com/screen-capture.html) or other tools to capture screenshots.
+
+## Lists {#lists}
+
+Use a list for a series of items or steps instead of writing them as a sentence. Introduce the list with a description of the list elements ending in a colon (:).
+
+**Instead of:**
+
+The Build section of the documentation includes topics about: Building with Sui, Using the CLI to Start a Network, Creating Smart Contracts, Sui Tutorial, and Sui Examples.
+
+**Use:**
+
+The Build section of the documentation includes the following topics:
+
+- Building with Sui
+- Using the CLI to Start a Network
+- Creating Smart Contracts
+- Sui Tutorial
+- Sui Examples
+
+### Numbered or ordered lists {#numbered-ordered-lists}
+
+Use a numbered list when:
+
+- the items in the list must be performed in a specific order, such as the steps in a task
+- the items in the list describe a sequence of events, such as a workflow or scenario
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+1. Create a fork of the repo.
+1. Clone your fork of the repo.
+1. Install Sui.
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+1. Create a fork of the repo.
+1. Clone your fork of the repo.
+1. Install Sui.
+
+```
+
+</TabItem>
+</Tabs>
+
+### Bulleted lists {#bulleted-lists}
+
+Use bulleted lists to list more than two pieces of related information, such as links or terms, that don't need to be in a specific order. Optionally, use a bulleted list for only two items to include a description of the items in the list. Use sentence capitalization in lists, and use punctuation consistently for all list items. Do not use an ending period unless the list item includes a full sentence.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+Sui Explorer used to support the following browsers:
+
+- Firefox version X or later
+- Chrome version X or later
+- Edge version X or later
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+Sui Explorer used to support the following browsers:
+
+- Firefox version X or later
+- Chrome version X or later
+- Edge version X or later
+
+```
+
+</TabItem>
+</Tabs>
+
+### Term list {#term-list}
+
+Use a term list to define terms or concepts.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+> **Term:** A description of the term.
+
+> **DAG:** A directed acyclic graph (DAG) is a data modeling or structuring tool typically used in data architectures.
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+**Term:** A description of the term.
+**DAG:** A directed acyclic graph (DAG) is a data modeling or structuring tool typically used in cryptocurrencies.
+
+```
+
+</TabItem>
+</Tabs>
+
+### Capitalization in lists {#capitalization-in-lists}
+
+Use initial / sentence capitalization in list items.
+
+<Tabs>
+<TabItem value="example" label="Example - bulleted lists" default>
+
+- First list item
+- Second list item
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+* First list item
+* Second list item
+
+```
+
+</TabItem>
+</Tabs>
+
+<Tabs>
+<TabItem value="example" label="Example - numbered lists" default>
+
+1. First list item
+1. Second list item
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+1. First list item
+1. Second list item
+
+```
+
+</TabItem>
+</Tabs>
+
+## Numbers {#numbers}
+
+### Numerals vs. words {#numerals-vs-words}
+
+Write out numbers less than 10
+
+**Example**
+
+> The folder contains seven files.
+
+Use digits for larger numbers.
+
+**Example**
+
+> The folder contains 24 files.
+
+In body text, use numbers consistently if using both numbers less than and greater than 10.
+
+**Example**
+
+> One folder contains 7 files, and the other contains 24 files.
+
+For ease of reading, use both words and numbers when you use two numbers for different things together.
+
+**Example**
+
+> The folder contains twenty 12-page documents.
+
+Don't start a sentence with a numeral. Instead, add a qualifier or spell out the number.
+
+**Example**
+
+> At least 20 pieces of candy fell off the table.
+
+> Twenty pieces of candy melted.
+
+Measurements should be written as numerals.
+
+**Example**
+
+> The server processes 2 terabytes of data in 8 milliseconds.
+
+## Links {#links}
+
+Always use relative links when linking to topics on docs.sui.io.
+
+Include the `.mdx` extension when creating internal links so that they also work from the source file in GitHub.
+
+Use the topic title of the target topic as the link text for the link in a list or "Learn more" sentences. Do not use a URL as the link text.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+> To learn more, see [Examples of Sui Smart Contracts](/guides/developer/app-examples.mdx).
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```markdown
+To learn more, see [Examples of Sui Smart Contracts](/guides/developer/app-examples.mdx).
+
+```
+
+</TabItem>
+</Tabs>
+
+Use keywords from the target topic title when using links inline.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+> Before you install Sui, make sure to install the [prerequisites](/guides/developer/getting-started/sui-install.mdx#prerequisites).
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+Before you install Sui, make sure to install the [prerequisites](/guides/developer/getting-started/sui-install.mdx#prerequisites).
+
+```
+
+</TabItem>
+</Tabs>
+
+## Procedures / Tasks / Instructions {#procedures-tasks-instructions}
+
+Introduce a procedure with an infinitive verb. Format procedures using a numbered or ordered list.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+To get the latest version of the Sui Wallet extension:
+
+1. Open Google Chrome.
+1. Click **Extensions**, then click **Manage Extensions**.
+1. Click **Details** for the Sui Wallet extension, then click **View in Chrome Web Store**.
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+To get the latest version of the Sui Wallet extension:
+
+1. Open Google Chrome.
+1. Click **Extensions**, then click **Manage Extensions**.
+1. Click **Details** for the Sui Wallet extension, then click **View in Chrome Web Store**.
+
+```
+
+</TabItem>
+</Tabs>
+
+### Keyboard keys in procedures {#keyboard-keys-procedures}
+
+When you provide instructions to press keyboard keys, such as Press **Enter** to continue, use uppercase for the key name and format the key name as bold text.
+
+## Proper nouns {#proper-nouns}
+
+Capitalize proper nouns throughout.
+
+Proper nouns include:
+
+- Names of people (Bob Ross)
+- Named places, such as a city (San Francisco) or a train station (Union Station)
+- Products (Slack) and services (Google Play)
+- Trademarks, such as Coca-Cola
+- Book titles, such as The Move Book
+- Standards or technologies, such as Local Area Network (LAN)
+
+**Example**
+
+> Sui Wallet
+
+## Product names {#product-names}
+
+Product names are proper nouns. Capitalize all words of a product name. When referring to a product, use only the product name without “the”. When referring specifically to a Sui wallet, use Sui Wallet or Ethos Wallet and not just wallet. Users likely have multiple wallets, and we want to make it clear which wallet. Use wallet generically when referring to the concept of a wallet.
+
+**Example**
+
+> There are several types of wallets to choose from.
+
+> Never share the recovery passphrase for your wallet with anyone.
+
+> The Sui network supports the following wallets:
+
+- Sui Wallet
+- Ethos Wallet
+- Coinbase Wallet
+
+**Example**
+
+> Sui Wallet
+
+**Example**
+
+> You can mint an NFT directly from your Sui Wallet.
+
+## Slashes {#slashes}
+
+Avoid using slashes in place of "and" or "or", such as True / False or True/False. Use True or False, or True | False in code documentation.
+
+If you do use a slash, include a space between the term and slash.
+
+When using fractions, use no spaces, for example 3/4.
+
+## Spelling {#spelling}
+
+Use US English spelling in source content.
+
+## Tables {#tables}
+
+### Table headings {#table-headings}
+
+Capitalize the first word in the heading. Center align the text. Bold labels in the Header row.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+| **Column one** | **Column two** | **Column three** | **Column four** |
+| :------------- | :------------: | :--------------: | :-------------- |
+| Metric name    |       10       |        X         | Text string.    |
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+| **Column one** | **Column two** | **Column three** | **Column four** |
+
+```
+
+</TabItem>
+</Tabs>
+
+### Table alignment {#table-alignment}
+
+Center align labels in the Heading row. Left align strings of text. Center align values and Xs or checkmarks.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+| **Column one** | **Column two** | **Column three** | **Column four** |
+| :------------- | :------------: | :--------------: | :-------------- |
+| Metric name    |       10       |        X         | Text string.    |
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+| **Column one** | **Column two** | **Column three** | **Column four** |
+| :--- | :---: | :---: | :--- |
+
+```
+
+</TabItem>
+</Tabs>
+
+### Table text {#table-text}
+
+Follow style guidelines for regular body text.
+
+## UI elements {#ui-elements}
+
+Format UI elements, such as field labels, button names, and menu commands, in bold text. Always match the exact text or label of the UI element, including capitalization. Do not include special characters, such as ellipses, if included in the element label.
+
+**Example**
+
+> To open a different file, click File > Open FIle.
+
+**Example**
+
+> Click **More Transactions** to open the **Transactions** page.
+
+## URLs and web addresses {#urls-web-addresses}
+
+Add text and create a link to a site or URL. Provide the URL only when a reader needs to copy it, such as in example code or configuration files.
+
+## Word choice {#word-choice}
+
+### Referring to pages in our docs {#referring}
+
+Refer to pages in the documentation set as “topic”s. A “guide” can comprise many related topics.
+
+**Example**
+
+> See the Install topic in the Validator guide for more information.
+
+:::info
+
+You can also just refer to a topic by title where it makes sense. See Installing Sui for more information.
+
+:::
+
+### General considerations {#general-considerations}
+
+- Use simple words, concise sentences
+- Don't use common words in new ways
+- Use technical terms carefully
+- Avoid jargon
+
+### Contractions {#contractions}
+
+Optionally use contractions to provide a more conversational tone. It's OK to use them inconsistently. Be mindful that they can be confusing to non-native speakers.
+
+## New section template (Heading 2) {#heading-2}
+
+Describe the section.
+
+### Subsection or category (Heading 3) {#heading-3}
+
+Describe the additional entry.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+> Indented example for the section. (Normal text, indented)
+
+</TabItem>
+<TabItem value="markdown" label="Markdown">
+
+```
+
+Indented example for the section. (Roboto Mono Light)
+
+```
+
+</TabItem>
+</Tabs>
+
+## Reference Style Guides {#reference-style-guides}
+
+- [Write the Docs Style Guide article](https://www.writethedocs.org/guide/writing/style-guides/)
+- [GitLab Style Guide](https://docs.gitlab.com/ee/development/documentation/styleguide/index.html) - managed as a community project
+- [Digital Ocean Style Guide](https://www.digitalocean.com/community/tutorials/digitalocean-s-technical-writing-guidelines)
+- [SUSE Style Guide](https://documentation.suse.com/en-us/style/current/single-html/docu_styleguide/#sec-techwriting)
+- [Microsoft Style Guide](https://docs.microsoft.com/en-us/style-guide/welcome/)
+- [Google Developer Style Guide](https://developers.google.com/style)
+- [CDN Language and Style Reference](http://cdn.static-economist.com/sites/default/files/pdfs/style_guide_12.pdf)
+
+```
+
+```

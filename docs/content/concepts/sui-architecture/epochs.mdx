@@ -1,0 +1,28 @@
+---
+title: Epochs and Reconfiguration
+draft: true
+---
+
+In a simplified view, epochs are to the Sui network what individual days are to a calendar. Reconfiguration, then, is a process at the end of each epoch where that day's activity is tallied and the next day's parameters are set.
+
+## Epoch
+
+An epoch is a duration of time where the Sui validator set and their stakes remain unchanged. On both Mainnet and Testnet, an epoch is about 24 hours. This timeframe allows validators to process transactions efficiently without worrying about ad hoc validator changes during the middle of an epoch.
+
+Epoch values are included in the metadata of transactions on the Sui network, but the average user is unaffected by its value. The only time a user might need to know about epochs is in the case of expiring transactions, where a transaction is only valid if executed before a set epoch. See [Transactions](../transactions.mdx) for more information about transactions on Sui.
+
+## Reconfiguration
+
+Reconfiguration is a critical process occurring at the end of each epoch. It involves several key steps to adjust the network for the upcoming epoch:
+
+1. **Finalizing transactions and checkpoints**
+    - The network reaches consensus on the final set of transactions and checkpoints for the current epoch. This ensures all validators have an identical state at epoch conclusion.
+    - **Synchronous moment:** This is the only fully synchronous event in the network, crucial for maintaining consistency.
+1. **Distribution of gas rewards**
+    - Computation gas fees are distributed to the validator staking reward pool, from which stakers can withdraw.
+    - Storage fees are allocated to a storage fund, playing a vital role in the Sui tokenomics, as explained in [Tokenomics](../tokenomics.mdx).
+1. **Validator set change**
+    - Any pending staking and unstaking requests during the epoch are finalized and reflected in validators stake distribution.
+    - Any pending validator change requests are also processed, including adding new validators and removing existing validators. This is the sole opportunity for altering the validator set and stake distribution.
+1. **Protocol upgrade**
+    - If agreed upon by 2f+1 validators, the network might upgrade to a new protocol version, encompassing new features, bug fixes, and updates to Move framework libraries.

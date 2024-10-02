@@ -1,0 +1,6 @@
+{
+	"private": true,
+	"import": "../dist/esm/faucet/index.js",
+	"main": "../dist/cjs/faucet/index.js",
+	"sideEffects": false
+}

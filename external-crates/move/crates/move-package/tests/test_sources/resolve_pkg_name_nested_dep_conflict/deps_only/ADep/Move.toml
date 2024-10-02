@@ -1,0 +1,5 @@
+[package]
+name = "ADep-rename"
+
+[addresses]
+A = "_"

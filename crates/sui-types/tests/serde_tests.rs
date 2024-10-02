@@ -18,8 +18,9 @@ fn test_struct_tag_serde() {
     struct TestStructTag(#[serde_as(as = "SuiStructTag")] StructTag);
 
     // serialize to json should not trim the leading 0
-    let Value::String(json) = serde_json::to_value(&TestStructTag(tag.clone()))
-        .unwrap() else { panic!() };
+    let Value::String(json) = serde_json::to_value(TestStructTag(tag.clone())).unwrap() else {
+        panic!()
+    };
     assert_eq!(json, "0x07f89cdffd8968affa0b47bef91adc5314e19509080470c45bfd434cd83a766b::suifrens::SuiFren<0x07f89cdffd8968affa0b47bef91adc5314e19509080470c45bfd434cd83a766b::capy::Capy>");
 
     let tag2 = parse_sui_struct_tag(&json).unwrap();

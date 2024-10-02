@@ -1,0 +1,38 @@
+//# publish
+module 0x5.A {
+    public push_u64(): u64  {
+    label b0:
+        return 42;
+    }
+
+    public parity(u: u64): bool {
+    label b0:
+        return (move(u) % 2 == 0);
+    }
+
+    public foo(u: u64, b: bool): u64 {
+    label b0:
+        jump_if (move(b)) b2;
+    label b1:
+        return 0;
+    label b2:
+        return move(u) + 1;
+    }
+}
+
+
+//# run
+module 0x43.m {
+
+import 0x5.A;
+
+entry foo() {
+    let k: u64;
+    let ans: u64;
+label b0:
+    k = 101;
+    (A.push_u64());
+    ans = A.foo(A.parity(move(k)));
+    return;
+}
+}

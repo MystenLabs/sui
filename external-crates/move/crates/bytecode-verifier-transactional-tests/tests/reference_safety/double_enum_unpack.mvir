@@ -1,0 +1,30 @@
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64, y: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    a(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.One { x: x, y: y} = copy(e);
+            &mut X.Two { x: x, y: y} = move(e);
+            return;
+    }
+
+    b(e: &mut Self.X) {
+        let x: &mut u64;
+        let x2: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.One { x: x, y: y} = copy(e);
+            *move(y) = 0;
+            &mut X.One { x: x2, y: y} = move(e);
+            // x and x2 are aliases of each other
+            *move(x) = 0;
+            *move(x2) = 0;
+            return;
+    }
+}

@@ -12,7 +12,7 @@ bcs.workspace = true
 shared-crypto.workspace = true
 sui-genesis-builder.workspace = true
 sui-move-build.workspace = true
+sui-sdk.workspace = true
 sui-types.workspace = true
 
 move-core-types.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }

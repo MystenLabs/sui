@@ -1,0 +1,28 @@
+//# run
+module 0x5.m {
+
+entry foo() {
+    let v: vector<u64>;
+label b0:
+    v = vec_pack_1<u64>(42);
+    _ = vec_pop_back<u64>(&mut v);
+
+    return;
+}
+
+}
+
+//# run
+module 0x6.m {
+
+entry foo() {
+    let v: vector<u64>;
+label b0:
+    v = vec_pack_2<u64>(42, 43);
+    _ = vec_pop_back<u64>(&mut v);
+    _ = vec_pop_back<u64>(&mut v);
+
+    return;
+}
+
+}

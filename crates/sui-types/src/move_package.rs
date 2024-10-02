@@ -12,14 +12,11 @@ use crate::{
 };
 use derive_more::Display;
 use fastcrypto::hash::HashFunction;
+use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format::CompiledModule;
+use move_binary_format::file_format_common::VERSION_6;
 use move_binary_format::normalized;
-use move_binary_format::{
-    access::ModuleAccess,
-    compatibility::{Compatibility, InclusionCheck},
-    errors::PartialVMResult,
-};
-use move_binary_format::{binary_views::BinaryIndexedView, file_format::AbilitySet};
+use move_core_types::language_storage::ModuleId;
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -69,7 +66,9 @@ pub type FnInfoMap = BTreeMap<FnInfoKey, FnInfo>;
 )]
 pub struct TypeOrigin {
     pub module_name: String,
-    pub struct_name: String,
+    // `struct_name` alias to support backwards compatibility with the old name
+    #[serde(alias = "struct_name")]
+    pub datatype_name: String,
     pub package: ObjectID,
 }
 
@@ -133,37 +132,6 @@ impl UpgradePolicy {
 
     pub fn is_valid_policy(policy: &u8) -> bool {
         Self::try_from(*policy).is_ok()
-    }
-
-    fn compatibility_check_for_protocol(protocol_config: &ProtocolConfig) -> Compatibility {
-        let disallowed_new_abilities = if protocol_config.disallow_adding_abilities_on_upgrade() {
-            AbilitySet::ALL
-        } else {
-            AbilitySet::EMPTY
-        };
-        Compatibility {
-            check_struct_and_pub_function_linking: true,
-            check_struct_layout: true,
-            check_friend_linking: false,
-            check_private_entry_linking: false,
-            disallowed_new_abilities,
-            disallow_change_struct_type_params: protocol_config
-                .disallow_change_struct_type_params_on_upgrade(),
-        }
-    }
-
-    pub fn check_compatibility(
-        &self,
-        old_module: &normalized::Module,
-        new_module: &normalized::Module,
-        protocol_config: &ProtocolConfig,
-    ) -> PartialVMResult<()> {
-        match self {
-            Self::Compatible => Self::compatibility_check_for_protocol(protocol_config)
-                .check(old_module, new_module),
-            Self::Additive => InclusionCheck::Subset.check(old_module, new_module),
-            Self::DepOnly => InclusionCheck::Equal.check(old_module, new_module),
-        }
     }
 }
 
@@ -282,6 +250,7 @@ impl MovePackage {
     pub fn new_initial<'p>(
         modules: &[CompiledModule],
         max_move_package_size: u64,
+        move_binary_format_version: u32,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let module = modules
@@ -296,6 +265,7 @@ impl MovePackage {
             OBJECT_START_VERSION,
             modules,
             max_move_package_size,
+            move_binary_format_version,
             type_origin_table,
             transitive_dependencies,
         )
@@ -324,6 +294,7 @@ impl MovePackage {
             new_version,
             modules,
             protocol_config.max_move_package_size(),
+            protocol_config.move_binary_format_version(),
             type_origin_table,
             transitive_dependencies,
         )
@@ -363,7 +334,9 @@ impl MovePackage {
         let module_map = BTreeMap::from_iter(modules.iter().map(|module| {
             let name = module.name().to_string();
             let mut bytes = Vec::new();
-            module.serialize(&mut bytes).unwrap();
+            module
+                .serialize_with_version(module.version, &mut bytes)
+                .unwrap();
             (name, bytes)
         }));
 
@@ -384,6 +357,7 @@ impl MovePackage {
         version: SequenceNumber,
         modules: &[CompiledModule],
         max_move_package_size: u64,
+        move_binary_format_version: u32,
         type_origin_table: Vec<TypeOrigin>,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
@@ -401,7 +375,12 @@ impl MovePackage {
             );
 
             let mut bytes = Vec::new();
-            module.serialize(&mut bytes).unwrap();
+            let version = if move_binary_format_version > VERSION_6 {
+                module.version
+            } else {
+                VERSION_6
+            };
+            module.serialize_with_version(version, &mut bytes).unwrap();
             module_map.insert(name, bytes);
         }
 
@@ -417,6 +396,19 @@ impl MovePackage {
         )
     }
 
+    // Retrieve the module with `ModuleId` in the given package.
+    // The module must be the `storage_id` or the call will return `None`.
+    // Check if the address of the module is the same of the package
+    // and return `None` if that is not the case.
+    // All modules in a package share the address with the package.
+    pub fn get_module(&self, storage_id: &ModuleId) -> Option<&Vec<u8>> {
+        if self.id != ObjectID::from(*storage_id.address()) {
+            None
+        } else {
+            self.module_map.get(&storage_id.name().to_string())
+        }
+    }
+
     /// Return the size of the package in bytes
     pub fn size(&self) -> usize {
         let module_map_size = self
@@ -430,7 +422,7 @@ impl MovePackage {
             .map(
                 |TypeOrigin {
                      module_name,
-                     struct_name,
+                     datatype_name: struct_name,
                      ..
                  }| module_name.len() + struct_name.len() + ObjectID::LENGTH,
             )
@@ -477,7 +469,7 @@ impl MovePackage {
             .map(
                 |TypeOrigin {
                      module_name,
-                     struct_name,
+                     datatype_name: struct_name,
                      package,
                  }| { ((module_name.clone(), struct_name.clone()), *package) },
             )
@@ -500,8 +492,7 @@ impl MovePackage {
     pub fn deserialize_module(
         &self,
         module: &Identifier,
-        max_binary_format_version: u32,
-        check_no_bytes_remaining: bool,
+        binary_config: &BinaryConfig,
     ) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
         let bytes = self
@@ -510,13 +501,10 @@ impl MovePackage {
             .ok_or_else(|| SuiError::ModuleNotFound {
                 module_name: module.to_string(),
             })?;
-        CompiledModule::deserialize_with_config(
-            bytes,
-            max_binary_format_version,
-            check_no_bytes_remaining,
-        )
-        .map_err(|error| SuiError::ModuleDeserializationFailure {
-            error: error.to_string(),
+        CompiledModule::deserialize_with_config(bytes, binary_config).map_err(|error| {
+            SuiError::ModuleDeserializationFailure {
+                error: error.to_string(),
+            }
         })
     }
 
@@ -526,14 +514,9 @@ impl MovePackage {
 
     pub fn normalize(
         &self,
-        max_binary_format_version: u32,
-        check_no_bytes_remaining: bool,
+        binary_config: &BinaryConfig,
     ) -> SuiResult<BTreeMap<String, normalized::Module>> {
-        normalize_modules(
-            self.module_map.values(),
-            max_binary_format_version,
-            check_no_bytes_remaining,
-        )
+        normalize_modules(self.module_map.values(), binary_config)
     }
 }
 
@@ -615,12 +598,12 @@ where
                 error: error.to_string(),
             }
         })?;
-        let view = BinaryIndexedView::Module(&module);
-        let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
-            SuiError::ObjectSerializationError {
-                error: e.to_string(),
-            }
-        })?;
+        let d =
+            Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
+                SuiError::ObjectSerializationError {
+                    error: e.to_string(),
+                }
+            })?;
         let bytecode_str = d
             .disassemble()
             .map_err(|e| SuiError::ObjectSerializationError {
@@ -633,22 +616,19 @@ where
 
 pub fn normalize_modules<'a, I>(
     modules: I,
-    max_binary_format_version: u32,
-    check_no_bytes_remaining: bool,
+    binary_config: &BinaryConfig,
 ) -> SuiResult<BTreeMap<String, normalized::Module>>
 where
     I: Iterator<Item = &'a Vec<u8>>,
 {
     let mut normalized_modules = BTreeMap::new();
     for bytecode in modules {
-        let module = CompiledModule::deserialize_with_config(
-            bytecode,
-            max_binary_format_version,
-            check_no_bytes_remaining,
-        )
-        .map_err(|error| SuiError::ModuleDeserializationFailure {
-            error: error.to_string(),
-        })?;
+        let module =
+            CompiledModule::deserialize_with_config(bytecode, binary_config).map_err(|error| {
+                SuiError::ModuleDeserializationFailure {
+                    error: error.to_string(),
+                }
+            })?;
         let normalized_module = normalized::Module::new(&module);
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }
@@ -719,17 +699,30 @@ fn build_initial_type_origin_table(modules: &[CompiledModule]) -> Vec<TypeOrigin
     modules
         .iter()
         .flat_map(|m| {
-            m.struct_defs().iter().map(|struct_def| {
-                let struct_handle = m.struct_handle_at(struct_def.struct_handle);
-                let module_name = m.name().to_string();
-                let struct_name = m.identifier_at(struct_handle.name).to_string();
-                let package: ObjectID = (*m.self_id().address()).into();
-                TypeOrigin {
-                    module_name,
-                    struct_name,
-                    package,
-                }
-            })
+            m.struct_defs()
+                .iter()
+                .map(|struct_def| {
+                    let struct_handle = m.datatype_handle_at(struct_def.struct_handle);
+                    let module_name = m.name().to_string();
+                    let struct_name = m.identifier_at(struct_handle.name).to_string();
+                    let package: ObjectID = (*m.self_id().address()).into();
+                    TypeOrigin {
+                        module_name,
+                        datatype_name: struct_name,
+                        package,
+                    }
+                })
+                .chain(m.enum_defs().iter().map(|enum_def| {
+                    let enum_handle = m.datatype_handle_at(enum_def.enum_handle);
+                    let module_name = m.name().to_string();
+                    let enum_name = m.identifier_at(enum_handle.name).to_string();
+                    let package: ObjectID = (*m.self_id().address()).into();
+                    TypeOrigin {
+                        module_name,
+                        datatype_name: enum_name,
+                        package,
+                    }
+                }))
         })
         .collect()
 }
@@ -744,7 +737,7 @@ fn build_upgraded_type_origin_table(
     let mut existing_table = predecessor.type_origin_map();
     for m in modules {
         for struct_def in m.struct_defs() {
-            let struct_handle = m.struct_handle_at(struct_def.struct_handle);
+            let struct_handle = m.datatype_handle_at(struct_def.struct_handle);
             let module_name = m.name().to_string();
             let struct_name = m.identifier_at(struct_handle.name).to_string();
             let mod_key = (module_name.clone(), struct_name.clone());
@@ -753,7 +746,22 @@ fn build_upgraded_type_origin_table(
             let package = existing_table.remove(&mod_key).unwrap_or(storage_id);
             new_table.push(TypeOrigin {
                 module_name,
-                struct_name,
+                datatype_name: struct_name,
+                package,
+            });
+        }
+
+        for enum_def in m.enum_defs() {
+            let enum_handle = m.datatype_handle_at(enum_def.enum_handle);
+            let module_name = m.name().to_string();
+            let enum_name = m.identifier_at(enum_handle.name).to_string();
+            let mod_key = (module_name.clone(), enum_name.clone());
+            // if id exists in the predecessor's table, use it, otherwise use the id of the upgraded
+            // module
+            let package = existing_table.remove(&mod_key).unwrap_or(storage_id);
+            new_table.push(TypeOrigin {
+                module_name,
+                datatype_name: enum_name,
                 package,
             });
         }

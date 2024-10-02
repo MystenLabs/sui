@@ -1,0 +1,25 @@
+# Can assign to a literal
+--assign "a" "@0x0"
+# Can assign a variable to another variable
+--assign "b" "a"
+--make-move-vec "<address>" "[a,b]"
+# Can assign the result of the make-move-vec
+--assign "c"
+# Can assign to a field access
+--assign "c0" "c.0"
+# Can assign to the other field as well
+--assign "c1" "c.1"
+
+## Now the same thing but with no quotes around things
+# Can assign to a literal
+--assign a @0x0
+# Can assign a variable to another variable
+--assign b a
+--make-move-vec <address> [a,b]
+# Can assign the result of the make-move-vec
+--assign c
+# Can assign to a field access
+--assign c0 c.0
+# Can assign to the other field as well
+--assign c1 c.1
+

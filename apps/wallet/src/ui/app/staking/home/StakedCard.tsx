@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
-import { SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
-import { cx, cva, type VariantProps } from 'class-variance-authority';
-import { Link } from 'react-router-dom';
-
-import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE } from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
-
-import type { StakeObject } from '@mysten/sui.js';
+import { useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
+import { type StakeObject } from '@mysten/sui/client';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
+import { cva, cx, type VariantProps } from 'class-variance-authority';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+
+import { ValidatorLogo } from '../validators/ValidatorLogo';
 
 export enum StakeState {
 	WARM_UP = 'WARM_UP',
@@ -38,9 +37,10 @@ const STATUS_VARIANT = {
 	[StakeState.WITHDRAW]: 'withDraw',
 	[StakeState.IN_ACTIVE]: 'inActive',
 } as const;
-interface DelegationObjectWithValidator extends StakeObject {
-	validatorAddress: SuiAddress;
-}
+
+export type DelegationObjectWithValidator = Extract<StakeObject, { estimatedReward: string }> & {
+	validatorAddress: string;
+};
 
 const cardStyle = cva(
 	[
@@ -120,8 +120,8 @@ export function StakeCard({
 	const delegationState = inactiveValidator
 		? StakeState.IN_ACTIVE
 		: isEarnedRewards
-		? StakeState.EARNING
-		: StakeState.WARM_UP;
+			? StakeState.EARNING
+			: StakeState.WARM_UP;
 
 	const rewards = isEarnedRewards && estimatedReward ? BigInt(estimatedReward) : 0n;
 

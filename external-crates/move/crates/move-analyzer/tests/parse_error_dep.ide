@@ -1,0 +1,19 @@
+// Tests if in presence of parsing errors for one module (M1), partial symbolication information
+// will still be correctly constructed for another dependent module (M2).
+{
+  "UseDef": {
+    "project": "tests/parse-error-dep",
+    "file_tests": {
+      "M2.move": [
+        {
+          "use_line": 5,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 9,
+          "use_ndx": 1
+        }
+      ]
+    }
+  }
+}

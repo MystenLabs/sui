@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use base64::{engine::general_purpose, Engine};
 use prometheus_http_query::Client;
 use reqwest::header::{HeaderValue, AUTHORIZATION};
-use tracing::debug;
+use tracing::{debug, info};
 
 pub async fn instant_query(
     auth_header: &str,
@@ -41,7 +41,7 @@ pub async fn instant_query(
     }
 }
 
-// This will return the average value of the queried metric over the given time range.
+// This will return the median value of the queried metric over the given time range.
 pub async fn range_query(
     auth_header: &str,
     client: Client,
@@ -49,6 +49,7 @@ pub async fn range_query(
     start: i64,
     end: i64,
     step: f64,
+    percentile: u8,
 ) -> Result<f64, anyhow::Error> {
     debug!("Executing {query}");
     let response = client
@@ -68,21 +69,42 @@ pub async fn range_query(
         .as_matrix()
         .unwrap_or_else(|| panic!("Expected result of type matrix for {query}"));
 
-    if !result.is_empty() {
-        let samples = result.first().unwrap().samples();
-        let sum: f64 = samples.iter().map(|sample| sample.value()).sum();
-        let count = samples.len();
-
-        let avg = if count > 0 { sum / count as f64 } else { 0.0 };
-        debug!(
-            "Got average value {avg} over time range {} - {}",
-            unix_seconds_to_timestamp_string(start),
-            unix_seconds_to_timestamp_string(end)
-        );
-        Ok(avg)
-    } else {
-        Err(anyhow!(
+    if result.is_empty() {
+        return Err(anyhow!(
             "Did not get expected response from server for {query}"
-        ))
+        ));
     }
+
+    let mut samples: Vec<f64> = result
+        .first()
+        .unwrap()
+        .samples()
+        .iter()
+        .filter_map(|sample| {
+            let v = sample.value();
+            if v.is_nan() {
+                None
+            } else {
+                Some(v)
+            }
+        })
+        .collect();
+    if samples.is_empty() {
+        return Err(anyhow!("Query returned zero data point! {query}"));
+    }
+    samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    assert!(
+        (1..=100).contains(&percentile),
+        "Invalid percentile {percentile}"
+    );
+    let index = samples.len() * percentile as usize / 100;
+    let result = samples[index];
+    info!(
+        "{query}: got p{percentile} value {result}, over {} data points in time range {} - {}",
+        samples.len(),
+        unix_seconds_to_timestamp_string(start),
+        unix_seconds_to_timestamp_string(end)
+    );
+    Ok(result)
 }

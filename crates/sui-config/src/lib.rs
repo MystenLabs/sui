@@ -14,10 +14,13 @@ pub mod genesis;
 pub mod local_ip_utils;
 pub mod node;
 pub mod node_config_metrics;
+pub mod object_storage_config;
 pub mod p2p;
 pub mod transaction_deny_config;
+pub mod verifier_signing_config;
 
-pub use node::{ConsensusConfig, NodeConfig};
+pub use node::{ConsensusConfig, ExecutionCacheConfig, NodeConfig};
+use sui_types::multiaddr::Multiaddr;
 
 const SUI_DIR: &str = ".sui";
 pub const SUI_CONFIG_DIR: &str = "sui_config";
@@ -25,6 +28,7 @@ pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
 pub const SUI_FULLNODE_CONFIG: &str = "fullnode.yaml";
 pub const SUI_CLIENT_CONFIG: &str = "client.yaml";
 pub const SUI_KEYSTORE_FILENAME: &str = "sui.keystore";
+pub const SUI_KEYSTORE_ALIASES_FILENAME: &str = "sui.aliases";
 pub const SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME: &str = "benchmark.keystore";
 pub const SUI_GENESIS_FILENAME: &str = "genesis.blob";
 pub const SUI_DEV_NET_URL: &str = "https://fullnode.devnet.sui.io:443";
@@ -49,12 +53,37 @@ pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
     })
 }
 
-pub fn validator_config_file(i: usize) -> String {
-    format!("validator-config-{}.yaml", i)
+/// Check if the genesis blob exists in the given directory or the default directory.
+pub fn genesis_blob_exists(config_dir: Option<PathBuf>) -> bool {
+    if let Some(dir) = config_dir {
+        dir.join(SUI_GENESIS_FILENAME).exists()
+    } else if let Some(config_env) = std::env::var_os("SUI_CONFIG_DIR") {
+        Path::new(&config_env).join(SUI_GENESIS_FILENAME).exists()
+    } else if let Some(home) = dirs::home_dir() {
+        let mut config = PathBuf::new();
+        config.push(&home);
+        config.extend([SUI_DIR, SUI_CONFIG_DIR, SUI_GENESIS_FILENAME]);
+        config.exists()
+    } else {
+        false
+    }
 }
 
-pub fn ssfn_config_file(i: usize) -> String {
-    format!("ssfn-config-{}.yaml", i)
+pub fn validator_config_file(address: Multiaddr, i: usize) -> String {
+    multiaddr_to_filename(address).unwrap_or(format!("validator-config-{}.yaml", i))
+}
+
+pub fn ssfn_config_file(address: Multiaddr, i: usize) -> String {
+    multiaddr_to_filename(address).unwrap_or(format!("ssfn-config-{}.yaml", i))
+}
+
+fn multiaddr_to_filename(address: Multiaddr) -> Option<String> {
+    if let Some(hostname) = address.hostname() {
+        if let Some(port) = address.port() {
+            return Some(format!("{}-{}.yaml", hostname, port));
+        }
+    }
+    None
 }
 
 pub trait Config

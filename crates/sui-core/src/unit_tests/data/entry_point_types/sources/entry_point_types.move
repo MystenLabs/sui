@@ -18,11 +18,11 @@ module entry_point_types::entry_point_types {
     }
 
     public entry fun utf8_vec_arg(
-        v: vector<string::String>,
+        mut v: vector<string::String>,
         total_len: u64,
         _: &mut TxContext
     ) {
-        let concat = string::utf8(vector::empty());
+        let mut concat = string::utf8(vector::empty());
         while (!vector::is_empty(&v)) {
             let s = vector::pop_back(&mut v);
             string::append(&mut concat, s);
@@ -44,8 +44,8 @@ module entry_point_types::entry_point_types {
     ) {
     }
 
-    public fun drop_all<T: drop>(v: vector<T>, expected_len: u64) {
-        let actual = 0;
+    public fun drop_all<T: drop>(mut v: vector<T>, expected_len: u64) {
+        let mut actual = 0;
         while ((!vector::is_empty(&v))) {
             vector::pop_back(&mut v);
             actual = actual + 1;

@@ -1,0 +1,95 @@
+// Tests if symbolication + doc_string information for documented Move constructs is constructed
+// correctly.
+{
+  "UseDef": {
+    "project": "tests/symbols",
+    "file_tests": {
+      "M6.move": [
+        {
+          "use_line": 5,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 11,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 16,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 16,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 16,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 27,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 32,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 27,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 28,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 28,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 39,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 44,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 44,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 56,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 68,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 80,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 85,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 89,
+          "use_ndx": 0
+        }
+      ]
+    }
+  }
+}

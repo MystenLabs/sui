@@ -13,8 +13,8 @@ module sui::dummy_policy {
         TransferRequest
     };
 
-    struct Rule has drop {}
-    struct Config has store, drop {}
+    public struct Rule has drop {}
+    public struct Config has store, drop {}
 
     public fun set<T>(
         policy: &mut TransferPolicy<T>,

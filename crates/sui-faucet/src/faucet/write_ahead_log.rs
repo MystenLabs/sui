@@ -6,12 +6,12 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use sui_types::base_types::SuiAddress;
 use sui_types::{base_types::ObjectID, transaction::TransactionData};
-use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
+use typed_store::{rocks::DBMap, TypedStoreError};
 
 use tracing::info;
-use typed_store_derive::DBMapUtils;
+use typed_store::DBMapUtils;
 use uuid::Uuid;
 
 /// Persistent log of transactions paying out sui from the faucet, keyed by the coin serving the
@@ -40,7 +40,7 @@ impl WriteAheadLog {
     pub(crate) fn open(path: &Path) -> Self {
         Self::open_tables_read_write(
             path.to_path_buf(),
-            typed_store::rocks::MetricConf::default(),
+            typed_store::rocks::MetricConf::new("faucet_write_ahead_log"),
             None,
             None,
         )

@@ -1,0 +1,25 @@
+# Direct dependencies of the root package (A and B) both depend on the same version of C
+# and refer to it in different locations. These C packages then depend on D in different locations,
+# All versions are aligned, but C-loc-1 adds an address renaming to D which causes a conflict.
+#                                                                
+#                               v2                       v1      
+#               +---+       +---------+  a(P1N = N)  +---------+ 
+#      +------->| A |------>| C-loc-1 |------------> | D-loc-1 | 
+#      |        +---+       +---------+              +---------+ 
+#      |                                                         
+#    +----+                                                      
+#    |Root|                                                      
+#    +----+                                                      
+#      |                        v2                       v1      
+#      |        +---+       +---------+              +---------+ 
+#      +------->| B |------>| C-loc-2 |------------> | D-loc-2 | 
+#               +---+       +---------+              +---------+ 
+
+
+[package]
+name = "Root"
+version = "1"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { OwnedObjectType } from '../Inventory/OwnedObjects';
-import { DisplayObject } from '../DisplayObject';
-import { Button } from '../Base/Button';
 import { KioskListing } from '@mysten/kiosk';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
+
 import { KioskFnType } from '../../hooks/kiosk';
 import {
 	useCreateKioskMutation,
@@ -12,15 +12,15 @@ import {
 	usePurchaseItemMutation,
 	useTakeMutation,
 } from '../../mutations/kiosk';
-import { toast } from 'react-hot-toast';
-import { ObjectId } from '@mysten/sui.js';
-import { useQueryClient } from '@tanstack/react-query';
 import { TANSTACK_OWNED_KIOSK_KEY } from '../../utils/constants';
+import { Button } from '../Base/Button';
+import { DisplayObject } from '../DisplayObject';
+import { OwnedObjectType } from '../Inventory/OwnedObjects';
 
 export type KioskItemProps = {
 	isGuest?: boolean;
 	listing?: KioskListing | null;
-	kioskId: ObjectId;
+	kioskId: string;
 	hasKiosk: boolean;
 	onSuccess: () => void; // parent component onSuccess handler.
 	listFn: KioskFnType;
@@ -39,7 +39,7 @@ export function KioskItem({
 	const queryClient = useQueryClient();
 	const createKiosk = useCreateKioskMutation({
 		onSuccess: () => {
-			queryClient.invalidateQueries([TANSTACK_OWNED_KIOSK_KEY]);
+			queryClient.invalidateQueries({ queryKey: [TANSTACK_OWNED_KIOSK_KEY] });
 			toast.success('Kiosk created successfully');
 		},
 	});
@@ -71,7 +71,7 @@ export function KioskItem({
 				<>
 					{listing && hasKiosk && (
 						<Button
-							loading={purchaseMutation.isLoading}
+							loading={purchaseMutation.isPending}
 							className="border-gray-400 bg-transparent hover:bg-primary hover:text-white md:col-span-2"
 							onClick={() =>
 								purchaseMutation.mutate({
@@ -92,7 +92,7 @@ export function KioskItem({
 
 							<Button
 								className="mt-2"
-								loading={createKiosk.isLoading}
+								loading={createKiosk.isPending}
 								onClick={() => createKiosk.mutate()}
 							>
 								Click here to create.
@@ -109,7 +109,7 @@ export function KioskItem({
 					<>
 						<Button
 							className="border-transparent hover:bg-primary hover:text-white disabled:opacity-30 "
-							loading={takeMutation.isLoading}
+							loading={takeMutation.isPending}
 							disabled={item.isLocked}
 							onClick={() =>
 								takeMutation.mutate({
@@ -131,7 +131,7 @@ export function KioskItem({
 				)}
 				{listing && !isGuest && (
 					<Button
-						loading={delistMutation.isLoading}
+						loading={delistMutation.isPending}
 						className="border-gray-400 bg-transparent hover:bg-primary hover:text-white md:col-span-2"
 						onClick={() =>
 							delistMutation.mutate({

@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 anemo.workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -13,28 +16,23 @@ bcs.workspace = true
 csv.workspace = true
 dirs.workspace = true
 fastcrypto.workspace = true
-move-binary-format.workspace = true
-move-core-types.workspace = true
 once_cell.workspace = true
 rand.workspace = true
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_with.workspace = true
 serde_yaml.workspace = true
-tempfile.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
+clap.workspace = true
+object_store.workspace = true
+reqwest.workspace = true
 
+consensus-config.workspace = true
 narwhal-config.workspace = true
-shared-crypto.workspace = true
 sui-keys.workspace = true
 sui-protocol-config.workspace = true
-sui-storage.workspace = true
-sui-archival.workspace = true
 sui-types.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
-[target.'cfg(msim)'.dependencies]
-sui-simulator.workspace = true
+move-vm-config.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

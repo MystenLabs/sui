@@ -1,17 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Button } from './ui/button';
-import { useState } from 'react';
-import { useWalletKit, ConnectModal } from '@mysten/wallet-kit';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
-import { formatAddress } from '@mysten/sui.js';
+import {
+	ConnectModal,
+	useAccounts,
+	useCurrentAccount,
+	useDisconnectWallet,
+	useSwitchAccount,
+} from '@mysten/dapp-kit';
+import { formatAddress } from '@mysten/sui/utils';
 import { Check, ChevronsUpDown } from 'lucide-react';
+import { useState } from 'react';
+
 import { cn } from '@/lib/utils';
 
+import { Button } from './ui/button';
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from './ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+
 function ConnectedButton() {
-	const { accounts, currentAccount, selectAccount } = useWalletKit();
+	const accounts = useAccounts();
+	const currentAccount = useCurrentAccount();
+	const { mutateAsync: switchAccount } = useSwitchAccount();
+	const { mutateAsync: disconnect } = useDisconnectWallet();
 	const [open, setOpen] = useState(false);
 
 	return (
@@ -30,27 +48,39 @@ function ConnectedButton() {
 			<PopoverContent className="w-[180px] p-0">
 				<Command>
 					<CommandInput placeholder="Search accounts..." />
-					<CommandEmpty>No account found.</CommandEmpty>
-					<CommandGroup>
-						{accounts.map((account) => (
+					<CommandList>
+						<CommandEmpty>No account found.</CommandEmpty>
+						<CommandGroup>
+							{accounts.map((account) => (
+								<CommandItem
+									key={account.address}
+									value={account.address}
+									className="cursor-pointer"
+									onSelect={() => {
+										switchAccount({ account });
+										setOpen(false);
+									}}
+								>
+									<Check
+										className={cn(
+											'mr-2 h-4 w-4',
+											currentAccount?.address === account.address ? 'opacity-100' : 'opacity-0',
+										)}
+									/>
+									{formatAddress(account.address)}
+								</CommandItem>
+							))}
+
 							<CommandItem
-								key={account.address}
-								value={account.address}
+								className="cursor-pointer"
 								onSelect={() => {
-									selectAccount(account);
-									setOpen(false);
+									disconnect();
 								}}
 							>
-								<Check
-									className={cn(
-										'mr-2 h-4 w-4',
-										currentAccount?.address === account.address ? 'opacity-100' : 'opacity-0',
-									)}
-								/>
-								{formatAddress(account.address)}
+								Disconnect
 							</CommandItem>
-						))}
-					</CommandGroup>
+						</CommandGroup>
+					</CommandList>
 				</Command>
 			</PopoverContent>
 		</Popover>
@@ -59,7 +89,7 @@ function ConnectedButton() {
 
 export function ConnectWallet() {
 	const [connectModalOpen, setConnectModalOpen] = useState(false);
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 
 	return (
 		<>
@@ -69,7 +99,11 @@ export function ConnectWallet() {
 				<Button onClick={() => setConnectModalOpen(true)}>Connect Wallet</Button>
 			)}
 
-			<ConnectModal open={connectModalOpen} onClose={() => setConnectModalOpen(false)} />
+			<ConnectModal
+				trigger={<></>}
+				open={connectModalOpen}
+				onOpenChange={(open) => setConnectModalOpen(open)}
+			/>
 		</>
 	);
 }

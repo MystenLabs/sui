@@ -3,8 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use sui_types::base_types::TransactionDigest;
-use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::{InputSharedObject, TransactionEffects};
 use sui_types::storage::ObjectKey;
 use tracing::trace;
 
@@ -120,21 +120,33 @@ impl RWLockDependencyBuilder {
         let mut read_version: HashMap<ObjectKey, Vec<TransactionDigest>> = Default::default();
         let mut overwrite_versions: HashMap<TransactionDigest, Vec<ObjectKey>> = Default::default();
         for effect in effects {
-            let modified_at_versions: HashMap<_, _> =
-                effect.modified_at_versions().iter().cloned().collect();
-            for (obj, seq, _) in effect.shared_objects().iter() {
-                if let Some(modified_seq) = modified_at_versions.get(obj) {
-                    // write transaction
-                    overwrite_versions
+            for kind in effect.input_shared_objects() {
+                match kind {
+                    InputSharedObject::ReadOnly(obj_ref) => {
+                        let obj_key = obj_ref.into();
+                        // Read only transaction
+                        read_version
+                            .entry(obj_key)
+                            .or_default()
+                            .push(*effect.transaction_digest());
+                    }
+                    InputSharedObject::Mutate(obj_ref) => {
+                        let obj_key = obj_ref.into();
+                        // write transaction
+                        overwrite_versions
+                            .entry(*effect.transaction_digest())
+                            .or_default()
+                            .push(obj_key);
+                    }
+                    InputSharedObject::ReadDeleted(oid, version) => read_version
+                        .entry(ObjectKey(oid, version))
+                        .or_default()
+                        .push(*effect.transaction_digest()),
+                    InputSharedObject::MutateDeleted(oid, version) => overwrite_versions
                         .entry(*effect.transaction_digest())
                         .or_default()
-                        .push(ObjectKey(*obj, *modified_seq));
-                } else {
-                    // Read only transaction
-                    read_version
-                        .entry(ObjectKey(*obj, *seq))
-                        .or_default()
-                        .push(*effect.transaction_digest());
+                        .push(ObjectKey(oid, version)),
+                    InputSharedObject::Cancelled(..) => (), // TODO: confirm that consensus_commit_prologue is always at the beginning of the checkpoint, so that cancelled txn don't need to worry about dependency.
                 }
             }
         }
@@ -149,9 +161,13 @@ impl RWLockDependencyBuilder {
         digest: TransactionDigest,
         v: &mut BTreeSet<TransactionDigest>,
     ) {
-        let Some(overwrites) = self.overwrite_versions.get(&digest) else {return;};
+        let Some(overwrites) = self.overwrite_versions.get(&digest) else {
+            return;
+        };
         for obj_ver in overwrites {
-            let Some(reads) = self.read_version.get(obj_ver) else {continue;};
+            let Some(reads) = self.read_version.get(obj_ver) else {
+                continue;
+            };
             for dep in reads {
                 trace!(
                     "Assuming additional dependency when constructing checkpoint {:?} -> {:?}",
@@ -227,15 +243,22 @@ mod tests {
         let mut e2 = e(d(2), vec![]);
         let mut e3 = e(d(3), vec![]);
         let obj_digest = ObjectDigest::new(Default::default());
-        e5.shared_objects_mut_for_testing()
-            .push((o(1), SequenceNumber::from_u64(1), obj_digest));
-        e2.shared_objects_mut_for_testing()
-            .push((o(1), SequenceNumber::from_u64(1), obj_digest));
-        e3.shared_objects_mut_for_testing()
-            .push((o(1), SequenceNumber::from_u64(1), obj_digest));
+        e5.unsafe_add_input_shared_object_for_testing(InputSharedObject::ReadOnly((
+            o(1),
+            SequenceNumber::from_u64(1),
+            obj_digest,
+        )));
+        e2.unsafe_add_input_shared_object_for_testing(InputSharedObject::ReadOnly((
+            o(1),
+            SequenceNumber::from_u64(1),
+            obj_digest,
+        )));
+        e3.unsafe_add_input_shared_object_for_testing(InputSharedObject::Mutate((
+            o(1),
+            SequenceNumber::from_u64(1),
+            obj_digest,
+        )));
 
-        e3.modified_at_versions_mut_for_testing()
-            .push((o(1), SequenceNumber::from_u64(1)));
         let r = extract(CausalOrder::causal_sort(vec![e5, e2, e3]));
         assert_eq!(r.len(), 3);
         assert_eq!(*r.get(2).unwrap(), 3); // [3] is the last

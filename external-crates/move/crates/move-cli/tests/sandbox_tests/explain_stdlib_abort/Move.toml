@@ -1,0 +1,9 @@
+[package]
+name = "explain_stdlib_abort"
+edition = "2024.beta"
+
+[addresses]
+std = "0x1"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }

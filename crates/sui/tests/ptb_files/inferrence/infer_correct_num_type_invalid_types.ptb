@@ -1,0 +1,16 @@
+--make-move-vec <u8> [1,2,3,4u16]
+--make-move-vec <u16> [1,2,3,4u128]
+--make-move-vec <u32> [1,2,3,4u8]
+--make-move-vec <u64> [1,2,3,4u32]
+--make-move-vec <u128> [1,2u8,3,4]
+--make-move-vec <u256> [1u64,2,3,4]
+--make-move-vec <vector<u8>> [vector[1,2u16,3,4]]
+--make-move-vec <vector<u16>> [1,2,3,4]
+--make-move-vec <vector<u32>> [vector[1u64,2,3,4]]
+--make-move-vec <vector<u64>> [vector[1,2u128,3,4]]
+--make-move-vec <vector<u128>> [vector[1,2u256,3,4]]
+--make-move-vec <vector<u256>> [vector[1,2,3u8,4]]
+--make-move-vec <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(vector[1,2,3,4])]
+--make-move-vec <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(some(vector[1,2u128,3,4]))]
+--gas-budget 100000000
+

@@ -5,25 +5,25 @@
 
 //# publish --upgradeable --sender A
 module A0::base {
-    struct Foo<phantom T> { }
+    public struct Foo<phantom T> { }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
-    struct Foo<T: store> { }
+    public struct Foo<T: store> { }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
-    struct Foo<T: copy> { }
+    public struct Foo<T: copy> { }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
-    struct Foo<T: drop> { }
+    public struct Foo<T: drop> { }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
-    struct Foo<T: copy + drop + key> { }
+    public struct Foo<T: copy + drop + key> { }
 }

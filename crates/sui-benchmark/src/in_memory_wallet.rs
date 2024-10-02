@@ -8,7 +8,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
     object::Owner,
-    transaction::{CallArg, TransactionData, TransactionDataAPI, VerifiedTransaction},
+    transaction::{CallArg, Transaction, TransactionData, TransactionDataAPI},
     utils::to_sender_signed_transaction,
 };
 
@@ -124,7 +124,7 @@ impl InMemoryWallet {
         self.accounts.get(addr).map(|a| a.owned.values())
     }
 
-    pub fn create_tx(&self, data: TransactionData) -> VerifiedTransaction {
+    pub fn create_tx(&self, data: TransactionData) -> Transaction {
         let sender = data.sender();
         to_sender_signed_transaction(data, self.accounts.get(&sender).unwrap().key.as_ref())
     }
@@ -139,7 +139,7 @@ impl InMemoryWallet {
         arguments: Vec<CallArg>,
         gas_budget: u64,
         gas_price: u64,
-    ) -> VerifiedTransaction {
+    ) -> Transaction {
         let account = self.account(&sender).unwrap();
         let data = TransactionData::new_move_call(
             sender,
@@ -166,7 +166,7 @@ impl InMemoryWallet {
         arguments: Vec<BenchMoveCallArg>,
         gas_budget: u64,
         gas_price: u64,
-    ) -> VerifiedTransaction {
+    ) -> Transaction {
         let account = self.account(&sender).unwrap();
         move_call_pt_impl(
             sender,
@@ -214,7 +214,7 @@ pub fn move_call_pt_impl(
     gas_ref: &ObjectRef,
     gas_budget: u64,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Transaction {
     let mut builder = ProgrammableTransactionBuilder::new();
     let args = convert_move_call_args(&arguments, &mut builder);
 

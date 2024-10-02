@@ -1,0 +1,10 @@
+[package]
+name = "escrow"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+escrow = "0x0"

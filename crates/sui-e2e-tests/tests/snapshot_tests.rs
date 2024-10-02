@@ -6,7 +6,7 @@ use insta::assert_json_snapshot;
 use sui::sui_commands::SuiCommand;
 use sui_macros::sim_test;
 use sui_sdk::wallet_context::WalletContext;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 // special constants for substitution in commands
 const ME: &str = "{ME}";
@@ -41,11 +41,9 @@ async fn run_one(
                     }
                 }
             }
-            SuiCommand::Move {
-                package_path: _,
-                build_config: _,
-                cmd: _,
-            } => unimplemented!("Supporting Move publish and upgrade commands"),
+            SuiCommand::Move { .. } => {
+                unimplemented!("Supporting Move publish and upgrade commands")
+            }
             _ => panic!("Command {:?} not supported by RPC snapshot tests", cli_cmd),
         }
     }

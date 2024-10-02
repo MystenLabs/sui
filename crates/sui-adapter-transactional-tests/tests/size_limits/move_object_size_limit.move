@@ -8,18 +8,14 @@
 //# publish
 
 module Test::M1 {
-    use std::vector;
     use sui::bcs;
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
 
-    struct S has key, store {
+    public struct S has key, store {
         id: UID,
         contents: vector<u8>
     }
 
-    struct Wrapper has key {
+    public struct Wrapper has key {
         id: UID,
         s: S,
     }
@@ -28,15 +24,15 @@ module Test::M1 {
     public fun create_object_with_size(n: u64, ctx: &mut TxContext): S {
         // minimum object size for S is 32 bytes for UID + 1 byte for vector length
         assert!(n > std::address::length() + 1, 0);
-        let contents = vector[];
-        let i = 0;
+        let mut contents = vector[];
+        let mut i = 0;
         let bytes_to_add = n - (std::address::length() + 1);
         while (i < bytes_to_add) {
             vector::push_back(&mut contents, 9);
             i = i + 1;
         };
-        let s = S { id: object::new(ctx), contents };
-        let size = vector::length(&bcs::to_bytes(&s));
+        let mut s = S { id: object::new(ctx), contents };
+        let mut size = vector::length(&bcs::to_bytes(&s));
         // shrink by 1 byte until we match size. mismatch happens because of len(UID) + vector length byte
         while (size > n) {
             let _ = vector::pop_back(&mut s.contents);
@@ -64,8 +60,8 @@ module Test::M1 {
 
     /// Add `n` bytes to the `s` inside `wrapper`, then unwrap it. This should fail
     /// if `s` is larger than the max object size
-    public entry fun add_bytes_then_unwrap(wrapper: Wrapper, n: u64, ctx: &mut TxContext) {
-        let i = 0;
+    public entry fun add_bytes_then_unwrap(mut wrapper: Wrapper, n: u64, ctx: &mut TxContext) {
+        let mut i = 0;
         while (i < n) {
             vector::push_back(&mut wrapper.s.contents, 7);
             i = i + 1

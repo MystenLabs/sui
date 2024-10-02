@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { activeAddressSelector } from '../redux/slices/account';
-import useAppSelector from './useAppSelector';
+import { useActiveAccount } from './useActiveAccount';
 
 export function useActiveAddress() {
-	return useAppSelector(activeAddressSelector);
+	return useActiveAccount()?.address || null;
 }

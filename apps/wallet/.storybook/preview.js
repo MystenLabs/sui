@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import '../src/ui/styles/global.scss';
-import '@fontsource/inter/variable.css';
-import '@fontsource/red-hat-mono/variable.css';
+import '@fontsource-variable/inter';
+import '@fontsource-variable/red-hat-mono';
 import 'bootstrap-icons/font/bootstrap-icons.scss';
 
 import { MemoryRouter } from 'react-router-dom';

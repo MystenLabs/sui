@@ -1,0 +1,403 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+ @tailwind base;
+ @tailwind components;
+ @tailwind utilities;
+
+ @layer utilities {
+  .bg-checkerboard {
+    background-image: linear-gradient(45deg, var(--sui-black) 25%, transparent 25%, transparent 75%, var(--sui-black) 75%, var(--sui-black)),
+                      linear-gradient(45deg, var(--sui-black) 25%, transparent 25%, transparent 75%, var(--sui-black) 75%, var(--sui-black));
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    border-right: 1px solid var(--sui-blue);
+  }
+  .bg-checkerboard-dark {
+    background-image: linear-gradient(45deg, rgb(var(--sui-blue-dark)) 25%, transparent 25%, transparent 75%, rgb(var(--sui-blue-dark)) 75%, rgb(var(--sui-blue-dark))),
+                      linear-gradient(45deg, rgb(var(--sui-blue-dark)) 25%, transparent 25%, transparent 75%, rgb(var(--sui-blue-dark)) 75%, rgb(var(--sui-blue-dark)));
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    border-right: 1px solid rgb(var(--sui-blue-dark));
+  }
+}
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #4ca2ff;
+  --ifm-color-primary-dark: #2b91ff;
+  --ifm-color-primary-darker: #1a88ff;
+  --ifm-color-primary-darkest: #006fe8;
+  --ifm-color-primary-light: #6db3ff;
+  --ifm-color-primary-lighter: #7ebcff;
+  --ifm-color-primary-lightest: #afd6ff;
+  --ifm-code-font-size: 95%;
+  --ifm-background-color-dark: #030F1C;
+  --ifm-navbar-background-color: #030F1C;
+  --ifm-navbar-sidebar-link-color: #F7F7F8;
+  --ifm-navbar-sidebar-background-color: #030F1C;
+  --ifm-navbar-link-color: #F7F7F8;
+  --ifm-navbar-height: 4.5rem;
+  --ifm-spacing-horizontal: 1.875rem;
+  --ifm-font-size-base: .9375rem;
+  --ifm-line-height-base: 1.5rem;
+  --ifm-font-family-base: 'Inter', sans-serif;
+  --ifm-menu-color: #011829;
+  --ifm-menu-color-background-active: rgba(247, 247, 248, 1);
+
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --sui-black: #090B1A;
+  --sui-blue: #6fbcf0;
+  --sui-blue-bright: #00f9fb;
+  --sui-blue-light: #e1f3ff;
+  --sui-blue-lighter: #B4C2D0;
+  --sui-blue-dark: 52 99 151;
+  --sui-blue-darker: #303846;
+  --sui-hero: #0284AD;
+  --sui-hero-dark: #007195;
+  --sui-sui-steel: #A0B6C3;
+  --sui-steel-dark: #758F9E;
+  --sui-steel-darker: #566873;
+  --sui-header-nav: #2A4362;
+  --sui-success: #2DD7A7;
+  --sui-success-dark: #008C65;
+  --sui-success-light: #D5F7EE;
+  --sui-issue: #FF794B;
+  --sui-issue-dark: #EB5A29;
+  --sui-issue-light: #FFECE5;
+  --sui-warning: #F2BD24;
+  --sui-warning-dark: #8D6E15;
+  --sui-warning-light: #FFF8E2;
+  --sui-code: #845ED6;
+  --sui-gray-35: #FEFEFE;
+  --sui-gray-40: #F7F8F8;
+  --sui-gray-45: #EBECED;
+  --sui-gray-50: #E9EAEB;
+  --sui-gray-55: #D7D8DA;
+  --sui-gray-60: #C3C5C8;
+  --sui-gray-65: #9C9FA4;
+  --sui-gray-70: #898D93;
+  --sui-gray-75: #767A81;
+  --sui-gray-80: #636870;
+  --sui-gray-85: #5A6573;
+  --sui-gray-90: #383F47;
+  --sui-gray-95: #2A3645;
+  --sui-gray-100: #182435;
+  --sui-link-color: #1068a6;
+  --sui-link-color-dark: #057fd1;
+  --sui-link-color-light: #1f98e9;
+  --sui-ghost-white: #f8f8ff;
+  --sui-ghost-dark: #282a36;
+  --sui-white: 255 255 255;
+  --sui-card-dark: 13 20 37;
+  --sui-card-darker: 0 23 49;
+  --sui-blue-primary: 77 162 255;
+  --sui-gray: #ABBDCC;
+  --sui-white: #f7f7f8;
+  --sui-button-hover: #1a88ff;
+  --sui-line: rgba(247, 247, 248, .1);
+  --sui-max-width-desktop: 1162px;
+  --sui-dark-blue-bkg: #011829;
+
+  --primaryFont: 'Inter', sans-serif;
+  --headerFont: 'Twkeverett', sans-serif;
+  --monoFont: "Twkeverett Mono", monospace;
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #4ca2ff;
+  --ifm-color-primary-dark: #2b91ff;
+  --ifm-color-primary-darker: #1a88ff;
+  --ifm-color-primary-darkest: #006fe8;
+  --ifm-color-primary-light: #6db3ff;
+  --ifm-color-primary-lighter: #7ebcff;
+  --ifm-color-primary-lightest: #afd6ff;
+  --ifm-background-color: #030F1C;
+  --ifm-menu-color: var(--sui-white);
+  --ifm-menu-color-background-active: rgba(247, 247, 248, .05);
+  --ifm-navbar-sidebar-link-color: #F7F7F8;
+  --ifm-navbar-sidebar-background-color: #030F1C;
+}
+
+.active-scroll-spy {
+  @apply bg-sui-ghost-white dark:bg-sui-ghost-dark rounded-lg;
+}
+
+/* Inverts the image in the stadards/closed-loop-token.mdx in dark mode. */
+[data-theme='dark'] img.balance-coin-token {
+  filter: invert(1);
+}
+
+/** navbar overrides */
+.navbar-sidebar .menu__link {
+  color: var(--ifm-navbar-sidebar-link-color);
+}
+
+.navbar-sidebar .menu__link--active, .navbar-sidebar .menu__link--active:hover, [data-theme='dark'] .navbar-sidebar .menu__link--active, [data-theme='dark'] .navbar-sidebar .menu__link--active:hover {
+  @apply !bg-sui-blue-primary text-sui-gray-100
+}
+
+html[data-theme=dark] {
+  background-color: var(--ifm-navbar-background-color);
+}
+
+/* Targeting the docusaurus theme switch */
+button[title^="Switch between dark and light mode"] {
+  @apply !text-white hover:bg-sui-blue-primary
+}
+
+html[data-theme=light] .navbar-sidebar button.clean-btn.menu__caret {
+  @apply bg-sui-gray-65
+}
+
+/** setup global style overrides */
+
+body {
+  font-family: var(--primaryFont);
+  tab-size: 2;
+}
+
+h1 {
+  font-size: 3.375rem;
+  line-height: 3.5rem;
+  font-family: var(--primaryFont);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+
+.h1 {
+  letter-spacing: -2.88px;
+  margin-top: 0;
+  margin-bottom: 0;
+  font-family: var(--headerFont);
+  font-size: 4.5rem;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+h2 {
+  font-family: var(--primaryFont);
+  font-size: 2rem;
+  font-weight: 500;
+  line-height: 2.125rem;
+  letter-spacing: -0.04em;
+}
+
+.h2 {
+  letter-spacing: -1.62px;
+  margin-top: 0;
+  margin-bottom: 0;
+  font-family: var(--headerFont);
+  font-size: 3.375rem;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+h3 {
+  font-family: var(--primaryFont);
+  font-size: 1.5rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.625rem;
+  letter-spacing: -0.04em;
+}
+
+.h3 {
+  font-family: var(--headerFont);
+  font-size: 1.375rem;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+h4 {
+  font-family: var(--headerFont);
+  font-size: 1.5rem;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.h4 {
+  font-family: var(--headerFont);
+  font-size: 1.5rem;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.75rem;
+  letter-spacing: -2%;
+}
+
+@media screen and (max-width: 767px) {
+  h1 , .h1{
+    font-size: 3.5rem;
+  }
+
+  h2, .h2 {
+    font-size: 2rem;
+  }
+
+  h3, .h3 {
+    font-size: 1.5rem;
+  }
+
+  h4, .h4 {
+    font-size: 1.2rem;
+  }
+}
+
+@media screen and (max-width: 599px) {
+  h2, .h2 {
+    font-size: 1.7rem;
+  }
+
+  h3, .h3 {
+    font-size: 1.2rem;
+  }
+
+  h4, .h4 {
+    font-size: 1rem;
+  }
+}
+
+
+/** Navbar overrides **/
+
+.navbar {
+  border-bottom: 1px solid var(--sui-line);
+}
+
+.navbar__title {
+  visibility: hidden;
+}
+
+.navbar__toggle path {
+  stroke: var(--sui-white);
+}
+
+.navbar__items {
+  justify-content: space-between;
+}
+
+.navbar__items .navbar__brand {
+  width: 27%;
+}
+
+.navbar__items .navbar__item.navbar__link {
+  font-family: var(--headerFont);
+  font-size: .9375rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+  letter-spacing: -0.02em;
+}
+
+.darkNavbarColorModeToggle {
+  @apply text-sui-white;
+}
+
+@media screen and (min-width: 767px) {
+  .navbar__items.navbar__items--right {
+    min-width: 325px;
+  }
+}
+
+.theme-toggle-wrapper button:hover {
+  @apply !bg-sui-blue-primary
+}
+
+/** navbar search field **/
+
+.DocSearch-Button-Container {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.DocSearch-Button {
+  width: 12.5rem;
+  height: 2.625rem !important;
+  font-family: var(--headerFont);
+  border: solid 1px rgba(247, 247, 248, 0.1) !important;
+  border-radius: 2.25rem !important;
+  padding: 1rem 1.1rem 1rem 1.25rem !important;
+  color: var(--sui-white) !important;
+  font-family: var(--primaryFont);
+  letter-spacing: -0.01em;
+  background: linear-gradient(0deg, rgba(247, 247, 248, 0.1), rgba(247, 247, 248, 0.1)),
+  linear-gradient(0deg, rgba(247, 247, 248, 0.05), rgba(247, 247, 248, 0.05)) !important;
+}
+
+@media screen and (max-width: 599px) {
+  .DocSearch-Button {
+    width: initial;
+  }
+}
+
+.DocSearch-Search-Icon {
+  order: 2;
+  margin-left: auto;
+}
+
+.DocSearch-Search-Icon path {
+  stroke: var(--sui-white);
+}
+
+.DocSearch-Button-Keys {
+  display: none !important;
+}
+
+.grid-card {
+  row-gap: 1rem;
+  column-gap: 1rem;
+}
+
+.markdown h1:first-child {
+  margin-top: 1rem;
+}
+
+/*Targeting the search container so that the "start here" button displays alongside the search bar*/
+[class^="navbarSearchContainer"] {
+  @apply min-[997px]:flex min-[997px]:gap-4
+}
+
+/** Globals **/
+.button-cta {
+  @apply bg-sui-blue-primary font-sans text-sui-white -tracking-[.3px] cursor-pointer border-none rounded-[2.25rem] py-3 px-[1.125rem] text-base font-medium leading-[1.125rem] inline-block transition-colors duration-300 ease-in-out
+}
+
+.button-cta:hover {
+  background-color: var(--sui-button-hover);
+  color: var(--sui-white);
+  text-decoration: none;
+}
+/*
+details {
+  @apply !bg-sui-gray-45 !border-sui-gray-65 relative before:content-["Click\20to\20toggle"] before:absolute before:-top-3 before:-left-1 before:text-xs before:bg-white before:px-2 before:py-0.5 before:rounded before:border before:border-sui-gray-65 before:border-solid before:opacity-0 hover:before:opacity-100 before:duration-300 before:transition-opacity;
+}
+[data-theme='dark'] details {
+  @apply !bg-sui-gray-90 !border-sui-gray-65;
+}
+*/
+summary::before {
+  @apply !border-l-sui-gray-65;
+}
+
+details > div > div {
+  @apply !border-t-sui-gray-65;
+}
+@media (max-width: 1050px) {
+  .navbar .button-cta {
+    display: none;
+  }
+}
+
+/** colors **/
+
+.text-white {
+  color: var(--sui-white);
+}
+
+.text-gray {
+  color: var(--sui-gray);
+}

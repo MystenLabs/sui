@@ -1,0 +1,59 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090", "host.docker.internal:9184"]
+  - job_name: "Validator_0"
+    static_configs:
+      - targets: ["host.docker.internal:2002"]
+        labels:
+          host: validator0
+          network: local
+  - job_name: "Validator_1"
+    static_configs:
+      - targets: ["host.docker.internal:2012"]
+        labels:
+          host: validator1
+          network: local
+  - job_name: "Validator_2"
+    static_configs:
+      - targets: ["host.docker.internal:2022"]
+        labels:
+          host: validator2
+          network: local
+  - job_name: "Validator_3"
+    static_configs:
+      - targets: ["host.docker.internal:2032"]
+        labels:
+          host: validator3
+          network: local
+  - job_name: "Client_1"
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
+        labels:
+          host: client1
+          network: local
+  - job_name: "Client_2"
+    static_configs:
+      - targets: ["host.docker.internal:8082"]
+        labels:
+          host: client2
+          network: local
+  - job_name: "Client_3"
+    static_configs:
+      - targets: ["host.docker.internal:8083"]
+        labels:
+          host: client3
+          network: local
+  - job_name: "tempo"
+    static_configs:
+      - targets: ["tempo:3200"]
+  - job_name: "node"
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+        labels:
+          host: node
+          network: local

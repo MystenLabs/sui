@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::{file_format::CompiledModule, file_format_common::VERSION_MAX};
 
 use std::{collections::BTreeMap, path::PathBuf};
 use sui_move_build::{BuildConfig, CompiledPackage};
@@ -20,7 +20,7 @@ macro_rules! type_origin_table {
     {$($module:ident :: $type:ident => $pkg:expr),* $(,)?} => {{
         vec![$(TypeOrigin {
             module_name: stringify!($module).to_string(),
-            struct_name: stringify!($type).to_string(),
+            datatype_name: stringify!($type).to_string(),
             package: $pkg,
         },)*]
     }}
@@ -46,13 +46,20 @@ macro_rules! linkage_table {
 #[test]
 fn test_new_initial() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
+    let c_pkg =
+        MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, VERSION_MAX, []).unwrap();
 
     let b_id1 = ObjectID::from_single_byte(0xb1);
-    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, VERSION_MAX, [&c_pkg])
+        .unwrap();
 
-    let a_pkg =
-        MovePackage::new_initial(&build_test_modules("A"), u64::MAX, [&b_pkg, &c_pkg]).unwrap();
+    let a_pkg = MovePackage::new_initial(
+        &build_test_modules("A"),
+        u64::MAX,
+        VERSION_MAX,
+        [&b_pkg, &c_pkg],
+    )
+    .unwrap();
 
     assert_eq!(
         a_pkg.linkage_table(),
@@ -97,14 +104,15 @@ fn test_new_initial() {
 #[test]
 fn test_upgraded() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
+    let c_pkg =
+        MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, VERSION_MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
@@ -125,19 +133,21 @@ fn test_upgraded() {
 #[test]
 fn test_depending_on_upgrade() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
+    let c_pkg =
+        MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, VERSION_MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, VERSION_MAX, [&c_new])
+        .unwrap();
 
     assert_eq!(
         b_pkg.linkage_table(),
@@ -150,26 +160,28 @@ fn test_depending_on_upgrade() {
 #[test]
 fn test_upgrade_upgrades_linkage() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
+    let c_pkg =
+        MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, VERSION_MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, VERSION_MAX, [&c_pkg])
+        .unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
         .new_upgraded(
             b_id2,
             &build_test_modules("B"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [&c_new],
         )
         .unwrap();
@@ -192,26 +204,28 @@ fn test_upgrade_upgrades_linkage() {
 #[test]
 fn test_upgrade_linkage_digest_to_new_dep() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
+    let c_pkg =
+        MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, VERSION_MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, VERSION_MAX, [&c_pkg])
+        .unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
         .new_upgraded(
             b_id2,
             &build_test_modules("B"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [&c_new],
         )
         .unwrap();
@@ -233,7 +247,9 @@ fn test_upgrade_linkage_digest_to_new_dep() {
                 .iter()
                 .map(|module| {
                     let mut bytes = Vec::new();
-                    module.serialize(&mut bytes).unwrap();
+                    module
+                        .serialize_with_version(module.version, &mut bytes)
+                        .unwrap();
                     bytes
                 })
                 .collect::<Vec<_>>(),
@@ -246,26 +262,28 @@ fn test_upgrade_linkage_digest_to_new_dep() {
 #[test]
 fn test_upgrade_downngrades_linkage() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
+    let c_pkg =
+        MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, VERSION_MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, VERSION_MAX, [&c_new])
+        .unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
         .new_upgraded(
             b_id2,
             &build_test_modules("B"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [&c_pkg],
         )
         .unwrap();
@@ -288,23 +306,30 @@ fn test_upgrade_downngrades_linkage() {
 #[test]
 fn test_transitively_depending_on_upgrade() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
+    let c_pkg =
+        MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, VERSION_MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
     let b_id1 = ObjectID::from_single_byte(0xb1);
-    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, VERSION_MAX, [&c_pkg])
+        .unwrap();
 
-    let a_pkg =
-        MovePackage::new_initial(&build_test_modules("A"), u64::MAX, [&b_pkg, &c_new]).unwrap();
+    let a_pkg = MovePackage::new_initial(
+        &build_test_modules("A"),
+        u64::MAX,
+        VERSION_MAX,
+        [&b_pkg, &c_new],
+    )
+    .unwrap();
 
     assert_eq!(
         a_pkg.linkage_table(),
@@ -317,28 +342,29 @@ fn test_transitively_depending_on_upgrade() {
 
 #[test]
 fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest() {
-    let c_v1 = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
+    let c_v1 =
+        MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, VERSION_MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_v2 = c_v1
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_v1]).unwrap();
-
-    let b_v2 = MovePackage::new_initial(&build_test_modules("Bv2"), u64::MAX, [&c_v2]).unwrap();
+    let b_pkg =
+        MovePackage::new_initial(&build_test_modules("B"), u64::MAX, VERSION_MAX, [&c_v1]).unwrap();
+    let b_v2 = MovePackage::new_initial(&build_test_modules("Bv2"), u64::MAX, VERSION_MAX, [&c_v2])
+        .unwrap();
 
     let with_unpublished_deps = false;
-    let hash_modules = true;
-    let local_v1 = build_test_package("B").get_package_digest(with_unpublished_deps, hash_modules);
-    let local_v2 =
-        build_test_package("Bv2").get_package_digest(with_unpublished_deps, hash_modules);
+    let local_v1 = build_test_package("B").get_package_digest(with_unpublished_deps);
+    let local_v2 = build_test_package("Bv2").get_package_digest(with_unpublished_deps);
 
+    let hash_modules = true;
     assert_ne!(b_pkg.digest(hash_modules), b_v2.digest(hash_modules));
     assert_eq!(b_pkg.digest(hash_modules), local_v1);
     assert_eq!(b_v2.digest(hash_modules), local_v2);
@@ -348,12 +374,13 @@ fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest
 #[test]
 #[should_panic]
 fn test_panic_on_empty_package() {
-    let _ = MovePackage::new_initial(&[], u64::MAX, []);
+    let _ = MovePackage::new_initial(&[], u64::MAX, VERSION_MAX, []);
 }
 
 #[test]
 fn test_fail_on_missing_dep() {
-    let err = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, []).unwrap_err();
+    let err =
+        MovePackage::new_initial(&build_test_modules("B"), u64::MAX, VERSION_MAX, []).unwrap_err();
 
     assert_eq!(
         err.kind(),
@@ -363,11 +390,14 @@ fn test_fail_on_missing_dep() {
 
 #[test]
 fn test_fail_on_missing_transitive_dep() {
-    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
+    let c_pkg =
+        MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, VERSION_MAX, []).unwrap();
 
-    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, VERSION_MAX, [&c_pkg])
+        .unwrap();
 
-    let err = MovePackage::new_initial(&build_test_modules("A"), u64::MAX, [&b_pkg]).unwrap_err();
+    let err = MovePackage::new_initial(&build_test_modules("A"), u64::MAX, VERSION_MAX, [&b_pkg])
+        .unwrap_err();
 
     assert_eq!(
         err.kind(),
@@ -377,22 +407,29 @@ fn test_fail_on_missing_transitive_dep() {
 
 #[test]
 fn test_fail_on_transitive_dependency_downgrade() {
-    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, []).unwrap();
+    let c_pkg =
+        MovePackage::new_initial(&build_test_modules("Cv1"), u64::MAX, VERSION_MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv2"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
-    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
+    let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, VERSION_MAX, [&c_new])
+        .unwrap();
 
-    let err =
-        MovePackage::new_initial(&build_test_modules("A"), u64::MAX, [&b_pkg, &c_pkg]).unwrap_err();
+    let err = MovePackage::new_initial(
+        &build_test_modules("A"),
+        u64::MAX,
+        VERSION_MAX,
+        [&b_pkg, &c_pkg],
+    )
+    .unwrap_err();
 
     assert_eq!(
         err.kind(),
@@ -402,14 +439,15 @@ fn test_fail_on_transitive_dependency_downgrade() {
 
 #[test]
 fn test_fail_on_upgrade_missing_type() {
-    let c_pkg = MovePackage::new_initial(&build_test_modules("Cv2"), u64::MAX, []).unwrap();
+    let c_pkg =
+        MovePackage::new_initial(&build_test_modules("Cv2"), u64::MAX, VERSION_MAX, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let err = c_pkg
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv1"),
-            &ProtocolConfig::get_for_max_version(),
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap_err();
@@ -436,7 +474,7 @@ fn test_fail_on_upgrade_missing_type() {
 pub fn build_test_package(test_dir: &str) -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_package", test_dir]);
-    BuildConfig::new_for_testing().build(path).unwrap()
+    BuildConfig::new_for_testing().build(&path).unwrap()
 }
 
 pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {

@@ -110,7 +110,7 @@ impl
 }
 
 #[serde_as]
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum CheckpointId {
     SequenceNumber(

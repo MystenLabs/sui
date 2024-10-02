@@ -8,7 +8,7 @@ use std::{borrow::Borrow, collections::BTreeMap, error::Error};
 
 pub trait Map<'a, K, V>
 where
-    K: Serialize + DeserializeOwned + ?Sized,
+    K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
     type Error: Error;
@@ -39,23 +39,6 @@ where
     /// Returns the raw value (serialized bytes) for the given key from the map, if it exists.
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Returns the value for the given key from the map, if it exists
-    /// or the given default value if it does not.
-    /// This method is not thread safe
-    fn get_or_insert_unsafe<F: FnOnce() -> V>(
-        &self,
-        key: &K,
-        default: F,
-    ) -> Result<V, Self::Error> {
-        self.get(key).and_then(|optv| match optv {
-            Some(v) => Ok(v),
-            None => {
-                self.insert(key, &default())?;
-                self.get(key).transpose().expect("default just inserted")
-            }
-        })
-    }
-
     /// Inserts the given key-value pair into the map.
     fn insert(&self, key: &K, value: &V) -> Result<(), Self::Error>;
 
@@ -63,7 +46,13 @@ where
     fn remove(&self, key: &K) -> Result<(), Self::Error>;
 
     /// Removes every key-value pair from the map.
-    fn clear(&self) -> Result<(), Self::Error>;
+    fn unsafe_clear(&self) -> Result<(), Self::Error>;
+
+    /// Removes every key-value pair from the map by deleting the underlying file.
+    fn delete_file_in_range(&self, from: &K, to: &K) -> Result<(), TypedStoreError>;
+
+    /// Uses delete range on the entire key range
+    fn schedule_delete_all(&self) -> Result<(), TypedStoreError>;
 
     /// Returns true if the map is empty, otherwise false.
     fn is_empty(&self) -> bool;
@@ -72,7 +61,7 @@ where
     /// This is potentially unsafe as it can perform a full table scan
     fn unbounded_iter(&'a self) -> Self::Iterator;
 
-    /// Returns an iterator visiting each key-value pair in the map.
+    /// Returns an iterator visiting each key-value pair within the specified bounds in the map.
     fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>)
         -> Self::Iterator;
 
@@ -80,8 +69,18 @@ where
     /// TODO: find better name
     fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator;
 
-    /// Same as `iter` but performs status check
+    /// Same as `iter` but performs status check.
     fn safe_iter(&'a self) -> Self::SafeIterator;
+
+    // Same as `iter_with_bounds` but performs status check.
+    fn safe_iter_with_bounds(
+        &'a self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Self::SafeIterator;
+
+    // Same as `range_iter` but performs status check.
+    fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator;
 
     /// Returns an iterator over each key in the map.
     fn keys(&'a self) -> Self::Keys;
@@ -152,7 +151,7 @@ where
 #[async_trait]
 pub trait AsyncMap<'a, K, V>
 where
-    K: Serialize + DeserializeOwned + ?Sized + std::marker::Sync,
+    K: Serialize + DeserializeOwned + std::marker::Sync,
     V: Serialize + DeserializeOwned + std::marker::Sync + std::marker::Send,
 {
     type Error: Error;

@@ -1,0 +1,3 @@
+Command `sandbox publish`:
+Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000042/modules/m.mv bad_borrow`:
+Execution failed because of an error originated from vector operations (i.e., index out of bound, pop an empty vector, or unpack a vector with a wrong parity) in 0000000000000000000000000000000000000000000000000000000000000042::m::bad_borrow at code offset 4

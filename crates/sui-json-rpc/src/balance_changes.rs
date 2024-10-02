@@ -3,20 +3,16 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Neg;
-use std::sync::Arc;
 
 use async_trait::async_trait;
 use move_core_types::language_storage::TypeTag;
-use mysten_metrics::spawn_monitored_task;
 use tokio::sync::RwLock;
 
-use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::BalanceChange;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::coin::Coin;
 use sui_types::digests::ObjectDigest;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::SuiError;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas_coin::GAS;
 use sui_types::object::{Object, Owner};
@@ -34,20 +30,20 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     // Only charge gas when tx fails, skip all object parsing
     if effects.status() != &ExecutionStatus::Success {
         return Ok(vec![BalanceChange {
-            owner: *gas_owner,
+            owner: gas_owner,
             coin_type: GAS::type_tag(),
             amount: effects.gas_cost_summary().net_gas_usage().neg() as i128,
         }]);
     }
 
-    let all_mutated: Vec<(&ObjectRef, &Owner, WriteKind)> = effects.all_changed_objects();
-    let all_mutated = all_mutated
-        .iter()
+    let all_mutated = effects
+        .all_changed_objects()
+        .into_iter()
         .filter_map(|((id, version, digest), _, _)| {
-            if matches!(mocked_coin, Some(coin) if *id == coin) {
+            if matches!(mocked_coin, Some(coin) if id == coin) {
                 return None;
             }
-            Some((*id, *version, Some(*digest)))
+            Some((id, version, Some(digest)))
         })
         .collect::<Vec<_>>();
 
@@ -67,16 +63,16 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         object_provider,
         &effects
             .modified_at_versions()
-            .iter()
+            .into_iter()
             .filter_map(|(id, version)| {
-                if matches!(mocked_coin, Some(coin) if *id == coin) {
+                if matches!(mocked_coin, Some(coin) if id == coin) {
                     return None;
                 }
                 // We won't be able to get dynamic object from object provider today
-                if unwrapped_then_deleted.contains(id) {
+                if unwrapped_then_deleted.contains(&id) {
                     return None;
                 }
-                Some((*id, *version, input_objs_to_digest.get(id).cloned()))
+                Some((id, version, input_objs_to_digest.get(&id).cloned()))
             })
             .collect::<Vec<_>>(),
         &all_mutated,
@@ -171,31 +167,6 @@ pub trait ObjectProvider {
     ) -> Result<Option<Object>, Self::Error>;
 }
 
-#[async_trait]
-impl ObjectProvider for Arc<AuthorityState> {
-    type Error = SuiError;
-    async fn get_object(
-        &self,
-        id: &ObjectID,
-        version: &SequenceNumber,
-    ) -> Result<Object, Self::Error> {
-        Ok(self.get_past_object_read(id, *version)?.into_object()?)
-    }
-
-    async fn find_object_lt_or_eq_version(
-        &self,
-        id: &ObjectID,
-        version: &SequenceNumber,
-    ) -> Result<Option<Object>, Self::Error> {
-        let database = self.database.clone();
-        let id = *id;
-        let version = *version;
-        spawn_monitored_task!(async move { database.find_object_lt_or_eq_version(id, version) })
-            .await
-            .map_err(|e| SuiError::GenericStorageError(e.to_string()))
-    }
-}
-
 pub struct ObjectProviderCache<P> {
     object_cache: RwLock<BTreeMap<(ObjectID, SequenceNumber), Object>>,
     last_version_cache: RwLock<BTreeMap<(ObjectID, SequenceNumber), SequenceNumber>>,
@@ -208,6 +179,30 @@ impl<P> ObjectProviderCache<P> {
             object_cache: Default::default(),
             last_version_cache: Default::default(),
             provider,
+        }
+    }
+
+    pub fn insert_objects_into_cache(&mut self, objects: Vec<Object>) {
+        let object_cache = self.object_cache.get_mut();
+        let last_version_cache = self.last_version_cache.get_mut();
+
+        for object in objects {
+            let object_id = object.id();
+            let version = object.version();
+
+            let key = (object_id, version);
+            object_cache.insert(key, object.clone());
+
+            match last_version_cache.get_mut(&key) {
+                Some(existing_seq_number) => {
+                    if version > *existing_seq_number {
+                        *existing_seq_number = version
+                    }
+                }
+                None => {
+                    last_version_cache.insert(key, version);
+                }
+            }
         }
     }
 

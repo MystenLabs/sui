@@ -1,44 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::Registry;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
-use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    FinalizedEffects, QuorumDriverError,
+use sui_storage::key_value_store::TransactionKeyValueStore;
+use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
+use sui_test_transaction_builder::{
+    batch_make_transfer_transactions, make_staking_transaction, make_transfer_sui_transaction,
 };
-use sui_types::transaction::VerifiedTransaction;
-use test_utils::network::TestClusterBuilder;
-use test_utils::transaction::wait_for_tx;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::quorum_driver_types::{
+    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
+    FinalizedEffects, IsTransactionExecutedLocally, QuorumDriverError,
+};
+use sui_types::transaction::Transaction;
+use test_cluster::TestClusterBuilder;
 use tokio::time::timeout;
 use tracing::info;
+
+fn make_socket_addr() -> std::net::SocketAddr {
+    std::net::SocketAddr::new([127, 0, 0, 1].into(), 0)
+}
 
 #[sim_test]
 async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let handle = &test_cluster.fullnode_handle.sui_node;
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let registry = Registry::new();
-    // Start orchestrator inside container so that it will be properly shutdown.
-    let orchestrator = handle
-        .with_async(|node| {
-            TransactiondOrchestrator::new_with_network_clients(
-                node.state(),
-                node.subscribe_to_epoch_change(),
-                temp_dir.path(),
-                &registry,
-            )
-        })
-        .await
-        .unwrap();
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let txn_count = 4;
-    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -50,17 +45,25 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let digest = *txn.digest();
     orchestrator
         .quorum_driver()
-        .submit_transaction_no_ticket(txn)
+        .submit_transaction_no_ticket(
+            ExecuteTransactionRequestV3::new_v2(txn),
+            Some(make_socket_addr()),
+        )
         .await?;
 
     // Wait for data sync to catch up
-    wait_for_tx(digest, handle.state().clone()).await;
+    handle
+        .state()
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[digest])
+        .await
+        .unwrap();
 
     // Transaction Orchestrator proactivcely executes txn locally
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
 
-    let res = execute_with_orchestrator(
+    let (_, executed_locally) = execute_with_orchestrator(
         &orchestrator,
         txn,
         ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -68,13 +71,18 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     .await
     .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    let ExecuteTransactionResponse::EffectsCert(result) = res;
-    let (_, _, executed_locally) = *result;
     assert!(executed_locally);
+
+    let metrics = KeyValueStoreMetrics::new_for_tests();
+    let kv_store = Arc::new(TransactionKeyValueStore::new(
+        "rocksdb",
+        metrics,
+        handle.state(),
+    ));
 
     assert!(handle
         .state()
-        .get_executed_transaction_and_effects(digest)
+        .get_executed_transaction_and_effects(digest, kv_store)
         .await
         .is_ok());
 
@@ -83,6 +91,14 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
+    #[cfg(msim)]
+    {
+        use sui_core::authority::{init_checkpoint_timeout_config, CheckpointTimeoutConfig};
+        init_checkpoint_timeout_config(CheckpointTimeoutConfig {
+            warning_timeout: Duration::from_secs(2),
+            panic_timeout: None,
+        });
+    }
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(600000)
@@ -90,26 +106,11 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
         .await;
 
     let handle = &test_cluster.fullnode_handle.sui_node;
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    tokio::task::yield_now().await;
-    let registry = Registry::new();
-    // Start orchestrator inside container so that it will be properly shutdown.
-    let orchestrator = handle
-        .with_async(|node| {
-            TransactiondOrchestrator::new_with_network_clients(
-                node.state(),
-                node.subscribe_to_epoch_change(),
-                temp_dir.path(),
-                &registry,
-            )
-        })
-        .await
-        .unwrap();
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let txn_count = 2;
     let context = &mut test_cluster.wallet;
-    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -144,7 +145,11 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     .unwrap_err();
 
     // Because the tx did not go through, we expect to see it in the WAL log
-    let pending_txes = orchestrator.load_all_pending_transactions();
+    let pending_txes: Vec<_> = orchestrator
+        .load_all_pending_transactions()
+        .into_iter()
+        .map(|t| t.into_inner())
+        .collect();
     assert_eq!(pending_txes, vec![txn.clone()]);
 
     // Bring up 1 validator, we obtain quorum again and tx should succeed
@@ -220,10 +225,7 @@ async fn test_tx_across_epoch_boundaries() {
     let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<FinalizedEffects>(total_tx_cnt);
 
     let test_cluster = TestClusterBuilder::new().build().await;
-    let tx = test_cluster
-        .wallet
-        .make_transfer_sui_transaction(None, None)
-        .await;
+    let tx = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
     let authorities = test_cluster.swarm.validator_node_handles();
 
     // We first let 2 validators stop accepting user cert
@@ -243,19 +245,18 @@ async fn test_tx_across_epoch_boundaries() {
 
     let tx_digest = *tx.digest();
     info!(?tx_digest, "Submitting tx");
-    let tx = tx.into_inner();
     tokio::task::spawn(async move {
         match to
-            .execute_transaction_block(ExecuteTransactionRequest {
-                transaction: tx.clone(),
-                request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-            })
+            .execute_transaction_block(
+                ExecuteTransactionRequestV3::new_v2(tx.clone()),
+                ExecuteTransactionRequestType::WaitForEffectsCert,
+                None,
+            )
             .await
         {
-            Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
+            Ok((response, _)) => {
                 info!(?tx_digest, "tx result: ok");
-                let (effects_cert, _, _) = *res;
-                result_tx.send(effects_cert).await.unwrap();
+                result_tx.send(response.effects).await.unwrap();
             }
             Err(QuorumDriverError::TimeoutBeforeFinality) => {
                 info!(?tx_digest, "tx result: timeout and will retry")
@@ -286,13 +287,127 @@ async fn test_tx_across_epoch_boundaries() {
 
 async fn execute_with_orchestrator(
     orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
-    txn: VerifiedTransaction,
+    txn: Transaction,
     request_type: ExecuteTransactionRequestType,
-) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
+) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), QuorumDriverError> {
     orchestrator
-        .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn.into(),
-            request_type,
-        })
+        .execute_transaction_block(ExecuteTransactionRequestV3::new_v2(txn), request_type, None)
         .await
+}
+
+#[sim_test]
+async fn execute_transaction_v3() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let context = &mut test_cluster.wallet;
+    let handle = &test_cluster.fullnode_handle.sui_node;
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
+
+    let txn_count = 1;
+    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
+    assert!(
+        txns.len() >= txn_count,
+        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
+        txn_count,
+    );
+
+    // Quorum driver does not execute txn locally
+    let txn = txns.swap_remove(0);
+
+    let request = ExecuteTransactionRequestV3 {
+        transaction: txn,
+        include_events: true,
+        include_input_objects: true,
+        include_output_objects: true,
+        include_auxiliary_data: false,
+    };
+    let response = orchestrator.execute_transaction_v3(request, None).await?;
+    let fx = &response.effects.effects;
+
+    let mut expected_input_objects = fx.modified_at_versions();
+    expected_input_objects.sort_by_key(|&(id, _version)| id);
+    let mut expected_output_objects = fx
+        .all_changed_objects()
+        .into_iter()
+        .map(|(object_ref, _, _)| object_ref)
+        .collect::<Vec<_>>();
+    expected_output_objects.sort_by_key(|&(id, _version, _digest)| id);
+
+    let mut actual_input_objects_received = response
+        .input_objects
+        .unwrap()
+        .iter()
+        .map(|object| (object.id(), object.version()))
+        .collect::<Vec<_>>();
+    actual_input_objects_received.sort_by_key(|&(id, _version)| id);
+    assert_eq!(expected_input_objects, actual_input_objects_received);
+
+    let mut actual_output_objects_received = response
+        .output_objects
+        .unwrap()
+        .iter()
+        .map(|object| (object.id(), object.version(), object.digest()))
+        .collect::<Vec<_>>();
+    actual_output_objects_received.sort_by_key(|&(id, _version, _digest)| id);
+    assert_eq!(expected_output_objects, actual_output_objects_received);
+
+    Ok(())
+}
+
+#[sim_test]
+async fn execute_transaction_v3_staking_transaction() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let context = &mut test_cluster.wallet;
+    let handle = &test_cluster.fullnode_handle.sui_node;
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
+
+    let validator_address = context
+        .get_client()
+        .await?
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators
+        .first()
+        .unwrap()
+        .sui_address;
+    let transaction = make_staking_transaction(context, validator_address).await;
+
+    let request = ExecuteTransactionRequestV3 {
+        transaction,
+        include_events: true,
+        include_input_objects: true,
+        include_output_objects: true,
+        include_auxiliary_data: false,
+    };
+    let response = orchestrator.execute_transaction_v3(request, None).await?;
+    let fx = &response.effects.effects;
+
+    let mut expected_input_objects = fx.modified_at_versions();
+    expected_input_objects.sort_by_key(|&(id, _version)| id);
+    let mut expected_output_objects = fx
+        .all_changed_objects()
+        .into_iter()
+        .map(|(object_ref, _, _)| object_ref)
+        .collect::<Vec<_>>();
+    expected_output_objects.sort_by_key(|&(id, _version, _digest)| id);
+
+    let mut actual_input_objects_received = response
+        .input_objects
+        .unwrap()
+        .iter()
+        .map(|object| (object.id(), object.version()))
+        .collect::<Vec<_>>();
+    actual_input_objects_received.sort_by_key(|&(id, _version)| id);
+    assert_eq!(expected_input_objects, actual_input_objects_received);
+
+    let mut actual_output_objects_received = response
+        .output_objects
+        .unwrap()
+        .iter()
+        .map(|object| (object.id(), object.version(), object.digest()))
+        .collect::<Vec<_>>();
+    actual_output_objects_received.sort_by_key(|&(id, _version, _digest)| id);
+    assert_eq!(expected_output_objects, actual_output_objects_received);
+
+    Ok(())
 }

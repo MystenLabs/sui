@@ -1,55 +1,86 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetOwnedObjects, hasDisplayData, useGetKioskContents } from '@mysten/core';
-import { type SuiObjectData, type SuiAddress } from '@mysten/sui.js';
+import { hasDisplayData, isKioskOwnerToken, useGetOwnedObjects } from '@mysten/core';
+import { useKioskClient } from '@mysten/core/src/hooks/useKioskClient';
+import { type SuiObjectData } from '@mysten/sui/client';
+import { useMemo } from 'react';
 
-import useAppSelector from './useAppSelector';
+import { useBuyNLargeAssets } from '../components/buynlarge/useBuyNLargeAssets';
+import { useHiddenAssets } from '../pages/home/hidden-assets/HiddenAssetsProvider';
 
-export function useGetNFTs(address?: SuiAddress | null) {
+type OwnedAssets = {
+	visual: SuiObjectData[];
+	other: SuiObjectData[];
+	hidden: SuiObjectData[];
+};
+
+export enum AssetFilterTypes {
+	visual = 'visual',
+	other = 'other',
+}
+
+export function useGetNFTs(address?: string | null) {
+	const kioskClient = useKioskClient();
+	const bnl = useBuyNLargeAssets();
 	const {
 		data,
-		isLoading,
+		isPending,
 		error,
 		isError,
 		isFetchingNextPage,
 		hasNextPage,
 		fetchNextPage,
-		isInitialLoading,
+		isLoading,
 	} = useGetOwnedObjects(
 		address,
 		{
-			MatchNone: [{ StructType: '0x2::coin::Coin' }],
+			MatchNone: [
+				{ StructType: '0x2::coin::Coin' },
+				...(bnl
+					.filter((item) => !!item?.objectType)
+					.map((item) => ({ StructType: item?.objectType })) as { StructType: string }[]),
+			],
 		},
 		50,
 	);
-	const { apiEnv } = useAppSelector((state) => state.app);
-	const disableOriginByteKiosk = apiEnv !== 'mainnet';
+	const { hiddenAssetIds } = useHiddenAssets();
 
-	const { data: kioskData, isLoading: areKioskContentsLoading } = useGetKioskContents(
-		address,
-		disableOriginByteKiosk,
-	);
+	const assets = useMemo(() => {
+		const ownedAssets: OwnedAssets = {
+			visual: [],
+			other: [],
+			hidden: [],
+		};
 
-	const filteredKioskContents = (kioskData?.list ?? [])
-		.filter(hasDisplayData)
-		.map(({ data }) => (data as SuiObjectData) || []);
-
-	const nfts = [
-		...(filteredKioskContents ?? []),
-		...(data?.pages
+		const groupedAssets = data?.pages
 			.flatMap((page) => page.data)
-			.filter(hasDisplayData)
-			.map(({ data }) => data as SuiObjectData) || []),
-	];
+			.filter((asset) => !hiddenAssetIds.includes(asset.data?.objectId!))
+			.reduce((acc, curr) => {
+				if (hasDisplayData(curr) || isKioskOwnerToken(kioskClient.network, curr))
+					acc.visual.push(curr.data as SuiObjectData);
+				if (!hasDisplayData(curr)) acc.other.push(curr.data as SuiObjectData);
+				if (hiddenAssetIds.includes(curr.data?.objectId!))
+					acc.hidden.push(curr.data as SuiObjectData);
+				return acc;
+			}, ownedAssets);
+
+		bnl.forEach((item) => {
+			if (item?.asset?.data) {
+				groupedAssets?.visual.unshift(item.asset.data);
+			}
+		});
+
+		return groupedAssets;
+	}, [hiddenAssetIds, data?.pages, kioskClient.network, bnl]);
 
 	return {
-		data: nfts,
-		isInitialLoading,
+		data: assets,
+		isLoading,
 		hasNextPage,
 		isFetchingNextPage,
 		fetchNextPage,
-		isLoading: isLoading || areKioskContentsLoading,
+		isPending: isPending,
 		isError: isError,
 		error,
 	};

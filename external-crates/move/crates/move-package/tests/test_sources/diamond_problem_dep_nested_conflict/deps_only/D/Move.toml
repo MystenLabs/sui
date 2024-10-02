@@ -1,0 +1,5 @@
+[package]
+name = "D"
+
+[dependencies]
+G = { local = "../G-v3" }

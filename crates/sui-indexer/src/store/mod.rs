@@ -1,37 +1,54 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub use indexer_store::*;
+use std::time::Duration;
+
+use diesel_async::{scoped_futures::ScopedBoxFuture, AsyncPgConnection};
+pub(crate) use indexer_store::*;
 pub use pg_indexer_store::PgIndexerStore;
 
-mod indexer_store;
-mod module_resolver;
+use crate::{database::ConnectionPool, errors::IndexerError};
+
+pub mod indexer_store;
+pub mod package_resolver;
 mod pg_indexer_store;
-mod query;
+pub mod pg_partition_manager;
 
-mod diesel_marco {
-    macro_rules! read_only_blocking {
-        ($pool:expr, $query:expr) => {{
-            let mut pg_pool_conn = crate::get_pg_pool_connection($pool)?;
-            pg_pool_conn
-                .build_transaction()
-                .read_only()
-                .run($query)
-                .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
-        }};
-    }
+pub async fn transaction_with_retry<'a, Q, T>(
+    pool: &ConnectionPool,
+    timeout: Duration,
+    query: Q,
+) -> Result<T, IndexerError>
+where
+    Q: for<'r> FnOnce(
+            &'r mut AsyncPgConnection,
+        ) -> ScopedBoxFuture<'a, 'r, Result<T, IndexerError>>
+        + Send,
+    Q: Clone,
+    T: 'a,
+{
+    let backoff = backoff::ExponentialBackoff {
+        max_elapsed_time: Some(timeout),
+        ..Default::default()
+    };
+    backoff::future::retry(backoff, || async {
+        let mut connection = pool.get().await.map_err(|e| backoff::Error::Transient {
+            err: IndexerError::PostgresWriteError(e.to_string()),
+            retry_after: None,
+        })?;
 
-    macro_rules! transactional_blocking {
-        ($pool:expr, $query:expr) => {{
-            let mut pg_pool_conn = crate::get_pg_pool_connection($pool)?;
-            pg_pool_conn
-                .build_transaction()
-                .serializable()
-                .read_write()
-                .run($query)
-                .map_err(|e| IndexerError::PostgresWriteError(e.to_string()))
-        }};
-    }
-    pub(crate) use read_only_blocking;
-    pub(crate) use transactional_blocking;
+        connection
+            .build_transaction()
+            .read_write()
+            .run(query.clone())
+            .await
+            .map_err(|e| {
+                tracing::error!("Error with persisting data into DB: {:?}, retrying...", e);
+                backoff::Error::Transient {
+                    err: IndexerError::PostgresWriteError(e.to_string()),
+                    retry_after: None,
+                }
+            })
+    })
+    .await
 }

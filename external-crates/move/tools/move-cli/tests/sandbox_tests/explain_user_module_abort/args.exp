@@ -1,3 +1,0 @@
-Command `sandbox publish`:
-Command `sandbox run scripts/fail_script.move`:
-Execution aborted with code 77 in module 00000000000000000000000000000002::Fail.

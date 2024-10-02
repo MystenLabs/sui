@@ -1,0 +1,14 @@
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/top_level_module_address_invalid.move:2:12
+  │
+2 │     module m;
+  │            ^ 'module' label forms (ending with ';') are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_check/parser/top_level_module_address_invalid.move:2:12
+  │
+2 │     module m;
+  │            ^ Cannot define 'module' label in address block
+

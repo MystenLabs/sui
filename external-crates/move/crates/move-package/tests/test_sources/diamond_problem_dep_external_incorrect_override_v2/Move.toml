@@ -1,0 +1,21 @@
+# Dependency graph and and override (ov)
+# Root's dependency on A and ADep is externally resolved (override is incorrect)
+#
+#                 +----+
+#           +---->| A  |------+
+#           |     +----+      |
+#           |                 |
+# +----+    |                 +---------------->+-------+
+# |Root|----|                 +---------------->| ADep  |
+# +----+    |                 |            +--->+-------+
+#           |           ov(1) |            |
+#           |     +----+------+   +----+   |
+#           +---->| B  |--------->| C  |---+
+#                 +----+          +----+
+
+[package]
+name = "Root"
+
+[dependencies]
+B = { local = "./deps_only/B" }
+A = {r."../resolvers/successful.sh" = "A" }

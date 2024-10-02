@@ -1,0 +1,148 @@
+---
+title: Staking and Governance SDK
+sidebar_label: Staking and Governance
+---
+
+Examples of interacting with staking and governance. These functions typically require a `balanceManagerKey`, `poolKey`, or both. For details on these keys, see [DeepBookV3 SDK](../deepbookv3-sdk.mdx#keys). The SDK includes some default keys that you can view in the `constants.ts` file. 
+
+See [Staking and Governance](../deepbookv3/staking-governance.mdx) for more information on the staking and governance API.
+
+## Staking and governance functions
+
+### stake
+
+Use `stake` to stake an amount you specify into a specific pool. The call returns a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `balanceManagerKey`: String that identifies the balance manager.
+- `stakeAmount`: Number representing the amount to stake.
+
+```tsx
+stake(poolKey: string, balanceManagerKey: string, stakeAmount: number);
+```
+
+### unstake
+
+Use `unstake` to unstake from a particular pool. The call returns a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `balanceManagerKey`: String that identifies the balance manager.
+
+```tsx
+unstake(poolKey: string, balanceManagerKey: string);
+```
+
+### submitProposal
+
+Use `submitProposal` to submit a governance proposal. The call returns a `Transaction` object.
+
+**Parameters**
+
+- `params`: A `ProposalParams` object that defines the proposal.
+
+```tsx
+submitProposal({ params: ProposalParams });
+```
+
+### vote
+
+Use `vote` to vote on a proposal. The call returns a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `balanceManagerKey`: String that identifies the balance manager.
+- `proposal_id`: String that identifies the proposal to vote on.
+
+```tsx
+vote(poolKey: string, balanceManagerKey: string, proposal_id: string)
+```
+
+## Examples
+
+The following examples demonstrate custom staking and governance functions that you can place into the `DeepBookMarketMaker` class. 
+
+### stake custom function
+
+```tsx
+stake = (
+  poolKey: string, 
+  balanceManagerKey: string, 
+  stakeAmount: number
+) => (tx: Transaction) => {}
+
+// Custom function to stake 100 DEEP in DeepBookMarketMaker class
+stake = (tx: Transaction) => {
+  const poolKey = 'DBUSDT_DBUSDC';
+  const balanceManagerKey = 'MANAGER_1';
+  tx.add(this.governance.stake(poolKey, balanceManagerKey, 100));
+};
+```
+
+### unstake custom function
+
+```tsx
+unstake = (
+  poolKey: string, 
+  balanceManagerKey: string
+) => (tx: Transaction) => {}
+
+// Custom function to unstake in DeepBookMarketMaker class
+unstake = (tx: Transaction) => {
+  const poolKey = 'DBUSDT_DBUSDC';
+  const balanceManagerKey = 'MANAGER_1';
+  tx.add(this.governance.unstake(poolKey, balanceManagerKey));
+};
+```
+
+### submitProposal custom function
+
+```tsx
+// Proposal params
+export interface ProposalParams {
+  poolKey: string;
+  balanceManagerKey: string;
+  takerFee: number;
+  makerFee: number;
+  stakeRequired: number;
+}
+
+submitProposal = (params: ProposalParams) => (tx: Transaction) => {}
+
+// Custom function to submit proposal in DeepBookMarketMaker class
+submitProposal = (tx: Transaction) => {
+  const poolKey = 'DBUSDT_DBUSDC';
+  const balanceManagerKey = 'MANAGER_1';
+  tx.add(
+    this.governance.submitProposal({
+      poolKey,
+      balanceManagerKey,
+      takerFee: 0.002,
+      makerFee: 0.001,
+      stakeRequired: 100,
+    }),
+  );
+};
+```
+
+### vote custom function
+
+```tsx
+vote = (
+  poolKey: string, 
+  balanceManagerKey: string, 
+  proposal_id: string
+) => (tx: Transaction) => {}
+
+// Custom function to vote in DeepBookMarketMaker class
+vote = (tx: Transaction) => {
+  const poolKey = 'DBUSDT_DBUSDC';
+  const balanceManagerKey = 'MANAGER_1';
+  const proposalID = '0x123456789';
+  tx.add(this.governance.vote(poolKey, balanceManagerKey, proposalID));
+};
+```

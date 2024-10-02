@@ -1,0 +1,7 @@
+[package]
+name = "Root"
+
+[dependencies]
+B = { local = "./deps_only/B" }
+ADep = { local = "./deps_only/ADep-v1", override = true }
+A = { r."../resolvers/successful.sh" = "A" }

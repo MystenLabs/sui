@@ -4,7 +4,8 @@
 	"compilerOptions": {
 		"module": "CommonJS",
 		"outDir": "dist/cjs",
-		"rootDir": "src"
+		"rootDir": "src",
+		"isolatedModules": true
 	},
 	"references": [{ "path": "../bcs" }]
 }

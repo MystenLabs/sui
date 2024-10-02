@@ -5,10 +5,12 @@
 use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round, TimestampMs};
 use config::{AuthorityIdentifier, Committee};
 use enum_dispatch::enum_dispatch;
-use fastcrypto::hash::Hash;
+use fastcrypto::hash::{Digest, Hash, HashFunction};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::warn;
@@ -18,13 +20,40 @@ pub type SequenceNumber = u64;
 
 #[derive(Clone, Debug)]
 /// The output of Consensus, which includes all the batches for each certificate in the sub dag
-/// It is sent to the the ExecutionState handle_consensus_transactions
+/// It is sent to the ExecutionState handle_consensus_transactions
 pub struct ConsensusOutput {
     pub sub_dag: Arc<CommittedSubDag>,
-    pub batches: Vec<(Certificate, Vec<Batch>)>,
+    /// Matches certificates in the `sub_dag` one-to-one.
+    pub batches: Vec<Vec<Batch>>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+impl Hash<{ crypto::DIGEST_LENGTH }> for ConsensusOutput {
+    type TypedDigest = ConsensusOutputDigest;
+
+    fn digest(&self) -> ConsensusOutputDigest {
+        let mut hasher = crypto::DefaultHashFunction::new();
+        hasher.update(self.sub_dag.digest());
+        self.batches.iter().flatten().for_each(|b| {
+            hasher.update(b.digest());
+        });
+        ConsensusOutputDigest(hasher.finalize().into())
+    }
+}
+
+impl Display for ConsensusOutput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ConsensusOutput(round={:?}, sub_dag_index={:?}, timestamp={:?}, digest={:?})",
+            self.sub_dag.leader_round(),
+            self.sub_dag.sub_dag_index,
+            self.sub_dag.commit_timestamp(),
+            self.digest()
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommittedSubDag {
     /// The sequence of committed certificates.
     pub certificates: Vec<Certificate>,
@@ -118,6 +147,35 @@ impl CommittedSubDag {
             return *self.leader.header().created_at();
         }
         self.commit_timestamp
+    }
+}
+
+impl Hash<{ crypto::DIGEST_LENGTH }> for CommittedSubDag {
+    type TypedDigest = ConsensusOutputDigest;
+
+    fn digest(&self) -> ConsensusOutputDigest {
+        let mut hasher = crypto::DefaultHashFunction::new();
+        // Instead of hashing serialized CommittedSubDag, hash the certificate digests instead.
+        // Signatures in the certificates are not part of the commitment.
+        for cert in &self.certificates {
+            hasher.update(cert.digest());
+        }
+        hasher.update(self.leader.digest());
+        hasher.update(
+            bcs::to_bytes(&self.sub_dag_index).unwrap_or_else(|_| {
+                panic!("Serialization of {} should not fail", self.sub_dag_index)
+            }),
+        );
+        hasher.update(bcs::to_bytes(&self.reputation_score).unwrap_or_else(|_| {
+            panic!(
+                "Serialization of {:?} should not fail",
+                self.reputation_score
+            )
+        }));
+        hasher.update(bcs::to_bytes(&self.commit_timestamp).unwrap_or_else(|_| {
+            panic!("Serialization of {} should not fail", self.commit_timestamp)
+        }));
+        ConsensusOutputDigest(hasher.finalize().into())
     }
 }
 
@@ -359,6 +417,52 @@ impl CommittedSubDagShell {
 /// Shutdown token dropped when a task is properly shut down.
 pub type ShutdownToken = mpsc::Sender<()>;
 
+// Digest of ConsususOutput and CommittedSubDag.
+// In non-byzantine environment, ConsensusOutputDigest of each consensus output in different
+// validator must be the same.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ConsensusOutputDigest([u8; crypto::DIGEST_LENGTH]);
+
+impl ConsensusOutputDigest {
+    pub const fn into_inner(self) -> [u8; crypto::DIGEST_LENGTH] {
+        self.0
+    }
+}
+
+impl AsRef<[u8]> for ConsensusOutputDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl From<ConsensusOutputDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
+    fn from(d: ConsensusOutputDigest) -> Self {
+        Digest::new(d.0)
+    }
+}
+
+impl fmt::Debug for ConsensusOutputDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+        )
+    }
+}
+
+impl fmt::Display for ConsensusOutputDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+                .get(0..16)
+                .ok_or(fmt::Error)?
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{Certificate, Header, HeaderV1Builder};
@@ -367,7 +471,7 @@ mod tests {
     use indexmap::IndexMap;
     use std::collections::BTreeSet;
     use std::num::NonZeroUsize;
-    use test_utils::CommitteeFixture;
+    use test_utils::{latest_protocol_version, CommitteeFixture};
 
     #[test]
     fn test_zero_timestamp_in_sub_dag() {
@@ -385,8 +489,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let certificate =
-            Certificate::new_unsigned(&committee, Header::V1(header), Vec::new()).unwrap();
+        let certificate = Certificate::new_unsigned(
+            &latest_protocol_version(),
+            &committee,
+            Header::V1(header),
+            Vec::new(),
+        )
+        .unwrap();
 
         // AND we initialise the sub dag via the "restore" way
         let sub_dag_round = CommittedSubDag {
@@ -421,8 +530,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let certificate =
-            Certificate::new_unsigned(&committee, Header::V1(header), Vec::new()).unwrap();
+        let certificate = Certificate::new_unsigned(
+            &latest_protocol_version(),
+            &committee,
+            Header::V1(header),
+            Vec::new(),
+        )
+        .unwrap();
 
         // AND
         let sub_dag_round_2 = CommittedSubDag::new(
@@ -448,8 +562,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let certificate =
-            Certificate::new_unsigned(&committee, Header::V1(header), Vec::new()).unwrap();
+        let certificate = Certificate::new_unsigned(
+            &latest_protocol_version(),
+            &committee,
+            Header::V1(header),
+            Vec::new(),
+        )
+        .unwrap();
 
         // WHEN create the sub dag based on the "previously committed" sub dag.
         let sub_dag_round_4 = CommittedSubDag::new(
@@ -491,17 +610,22 @@ mod tests {
         scores.add_score(ids[8], 40);
         scores.add_score(ids[9], 40);
 
+        // the expected authorities
+        let expected_authorities = vec![
+            (ids[9], 40),
+            (ids[8], 40),
+            (ids[7], 30),
+            (ids[6], 30),
+            (ids[5], 20),
+            (ids[4], 10),
+            (ids[3], 10),
+            (ids[2], 10),
+            (ids[1], 10),
+            (ids[0], 0),
+        ];
+
         // sorting the authorities
         let sorted_authorities = scores.authorities_by_score_desc();
-        assert_eq!(sorted_authorities[0], (ids[9], 40));
-        assert_eq!(sorted_authorities[1], (ids[8], 40));
-        assert_eq!(sorted_authorities[2], (ids[7], 30));
-        assert_eq!(sorted_authorities[3], (ids[6], 30));
-        assert_eq!(sorted_authorities[4], (ids[5], 20));
-        assert_eq!(sorted_authorities[5], (ids[4], 10));
-        assert_eq!(sorted_authorities[6], (ids[3], 10));
-        assert_eq!(sorted_authorities[7], (ids[2], 10));
-        assert_eq!(sorted_authorities[8], (ids[1], 10));
-        assert_eq!(sorted_authorities[9], (ids[0], 0));
+        assert_eq!(sorted_authorities, expected_authorities);
     }
 }

@@ -1,0 +1,46 @@
+[package]
+name = "test-cluster"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+version = "0.1.0"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+bcs.workspace = true
+fastcrypto.workspace = true
+futures.workspace = true
+tracing.workspace = true
+jsonrpsee.workspace = true
+tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
+rand.workspace = true
+sui-config.workspace = true
+sui-core = { workspace = true, features = ["test-utils"] }
+sui-framework.workspace = true
+sui-swarm-config.workspace = true
+sui-json-rpc.workspace = true
+sui-json-rpc-types.workspace = true
+sui-json-rpc-api.workspace = true
+sui-node.workspace = true
+sui-protocol-config.workspace = true
+sui-swarm.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }
+prometheus.workspace = true
+sui-keys.workspace = true
+sui-bridge.workspace = true
+sui-sdk.workspace = true
+sui-test-transaction-builder.workspace = true
+
+move-binary-format.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator.workspace = true
+fastcrypto-zkp.workspace = true
+
+[dev-dependencies]
+sui-json-rpc-api.workspace = true
+sui-macros.workspace = true

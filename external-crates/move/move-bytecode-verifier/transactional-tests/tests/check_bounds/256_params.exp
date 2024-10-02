@@ -1,4 +1,0 @@
-processed 1 task
-
-task 0 'publish'. lines 1-264:
-Error: value (256) cannot exceed (255)

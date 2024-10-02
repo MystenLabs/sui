@@ -1,0 +1,95 @@
+// Checks if symbolication for positional struct fields work correctly and recognizes the visibility
+// modifier.
+{
+  "UseDef": {
+    "project": "tests/move-2024",
+    "file_tests": {
+      "structs.move": [
+        {
+          "use_line": 3,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 5,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 5,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 7,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 7,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 8,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 8,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 12,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 13,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 18,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 18,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 19,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 24,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 24,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 29,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 29,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 30,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 36,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 36,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 41,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 45,
+          "use_ndx": 1
+        }
+      ]
+    }
+  }
+}

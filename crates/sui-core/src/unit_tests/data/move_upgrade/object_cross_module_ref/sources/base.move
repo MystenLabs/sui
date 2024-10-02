@@ -7,17 +7,17 @@ module base_addr::base {
     use sui::transfer;
     use base_addr::friend_module::{Self, X};
 
-    struct A has store, drop {
+    public struct A has store, drop {
         v: u16,
     }
 
-    struct B has key {
+    public struct B has key {
         id: UID,
         field1: u32,
         field2: A,
     }
 
-    struct C has key {
+    public struct C has key {
         id: UID,
         field1: u64,
         field2: X,

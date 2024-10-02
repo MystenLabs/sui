@@ -1,6 +1,7 @@
 [package]
 name = "Examples"
 version = "0.0.1"
+edition = "2024.beta"
 
 [addresses]
 examples = "0x0"

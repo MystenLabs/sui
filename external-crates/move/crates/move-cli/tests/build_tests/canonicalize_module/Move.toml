@@ -1,0 +1,9 @@
+[package]
+name = "Test"
+edition = "2024.beta"
+
+[addresses]
+foo = "0x1"
+bar = "0x2"
+baz = "0x3"
+qux = "0x4"

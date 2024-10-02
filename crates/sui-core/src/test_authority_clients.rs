@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    net::SocketAddr,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -12,19 +13,25 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::SuiResult;
 use sui_types::messages_grpc::{
-    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
-    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
-    TransactionInfoResponse,
+    HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
+    HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
+    ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-    transaction::{CertifiedTransaction, Transaction},
+    transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
+};
+use sui_types::{
+    effects::TransactionEffectsAPI,
+    messages_checkpoint::{CheckpointRequestV2, CheckpointResponseV2},
+};
+use sui_types::{
+    error::SuiResult,
+    messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3},
 };
 
 #[derive(Clone, Copy, Default)]
@@ -33,6 +40,7 @@ pub struct LocalAuthorityClientFaultConfig {
     pub fail_after_handle_transaction: bool,
     pub fail_before_handle_confirmation: bool,
     pub fail_after_handle_confirmation: bool,
+    pub overload_retry_after_handle_transaction: Option<Duration>,
 }
 
 impl LocalAuthorityClientFaultConfig {
@@ -52,40 +60,73 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleTransactionResponse, SuiError> {
         if self.fault_config.fail_before_handle_transaction {
             return Err(SuiError::from("Mock error before handle_transaction"));
         }
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let state = self.state.clone();
-        let transaction = transaction.verify()?;
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let transaction = epoch_store
+            .signature_verifier
+            .verify_tx(transaction.data())
+            .map(|_| VerifiedTransaction::new_from_verified(transaction))?;
         let result = state.handle_transaction(&epoch_store, transaction).await;
         if self.fault_config.fail_after_handle_transaction {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_transaction".to_owned(),
             });
         }
+        if let Some(duration) = self.fault_config.overload_retry_after_handle_transaction {
+            return Err(SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: duration.as_secs(),
+            });
+        }
         result
-    }
-
-    async fn handle_certificate(
-        &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        self.handle_certificate_v2(certificate)
-            .await
-            .map(|r| r.into())
     }
 
     async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
         let state = self.state.clone();
         let fault_config = self.fault_config;
-        spawn_monitored_task!(Self::handle_certificate(state, certificate, fault_config))
+        let request = HandleCertificateRequestV3 {
+            certificate,
+            include_events: true,
+            include_input_objects: false,
+            include_output_objects: false,
+            include_auxiliary_data: false,
+        };
+        spawn_monitored_task!(Self::handle_certificate(state, request, fault_config))
             .await
             .unwrap()
+            .map(|resp| HandleCertificateResponseV2 {
+                signed_effects: resp.effects,
+                events: resp.events.unwrap_or_default(),
+                fastpath_input_objects: vec![],
+            })
+    }
+
+    async fn handle_certificate_v3(
+        &self,
+        request: HandleCertificateRequestV3,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleCertificateResponseV3, SuiError> {
+        let state = self.state.clone();
+        let fault_config = self.fault_config;
+        spawn_monitored_task!(Self::handle_certificate(state, request, fault_config))
+            .await
+            .unwrap()
+    }
+
+    async fn handle_soft_bundle_certificates_v3(
+        &self,
+        _request: HandleSoftBundleCertificatesRequestV3,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
+        unimplemented!()
     }
 
     async fn handle_object_info_request(
@@ -114,11 +155,20 @@ impl AuthorityAPI for LocalAuthorityClient {
         state.handle_checkpoint_request(&request)
     }
 
+    async fn handle_checkpoint_v2(
+        &self,
+        request: CheckpointRequestV2,
+    ) -> Result<CheckpointResponseV2, SuiError> {
+        let state = self.state.clone();
+
+        state.handle_checkpoint_request_v2(&request)
+    }
+
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
-        Ok(self.state.database.get_sui_system_state_object()?)
+        self.state.get_sui_system_state_object_for_testing()
     }
 }
 
@@ -146,9 +196,9 @@ impl LocalAuthorityClient {
     // object transactions as well as owned object transactions.
     async fn handle_certificate(
         state: Arc<AuthorityState>,
-        certificate: CertifiedTransaction,
+        request: HandleCertificateRequestV3,
         fault_config: LocalAuthorityClientFaultConfig,
-    ) -> Result<HandleCertificateResponseV2, SuiError> {
+    ) -> Result<HandleCertificateResponseV3, SuiError> {
         if fault_config.fail_before_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error before handle_confirmation_transaction".to_owned(),
@@ -156,26 +206,33 @@ impl LocalAuthorityClient {
         }
         // Check existing effects before verifying the cert to allow querying certs finalized
         // from previous epochs.
-        let tx_digest = *certificate.digest();
+        let tx_digest = *request.certificate.digest();
         let epoch_store = state.epoch_store_for_testing();
         let signed_effects = match state
             .get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)
         {
             Ok(Some(effects)) => effects,
             _ => {
-                let certificate = certificate.verify(epoch_store.committee())?;
-                state
-                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store)?;
-                let effects = state.notify_read_effects(&certificate).await?;
+                let certificate = epoch_store
+                    .signature_verifier
+                    .verify_cert(request.certificate)
+                    .await?;
+                //let certificate = certificate.verify(epoch_store.committee())?;
+                state.enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store);
+                let effects = state.notify_read_effects(*certificate.digest()).await?;
                 state.sign_effects(effects, &epoch_store)?
             }
         }
         .into_inner();
 
-        let events = if let Some(digest) = signed_effects.events_digest() {
-            state.get_transaction_events(digest)?
+        let events = if request.include_events {
+            if let Some(digest) = signed_effects.events_digest() {
+                Some(state.get_transaction_events(digest)?)
+            } else {
+                None
+            }
         } else {
-            TransactionEvents::default()
+            None
         };
 
         if fault_config.fail_after_handle_confirmation {
@@ -183,11 +240,23 @@ impl LocalAuthorityClient {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
             });
         }
-        let fastpath_input_objects = state.load_fastpath_input_objects(&signed_effects)?;
-        Ok(HandleCertificateResponseV2 {
-            signed_effects,
+
+        let input_objects = request
+            .include_input_objects
+            .then(|| state.get_transaction_input_objects(&signed_effects))
+            .and_then(Result::ok);
+
+        let output_objects = request
+            .include_output_objects
+            .then(|| state.get_transaction_output_objects(&signed_effects))
+            .and_then(Result::ok);
+
+        Ok(HandleCertificateResponseV3 {
+            effects: signed_effects,
             events,
-            fastpath_input_objects,
+            input_objects,
+            output_objects,
+            auxiliary_data: None, // We don't have any aux data generated presently
         })
     }
 }
@@ -219,23 +288,33 @@ impl AuthorityAPI for MockAuthorityApi {
     async fn handle_transaction(
         &self,
         _transaction: Transaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleTransactionResponse, SuiError> {
         unimplemented!();
-    }
-
-    /// Execute a certificate.
-    async fn handle_certificate(
-        &self,
-        _certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        unimplemented!()
     }
 
     /// Execute a certificate.
     async fn handle_certificate_v2(
         &self,
         _certificate: CertifiedTransaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
+        unimplemented!()
+    }
+
+    async fn handle_certificate_v3(
+        &self,
+        _request: HandleCertificateRequestV3,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleCertificateResponseV3, SuiError> {
+        unimplemented!()
+    }
+
+    async fn handle_soft_bundle_certificates_v3(
+        &self,
+        _request: HandleSoftBundleCertificatesRequestV3,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
         unimplemented!()
     }
 
@@ -275,6 +354,13 @@ impl AuthorityAPI for MockAuthorityApi {
         unimplemented!();
     }
 
+    async fn handle_checkpoint_v2(
+        &self,
+        _request: CheckpointRequestV2,
+    ) -> Result<CheckpointResponseV2, SuiError> {
+        unimplemented!();
+    }
+
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
@@ -286,6 +372,7 @@ impl AuthorityAPI for MockAuthorityApi {
 #[derive(Clone)]
 pub struct HandleTransactionTestAuthorityClient {
     pub tx_info_resp_to_return: SuiResult<HandleTransactionResponse>,
+    pub cert_resp_to_return: SuiResult<HandleCertificateResponseV2>,
     // If set, sleep for this duration before responding to a request.
     // This is useful in testing a timeout scenario.
     pub sleep_duration_before_responding: Option<Duration>,
@@ -296,6 +383,7 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
     async fn handle_transaction(
         &self,
         _transaction: Transaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleTransactionResponse, SuiError> {
         if let Some(duration) = self.sleep_duration_before_responding {
             tokio::time::sleep(duration).await;
@@ -303,17 +391,30 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         self.tx_info_resp_to_return.clone()
     }
 
-    async fn handle_certificate(
-        &self,
-        _certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        unimplemented!()
-    }
-
     async fn handle_certificate_v2(
         &self,
         _certificate: CertifiedTransaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
+        if let Some(duration) = self.sleep_duration_before_responding {
+            tokio::time::sleep(duration).await;
+        }
+        self.cert_resp_to_return.clone()
+    }
+
+    async fn handle_certificate_v3(
+        &self,
+        _request: HandleCertificateRequestV3,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleCertificateResponseV3, SuiError> {
+        unimplemented!()
+    }
+
+    async fn handle_soft_bundle_certificates_v3(
+        &self,
+        _request: HandleSoftBundleCertificatesRequestV3,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
         unimplemented!()
     }
 
@@ -338,6 +439,13 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         unimplemented!()
     }
 
+    async fn handle_checkpoint_v2(
+        &self,
+        _request: CheckpointRequestV2,
+    ) -> Result<CheckpointResponseV2, SuiError> {
+        unimplemented!()
+    }
+
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
@@ -350,6 +458,7 @@ impl HandleTransactionTestAuthorityClient {
     pub fn new() -> Self {
         Self {
             tx_info_resp_to_return: Err(SuiError::Unknown("".to_string())),
+            cert_resp_to_return: Err(SuiError::Unknown("".to_string())),
             sleep_duration_before_responding: None,
         }
     }
@@ -364,6 +473,18 @@ impl HandleTransactionTestAuthorityClient {
 
     pub fn reset_tx_info_response(&mut self) {
         self.tx_info_resp_to_return = Err(SuiError::Unknown("".to_string()));
+    }
+
+    pub fn set_cert_resp_to_return(&mut self, resp: HandleCertificateResponseV2) {
+        self.cert_resp_to_return = Ok(resp);
+    }
+
+    pub fn set_cert_resp_to_return_error(&mut self, error: SuiError) {
+        self.cert_resp_to_return = Err(error);
+    }
+
+    pub fn reset_cert_response(&mut self) {
+        self.cert_resp_to_return = Err(SuiError::Unknown("".to_string()));
     }
 
     pub fn set_sleep_duration_before_responding(&mut self, duration: Duration) {

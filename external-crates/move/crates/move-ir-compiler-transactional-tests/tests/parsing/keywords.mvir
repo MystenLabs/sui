@@ -1,0 +1,8 @@
+//# print-bytecode
+module 0x6.m {
+// `label` is a keyword so it cannot be used as a parameter name.
+entry foo(label: address) {
+label b0:
+    return;
+}
+}

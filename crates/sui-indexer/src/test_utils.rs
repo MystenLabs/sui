@@ -1,44 +1,149 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use prometheus::Registry;
+use mysten_metrics::init_metrics;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
+use std::path::PathBuf;
+use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 
+use crate::config::{IngestionConfig, PruningOptions, SnapshotLagConfig, UploadOptions};
+use crate::database::Connection;
+use crate::database::ConnectionPool;
+use crate::db::ConnectionPoolConfig;
 use crate::errors::IndexerError;
+use crate::indexer::Indexer;
 use crate::store::PgIndexerStore;
-use crate::utils::reset_database;
 use crate::IndexerMetrics;
-use crate::{new_pg_connection_pool, Indexer, IndexerConfig};
 
-/// Spawns an indexer thread with provided Postgres DB url
-pub async fn start_test_indexer(
-    config: IndexerConfig,
-) -> Result<(PgIndexerStore, JoinHandle<Result<(), IndexerError>>), anyhow::Error> {
-    let parsed_url = config.base_connection_url()?;
-    let blocking_pool = new_pg_connection_pool(&parsed_url)
-        .await
-        .map_err(|e| anyhow!("unable to connect to Postgres, is it running? {e}"))?;
-    if config.reset_db {
-        reset_database(
-            &mut blocking_pool
-                .get()
-                .map_err(|e| anyhow!("Fail to get pg_connection_pool {e}"))?,
-            true,
-        )?;
+pub enum ReaderWriterConfig {
+    Reader {
+        reader_mode_rpc_url: String,
+    },
+    Writer {
+        snapshot_config: SnapshotLagConfig,
+        pruning_options: PruningOptions,
+    },
+}
+
+impl ReaderWriterConfig {
+    pub fn reader_mode(reader_mode_rpc_url: String) -> Self {
+        Self::Reader {
+            reader_mode_rpc_url,
+        }
     }
 
-    let registry = Registry::default();
+    /// Instantiates a config for indexer in writer mode with the given snapshot config and epochs
+    /// to keep.
+    pub fn writer_mode(
+        snapshot_config: Option<SnapshotLagConfig>,
+        epochs_to_keep: Option<u64>,
+    ) -> Self {
+        Self::Writer {
+            snapshot_config: snapshot_config.unwrap_or_default(),
+            pruning_options: PruningOptions { epochs_to_keep },
+        }
+    }
+}
+
+pub async fn start_test_indexer(
+    db_url: String,
+    rpc_url: String,
+    reader_writer_config: ReaderWriterConfig,
+    data_ingestion_path: PathBuf,
+) -> (
+    PgIndexerStore,
+    JoinHandle<Result<(), IndexerError>>,
+    CancellationToken,
+) {
+    let token = CancellationToken::new();
+    let (store, handle) = start_test_indexer_impl(
+        db_url,
+        rpc_url,
+        reader_writer_config,
+        Some(data_ingestion_path),
+        token.clone(),
+    )
+    .await;
+    (store, handle, token)
+}
+
+/// Starts an indexer reader or writer for testing depending on the `reader_writer_config`.
+pub async fn start_test_indexer_impl(
+    db_url: String,
+    rpc_url: String,
+    reader_writer_config: ReaderWriterConfig,
+    data_ingestion_path: Option<PathBuf>,
+    cancel: CancellationToken,
+) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
+    // Reduce the connection pool size to 10 for testing
+    // to prevent maxing out
+    let pool_config = ConnectionPoolConfig {
+        pool_size: 5,
+        connection_timeout: Duration::from_secs(10),
+        statement_timeout: Duration::from_secs(30),
+    };
+
+    println!("db_url: {db_url}");
+    println!("pool_config: {pool_config:?}");
+    println!("{data_ingestion_path:?}");
+
+    let registry = prometheus::Registry::default();
+
+    init_metrics(&registry);
+
     let indexer_metrics = IndexerMetrics::new(&registry);
 
-    let store = PgIndexerStore::new(blocking_pool, indexer_metrics.clone()).await;
-    let store_clone = store.clone();
-    let handle = tokio::spawn(async move {
-        Indexer::start(&config, &registry, store_clone, indexer_metrics, None).await
-    });
-    Ok((store, handle))
+    let pool = ConnectionPool::new(db_url.parse().unwrap(), pool_config)
+        .await
+        .unwrap();
+    let store = PgIndexerStore::new(
+        pool.clone(),
+        UploadOptions::default(),
+        indexer_metrics.clone(),
+    );
+
+    let handle = match reader_writer_config {
+        ReaderWriterConfig::Reader {
+            reader_mode_rpc_url,
+        } => {
+            let config = crate::config::JsonRpcConfig {
+                name_service_options: crate::config::NameServiceOptions::default(),
+                rpc_address: reader_mode_rpc_url.parse().unwrap(),
+                rpc_client_url: rpc_url,
+            };
+            tokio::spawn(async move { Indexer::start_reader(&config, &registry, pool).await })
+        }
+        ReaderWriterConfig::Writer {
+            snapshot_config,
+            pruning_options,
+        } => {
+            let connection = Connection::dedicated(&db_url.parse().unwrap())
+                .await
+                .unwrap();
+            crate::db::reset_database(connection).await.unwrap();
+
+            let store_clone = store.clone();
+            let mut ingestion_config = IngestionConfig::default();
+            ingestion_config.sources.data_ingestion_path = data_ingestion_path;
+
+            tokio::spawn(async move {
+                Indexer::start_writer_with_config(
+                    &ingestion_config,
+                    store_clone,
+                    indexer_metrics,
+                    snapshot_config,
+                    pruning_options,
+                    cancel,
+                )
+                .await
+            })
+        }
+    };
+
+    (store, handle)
 }
 
 #[derive(Clone)]

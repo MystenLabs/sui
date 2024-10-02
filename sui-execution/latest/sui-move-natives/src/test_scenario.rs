@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    get_nth_struct_field, legacy_test_cost,
+    get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
     object_runtime::{ObjectRuntime, RuntimeResults},
 };
-use linked_hash_map::LinkedHashMap;
+use better_any::{Tid, TidAble};
+use indexmap::{IndexMap, IndexSet};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::Identifier,
+    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout, MoveValue},
+    annotated_visitor as AV,
     language_storage::StructTag,
-    value::{MoveStruct, MoveValue},
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_functions::NativeContext;
@@ -24,21 +25,66 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::{
     borrow::Borrow,
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet, VecDeque},
+    thread::LocalKey,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
+    config,
+    digests::{ObjectDigest, TransactionDigest},
+    dynamic_field::DynamicFieldInfo,
+    execution::DynamicallyLoadedObjectMetadata,
     id::UID,
-    object::Owner,
-    storage::WriteKind,
+    in_memory_storage::InMemoryStorage,
+    object::{MoveObject, Object, Owner},
+    storage::ChildObjectResolver,
+    TypeTag,
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
 const E_INVALID_SHARED_OR_IMMUTABLE_USAGE: u64 = 1;
 const E_OBJECT_NOT_FOUND_CODE: u64 = 4;
+const E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET: u64 = 5;
+const E_RECEIVING_TICKET_ALREADY_ALLOCATED: u64 = 6;
+const E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET: u64 = 7;
 
-// LinkedHashSet has a bug for accessing the back/last element
-type Set<K> = LinkedHashMap<K, ()>;
+type Set<K> = IndexSet<K>;
+
+/// An in-memory test store is a thin wrapper around the in-memory storage in a mutex. The mutex
+/// allows this to be used by both the object runtime (for reading) and the test scenario (for
+/// writing) while hiding mutability.
+#[derive(Tid)]
+pub struct InMemoryTestStore(pub &'static LocalKey<RefCell<InMemoryStorage>>);
+
+impl ChildObjectResolver for InMemoryTestStore {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> sui_types::error::SuiResult<Option<Object>> {
+        let l: &'static LocalKey<RefCell<InMemoryStorage>> = self.0;
+        l.with_borrow(|store| store.read_child_object(parent, child, child_version_upper_bound))
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: sui_types::committee::EpochId,
+    ) -> sui_types::error::SuiResult<Option<Object>> {
+        self.0.with_borrow(|store| {
+            store.get_object_received_at_version(
+                owner,
+                receiving_object_id,
+                receive_object_at_version,
+                epoch_id,
+            )
+        })
+    }
+}
 
 // This function updates the inventories based on the transfers and deletes that occurred in the
 // transaction
@@ -64,21 +110,41 @@ pub fn end_transaction(
     // if true, we will "abort"
     let mut incorrect_shared_or_imm_handling = false;
 
+    // Handle the allocated tickets:
+    // * Remove all allocated_tickets in the test inventories.
+    // * For each allocated ticket, if the ticket's object ID is loaded, move it to `received`.
+    // * Otherwise re-insert the allocated ticket into the objects inventory, and mark it to be
+    //   removed from the backing storage (deferred due to needing to have acces to `context` which
+    //   has outstanding references at this point).
+    let allocated_tickets =
+        std::mem::take(&mut object_runtime_ref.test_inventories.allocated_tickets);
+    let mut received = BTreeMap::new();
+    let mut unreceived = BTreeSet::new();
+    let loaded_runtime_objects = object_runtime_ref.loaded_runtime_objects();
+    for (id, (metadata, value)) in allocated_tickets {
+        if loaded_runtime_objects.contains_key(&id) {
+            received.insert(id, metadata);
+        } else {
+            unreceived.insert(id);
+            // This must be untouched since the allocated ticket is still live, so ok to re-insert.
+            object_runtime_ref
+                .test_inventories
+                .objects
+                .insert(id, value);
+        }
+    }
+
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
-    // We pass an empty map as we do not expose dynamic field objects in the system
-    let results = object_runtime_state.finish(
-        BTreeSet::new(),
-        BTreeSet::new(),
-        BTreeMap::new(),
-        BTreeMap::new(),
-        false,
-    );
+    // We pass the received objects since they should be viewed as "loaded" for the purposes of of
+    // calculating the effects of the transaction.
+    let results = object_runtime_state.finish(received, BTreeMap::new());
     let RuntimeResults {
         writes,
-        deletions,
         user_events,
         loaded_child_objects: _,
+        created_object_ids,
+        deleted_object_ids,
     } = match results {
         Ok(res) => res,
         Err(_) => {
@@ -88,40 +154,44 @@ pub fn end_transaction(
             ));
         }
     };
-    let all_active_child_objects = object_runtime_ref
+    let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let all_active_child_objects_with_values = object_runtime_ref
         .all_active_child_objects()
-        .map(|(id, _, _)| *id)
+        .filter(|child| child.copied_value.is_some())
+        .map(|child| *child.id)
         .collect::<BTreeSet<_>>();
     let inventories = &mut object_runtime_ref.test_inventories;
-    let mut new_object_values = LinkedHashMap::new();
+    let mut new_object_values = IndexMap::new();
     let mut transferred = vec![];
     // cleanup inventories
     // we will remove all changed objects
     // - deleted objects need to be removed to mark deletions
     // - written objects are removed and later replaced to mark new values and new owners
     // - child objects will not be reflected in transfers, but need to be no longer retrievable
-    for id in deletions
-        .keys()
+    for id in deleted_object_ids
+        .iter()
         .chain(writes.keys())
-        .chain(&all_active_child_objects)
+        .chain(&all_active_child_objects_with_values)
     {
         for addr_inventory in inventories.address_inventories.values_mut() {
             for s in addr_inventory.values_mut() {
-                s.remove(id);
+                s.shift_remove(id);
             }
         }
         for s in &mut inventories.shared_inventory.values_mut() {
-            s.remove(id);
+            s.shift_remove(id);
         }
         for s in &mut inventories.immutable_inventory.values_mut() {
-            s.remove(id);
+            s.shift_remove(id);
         }
         inventories.taken.remove(id);
     }
+
     // handle transfers, inserting transferred/written objects into their respective inventory
     let mut created = vec![];
     let mut written = vec![];
-    for (id, (kind, owner, ty, value)) in writes {
+    for (id, (owner, ty, value)) in writes {
+        // write configs to cache
         new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
         transferred.push((id, owner));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
@@ -129,42 +199,61 @@ pub fn end_transaction(
                 .get(&id)
                 .map(|shared_or_imm_owner| shared_or_imm_owner != &owner)
                 .unwrap_or(/* not incorrect */ false);
-        match kind {
-            WriteKind::Create => created.push(id),
-            WriteKind::Mutate | WriteKind::Unwrap => written.push(id),
+        if created_object_ids.contains(&id) {
+            created.push(id);
+        } else {
+            written.push(id);
         }
         match owner {
             Owner::AddressOwner(a) => {
                 inventories
                     .address_inventories
                     .entry(a)
-                    .or_insert_with(BTreeMap::new)
+                    .or_default()
                     .entry(ty)
-                    .or_insert_with(Set::new)
-                    .insert(id, ());
+                    .or_default()
+                    .insert(id);
             }
             Owner::ObjectOwner(_) => (),
             Owner::Shared { .. } => {
                 inventories
                     .shared_inventory
                     .entry(ty)
-                    .or_insert_with(Set::new)
-                    .insert(id, ());
+                    .or_default()
+                    .insert(id);
             }
             Owner::Immutable => {
                 inventories
                     .immutable_inventory
                     .entry(ty)
-                    .or_insert_with(Set::new)
-                    .insert(id, ());
+                    .or_default()
+                    .insert(id);
             }
         }
     }
+
+    // For any unused allocated tickets, remove them from the store.
+    let store: &&InMemoryTestStore = context.extensions().get();
+    for id in unreceived {
+        if store
+            .0
+            .with_borrow_mut(|store| store.remove_object(id).is_none())
+        {
+            return Ok(NativeResult::err(
+                context.gas_used(),
+                E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
+            ));
+        }
+    }
+
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
-    for (id, _) in deletions {
-        incorrect_shared_or_imm_handling =
-            incorrect_shared_or_imm_handling || taken_shared_or_imm.contains_key(&id);
+    for id in deleted_object_ids {
+        // Mark as "incorrect" if a imm object was deleted. Allow shared objects to be deleted though.
+        incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
+            || taken_shared_or_imm
+                .get(&id)
+                .is_some_and(|owner| matches!(owner, Owner::Immutable));
         deleted.push(id);
     }
     // find all wrapped objects
@@ -182,13 +271,13 @@ pub fn end_transaction(
         &mut all_wrapped,
         object_runtime_ref
             .all_active_child_objects()
-            .map(|(id, ty, value)| (id, ty, value)),
+            .filter_map(|child| Some((child.id, child.ty, child.copied_value?))),
     );
     // mark as "incorrect" if a shared/imm object was wrapped or is a child object
     incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
-        || taken_shared_or_imm
-            .keys()
-            .any(|id| all_wrapped.contains(id) || all_active_child_objects.contains(id));
+        || taken_shared_or_imm.keys().any(|id| {
+            all_wrapped.contains(id) || all_active_child_objects_with_values.contains(id)
+        });
     // if incorrect handling, return with an 'abort'
     if incorrect_shared_or_imm_handling {
         return Ok(NativeResult::err(
@@ -204,6 +293,23 @@ pub fn end_transaction(
 
     // new input objects are remaining taken objects not written/deleted
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let mut config_settings = vec![];
+    for child in object_runtime_ref.all_active_child_objects() {
+        let s: StructTag = child.move_type.clone().into();
+        let is_setting = DynamicFieldInfo::is_dynamic_field(&s)
+            && matches!(&s.type_params[1], TypeTag::Struct(s) if config::is_setting(s));
+        if is_setting {
+            config_settings.push((
+                *child.owner,
+                *child.id,
+                child.move_type.clone(),
+                child.copied_value,
+            ));
+        }
+    }
+    for (config, setting, ty, value) in config_settings {
+        object_runtime_ref.config_setting_cache_update(config, setting, ty, value)
+    }
     object_runtime_ref.state.input_objects = object_runtime_ref
         .test_inventories
         .taken
@@ -213,7 +319,7 @@ pub fn end_transaction(
     // update inventories
     // check for bad updates to immutable values
     for (id, (ty, value)) in new_object_values {
-        debug_assert!(!all_active_child_objects.contains(&id));
+        debug_assert!(!all_active_child_objects_with_values.contains(&id));
         if let Some(prev_value) = object_runtime_ref
             .test_inventories
             .taken_immutable_values
@@ -237,7 +343,7 @@ pub fn end_transaction(
         object_runtime_ref.test_inventories.objects.remove(id);
     }
     // remove active child objects
-    for id in all_active_child_objects {
+    for id in all_active_child_objects_with_values {
         object_runtime_ref.test_inventories.objects.remove(&id);
     }
 
@@ -270,7 +376,7 @@ pub fn take_from_address_by_id(
                 .address_inventories
                 .get(&account)
                 .and_then(|inv| inv.get(&specified_ty))
-                .map(|s| s.contains_key(x))
+                .map(|s| s.contains(x))
                 .unwrap_or(false)
         },
         &inventories.objects,
@@ -300,7 +406,7 @@ pub fn ids_for_address(
         .address_inventories
         .get(&account)
         .and_then(|inv| inv.get(&specified_ty))
-        .map(|s| s.keys().map(|id| pack_id(*id)).collect::<Vec<Value>>())
+        .map(|s| s.iter().map(|id| pack_id(*id)).collect::<Vec<Value>>())
         .unwrap_or_default();
     let ids_vector = Value::vector_for_testing_only(ids);
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![ids_vector]))
@@ -367,7 +473,7 @@ pub fn take_immutable_by_id(
             inventories
                 .immutable_inventory
                 .get(&specified_ty)
-                .map(|s| s.contains_key(x))
+                .map(|s| s.contains(x))
                 .unwrap_or(false)
         },
         &inventories.objects,
@@ -449,7 +555,7 @@ pub fn take_shared_by_id(
             inventories
                 .shared_inventory
                 .get(&specified_ty)
-                .map(|s| s.contains_key(x))
+                .map(|s| s.contains(x))
                 .unwrap_or(false)
         },
         &inventories.objects,
@@ -507,6 +613,127 @@ pub fn was_taken_shared(
     ))
 }
 
+pub fn allocate_receiving_ticket_for_object(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    let ty = get_specified_ty(ty_args);
+    let id = pop_id(&mut args)?;
+
+    let abilities = context.type_to_abilities(&ty)?;
+    let Some((tag, layout, _)) = get_tag_and_layouts(context, &ty)? else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET,
+        ));
+    };
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let object_version = SequenceNumber::new();
+    let inventories = &mut object_runtime.test_inventories;
+    if inventories.allocated_tickets.contains_key(&id) {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_RECEIVING_TICKET_ALREADY_ALLOCATED,
+        ));
+    }
+
+    let obj_value = inventories.objects.remove(&id).unwrap();
+    let Some(bytes) = obj_value.simple_serialize(&layout) else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET,
+        ));
+    };
+    let has_public_transfer = abilities.has_store();
+    let move_object = unsafe {
+        MoveObject::new_from_execution_with_limit(
+            tag.into(),
+            has_public_transfer,
+            object_version,
+            bytes,
+            250 * 1024,
+        )
+    }
+    .unwrap();
+
+    let Some((owner, _)) = inventories
+        .address_inventories
+        .iter()
+        .find(|(_addr, objs)| objs.iter().any(|(_, ids)| ids.contains(&id)))
+    else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_OBJECT_NOT_FOUND_CODE,
+        ));
+    };
+
+    inventories.allocated_tickets.insert(
+        id,
+        (
+            DynamicallyLoadedObjectMetadata {
+                version: SequenceNumber::new(),
+                digest: ObjectDigest::MIN,
+                owner: Owner::AddressOwner(*owner),
+                storage_rebate: 0,
+                previous_transaction: TransactionDigest::default(),
+            },
+            obj_value,
+        ),
+    );
+
+    let object = Object::new_move(
+        move_object,
+        Owner::AddressOwner(*owner),
+        TransactionDigest::default(),
+    );
+
+    // NB: Must be a `&&` reference since the extension stores a static ref to the object storage.
+    let store: &&InMemoryTestStore = context.extensions().get();
+    store.0.with_borrow_mut(|store| store.insert_object(object));
+
+    Ok(NativeResult::ok(
+        legacy_test_cost(),
+        smallvec![Value::u64(object_version.value())],
+    ))
+}
+
+pub fn deallocate_receiving_ticket_for_object(
+    context: &mut NativeContext,
+    _ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    let id = pop_id(&mut args)?;
+
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let inventories = &mut object_runtime.test_inventories;
+    // Deallocate the ticket -- we should never hit this scenario
+    let Some((_, value)) = inventories.allocated_tickets.remove(&id) else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
+        ));
+    };
+
+    // Insert the object value that we saved from earlier and put it back into the object set.
+    // This is fine since it can't have been touched.
+    inventories.objects.insert(id, value);
+
+    // Remove the object from storage. We should never hit this scenario either.
+    let store: &&InMemoryTestStore = context.extensions().get();
+    if store
+        .0
+        .with_borrow_mut(|store| store.remove_object(id).is_none())
+    {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
+        ));
+    };
+
+    Ok(NativeResult::ok(legacy_test_cost(), smallvec![]))
+}
+
 // impls
 
 fn take_from_inventory(
@@ -545,7 +772,7 @@ fn most_recent_at_ty_opt(
     ty: Type,
 ) -> Option<Value> {
     let s = inv.get(&ty)?;
-    let most_recent_id = s.keys().filter(|id| !taken.contains_key(id)).last()?;
+    let most_recent_id = s.iter().filter(|id| !taken.contains_key(id)).last()?;
     Some(pack_id(*most_recent_id))
 }
 
@@ -637,162 +864,105 @@ fn pack_option(opt: Option<Value>) -> Value {
     )]))
 }
 
-fn find_all_wrapped_objects<'a>(
+fn find_all_wrapped_objects<'a, 'i>(
     context: &NativeContext,
-    ids: &mut BTreeSet<ObjectID>,
+    ids: &'i mut BTreeSet<ObjectID>,
     new_object_values: impl IntoIterator<Item = (&'a ObjectID, &'a Type, impl Borrow<Value>)>,
 ) {
-    for (_id, ty, value) in new_object_values {
-        let layout = match context.type_to_type_layout(ty) {
-            Ok(Some(layout)) => layout,
-            _ => {
-                debug_assert!(false);
-                continue;
-            }
-        };
-        let annotated_layout = match context.type_to_fully_annotated_layout(ty) {
-            Ok(Some(layout)) => layout,
-            _ => {
-                debug_assert!(false);
-                continue;
-            }
-        };
-        let blob = value.borrow().simple_serialize(&layout).unwrap();
-        let move_value = MoveValue::simple_deserialize(&blob, &annotated_layout).unwrap();
-        let uid = UID::type_();
-        visit_structs(
-            &move_value,
-            |_, _| panic!("unexpected struct without a struct tag. Layout: {}", layout),
-            |_, _| panic!("unexpected struct without a struct tag. Layout: {}", layout),
-            |depth, tag, fields| {
-                if tag != &uid {
-                    return if depth == 0 {
-                        debug_assert!(!fields.is_empty());
-                        // all object values so the first field is a UID that should be skipped
-                        &fields[1..]
-                    } else {
-                        fields
-                    };
+    #[derive(Copy, Clone)]
+    enum LookingFor {
+        Wrapped,
+        Uid,
+        Address,
+    }
+
+    struct Traversal<'i, 'u> {
+        state: LookingFor,
+        ids: &'i mut BTreeSet<ObjectID>,
+        uid: &'u MoveStructLayout,
+    }
+
+    impl<'i, 'u, 'b, 'l> AV::Traversal<'b, 'l> for Traversal<'i, 'u> {
+        type Error = AV::Error;
+
+        fn traverse_struct(
+            &mut self,
+            driver: &mut AV::StructDriver<'_, 'b, 'l>,
+        ) -> Result<(), Self::Error> {
+            match self.state {
+                // We're at the top-level of the traversal, looking for an object to recurse into.
+                // We can unconditionally switch to looking for UID fields at the level below,
+                // because we know that all the top-level values are objects.
+                LookingFor::Wrapped => {
+                    while driver
+                        .next_field(&mut Traversal {
+                            state: LookingFor::Uid,
+                            ids: self.ids,
+                            uid: self.uid,
+                        })?
+                        .is_some()
+                    {}
                 }
-                debug_assert!(fields.len() == 1);
-                let id = &fields[0].1;
-                let addr_field = match &id {
-                    MoveValue::Struct(MoveStruct::WithTypes { fields, .. }) => {
-                        debug_assert!(fields.len() == 1);
-                        &fields[0].1
+
+                // We are looking for UID fields. If we find one (which we confirm by checking its
+                // layout), switch to looking for addresses in its sub-structure.
+                LookingFor::Uid => {
+                    while let Some(MoveFieldLayout { name: _, layout }) = driver.peek_field() {
+                        if matches!(layout, MoveTypeLayout::Struct(s) if s.as_ref() == self.uid) {
+                            driver.next_field(&mut Traversal {
+                                state: LookingFor::Address,
+                                ids: self.ids,
+                                uid: self.uid,
+                            })?;
+                        } else {
+                            driver.next_field(self)?;
+                        }
                     }
-                    v => unreachable!("Not reachable via Move type system: {:?}", v),
-                };
-                let addr = match addr_field {
-                    MoveValue::Address(a) => *a,
-                    v => unreachable!("Not reachable via Move type system: {:?}", v),
-                };
-                ids.insert(addr.into());
-                fields
+                }
+
+                // When looking for addresses, recurse through structs, as the address is nested
+                // within the UID.
+                LookingFor::Address => while driver.next_field(self)?.is_some() {},
+            }
+
+            Ok(())
+        }
+
+        fn traverse_address(
+            &mut self,
+            _: &AV::ValueDriver<'_, 'b, 'l>,
+            address: AccountAddress,
+        ) -> Result<(), Self::Error> {
+            // If we're looking for addresses, and we found one, then save it.
+            if matches!(self.state, LookingFor::Address) {
+                self.ids.insert(address.into());
+            }
+            Ok(())
+        }
+    }
+
+    let uid = UID::layout();
+    for (_id, ty, value) in new_object_values {
+        let Ok(Some(layout)) = context.type_to_type_layout(ty) else {
+            debug_assert!(false);
+            continue;
+        };
+
+        let Ok(Some(annotated_layout)) = context.type_to_fully_annotated_layout(ty) else {
+            debug_assert!(false);
+            continue;
+        };
+
+        let blob = value.borrow().simple_serialize(&layout).unwrap();
+        MoveValue::visit_deserialize(
+            &blob,
+            &annotated_layout,
+            &mut Traversal {
+                state: LookingFor::Wrapped,
+                ids,
+                uid: &uid,
             },
         )
-    }
-}
-
-fn visit_structs<FVisitTypes>(
-    move_value: &MoveValue,
-    mut visit_runtime: impl FnMut(/* value depth */ usize, &Vec<MoveValue>) -> &[MoveValue],
-    mut visit_with_fields: impl FnMut(
-        /* value depth */ usize,
-        &Vec<(Identifier, MoveValue)>,
-    ) -> &[(Identifier, MoveValue)],
-    mut visit_with_types: FVisitTypes,
-) where
-    for<'a> FVisitTypes: FnMut(
-        /* value depth */ usize,
-        &StructTag,
-        &'a Vec<(Identifier, MoveValue)>,
-    ) -> &'a [(Identifier, MoveValue)],
-{
-    visit_structs_impl(
-        move_value,
-        &mut visit_runtime,
-        &mut visit_with_fields,
-        &mut visit_with_types,
-        0,
-    )
-}
-
-fn visit_structs_impl<FVisitTypes>(
-    move_value: &MoveValue,
-    visit_runtime: &mut impl FnMut(/* value depth */ usize, &Vec<MoveValue>) -> &[MoveValue],
-    visit_with_fields: &mut impl FnMut(
-        /* value depth */ usize,
-        &Vec<(Identifier, MoveValue)>,
-    ) -> &[(Identifier, MoveValue)],
-    visit_with_types: &mut FVisitTypes,
-    depth: usize,
-) where
-    for<'a> FVisitTypes: FnMut(
-        /* value depth */ usize,
-        &StructTag,
-        &'a Vec<(Identifier, MoveValue)>,
-    ) -> &'a [(Identifier, MoveValue)],
-{
-    let next_depth = depth + 1;
-    match move_value {
-        MoveValue::U8(_)
-        | MoveValue::U16(_)
-        | MoveValue::U32(_)
-        | MoveValue::U64(_)
-        | MoveValue::U128(_)
-        | MoveValue::U256(_)
-        | MoveValue::Bool(_)
-        | MoveValue::Address(_)
-        | MoveValue::Signer(_) => (),
-        MoveValue::Vector(vs) => {
-            for v in vs {
-                visit_structs_impl(
-                    v,
-                    visit_runtime,
-                    visit_with_fields,
-                    visit_with_types,
-                    next_depth,
-                )
-            }
-        }
-        MoveValue::Struct(s) => match s {
-            MoveStruct::Runtime(vs) => {
-                let vs = visit_runtime(depth, vs);
-                for v in vs {
-                    visit_structs_impl(
-                        v,
-                        visit_runtime,
-                        visit_with_fields,
-                        visit_with_types,
-                        next_depth,
-                    )
-                }
-            }
-            MoveStruct::WithFields(fields) => {
-                let fields = visit_with_fields(depth, fields);
-                for (_, v) in fields {
-                    visit_structs_impl(
-                        v,
-                        visit_runtime,
-                        visit_with_fields,
-                        visit_with_types,
-                        next_depth,
-                    )
-                }
-            }
-            MoveStruct::WithTypes { type_, fields } => {
-                let fields = visit_with_types(depth, type_, fields);
-                for (_, v) in fields {
-                    visit_structs_impl(
-                        v,
-                        visit_runtime,
-                        visit_with_fields,
-                        visit_with_types,
-                        next_depth,
-                    )
-                }
-            }
-        },
+        .unwrap();
     }
 }

@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Text } from '../../text';
 import { CoinIcon } from '_src/ui/app/components/coin-icon';
+
+import { Text } from '../../text';
 
 export interface CoinsStackProps {
 	coinTypes: string[];

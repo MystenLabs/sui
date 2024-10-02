@@ -1,0 +1,20 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                              │
+├───────────┬──────────────────────────────────────────────────────────────────────────────┤
+│ command   │ values                                                                       │
+├───────────┼──────────────────────────────────────────────────────────────────────────────┤
+│ move-call │ std::option::is_none<u64> "a (this is an unmatched paren in a string" "b)" c │
+╰───────────┴──────────────────────────────────────────────────────────────────────────────╯
+ === BUILDING PTB ERRORS === 
+  × Error when processing PTB
+   ╭────
+ 1 │ --move-call std::option::is_none <u64> 'a (this is an unmatched paren in a string' "b)" c 
+   ·                                        ─────────────────────────┬────────────────────────
+   ·                                                                 ╰── Expected 1 argument, but got 3
+   ╰────
+

@@ -1,0 +1,23 @@
+# Dependency graph and an address substitution introduced by an external resolver (C's dependency on
+# A and ADep is externally resolved). Even though both C and B rely on the same version of A, in
+# the externally resolved graph ADep is reached via a dependency with address substitution whereas
+# in internally resolved graph ADep is reached via a dependency without address substitution.
+#
+#                 +----+ s(A=42) 
+#           +---->| C  |----+
+#           |     +----+    |
+#           |               | 
+# +----+    |               +---->+----+       +-------+
+# |Root|----|                     | A  |------>| ADep  |
+# +----+    |               +---->+----+       +-------+
+#           |               |
+#           |     +----+----+
+#           +---->| B  |
+#                 +----+
+
+[package]
+name = "Root"
+
+[dependencies]
+B = { local = "./deps_only/B" }
+C = { local = "./deps_only/C" }

@@ -1,5 +1,5 @@
 # ignore everything by default
-/*
+# /*
 # Enable prettier for apps, dapps and sdk
 !/apps
 !/sdk
@@ -18,8 +18,8 @@ build/
 coverage/
 dist/
 out/
+generated/
 playwright-report/
 storybook-static/
-sdk/wallet-adapter/site/pages/
 CHANGELOG.md
 

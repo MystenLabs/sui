@@ -1,0 +1,3 @@
+[package]
+name = "Deps2"
+edition = "2024.beta"

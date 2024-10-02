@@ -1,0 +1,114 @@
+---
+source: crates/sui-package-resolver/src/lib.rs
+expression: "format!(\"a0::m::E0: {e0:#?}\\n\\\n             a0::m::E1: {e1:#?}\\n\\\n             a0::m::E2: {e2:#?}\",)"
+---
+a0::m::E0: DataDef {
+    defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+    abilities: [],
+    type_params: [],
+    data: Enum(
+        [
+            VariantDef {
+                name: "V",
+                signatures: [
+                    (
+                        "b",
+                        Bool,
+                    ),
+                    (
+                        "v",
+                        Vector(
+                            Datatype(
+                                DatatypeRef {
+                                    package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                                    module: "m",
+                                    name: "E1",
+                                },
+                                [
+                                    Datatype(
+                                        DatatypeRef {
+                                            package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                                            module: "m",
+                                            name: "T1",
+                                        },
+                                        [
+                                            Datatype(
+                                                DatatypeRef {
+                                                    package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                                                    module: "m",
+                                                    name: "T2",
+                                                },
+                                                [],
+                                            ),
+                                            U128,
+                                        ],
+                                    ),
+                                    U128,
+                                ],
+                            ),
+                        ),
+                    ),
+                ],
+            },
+        ],
+    ),
+}
+a0::m::E1: DataDef {
+    defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+    abilities: [],
+    type_params: [
+        DatatypeTyParameter {
+            constraints: [],
+            is_phantom: false,
+        },
+        DatatypeTyParameter {
+            constraints: [],
+            is_phantom: false,
+        },
+    ],
+    data: Enum(
+        [
+            VariantDef {
+                name: "V",
+                signatures: [
+                    (
+                        "a",
+                        Address,
+                    ),
+                    (
+                        "p",
+                        TypeParameter(
+                            0,
+                        ),
+                    ),
+                    (
+                        "q",
+                        Vector(
+                            TypeParameter(
+                                1,
+                            ),
+                        ),
+                    ),
+                ],
+            },
+        ],
+    ),
+}
+a0::m::E2: DataDef {
+    defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+    abilities: [],
+    type_params: [],
+    data: Enum(
+        [
+            VariantDef {
+                name: "V0",
+                signatures: [
+                    (
+                        "x",
+                        U8,
+                    ),
+                ],
+            },
+        ],
+    ),
+}

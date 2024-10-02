@@ -1,0 +1,7 @@
+[package]
+name = "Root"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }
+C = { local = "./deps_only/C-v1", override = true }

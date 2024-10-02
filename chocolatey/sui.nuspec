@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Do not remove this test for UTF-8: if “Ω” doesn’t appear as greek uppercase omega letter
+enclosed in quotation marks, you should use an editor that supports UTF-8, not this one. -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+	<metadata>
+		<id>sui</id>
+		<version>$version$</version>
+		<owners>Sui Foundation</owners>
+		<title>Main Sui Binary</title>
+		<authors>sui</authors>
+		<projectUrl>https://sui.io/</projectUrl>
+		<licenseUrl>https://github.com/MystenLabs/sui/blob/main/LICENSE</licenseUrl>
+		<iconUrl>https://assets-global.website-files.com/6425f546844727ce5fb9e5ab/643775f4a15c9a9e10426daa_Sui_Favicon_256.png</iconUrl>
+		<projectSourceUrl>https://github.com/MystenLabs/sui/</projectSourceUrl>
+		<bugTrackerUrl>https://github.com/MystenLabs/sui/issues</bugTrackerUrl>
+		<tags>sui</tags>
+		<packageSourceUrl>https://community.chocolatey.org/packages/sui.portable</packageSourceUrl>
+		<summary>Sui delivers the benefits of Web3 with the ease of Web2</summary>
+		<description>Sui is the first internet-scale programmable blockchain platform</description>
+		<releaseNotes>See https://github.com/MystenLabs/sui/releases/tag/testnet-v$version$</releaseNotes>
+	</metadata>
+	<files>
+		<file src="../tmp/release/sui.exe" target="bin/sui.exe" />
+		<file src="../LICENSE" target="bin/LICENSE.txt" />
+		<file src="./VERIFICATION.txt" target="bin/VERIFICATION.txt" />
+	</files>
+</package>

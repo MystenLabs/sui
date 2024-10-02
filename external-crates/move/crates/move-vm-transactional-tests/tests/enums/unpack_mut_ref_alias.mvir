@@ -1,0 +1,65 @@
+//# publish
+module 0x6.o {
+    enum X has drop { 
+        One { x: u64, y: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    // Tests that in this situation `x` and `x2` are aliases of each other
+    a(e: &mut Self.X) {
+        let x: &mut u64;
+        let x2: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.One { x: x, y: y} = copy(e);
+            *move(y) = 0;
+            &mut X.One { x: x2, y: y} = move(e);
+            *move(x) = 0;
+            return;
+    }
+
+    // Tests that in this situation `x` and `x2` are aliases of each other and can both be mutated
+    b(e: &mut Self.X) {
+        let x: &mut u64;
+        let x2: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.One { x: x, y: y} = copy(e);
+            *move(y) = 0;
+            &mut X.One { x: x2, y: y} = move(e);
+            *move(x) = 0;
+            *move(x2) = 0;
+            return;
+    }
+
+    public test1() {
+        let x: Self.X;
+        let x1: u64;
+        let x2: u64;
+        label b0:
+            x = X.One { x: 10, y: 20};
+            Self.b(&mut x);
+            X.One { x: x1, y: x2} = move(x);
+            assert(move(x1) == 0, 1);
+            assert(move(x2) == 0, 2);
+            return;
+    }
+
+    public test2() {
+        let x: Self.X;
+        let x1: u64;
+        let x2: u64;
+        label b0:
+            x = X.One { x: 10, y: 20};
+            Self.a(&mut x);
+            X.One { x: x1, y: x2} = move(x);
+            assert(move(x1) == 0, 1);
+            assert(move(x2) == 0, 2);
+            return;
+    }
+
+}
+
+//# run 0x6::o::test1
+
+//# run 0x6::o::test2

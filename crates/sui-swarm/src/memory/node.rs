@@ -4,9 +4,11 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use std::sync::Mutex;
+use std::sync::MutexGuard;
 use sui_config::NodeConfig;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::AuthorityName;
+use sui_types::base_types::ConciseableName;
 use tap::TapFallible;
 use tracing::{error, info};
 
@@ -21,7 +23,7 @@ use super::container::Container;
 #[derive(Debug)]
 pub struct Node {
     container: Mutex<Option<Container>>,
-    pub config: NodeConfig,
+    config: Mutex<NodeConfig>,
     runtime_type: RuntimeType,
 }
 
@@ -35,25 +37,29 @@ impl Node {
     pub fn new(config: NodeConfig) -> Self {
         Self {
             container: Default::default(),
-            config,
+            config: config.into(),
             runtime_type: RuntimeType::SingleThreaded,
         }
     }
 
     /// Return the `name` of this Node
     pub fn name(&self) -> AuthorityName {
-        self.config.protocol_public_key()
+        self.config().protocol_public_key()
+    }
+
+    pub fn config(&self) -> MutexGuard<'_, NodeConfig> {
+        self.config.lock().unwrap()
     }
 
     pub fn json_rpc_address(&self) -> std::net::SocketAddr {
-        self.config.json_rpc_address
+        self.config().json_rpc_address
     }
 
     /// Start this Node
     pub async fn spawn(&self) -> Result<()> {
         info!(name =% self.name().concise(), "starting in-memory node");
-        *self.container.lock().unwrap() =
-            Some(Container::spawn(self.config.clone(), self.runtime_type).await);
+        let config = self.config().clone();
+        *self.container.lock().unwrap() = Some(Container::spawn(config, self.runtime_type).await);
         Ok(())
     }
 
@@ -66,6 +72,7 @@ impl Node {
     pub fn stop(&self) {
         info!(name =% self.name().concise(), "stopping in-memory node");
         *self.container.lock().unwrap() = None;
+        info!(name =% self.name().concise(), "node stopped");
     }
 
     /// If this Node is currently running
@@ -98,15 +105,16 @@ impl Node {
         }
 
         if is_validator {
-            let channel = mysten_network::client::connect(self.config.network_address())
+            let network_address = self.config().network_address().clone();
+            let channel = mysten_network::client::connect(&network_address)
                 .await
                 .map_err(|err| anyhow!(err.to_string()))
                 .map_err(HealthCheckError::Failure)
                 .tap_err(|e| error!("error connecting to {}: {e}", self.name().concise()))?;
 
-            let mut client = tonic_health::proto::health_client::HealthClient::new(channel);
+            let mut client = tonic_health::pb::health_client::HealthClient::new(channel);
             client
-                .check(tonic_health::proto::HealthCheckRequest::default())
+                .check(tonic_health::pb::HealthCheckRequest::default())
                 .await
                 .map_err(|e| HealthCheckError::Failure(e.into()))
                 .tap_err(|e| {

@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { Heading } from '_src/ui/app/shared/heading';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type AnchorHTMLAttributes, type ElementType, type ReactNode } from 'react';
 
-import { Heading } from '_src/ui/app/shared/heading';
-
 const cardStyles = cva(
-	['bg-white relative flex flex-col p-4.5 w-full shadow-summary-card rounded-2xl'],
+	['bg-white relative flex flex-col p-4.5 w-full shadow-card-soft rounded-2xl'],
 	{
 		variants: {
 			as: {

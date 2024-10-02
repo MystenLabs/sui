@@ -10,7 +10,6 @@
 #![allow(clippy::async_yields_async)]
 
 pub mod admin;
-pub mod anemo_ext;
 pub mod client;
 pub mod connectivity;
 pub mod epoch_filter;
@@ -23,8 +22,8 @@ mod traits;
 pub use crate::{
     retry::RetryConfig,
     traits::{
-        PrimaryToPrimaryRpc, PrimaryToWorkerClient, PrimaryToWorkerRpc, ReliableNetwork,
-        UnreliableNetwork, WorkerRpc, WorkerToPrimaryClient,
+        PrimaryToPrimaryRpc, PrimaryToWorkerClient, ReliableNetwork, WorkerRpc,
+        WorkerToPrimaryClient,
     },
 };
 

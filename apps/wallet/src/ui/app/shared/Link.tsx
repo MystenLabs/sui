@@ -24,10 +24,14 @@ const styles = cva(
 				steelDark: [
 					'text-steel-dark hover:text-steel-darker focus:text-steel-darker disabled:text-steel-dark',
 				],
+				steelDarker: [
+					'text-steel-darker hover:text-steel-darker focus:text-steel-darker disabled:text-steel-darker',
+				],
 				heroDark: [
 					'text-hero-dark hover:text-hero-darkest focus:text-hero-darkest disabled:text-hero-dark',
 				],
 				suiDark: ['text-sui-dark'],
+				hero: ['text-hero hover:text-hero-dark focus:text-hero-dark disabled:text-hero-dark'],
 			},
 			weight: {
 				semibold: 'font-semibold',
@@ -49,9 +53,15 @@ const styles = cva(
 
 const iconStyles = cva(['transition flex'], {
 	variants: {
+		beforeColor: {
+			steelDarker: ['text-steel-darker'],
+		},
 		color: {
 			steelDark: [
 				'text-steel group-hover:text-steel-darker group-focus:text-steel-darker group-disabled:text-steel-dark',
+			],
+			steelDarker: [
+				'text-steel-darker group-hover:text-steel-darker group-focus:text-steel-darker group-disabled:text-steel-darker',
 			],
 			heroDark: [
 				'text-hero group-hover:text-hero-darkest group-focus:text-hero-darkest group-disabled:text-hero-dark',
@@ -59,11 +69,14 @@ const iconStyles = cva(['transition flex'], {
 			suiDark: [
 				'text-steel group-hover:text-sui-dark group-focus:text-sui-dark group-disabled:text-steel',
 			],
+			hero: [
+				'text-hero group-hover:text-hero-dark group-focus:text-hero-dark group-disabled:text-hero-dark',
+			],
 		},
 	},
 });
 
-interface LinkProps
+export interface LinkProps
 	extends VariantProps<typeof styles>,
 		VariantProps<typeof iconStyles>,
 		Omit<ButtonOrLinkProps, 'className' | 'color'> {
@@ -76,6 +89,7 @@ export const Link = forwardRef(
 	(
 		{
 			before,
+			beforeColor,
 			after,
 			text,
 			color,
@@ -92,7 +106,11 @@ export const Link = forwardRef(
 			{...otherProps}
 			ref={ref}
 		>
-			{before ? <div className={iconStyles({ color })}>{before}</div> : null}
+			{before ? (
+				<div className={beforeColor ? iconStyles({ beforeColor }) : iconStyles({ color })}>
+					{before}
+				</div>
+			) : null}
 			{text ? <div className={'truncate leading-none'}>{text}</div> : null}
 			{after ? <div className={iconStyles({ color })}>{after}</div> : null}
 		</ButtonOrLink>

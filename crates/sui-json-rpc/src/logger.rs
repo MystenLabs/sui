@@ -3,32 +3,37 @@
 
 #[macro_export]
 macro_rules! with_tracing {
-    ($future:expr) => {{
+    ($time_spent_threshold:expr, $future:expr) => {{
         use tracing::{info, error, Instrument, Span};
         use jsonrpsee::core::{RpcResult, Error as RpcError};
-        use jsonrpsee::types::error::{CallError, INVALID_PARAMS_CODE, CALL_EXECUTION_FAILED_CODE};
+        use jsonrpsee::types::error::{CallError};
+        use $crate::error::RpcInterimResult;
+        use anyhow::anyhow;
 
         async move {
-            let result: RpcResult<_> = $future.await;
+            let start = std::time::Instant::now();
+            let interim_result: RpcInterimResult<_> = $future.await;
+            let elapsed = start.elapsed();
+            let result: RpcResult<_> = interim_result.map_err(|e: Error| {
+                let anyhow_error = anyhow!("{:?}", e);
 
-            match &result {
-                Ok(_) => info!("success"),
-                Err(e) => {
-                    match e {
-                        RpcError::Call(call_error) => {
-                            let error_code = match call_error {
-                                CallError::InvalidParams(_) => INVALID_PARAMS_CODE,
-                                _ => CALL_EXECUTION_FAILED_CODE
-                            };
-                            error!(error = ?e, error_code = error_code);
-                        }
-                        _ => error!(error = ?e),
-                    }
+                let rpc_error: RpcError = e.into();
+                if !matches!(rpc_error, RpcError::Call(CallError::InvalidParams(_))) {
+                    error!(error=?anyhow_error);
                 }
+                rpc_error
+            });
+
+            if elapsed > $time_spent_threshold {
+                info!(?elapsed, "RPC took longer than threshold to complete.");
             }
             result
         }
         .instrument(Span::current())
         .await
+    }};
+
+    ($future:expr) => {{
+        with_tracing!(std::time::Duration::from_secs(1), $future)
     }};
 }

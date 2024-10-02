@@ -4,7 +4,8 @@
 
 # ledgerjs-hw-app-sui
 
-[Ledger Hardware Wallet](https://www.ledger.com/) JavaScript bindings for [Sui](https://sui.io/), based on [LedgerJS](https://github.com/LedgerHQ/ledgerjs).
+[Ledger Hardware Wallet](https://www.ledger.com/) JavaScript bindings for [Sui](https://sui.io/),
+based on [LedgerJS](https://github.com/LedgerHQ/ledgerjs).
 
 ## Using LedgerJS for Sui
 
@@ -58,7 +59,9 @@ doAll().catch((err) => console.log(err));
 ### Parameters
 
 - `transport` **`Transport<any>`**
-- `scrambleKey` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** (optional, default `"Sui"`)
+- `scrambleKey`
+  **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**
+  (optional, default `"Sui"`)
 
 ### Examples
 
@@ -75,8 +78,12 @@ Gets the Sui address for a given BIP-32 path.
 
 #### Parameters
 
-- `path` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** a path in BIP-32 format
-- `displayOnDevice` **[boolean](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** whether or not to display the address on the Ledger device.
+- `path`
+  **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** a
+  path in BIP-32 format
+- `displayOnDevice`
+  **[boolean](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean)**
+  whether or not to display the address on the Ledger device.
 
 #### Examples
 
@@ -84,7 +91,9 @@ Gets the Sui address for a given BIP-32 path.
 const publicKey = await sui.getPublicKey("44'/784'/0'/0'/0'");
 ```
 
-Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)>** an object with a public key.
+Returns
+**[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)>**
+an object with a public key.
 
 ### signTransaction
 
@@ -92,7 +101,9 @@ Sign a transaction with a given BIP-32 path.
 
 #### Parameters
 
-- `path` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** a path in BIP-32 format
+- `path`
+  **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** a
+  path in BIP-32 format
 
 #### Examples
 
@@ -100,7 +111,9 @@ Sign a transaction with a given BIP-32 path.
 const publicKey = await sui.signTransaction("44'/784'/0'/0'/0'", '<transaction contents>');
 ```
 
-Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[object](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object)>** an object with text field containing a signature.
+Returns
+**[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[object](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object)>**
+an object with text field containing a signature.
 
 ### getVersion
 
@@ -122,4 +135,6 @@ for version 0.1.0, it produces something like
 }
 ```
 
-Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;{[object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)}>** an object with major, minor, and patch of the version.
+Returns
+**[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;{[object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)}>**
+an object with major, minor, and patch of the version.

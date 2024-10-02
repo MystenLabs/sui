@@ -1,0 +1,10 @@
+[package]
+name = "shared_object_deletion"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+shared_object_deletion = "0x0"

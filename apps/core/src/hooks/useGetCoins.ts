@@ -1,36 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '../api/RpcClientContext';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { PaginatedCoins } from '@mysten/sui/client';
 import { useInfiniteQuery } from '@tanstack/react-query';
-
-import type { SuiAddress } from '@mysten/sui.js';
 
 const MAX_COINS_PER_REQUEST = 10;
 
 export function useGetCoins(
 	coinType: string,
-	address?: SuiAddress | null,
+	address?: string | null,
 	maxCoinsPerRequest = MAX_COINS_PER_REQUEST,
 ) {
-	const rpc = useRpcClient();
-	return useInfiniteQuery(
-		['get-coins', address, coinType, maxCoinsPerRequest],
-		({ pageParam }) =>
-			rpc.getCoins({
+	const client = useSuiClient();
+	return useInfiniteQuery<PaginatedCoins>({
+		queryKey: ['get-coins', address, coinType, maxCoinsPerRequest],
+		initialPageParam: null,
+		getNextPageParam: ({ hasNextPage, nextCursor }) => (hasNextPage ? nextCursor : null),
+		queryFn: ({ pageParam }) =>
+			client.getCoins({
 				owner: address!,
 				coinType,
-				cursor: pageParam ? pageParam.cursor : null,
+				cursor: pageParam as string | null,
 				limit: maxCoinsPerRequest,
 			}),
-		{
-			getNextPageParam: ({ hasNextPage, nextCursor }) =>
-				hasNextPage
-					? {
-							cursor: nextCursor,
-					  }
-					: false,
-			enabled: !!address,
-		},
-	);
+		enabled: !!address,
+	});
 }

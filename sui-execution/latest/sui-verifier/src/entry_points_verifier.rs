@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
 };
 use move_bytecode_utils::format_signature_token;
-use sui_protocol_config::ProtocolConfig;
+use move_vm_config::verifier::VerifierConfig;
+use sui_types::randomness_state::is_mutable_random;
 use sui_types::{
     base_types::{TxContext, TxContextKind, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     clock::Clock,
     error::ExecutionError,
     is_object, is_object_vector, is_primitive,
     move_package::{is_test_fun, FnInfoMap},
+    transfer::Receiving,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -28,8 +28,8 @@ use crate::{verification_failure, INIT_FN_NAME};
 /// - The function must have `Visibility::Private`
 /// - The function can have at most two parameters:
 ///   - mandatory &mut TxContext or &TxContext (see `is_tx_context`) in the last position
-///   - optional one-time witness type (see one_time_witness verifier pass) passed by value in the first
-///   position
+///   - optional one-time witness type (see one_time_witness verifier pass) passed by value in the
+///     first position
 ///
 /// For transaction entry points
 /// - The function must have `is_entry` true
@@ -37,9 +37,9 @@ use crate::{verification_failure, INIT_FN_NAME};
 ///   - The transaction context parameter must be the last parameter
 /// - The function cannot have any return values
 pub fn verify_module(
-    config: &ProtocolConfig,
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
+    verifier_config: &VerifierConfig,
 ) -> Result<(), ExecutionError> {
     // When verifying test functions, a check preventing explicit calls to init functions is
     // disabled.
@@ -54,7 +54,7 @@ pub fn verify_module(
         }
 
         if name == INIT_FN_NAME {
-            verify_init_function(config, module, func_def).map_err(verification_failure)?;
+            verify_init_function(module, func_def).map_err(verification_failure)?;
             continue;
         }
 
@@ -64,7 +64,8 @@ pub fn verify_module(
             // it's not an entry function
             continue;
         }
-        verify_entry_function_impl(module, func_def).map_err(verification_failure)?;
+        verify_entry_function_impl(module, func_def, verifier_config)
+            .map_err(verification_failure)?;
     }
     Ok(())
 }
@@ -105,13 +106,7 @@ fn verify_init_not_called(
 }
 
 /// Checks if this module has a conformant `init`
-fn verify_init_function(
-    config: &ProtocolConfig,
-    module: &CompiledModule,
-    fdef: &FunctionDefinition,
-) -> Result<(), String> {
-    let view = &BinaryIndexedView::Module(module);
-
+fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> Result<(), String> {
     if fdef.visibility != Visibility::Private {
         return Err(format!(
             "{}. '{}' function must be private",
@@ -120,7 +115,7 @@ fn verify_init_function(
         ));
     }
 
-    if config.ban_entry_init() && fdef.is_entry {
+    if fdef.is_entry {
         return Err(format!(
             "{}. '{}' cannot be 'entry'",
             module.self_id(),
@@ -137,7 +132,7 @@ fn verify_init_function(
         ));
     }
 
-    if !view.signature_at(fhandle.return_).is_empty() {
+    if !module.signature_at(fhandle.return_).is_empty() {
         return Err(format!(
             "{}, '{}' function cannot have return values",
             module.self_id(),
@@ -145,7 +140,7 @@ fn verify_init_function(
         ));
     }
 
-    let parameters = &view.signature_at(fhandle.parameters).0;
+    let parameters = &module.signature_at(fhandle.parameters).0;
     if parameters.is_empty() || parameters.len() > 2 {
         return Err(format!(
             "Expected at least one and at most two parameters for {}::{}",
@@ -158,7 +153,7 @@ fn verify_init_function(
     // then the first parameter must be of a one-time witness type and must be passed by value. This
     // is checked by the verifier for pass one-time witness value (one_time_witness_verifier) -
     // please see the description of this pass for additional details.
-    if TxContext::kind(view, &parameters[parameters.len() - 1]) != TxContextKind::None {
+    if TxContext::kind(module, &parameters[parameters.len() - 1]) != TxContextKind::None {
         Ok(())
     } else {
         Err(format!(
@@ -169,16 +164,16 @@ fn verify_init_function(
             SUI_FRAMEWORK_ADDRESS,
             TX_CONTEXT_MODULE_NAME,
             TX_CONTEXT_STRUCT_NAME,
-            format_signature_token(view, &parameters[0]),
+            format_signature_token(module, &parameters[0]),
         ))
     }
 }
 
 fn verify_entry_function_impl(
-    module: &CompiledModule,
+    view: &CompiledModule,
     func_def: &FunctionDefinition,
+    verifier_config: &VerifierConfig,
 ) -> Result<(), String> {
-    let view = &BinaryIndexedView::Module(module);
     let handle = view.function_handle_at(func_def.function);
     let params = view.signature_at(handle.parameters);
 
@@ -189,7 +184,7 @@ fn verify_entry_function_impl(
         _ => &params.0,
     };
     for param in all_non_ctx_params {
-        verify_param_type(view, &handle.type_parameters, param)?;
+        verify_param_type(view, &handle.type_parameters, param, verifier_config)?;
     }
 
     for return_ty in &view.signature_at(handle.return_).0 {
@@ -200,7 +195,7 @@ fn verify_entry_function_impl(
 }
 
 fn verify_return_type(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     type_parameters: &[AbilitySet],
     return_ty: &SignatureToken,
 ) -> Result<(), String> {
@@ -225,9 +220,10 @@ fn verify_return_type(
 }
 
 fn verify_param_type(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     function_type_args: &[AbilitySet],
     param: &SignatureToken,
+    verifier_config: &VerifierConfig,
 ) -> Result<(), String> {
     // Only `sui::sui_system` is allowed to expose entry functions that accept a mutable clock
     // parameter.
@@ -239,9 +235,20 @@ fn verify_param_type(
         ));
     }
 
+    // Only `sui::sui_system` is allowed to expose entry functions that accept a mutable Random
+    // parameter.
+    if verifier_config.reject_mutable_random_on_entry_functions && is_mutable_random(view, param) {
+        return Err(format!(
+            "Invalid entry point parameter type. Random must be passed by immutable reference. got: \
+             {}",
+            format_signature_token(view, param),
+        ));
+    }
+
     if is_primitive(view, function_type_args, param)
         || is_object(view, function_type_args, param)?
         || is_object_vector(view, function_type_args, param)?
+        || Receiving::is_receiving(view, param)
     {
         Ok(())
     } else {

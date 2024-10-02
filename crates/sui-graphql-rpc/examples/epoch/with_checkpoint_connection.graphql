@@ -1,0 +1,33 @@
+{
+  epoch {
+    checkpoints {
+      nodes {
+        transactionBlocks(first: 10) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            cursor
+            node {
+              sender {
+                address
+              }
+              effects {
+                gasEffects {
+                  gasObject {
+                    address
+                  }
+                }
+              }
+              gasInput {
+                gasPrice
+                gasBudget
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

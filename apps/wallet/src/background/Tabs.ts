@@ -15,7 +15,6 @@ import {
 	switchMap,
 } from 'rxjs';
 import Browser from 'webextension-polyfill';
-
 import type { Tabs as BrowserTabs } from 'webextension-polyfill';
 
 const onRemovedStream = fromEventPattern<[number, BrowserTabs.OnRemovedRemoveInfoType]>(
@@ -211,4 +210,5 @@ class Tabs {
 	}
 }
 
-export default new Tabs();
+const tabs = new Tabs();
+export default tabs;

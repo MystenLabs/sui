@@ -27,6 +27,8 @@ const textStyles = cva([], {
 			pSubtitleSmall: 'text-pSubtitleSmall',
 		},
 		color: {
+			black: 'text-black',
+			white: 'text-white',
 			'gray-100': 'text-gray-100',
 			'gray-90': 'text-gray-90',
 			'gray-85': 'text-gray-85',
@@ -43,6 +45,7 @@ const textStyles = cva([], {
 			'steel-darker': 'text-steel-darker',
 			hero: 'text-hero',
 			'hero-dark': 'text-hero-dark',
+			'hero-darkest': 'text-hero-darkest',
 			'success-dark': 'text-success-dark',
 			'issue-dark': 'text-issue-dark',
 		},

@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState } from 'react';
-
-import DisconnectApp from './DisconnectApp';
 import { ImageIcon } from '_app/shared/image-icon';
 import ExternalLink from '_components/external-link';
 import { ampli } from '_src/shared/analytics/ampli';
-import { trackEvent } from '_src/shared/plausible';
 import { getDAppUrl } from '_src/shared/utils';
 import { Text } from '_src/ui/app/shared/text';
+import { useState } from 'react';
+
+import DisconnectApp from './DisconnectApp';
 
 export type DAppEntry = {
 	name: string;
@@ -32,7 +31,7 @@ function CardView({ name, link, icon }: CardViewProp) {
 	return (
 		<div className="bg-white flex flex-col p-3.75 box-border w-full rounded-2xl border border-gray-45 border-solid h-32 hover:bg-sui/10 hover:border-sui/30">
 			<div className="flex mb-1">
-				<ImageIcon src={icon || null} label={name} fallback={name} size="lg" circle />
+				<ImageIcon src={icon || null} label={name} fallback={name} size="lg" rounded="lg" />
 			</div>
 
 			<div className="flex flex-col gap-1 justify-start item-start">
@@ -59,16 +58,16 @@ type ListViewProp = {
 function ListView({ name, icon, description, tags }: ListViewProp) {
 	return (
 		<div className="bg-white flex py-3.5 px-1.25 gap-3 item-center box-border rounded hover:bg-sui/10">
-			<ImageIcon src={icon || null} label={name} fallback={name} size="xl" circle />
+			<ImageIcon src={icon || null} label={name} fallback={name} size="xxl" rounded="lg" />
 			<div className="flex flex-col gap-1 justify-center">
 				<Text variant="body" weight="semibold" color="sui-dark">
 					{name}
 				</Text>
-				<Text variant="subtitle" weight="normal" color="steel-darker">
+				<Text variant="pSubtitle" weight="normal" color="steel-darker">
 					{description}
 				</Text>
 				{tags?.length && (
-					<div className="flex flex-wrap gap-1">
+					<div className="flex flex-wrap gap-1 mt-0.5">
 						{tags?.map((tag) => (
 							<div
 								className="flex item-center justify-center px-1.5 py-0.5 border border-solid border-steel rounded"
@@ -148,9 +147,6 @@ export function SuiApp({
 			className="no-underline"
 			onClick={() => {
 				ampli.openedApplication({ applicationName: name });
-				trackEvent('AppOpen', {
-					props: { name, source: 'AppPage' },
-				});
 			}}
 		>
 			{AppDetails}

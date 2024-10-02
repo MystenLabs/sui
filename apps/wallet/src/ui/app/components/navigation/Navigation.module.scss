@@ -7,22 +7,21 @@
 	flex-flow: row nowrap;
 	background-color: v.use(v.$colors-nav-background-color);
 	backdrop-filter: v.use(v.$colors-nav-background-filter);
-	min-height: values.$sizing-nav-height;
-	height: auto;
-	position: absolute;
+	position: sticky;
 	bottom: 0;
 	width: 100%;
 	align-items: center;
 	justify-content: stretch;
-	padding: 8px 10px;
-	padding-bottom: 0;
 	overflow: hidden;
 	border: 1px solid rgb(111 188 240 / 1%);
-	border-top-left-radius: 20px;
-	border-top-right-radius: 20px;
-	transition: transform 300ms ease-in-out;
+	transition:
+		max-height 300ms ease-in-out,
+		opacity 300ms ease-in-out;
 	opacity: 1;
 	flex-direction: column;
+	z-index: 40;
+	max-height: 120px;
+	padding-top: 8px;
 }
 
 .nav-menu {
@@ -84,6 +83,10 @@
 			border-bottom-color: v.use(v.$colors-nav-item-active-highlighted-color);
 		}
 	}
+
+	&.disabled {
+		color: #c3c5c8;
+	}
 }
 
 .icon {
@@ -102,9 +105,12 @@
 }
 
 .hidden {
-	transform: translateY(100%);
+	padding-top: 0;
+	max-height: 0;
 	opacity: 0;
-	transition: transform 300ms ease-in-out, opacity 0ms ease-in 300ms;
+	transition:
+		max-height 300ms ease-in-out,
+		opacity 0ms ease-in 300ms;
 }
 
 /* TODO update icons so they are all the same size */

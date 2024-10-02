@@ -1,0 +1,90 @@
+// Tests if symbolication information for constants has been constructed correctly.
+{
+  "UseDef": {
+    "project": "tests/symbols",
+    "file_tests": {
+      "M8.move": [
+        {
+          "use_line": 3,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 5,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 7,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 9,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 11,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 13,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 17,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 19,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 21,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 23,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 25,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 27,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 27,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 29,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 31,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 31,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 34,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 37,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 37,
+          "use_ndx": 1
+        }
+      ]
+    }
+  }
+}

@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use toml::value::Value;
-use toml_edit::{Document, Item};
+use toml_edit::{self, Document, Item};
 
 use crate::args::Args;
 use crate::path::{deep_copy, normalize_path, path_relative_to, shortest_new_prefix};
@@ -100,7 +100,7 @@ impl CutPlan {
 
         struct Walker {
             feature: String,
-            ws: Workspace,
+            ws: Option<Workspace>,
             planned_packages: BTreeMap<String, CutPackage>,
             pending_packages: HashSet<String>,
             make_directories: BTreeSet<PathBuf>,
@@ -155,7 +155,7 @@ impl CutPlan {
                 let toml = src.join("Cargo.toml");
 
                 let Some(pkg_name) = package_name(toml)? else {
-                    return Ok(())
+                    return Ok(());
                 };
 
                 if !self.pending_packages.remove(&pkg_name) {
@@ -182,7 +182,11 @@ impl CutPlan {
                         dst_name,
                         dst_path,
                         src_path: src.to_path_buf(),
-                        ws_state: self.ws.state(src)?,
+                        ws_state: if let Some(ws) = &self.ws {
+                            ws.state(src)?
+                        } else {
+                            WorkspaceState::Unknown
+                        },
                     },
                 );
 
@@ -192,7 +196,11 @@ impl CutPlan {
 
         let mut walker = Walker {
             feature: args.feature,
-            ws: Workspace::read(&root)?,
+            ws: if args.workspace_update {
+                Some(Workspace::read(&root)?)
+            } else {
+                None
+            },
             planned_packages: BTreeMap::new(),
             pending_packages: args.packages.into_iter().collect(),
             make_directories: BTreeSet::new(),
@@ -264,9 +272,8 @@ impl CutPlan {
     /// their destinations, and their dependencies will be fixed up.  On failure, pending changes
     /// are rolled back.
     pub(crate) fn execute(&self) -> Result<()> {
-        self.execute_().map_err(|e| {
+        self.execute_().inspect_err(|_| {
             self.rollback();
-            e
         })
     }
     fn execute_(&self) -> Result<()> {
@@ -335,7 +342,7 @@ impl CutPlan {
     ) -> Result<()> {
         for field in ["dependencies", "dev-dependencies", "build-dependencies"] {
             let Some(deps) = table.get_mut(field).and_then(Item::as_table_like_mut) else {
-                continue
+                continue;
             };
 
             for (dep_name, dep) in deps.iter_mut() {
@@ -362,7 +369,7 @@ impl CutPlan {
         dep: &mut Item,
     ) -> Result<()> {
         let Some(dep) = dep.as_table_like_mut() else {
-            return Ok(())
+            return Ok(());
         };
 
         // If the dep has an explicit package name, use that as the key for finding package
@@ -375,7 +382,7 @@ impl CutPlan {
 
         // Only path-based dependencies need to be updated.
         let Some(path) = dep.get_mut("path") else {
-            return Ok(())
+            return Ok(());
         };
 
         if let Some(dep_pkg) = dep_pkg {
@@ -437,7 +444,7 @@ impl CutPlan {
             .and_then(|w| w.get_mut("members"))
             .and_then(|m| m.as_array_mut())
         {
-            format_array_of_strings(members)
+            format_array_of_strings("members", members)?
         }
 
         if let Some(exclude) = toml
@@ -445,7 +452,7 @@ impl CutPlan {
             .and_then(|w| w.get_mut("exclude"))
             .and_then(|m| m.as_array_mut())
         {
-            format_array_of_strings(exclude)
+            format_array_of_strings("exclude", exclude)?
         }
 
         fs::write(&path, toml.to_string())?;
@@ -582,7 +589,9 @@ fn toml_path_array_to_set<P: AsRef<Path>>(
 ) -> Result<HashSet<PathBuf>> {
     let mut set = HashSet::new();
 
-    let Some(array) = table.get(field) else { return Ok(set) };
+    let Some(array) = table.get(field) else {
+        return Ok(set);
+    };
     let Some(array) = array.as_array() else {
         bail!(Error::NotAStringArray(field))
     };
@@ -620,21 +629,25 @@ where
 
 /// Format a TOML array of strings: Splits elements over multiple lines, indents them, sorts them,
 /// and adds a trailing comma.
-fn format_array_of_strings(array: &mut toml_edit::Array) {
-    let mut items: Vec<_> = array.iter().cloned().collect();
-    items.sort_by(|i, j| i.as_str().cmp(&j.as_str()));
+fn format_array_of_strings(field: &'static str, array: &mut toml_edit::Array) -> Result<()> {
+    let mut strs = BTreeSet::new();
+    for item in &*array {
+        let Some(s) = item.as_str() else {
+            bail!(Error::NotAStringArray(field));
+        };
+
+        strs.insert(s.to_owned());
+    }
 
     array.set_trailing_comma(true);
     array.set_trailing("\n");
     array.clear();
 
-    for mut item in items {
-        let decor = item.decor_mut();
-        decor.set_prefix("\n    ");
-        decor.set_suffix("");
-
-        array.push_formatted(item);
+    for s in strs {
+        array.push_formatted(toml_edit::Value::from(s).decorated("\n    ", ""));
     }
+
+    Ok(())
 }
 
 fn package_name<P: AsRef<Path>>(path: P) -> Result<Option<String>> {
@@ -706,7 +719,7 @@ mod tests {
         let root = discover_root(cut.clone()).unwrap();
 
         let sui_execution = root.join("sui-execution");
-        let move_vm_types = root.join("external-crates/move/move-vm/types");
+        let move_vm_types = root.join("external-crates/move/crates/move-vm-types");
 
         let ws = Workspace::read(&root).unwrap();
 
@@ -787,6 +800,7 @@ mod tests {
 
         let plan = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: None,
             directories: vec![
@@ -801,8 +815,8 @@ mod tests {
                     suffix: None,
                 },
                 Directory {
-                    src: cut.join("../../external-crates/move/move-core"),
-                    dst: cut.join("../cut-move-core"),
+                    src: cut.join("../../external-crates/move/crates/move-core-types"),
+                    dst: cut.join("../cut-move-core-types"),
                     suffix: None,
                 },
             ],
@@ -820,14 +834,14 @@ mod tests {
                 root: "$PATH",
                 directories: {
                     "$PATH/sui-execution/cut-cut",
-                    "$PATH/sui-execution/cut-move-core",
+                    "$PATH/sui-execution/cut-move-core-types",
                     "$PATH/sui-execution/exec-cut",
                 },
                 packages: {
                     "move-core-types": CutPackage {
                         dst_name: "move-core-types-feature",
-                        src_path: "$PATH/external-crates/move/move-core/types",
-                        dst_path: "$PATH/sui-execution/cut-move-core/types",
+                        src_path: "$PATH/external-crates/move/crates/move-core-types",
+                        dst_path: "$PATH/sui-execution/cut-move-core-types",
                         ws_state: Exclude,
                     },
                     "sui-adapter-latest": CutPackage {
@@ -871,9 +885,9 @@ mod tests {
 
             new [workspace] excludes:
              - to:   move-core-types-feature
-                     sui-execution/cut-move-core/types
+                     sui-execution/cut-move-core-types
                from: move-core-types
-                     external-crates/move/move-core/types
+                     external-crates/move/crates/move-core-types
 
             other packages:
         "#]]
@@ -888,6 +902,7 @@ mod tests {
         // directory, and expect that the resulting plan's `directories` only contains one entry.
         let plan = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: None,
             directories: vec![
@@ -925,8 +940,8 @@ mod tests {
                 packages: {
                     "move-core-types": CutPackage {
                         dst_name: "move-core-types-feature",
-                        src_path: "$PATH/external-crates/move/move-core/types",
-                        dst_path: "$PATH/sui-execution/feature/move/move-core/types",
+                        src_path: "$PATH/external-crates/move/crates/move-core-types",
+                        dst_path: "$PATH/sui-execution/feature/move/crates/move-core-types",
                         ws_state: Exclude,
                     },
                     "sui-adapter-latest": CutPackage {
@@ -978,6 +993,7 @@ mod tests {
 
         let err = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -1015,6 +1031,7 @@ mod tests {
 
         let err = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![
@@ -1059,6 +1076,7 @@ mod tests {
 
         let err = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![
@@ -1103,6 +1121,7 @@ mod tests {
 
         let err = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -1127,7 +1146,7 @@ mod tests {
 
         fs::write(
             root.join("Cargo.toml"),
-            vec![
+            [
                 r#"[workspace]"#,
                 r#"members = ["crates/foo"]"#,
                 r#"exclude = ["#,
@@ -1147,7 +1166,7 @@ mod tests {
 
         fs::write(
             root.join("crates/bar/Cargo.toml"),
-            vec![
+            [
                 r#"[package]"#,
                 r#"name = "bar""#,
                 r#""#,
@@ -1164,7 +1183,7 @@ mod tests {
 
         fs::write(
             root.join("crates/baz/Cargo.toml"),
-            vec![
+            [
                 r#"[package]"#,
                 r#"name = "baz""#,
                 r#""#,
@@ -1180,7 +1199,7 @@ mod tests {
 
         fs::write(
             root.join("crates/qux/Cargo.toml"),
-            vec![
+            [
                 r#"[package]"#,
                 r#"name = "qux""#,
                 r#""#,
@@ -1196,12 +1215,13 @@ mod tests {
 
         fs::write(
             root.join("crates/quy/Cargo.toml"),
-            vec![r#"[package]"#, r#"name = "quy""#].join("\n"),
+            [r#"[package]"#, r#"name = "quy""#].join("\n"),
         )
         .unwrap();
 
         let plan = CutPlan::discover(Args {
             dry_run: false,
+            workspace_update: true,
             feature: "cut".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -1279,6 +1299,79 @@ mod tests {
 
         plan.rollback();
         assert!(!root.join("cut").exists())
+    }
+
+    #[test]
+    fn test_cut_plan_no_workspace_update() {
+        let cut = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+        let plan = CutPlan::discover(Args {
+            dry_run: false,
+            workspace_update: false,
+            feature: "feature".to_string(),
+            root: None,
+            directories: vec![
+                Directory {
+                    src: cut.join("../latest"),
+                    dst: cut.join("../exec-cut"),
+                    suffix: Some("-latest".to_string()),
+                },
+                Directory {
+                    src: cut.clone(),
+                    dst: cut.join("../cut-cut"),
+                    suffix: None,
+                },
+                Directory {
+                    src: cut.join("../../external-crates/move/crates/move-core-types"),
+                    dst: cut.join("../cut-move-core-types"),
+                    suffix: None,
+                },
+            ],
+            packages: vec![
+                "move-core-types".to_string(),
+                "sui-adapter-latest".to_string(),
+                "sui-execution-cut".to_string(),
+                "sui-verifier-latest".to_string(),
+            ],
+        })
+        .unwrap();
+
+        expect![[r#"
+            CutPlan {
+                root: "$PATH",
+                directories: {
+                    "$PATH/sui-execution/cut-cut",
+                    "$PATH/sui-execution/cut-move-core-types",
+                    "$PATH/sui-execution/exec-cut",
+                },
+                packages: {
+                    "move-core-types": CutPackage {
+                        dst_name: "move-core-types-feature",
+                        src_path: "$PATH/external-crates/move/crates/move-core-types",
+                        dst_path: "$PATH/sui-execution/cut-move-core-types",
+                        ws_state: Unknown,
+                    },
+                    "sui-adapter-latest": CutPackage {
+                        dst_name: "sui-adapter-feature",
+                        src_path: "$PATH/sui-execution/latest/sui-adapter",
+                        dst_path: "$PATH/sui-execution/exec-cut/sui-adapter",
+                        ws_state: Unknown,
+                    },
+                    "sui-execution-cut": CutPackage {
+                        dst_name: "sui-execution-cut-feature",
+                        src_path: "$PATH/sui-execution/cut",
+                        dst_path: "$PATH/sui-execution/cut-cut",
+                        ws_state: Unknown,
+                    },
+                    "sui-verifier-latest": CutPackage {
+                        dst_name: "sui-verifier-feature",
+                        src_path: "$PATH/sui-execution/latest/sui-verifier",
+                        dst_path: "$PATH/sui-execution/exec-cut/sui-verifier",
+                        ws_state: Unknown,
+                    },
+                },
+            }"#]]
+        .assert_eq(&debug_for_test(&plan));
     }
 
     /// Print with pretty-printed debug formatting, with repo paths scrubbed out for consistency.

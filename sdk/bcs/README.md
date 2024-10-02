@@ -1,440 +1,358 @@
 # BCS - Binary Canonical Serialization
 
-This small and lightweight library implements [Binary Canonical Serialization (BCS)](https://github.com/zefchain/bcs) in JavaScript, making BCS available in both Browser and NodeJS environments.
+This small and lightweight library implements
+[Binary Canonical Serialization (BCS)](https://github.com/zefchain/bcs) in TypeScript, making BCS
+available in both Browser and NodeJS environments in a type-safe way.`
 
 ## Install
 
-To install, add the [`@mysten/bcs`](https://www.npmjs.com/package/@mysten/bcs) package to your project:
+To install, add the [`@mysten/bcs`](https://www.npmjs.com/package/@mysten/bcs) package to your
+project:
 
-```sh
+```sh npm2yarn
 npm i @mysten/bcs
 ```
 
 ## Quickstart
 
 ```ts
-import { BCS, getSuiMoveConfig } from '@mysten/bcs';
+import { bcs, fromHex, toHex } from '@mysten/bcs';
 
-const bcs = new BCS(getSuiMoveConfig());
-
-// registering types so we can use them
-bcs.registerAlias('UID', BCS.ADDRESS);
-bcs.registerEnumType('Option<T>', {
-	none: null,
-	some: 'T',
+// define UID as a 32-byte array, then add a transform to/from hex strings
+const UID = bcs.fixedArray(32, bcs.u8()).transform({
+	input: (id: string) => fromHex(id),
+	output: (id) => toHex(Uint8Array.from(id)),
 });
-bcs.registerStructType('Coin', {
-	id: 'UID',
-	value: BCS.U64,
+
+const Coin = bcs.struct('Coin', {
+	id: UID,
+	value: bcs.u64(),
 });
 
 // deserialization: BCS bytes into Coin
-let bcsBytes = bcs
-	.ser('Coin', {
-		id: '0000000000000000000000000000000000000000000000000000000000000001',
-		value: 1000000n,
-	})
-	.toBytes();
-let coin = bcs.de('Coin', bcsBytes, 'hex');
+const bcsBytes = Coin.serialize({
+	id: '0000000000000000000000000000000000000000000000000000000000000001',
+	value: 1000000n,
+}).toBytes();
+
+const coin = Coin.parse(bcsBytes);
 
 // serialization: Object into bytes - an Option with <T = Coin>
-let data = bcs.ser('Option<Coin>', { some: coin }).toString('hex');
+const hex = bcs.option(Coin).serialize(coin).toHex();
 
-console.log(data);
+console.log(hex);
 ```
 
 ## Description
 
-BCS defines the way the data is serialized, and the result contains no type information. To be able to serialize the data and later deserialize, a schema has to be created (based on the built-in primitives, such as `address` or `u64`). There's no tip in the serialized bytes on what they mean, so the receiving part needs to know how to treat it.
+BCS defines the way the data is serialized, and the serialized results contains no type information.
+To be able to serialize the data and later deserialize it, a schema has to be created (based on the
+built-in primitives, such as `string` or `u64`). There are no type hints in the serialized bytes on
+what they mean, so the schema used for decoding must match the schema used to encode the data.
 
-## Configuration
+The `@mysten/bcs` library can be used to define schemas that can serialize and deserialize BCS
+encoded data, and can infer the correct TypeScript for the schema from the definitions themselves
+rather than having to define them manually.
 
-BCS constructor is configurable for the target. The following parameters are available for custom configuration:
+## Basic types
 
-| parameter           | required | description                                                               |
-| ------------------- | -------- | ------------------------------------------------------------------------- |
-| `vectorType`        | +        | Defines the type of the vector (`vector<T>` in SuiMove, `Vec<T>` in Rust) |
-| `addressLength`     | +        | Length of the built-in `address` type. 20 for SuiMove, 32 for Core Move   |
-| `addressEncoding`   | -        | Custom encoding for addresses - "hex" or "base64"                         |
-| `genericSeparators` | -        | Generic type parameters syntax, default is `['<', '>']`                   |
-| `types`             | -        | Define enums, structs and aliases at initialization stage                 |
-| `withPrimitives`    | -        | Whether to register primitive types (`true` by default)                   |
+bcs supports a number of built in base types that can be combined to create more complex types. The
+following table lists the primitive types available:
 
-```ts
-// Example: All options used
-import { BCS } from '@mysten/bcs';
-
-const SUI_ADDRESS_LENGTH = 32;
-const bcs = new BCS({
-	vectorType: 'vector<T>',
-	addressLength: SUI_ADDRESS_LENGTH,
-	addressEncoding: 'hex',
-	genericSeparators: ['<', '>'],
-	types: {
-		// define schema in the initializer
-		structs: {
-			User: {
-				name: BCS.STRING,
-				age: BCS.U8,
-			},
-		},
-		enums: {},
-		aliases: { hex: BCS.HEX },
-	},
-	withPrimitives: true,
-});
-
-let bytes = bcs.ser('User', { name: 'Adam', age: '30' }).toString('base64');
-
-console.log(bytes);
-```
-
-For Sui Move there's already a pre-built configuration which can be used through the `getSuiMoveConfig()` call.
+| Method                | TS Type      | TS Input Type                | Description                                                                 |
+| --------------------- | ------------ | ---------------------------- | --------------------------------------------------------------------------- |
+| `bool`                | `boolean`    | `boolean`                    | Boolean type (converts to `true` / `false`)                                 |
+| `u8`, `u16`, `u32`    | `number`     | `number`                     | Unsigned Integer types                                                      |
+| `u64`, `u128`, `u256` | `string`     | `number \| string \| bigint` | Unsigned Integer types, decoded as `string` to allow for JSON serialization |
+| `uleb128`             | `number`     | `number`                     | Unsigned LEB128 integer type                                                |
+| `string`              | `string`     | `string`                     | UTF-8 encoded string                                                        |
+| `bytes(size)`         | `Uint8Array` | `Iterable<number>`           | Fixed length bytes                                                          |
 
 ```ts
-// Example: Sui Move Config
-import { BCS, getSuiMoveConfig } from '@mysten/bcs';
-
-const bcs = new BCS(getSuiMoveConfig());
-
-// use bcs.ser() to serialize data
-const val = [1, 2, 3, 4];
-const ser = bcs.ser(['vector', BCS.U8], val).toBytes();
-
-// use bcs.de() to deserialize data
-const res = bcs.de(['vector', BCS.U8], ser);
-
-console.assert(res.toString() === val.toString());
-```
-
-Similar configuration exists for Rust, the difference is the `Vec<T>` for vectors and `address` (being a special Move type) is not needed:
-
-```ts
-// Example: Rust Config
-import { BCS, getRustConfig } from '@mysten/bcs';
-
-const bcs = new BCS(getRustConfig());
-const val = [1, 2, 3, 4];
-const ser = bcs.ser(['Vec', BCS.U8], val).toBytes();
-const res = bcs.de(['Vec', BCS.U8], ser);
-
-console.assert(res.toString() === val.toString());
-```
-
-## Built-in types
-
-By default, BCS will have a set of built-in type definitions and handy abstractions; all of them are supported in Move.
-
-Supported integer types are: u8, u16, u32, u64, u128 and u256. Constants `BCS.U8` to `BCS.U256` are provided by the library.
-
-| Type                        | Constant                      | Description                                            |
-| --------------------------- | ----------------------------- | ------------------------------------------------------ |
-| 'bool'                      | `BCS.BOOL`                    | Boolean type (converts to `true` / `false`)            |
-| 'u8'...'u256'               | `BCS.U8` ... `BCS.U256`       | Integer types                                          |
-| 'address'                   | `BCS.ADDRESS`                 | Address type (also used for IDs in Sui Move)           |
-| 'vector\<T\>' \| 'Vec\<T\>' | _Only custom use, requires T_ | Generic vector of any element                          |
-| 'string'                    | `BCS.STRING`                  | `vector<u8>` that (de)serializes to/from ASCII string  |
-| 'hex-string'                | `BCS.HEX`                     | `vector<u8>` that (de)serializes to/from HEX string    |
-| 'base64-string'             | `BCS.BASE64`                  | `vector<u8>` that (de)serializes to/from Base64 string |
-| 'base58-string'             | `BCS.BASE58`                  | `vector<u8>` that (de)serializes to/from Base58 string |
-
----
-
-All of the type usage examples below can be used for `bcs.de(<type>, ...)` as well.
-
-```ts
-// Example: Primitive types
-import { BCS, getSuiMoveConfig } from '@mysten/bcs';
-const bcs = new BCS(getSuiMoveConfig());
+import { bcs } from '@mysten/bcs';
 
 // Integers
-let _u8 = bcs.ser(BCS.U8, 100).toBytes();
-let _u64 = bcs.ser(BCS.U64, 1000000n).toString('hex');
-let _u128 = bcs.ser(BCS.U128, '100000010000001000000').toString('base64');
+const u8 = bcs.u8().serialize(100).toBytes();
+const u64 = bcs.u64().serialize(1000000n).toBytes();
+const u128 = bcs.u128().serialize('100000010000001000000').toBytes();
 
 // Other types
-let _bool = bcs.ser(BCS.BOOL, true).toString('hex');
-let _addr = bcs.ser(BCS.ADDRESS, '0000000000000000000000000000000000000001').toBytes();
-let _str = bcs.ser(BCS.STRING, 'this is an ascii string').toBytes();
+const str = bcs.string().serialize('this is an ascii string').toBytes();
+const hex = bcs.hex().serialize('C0FFEE').toBytes();
+const bytes = bcs.bytes(4).serialize([1, 2, 3, 4]).toBytes();
 
-// Vectors (vector<T>)
-let _u8_vec = bcs.ser(['vector', BCS.U8], [1, 2, 3, 4, 5, 6, 7]).toBytes();
-let _bool_vec = bcs.ser(['vector', BCS.BOOL], [true, true, false]).toBytes();
-let _str_vec = bcs.ser('vector<bool>', ['string1', 'string2', 'string3']).toBytes();
+// Parsing data back into original types
+const parsedU8 = bcs.u8().parse(u8);
+// u64-u256 will be represented as bigints regardless of how they were provided when serializing them
+const parsedU64 = bcs.u64().parse(u64);
+const parsedU128 = bcs.u128().parse(u128);
 
-// Even vector of vector (...of vector) is an option
-let _matrix = bcs
-	.ser('vector<vector<u8>>', [
-		[0, 0, 0],
-		[1, 1, 1],
-		[2, 2, 2],
-	])
+const parsedStr = bcs.string().parse(str);
+const parsedHex = bcs.hex().parse(hex);
+const parsedBytes = bcs.bytes(4).parse(bytes);
+```
+
+## Compound types
+
+For most use-cases you'll want to combine primitive types into more complex types like `vectors`,
+`structs` and `enums`. The following table lists methods available for creating compound types:
+
+| Method                 | Description                                           |
+| ---------------------- | ----------------------------------------------------- |
+| `vector(type: T)`      | A variable length list of values of type `T`          |
+| `fixedArray(size, T)`  | A fixed length array of values of type `T`            |
+| `option(type: T)`      | A value of type `T` or `null`                         |
+| `enum(name, values)`   | An enum value representing one of the provided values |
+| `struct(name, fields)` | A struct with named fields of the provided types      |
+| `tuple(types)`         | A tuple of the provided types                         |
+| `map(K, V)`            | A map of keys of type `K` to values of type `V`       |
+
+```ts
+import { bcs } from '@mysten/bcs';
+
+// Vectors
+const intList = bcs.vector(bcs.u8()).serialize([1, 2, 3, 4, 5]).toBytes();
+const stringList = bcs.vector(bcs.string()).serialize(['a', 'b', 'c']).toBytes();
+
+// Fixed length Arrays
+const intArray = bcs.fixedArray(4, bcs.u8()).serialize([1, 2, 3, 4]).toBytes();
+const stringArray = bcs.fixedArray(3, bcs.string()).serialize(['a', 'b', 'c']).toBytes();
+
+// Option
+const option = bcs.option(bcs.string()).serialize('some value').toBytes();
+const nullOption = bcs.option(bcs.string()).serialize(null).toBytes();
+
+// Enum
+const MyEnum = bcs.enum('MyEnum', {
+	NoType: null,
+	Int: bcs.u8(),
+	String: bcs.string(),
+	Array: bcs.fixedArray(3, bcs.u8()),
+});
+
+const noTypeEnum = MyEnum.serialize({ NoType: null }).toBytes();
+const intEnum = MyEnum.serialize({ Int: 100 }).toBytes();
+const stringEnum = MyEnum.serialize({ String: 'string' }).toBytes();
+const arrayEnum = MyEnum.serialize({ Array: [1, 2, 3] }).toBytes();
+
+// Struct
+const MyStruct = bcs.struct('MyStruct', {
+	id: bcs.u8(),
+	name: bcs.string(),
+});
+
+const struct = MyStruct.serialize({ id: 1, name: 'name' }).toBytes();
+
+// Tuple
+const tuple = bcs.tuple([bcs.u8(), bcs.string()]).serialize([1, 'name']).toBytes();
+
+// Map
+const map = bcs
+	.map(bcs.u8(), bcs.string())
+	.serialize(
+		new Map([
+			[1, 'one'],
+			[2, 'two'],
+		]),
+	)
+	.toBytes();
+
+// Parsing data back into original types
+
+// Vectors
+const parsedIntList = bcs.vector(bcs.u8()).parse(intList);
+const parsedStringList = bcs.vector(bcs.string()).parse(stringList);
+
+// Fixed length Arrays
+const parsedIntArray = bcs.fixedArray(4, bcs.u8()).parse(intArray);
+
+// Option
+const parsedOption = bcs.option(bcs.string()).parse(option);
+const parsedNullOption = bcs.option(bcs.string()).parse(nullOption);
+
+// Enum
+const parsedNoTypeEnum = MyEnum.parse(noTypeEnum);
+const parsedIntEnum = MyEnum.parse(intEnum);
+const parsedStringEnum = MyEnum.parse(stringEnum);
+const parsedArrayEnum = MyEnum.parse(arrayEnum);
+
+// Struct
+const parsedStruct = MyStruct.parse(struct);
+
+// Tuple
+const parsedTuple = bcs.tuple([bcs.u8(), bcs.string()]).parse(tuple);
+
+// Map
+const parsedMap = bcs.map(bcs.u8(), bcs.string()).parse(map);
+```
+
+## Generics
+
+To define a generic struct or an enum, you can define a generic typescript function helper
+
+```ts
+// Example: Generics
+import { bcs, BcsType } from '@mysten/bcs';
+
+// The T typescript generic is a placeholder for the typescript type of the generic value
+// The T argument will be the bcs type passed in when creating a concrete instance of the Container type
+function Container<T>(T: BcsType<T>) {
+	return bcs.struct('Container<T>', {
+		contents: T,
+	}),
+}
+
+// When serializing, we have to pass the type to use for `T`
+const bytes = Container(bcs.u8()).serialize({ contents: 100 }).toBytes();
+
+// Alternatively we can save the concrete type as a variable
+const U8Container = Container(bcs.u8());
+const bytes = U8Container.serialize({ contents: 100 }).toBytes();
+
+// Using multiple generics
+function VecMap<K, V>, (K: BcsType<K>, V: BcsType<V>) {
+	// You can use the names of the generic params in the type name to
+	return bcs.struct(
+		// You can use the names of the generic params to give your type a more useful name
+		`VecMap<${K.name}, ${V.name}>`,
+		{
+			keys: bcs.vector(K),
+			values: bcs.vector(V),
+		}
+	)
+}
+
+// To serialize VecMap, we can use:
+VecMap(bcs.string(), bcs.string())
+	.serialize({
+		keys: ['key1', 'key2', 'key3'],
+		values: ['value1', 'value2', 'value3'],
+	})
 	.toBytes();
 ```
 
-## Ser/de and formatting
+## Transforms
 
-To serialize and deserialize data to and from BCS there are two methods: `bcs.ser()` and `bcs.de()`.
+If you the format you use in your code is different from the format expected for BCS serialization,
+you can use the `transform` API to map between the types you use in your application, and the types
+needed for serialization.
+
+The `address` type used by Move code is a good example of this. In many cases, you'll want to
+represent an address as a hex string, but the BCS serialization format for addresses is a 32 byte
+array. To handle this, you can use the `transform` API to map between the two formats:
 
 ```ts
-// Example: Ser/de and Encoding
-import { BCS, getSuiMoveConfig, BcsWriter } from '@mysten/bcs';
-const bcs = new BCS(getSuiMoveConfig());
+import { bcs, toHex } from '@mysten/bcs';
 
-// bcs.ser() returns an instance of BcsWriter which can be converted to bytes or a string
-let bcsWriter: BcsWriter = bcs.ser(BCS.STRING, 'this is a string');
+const Address = bcs.bytes(32).transform({
+	// To change the input type, you need to provide a type definition for the input
+	input: (val: string) => fromHex(val),
+	output: (val) => toHex(val),
+});
 
-// writer.toBytes() returns a Uint8Array
-let bytes: Uint8Array = bcsWriter.toBytes();
+const serialized = Address.serialize('0x000000...').toBytes();
+const parsed = Address.parse(serialized); // will return a hex string
+```
 
-// custom encodings can be chosen when needed (just like Buffer)
-let hex: string = bcsWriter.toString('hex');
-let base64: string = bcsWriter.toString('base64');
-let base58: string = bcsWriter.toString('base58');
+When using a transform, a new type is created that uses the inferred return value of `output` as the
+return type of the `parse` method, and the type of the `input` argument as the allowed input type
+when calling `serialize`. The `output` type can generally be inferred from the definition, but the
+input type will need to be provided explicitly. In some cases, for complex transforms, you'll need
+to manually type the return
 
-// bcs.de() reads BCS data and returns the value
-// by default it expects data to be `Uint8Array`
-let str1 = bcs.de(BCS.STRING, bytes);
+transforms can also handle more complex types. For instance, `@mysten/sui` uses the following
+definition to transform enums into a more TypeScript friends format:
 
-// alternatively, an encoding of input can be specified
-let str2 = bcs.de(BCS.STRING, hex, 'hex');
-let str3 = bcs.de(BCS.STRING, base64, 'base64');
-let str4 = bcs.de(BCS.STRING, base58, 'base58');
+```ts
+type Merge<T> = T extends infer U ? { [K in keyof U]: U[K] } : never;
+type EnumKindTransform<T> = T extends infer U
+	? Merge<(U[keyof U] extends null | boolean ? object : U[keyof U]) & { kind: keyof U }>
+	: never;
+
+function enumKind<T extends object, Input extends object>(type: BcsType<T, Input>) {
+	return type.transform({
+		input: ({ kind, ...val }: EnumKindTransform<Input>) =>
+			({
+				[kind]: val,
+			}) as Input,
+		output: (val) => {
+			const key = Object.keys(val)[0] as keyof T;
+
+			return { kind: key, ...val[key] } as EnumKindTransform<T>;
+		},
+	});
+}
+
+const MyEnum = enumKind(
+	bcs.enum('MyEnum', {
+		A: bcs.struct('A', {
+			id: bcs.u8(),
+		}),
+		B: bcs.struct('B', {
+			val: bcs.string(),
+		}),
+	}),
+);
+
+// Enums wrapped with enumKind flatten the enum variants and add a `kind` field to differentiate them
+const A = MyEnum.serialize({ kind: 'A', id: 1 }).toBytes();
+const B = MyEnum.serialize({ kind: 'B', val: 'xyz' }).toBytes();
+
+const parsedA = MyEnum.parse(A); // returns { kind: 'A', id: 1 }
+```
+
+## Formats for serialized bytes
+
+When you call `serialize` on a `BcsType`, you will receive a `SerializedBcs` instance. This wrapper
+preserves type information for the serialized bytes, and can be used to get raw data in various
+formats.
+
+```ts
+import { bcs, fromBase58, fromBase64, fromHex } from '@mysten/bcs';
+
+const serializedString = bcs.string().serialize('this is a string');
+
+// SerializedBcs.toBytes() returns a Uint8Array
+const bytes: Uint8Array = serializedString.toBytes();
+
+// You can get the serialized bytes encoded as hex, base64 or base58
+const hex: string = serializedString.toHex();
+const base64: string = bcsWriter.toBase64();
+const base58: string = bcsWriter.toBase58();
+
+// To parse a BCS value from bytes, the bytes need to be a Uint8Array
+const str1 = bcs.string().parse(bytes);
+
+// If your data is encoded as string, you need to convert it to Uint8Array first
+const str2 = bcs.string().parse(fromHex(hex));
+const str3 = bcs.string().parse(fromBase64(base64));
+const str4 = bcs.string().parse(fromBase58(base58));
 
 console.assert((str1 == str2) == (str3 == str4), 'Result is the same');
 ```
 
-## Registering new types
+## Inferring types
 
-> Tip: all registering methods start with `bcs.register*` (eg `bcs.registerStructType`).
+BCS types have both a `type` and an `inputType`. For some types these are the same, but for others
+(like `u64`) the types diverge slightly to make inputs more flexible. For instance, `u64` will
+always be `string` for it's type, but can be a `number`, `string` or `bigint` for it's input type.
 
-### Alias
-
-Alias is a way to create custom name for a registered type. It is helpful for fine-tuning a predefined schema without making changes deep in the tree.
-
-```ts
-// Example: Alias
-import { BCS, getSuiMoveConfig } from '@mysten/bcs';
-const bcs = new BCS(getSuiMoveConfig());
-
-bcs.registerAlias('ObjectDigest', BCS.BASE58);
-
-// ObjectDigest is now treated as base58 string
-let _b58 = bcs.ser('ObjectDigest', 'Ldp').toBytes();
-
-// we can override already existing definition to make it a HEX string
-bcs.registerAlias('ObjectDigest', BCS.HEX);
-
-let _hex = bcs.ser('ObjectDigest', 'C0FFEE').toBytes();
-```
-
-### Struct
-
-Structs are the most common way of working with data; in BCS, a struct is simply a sequence of base types.
+You can infer these types in one of 2 ways, either using the `$inferType` and `$inferInput`
+properties on a `BcsType`, or using the `InferBcsType` and `InferBcsInput` type helpers.
 
 ```ts
-// Example: Struct
-import { BCS, getSuiMoveConfig } from '@mysten/bcs';
-const bcs = new BCS(getSuiMoveConfig());
+import { bcs, type InferBcsType, type InferBcsInput } from '@mysten/bcs';
 
-// register a custom type (it becomes available for using)
-bcs.registerStructType('Balance', {
-	value: BCS.U64,
+const MyStruct = bcs.struct('MyStruct', {
+	id: bcs.u64(),
+	name: bcs.string(),
 });
 
-bcs.registerStructType('Coin', {
-	id: BCS.ADDRESS,
-	// reference another registered type
-	balance: 'Balance',
-});
+// using the $inferType and $inferInput properties
+type MyStructType = typeof MyStruct.$inferType; // { id: string; name: string; }
+type MyStructInput = typeof MyStruct.$inferInput; // { id: number | string | bigint; name: string; }
 
-// value passed into ser function has to have the same
-// structure as the definition
-let _bytes = bcs
-	.ser('Coin', {
-		id: '0x0000000000000000000000000000000000000000000000000000000000000005',
-		balance: {
-			value: 100000000n,
-		},
-	})
-	.toBytes();
+// using the InferBcsType and InferBcsInput type helpers
+type MyStructType = InferBcsType<typeof MyStruct>; // { id: string; name: string; }
+type MyStructInput = InferBcsInput<typeof MyStruct>; // { id: number | string | bigint; name: string; }
 ```
-
-## Using Generics
-
-To define a generic struct or an enum, pass the type parameters. It can either be done as a part of a string or as an Array. See below:
-
-```ts
-// Example: Generics
-import { BCS, getSuiMoveConfig } from '@mysten/bcs';
-const bcs = new BCS(getSuiMoveConfig());
-
-// Container -> the name of the type
-// T -> type parameter which has to be passed in `ser()` or `de()` methods
-// If you're not familiar with generics, treat them as type Templates
-bcs.registerStructType(['Container', 'T'], {
-	contents: 'T',
-});
-
-// When serializing, we have to pass the type to use for `T`
-bcs
-	.ser(['Container', BCS.U8], {
-		contents: 100,
-	})
-	.toString('hex');
-
-// Reusing the same Container type with different contents.
-// Mind that generics need to be passed as Array after the main type.
-bcs
-	.ser(['Container', ['vector', BCS.BOOL]], {
-		contents: [true, false, true],
-	})
-	.toString('hex');
-
-// Using multiple generics - you can use any string for convenience and
-// readability. See how we also use array notation for a field definition.
-bcs.registerStructType(['VecMap', 'Key', 'Val'], {
-	keys: ['vector', 'Key'],
-	values: ['vector', 'Val'],
-});
-
-// To serialize VecMap, we can use:
-bcs.ser(['VecMap', BCS.STRING, BCS.STRING], {
-	keys: ['key1', 'key2', 'key3'],
-	values: ['value1', 'value2', 'value3'],
-});
-```
-
-### Enum
-
-In BCS enums are encoded in a special way - first byte marks the order and then the value. Enum is an object, only one property of which is used; if an invariant is empty, `null` should be used to mark it (see `Option<T>` below).
-
-```ts
-// Example: Enum
-import { BCS, getSuiMoveConfig } from '@mysten/bcs';
-const bcs = new BCS(getSuiMoveConfig());
-
-bcs.registerEnumType('Option<T>', {
-	none: null,
-	some: 'T',
-});
-
-bcs.registerEnumType('TransactionType', {
-	single: 'vector<u8>',
-	batch: 'vector<vector<u8>>',
-});
-
-// any truthy value marks empty in struct value
-let _optionNone = bcs.ser('Option<TransactionType>', {
-	none: true,
-});
-
-// some now contains a value of type TransactionType
-let _optionTx = bcs.ser('Option<TransactionType>', {
-	some: {
-		single: [1, 2, 3, 4, 5, 6],
-	},
-});
-
-// same type signature but a different enum invariant - batch
-let _optionTxBatch = bcs.ser('Option<TransactionType>', {
-	some: {
-		batch: [
-			[1, 2, 3, 4, 5, 6],
-			[1, 2, 3, 4, 5, 6],
-		],
-	},
-});
-```
-
-### Inline (de)serialization
-
-Sometimes it is useful to get a value without registering a new struct. For that inline struct definition can be used.
-
-> Nested struct definitions are not yet supported, only first level properties can be used (but they can reference any type, including other struct types).
-
-```ts
-// Example: Inline Struct
-import { BCS, getSuiMoveConfig } from '@mysten/bcs';
-const bcs = new BCS(getSuiMoveConfig());
-
-// Some value we want to serialize
-const coin = {
-	id: '0000000000000000000000000000000000000000000000000000000000000005',
-	value: 1111333333222n,
-};
-
-// Instead of defining a type we pass struct schema as the first argument
-let coin_bytes = bcs.ser({ id: BCS.ADDRESS, value: BCS.U64 }, coin).toBytes();
-
-// Same with deserialization
-let coin_restored = bcs.de({ id: BCS.ADDRESS, value: BCS.U64 }, coin_bytes);
-
-console.assert(coin.id == coin_restored.id, '`id` must match');
-console.assert(coin.value == coin_restored.value, '`value` must match');
-```
-
-## Aligning schema with Move
-
-Currently, main applications of this library are:
-
-1. Serializing transactions and data passed into a transaction
-2. Deserializing onchain data for performance and formatting reasons
-3. Deserializing events
-
-In this library, all of the primitive Move types are present as built-ins, however, there's a set of special types in Sui which can be simplified to a primitive.
-
-```rust
-// Definition in Move which we want to read in JS
-module me::example {
-    struct Metadata has store {
-        name: std::ascii::String,
-    }
-
-    struct ChainObject has key {
-        id: sui::object::UID,
-        owner: address,
-        meta: Metadata
-    }
-    // ...
-}
-```
-
-Definition for the above should be the following:
-
-```ts
-// Example: Simplifying UID
-import { BCS, getSuiMoveConfig } from '@mysten/bcs';
-const bcs = new BCS(getSuiMoveConfig());
-
-// If there's a deep nested struct we can ignore Move type
-// structure and use only the value.
-bcs.registerAlias('UID', BCS.ADDRESS);
-
-// Simply follow the definition onchain
-bcs.registerStructType('Metadata', {
-	name: BCS.STRING,
-});
-
-// Same for the main object that we intend to read
-bcs.registerStructType('ChainObject', {
-	id: 'UID',
-	owner: BCS.ADDRESS,
-	meta: 'Metadata',
-});
-```
-
-<details><summary>See definition of the UID here</summary>
-<pre>
-struct UID has store {
-    id: ID
-}
-
-struct ID has store, copy, drop {
-bytes: address
-}
-
-// { id: { bytes: '0x.....' } }
-
-</pre>
-</details>

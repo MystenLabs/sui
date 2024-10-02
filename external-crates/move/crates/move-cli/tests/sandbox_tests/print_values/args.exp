@@ -1,0 +1,163 @@
+Command `sandbox publish`:
+Command `test`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING print_values
+Running Move unit tests
+[debug] 42
+[debug] [ 100, 200, 300 ]
+[debug] 0x2::M::Foo {
+  dummy_field: false
+}
+[debug] 0x2::M::Bar {
+  x: 404,
+  y: 0x2::M::Foo {
+    dummy_field: false
+  },
+  z: true
+}
+[debug] 0x2::M::Box<0x2::M::Foo> {
+  x: 0x2::M::Foo {
+    dummy_field: false
+  }
+}
+[debug] "test_print_quoted_string"
+[debug] "Can you say \"Hel\\lo\"?"
+[debug] "test_print_string"
+[debug] 0x48656c6c6f2c2073616e65204d6f766520646562756767696e6721
+[debug] "Hello, sane Move debugging!"
+[debug] "test_print_ascii_string"
+[debug] "Hello, sane Move debugging!"
+[debug] "test_print_primitive_types"
+[debug] 255
+[debug] 65535
+[debug] 4294967295
+[debug] 18446744073709551615
+[debug] 340282366920938463463374607431768211455
+[debug] 115792089237316195423570985008687907853269984665640564039457584007913129639935
+[debug] false
+[debug] true
+[debug] @0x1234c0ffee
+[debug] "test_print_struct"
+[debug] 0x2::M::TestInner {
+  val: 100,
+  vec: [ 200, 400 ],
+  msgs: [
+    0x616263646566,
+    0x313233343536
+  ]
+}
+[debug] 0x2::M::TestInner {
+  val: 10,
+  vec: [],
+  msgs: []
+}
+[debug] "test_print_vectors"
+[debug] 0xffabcdef
+[debug] [ 16, 17, 18, 19 ]
+[debug] [ 32, 33, 34, 35 ]
+[debug] [ 64, 65, 66, 67 ]
+[debug] [ 128, 129, 130, 131 ]
+[debug] [ 256, 257, 258, 259 ]
+[debug] [ true, false ]
+[debug] [ @0x1234, @0x5678, @0xabcdef ]
+[debug] [
+  0x2::M::TestInner {
+    val: 4,
+    vec: [ 127, 128 ],
+    msgs: [
+      0x00ff,
+      0xabcd
+    ]
+  },
+  0x2::M::TestInner {
+    val: 8,
+    vec: [ 128, 129 ],
+    msgs: [
+      0x0000
+    ]
+  }
+]
+[debug] "test_print_vector_of_vectors"
+[debug] [
+  0xffab,
+  0xcdef
+]
+[debug] [
+  [ 16, 17 ],
+  [ 18, 19 ]
+]
+[debug] [
+  [ 32, 33 ],
+  [ 34, 35 ]
+]
+[debug] [
+  [ 64, 65 ],
+  [ 66, 67 ]
+]
+[debug] [
+  [ 128, 129 ],
+  [ 130, 131 ]
+]
+[debug] [
+  [ 256, 257 ],
+  [ 258, 259 ]
+]
+[debug] [
+  [ true, false ],
+  [ false, true ]
+]
+[debug] [
+  [ @0x1234, @0x5678 ],
+  [ @0xabcdef, @0x9999 ]
+]
+[debug] [
+  [
+    0x2::M::TestInner {
+      val: 4,
+      vec: [ 127, 128 ],
+      msgs: []
+    },
+    0x2::M::TestInner {
+      val: 8,
+      vec: [ 128, 129 ],
+      msgs: []
+    }
+  ],
+  [
+    0x2::M::TestInner {
+      val: 4,
+      vec: [ 127, 128 ],
+      msgs: []
+    },
+    0x2::M::TestInner {
+      val: 8,
+      vec: [ 128, 129 ],
+      msgs: []
+    }
+  ]
+]
+[debug] "test_print_nested_struct"
+[debug] 0x2::M::TestStruct {
+  addr: @0x1,
+  number: 255,
+  bytes: 0xc0ffee,
+  name: "He\"llo",
+  vec: [
+    0x2::M::TestInner {
+      val: 1,
+      vec: [ 130, 131 ],
+      msgs: []
+    },
+    0x2::M::TestInner {
+      val: 2,
+      vec: [ 132, 133 ],
+      msgs: []
+    }
+  ]
+}
+[debug] "test_print_generic_struct"
+[debug] 0x2::M::GenericStruct<0x2::M::Foo> {
+  val: 60
+}
+[ PASS    ] 0x2::M::test
+Test result: OK. Total tests: 1; passed: 1; failed: 0

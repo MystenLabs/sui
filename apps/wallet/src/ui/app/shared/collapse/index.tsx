@@ -1,42 +1,67 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Disclosure } from '@headlessui/react';
-import { ChevronRight12 } from '@mysten/icons';
-import cl from 'classnames';
+import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
+import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
+import cn from 'clsx';
+import { useState, type ReactNode } from 'react';
 
-import { Text } from '_app/shared/text';
-
-import type { ReactNode } from 'react';
-
-type CollapseProps = {
+interface CollapsibleProps {
 	title: string;
-	initialIsOpen?: boolean;
+	defaultOpen?: boolean;
 	children: ReactNode | ReactNode[];
-};
+	shade?: 'lighter' | 'darker';
+	isOpen?: boolean;
+	onOpenChange?: (isOpen: boolean) => void;
+}
 
-export function Collapse({ title, children, initialIsOpen = false }: CollapseProps) {
+export function Collapsible({
+	title,
+	children,
+	defaultOpen,
+	isOpen,
+	onOpenChange,
+	shade = 'lighter',
+}: CollapsibleProps) {
+	const [open, setOpen] = useState(isOpen ?? defaultOpen ?? false);
+
+	const handleOpenChange = (isOpen: boolean) => {
+		setOpen(isOpen);
+		onOpenChange?.(isOpen);
+	};
+
 	return (
-		<div>
-			<Disclosure defaultOpen={initialIsOpen}>
-				{({ open }) => (
-					<>
-						<Disclosure.Button as="div" className="flex w-full flex-col gap-2 cursor-pointer">
-							<div className="flex items-center gap-1">
-								<Text nowrap variant="caption" weight="semibold" color="steel-darker">
-									{title}
-								</Text>
-								<div className="h-px bg-gray-45 w-full" />
-								<ChevronRight12 className={cl('h-3 w-3 text-gray-45', open && 'rotate-90')} />
-							</div>
-						</Disclosure.Button>
+		<CollapsiblePrimitive.Root
+			className="flex flex-shrink-0 justify-start flex-col w-full gap-3"
+			open={isOpen ?? open}
+			onOpenChange={handleOpenChange}
+		>
+			<CollapsiblePrimitive.Trigger className="flex items-center gap-2 w-full bg-transparent border-none p-0 cursor-pointer group">
+				<div
+					className={cn('text-captionSmall font-semibold uppercase group-hover:text-hero', {
+						'text-steel': shade === 'lighter',
+						'text-steel-darker': shade === 'darker',
+					})}
+				>
+					{title}
+				</div>
+				<div
+					className={cn('h-px group-hover:bg-hero flex-1', {
+						'bg-steel': shade === 'darker',
+						'bg-gray-45 group-hover:bg-steel': shade === 'lighter',
+					})}
+				/>
+				<div
+					className={cn('group-hover:text-hero inline-flex', {
+						'text-steel': shade === 'darker',
+						'text-gray-45': shade === 'lighter',
+					})}
+				>
+					{open ? <ChevronDown12 /> : <ChevronRight12 />}
+				</div>
+			</CollapsiblePrimitive.Trigger>
 
-						<Disclosure.Panel>
-							<div className="pt-3">{children}</div>
-						</Disclosure.Panel>
-					</>
-				)}
-			</Disclosure>
-		</div>
+			<CollapsiblePrimitive.Content>{children}</CollapsiblePrimitive.Content>
+		</CollapsiblePrimitive.Root>
 	);
 }

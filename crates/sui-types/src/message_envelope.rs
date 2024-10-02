@@ -10,46 +10,16 @@ use crate::crypto::{
 use crate::error::SuiResult;
 use crate::executable_transaction::CertificateProof;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
-use crate::transaction::VersionedProtocolMessage;
+use crate::messages_consensus::{AuthorityIndex, Round, TransactionIndex};
+use crate::transaction::SenderSignedData;
 use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use shared_crypto::intent::{Intent, IntentScope};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
-use std::sync::RwLock;
-use sui_protocol_config::ProtocolConfig;
 
-pub static GOOGLE_JWK_BYTES: OnceCell<Arc<RwLock<Vec<u8>>>> = OnceCell::new();
-
-pub fn get_google_jwk_bytes() -> Arc<RwLock<Vec<u8>>> {
-    GOOGLE_JWK_BYTES
-        .get_or_init(|| {
-            Arc::new(RwLock::new(
-                r#"{
-                    "keys": [
-                        {
-                          "kty": "RSA",
-                          "e": "AQAB",
-                          "alg": "RS256",
-                          "kid": "2d9a5ef5b12623c91671a7093cb323333cd07d09",
-                          "use": "sig",
-                          "n": "0NDRXWtH6_HnmuSuTAisgYVZ3Z67PQjHbRFz4XNYuD95BKx0wQr0GWOi_UCGLfI0col3i6J3_AF-b1YrTFTMEr_bL8CYDdK2CYLcGUzc5bLRDAySsqnKdlhWkneqfFdr3J66mHu11KUaIIRWiLsCkR9QFF-8o2PtZzv3F-3Uh7L4q7i_Evs1s7SJlO0OAnI4ew4rP2HbRaO0Q2zK0DL_d1eoAC72apQuEzz-2aXfQ-QYSTlVK74McBhP1MRtgD6zGF2lwg4uhgb55fDDQQh0VHWQSxwbvAL0Oox69zzpkFgpjJAJUqaxegzETU1jf3iKs1vyFIB0C4N-Jr__zwLQZw=="
-                        },
-                        {
-                          "alg": "RS256",
-                          "use": "sig",
-                          "n": "1qrQCTst3RF04aMC9Ye_kGbsE0sftL4FOtB_WrzBDOFdrfVwLfflQuPX5kJ-0iYv9r2mjD5YIDy8b-iJKwevb69ISeoOrmL3tj6MStJesbbRRLVyFIm_6L7alHhZVyqHQtMKX7IaNndrfebnLReGntuNk76XCFxBBnRaIzAWnzr3WN4UPBt84A0KF74pei17dlqHZJ2HB2CsYbE9Ort8m7Vf6hwxYzFtCvMCnZil0fCtk2OQ73l6egcvYO65DkAJibFsC9xAgZaF-9GYRlSjMPd0SMQ8yU9i3W7beT00Xw6C0FYA9JAYaGaOvbT87l_6ZkAksOMuvIPD_jNVfTCPLQ==",
-                          "e": "AQAB",
-                          "kty": "RSA",
-                          "kid": "6083dd5981673f661fde9dae646b6f0380a0145c"
-                        }
-                      ]
-                  }"#.as_bytes().to_vec()
-            ))
-        }).clone()
-}
 pub trait Message {
     type DigestType: Clone + Debug;
     const SCOPE: IntentScope;
@@ -59,20 +29,48 @@ pub trait Message {
     }
 
     fn digest(&self) -> Self::DigestType;
-
-    /// Verify the internal data consistency of this message.
-    /// In some cases, such as user signed transaction, we also need
-    /// to verify the user signature here.
-    fn verify(&self, signature_epoch: Option<EpochId>) -> SuiResult;
 }
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
+#[serde(remote = "Envelope")]
 pub struct Envelope<T: Message, S> {
     #[serde(skip)]
     digest: OnceCell<T::DigestType>,
 
     data: T,
     auth_signature: S,
+}
+
+impl<'de, T, S> Deserialize<'de> for Envelope<T, S>
+where
+    T: Message + Deserialize<'de>,
+    S: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        Envelope::deserialize(DeserializeNameAdapter::new(
+            deserializer,
+            std::any::type_name::<Self>(),
+        ))
+    }
+}
+
+impl<T, Sig> Serialize for Envelope<T, Sig>
+where
+    T: Message + Serialize,
+    Sig: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        Envelope::serialize(
+            self,
+            SerializeNameAdapter::new(serializer, std::any::type_name::<Self>()),
+        )
+    }
 }
 
 impl<T: Message, S> Envelope<T, S> {
@@ -127,12 +125,6 @@ impl<T: Message, S> Envelope<T, S> {
     }
 }
 
-impl<T: Message + VersionedProtocolMessage, S> VersionedProtocolMessage for Envelope<T, S> {
-    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        self.data.check_version_supported(protocol_config)
-    }
-}
-
 impl<T: Message + PartialEq, S: PartialEq> PartialEq for Envelope<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.data == other.data && self.auth_signature == other.auth_signature
@@ -146,17 +138,6 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
             data,
             auth_signature: EmptySignInfo {},
         }
-    }
-
-    pub fn verify_signature(&self) -> SuiResult {
-        self.data.verify(None)
-    }
-
-    pub fn verify(self) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
-        self.verify_signature()?;
-        Ok(VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(
-            self,
-        ))
     }
 }
 
@@ -190,21 +171,15 @@ where
     pub fn epoch(&self) -> EpochId {
         self.auth_signature.epoch
     }
+}
 
-    pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
-        self.data.verify(Some(self.auth_sig().epoch))?;
-        self.auth_signature
-            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
-    }
-
-    pub fn verify(
-        self,
-        committee: &Committee,
-    ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
-        self.verify_signature(committee)?;
-        Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_from_verified(
-            self,
-        ))
+impl Envelope<SenderSignedData, AuthoritySignInfo> {
+    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult {
+        self.auth_signature.verify_secure(
+            self.data(),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
+            committee,
+        )
     }
 }
 
@@ -250,22 +225,6 @@ where
 
     pub fn epoch(&self) -> EpochId {
         self.auth_signature.epoch
-    }
-
-    // TODO: Eventually we should remove all calls to verify_signature
-    // and make sure they all call verify to avoid repeated verifications.
-    pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
-        self.data.verify(Some(self.auth_sig().epoch))?;
-        self.auth_signature
-            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
-    }
-
-    pub fn verify(
-        self,
-        committee: &Committee,
-    ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
-        self.verify_signature(committee)?;
-        Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
     }
 }
 
@@ -364,12 +323,6 @@ impl<T: Message, S> VerifiedEnvelope<T, S> {
     /// Remove the authority signatures `S` from this envelope.
     pub fn into_unsigned(self) -> VerifiedEnvelope<T, EmptySignInfo> {
         VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(self.into_inner().into_unsigned())
-    }
-}
-
-impl<T: Message + VersionedProtocolMessage, S> VersionedProtocolMessage for VerifiedEnvelope<T, S> {
-    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        self.inner().check_version_supported(protocol_config)
     }
 }
 
@@ -497,6 +450,31 @@ impl<T: Message> VerifiedEnvelope<T, CertificateProof> {
             digest,
             data,
             auth_signature: CertificateProof::QuorumExecuted(epoch),
+        })
+    }
+
+    pub fn new_from_consensus(
+        transaction: VerifiedEnvelope<T, EmptySignInfo>,
+        epoch: EpochId,
+        round: Round,
+        authority: AuthorityIndex,
+        transaction_index: TransactionIndex,
+    ) -> Self {
+        let inner = transaction.into_inner();
+        let Envelope {
+            digest,
+            data,
+            auth_signature: _,
+        } = inner;
+        VerifiedEnvelope::new_unchecked(Envelope {
+            digest,
+            data,
+            auth_signature: CertificateProof::new_from_consensus(
+                epoch,
+                round,
+                authority,
+                transaction_index,
+            ),
         })
     }
 

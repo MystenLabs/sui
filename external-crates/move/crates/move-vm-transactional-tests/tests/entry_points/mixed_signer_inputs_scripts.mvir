@@ -1,0 +1,28 @@
+//# run --args @0x1 @0x1 @0x1
+module 0x5.m {
+// tests various mixed usage of signer in script arguments
+
+entry foo(s1: signer, s2: &signer, s3: signer) {
+    label l0:
+    return;
+}
+}
+
+//# run --args @0x1 0 @0x1 false @0x1
+module 0x6.m {
+
+entry foo(s1: &signer, u: u64, s2: signer, f: bool, s3: &signer) {
+    label l0:
+    return;
+}
+
+}
+//# run --args 0 false @0x1 @0x2 @0x3
+module 0x7.m {
+
+entry foo(u: u64, f: bool, a: address, s1: signer, s2: &signer) {
+    label l0:
+    return;
+}
+
+}

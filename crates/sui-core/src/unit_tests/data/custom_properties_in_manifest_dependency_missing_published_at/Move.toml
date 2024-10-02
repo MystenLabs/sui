@@ -1,6 +1,7 @@
 [package]
 name = "CustomPropertiesInManifestDependencyMissingPublishedAt"
 version = "0.0.0"
+edition = "2024.beta"
 # oops we there's no published-at field, so a package that depends on us should fail when published...
 # published-at = "0x777"
 

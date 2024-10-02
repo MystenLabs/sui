@@ -7,7 +7,7 @@ module examples::publish_with_event {
     use sui::event;
     use sui::tx_context::TxContext;
 
-    struct PublishEvent has copy, drop {
+    public struct PublishEvent has copy, drop {
         foo: String
     }
 

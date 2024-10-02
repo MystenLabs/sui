@@ -1,0 +1,15 @@
+[package]
+name = "Foo"
+edition = "2024.beta"
+
+[addresses]
+A = "_"
+
+[dev-addresses]
+std = "0x1"
+A = "0x2"
+B = "0x3"
+
+[dev-dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+Bar = { local = "dep" }

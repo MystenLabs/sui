@@ -6,11 +6,7 @@
 //# publish
 
 module t3::o3 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
-    struct Obj3 has key, store {
+    public struct Obj3 has key, store {
         id: UID,
     }
 
@@ -23,12 +19,9 @@ module t3::o3 {
 //# publish --dependencies t3
 
 module t2::o2 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use t3::o3::Obj3;
 
-    struct Obj2 has key, store {
+    public struct Obj2 has key, store {
         id: UID,
     }
 
@@ -45,7 +38,7 @@ module t2::o2 {
     }
 
     fun new(child: Obj3, ctx: &mut TxContext): Obj2 {
-        let id = object::new(ctx);
+        let mut id = object::new(ctx);
         sui::dynamic_object_field::add(&mut id, 0, child);
         Obj2 { id }
     }
@@ -55,13 +48,10 @@ module t2::o2 {
 //# publish --dependencies t2 t3
 
 module t1::o1 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use t2::o2::Obj2;
     use t3::o3::Obj3;
 
-    struct Obj1 has key {
+    public struct Obj1 has key {
         id: UID,
     }
 
@@ -75,7 +65,7 @@ module t1::o1 {
     }
 
     fun new(child: Obj2, ctx: &mut TxContext): Obj1 {
-        let id = object::new(ctx);
+        let mut id = object::new(ctx);
         sui::dynamic_object_field::add(&mut id, 0, child);
         Obj1 { id }
     }

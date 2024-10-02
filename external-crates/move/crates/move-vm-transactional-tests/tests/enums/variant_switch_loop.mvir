@@ -1,0 +1,58 @@
+//# print-bytecode
+module 0x6.InfiniteSwith {
+    enum EnumWithOneVariant {
+        One { }
+    }
+
+    public f(x: Self.EnumWithOneVariant) {
+        label b0:
+            variant_switch EnumWithOneVariant (&x) {
+                One : b0,
+            };
+        label end:
+            return;
+    }
+
+    public start(): Self.EnumWithOneVariant {
+        let x: Self.EnumWithOneVariant;
+        label b0: 
+            x = EnumWithOneVariant.One{};
+            return move(x);
+    }
+}
+
+//# publish
+module 0x6.InfiniteSwith {
+    enum EnumWithOneVariant {
+        One { }
+    }
+
+    public f(x: Self.EnumWithOneVariant) {
+        label b0:
+            variant_switch EnumWithOneVariant (&x) {
+                One : b0,
+            };
+        label end:
+            return;
+    }
+
+    public start(): Self.EnumWithOneVariant {
+        let x: Self.EnumWithOneVariant;
+        label b0: 
+            x = EnumWithOneVariant.One{};
+            return move(x);
+    }
+}
+
+
+//# run --gas-budget 10000
+module 0x7.m {
+import 0x6.InfiniteSwith;
+entry foo() {
+    let x: InfiniteSwith.EnumWithOneVariant;
+    label b0:
+        x = InfiniteSwith.start();
+        InfiniteSwith.f(move(x));
+        return;
+}
+}

@@ -1,0 +1,105 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sui-node
+  namespace: rpc-mainnet
+spec:
+  ports:
+  - port: 9000
+    protocol: TCP
+    targetPort: 9000
+  selector:
+    app: sui-node
+  type: ClusterIP
+---
+allowVolumeExpansion: true
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: pd-ssd
+parameters:
+  type: pd-ssd
+provisioner: kubernetes.io/gce-pd
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: sui-node
+  name: sui-node
+  namespace: rpc-mainnet
+spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: sui-node
+  serviceName: sui-node
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9184"
+        prometheus.io/scrape: "true"
+      labels:
+        app: sui-node
+    spec:
+      containers:
+      - command:
+        - /opt/sui/bin/sui-node
+        - --config-path
+        - /opt/sui/config/sui-node.yaml
+        env:
+        - name: RUST_BACKTRACE
+          value: "1"
+        - name: RUST_LOG
+          value: info,sui_core=debug,sui_network=debug,narwhal=info,consensus=debug,jsonrpsee=error
+        image: x
+        imagePullPolicy: Always
+        name: sui-node
+        ports:
+        - containerPort: 9000
+          protocol: TCP
+        resources:
+          requests:
+            cpu: "32"
+            memory: 128G
+        volumeMounts:
+        - mountPath: /opt/sui/db
+          name: ssd-storage
+        - mountPath: /opt/sui/config/sui-node.yaml
+          name: sui-config-volume
+          subPath: sui-node.yaml
+        - mountPath: /opt/sui/config/genesis.blob
+          name: sui-genesis-volume
+          subPath: genesis.blob
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: sui-config
+        name: sui-config-volume
+      - configMap:
+          defaultMode: 420
+          name: sui-genesis
+        name: sui-genesis-volume
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ssd-storage
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 5000Gi
+      storageClassName: pd-ssd
+      volumeMode: Filesystem

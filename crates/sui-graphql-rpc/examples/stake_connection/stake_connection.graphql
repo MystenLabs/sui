@@ -1,0 +1,38 @@
+# Get all the staked objects for this address and all the active validators at the epoch when the stake became active
+{
+  address(
+    address: "0xc0a5b916d0e406ddde11a29558cd91b29c49e644eef597b7424a622955280e1e"
+  ) {
+    address
+    balance(type: "0x2::sui::SUI") {
+      coinType {
+        repr
+      }
+      totalBalance
+    }
+    stakedSuis {
+      nodes {
+        status
+        principal
+        estimatedReward
+        activatedEpoch {
+          epochId
+          referenceGasPrice
+          validatorSet {
+            activeValidators {
+              nodes {
+                name
+                description
+                exchangeRatesSize
+              }
+            }
+            totalStake
+          }
+        }
+        requestedEpoch {
+          epochId
+        }
+      }
+    }
+  }
+}

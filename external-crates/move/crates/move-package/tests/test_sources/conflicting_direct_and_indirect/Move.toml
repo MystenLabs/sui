@@ -1,0 +1,17 @@
+# Dependency graph to check if a different package version as direct and as indirect dependency
+# triggers an error.
+#
+#                 +----+ v2
+#           +---->| B  |----+
+#           |     +----+    |
+#           |               |
+# +----+    |      v1       +-->+----+
+# |Root|----+------------------>| A  |
+# +----+                        +----+
+#
+[package]
+name = "Root"
+
+[dependencies]
+A = { local = "./deps_only/A-v1" }
+B = { local = "./deps_only/B" }

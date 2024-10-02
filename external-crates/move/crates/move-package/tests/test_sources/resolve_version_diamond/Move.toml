@@ -1,0 +1,11 @@
+# Direct dependencies of the root package (A and B) both depend on the same version of C
+# but refer to it in different locations. Since we have version resolution, this should
+# not cause a conflict.
+
+[package]
+name = "Root"
+version = "1"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }

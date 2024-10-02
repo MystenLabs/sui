@@ -1,18 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	Ed25519PublicKey,
-	type SerializedSignature,
-	type SignatureScheme,
-	type SuiAddress,
-	toSerializedSignature,
-	type JsonRpcProvider,
-} from '@mysten/sui.js';
+import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
+import { type SuiClient } from '@mysten/sui/client';
+import { toSerializedSignature, type SignatureScheme } from '@mysten/sui/cryptography';
+import { Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
 
 import { WalletSigner } from './WalletSigner';
-
-import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 
 export class LedgerSigner extends WalletSigner {
 	#suiLedgerClient: SuiLedgerClient | null;
@@ -23,9 +17,9 @@ export class LedgerSigner extends WalletSigner {
 	constructor(
 		connectToLedger: () => Promise<SuiLedgerClient>,
 		derivationPath: string,
-		provider: JsonRpcProvider,
+		client: SuiClient,
 	) {
-		super(provider);
+		super(client);
 		this.#connectToLedger = connectToLedger;
 		this.#suiLedgerClient = null;
 		this.#derivationPath = derivationPath;
@@ -40,7 +34,7 @@ export class LedgerSigner extends WalletSigner {
 		return this.#suiLedgerClient;
 	}
 
-	async getAddress(): Promise<SuiAddress> {
+	async getAddress(): Promise<string> {
 		const ledgerClient = await this.#initializeSuiLedgerClient();
 		const publicKeyResult = await ledgerClient.getPublicKey(this.#derivationPath);
 		const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);
@@ -53,18 +47,18 @@ export class LedgerSigner extends WalletSigner {
 		return new Ed25519PublicKey(publicKey);
 	}
 
-	async signData(data: Uint8Array): Promise<SerializedSignature> {
+	async signData(data: Uint8Array): Promise<string> {
 		const ledgerClient = await this.#initializeSuiLedgerClient();
 		const { signature } = await ledgerClient.signTransaction(this.#derivationPath, data);
-		const pubKey = await this.getPublicKey();
+		const publicKey = await this.getPublicKey();
 		return toSerializedSignature({
 			signature,
 			signatureScheme: this.#signatureScheme,
-			pubKey,
+			publicKey,
 		});
 	}
 
-	connect(provider: JsonRpcProvider) {
-		return new LedgerSigner(this.#connectToLedger, this.#derivationPath, provider);
+	connect(client: SuiClient) {
+		return new LedgerSigner(this.#connectToLedger, this.#derivationPath, client);
 	}
 }

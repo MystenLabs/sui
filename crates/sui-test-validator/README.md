@@ -3,7 +3,7 @@ an indexer.
 
 ## Guide
 
-Refer to [sui-local-network.md](../../doc/src/build/sui-local-network.md)
+Refer to [sui-local-network.md](../../docs/content/guides/developer/getting-started/local-network.mdx)
 
 ## Experimental Feature - Running with Indexer
 
@@ -13,3 +13,9 @@ Refer to [sui-local-network.md](../../doc/src/build/sui-local-network.md)
 2. Make sure the `Posgresdb` starts on your local machine
 3. run `RUST_LOG="consensus=off" ./target/debug/sui-test-validator --with-indexer`
 4. To check your local db, if you use the default db url `postgres://postgres:postgres@localhost:5432/sui_indexer`, you can login to the `postgres` database and run `\dt` to show all tables.
+
+## Run with a persisted state
+You can combine this with indexer runs as well to save a persisted state on local development.
+
+1. Generate a config to store db and genesis configs `sui genesis -f --with-faucet --working-dir=[some-directory]`
+2. `sui-test-validator --config-dir [some-directory]`

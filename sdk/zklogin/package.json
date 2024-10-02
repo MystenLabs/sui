@@ -1,0 +1,56 @@
+{
+	"name": "@mysten/zklogin",
+	"version": "0.7.21",
+	"description": "Utilities for interacting with zkLogin in Sui",
+	"license": "Apache-2.0",
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"type": "commonjs",
+	"main": "./dist/cjs/index.js",
+	"module": "./dist/esm/index.js",
+	"types": "./dist/cjs/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/esm/index.js",
+			"require": "./dist/cjs/index.js"
+		}
+	},
+	"sideEffects": false,
+	"files": [
+		"CHANGELOG.md",
+		"dist",
+		"src"
+	],
+	"scripts": {
+		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
+		"build": "build-package",
+		"prepublishOnly": "pnpm build",
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+		"test": "vitest run"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mystenlabs/sui.git"
+	},
+	"bugs": {
+		"url": "https://github.com/mystenlabs/sui/issues"
+	},
+	"homepage": "https://github.com/mystenlabs/sui#readme",
+	"devDependencies": {
+		"@mysten/build-scripts": "workspace:*",
+		"@types/node": "^20.14.10",
+		"typescript": "^5.5.3",
+		"vitest": "^2.0.1"
+	},
+	"dependencies": {
+		"@mysten/bcs": "workspace:*",
+		"@mysten/sui": "workspace:*",
+		"@noble/hashes": "^1.4.0",
+		"jose": "^5.6.3",
+		"poseidon-lite": "^0.2.0"
+	}
+}

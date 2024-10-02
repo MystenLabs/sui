@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ampli } from '_src/shared/analytics/ampli';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
@@ -8,7 +9,6 @@ import Browser from 'webextension-polyfill';
 import { AppType } from '../redux/slices/app/AppType';
 import { useActiveAccount } from './useActiveAccount';
 import useAppSelector from './useAppSelector';
-import { ampli } from '_src/shared/analytics/ampli';
 
 export function useInitialPageView() {
 	const activeAccount = useActiveAccount();

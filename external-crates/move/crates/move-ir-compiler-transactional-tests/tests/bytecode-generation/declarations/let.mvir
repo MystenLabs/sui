@@ -1,0 +1,20 @@
+//# print-bytecode
+module 0x6.m {
+// `let` generates a local with the given type.
+entry foo() {
+    let x: u64;
+label b0:
+    return;
+}
+}
+
+//# print-bytecode
+module 0x6.m {
+// Two `let` cannot use the same name for a local.
+entry foo() {
+    let x: u64;
+    let x: u64;
+label b0:
+    return;
+}
+}

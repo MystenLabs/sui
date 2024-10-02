@@ -1,0 +1,9 @@
+[package]
+name = "Enums"
+edition = "2024.alpha"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+
+[addresses]
+Enums = "0xCAFE"

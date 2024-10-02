@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ErrorBoundary as ReactErrorBoundary } from 'react-error-boundary';
-import { useLocation } from 'react-router-dom';
-
 import Alert from '_components/alert';
-
 import type { ReactNode } from 'react';
+import { ErrorBoundary as ReactErrorBoundary } from 'react-error-boundary';
 import type { FallbackProps } from 'react-error-boundary';
+import { useLocation } from 'react-router-dom';
 
 function Fallback({ error }: FallbackProps) {
 	return (

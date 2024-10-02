@@ -43,6 +43,8 @@ pub struct ExecutorMetrics {
     /// Latency for time taken to fetch all batches for committed subdag
     /// either from local or remote worker.
     pub batch_fetch_for_committed_subdag_total_latency: Histogram,
+    /// Number of transactions in the consensus output.
+    pub consensus_output_transactions: IntCounter,
 }
 
 impl ExecutorMetrics {
@@ -104,6 +106,11 @@ impl ExecutorMetrics {
                 "subscriber_certificate_latency",
                 "Latency between when the certificate has been created and when it reached the executor",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            consensus_output_transactions: register_int_counter_with_registry!(
+                "consensus_output_transactions",
+                "Number of transactions in consensus output",
                 registry
             ).unwrap(),
         }

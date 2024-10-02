@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ChevronDown16, ChevronRight16 } from '@mysten/icons';
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { useState, type ReactNode } from 'react';
 
 import { Text } from '../../../shared/text';
@@ -25,7 +25,7 @@ export function SummaryCard({
 	return (
 		<div
 			className={clsx(
-				'border border-solid rounded-2xl overflow-hidden',
+				'bg-white border border-solid rounded-2xl overflow-hidden',
 				expanded ? 'border-gray-45' : 'border-gray-40',
 			)}
 		>

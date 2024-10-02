@@ -1,0 +1,12 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+    let byte_array: vector<u8>;
+label b0:
+    byte_array = h"deadbeefdeadbeef";
+    assert(move(byte_array) == h"deadbeefdeadbeef", 42);
+    return;
+}
+
+}

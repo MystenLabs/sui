@@ -1,0 +1,3 @@
+[package]
+name = "explain_arithmetic_failure"
+edition = "2024.beta"

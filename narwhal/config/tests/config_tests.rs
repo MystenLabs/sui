@@ -19,8 +19,7 @@
 // 2. Review, accept or reject changes.
 
 use config::{
-    ConsensusAPIGrpcParameters, Import, NetworkAdminServerParameters, Parameters,
-    PrometheusMetricsParameters, Stake,
+    Import, NetworkAdminServerParameters, Parameters, PrometheusMetricsParameters, Stake,
 };
 use crypto::PublicKey;
 use insta::assert_json_snapshot;
@@ -161,11 +160,7 @@ fn parameters_snapshot_matches() {
     // and in Sui (prod config + shared object bench base). If this test breaks,
     // config needs to change in all of these.
 
-    // We avoid defaults that randomly bind to a random port
-    let consensus_api_grpc_parameters = ConsensusAPIGrpcParameters {
-        socket_addr: "/ip4/127.0.0.1/tcp/8081/http".parse().unwrap(),
-        ..ConsensusAPIGrpcParameters::default()
-    };
+    // Avoid default which bind to random ports.
     let prometheus_metrics_parameters = PrometheusMetricsParameters {
         socket_addr: "/ip4/127.0.0.1/tcp/8081/http".parse().unwrap(),
     };
@@ -175,7 +170,6 @@ fn parameters_snapshot_matches() {
     };
 
     let parameters = Parameters {
-        consensus_api_grpc: consensus_api_grpc_parameters,
         prometheus_metrics: prometheus_metrics_parameters,
         network_admin_server: network_admin_server_parameters,
         ..Parameters::default()
@@ -194,17 +188,6 @@ fn parameters_import_snapshot_matches() {
          "sync_retry_nodes": 3,
          "batch_size": 500000,
          "max_batch_delay": "100ms",
-         "block_synchronizer": {
-             "range_synchronize_timeout": "30s",
-             "certificates_synchronize_timeout": "2s",
-             "payload_synchronize_timeout": "3_000ms",
-             "payload_availability_timeout": "4_000ms"
-         },
-         "consensus_api_grpc": {
-             "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-             "get_collections_timeout": "5_000ms",
-             "remove_collections_timeout": "5_000ms"
-         },
          "max_concurrent_requests": 500000,
          "prometheus_metrics": {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"

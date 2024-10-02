@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ObjectId, type SuiAddress, type TransactionDigest } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import {
-	getObjectUrl,
 	getAddressUrl,
+	getObjectUrl,
 	getTransactionUrl,
 	getValidatorUrl,
 } from '../components/explorer-link//Explorer';
@@ -17,16 +16,16 @@ import useAppSelector from './useAppSelector';
 export type ExplorerLinkConfig =
 	| {
 			type: ExplorerLinkType.address;
-			address: SuiAddress;
+			address?: string;
 			useActiveAddress?: false;
 	  }
 	| {
 			type: ExplorerLinkType.address;
 			useActiveAddress: true;
 	  }
-	| { type: ExplorerLinkType.object; objectID: ObjectId; moduleName?: string }
-	| { type: ExplorerLinkType.transaction; transactionID: TransactionDigest }
-	| { type: ExplorerLinkType.validator; validator: SuiAddress };
+	| { type: ExplorerLinkType.object; objectID: string; moduleName?: string }
+	| { type: ExplorerLinkType.transaction; transactionID: string }
+	| { type: ExplorerLinkType.validator; validator: string };
 
 function useAddress(linkConfig: ExplorerLinkConfig) {
 	const { type } = linkConfig;
@@ -39,8 +38,8 @@ function useAddress(linkConfig: ExplorerLinkConfig) {
 export function useExplorerLink(linkConfig: ExplorerLinkConfig) {
 	const { type } = linkConfig;
 	const address = useAddress(linkConfig);
-	const [selectedApiEnv, customRPC] = useAppSelector(({ app }) => [app.apiEnv, app.customRPC]);
-
+	const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
+	const customRPC = useAppSelector(({ app }) => app.customRPC);
 	const objectID = type === ExplorerLinkType.object ? linkConfig.objectID : null;
 	const transactionID = type === ExplorerLinkType.transaction ? linkConfig.transactionID : null;
 	const validator = type === ExplorerLinkType.validator ? linkConfig.validator : null;
@@ -49,6 +48,7 @@ export function useExplorerLink(linkConfig: ExplorerLinkConfig) {
 	// fallback to localhost if customRPC is not set
 	const customRPCUrl = customRPC || 'http://localhost:3000/';
 	return useMemo(() => {
+		if (!address) return null;
 		switch (type) {
 			case ExplorerLinkType.address:
 				return address && getAddressUrl(address, selectedApiEnv, customRPCUrl);

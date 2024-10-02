@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use duration_str::parse;
+use std::fmt::Formatter;
 use std::{str::FromStr, time::Duration};
 
 pub mod bench_driver;
@@ -9,7 +10,7 @@ pub mod driver;
 use comfy_table::{Cell, Color, ContentArrangement, Row, Table};
 use hdrhistogram::{serialization::Serializer, Histogram};
 
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 pub enum Interval {
     Count(u64),
     Time(tokio::time::Duration),
@@ -30,9 +31,24 @@ impl FromStr for Interval {
         } else if let Ok(d) = parse(s) {
             Ok(Interval::Time(d))
         } else if "unbounded" == s {
-            Ok(Interval::Time(tokio::time::Duration::MAX))
+            Ok(Interval::Time(Duration::MAX))
         } else {
             Err("Required integer number of cycles or time duration".to_string())
+        }
+    }
+}
+
+impl std::fmt::Display for Interval {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Interval::Count(count) => f.write_str(format!("{}", count).as_str()),
+            Interval::Time(d) => {
+                if *d == Duration::MAX {
+                    f.write_str("unbounded")
+                } else {
+                    f.write_str(format!("{}sec", d.as_secs()).as_str())
+                }
+            }
         }
     }
 }
@@ -42,6 +58,14 @@ impl FromStr for Interval {
 #[derive(Debug)]
 pub struct HistogramWrapper {
     histogram: Histogram<u64>,
+}
+
+impl Default for HistogramWrapper {
+    fn default() -> Self {
+        Self {
+            histogram: Histogram::new(0).unwrap(),
+        }
+    }
 }
 
 impl serde::Serialize for HistogramWrapper {
@@ -95,7 +119,7 @@ impl StressStats {
 }
 
 /// Stores the final statistics of the test run.
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
 pub struct BenchmarkStats {
     pub duration: Duration,
     /// Number of transactions that ended in an error

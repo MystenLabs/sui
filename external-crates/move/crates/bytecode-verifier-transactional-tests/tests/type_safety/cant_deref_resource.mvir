@@ -1,0 +1,79 @@
+//# publish
+module 0x1.Token {
+
+    struct T has key {v: u64}
+
+    public new(v: u64): Self.T {
+    label b0:
+        return T{v: move(v)};
+    }
+
+    public value(this: &Self.T): u64 {
+        let vref: &u64;
+        let res: u64;
+    label b0:
+        vref = &move(this).T::v;
+        // T does not have copy
+        res = *move(vref);
+        return move(res);
+    }
+
+    public publish(account: address, t: Self.T) {
+    label b0:
+        abort(0);
+    }
+
+    fake(addr: address): &mut Self.T { label b0: abort(0); }
+
+    public test(account: address) {
+        let t: Self.T;
+        let tref: &mut Self.T;
+        let y: Self.T;
+    label b0:
+        t = Self.new(0);
+        Self.publish(copy(account), move(t));
+        tref = Self.fake(move(account));
+        y = *move(tref);
+        return;
+    }
+}
+
+//# publish
+module 0x2.Token {
+
+    enum T has key { V{v: u64}}
+
+    public new(v: u64): Self.T {
+    label b0:
+        return T.V {v: move(v)};
+    }
+
+    public value(this: &Self.T): u64 {
+        let vref: &u64;
+        let res: u64;
+    label b0:
+        &T.V{ v: vref } = move(this);
+        // T does not have copy
+        res = *move(vref);
+        return move(res);
+    }
+
+    public publish(account: address, t: Self.T) {
+    label b0:
+        abort(0);
+    }
+
+    fake(addr: address): &mut Self.T { label b0: abort(0); }
+
+    public test(account: address) {
+        let t: Self.T;
+        let tref: &mut Self.T;
+        let y: Self.T;
+    label b0:
+        t = Self.new(0);
+        Self.publish(copy(account), move(t));
+        tref = Self.fake(move(account));
+        y = *move(tref);
+        return;
+    }
+}

@@ -1,0 +1,10 @@
+[package]
+name = "simple_warrior"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+simple_warrior = "0x0"

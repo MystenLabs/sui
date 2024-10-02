@@ -1,0 +1,14 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// invalid, Random by mutable reference
+
+//# publish
+module 0x0.m {
+    import 0x2.random;
+
+    public entry no_random_mut(l0: &mut random.Random) {
+        label l0:
+        abort 0;
+    }
+}

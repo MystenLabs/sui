@@ -1,0 +1,20 @@
+{
+	"entryPoints": [
+		"../bcs",
+		"../dapp-kit",
+		"../deepbook",
+		"../enoki",
+		"../graphql-transport",
+		"../kiosk",
+		"../typescript",
+		"../zklogin",
+		"../zksend",
+		"../wallet-standard"
+	],
+	"excludeInternal": true,
+	"excludePrivate": true,
+	"intentionallyNotExported": [],
+	"out": "public/typedoc",
+	"entryPointStrategy": "packages",
+	"plugin": ["typedoc-plugin-mermaid"]
+}

@@ -1,0 +1,27 @@
+//# init --addresses Test=0x0
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# publish
+
+// initializer not valid due to return value
+
+module 0x0.M1 {
+    import 0x2.tx_context;
+    import 0x2.object;
+    import 0x2.transfer;
+
+    struct Object has key, store {
+        id: object.UID,
+        value: u64,
+    }
+
+    // value param invalid
+    init(ctx: &mut tx_context.TxContext, value: u64): u64 {
+        label l0:
+        (Object { id: object.new(copy(ctx)), value: copy(value) });
+        (tx_context.sender(freeze(move(ctx))));
+        transfer.public_transfer<Self.Object>();
+        return move(value);
+    }
+}

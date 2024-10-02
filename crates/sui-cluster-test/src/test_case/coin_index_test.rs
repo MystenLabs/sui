@@ -12,6 +12,7 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{Balance, SuiTransactionBlockResponseOptions};
+use sui_test_transaction_builder::make_staking_transaction;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
@@ -100,13 +101,10 @@ impl TestCaseImpl for CoinIndexTest {
             .get_latest_sui_system_state()
             .await
             .active_validators
-            .get(0)
+            .first()
             .unwrap()
             .sui_address;
-        let txn = ctx
-            .get_wallet()
-            .make_staking_transaction(validator_addr)
-            .await;
+        let txn = make_staking_transaction(ctx.get_wallet(), validator_addr).await;
 
         let response = client
             .quorum_driver_api()
@@ -169,6 +167,7 @@ impl TestCaseImpl for CoinIndexTest {
                 args,
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -253,6 +252,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -318,6 +318,7 @@ impl TestCaseImpl for CoinIndexTest {
                 args,
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -357,6 +358,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -388,6 +390,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -457,6 +460,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -627,7 +631,7 @@ async fn publish_managed_coin_package(
     let compiled_package = compile_managed_coin_package();
     let all_module_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let params = rpc_params![
         ctx.get_wallet_address(),
@@ -703,6 +707,7 @@ async fn add_to_envelope(
             ],
             None,
             rgp * 2_000_000,
+            None,
         )
         .await
         .unwrap();

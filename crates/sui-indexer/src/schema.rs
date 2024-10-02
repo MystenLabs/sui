@@ -2,91 +2,41 @@
 // SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
 
-pub mod sql_types {
-    #[derive(diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "bcs_bytes"))]
-    pub struct BcsBytes;
-
-    #[derive(diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "object_status"))]
-    pub struct ObjectStatus;
-
-    #[derive(diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "owner_type"))]
-    pub struct OwnerType;
-}
-
 diesel::table! {
-    active_addresses (account_address) {
-        account_address -> Varchar,
-        first_appearance_tx -> Varchar,
-        first_appearance_time -> Int8,
-        last_appearance_tx -> Varchar,
-        last_appearance_time -> Int8,
-    }
-}
-
-diesel::table! {
-    address_stats (checkpoint) {
-        checkpoint -> Int8,
-        epoch -> Int8,
-        timestamp_ms -> Int8,
-        cumulative_addresses -> Int8,
-        cumulative_active_addresses -> Int8,
-        daily_active_addresses -> Int8,
-    }
-}
-
-diesel::table! {
-    addresses (account_address) {
-        account_address -> Varchar,
-        first_appearance_tx -> Varchar,
-        first_appearance_time -> Int8,
-        last_appearance_tx -> Varchar,
-        last_appearance_time -> Int8,
-    }
-}
-
-diesel::table! {
-    at_risk_validators (epoch, address) {
-        epoch -> Int8,
-        address -> Text,
-        epoch_count -> Int8,
-        reported_by -> Array<Nullable<Text>>,
-    }
-}
-
-diesel::table! {
-    changed_objects (id) {
-        id -> Int8,
-        transaction_digest -> Varchar,
-        checkpoint_sequence_number -> Int8,
-        epoch -> Int8,
-        object_id -> Varchar,
-        object_change_type -> Text,
-        object_version -> Int8,
+    chain_identifier (checkpoint_digest) {
+        checkpoint_digest -> Bytea,
     }
 }
 
 diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
-        checkpoint_digest -> Varchar,
+        checkpoint_digest -> Bytea,
         epoch -> Int8,
-        transactions -> Array<Nullable<Text>>,
-        previous_checkpoint_digest -> Nullable<Varchar>,
-        end_of_epoch -> Bool,
-        total_gas_cost -> Int8,
-        total_computation_cost -> Int8,
-        total_storage_cost -> Int8,
-        total_storage_rebate -> Int8,
-        total_transaction_blocks -> Int8,
-        total_transactions -> Int8,
-        total_successful_transaction_blocks -> Int8,
-        total_successful_transactions -> Int8,
         network_total_transactions -> Int8,
+        previous_checkpoint_digest -> Nullable<Bytea>,
+        end_of_epoch -> Bool,
+        tx_digests -> Array<Nullable<Bytea>>,
         timestamp_ms -> Int8,
-        validator_signature -> Text,
+        total_gas_cost -> Int8,
+        computation_cost -> Int8,
+        storage_cost -> Int8,
+        storage_rebate -> Int8,
+        non_refundable_storage_fee -> Int8,
+        checkpoint_commitments -> Bytea,
+        validator_signature -> Bytea,
+        end_of_epoch_data -> Nullable<Bytea>,
+        min_tx_sequence_number -> Nullable<Int8>,
+        max_tx_sequence_number -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
+    display (object_type) {
+        object_type -> Text,
+        id -> Bytea,
+        version -> Int2,
+        bcs -> Bytea,
     }
 }
 
@@ -94,261 +44,363 @@ diesel::table! {
     epochs (epoch) {
         epoch -> Int8,
         first_checkpoint_id -> Int8,
-        last_checkpoint_id -> Nullable<Int8>,
         epoch_start_timestamp -> Int8,
+        reference_gas_price -> Int8,
+        protocol_version -> Int8,
+        total_stake -> Int8,
+        storage_fund_balance -> Int8,
+        system_state -> Nullable<Bytea>,
+        epoch_total_transactions -> Nullable<Int8>,
+        last_checkpoint_id -> Nullable<Int8>,
         epoch_end_timestamp -> Nullable<Int8>,
-        epoch_total_transactions -> Int8,
-        next_epoch_version -> Nullable<Int8>,
-        next_epoch_committee -> Array<Nullable<Bytea>>,
-        next_epoch_committee_stake -> Array<Nullable<Int8>>,
-        epoch_commitments -> Array<Nullable<Bytea>>,
-        protocol_version -> Nullable<Int8>,
-        reference_gas_price -> Nullable<Int8>,
-        total_stake -> Nullable<Int8>,
         storage_fund_reinvestment -> Nullable<Int8>,
         storage_charge -> Nullable<Int8>,
         storage_rebate -> Nullable<Int8>,
-        storage_fund_balance -> Nullable<Int8>,
         stake_subsidy_amount -> Nullable<Int8>,
         total_gas_fees -> Nullable<Int8>,
         total_stake_rewards_distributed -> Nullable<Int8>,
         leftover_storage_fund_inflow -> Nullable<Int8>,
+        epoch_commitments -> Nullable<Bytea>,
+        system_state_summary_json -> Nullable<Jsonb>,
     }
 }
 
 diesel::table! {
-    events (id) {
-        id -> Int8,
-        transaction_digest -> Varchar,
-        event_sequence -> Int8,
-        sender -> Varchar,
-        package -> Varchar,
+    event_emit_module (package, module, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    event_emit_package (package, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    event_senders (sender, tx_sequence_number, event_sequence_number) {
+        sender -> Bytea,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    event_struct_instantiation (package, module, type_instantiation, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        type_instantiation -> Text,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    event_struct_module (package, module, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    event_struct_name (package, module, type_name, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        type_name -> Text,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    event_struct_package (package, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    events (tx_sequence_number, event_sequence_number) {
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        transaction_digest -> Bytea,
+        senders -> Array<Nullable<Bytea>>,
+        package -> Bytea,
         module -> Text,
         event_type -> Text,
-        event_time_ms -> Nullable<Int8>,
-        event_bcs -> Bytea,
+        timestamp_ms -> Int8,
+        bcs -> Bytea,
+        sender -> Nullable<Bytea>,
     }
 }
 
 diesel::table! {
-    input_objects (id) {
-        id -> Int8,
-        transaction_digest -> Varchar,
-        checkpoint_sequence_number -> Int8,
-        epoch -> Int8,
-        object_id -> Varchar,
-        object_version -> Nullable<Int8>,
-    }
-}
-
-diesel::table! {
-    move_calls (id) {
-        id -> Int8,
-        transaction_digest -> Varchar,
-        checkpoint_sequence_number -> Int8,
-        epoch -> Int8,
-        sender -> Varchar,
-        move_package -> Text,
-        move_module -> Text,
-        move_function -> Text,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::OwnerType;
-    use super::sql_types::ObjectStatus;
-    use super::sql_types::BcsBytes;
-
-    objects (object_id) {
-        epoch -> Int8,
-        checkpoint -> Int8,
-        object_id -> Varchar,
-        version -> Int8,
-        object_digest -> Varchar,
-        owner_type -> OwnerType,
-        owner_address -> Nullable<Varchar>,
-        initial_shared_version -> Nullable<Int8>,
-        previous_transaction -> Varchar,
-        object_type -> Varchar,
-        object_status -> ObjectStatus,
-        has_public_transfer -> Bool,
-        storage_rebate -> Int8,
-        bcs -> Array<Nullable<BcsBytes>>,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::OwnerType;
-    use super::sql_types::ObjectStatus;
-    use super::sql_types::BcsBytes;
-
-    objects_history (object_id, version, checkpoint) {
-        epoch -> Int8,
-        checkpoint -> Int8,
-        object_id -> Varchar,
-        version -> Int8,
-        object_digest -> Varchar,
-        owner_type -> OwnerType,
-        owner_address -> Nullable<Varchar>,
-        old_owner_type -> Nullable<OwnerType>,
-        old_owner_address -> Nullable<Varchar>,
-        initial_shared_version -> Nullable<Int8>,
-        previous_transaction -> Varchar,
-        object_type -> Varchar,
-        object_status -> ObjectStatus,
-        has_public_transfer -> Bool,
-        storage_rebate -> Int8,
-        bcs -> Array<Nullable<BcsBytes>>,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::BcsBytes;
-
-    packages (package_id, version) {
-        package_id -> Varchar,
-        version -> Int8,
-        author -> Varchar,
-        data -> Array<Nullable<BcsBytes>>,
-    }
-}
-
-diesel::table! {
-    recipients (id) {
-        id -> Int8,
-        transaction_digest -> Varchar,
-        checkpoint_sequence_number -> Int8,
-        epoch -> Int8,
-        sender -> Varchar,
-        recipient -> Varchar,
-    }
-}
-
-diesel::table! {
-    system_states (epoch) {
-        epoch -> Int8,
+    feature_flags (protocol_version, flag_name) {
         protocol_version -> Int8,
-        system_state_version -> Int8,
-        storage_fund -> Int8,
-        reference_gas_price -> Int8,
-        safe_mode -> Bool,
-        epoch_start_timestamp_ms -> Int8,
-        epoch_duration_ms -> Int8,
-        stake_subsidy_start_epoch -> Int8,
-        stake_subsidy_epoch_counter -> Int8,
-        stake_subsidy_balance -> Int8,
-        stake_subsidy_current_epoch_amount -> Int8,
-        total_stake -> Int8,
-        pending_active_validators_id -> Text,
-        pending_active_validators_size -> Int8,
-        pending_removals -> Array<Nullable<Int8>>,
-        staking_pool_mappings_id -> Text,
-        staking_pool_mappings_size -> Int8,
-        inactive_pools_id -> Text,
-        inactive_pools_size -> Int8,
-        validator_candidates_id -> Text,
-        validator_candidates_size -> Int8,
+        flag_name -> Text,
+        flag_value -> Bool,
     }
 }
 
 diesel::table! {
-    transactions (id) {
-        id -> Int8,
-        transaction_digest -> Varchar,
-        sender -> Varchar,
-        recipients -> Array<Nullable<Text>>,
-        checkpoint_sequence_number -> Nullable<Int8>,
-        timestamp_ms -> Nullable<Int8>,
-        transaction_kind -> Text,
-        transaction_count -> Int8,
-        execution_success -> Bool,
-        created -> Array<Nullable<Text>>,
-        mutated -> Array<Nullable<Text>>,
-        deleted -> Array<Nullable<Text>>,
-        unwrapped -> Array<Nullable<Text>>,
-        wrapped -> Array<Nullable<Text>>,
-        move_calls -> Array<Nullable<Text>>,
-        gas_object_id -> Varchar,
-        gas_object_sequence -> Int8,
-        gas_object_digest -> Varchar,
-        gas_budget -> Int8,
-        total_gas_cost -> Int8,
-        computation_cost -> Int8,
-        storage_cost -> Int8,
-        storage_rebate -> Int8,
-        non_refundable_storage_fee -> Int8,
-        gas_price -> Int8,
+    full_objects_history (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        serialized_object -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
+    objects (object_id) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        object_digest -> Bytea,
+        owner_type -> Int2,
+        owner_id -> Nullable<Bytea>,
+        object_type -> Nullable<Text>,
+        object_type_package -> Nullable<Bytea>,
+        object_type_module -> Nullable<Text>,
+        object_type_name -> Nullable<Text>,
+        serialized_object -> Bytea,
+        coin_type -> Nullable<Text>,
+        coin_balance -> Nullable<Int8>,
+        df_kind -> Nullable<Int2>,
+    }
+}
+
+diesel::table! {
+    objects_history (checkpoint_sequence_number, object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        object_status -> Int2,
+        object_digest -> Nullable<Bytea>,
+        checkpoint_sequence_number -> Int8,
+        owner_type -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        object_type -> Nullable<Text>,
+        object_type_package -> Nullable<Bytea>,
+        object_type_module -> Nullable<Text>,
+        object_type_name -> Nullable<Text>,
+        serialized_object -> Nullable<Bytea>,
+        coin_type -> Nullable<Text>,
+        coin_balance -> Nullable<Int8>,
+        df_kind -> Nullable<Int2>,
+    }
+}
+
+diesel::table! {
+    objects_snapshot (object_id) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        object_status -> Int2,
+        object_digest -> Nullable<Bytea>,
+        checkpoint_sequence_number -> Int8,
+        owner_type -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        object_type -> Nullable<Text>,
+        object_type_package -> Nullable<Bytea>,
+        object_type_module -> Nullable<Text>,
+        object_type_name -> Nullable<Text>,
+        serialized_object -> Nullable<Bytea>,
+        coin_type -> Nullable<Text>,
+        coin_balance -> Nullable<Int8>,
+        df_kind -> Nullable<Int2>,
+    }
+}
+
+diesel::table! {
+    objects_version (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    packages (package_id, original_id, package_version) {
+        package_id -> Bytea,
+        original_id -> Bytea,
+        package_version -> Int8,
+        move_package -> Bytea,
+        checkpoint_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    protocol_configs (protocol_version, config_name) {
+        protocol_version -> Int8,
+        config_name -> Text,
+        config_value -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    pruner_cp_watermark (checkpoint_sequence_number) {
+        checkpoint_sequence_number -> Int8,
+        min_tx_sequence_number -> Int8,
+        max_tx_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    raw_checkpoints (sequence_number) {
+        sequence_number -> Int8,
+        certified_checkpoint -> Bytea,
+        checkpoint_contents -> Bytea,
+    }
+}
+
+diesel::table! {
+    transactions (tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        transaction_digest -> Bytea,
         raw_transaction -> Bytea,
-        transaction_content -> Text,
-        transaction_effects_content -> Text,
-        confirmed_local_execution -> Nullable<Bool>,
+        raw_effects -> Bytea,
+        checkpoint_sequence_number -> Int8,
+        timestamp_ms -> Int8,
+        object_changes -> Array<Nullable<Bytea>>,
+        balance_changes -> Array<Nullable<Bytea>>,
+        events -> Array<Nullable<Bytea>>,
+        transaction_kind -> Int2,
+        success_command_count -> Int2,
     }
 }
 
 diesel::table! {
-    validators (epoch, sui_address) {
-        epoch -> Int8,
-        sui_address -> Text,
-        protocol_pubkey_bytes -> Bytea,
-        network_pubkey_bytes -> Bytea,
-        worker_pubkey_bytes -> Bytea,
-        proof_of_possession_bytes -> Bytea,
-        name -> Text,
-        description -> Text,
-        image_url -> Text,
-        project_url -> Text,
-        net_address -> Text,
-        p2p_address -> Text,
-        primary_address -> Text,
-        worker_address -> Text,
-        next_epoch_protocol_pubkey_bytes -> Nullable<Bytea>,
-        next_epoch_proof_of_possession -> Nullable<Bytea>,
-        next_epoch_network_pubkey_bytes -> Nullable<Bytea>,
-        next_epoch_worker_pubkey_bytes -> Nullable<Bytea>,
-        next_epoch_net_address -> Nullable<Text>,
-        next_epoch_p2p_address -> Nullable<Text>,
-        next_epoch_primary_address -> Nullable<Text>,
-        next_epoch_worker_address -> Nullable<Text>,
-        voting_power -> Int8,
-        operation_cap_id -> Text,
-        gas_price -> Int8,
-        commission_rate -> Int8,
-        next_epoch_stake -> Int8,
-        next_epoch_gas_price -> Int8,
-        next_epoch_commission_rate -> Int8,
-        staking_pool_id -> Text,
-        staking_pool_activation_epoch -> Nullable<Int8>,
-        staking_pool_deactivation_epoch -> Nullable<Int8>,
-        staking_pool_sui_balance -> Int8,
-        rewards_pool -> Int8,
-        pool_token_balance -> Int8,
-        pending_stake -> Int8,
-        pending_total_sui_withdraw -> Int8,
-        pending_pool_token_withdraw -> Int8,
-        exchange_rates_id -> Text,
-        exchange_rates_size -> Int8,
+    tx_affected_addresses (affected, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        affected -> Bytea,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_affected_objects (affected, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        affected -> Bytea,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_calls_fun (package, module, func, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        package -> Bytea,
+        module -> Text,
+        func -> Text,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_calls_mod (package, module, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        package -> Bytea,
+        module -> Text,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_calls_pkg (package, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        package -> Bytea,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_changed_objects (object_id, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        object_id -> Bytea,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_digests (tx_digest) {
+        tx_digest -> Bytea,
+        tx_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    tx_input_objects (object_id, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        object_id -> Bytea,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_kinds (tx_kind, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        tx_kind -> Int2,
+    }
+}
+
+diesel::table! {
+    tx_recipients (recipient, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        recipient -> Bytea,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_senders (sender, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        sender -> Bytea,
     }
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
-    active_addresses,
-    address_stats,
-    addresses,
-    at_risk_validators,
-    changed_objects,
+    chain_identifier,
     checkpoints,
+    display,
     epochs,
+    event_emit_module,
+    event_emit_package,
+    event_senders,
+    event_struct_instantiation,
+    event_struct_module,
+    event_struct_name,
+    event_struct_package,
     events,
-    input_objects,
-    move_calls,
+    feature_flags,
+    full_objects_history,
     objects,
     objects_history,
+    objects_snapshot,
+    objects_version,
     packages,
-    recipients,
-    system_states,
+    protocol_configs,
+    pruner_cp_watermark,
+    raw_checkpoints,
     transactions,
-    validators,
+    tx_affected_addresses,
+    tx_affected_objects,
+    tx_calls_fun,
+    tx_calls_mod,
+    tx_calls_pkg,
+    tx_changed_objects,
+    tx_digests,
+    tx_input_objects,
+    tx_kinds,
+    tx_recipients,
+    tx_senders,
 );

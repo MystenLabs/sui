@@ -1,2 +1,0 @@
-sandbox publish
-sandbox run scripts/resource_already_exists.move --signers 0xA

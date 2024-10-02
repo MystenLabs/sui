@@ -17,9 +17,7 @@ use std::{
 use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
-    authority_client::{
-        make_authority_clients_with_timeout_config, AuthorityAPI, NetworkAuthorityClient,
-    },
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
     quorum_driver::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
@@ -28,8 +26,9 @@ use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
-use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::base_types::ConciseableName;
+use sui_types::committee::CommitteeTrait;
 use sui_types::effects::{CertifiedTransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
@@ -71,8 +70,8 @@ pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
 use futures::FutureExt;
-use sui_types::messages_grpc::{HandleCertificateResponse, TransactionStatus};
-use sui_types::quorum_driver_types::QuorumDriverResponse;
+use sui_types::messages_grpc::{HandleCertificateResponseV2, TransactionStatus};
+use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse};
 
 #[derive(Debug)]
 /// A wrapper on execution results to accommodate different types of
@@ -100,7 +99,7 @@ impl ExecutionEffects {
     pub fn created(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                certified_effects.data().created().to_vec()
+                certified_effects.data().created()
             }
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .created()
@@ -135,7 +134,7 @@ impl ExecutionEffects {
     pub fn gas_object(&self) -> (ObjectRef, Owner) {
         match self {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
-                *certified_effects.data().gas_object()
+                certified_effects.data().gas_object()
             }
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 let refe = &sui_tx_effects.gas_object();
@@ -254,25 +253,17 @@ impl LocalValidatorAggregatorProxy {
         registry: &Registry,
         reconfig_fullnode_rpc_url: Option<&str>,
     ) -> Self {
-        let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
+        let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
             .with_registry(registry)
-            .build()
-            .unwrap();
-
-        let committee = genesis.committee_with_network();
-        let clients = make_authority_clients_with_timeout_config(
-            &committee,
-            DEFAULT_CONNECT_TIMEOUT_SEC,
-            DEFAULT_REQUEST_TIMEOUT_SEC,
-        )
-        .unwrap();
+            .build_network_clients();
+        let committee = genesis.committee().unwrap();
 
         Self::new_impl(
             aggregator,
             registry,
             reconfig_fullnode_rpc_url,
             clients,
-            committee.committee,
+            committee,
         )
         .await
     }
@@ -359,10 +350,20 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             return self.execute_bench_transaction(tx).await;
         }
         let tx_digest = *tx.digest();
-        let tx = tx.verify()?;
         let mut retry_cnt = 0;
         while retry_cnt < 3 {
-            let ticket = self.qd.submit_transaction(tx.clone()).await?;
+            let ticket = self
+                .qd
+                .submit_transaction(
+                    sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
+                        transaction: tx.clone(),
+                        include_events: true,
+                        include_input_objects: false,
+                        include_output_objects: false,
+                        include_auxiliary_data: false,
+                    },
+                )
+                .await?;
             // The ticket only times out when QuorumDriver exceeds the retry times
             match ticket.await {
                 Ok(resp) => {
@@ -373,8 +374,11 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     } = resp;
                     return Ok(ExecutionEffects::CertifiedTransactionEffects(
                         effects_cert.into(),
-                        events,
+                        events.unwrap_or_default(),
                     ));
+                }
+                Err(QuorumDriverError::NonRecoverableTransactionError { errors }) => {
+                    bail!(QuorumDriverError::NonRecoverableTransactionError { errors });
                 }
                 Err(err) => {
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
@@ -402,7 +406,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let tx_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_transactions);
         let mut futures = FuturesUnordered::new();
         for (name, client) in self.clients.iter() {
-            let fut = client.handle_transaction(tx.clone()).map(|r| (r, *name));
+            let fut = client
+                .handle_transaction(tx.clone(), None)
+                .map(|r| (r, *name));
             futures.push(fut);
         }
         auth_agg
@@ -516,7 +522,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             let name = *name;
             futures.push(async move {
                 client
-                    .handle_certificate(certificate)
+                    .handle_certificate_v2(certificate, None)
                     .map(move |r| (r, name))
                     .await
             });
@@ -531,9 +537,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             auth_agg.metrics.inflight_certificate_requests.dec();
             match response {
                 // If all goes well, the validators reply with signed effects.
-                Ok(HandleCertificateResponse {
+                Ok(HandleCertificateResponseV2 {
                     signed_effects,
                     events,
+                    fastpath_input_objects: _, // unused field
                 }) => {
                     let author = signed_effects.auth_sig().authority;
                     transaction_effects = Some(signed_effects.data().clone());
@@ -638,8 +645,7 @@ impl FullNodeProxy {
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
         let committee_vec = resp.validators;
-        let committee_map =
-            BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
+        let committee_map = BTreeMap::from_iter(committee_vec.into_iter());
         let committee =
             Committee::new_for_testing_with_normalized_voting_power(epoch, committee_map);
 
@@ -721,7 +727,6 @@ impl ValidatorProxy for FullNodeProxy {
 
     async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
-        let tx = tx.verify()?;
         let mut retry_cnt = 0;
         while retry_cnt < 10 {
             // Fullnode could time out after WAIT_FOR_FINALITY_TIMEOUT (30s) in TransactionOrchestrator
@@ -859,6 +864,9 @@ impl From<CallArg> for BenchMoveCallArg {
                     initial_shared_version,
                     mutable,
                 } => BenchMoveCallArg::Shared((id, initial_shared_version, mutable)),
+                ObjectArg::Receiving(_) => {
+                    unimplemented!("Receiving is not supported for benchmarks")
+                }
             },
         }
     }

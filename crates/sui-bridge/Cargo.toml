@@ -1,0 +1,59 @@
+[package]
+name = "sui-bridge"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+ethers = "2.0"
+tokio = { workspace = true, features = ["full"] }
+sui-types.workspace = true
+sui-authority-aggregation.workspace = true
+arc-swap.workspace = true
+num_enum.workspace = true
+move-core-types.workspace = true
+url.workspace = true
+futures.workspace = true
+once_cell.workspace = true
+telemetry-subscribers.workspace = true
+prometheus.workspace = true
+async-trait.workspace = true
+typed-store.workspace = true
+mysten-metrics.workspace = true
+sui-sdk.workspace = true
+sui-keys.workspace = true
+sui-config.workspace = true
+clap.workspace = true
+tracing.workspace = true
+bin-version.workspace = true
+bcs.workspace = true
+sui-json-rpc-types.workspace = true
+serde.workspace = true
+serde_with.workspace = true
+serde_json.workspace = true
+eyre.workspace = true
+tempfile.workspace = true
+axum.workspace = true
+anyhow.workspace = true
+reqwest.workspace = true
+fastcrypto.workspace = true
+tap.workspace = true
+rand.workspace = true
+lru.workspace = true
+shared-crypto.workspace = true
+backoff.workspace = true
+mysten-common.workspace = true
+enum_dispatch.workspace = true
+sui-json-rpc-api.workspace = true
+sui-test-transaction-builder.workspace = true
+
+[dev-dependencies]
+sui-types = { workspace = true, features = ["test-utils"] }
+sui-json-rpc-types = { workspace = true, features = ["test-utils"] }
+sui-config.workspace = true
+sui-test-transaction-builder.workspace = true
+test-cluster.workspace = true
+hex-literal = "0.3.4"
+maplit = "1.0.2"

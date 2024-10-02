@@ -3,37 +3,62 @@
 
 #[test_only]
 module sui::coin_balance_tests {
-    use sui::test_scenario::{Self, ctx};
+    use sui::test_scenario;
     use sui::pay;
     use sui::coin;
     use sui::balance;
     use sui::sui::SUI;
+    use sui::test_utils;
+
 
     #[test]
     fun type_morphing() {
-        let scenario = test_scenario::begin(@0x1);
-        let test = &mut scenario;
+        let mut scenario = test_scenario::begin(@0x1);
 
         let balance = balance::zero<SUI>();
-        let coin = coin::from_balance(balance, ctx(test));
-        let balance = coin::into_balance(coin);
+        let coin = balance.into_coin(scenario.ctx());
+        let balance = coin.into_balance();
 
-        balance::destroy_zero(balance);
+        balance.destroy_zero();
 
-        let coin = coin::mint_for_testing<SUI>(100, ctx(test));
+        let mut coin = coin::mint_for_testing<SUI>(100, scenario.ctx());
         let balance_mut = coin::balance_mut(&mut coin);
-        let sub_balance = balance::split(balance_mut, 50);
+        let sub_balance = balance_mut.split(50);
 
-        assert!(balance::value(&sub_balance) == 50, 0);
-        assert!(coin::value(&coin) == 50, 0);
+        assert!(sub_balance.value() == 50);
+        assert!(coin.value() == 50);
 
-        let balance = coin::into_balance(coin);
-        balance::join(&mut balance, sub_balance);
+        let mut balance = coin.into_balance();
+        balance.join(sub_balance);
 
-        assert!(balance::value(&balance) == 100, 0);
+        assert!(balance.value() == 100);
 
-        let coin = coin::from_balance(balance, ctx(test));
-        pay::keep(coin, ctx(test));
-        test_scenario::end(scenario);
+        let coin = balance.into_coin(scenario.ctx());
+        pay::keep(coin, scenario.ctx());
+        scenario.end();
+    }
+
+    #[test]
+    fun test_balance() {
+        let mut balance = balance::zero<SUI>();
+        let another = balance::create_for_testing(1000);
+
+        balance.join(another);
+
+        assert!(balance.value() == 1000);
+
+        let balance1 = balance.split(333);
+        let balance2 = balance.split(333);
+        let balance3 = balance.split(334);
+
+        balance.destroy_zero();
+
+        assert!(balance1.value() == 333);
+        assert!(balance2.value() == 333);
+        assert!(balance3.value() == 334);
+
+        test_utils::destroy(balance1);
+        test_utils::destroy(balance2);
+        test_utils::destroy(balance3);
     }
 }

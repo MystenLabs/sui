@@ -1,0 +1,63 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[1:1]
+ 1 │ --move-cal
+   · ─────┬────
+   ·      ╰── Unknown command '--move-cal'
+ 2 │ --assing
+   ╰────
+  help: Did you mean '--move-call'?
+
+  × Error when processing PTB
+   ╭─[2:1]
+ 1 │ --move-cal
+ 2 │ --assing
+   · ────┬───
+   ·     ╰── Unknown command '--assing'
+ 3 │ --assig
+   ╰────
+  help: Did you mean '--assign'?
+
+  × Error when processing PTB
+   ╭─[3:1]
+ 2 │ --assing
+ 3 │ --assig
+   · ───┬───
+   ·    ╰── Unknown command '--assig'
+ 4 │ --splitcoins
+   ╰────
+  help: Did you mean '--assign'?
+
+  × Error when processing PTB
+   ╭─[4:1]
+ 3 │ --assig
+ 4 │ --splitcoins
+   · ──────┬─────
+   ·       ╰── Unknown command '--splitcoins'
+ 5 │ --move-vec
+   ╰────
+  help: Did you mean '--split-coins'?
+
+  × Error when processing PTB
+   ╭─[5:1]
+ 4 │ --splitcoins
+ 5 │ --move-vec
+   · ─────┬────
+   ·      ╰── Unknown command '--move-vec'
+ 6 │ --transfer-object 
+   ╰────
+  help: Did you mean '--move-call'?
+
+  × Error when processing PTB
+   ╭─[6:1]
+ 5 │ --move-vec
+ 6 │ --transfer-object 
+   · ────────┬────────
+   ·         ╰── Unknown command '--transfer-object'
+   ╰────
+  help: Did you mean '--transfer-objects'?
+

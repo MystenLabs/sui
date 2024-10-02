@@ -1,0 +1,3 @@
+[package]
+name = "two-runs-same-module"
+edition = "2024.beta"

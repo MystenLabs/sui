@@ -1,0 +1,17 @@
+//# publish
+module 0x6.test {
+    public test(external: &mut u64) {
+        let local: u64;
+        let local_ref: &mut u64;
+    label b0:
+        local = 0;
+        local_ref = &mut local;
+        // make sure refs are equal even if one is in global storage and one is local
+        assert(move(external) == move(local_ref), 42);
+        return;
+    }
+}
+
+//# run 0x6::test::test --args 0
+
+//# run 0x6::test::test --args 1

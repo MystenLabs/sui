@@ -1,0 +1,5 @@
+[package]
+name = "C"
+
+[dependencies]
+A = { r."../../../resolvers/successful.sh" = "A" }

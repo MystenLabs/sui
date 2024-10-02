@@ -1,17 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SentryRpcClient } from '@mysten/core';
-import { Connection, JsonRpcProvider } from '@mysten/sui.js';
-
-import { type WalletSigner } from './WalletSigner';
-import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
-import { queryClient } from './helpers/queryClient';
-import { AccountType, type SerializedAccount } from '_src/background/keyring/Account';
+import { type AccountType, type SerializedUIAccount } from '_src/background/accounts/Account';
 import { API_ENV } from '_src/shared/api-env';
+import { getSuiClient } from '_src/shared/sui-client';
+import { type SuiClient } from '@mysten/sui/client';
 
 import type { BackgroundClient } from './background-client';
-import type { SuiAddress, SignerWithProvider } from '@mysten/sui.js';
+import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
+import { queryClient } from './helpers/queryClient';
+import { type WalletSigner } from './WalletSigner';
 
 type EnvInfo = {
 	name: string;
@@ -20,29 +18,10 @@ type EnvInfo = {
 
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
 	[API_ENV.local]: { name: 'Local', env: API_ENV.local },
-	[API_ENV.devNet]: { name: 'Sui Devnet', env: API_ENV.devNet },
-	[API_ENV.customRPC]: { name: 'Custom RPC URL', env: API_ENV.customRPC },
-	[API_ENV.testNet]: { name: 'Sui Testnet', env: API_ENV.testNet },
-	[API_ENV.mainnet]: { name: 'Sui Mainnet', env: API_ENV.mainnet },
-};
-
-export const ENV_TO_API: Record<API_ENV, Connection | null> = {
-	[API_ENV.customRPC]: null,
-	[API_ENV.local]: new Connection({
-		fullnode: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
-		faucet: process.env.API_ENDPOINT_LOCAL_FAUCET || '',
-	}),
-	[API_ENV.devNet]: new Connection({
-		fullnode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
-		faucet: process.env.API_ENDPOINT_DEV_NET_FAUCET || '',
-	}),
-	[API_ENV.testNet]: new Connection({
-		fullnode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
-		faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
-	}),
-	[API_ENV.mainnet]: new Connection({
-		fullnode: process.env.API_ENDPOINT_MAINNET_FULLNODE || '',
-	}),
+	[API_ENV.devNet]: { name: 'Devnet', env: API_ENV.devNet },
+	[API_ENV.customRPC]: { name: 'Custom RPC', env: API_ENV.customRPC },
+	[API_ENV.testNet]: { name: 'Testnet', env: API_ENV.testNet },
+	[API_ENV.mainnet]: { name: 'Mainnet', env: API_ENV.mainnet },
 };
 
 function getDefaultApiEnv() {
@@ -53,16 +32,7 @@ function getDefaultApiEnv() {
 	return apiEnv ? API_ENV[apiEnv as keyof typeof API_ENV] : API_ENV.devNet;
 }
 
-function getDefaultAPI(env: API_ENV) {
-	const apiEndpoint = ENV_TO_API[env];
-	if (!apiEndpoint || apiEndpoint.fullnode === '' || apiEndpoint.faucet === '') {
-		throw new Error(`API endpoint not found for API_ENV ${env}`);
-	}
-	return apiEndpoint;
-}
-
 export const DEFAULT_API_ENV = getDefaultApiEnv();
-const SENTRY_MONITORED_ENVS = [API_ENV.mainnet];
 
 type NetworkTypes = keyof typeof API_ENV;
 
@@ -70,18 +40,20 @@ export const generateActiveNetworkList = (): NetworkTypes[] => {
 	return Object.values(API_ENV);
 };
 
+const accountTypesWithBackgroundSigner: AccountType[] = ['mnemonic-derived', 'imported', 'zkLogin'];
+
 export default class ApiProvider {
-	private _apiFullNodeProvider?: JsonRpcProvider;
-	private _signerByAddress: Map<SuiAddress, SignerWithProvider> = new Map();
+	private _apiFullNodeProvider?: SuiClient;
+	private _signerByAddress: Map<string, WalletSigner> = new Map();
+	apiEnv: API_ENV = DEFAULT_API_ENV;
 
 	public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV, customRPC?: string | null) {
-		const connection = customRPC ? new Connection({ fullnode: customRPC }) : getDefaultAPI(apiEnv);
-		this._apiFullNodeProvider = new JsonRpcProvider(connection, {
-			rpcClient:
-				!customRPC && SENTRY_MONITORED_ENVS.includes(apiEnv)
-					? new SentryRpcClient(connection.fullnode)
-					: undefined,
-		});
+		this.apiEnv = apiEnv;
+		this._apiFullNodeProvider = getSuiClient(
+			apiEnv === API_ENV.customRPC
+				? { env: apiEnv, customRpcUrl: customRPC || '' }
+				: { env: apiEnv, customRpcUrl: null },
+		);
 
 		this._signerByAddress.clear();
 
@@ -101,44 +73,44 @@ export default class ApiProvider {
 	}
 
 	public getSignerInstance(
-		account: SerializedAccount,
+		account: SerializedUIAccount,
 		backgroundClient: BackgroundClient,
-	): SignerWithProvider {
+	): WalletSigner {
 		if (!this._apiFullNodeProvider) {
 			this.setNewJsonRpcProvider();
 		}
-
-		switch (account.type) {
-			case AccountType.DERIVED:
-			case AccountType.IMPORTED:
-				return this.getBackgroundSignerInstance(account.address, backgroundClient);
-			case AccountType.LEDGER:
-				// Ideally, Ledger transactions would be signed in the background
-				// and exist as an asynchronous keypair; however, this isn't possible
-				// because you can't connect to a Ledger device from the background
-				// script. Similarly, the signer instance can't be retrieved from
-				// here because ApiProvider is a global and results in very buggy
-				// behavior due to the reactive nature of managing Ledger connections
-				// and displaying relevant UI updates. Refactoring ApiProvider to
-				// not be a global instance would help out here, but that is also
-				// a non-trivial task because we need access to ApiProvider in the
-				// background script as well.
-				throw new Error("Signing with Ledger via ApiProvider isn't supported");
-			default:
-				throw new Error('Encountered unknown account type');
+		if (accountTypesWithBackgroundSigner.includes(account.type)) {
+			return this.getBackgroundSignerInstance(account, backgroundClient);
 		}
+		if ('ledger' === account.type) {
+			// Ideally, Ledger transactions would be signed in the background
+			// and exist as an asynchronous keypair; however, this isn't possible
+			// because you can't connect to a Ledger device from the background
+			// script. Similarly, the signer instance can't be retrieved from
+			// here because ApiProvider is a global and results in very buggy
+			// behavior due to the reactive nature of managing Ledger connections
+			// and displaying relevant UI updates. Refactoring ApiProvider to
+			// not be a global instance would help out here, but that is also
+			// a non-trivial task because we need access to ApiProvider in the
+			// background script as well.
+			throw new Error("Signing with Ledger via ApiProvider isn't supported");
+		}
+		throw new Error('Encountered unknown account type');
 	}
 
 	public getBackgroundSignerInstance(
-		address: SuiAddress,
+		account: SerializedUIAccount,
 		backgroundClient: BackgroundClient,
 	): WalletSigner {
-		if (!this._signerByAddress.has(address)) {
+		const key = account.id;
+		if (!this._signerByAddress.has(account.id)) {
 			this._signerByAddress.set(
-				address,
-				new BackgroundServiceSigner(address, backgroundClient, this._apiFullNodeProvider!),
+				key,
+				new BackgroundServiceSigner(account, backgroundClient, this._apiFullNodeProvider!),
 			);
 		}
-		return this._signerByAddress.get(address)!;
+		return this._signerByAddress.get(key)!;
 	}
 }
+
+export const walletApiProvider = new ApiProvider();

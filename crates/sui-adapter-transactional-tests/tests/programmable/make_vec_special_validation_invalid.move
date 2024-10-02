@@ -7,11 +7,9 @@
 
 //# publish
 module test::m1 {
-    use std::vector;
     use std::string::{Self, String};
-    use std::option::{Self, Option};
 
-    public entry fun vec_option_u64(v: vector<Option<u64>>) {
+    public entry fun vec_option_u64(mut v: vector<Option<u64>>) {
         while (!vector::is_empty(&v)) {
             let opt = vector::pop_back(&mut v);
             if (option::is_some(&opt)) {
@@ -20,11 +18,11 @@ module test::m1 {
         }
     }
 
-    public entry fun vec_option_string(v: vector<Option<String>>) {
+    public entry fun vec_option_string(mut v: vector<Option<String>>) {
         while (!vector::is_empty(&v)) {
             let opt = vector::pop_back(&mut v);
             if (option::is_some(&opt)) {
-                string::utf8(*string::bytes(&option::destroy_some(opt)));
+                string::utf8(*string::as_bytes(&option::destroy_some(opt)));
             }
         }
     }

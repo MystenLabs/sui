@@ -1,34 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	JsonRpcProvider,
-	ObjectId,
+import type {
 	PaginationArguments,
-	SuiAddress,
+	SuiClient,
 	SuiObjectData,
+	SuiObjectDataFilter,
 	SuiObjectResponse,
-	getObjectFields,
-	isValidSuiAddress,
-} from '@mysten/sui.js';
-import {
-	attachListingsAndPrices,
-	attachLockedItems,
-	extractKioskData,
-	getAllDynamicFields,
-	getKioskObject,
-} from '../utils';
-import {
+} from '@mysten/sui/client';
+import { isValidSuiAddress } from '@mysten/sui/utils';
+
+import type {
 	FetchKioskOptions,
-	KIOSK_OWNER_CAP,
+	KioskExtension,
 	KioskListing,
 	OwnedKiosks,
 	PagedKioskData,
-} from '../types';
+} from '../types/index.js';
+import { KIOSK_OWNER_CAP } from '../types/index.js';
+import {
+	attachListingsAndPrices,
+	attachLockedItems,
+	attachObjects,
+	extractKioskData,
+	getAllDynamicFields,
+	getAllObjects,
+	getKioskObject,
+} from '../utils.js';
 
 export async function fetchKiosk(
-	provider: JsonRpcProvider,
-	kioskId: SuiAddress,
+	client: SuiClient,
+	kioskId: string,
 	pagination: PaginationArguments<string>,
 	options: FetchKioskOptions,
 ): Promise<PagedKioskData> {
@@ -36,26 +38,26 @@ export async function fetchKiosk(
 	// response, once we have better RPC support for
 	// type filtering & batch fetching.
 	// This can't work with pagination currently.
-	const data = await getAllDynamicFields(provider, kioskId, pagination);
+	const data = await getAllDynamicFields(client, kioskId, pagination);
 
 	const listings: KioskListing[] = [];
-	const lockedItemIds: ObjectId[] = [];
+	const lockedItemIds: string[] = [];
 
 	// extracted kiosk data.
-	const kioskData = extractKioskData(data, listings, lockedItemIds);
+	const kioskData = extractKioskData(data, listings, lockedItemIds, kioskId);
 
 	// split the fetching in two queries as we are most likely passing different options for each kind.
 	// For items, we usually seek the Display.
 	// For listings we usually seek the DF value (price) / exclusivity.
-	const [kiosk, listingObjects] = await Promise.all([
-		options.withKioskFields ? getKioskObject(provider, kioskId) : Promise.resolve(undefined),
+	const [kiosk, listingObjects, items] = await Promise.all([
+		options.withKioskFields ? getKioskObject(client, kioskId) : Promise.resolve(undefined),
 		options.withListingPrices
-			? provider.multiGetObjects({
-					ids: kioskData.listingIds,
-					options: {
-						showContent: true,
-					},
-			  })
+			? getAllObjects(client, kioskData.listingIds, {
+					showContent: true,
+				})
+			: Promise.resolve([]),
+		options.withObjects
+			? getAllObjects(client, kioskData.itemIds, options.objectOptions || { showDisplay: true })
 			: Promise.resolve([]),
 	]);
 
@@ -64,6 +66,12 @@ export async function fetchKiosk(
 	attachListingsAndPrices(kioskData, listings, listingObjects);
 	// add `locked` status to items that are locked.
 	attachLockedItems(kioskData, lockedItemIds);
+
+	// Attach the objects for the queried items.
+	attachObjects(
+		kioskData,
+		items.filter((x) => !!x.data).map((x) => x.data!),
+	);
 
 	return {
 		data: kioskData,
@@ -79,10 +87,11 @@ export async function fetchKiosk(
  * Extra options allow pagination.
  */
 export async function getOwnedKiosks(
-	provider: JsonRpcProvider,
-	address: SuiAddress,
+	client: SuiClient,
+	address: string,
 	options?: {
 		pagination?: PaginationArguments<string>;
+		personalKioskType: string;
 	},
 ): Promise<OwnedKiosks> {
 	if (!isValidSuiAddress(address))
@@ -93,18 +102,38 @@ export async function getOwnedKiosks(
 			kioskIds: [],
 		};
 
+	const filter: SuiObjectDataFilter = {
+		MatchAny: [
+			{
+				StructType: KIOSK_OWNER_CAP,
+			},
+		],
+	};
+
+	if (options?.personalKioskType) {
+		filter.MatchAny.push({
+			StructType: options.personalKioskType,
+		});
+	}
+
 	// fetch owned kiosk caps, paginated.
-	const { data, hasNextPage, nextCursor } = await provider.getOwnedObjects({
+	const { data, hasNextPage, nextCursor } = await client.getOwnedObjects({
 		owner: address,
-		filter: { StructType: KIOSK_OWNER_CAP },
+		filter,
 		options: {
 			showContent: true,
+			showType: true,
 		},
 		...(options?.pagination || {}),
 	});
 
 	// get kioskIds from the OwnerCaps.
-	const kioskIdList = data?.map((x: SuiObjectResponse) => getObjectFields(x)?.for);
+	const kioskIdList = data?.map((x: SuiObjectResponse) => {
+		const fields = x.data?.content?.dataType === 'moveObject' ? x.data.content.fields : null;
+		// @ts-ignore-next-line TODO: should i remove ts ignore here?
+		return (fields?.cap ? fields?.cap?.fields?.for : fields?.for) as string;
+		// return (fields as { for: string })?.for;
+	});
 
 	// clean up data that might have an error in them.
 	// only return valid objects.
@@ -114,11 +143,43 @@ export async function getOwnedKiosks(
 		nextCursor,
 		hasNextPage,
 		kioskOwnerCaps: filteredData.map((x, idx) => ({
+			isPersonal: x.type !== KIOSK_OWNER_CAP,
 			digest: x.digest,
 			version: x.version,
 			objectId: x.objectId,
 			kioskId: kioskIdList[idx],
 		})),
 		kioskIds: kioskIdList,
+	};
+}
+
+// Get a kiosk extension data for a given kioskId and extensionType.
+export async function fetchKioskExtension(
+	client: SuiClient,
+	kioskId: string,
+	extensionType: string,
+): Promise<KioskExtension | null> {
+	const extension = await client.getDynamicFieldObject({
+		parentId: kioskId,
+		name: {
+			type: `0x2::kiosk_extension::ExtensionKey<${extensionType}>`,
+			value: {
+				dummy_field: false,
+			},
+		},
+	});
+
+	if (!extension.data) return null;
+
+	const fields = (extension?.data?.content as { fields: { [k: string]: any } })?.fields?.value
+		?.fields;
+
+	return {
+		objectId: extension.data.objectId,
+		type: extensionType,
+		isEnabled: fields?.is_enabled,
+		permissions: fields?.permissions,
+		storageId: fields?.storage?.fields?.id?.id,
+		storageSize: fields?.storage?.fields?.size,
 	};
 }

@@ -6,45 +6,55 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
 arc-swap.workspace = true
 axum.workspace = true
 anyhow.workspace = true
+base64.workspace = true
+bcs.workspace = true
 clap.workspace = true
 prometheus.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 futures.workspace = true
+parking_lot.workspace = true
 tower.workspace = true
 reqwest.workspace = true
 tap.workspace = true
 serde.workspace = true
-snap.workspace = true
-git-version.workspace = true
-const-str.workspace = true
+bin-version.workspace = true
+url.workspace = true
+humantime.workspace = true
 
 sui-archival.workspace = true
 sui-tls.workspace = true
 sui-macros.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
+sui-rest-api.workspace = true
 sui-storage.workspace = true
 sui-network.workspace = true
 sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
 sui-protocol-config.workspace = true
+sui-snapshot.workspace = true
 sui-telemetry.workspace = true
 sui-types.workspace = true
 mysten-metrics.workspace = true
+mysten-service.workspace = true
 mysten-common.workspace = true
 narwhal-network.workspace = true
-narwhal-types.workspace = true
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+fastcrypto-zkp.workspace = true
+move-vm-profiler.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

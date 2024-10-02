@@ -1,0 +1,22 @@
+[package]
+name = "move-bytecode-source-map"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-symbol-pool.workspace = true
+move-binary-format.workspace = true
+move-command-line-common.workspace = true
+
+bcs.workspace = true
+
+serde.workspace = true
+
+[features]
+default = []

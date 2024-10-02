@@ -26,13 +26,22 @@
 ///    }
 /// }
 /// ```
-module sui::event {
-    /// Emit a custom Move event, sending the data offchain.
-    ///
-    /// Used for creating custom indexes and tracking onchain
-    /// activity in a way that suits a specific application the most.
-    ///
-    /// The type `T` is the main way to index the event, and can contain
-    /// phantom parameters, eg `emit(MyEvent<phantom T>)`.
-    public native fun emit<T: copy + drop>(event: T);
-}
+module sui::event;
+
+/// Emit a custom Move event, sending the data offchain.
+///
+/// Used for creating custom indexes and tracking onchain
+/// activity in a way that suits a specific application the most.
+///
+/// The type `T` is the main way to index the event, and can contain
+/// phantom parameters, eg `emit(MyEvent<phantom T>)`.
+public native fun emit<T: copy + drop>(event: T);
+
+#[test_only]
+/// Get the total number of events emitted during execution so far
+public native fun num_events(): u32;
+
+#[test_only]
+/// Get all events of type `T` emitted during execution.
+/// Can only be used in testing,
+public native fun events_by_type<T: copy + drop>(): vector<T>;

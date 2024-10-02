@@ -10,30 +10,28 @@
 /// Test event limits enforced
 module Test::M1 {
     use sui::event;
-    use sui::tx_context::TxContext;
-    use std::vector;
     use sui::bcs;
 
-    struct NewValueEvent has copy, drop {
+    public struct NewValueEvent has copy, drop {
         contents: vector<u8>
     }
 
     // emit an event of size n
-    public fun emit_event_with_size(n: u64) {
+    public fun emit_event_with_size(mut n: u64) {
         // 46 seems to be the added size from event size derivation for `NewValueEvent`
         assert!(n > 46, 0);
         n = n - 46;
         // minimum object size for NewValueEvent is 1 byte for vector length
         assert!(n > 1, 0);
-        let contents = vector[];
-        let i = 0;
+        let mut contents = vector[];
+        let mut i = 0;
         let bytes_to_add = n - 1;
         while (i < bytes_to_add) {
             vector::push_back(&mut contents, 9);
             i = i + 1;
         };
-        let s = NewValueEvent { contents };
-        let size = vector::length(&bcs::to_bytes(&s));
+        let mut s = NewValueEvent { contents };
+        let mut size = vector::length(&bcs::to_bytes(&s));
         // shrink by 1 byte until we match size. mismatch happens because of len(UID) + vector length byte
         while (size > n) {
             let _ = vector::pop_back(&mut s.contents);
@@ -46,7 +44,7 @@ module Test::M1 {
 
     // Emit small (less than max size) events to test that the number of events is limited to the max count
     public entry fun emit_n_small_events(n: u64, _ctx: &mut TxContext) {
-        let i = 0;
+        let mut i = 0;
         while (i < n) {
             emit_event_with_size(50);
             i = i + 1;
@@ -58,13 +56,13 @@ module Test::M1 {
 //# run Test::M1::emit_n_small_events --args 1 --gas-budget 100000000000000 --summarize
 
 // emit at event count limit should succeed
-//# run Test::M1::emit_n_small_events --args 256 --gas-budget 100000000000000 --summarize
+//# run Test::M1::emit_n_small_events --args 1024 --gas-budget 100000000000000 --summarize
 
 // emit above event count limit should fail
-//# run Test::M1::emit_n_small_events --args 257 --gas-budget 100000000000000
+//# run Test::M1::emit_n_small_events --args 1025 --gas-budget 100000000000000
 
 // emit above event count limit should fail
-//# run Test::M1::emit_n_small_events --args 300 --gas-budget 100000000000000
+//# run Test::M1::emit_n_small_events --args 2093 --gas-budget 100000000000000
 
 // emit below event size limit should succeed
 //# run Test::M1::emit_event_with_size --args 200000 --gas-budget 100000000000000 --summarize

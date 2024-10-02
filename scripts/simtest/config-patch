@@ -1,0 +1,22 @@
+diff --git a/.cargo/config.toml b/.cargo/config.toml
+index ec2c459490..55985cbe9f 100644
+--- a/.cargo/config.toml
++++ b/.cargo/config.toml
+@@ -25,4 +25,4 @@ move-clippy = [
+ ]
+
+ [build]
+-rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]
++rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "--cfg", "msim"]
+diff --git a/Cargo.toml b/Cargo.toml
+index c0829bc1b6..4007f97d66 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -682,5 +682,7 @@ field_names = "0.2.0"
+ semver = "1.0.16"
+ spinners = "4.1.0"
+ include_dir = "0.7.3"
+
+ [patch.crates-io]
++tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "b320996d8dfb99b273fe31c0222c659332283c99" }
++futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "b320996d8dfb99b273fe31c0222c659332283c99" }

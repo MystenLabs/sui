@@ -1,0 +1,6 @@
+[package]
+name = "Root"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }

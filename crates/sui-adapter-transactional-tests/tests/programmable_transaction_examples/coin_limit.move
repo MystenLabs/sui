@@ -5,13 +5,10 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
 
-    struct CoolMarker has key, store { id: UID }
+    public struct CoolMarker has key, store { id: UID }
 
     public entry fun purchase(coin: Coin<SUI>, ctx: &mut TxContext) {
         transfer::public_transfer(purchase_(coin, ctx), tx_context::sender(ctx))

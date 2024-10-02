@@ -1,0 +1,54 @@
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+    import 0x2.object;
+
+    receive_bad<T: key>(m: &mut object.UID, r: transfer.Receiving<T>): T {
+        let x: T;
+        label l0:
+        x = transfer.receive<T>(move(m), move(r));
+        return move(x);
+    }
+}
+
+//# publish
+module 0x0.m1 {
+    import 0x2.transfer;
+    import 0x2.object;
+
+    receive_bad<T: key + store>(m: &mut object.UID, r: transfer.Receiving<T>): T {
+        let x: T;
+        label l0:
+        x = transfer.receive<T>(move(m), move(r));
+        return move(x);
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+    import 0x2.object;
+
+    struct A has key { id: object.UID }
+
+    // Valid since `A` defined in this module
+    receive_good(m: &mut object.UID, r: transfer.Receiving<Self.A>): Self.A {
+        let x: Self.A;
+        label l0:
+        x = transfer.receive<Self.A>(move(m), move(r));
+        return move(x);
+    }
+}
+
+//# publish
+module 0x0.m1 {
+    import 0x2.transfer;
+    import 0x2.object;
+
+    receive_good<T: key + store>(m: &mut object.UID, r: transfer.Receiving<T>): T {
+        let x: T;
+        label l0:
+        x = transfer.public_receive<T>(move(m), move(r));
+        return move(x);
+    }
+}

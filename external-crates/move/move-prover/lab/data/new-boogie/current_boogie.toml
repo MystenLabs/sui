@@ -1,3 +1,0 @@
-# Use the current default boogie
-boogie_exp = true
-prover.run_mono = true

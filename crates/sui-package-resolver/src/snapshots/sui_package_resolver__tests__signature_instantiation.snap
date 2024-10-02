@@ -1,0 +1,34 @@
+---
+source: crates/sui-package-resolver/src/lib.rs
+expression: "sig.instantiate(&[T::U64, T::Bool]).unwrap()"
+---
+Struct(
+    StructTag {
+        address: 0000000000000000000000000000000000000000000000000000000000000002,
+        module: Identifier(
+            "table",
+        ),
+        name: Identifier(
+            "Table",
+        ),
+        type_params: [
+            Bool,
+            Vector(
+                Struct(
+                    StructTag {
+                        address: 0000000000000000000000000000000000000000000000000000000000000001,
+                        module: Identifier(
+                            "option",
+                        ),
+                        name: Identifier(
+                            "Option",
+                        ),
+                        type_params: [
+                            U64,
+                        ],
+                    },
+                ),
+            ),
+        ],
+    },
+)

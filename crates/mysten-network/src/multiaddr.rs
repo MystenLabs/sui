@@ -4,8 +4,9 @@
 use eyre::{eyre, Result};
 use std::{
     borrow::Cow,
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
 };
+use tracing::error;
 
 pub use ::multiaddr::Error;
 pub use ::multiaddr::Protocol;
@@ -23,7 +24,7 @@ impl Multiaddr {
         Self(inner)
     }
 
-    pub(crate) fn iter(&self) -> ::multiaddr::Iter<'_> {
+    pub fn iter(&self) -> ::multiaddr::Iter<'_> {
         self.0.iter()
     }
 
@@ -100,19 +101,119 @@ impl Multiaddr {
         Ok(SocketAddr::new(ip, tcp_port))
     }
 
+    // Returns true if the third component in the multiaddr is `Protocol::Tcp`
+    pub fn is_loosely_valid_tcp_addr(&self) -> bool {
+        let mut iter = self.iter();
+        iter.next(); // Skip the ip/dns part
+        match iter.next() {
+            Some(Protocol::Tcp(_)) => true,
+            _ => false, // including `None` and `Some(other)`
+        }
+    }
+
     /// Set the ip address to `0.0.0.0`. For instance, it converts the following address
     /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/0.0.0.0/tcp/1500/http`.
-    pub fn zero_ip_multi_address(&self) -> Self {
-        let mut new_address = ::multiaddr::Multiaddr::empty();
-        for component in &self.0 {
-            match component {
-                multiaddr::Protocol::Ip4(_) => new_address.push(multiaddr::Protocol::Ip4(
-                    std::net::Ipv4Addr::new(0, 0, 0, 0),
-                )),
-                c => new_address.push(c),
+    /// This is useful when starting a server and you want to listen on all interfaces.
+    pub fn with_zero_ip(&self) -> Self {
+        let mut new_address = self.0.clone();
+        let Some(protocol) = new_address.iter().next() else {
+            error!("Multiaddr is empty");
+            return Self(new_address);
+        };
+        match protocol {
+            multiaddr::Protocol::Ip4(_)
+            | multiaddr::Protocol::Dns(_)
+            | multiaddr::Protocol::Dns4(_) => {
+                new_address = new_address
+                    .replace(0, |_| Some(multiaddr::Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
+                    .unwrap();
+            }
+            multiaddr::Protocol::Ip6(_) | multiaddr::Protocol::Dns6(_) => {
+                new_address = new_address
+                    .replace(0, |_| Some(multiaddr::Protocol::Ip6(Ipv6Addr::UNSPECIFIED)))
+                    .unwrap();
+            }
+            p => {
+                error!("Unsupported protocol {} in Multiaddr {}!", p, new_address);
             }
         }
         Self(new_address)
+    }
+
+    /// Set the ip address to `127.0.0.1`. For instance, it converts the following address
+    /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/127.0.0.1/tcp/1500/http`.
+    pub fn with_localhost_ip(&self) -> Self {
+        let mut new_address = self.0.clone();
+        let Some(protocol) = new_address.iter().next() else {
+            error!("Multiaddr is empty");
+            return Self(new_address);
+        };
+        match protocol {
+            multiaddr::Protocol::Ip4(_)
+            | multiaddr::Protocol::Dns(_)
+            | multiaddr::Protocol::Dns4(_) => {
+                new_address = new_address
+                    .replace(0, |_| Some(multiaddr::Protocol::Ip4(Ipv4Addr::LOCALHOST)))
+                    .unwrap();
+            }
+            multiaddr::Protocol::Ip6(_) | multiaddr::Protocol::Dns6(_) => {
+                new_address = new_address
+                    .replace(0, |_| Some(multiaddr::Protocol::Ip6(Ipv6Addr::LOCALHOST)))
+                    .unwrap();
+            }
+            p => {
+                error!("Unsupported protocol {} in Multiaddr {}!", p, new_address);
+            }
+        }
+        Self(new_address)
+    }
+
+    pub fn is_localhost_ip(&self) -> bool {
+        let Some(protocol) = self.0.iter().next() else {
+            error!("Multiaddr is empty");
+            return false;
+        };
+        match protocol {
+            multiaddr::Protocol::Ip4(addr) => addr == Ipv4Addr::LOCALHOST,
+            multiaddr::Protocol::Ip6(addr) => addr == Ipv6Addr::LOCALHOST,
+            _ => false,
+        }
+    }
+
+    pub fn hostname(&self) -> Option<String> {
+        for component in self.iter() {
+            match component {
+                Protocol::Ip4(ip) => return Some(ip.to_string()),
+                Protocol::Ip6(ip) => return Some(ip.to_string()),
+                Protocol::Dns(dns) => return Some(dns.to_string()),
+                _ => (),
+            }
+        }
+        None
+    }
+
+    pub fn port(&self) -> Option<u16> {
+        for component in self.iter() {
+            match component {
+                Protocol::Udp(port) | Protocol::Tcp(port) => return Some(port),
+                _ => (),
+            }
+        }
+        None
+    }
+
+    pub fn rewrite_udp_to_tcp(&self) -> Self {
+        let mut new = Self::empty();
+
+        for component in self.iter() {
+            if let Protocol::Udp(port) = component {
+                new.push(Protocol::Tcp(port));
+            } else {
+                new.push(component);
+            }
+        }
+
+        new
     }
 }
 
@@ -181,13 +282,10 @@ pub(crate) fn parse_tcp<'a, T: Iterator<Item = Protocol<'a>>>(protocols: &mut T)
 pub(crate) fn parse_http_https<'a, T: Iterator<Item = Protocol<'a>>>(
     protocols: &mut T,
 ) -> Result<&'static str> {
-    match protocols
-        .next()
-        .ok_or_else(|| eyre!("unexpected end of multiaddr"))?
-    {
-        Protocol::Http => Ok("http"),
-        Protocol::Https => Ok("https"),
-        _ => Err(eyre!("expected http/https protocol")),
+    match protocols.next() {
+        Some(Protocol::Http) => Ok("http"),
+        Some(Protocol::Https) => Ok("https"),
+        _ => Ok("http"),
     }
 }
 
@@ -254,24 +352,6 @@ pub(crate) fn parse_ip6(address: &Multiaddr) -> Result<(SocketAddr, &'static str
     Ok((socket_addr, http_or_https))
 }
 
-// Parse a full /unix/-/{http,https} address
-#[cfg(unix)]
-pub(crate) fn parse_unix(address: &Multiaddr) -> Result<(Cow<'_, str>, &'static str)> {
-    let mut iter = address.iter();
-
-    let path = match iter
-        .next()
-        .ok_or_else(|| eyre!("unexpected end of multiaddr"))?
-    {
-        Protocol::Unix(path) => path,
-        other => return Err(eyre!("expected unix found {other}")),
-    };
-    let http_or_https = parse_http_https(&mut iter)?;
-    parse_end(&mut iter)?;
-
-    Ok((path, http_or_https))
-}
-
 #[cfg(test)]
 mod test {
     use super::Multiaddr;
@@ -298,5 +378,102 @@ mod test {
         let _ = multi_addr_dns
             .to_socket_addr()
             .expect_err("DNS is unsupported");
+    }
+
+    #[test]
+    fn test_is_loosely_valid_tcp_addr() {
+        let multi_addr_ipv4 = Multiaddr(multiaddr!(Ip4([127, 0, 0, 1]), Tcp(10500u16)));
+        assert!(multi_addr_ipv4.is_loosely_valid_tcp_addr());
+        let multi_addr_ipv6 = Multiaddr(multiaddr!(Ip6([172, 0, 0, 1, 1, 1, 1, 1]), Tcp(10500u16)));
+        assert!(multi_addr_ipv6.is_loosely_valid_tcp_addr());
+        let multi_addr_dns = Multiaddr(multiaddr!(Dnsaddr("mysten.sui"), Tcp(10500u16)));
+        assert!(multi_addr_dns.is_loosely_valid_tcp_addr());
+
+        let multi_addr_ipv4 = Multiaddr(multiaddr!(Ip4([127, 0, 0, 1]), Udp(10500u16)));
+        assert!(!multi_addr_ipv4.is_loosely_valid_tcp_addr());
+        let multi_addr_ipv6 = Multiaddr(multiaddr!(Ip6([172, 0, 0, 1, 1, 1, 1, 1]), Udp(10500u16)));
+        assert!(!multi_addr_ipv6.is_loosely_valid_tcp_addr());
+        let multi_addr_dns = Multiaddr(multiaddr!(Dnsaddr("mysten.sui"), Udp(10500u16)));
+        assert!(!multi_addr_dns.is_loosely_valid_tcp_addr());
+
+        let invalid_multi_addr_ipv4 = Multiaddr(multiaddr!(Ip4([127, 0, 0, 1])));
+        assert!(!invalid_multi_addr_ipv4.is_loosely_valid_tcp_addr());
+    }
+
+    #[test]
+    fn test_get_hostname_port() {
+        let multi_addr_ip4 = Multiaddr(multiaddr!(Ip4([127, 0, 0, 1]), Tcp(10500u16)));
+        assert_eq!(Some("127.0.0.1".to_string()), multi_addr_ip4.hostname());
+        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+
+        let multi_addr_dns = Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16)));
+        assert_eq!(Some("mysten.sui".to_string()), multi_addr_dns.hostname());
+        assert_eq!(Some(10501u16), multi_addr_dns.port());
+    }
+
+    #[test]
+    fn test_to_anemo_address() {
+        let addr_ip4 = Multiaddr(multiaddr!(Ip4([15, 15, 15, 1]), Udp(10500u16)))
+            .to_anemo_address()
+            .unwrap();
+        assert_eq!("15.15.15.1:10500".to_string(), addr_ip4.to_string());
+
+        let addr_ip6 = Multiaddr(multiaddr!(
+            Ip6([15, 15, 15, 15, 15, 15, 15, 1]),
+            Udp(10500u16)
+        ))
+        .to_anemo_address()
+        .unwrap();
+        assert_eq!("[f:f:f:f:f:f:f:1]:10500".to_string(), addr_ip6.to_string());
+
+        let addr_dns = Multiaddr(multiaddr!(Dns("mysten.sui"), Udp(10501u16)))
+            .to_anemo_address()
+            .unwrap();
+        assert_eq!("mysten.sui:10501".to_string(), addr_dns.to_string());
+
+        let addr_invalid =
+            Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16))).to_anemo_address();
+        assert!(addr_invalid.is_err());
+    }
+
+    #[test]
+    fn test_with_zero_ip() {
+        let multi_addr_ip4 =
+            Multiaddr(multiaddr!(Ip4([15, 15, 15, 1]), Tcp(10500u16))).with_zero_ip();
+        assert_eq!(Some("0.0.0.0".to_string()), multi_addr_ip4.hostname());
+        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+
+        let multi_addr_ip6 = Multiaddr(multiaddr!(
+            Ip6([15, 15, 15, 15, 15, 15, 15, 1]),
+            Tcp(10500u16)
+        ))
+        .with_zero_ip();
+        assert_eq!(Some("::".to_string()), multi_addr_ip6.hostname());
+        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+
+        let multi_addr_dns = Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16))).with_zero_ip();
+        assert_eq!(Some("0.0.0.0".to_string()), multi_addr_dns.hostname());
+        assert_eq!(Some(10501u16), multi_addr_dns.port());
+    }
+
+    #[test]
+    fn test_with_localhost_ip() {
+        let multi_addr_ip4 =
+            Multiaddr(multiaddr!(Ip4([15, 15, 15, 1]), Tcp(10500u16))).with_localhost_ip();
+        assert_eq!(Some("127.0.0.1".to_string()), multi_addr_ip4.hostname());
+        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+
+        let multi_addr_ip6 = Multiaddr(multiaddr!(
+            Ip6([15, 15, 15, 15, 15, 15, 15, 1]),
+            Tcp(10500u16)
+        ))
+        .with_localhost_ip();
+        assert_eq!(Some("::1".to_string()), multi_addr_ip6.hostname());
+        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+
+        let multi_addr_dns =
+            Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16))).with_localhost_ip();
+        assert_eq!(Some("127.0.0.1".to_string()), multi_addr_dns.hostname());
+        assert_eq!(Some(10501u16), multi_addr_dns.port());
     }
 }

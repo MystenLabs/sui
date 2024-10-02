@@ -18,8 +18,6 @@ use sui_benchmark::drivers::BenchmarkCmp;
 use sui_benchmark::drivers::BenchmarkStats;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
-use sui_node::metrics;
-
 use sui_benchmark::benchmark_setup::Env;
 use sui_benchmark::options::Opts;
 
@@ -60,7 +58,7 @@ async fn main() -> Result<()> {
     // TODO: query the network for the current protocol version.
     let protocol_config = match opts.protocol_version {
         Some(v) => ProtocolConfig::get_for_version(ProtocolVersion::new(v), Chain::Unknown),
-        None => ProtocolConfig::get_for_max_version(),
+        None => ProtocolConfig::get_for_max_version_UNSAFE(),
     };
 
     let max_num_new_move_object_ids = protocol_config.max_num_new_move_object_ids();
@@ -81,7 +79,7 @@ async fn main() -> Result<()> {
     }
     let _guard = config.with_env().init();
 
-    let registry_service = metrics::start_prometheus_server(
+    let registry_service = mysten_metrics::start_prometheus_server(
         format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
             .parse()
             .unwrap(),

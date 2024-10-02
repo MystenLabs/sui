@@ -1,0 +1,13 @@
+# This tests proper generation of a dependency graph when lock files are present. The Move.locked
+# file is not generated due to how the test harness works but the graph is correctly included in the
+# Move.resolved file
+
+[package]
+name = "test"
+
+[addresses]
+A = "0x3"
+
+[dependencies]
+C = { local = "./deps_only/C" }
+D = { local = "./deps_only/D" }

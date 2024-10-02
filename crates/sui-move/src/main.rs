@@ -10,22 +10,8 @@ use sui_move::execute_move_command;
 use sui_types::exit_main;
 use tracing::debug;
 
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        let version = git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = ""
-        );
-
-        if version.is_empty() {
-            panic!("unable to query git revision");
-        }
-        version
-    }
-};
-const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
+// Define the `GIT_REVISION` and `VERSION` consts
+bin_version::bin_version!();
 
 #[derive(Parser)]
 #[clap(
@@ -37,7 +23,7 @@ const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REV
 )]
 struct Args {
     /// Path to a package which the command should be run with respect to.
-    #[clap(long = "path", short = 'p', global = true, parse(from_os_str))]
+    #[clap(long = "path", short = 'p', global = true)]
     pub package_path: Option<PathBuf>,
     /// If true, run the Move bytecode verifier on the bytecode from a successful build
     #[clap(long = "path", short = 'p', global = true)]
@@ -79,7 +65,7 @@ async fn main() {
     debug!("Sui-Move CLI version: {VERSION}");
 
     exit_main!(execute_move_command(
-        args.package_path,
+        args.package_path.as_deref(),
         args.build_config,
         args.cmd
     ));

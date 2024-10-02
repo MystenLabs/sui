@@ -1,0 +1,31 @@
+{
+  object(
+    address: "0x04e20ddf36af412a4096f9014f4a565af9e812db9a05cc40254846cf6ed0ad91"
+  ) {
+    address
+    version
+    digest
+    storageRebate
+    owner {
+      __typename
+      ... on Shared {
+        initialSharedVersion
+      }
+      __typename
+      ... on Parent {
+        parent {
+          address
+        }
+      }
+      __typename
+      ... on AddressOwner {
+        owner {
+          address
+        }
+      }
+    }
+    previousTransactionBlock {
+      digest
+    }
+  }
+}

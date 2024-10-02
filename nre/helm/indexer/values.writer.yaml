@@ -1,0 +1,43 @@
+# Default values for indexer-writer.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+args: ["--db-url", "$(DB_URL)", "--rpc-client-url", "https://public-rpc.mainnet.sui.io", "--remote-store-url", "https://checkpoints.mainnet.sui.io", "--fullnode-sync-worker"]
+
+# only 1 writer needed
+replicaCount: 1
+
+podAnnotations:
+    app: sui-indexer-writer
+
+env:
+  RUST_BACKTRACE:
+    value: "1"
+  RUST_LOG:
+    value: "info,jsonrpsee=error,jsonrpsee_types=error"
+  RUST_JSON_LOG:
+    value: "true"
+  DB_CONNECTION_TIMEOUT:
+    value: "3600"
+  DB_STATEMENT_TIMEOUT:
+    value: "3600"
+  CHECKPOINT_COMIT_BATCH_SIZE:
+    value: "300"
+  DB_URL:
+    valueFrom:
+      secretKeyRef:
+        name: "indexer-writer-db-url-secret"
+        key: "db-url"
+
+resources: 
+  limits:
+     cpu: 3
+     memory: 10Gi
+  requests:
+     cpu: 2
+     memory: 8Gi
+
+# writer does not need ingress, no api exists
+ingress:
+  enabled: false
+

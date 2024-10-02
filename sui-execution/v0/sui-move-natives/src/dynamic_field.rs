@@ -9,9 +9,10 @@ use crate::{
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value as A,
     gas_algebra::InternalGas,
     language_storage::{StructTag, TypeTag},
-    value::MoveTypeLayout,
+    runtime_value as R,
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_charge_gas_early_exit;
@@ -25,6 +26,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::MoveObjectType, dynamic_field::derive_dynamic_field_id};
+use tracing::instrument;
 
 const E_KEY_DOES_NOT_EXIST: u64 = 1;
 const E_FIELD_TYPE_MISMATCH: u64 = 2;
@@ -39,7 +41,7 @@ macro_rules! get_or_fetch_object {
         );
 
         assert!($ty_args.is_empty());
-        let (layout, tag) = match get_tag_and_layout($context, &child_ty)? {
+        let (tag, layout, annotated_layout) = match get_tag_and_layouts($context, &child_ty)? {
             Some(res) => res,
             None => {
                 return Ok(NativeResult::err(
@@ -48,12 +50,14 @@ macro_rules! get_or_fetch_object {
                 ))
             }
         };
+
         let object_runtime: &mut ObjectRuntime = $context.extensions_mut().get_mut();
         object_runtime.get_or_fetch_child_object(
             $parent,
             $child_id,
             &child_ty,
-            layout,
+            &layout,
+            &annotated_layout,
             MoveObjectType::from(tag),
         )?
     }};
@@ -75,6 +79,7 @@ pub struct DynamicFieldHashTypeAndKeyCostParams {
  *              + dynamic_field_hash_type_and_key_value_cost_per_byte * size_of(k)  | covers cost of operating on the value `k`
  *              + dynamic_field_hash_type_and_key_type_tag_cost_per_byte * size_of(type_tag(k))    | covers cost of operating on the type tag of `K`
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn hash_type_and_key(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -129,16 +134,10 @@ pub fn hash_type_and_key(
         _ => return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE)),
     };
     let Some(k_bytes) = k.simple_serialize(&k_layout) else {
-        return Ok(NativeResult::err(
-            cost,
-            E_BCS_SERIALIZATION_FAILURE,
-        ))
+        return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE));
     };
     let Ok(id) = derive_dynamic_field_id(parent, &k_tag, &k_bytes) else {
-        return Ok(NativeResult::err(
-            cost,
-            E_BCS_SERIALIZATION_FAILURE,
-        ));
+        return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE));
     };
 
     Ok(NativeResult::ok(cost, smallvec![Value::address(id.into())]))
@@ -161,6 +160,7 @@ pub struct DynamicFieldAddChildObjectCostParams {
  *              + dynamic_field_add_child_object_value_cost_per_byte * size_of(child)       | covers cost of operating on the value `child`
  *              + dynamic_field_add_child_object_struct_tag_cost_per_byte * size_of(struct)tag(Child))  | covers cost of operating on the struct tag of `Child`
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn add_child_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -256,6 +256,7 @@ pub struct DynamicFieldBorrowChildObjectCostParams {
  *              + dynamic_field_borrow_child_object_child_ref_cost_per_byte  * size_of(&Child)  | covers cost of fetching and returning `&Child`
  *              + dynamic_field_borrow_child_object_type_cost_per_byte  * size_of(Child)        | covers cost of operating on type `Child`
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn borrow_child_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -302,9 +303,8 @@ pub fn borrow_child_object(
     if !global_value.exists()? {
         return Ok(NativeResult::err(context.gas_used(), E_KEY_DOES_NOT_EXIST));
     }
-    let child_ref = global_value.borrow_global().map_err(|err| {
+    let child_ref = global_value.borrow_global().inspect_err(|err| {
         assert!(err.major_status() != StatusCode::MISSING_DATA);
-        err
     })?;
 
     native_charge_gas_early_exit!(
@@ -332,6 +332,7 @@ pub struct DynamicFieldRemoveChildObjectCostParams {
  *              + dynamic_field_remove_child_object_type_cost_per_byte * size_of(Child)      | covers cost of operating on type `Child`
  *              + dynamic_field_remove_child_object_child_cost_per_byte  * size_of(child)     | covers cost of fetching and returning value of type `Child`
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn remove_child_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -370,9 +371,8 @@ pub fn remove_child_object(
     if !global_value.exists()? {
         return Ok(NativeResult::err(context.gas_used(), E_KEY_DOES_NOT_EXIST));
     }
-    let child = global_value.move_from().map_err(|err| {
+    let child = global_value.move_from().inspect_err(|err| {
         assert!(err.major_status() != StatusCode::MISSING_DATA);
-        err
     })?;
 
     native_charge_gas_early_exit!(
@@ -395,6 +395,7 @@ pub struct DynamicFieldHasChildObjectCostParams {
  * Implementation of the Move native function `has_child_object(parent: address, id: address): bool`
  *   gas cost: dynamic_field_has_child_object_cost_base                    | covers various fixed costs in the oper
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn has_child_object(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -436,6 +437,7 @@ pub struct DynamicFieldHasChildObjectWithTyCostParams {
  *              + dynamic_field_has_child_object_with_ty_type_cost_per_byte * size_of(Child)        | covers cost of operating on type `Child`
  *              + dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte * size_of(Child)    | covers cost of fetching and returning value of type tag for `Child`
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn has_child_object_with_ty(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -496,14 +498,10 @@ pub fn has_child_object_with_ty(
     ))
 }
 
-fn get_tag_and_layout(
+fn get_tag_and_layouts(
     context: &NativeContext,
     ty: &Type,
-) -> PartialVMResult<Option<(MoveTypeLayout, StructTag)>> {
-    let layout = match context.type_to_type_layout(ty)? {
-        None => return Ok(None),
-        Some(layout) => layout,
-    };
+) -> PartialVMResult<Option<(StructTag, R::MoveTypeLayout, A::MoveTypeLayout)>> {
     let tag = match context.type_to_type_tag(ty)? {
         TypeTag::Struct(s) => s,
         _ => {
@@ -513,5 +511,11 @@ fn get_tag_and_layout(
             )
         }
     };
-    Ok(Some((layout, *tag)))
+    let Some(layout) = context.type_to_type_layout(ty)? else {
+        return Ok(None);
+    };
+    let Some(annotated_layout) = context.type_to_fully_annotated_layout(ty)? else {
+        return Ok(None);
+    };
+    Ok(Some((*tag, layout, annotated_layout)))
 }

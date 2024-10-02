@@ -2,10 +2,7 @@
 # see https://diesel.rs/guides/configuring-diesel-cli
 
 [print_schema]
-file = "src/schema.rs"
-patch_file = "src/schema.patch"
-# exclude partitions
-filter = { except_tables = ['.*(_partition_)\d+']}
+file = "src/schema/pg.rs"
 
 [migrations_directory]
-dir = "migrations"
+dir = "migrations/pg"

@@ -3,14 +3,15 @@
 
 use std::path::PathBuf;
 use sui_macros::*;
+use sui_test_transaction_builder::publish_package;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::object::{Object, Owner, OBJECT_START_VERSION};
+use sui_types::object::{Owner, OBJECT_START_VERSION};
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use test_utils::network::{TestCluster, TestClusterBuilder};
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 #[sim_test]
 async fn fresh_shared_object_initial_version_matches_current() {
@@ -28,7 +29,10 @@ async fn objects_transitioning_to_shared_remember_their_previous_version() {
     assert_ne!(counter.1, OBJECT_START_VERSION);
 
     let ExecutionFailureStatus::MoveAbort(location, code) =
-        env.share_counter(counter).await.unwrap_err() else { panic!() };
+        env.share_counter(counter).await.unwrap_err()
+    else {
+        panic!()
+    };
     assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
@@ -41,7 +45,10 @@ async fn shared_object_owner_doesnt_change_on_write() {
 
     let (inc_counter, _) = env.increment_owned_counter(counter).await;
     let ExecutionFailureStatus::MoveAbort(location, code) =
-        env.share_counter(inc_counter).await.unwrap_err() else { panic!() };
+        env.share_counter(inc_counter).await.unwrap_err()
+    else {
+        panic!()
+    };
     assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
@@ -54,7 +61,10 @@ async fn initial_shared_version_mismatch_start_version() {
 
     let (counter, _) = env.increment_owned_counter(counter).await;
     let ExecutionFailureStatus::MoveAbort(location, code) =
-        env.share_counter(counter).await.unwrap_err() else { panic!() };
+        env.share_counter(counter).await.unwrap_err()
+    else {
+        panic!()
+    };
     assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
@@ -66,7 +76,10 @@ async fn initial_shared_version_mismatch_current_version() {
     let (counter, _) = env.create_counter().await;
 
     let ExecutionFailureStatus::MoveAbort(location, code) =
-        env.share_counter(counter).await.unwrap_err() else { panic!() };
+        env.share_counter(counter).await.unwrap_err()
+    else {
+        panic!()
+    };
     assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
@@ -115,7 +128,7 @@ impl TestEnvironment {
         &self,
         function: &'static str,
         arguments: Vec<CallArg>,
-    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let transaction = self
             .test_cluster
             .test_transaction_builder()
@@ -134,7 +147,7 @@ impl TestEnvironment {
     }
 
     async fn create_counter(&self) -> (ObjectRef, Owner) {
-        let (fx, _, _) = self.move_call("create_counter", vec![]).await.unwrap();
+        let (fx, _) = self.move_call("create_counter", vec![]).await.unwrap();
         assert!(fx.status().is_ok());
 
         *fx.created()
@@ -144,7 +157,7 @@ impl TestEnvironment {
     }
 
     async fn create_shared_counter(&self) -> (ObjectRef, Owner) {
-        let (fx, _, _) = self
+        let (fx, _) = self
             .move_call("create_shared_counter", vec![])
             .await
             .unwrap();
@@ -160,7 +173,7 @@ impl TestEnvironment {
         &self,
         counter: ObjectRef,
     ) -> Result<(ObjectRef, Owner), ExecutionFailureStatus> {
-        let (fx, _, _) = self
+        let (fx, _) = self
             .move_call(
                 "share_counter",
                 vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(counter))],
@@ -180,7 +193,7 @@ impl TestEnvironment {
     }
 
     async fn increment_owned_counter(&self, counter: ObjectRef) -> (ObjectRef, Owner) {
-        let (fx, _, _) = self
+        let (fx, _) = self
             .move_call(
                 "increment_counter",
                 vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(counter))],
@@ -199,7 +212,7 @@ impl TestEnvironment {
         counter: ObjectID,
         initial_shared_version: SequenceNumber,
     ) -> anyhow::Result<(ObjectRef, Owner)> {
-        let (fx, _, _) = self
+        let (fx, _) = self
             .move_call(
                 "increment_counter",
                 vec![CallArg::Object(ObjectArg::SharedObject {
@@ -221,5 +234,5 @@ impl TestEnvironment {
 async fn publish_move_package(test_cluster: &TestCluster) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests/move_test_code");
-    test_cluster.wallet.publish_package(path).await
+    publish_package(&test_cluster.wallet, path).await
 }

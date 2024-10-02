@@ -22,37 +22,47 @@ use thiserror::Error;
 pub type QuorumDriverResult = Result<QuorumDriverResponse, QuorumDriverError>;
 
 pub type QuorumDriverEffectsQueueResult =
-    Result<(VerifiedTransaction, QuorumDriverResponse), (TransactionDigest, QuorumDriverError)>;
+    Result<(Transaction, QuorumDriverResponse), (TransactionDigest, QuorumDriverError)>;
+
+pub const NON_RECOVERABLE_ERROR_MSG: &str =
+    "Transaction has non recoverable errors from at least 1/3 of validators";
 
 /// Client facing errors regarding transaction submission via Quorum Driver.
 /// Every invariant needs detailed documents to instruct client handling.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr)]
 pub enum QuorumDriverError {
-    #[error("QuorumDriver internal error: {0:?}.")]
+    #[error("QuorumDriver internal error: {0}.")]
     QuorumDriverInternalError(SuiError),
-    #[error("Invalid user signature: {0:?}.")]
+    #[error("Invalid user signature: {0}.")]
     InvalidUserSignature(SuiError),
     #[error(
         "Failed to sign transaction by a quorum of validators because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
         conflicting_txes,
-        retried_tx,
-        retried_tx_success
+        .retried_tx_status.map(|(tx, success)| tx),
+        .retried_tx_status.map(|(tx, success)| success),
     )]
     ObjectsDoubleUsed {
         conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
-        retried_tx: Option<TransactionDigest>,
-        retried_tx_success: Option<bool>,
+        retried_tx_status: Option<(TransactionDigest, bool)>,
     },
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeFinality,
     #[error("Transaction failed to reach finality with transient error after {total_attempts} attempts.")]
-    FailedWithTransientErrorAfterMaximumAttempts { total_attempts: u8 },
-    #[error("Transaction has non recoverable errors from at least 1/3 of validators: {errors:?}.")]
+    FailedWithTransientErrorAfterMaximumAttempts { total_attempts: u32 },
+    #[error("{NON_RECOVERABLE_ERROR_MSG}: {errors:?}.")]
     NonRecoverableTransactionError { errors: GroupedErrors },
     #[error("Transaction is not processed because {overloaded_stake} of validators by stake are overloaded with certificates pending execution.")]
     SystemOverload {
         overloaded_stake: StakeUnit,
         errors: GroupedErrors,
+    },
+    #[error("Transaction is already finalized but with different user signatures")]
+    TxAlreadyFinalizedWithDifferentUserSignatures,
+    #[error("Transaction is not processed because {overload_stake} of validators are overloaded and asked client to retry after {retry_after_secs}.")]
+    SystemOverloadRetryAfter {
+        overload_stake: StakeUnit,
+        errors: GroupedErrors,
+        retry_after_secs: u64,
     },
 }
 
@@ -101,8 +111,13 @@ pub struct QuorumDriverRequest {
 #[derive(Debug, Clone)]
 pub struct QuorumDriverResponse {
     pub effects_cert: VerifiedCertifiedTransactionEffects,
-    pub events: TransactionEvents,
-    pub objects: Vec<Object>,
+    // pub events: TransactionEvents,
+    pub events: Option<TransactionEvents>,
+    // Input objects will only be populated in the happy path
+    pub input_objects: Option<Vec<Object>>,
+    // Output objects will only be populated in the happy path
+    pub output_objects: Option<Vec<Object>>,
+    pub auxiliary_data: Option<Vec<u8>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -119,6 +134,51 @@ impl ExecuteTransactionRequest {
             TransactionType::SingleWriter
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExecuteTransactionRequestV3 {
+    pub transaction: Transaction,
+
+    pub include_events: bool,
+    pub include_input_objects: bool,
+    pub include_output_objects: bool,
+    pub include_auxiliary_data: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct VerifiedExecuteTransactionResponseV3 {
+    pub effects: VerifiedCertifiedTransactionEffects,
+    pub events: Option<TransactionEvents>,
+    // Input objects will only be populated in the happy path
+    pub input_objects: Option<Vec<Object>>,
+    // Output objects will only be populated in the happy path
+    pub output_objects: Option<Vec<Object>>,
+    pub auxiliary_data: Option<Vec<u8>>,
+}
+
+impl ExecuteTransactionRequestV3 {
+    pub fn new_v2<T: Into<Transaction>>(transaction: T) -> Self {
+        Self {
+            transaction: transaction.into(),
+            include_events: true,
+            include_input_objects: false,
+            include_output_objects: false,
+            include_auxiliary_data: false,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExecuteTransactionResponseV3 {
+    pub effects: FinalizedEffects,
+
+    pub events: Option<TransactionEvents>,
+    // Input objects will only be populated in the happy path
+    pub input_objects: Option<Vec<Object>>,
+    // Output objects will only be populated in the happy path
+    pub output_objects: Option<Vec<Object>>,
+    pub auxiliary_data: Option<Vec<u8>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -13,9 +13,10 @@ use anyhow::anyhow;
 use prometheus::Registry;
 use std::num::NonZeroUsize;
 use std::{collections::HashMap, time::Duration};
-use sui_archival::reader::{ArchiveReaderBalancer, ArchiveReaderConfig};
+use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_config::node::ArchiveReaderConfig;
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::{FileCompression, StorageFormat};
 use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
 use sui_types::{
@@ -314,7 +315,8 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
     };
     // We will delete all checkpoints older than this checkpoint on Node 2
     let oldest_checkpoint_to_keep: u64 = 10;
-    let archive_readers = ArchiveReaderBalancer::new(vec![archive_reader_config])?;
+    let archive_readers =
+        ArchiveReaderBalancer::new(vec![archive_reader_config], &Registry::default())?;
     let archive_reader = archive_readers.pick_one_random(0..u64::MAX).await.unwrap();
     loop {
         archive_reader.sync_manifest_once().await?;

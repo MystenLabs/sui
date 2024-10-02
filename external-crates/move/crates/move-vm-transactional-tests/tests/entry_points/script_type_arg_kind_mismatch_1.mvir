@@ -1,0 +1,28 @@
+//# publish
+module 0x5.Coin {
+    struct Coin { value: u64 }
+    public value(c: &Self.Coin): u64 {
+    label b0:
+        return *&move(c).Coin::value;
+    }
+    public zero(): Self.Coin {
+    label b0:
+        return Coin { value: 0 };
+    }
+    public destroy_zero(c: Self.Coin) {
+    label b0:
+        Coin {} = move(c);
+        assert(() == 0, 42);
+        return;
+    }
+}
+
+//# run --type-args 0x5::Coin::Coin
+module 0x42.m {
+
+entry foo<T: copy + drop>() { // coin does not have copy or drop
+label b0:
+    return;
+}
+
+}

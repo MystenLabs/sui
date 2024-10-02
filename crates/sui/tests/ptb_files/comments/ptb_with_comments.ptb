@@ -1,0 +1,9 @@
+# Testing comments, including # "nested" comments
+# This ptb splits a coin into two
+# and then transfers the coin to another address
+# First split the coin
+--split-coins @0x005 [1000]
+# Then assign the result to variable result
+--assign result
+# Now transfer the resulting coin
+--transfer-objects [result.0] @0x006 

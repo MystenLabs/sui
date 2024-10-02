@@ -2,23 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { KioskListing, KioskOwnerCap } from '@mysten/kiosk';
-import {
-	MIST_PER_SUI,
-	ObjectId,
-	SuiObjectResponse,
-	getObjectDisplay,
-	getObjectId,
-	normalizeSuiAddress,
-} from '@mysten/sui.js';
+import { SuiObjectResponse } from '@mysten/sui/client';
+import { MIST_PER_SUI, normalizeSuiAddress } from '@mysten/sui/utils';
+
 // Parse the display of a list of objects into a simple {object_id: display} map
 // to use throughout the app.
 export const parseObjectDisplays = (
 	data: SuiObjectResponse[],
-): Record<ObjectId, Record<string, string> | undefined> => {
-	return data.reduce<Record<ObjectId, Record<string, string> | undefined>>(
+): Record<string, Record<string, string> | undefined> => {
+	return data.reduce<Record<string, Record<string, string> | undefined>>(
 		(acc, item: SuiObjectResponse) => {
-			const display = getObjectDisplay(item)?.data;
-			const id = getObjectId(item);
+			const display = item.data?.display?.data;
+			const id = item.data?.objectId!;
 			acc[id] = display || undefined;
 			return acc;
 		},
@@ -26,8 +21,8 @@ export const parseObjectDisplays = (
 	);
 };
 
-export const processKioskListings = (data: KioskListing[]): Record<ObjectId, KioskListing> => {
-	const results: Record<ObjectId, KioskListing> = {};
+export const processKioskListings = (data: KioskListing[]): Record<string, KioskListing> => {
+	const results: Record<string, KioskListing> = {};
 
 	data
 		.filter((x) => !!x)
@@ -56,7 +51,7 @@ export const formatSui = (amount: number) => {
  */
 export const findActiveCap = (
 	caps: KioskOwnerCap[] = [],
-	kioskId: ObjectId,
+	kioskId: string,
 ): KioskOwnerCap | undefined => {
 	return caps.find((x) => normalizeSuiAddress(x.kioskId) === normalizeSuiAddress(kioskId));
 };

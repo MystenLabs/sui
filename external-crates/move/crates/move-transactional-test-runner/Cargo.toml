@@ -1,0 +1,48 @@
+[package]
+name = "move-transactional-test-runner"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Transactional testing framework for Move"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+once_cell.workspace = true
+regex.workspace = true
+rayon.workspace = true
+clap.workspace = true
+tempfile.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+
+move-bytecode-source-map.workspace = true
+move-disassembler.workspace = true
+move-binary-format.workspace = true
+move-cli.workspace = true
+move-command-line-common.workspace = true
+move-core-types.workspace = true
+move-ir-compiler.workspace = true
+move-ir-types.workspace = true
+move-compiler.workspace = true
+move-stdlib.workspace = true
+move-stdlib-natives.workspace = true
+move-symbol-pool.workspace = true
+move-vm-config.workspace = true
+move-vm-test-utils.workspace = true
+move-vm-types.workspace = true
+move-vm-runtime.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+difference.workspace = true
+
+[[test]]
+name = "tests"
+harness = false
+
+[features]
+failpoints = ['move-vm-runtime/failpoints']

@@ -1,0 +1,7 @@
+[package]
+name = "Root"
+
+[dependencies]
+# The resolver will introduce Root -> A -> ADep into the dependency
+# graph, but ADep doesn't exist, so it will fail.
+A = { r."../resolvers/successful.sh" = "A" }

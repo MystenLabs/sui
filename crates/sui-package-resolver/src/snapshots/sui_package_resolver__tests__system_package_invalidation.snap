@@ -1,0 +1,15 @@
+---
+source: crates/sui-package-resolver/src/lib.rs
+expression: "fmt(struct_layout, enum_layout)"
+---
+struct:
+struct 0x1::m::T1 {
+    x: u256,
+}
+
+enum:
+enum 0x1::m::E1 {
+    V {
+        x: u256,
+    },
+}

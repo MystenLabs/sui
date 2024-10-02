@@ -1,13 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fontFamily } from 'tailwindcss/defaultTheme';
 import { type Config } from 'tailwindcss';
 import animatePlugin from 'tailwindcss-animate';
 
 export default {
 	darkMode: ['class'],
-	content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+	content: [
+		'./pages/**/*.{ts,tsx}',
+		'./components/**/*.{ts,tsx}',
+		'./app/**/*.{ts,tsx}',
+		'./src/**/*.{ts,tsx}',
+	],
 	theme: {
 		container: {
 			center: true,
@@ -53,13 +57,9 @@ export default {
 				},
 			},
 			borderRadius: {
-				lg: `var(--radius)`,
-				md: `calc(var(--radius) - 2px)`,
+				lg: 'var(--radius)',
+				md: 'calc(var(--radius) - 2px)',
 				sm: 'calc(var(--radius) - 4px)',
-			},
-			fontFamily: {
-				sans: ['var(--font-sans)', ...fontFamily.sans],
-				mono: ['var(--font-mono)', ...fontFamily.mono],
 			},
 			keyframes: {
 				'accordion-down': {

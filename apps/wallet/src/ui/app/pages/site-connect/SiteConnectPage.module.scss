@@ -1,5 +1,6 @@
 @use '_utils';
 @use '_values/colors';
+@use '_variables' as v;
 
 .label {
 	border-top: 1px solid colors.$gray-45;
@@ -13,8 +14,10 @@
 }
 
 .warning-wrapper {
-	border-bottom: 1px solid colors.$gray-45;
 	margin-bottom: 8px;
+	display: flex;
+	justify-content: space-around;
+	color: colors.$sui-steel-darker;
 }
 
 .warning-title {
@@ -23,11 +26,14 @@
 	display: inline-block;
 	margin-bottom: -1px;
 	padding-bottom: 8px;
-	border-bottom: 1px solid colors.$gray-90;
 }
 
 .warning-message {
 	@include utils.typography('Primary/BodySmall-M');
 
 	color: colors.$gray-80;
+	background-color: colors.$white;
+	padding: 20px;
+	border-radius: 16px;
+	box-shadow: v.use(v.$shadows-message-content);
 }

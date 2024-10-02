@@ -1,0 +1,11 @@
+[package]
+name = "sui-axelar-cgp"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local= "../../sui-framework/packages/sui-framework" }
+
+[addresses]
+axelar = "0x0"
+sui = "0x2"

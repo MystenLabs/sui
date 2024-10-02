@@ -5,13 +5,9 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use std::vector;
     use std::string::{Self, String};
-    use std::option::{Self, Option};
 
-    struct CoolMarker has key, store { id: UID }
+    public struct CoolMarker has key, store { id: UID }
 
     public entry fun vec_u64(_: vector<u64>) {
     }
@@ -19,21 +15,21 @@ module test::m1 {
     public entry fun vec_vec_u64(_: vector<vector<u64>>) {
     }
 
-    public entry fun vec_string(v: vector<String>) {
+    public entry fun vec_string(mut v: vector<String>) {
         while (!vector::is_empty(&v)) {
-            string::utf8(*string::bytes(&vector::pop_back(&mut v)));
+            string::utf8(*string::as_bytes(&vector::pop_back(&mut v)));
         }
     }
 
-    public entry fun vec_vec_string(v: vector<vector<String>>) {
+    public entry fun vec_vec_string(mut v: vector<vector<String>>) {
         while (!vector::is_empty(&v)) vec_string(vector::pop_back(&mut v))
     }
 
-    public entry fun vec_option_string(v: vector<Option<String>>) {
+    public entry fun vec_option_string(mut v: vector<Option<String>>) {
         while (!vector::is_empty(&v)) {
             let opt = vector::pop_back(&mut v);
             if (option::is_some(&opt)) {
-                string::utf8(*string::bytes(&option::destroy_some(opt)));
+                string::utf8(*string::as_bytes(&option::destroy_some(opt)));
             }
         }
     }
@@ -42,7 +38,7 @@ module test::m1 {
         CoolMarker { id: object::new(ctx) }
     }
 
-    public fun burn_markers(markers: vector<CoolMarker>) {
+    public fun burn_markers(mut markers: vector<CoolMarker>) {
         while (!vector::is_empty(&markers)) {
             let CoolMarker { id } = vector::pop_back(&mut markers);
             object::delete(id);

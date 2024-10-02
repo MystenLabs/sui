@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use anyhow::Result;
 use clap::Parser;
+use std::env;
 use sui_proxy::config::ProxyConfig;
 use sui_proxy::{
     admin::{
@@ -16,23 +16,8 @@ use sui_tls::TlsAcceptor;
 use telemetry_subscribers::TelemetryConfig;
 use tracing::info;
 
-// WARNING!!!
-//
-// Do not move or use similar logic to generate git revision information outside of a binary entry
-// point (e.g. main.rs). Placing the below logic into a library can result in unessesary builds.
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = "DIRTY"
-        )
-    }
-};
-
-// VERSION mimics what other sui binaries use for the same const
-pub const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
+// Define the `GIT_REVISION` and `VERSION` consts
+bin_version::bin_version!();
 
 /// user agent we use when posting to mimir
 static APP_USER_AGENT: &str = const_str::concat!(
@@ -73,14 +58,16 @@ async fn main() -> Result<()> {
     let listener = std::net::TcpListener::bind(config.listen_address).unwrap();
 
     let (tls_config, allower) =
-        if config.json_rpc.certificate_file.is_none() || config.json_rpc.private_key.is_none() {
+        // we'll only use the dynamic peers in some cases - it makes little sense to run with the static's
+        // since this first mode allows all.
+        if config.dynamic_peers.certificate_file.is_none() || config.dynamic_peers.private_key.is_none() {
             (
-                create_server_cert_default_allow(config.json_rpc.hostname.unwrap())
+                create_server_cert_default_allow(config.dynamic_peers.hostname.unwrap())
                     .expect("unable to create self-signed server cert"),
                 None,
             )
         } else {
-            create_server_cert_enforce_peer(config.json_rpc)
+            create_server_cert_enforce_peer(config.dynamic_peers, config.static_peers)
                 .expect("unable to create tls server config")
         };
     let histogram_listener = std::net::TcpListener::bind(config.histogram_address).unwrap();
@@ -91,12 +78,17 @@ async fn main() -> Result<()> {
     let registry_service = metrics::start_prometheus_server(metrics_listener);
     let prometheus_registry = registry_service.default_registry();
     prometheus_registry
-        .register(mysten_metrics::uptime_metric(VERSION, "sui-proxy"))
+        .register(mysten_metrics::uptime_metric(
+            "sui-proxy",
+            VERSION,
+            "unavailable",
+        ))
         .unwrap();
     let app = app(
         Labels {
             network: config.network,
-            inventory_hostname: config.inventory_hostname,
+            inventory_hostname: env::var("INVENTORY_HOSTNAME")
+                .expect("INVENTORY_HOSTNAME not found in environment"),
         },
         client,
         histogram_relay,

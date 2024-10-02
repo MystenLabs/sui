@@ -1,0 +1,6 @@
+[package]
+name = "Root"
+
+# This resolver doesn't exist, so calling out to it will fail.
+[dependencies]
+A = { r."../resolvers/doesnt_exist.sh" = "A" }

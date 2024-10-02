@@ -1,0 +1,17 @@
+# No type args
+--make-move-vec [100]
+
+# Include the type arg delimiters but no type args inside
+--make-move-vec <> [100]
+
+# Just type args
+--make-move-vec <u64>
+
+# Too many type args
+--make-move-vec <u64, bool> []
+
+# Invalid type args
+--make-move-vec u64 []
+
+# Invalid array
+--make-move-vec <u64> 10

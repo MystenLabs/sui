@@ -1,7 +1,0 @@
-Command `build -v`:
-Error: Failed to resolve dependencies for package 'A'
-
-Caused by:
-    0: Parsing manifest for 'Foo'
-    1: Unable to find package manifest at "./foo"
-    2: No such file or directory (os error 2)

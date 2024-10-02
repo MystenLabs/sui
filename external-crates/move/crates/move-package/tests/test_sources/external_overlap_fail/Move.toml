@@ -1,0 +1,9 @@
+[package]
+name = "Root"
+
+[dependencies]
+# This should fail because the external resolver will also return `ADep` as a transitive dependency
+# and the set of `ADep`s own dependencies is empty in the "external" case and non-empty in the
+# "internal" one.
+ADep = { local = "./deps_only/ADep"}
+A = { r."../resolvers/successful.sh" = "A" }

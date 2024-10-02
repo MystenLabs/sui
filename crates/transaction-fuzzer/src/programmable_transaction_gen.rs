@@ -12,7 +12,8 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction};
 
-static PROTOCOL_CONFIG: Lazy<ProtocolConfig> = Lazy::new(ProtocolConfig::get_for_max_version);
+static PROTOCOL_CONFIG: Lazy<ProtocolConfig> =
+    Lazy::new(ProtocolConfig::get_for_max_version_UNSAFE);
 
 prop_compose! {
     pub fn gen_transfer()
@@ -403,7 +404,7 @@ pub fn gen_move_vec_input(
 
 /// A helper function to generate enough input coins for a command (transfer, merge, or create vector)
 /// - either collect them all from previous command or generate additional ones if the previous
-/// command does not deliver enough.
+///     command does not deliver enough.
 fn gen_enough_arguments(
     builder: &mut ProgrammableTransactionBuilder,
     prev_cmd_num: i64,

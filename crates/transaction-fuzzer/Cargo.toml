@@ -7,19 +7,17 @@ description = "Tool to fuzz the system with randomly generated transactions"
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 proptest.workspace = true
 proptest-derive.workspace = true
 rand.workspace = true
 move-core-types.workspace = true
-move-binary-format.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 
-sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
-
-test-utils.workspace = true
 once_cell.workspace = true
 sui-core.workspace = true
 sui-protocol-config.workspace = true

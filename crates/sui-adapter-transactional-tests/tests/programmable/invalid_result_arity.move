@@ -7,7 +7,7 @@
 
 //# publish
 module test::m1 {
-    struct R has drop {}
+    public struct R has drop {}
     public fun nop() {}
     public fun r(): (R, R) { (R{}, R{}) }
     public fun take(_: R) { abort 0 }

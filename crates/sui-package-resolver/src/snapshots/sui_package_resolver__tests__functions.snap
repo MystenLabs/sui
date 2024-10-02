@@ -1,0 +1,97 @@
+---
+source: crates/sui-package-resolver/src/lib.rs
+expression: "format!(\"c0::m::foo: {foo:#?}\\n\\\n             c0::m::bar: {bar:#?}\\n\\\n             c0::m::baz: {baz:#?}\")"
+---
+c0::m::foo: FunctionDef {
+    visibility: Public,
+    is_entry: false,
+    type_params: [],
+    parameters: [],
+    return_: [],
+}
+c0::m::bar: FunctionDef {
+    visibility: Friend,
+    is_entry: false,
+    type_params: [],
+    parameters: [
+        OpenSignature {
+            ref_: Some(
+                Immutable,
+            ),
+            body: Datatype(
+                DatatypeRef {
+                    package: 00000000000000000000000000000000000000000000000000000000000000c0,
+                    module: "m",
+                    name: "T0",
+                },
+                [],
+            ),
+        },
+        OpenSignature {
+            ref_: Some(
+                Mutable,
+            ),
+            body: Datatype(
+                DatatypeRef {
+                    package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                    module: "n",
+                    name: "T1",
+                },
+                [],
+            ),
+        },
+        OpenSignature {
+            ref_: Some(
+                Immutable,
+            ),
+            body: Datatype(
+                DatatypeRef {
+                    package: 00000000000000000000000000000000000000000000000000000000000000c0,
+                    module: "m",
+                    name: "E0",
+                },
+                [],
+            ),
+        },
+        OpenSignature {
+            ref_: Some(
+                Mutable,
+            ),
+            body: Datatype(
+                DatatypeRef {
+                    package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                    module: "n",
+                    name: "E1",
+                },
+                [],
+            ),
+        },
+    ],
+    return_: [
+        OpenSignature {
+            ref_: None,
+            body: U64,
+        },
+    ],
+}
+c0::m::baz: FunctionDef {
+    visibility: Private,
+    is_entry: false,
+    type_params: [],
+    parameters: [
+        OpenSignature {
+            ref_: None,
+            body: U8,
+        },
+    ],
+    return_: [
+        OpenSignature {
+            ref_: None,
+            body: U16,
+        },
+        OpenSignature {
+            ref_: None,
+            body: U32,
+        },
+    ],
+}

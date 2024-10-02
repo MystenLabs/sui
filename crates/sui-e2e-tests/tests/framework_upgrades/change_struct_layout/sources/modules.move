@@ -2,14 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui_system::msim_extra_1 {
-    struct Type has drop {
+    use sui::object::UID;
+    use sui::tx_context::TxContext;
+
+    public struct Type has drop {
         x: u64,
         y: u64,
+    }
+
+    public struct Obj has key {
+        id: UID,
+    }
+
+    public struct AlmostObj {
+        id: UID,
     }
 
     public fun canary(): u64 {
         private_function(43)
     }
+
+    entry fun mint(_ctx: &mut TxContext) {}
 
     entry fun entry_fun() {}
 

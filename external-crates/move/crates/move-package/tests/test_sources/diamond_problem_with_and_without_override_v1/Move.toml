@@ -1,0 +1,26 @@
+# Dependency graph and an override. This tests if pruning correctly preserves links to D and E
+# despite these dependencies being first visited (during pruned package discovery) on the
+# overridden path (via A2)
+#
+#                                  +----+
+#                            +---->| A2 |-------+
+#                            |     +----+       |
+#                            |                  |
+#                 +----+     |                  |     +----+     +----+
+#           +---->| B  |-----+                  +---->| D  |---->| E  |
+#           |     +----+     |                  |     +----+     +----+
+#           |                |                  |
+# +----+    |                |     +----+       |
+# |Root|----|                +---->| C  |-------+
+# +----+    |                      +----+
+#           |
+#           | ov  +----+
+#           +---->| A1 |
+#                 +----+
+
+[package]
+name = "Root"
+
+[dependencies]
+A = { local = "./deps_only/A1" , override = true }
+B = { local = "./deps_only/B" }

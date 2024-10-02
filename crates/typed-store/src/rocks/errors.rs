@@ -7,41 +7,11 @@ use rocksdb::Error as RocksError;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fmt::Display};
 use thiserror::Error;
-
-#[non_exhaustive]
-#[derive(Error, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Ord, PartialOrd)]
-pub enum TypedStoreError {
-    #[error("rocksdb error: {0}")]
-    RocksDBError(String),
-    #[error("(de)serialization error: {0}")]
-    SerializationError(String),
-    #[error("the column family {0} was not registered with the database")]
-    UnregisteredColumn(String),
-    #[error("a batch operation can't operate across databases")]
-    CrossDBBatch,
-    #[error("Metric reporting thread failed with error")]
-    MetricsReporting,
-    #[error("Transaction should be retried")]
-    RetryableTransactionError,
-}
+use typed_store_error::TypedStoreError;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, Error)]
 pub(crate) struct RocksErrorDef {
     message: String,
-}
-
-impl From<RocksError> for RocksErrorDef {
-    fn from(err: RocksError) -> Self {
-        RocksErrorDef {
-            message: err.as_ref().to_string(),
-        }
-    }
-}
-
-impl From<RocksError> for TypedStoreError {
-    fn from(err: RocksError) -> Self {
-        TypedStoreError::RocksDBError(format!("{err}"))
-    }
 }
 
 impl Display for RocksErrorDef {
@@ -110,14 +80,14 @@ impl From<bincode::Error> for BincodeErrorDef {
     }
 }
 
-impl From<bcs::Error> for TypedStoreError {
-    fn from(err: bcs::Error) -> Self {
-        TypedStoreError::SerializationError(format!("{err}"))
-    }
+pub fn typed_store_err_from_bincode_err(err: bincode::Error) -> TypedStoreError {
+    TypedStoreError::SerializationError(format!("{err}"))
 }
 
-impl From<bincode::Error> for TypedStoreError {
-    fn from(err: bincode::Error) -> Self {
-        TypedStoreError::SerializationError(format!("{err}"))
-    }
+pub fn typed_store_err_from_bcs_err(err: bcs::Error) -> TypedStoreError {
+    TypedStoreError::SerializationError(format!("{err}"))
+}
+
+pub fn typed_store_err_from_rocks_err(err: RocksError) -> TypedStoreError {
+    TypedStoreError::RocksDBError(format!("{err}"))
 }

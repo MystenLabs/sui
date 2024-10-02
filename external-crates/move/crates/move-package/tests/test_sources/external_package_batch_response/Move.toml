@@ -1,0 +1,8 @@
+[package]
+name = "Root"
+
+[dependencies]
+Anything = { r."../resolvers/successful_package_batch_response.sh" = "AlsoAnything" }
+
+[addresses]
+root = "0x0"

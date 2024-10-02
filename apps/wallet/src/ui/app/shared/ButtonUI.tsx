@@ -5,11 +5,9 @@
 // TODO: rename this to Button when the existing Button component is removed
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { forwardRef, type Ref } from 'react';
+import { forwardRef, type ReactNode, type Ref } from 'react';
 
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
-
-import type { ReactNode } from 'react';
 
 const styles = cva(
 	[
@@ -28,13 +26,22 @@ const styles = cva(
 					'disabled:bg-hero-darkest disabled:text-white disabled:opacity-40',
 				],
 				secondary: [
-					'bg-gray-45 text-steel-darker border-none',
+					'bg-hero-darkest/10 text-steel-dark border-none',
+					'hover:bg-hero-darkest/20 hover:text-steel-darker',
+					'focus:bg-hero-darkest/10 focus:text-steel-dark/70',
+					'active:text-steel-dark/70',
+					'visited:text-steel-darkest',
+					'disabled:bg-hero-darkest/5 disabled:text-steel/50',
+				],
+				secondarySui: [
+					'bg-transparent text-steel border-none',
+					'hover:bg-sui-light focus:bg-sui-light',
 					'visited:text-steel-darker',
 					'active:text-steel-dark/70',
 					'disabled:bg-gray-40 disabled:text-steel/50',
 				],
 				outline: [
-					'bg-white border-solid border border-steel text-steel-dark',
+					'bg-white border-solid border border-steel text-steel-dark text-body font-semibold',
 					'hover:border-steel-dark focus:border-steel-dark hover:text-steel-darker focus:text-steel-darker',
 					'visited:text-steel-dark',
 					'active:border-steel active:text-steel-dark',
@@ -59,17 +66,24 @@ const styles = cva(
 					'active:text-steel-darker/70',
 					'disabled:text-steel-dark/50',
 				],
+				hidden: [
+					'bg-gray-45 bg-opacity-25 text-gray-60 hover:text-sui-dark hover:bg-gray-35 hover:bg-opacity-75 border-none h-full w-full backdrop-blur-md',
+				],
 			},
 			size: {
-				tall: ['h-11 px-5 rounded-xl'],
+				tall: ['h-10 px-5 rounded-xl'],
 				narrow: ['h-9 py-2.5 px-5 rounded-lg'],
-				tiny: ['h-5 rounded-lg px-2'],
+				xs: ['h-6 rounded-lg px-2 py-3 !uppercase text-captionSmall'],
+				icon: ['h-full w-full rounded-lg p-1'],
 			},
 		},
 	},
 );
 const iconStyles = cva('flex', {
 	variants: {
+		border: {
+			none: 'border-none',
+		},
 		variant: {
 			primary: ['text-sui-light group-active:text-steel/70 group-disabled:text-steel/50'],
 			secondary: [
@@ -77,6 +91,12 @@ const iconStyles = cva('flex', {
 				'group-hover:text-steel-darker group-focus:text-steel-darker',
 				'group-active:text-steel-dark/70',
 				'group-disabled:text-steel/50',
+			],
+			secondarySui: [
+				'text-steel',
+				'group-hover:text-hero group-focus:text-hero',
+				'group-active:text-hero/70',
+				'group-disabled:text-hero/50',
 			],
 			outline: [
 				'text-steel',
@@ -97,6 +117,7 @@ const iconStyles = cva('flex', {
 				'group-disabled:text-issue/50',
 			],
 			plain: [],
+			hidden: [],
 		},
 	},
 });

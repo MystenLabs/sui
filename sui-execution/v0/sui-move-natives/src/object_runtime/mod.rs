@@ -5,8 +5,8 @@ use better_any::{Tid, TidAble};
 use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
-    account_address::AccountAddress, effects::Op, language_storage::StructTag,
-    value::MoveTypeLayout, vm_status::StatusCode,
+    account_address::AccountAddress, annotated_value as A, annotated_visitor as AV, effects::Op,
+    language_storage::StructTag, runtime_value as R, vm_status::StatusCode,
 };
 use move_vm_types::{
     loaded_data::runtime_types::Type,
@@ -20,6 +20,8 @@ use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolC
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
+    execution::DynamicallyLoadedObjectMetadata,
+    id::UID,
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::{ChildObjectResolver, DeleteKind, WriteKind},
@@ -143,6 +145,12 @@ pub enum TransferResult {
     OwnerChanged,
 }
 
+pub struct InputObject {
+    pub contained_uids: BTreeSet<ObjectID>,
+    pub version: SequenceNumber,
+    pub owner: Owner,
+}
+
 impl TestInventories {
     fn new() -> Self {
         Self::default()
@@ -152,21 +160,36 @@ impl TestInventories {
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
         object_resolver: &'a dyn ChildObjectResolver,
-        input_objects: BTreeMap<ObjectID, Owner>,
+        input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
     ) -> Self {
+        let mut input_object_owners = BTreeMap::new();
+        let mut root_version = BTreeMap::new();
+        for (id, input_object) in input_objects {
+            let InputObject {
+                contained_uids,
+                version,
+                owner,
+            } = input_object;
+            input_object_owners.insert(id, owner);
+            debug_assert!(contained_uids.contains(&id));
+            for contained_uid in contained_uids {
+                root_version.insert(contained_uid, version);
+            }
+        }
         Self {
             object_store: ObjectStore::new(
                 object_resolver,
+                root_version,
                 is_metered,
                 LocalProtocolConfig::new(protocol_config),
                 metrics.clone(),
             ),
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
-                input_objects,
+                input_objects: input_object_owners,
                 new_ids: Set::new(),
                 deleted_ids: Set::new(),
                 transfers: LinkedHashMap::new(),
@@ -198,9 +221,10 @@ impl<'a> ObjectRuntime<'a> {
 
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
         // and then re-added in a single transaction
-        self.state.deleted_ids.remove(&id);
-        // mark the id as new
-        self.state.new_ids.insert(id, ());
+        if self.state.deleted_ids.remove(&id).is_none() {
+            // mark the id as new
+            self.state.new_ids.insert(id, ());
+        }
         Ok(())
     }
 
@@ -318,7 +342,8 @@ impl<'a> ObjectRuntime<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_layout: MoveTypeLayout,
+        child_layout: &R::MoveTypeLayout,
+        child_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut GlobalValue>> {
         let res = self.object_store.get_or_fetch_object(
@@ -326,6 +351,7 @@ impl<'a> ObjectRuntime<'a> {
             child,
             child_ty,
             child_layout,
+            child_fully_annotated_layout,
             child_move_type,
         )?;
         Ok(match res {
@@ -372,11 +398,24 @@ impl<'a> ObjectRuntime<'a> {
         self.object_store.all_active_objects()
     }
 
-    pub fn loaded_child_objects(&self) -> BTreeMap<ObjectID, SequenceNumber> {
+    pub fn loaded_child_objects(&self) -> BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata> {
         self.object_store
             .cached_objects()
             .iter()
-            .filter_map(|(id, obj_opt)| Some((*id, obj_opt.as_ref()?.version())))
+            .filter_map(|(id, obj_opt)| {
+                obj_opt.as_ref().map(|obj| {
+                    (
+                        *id,
+                        DynamicallyLoadedObjectMetadata {
+                            version: obj.version(),
+                            digest: obj.digest(),
+                            storage_rebate: obj.storage_rebate,
+                            owner: obj.owner,
+                            previous_transaction: obj.previous_transaction,
+                        },
+                    )
+                })
+            })
             .collect()
     }
 }
@@ -423,11 +462,6 @@ impl ObjectRuntimeState {
                 ty,
                 effect,
             } = child_object_effect;
-            if loaded_child_objects.contains_key(&child) {
-                // remove if from new_ids if it was loaded for case in dynamic fields where the
-                // Field object was removed and then re-added in a single transaction
-                self.new_ids.remove(&child);
-            }
 
             match effect {
                 // was modified, so mark it as mutated and transferred
@@ -572,4 +606,54 @@ fn update_owner_map(
         }
     }
     Ok(())
+}
+
+/// WARNING! This function assumes that the bcs bytes have already been validated,
+/// and it will give an invariant violation otherwise.
+/// In short, we are relying on the invariant that the bytes are valid for objects
+/// in storage.  We do not need this invariant for dev-inspect, as the programmable
+/// transaction execution will validate the bytes before we get to this point.
+pub fn get_all_uids(
+    fully_annotated_layout: &A::MoveTypeLayout,
+    bcs_bytes: &[u8],
+) -> Result<BTreeSet<ObjectID>, /* invariant violation */ String> {
+    let mut ids = BTreeSet::new();
+    struct UIDTraversal<'i>(&'i mut BTreeSet<ObjectID>);
+    struct UIDCollector<'i>(&'i mut BTreeSet<ObjectID>);
+
+    impl<'i, 'b, 'l> AV::Traversal<'b, 'l> for UIDTraversal<'i> {
+        type Error = AV::Error;
+
+        fn traverse_struct(
+            &mut self,
+            driver: &mut AV::StructDriver<'_, 'b, 'l>,
+        ) -> Result<(), Self::Error> {
+            if driver.struct_layout().type_ == UID::type_() {
+                while driver.next_field(&mut UIDCollector(self.0))?.is_some() {}
+            } else {
+                while driver.next_field(self)?.is_some() {}
+            }
+            Ok(())
+        }
+    }
+
+    impl<'i, 'b, 'l> AV::Traversal<'b, 'l> for UIDCollector<'i> {
+        type Error = AV::Error;
+        fn traverse_address(
+            &mut self,
+            _driver: &AV::ValueDriver<'_, 'b, 'l>,
+            value: AccountAddress,
+        ) -> Result<(), Self::Error> {
+            self.0.insert(value.into());
+            Ok(())
+        }
+    }
+
+    A::MoveValue::visit_deserialize(
+        bcs_bytes,
+        fully_annotated_layout,
+        &mut UIDTraversal(&mut ids),
+    )
+    .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
+    Ok(ids)
 }

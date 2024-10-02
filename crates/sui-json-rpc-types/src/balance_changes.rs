@@ -5,6 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use std::fmt::{Display, Formatter, Result};
 use sui_types::object::Owner;
 use sui_types::sui_serde::SuiTypeTag;
 
@@ -22,4 +23,14 @@ pub struct BalanceChange {
     #[schemars(with = "String")]
     #[serde_as(as = "DisplayFromStr")]
     pub amount: i128,
+}
+
+impl Display for BalanceChange {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(
+            f,
+            " ┌──\n │ Owner: {} \n │ CoinType: {} \n │ Amount: {}\n └──",
+            self.owner, self.coin_type, self.amount
+        )
+    }
 }

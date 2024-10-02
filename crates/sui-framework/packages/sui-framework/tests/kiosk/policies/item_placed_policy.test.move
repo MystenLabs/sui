@@ -17,7 +17,7 @@ module sui::item_locked_policy {
     const ENotInKiosk: u64 = 0;
 
     /// A unique confirmation for the Rule
-    struct Rule has drop {}
+    public struct Rule has drop {}
 
     public fun set<T>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {
         policy::add_rule(Rule {}, policy, cap, true)
@@ -25,7 +25,7 @@ module sui::item_locked_policy {
 
     /// Prove that an item a
     public fun prove<T>(request: &mut TransferRequest<T>, kiosk: &Kiosk) {
-        let item = policy::item(request);
+        let item = request.item();
         assert!(kiosk::has_item(kiosk, item) && kiosk::is_locked(kiosk, item), ENotInKiosk);
         policy::add_receipt(Rule {}, request)
     }

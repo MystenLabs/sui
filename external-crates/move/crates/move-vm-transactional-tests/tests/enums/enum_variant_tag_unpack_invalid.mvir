@@ -1,0 +1,244 @@
+//# publish
+module 0x6.Enums {
+    enum PolyEnum<T> {
+        One { },
+        Two { x: T },
+    }
+
+    enum MonoEnum {
+        One { },
+        Two { x: u8 },
+    }
+
+    public poly_unpack_one<T>(e: Self.PolyEnum<T>) {
+        label b0:
+            PolyEnum.One<T> { } = move(e);
+            return;
+    }
+
+    public poly_unpack_one_mut_ref<T>(e: &mut Self.PolyEnum<T>) {
+        label b0:
+            &mut PolyEnum.One<T> { } = move(e);
+            return;
+    }
+
+    public poly_unpack_one_imm_ref<T>(e: &Self.PolyEnum<T>) {
+        label b0:
+            & PolyEnum.One<T> { } = move(e);
+            return;
+    }
+
+    public poly_unpack_two<T: drop>(e: Self.PolyEnum<T>) {
+        let x: T;
+        label b0:
+            PolyEnum.Two<T> { x: x } = move(e);
+            return;
+    }
+
+    public poly_unpack_two_mut_ref<T: drop>(e: &mut Self.PolyEnum<T>) {
+        let x: &mut T;
+        label b0:
+            &mut PolyEnum.Two<T> { x: x } = move(e);
+            return;
+    }
+
+    public poly_unpack_two_imm_ref<T: drop>(e: &Self.PolyEnum<T>) {
+        let x: &T;
+        label b0:
+            & PolyEnum.Two<T> { x: x } = move(e);
+            return;
+    }
+
+    public mono_unpack_one(e: Self.MonoEnum) {
+        label b0:
+            MonoEnum.One { } = move(e);
+            return;
+    }
+
+    public mono_unpack_one_mut_ref(e: &mut Self.MonoEnum) {
+        label b0:
+            &mut MonoEnum.One { } = move(e);
+            return;
+    }
+
+    public mono_unpack_one_imm_ref(e: &Self.MonoEnum) {
+        label b0:
+            &MonoEnum.One { } = move(e);
+            return;
+    }
+
+    public mono_unpack_two(e: Self.MonoEnum) {
+        let x: u8;
+        label b0:
+            MonoEnum.Two { x: x } = move(e);
+            return;
+    }
+
+    public mono_unpack_two_mut_ref(e: &mut Self.MonoEnum) {
+        let x: &mut u8;
+        label b0:
+            &mut MonoEnum.Two { x: x } = move(e);
+            return;
+    }
+
+    public mono_unpack_two_imm_ref(e: &Self.MonoEnum) {
+        let x: &u8;
+        label b0:
+            & MonoEnum.Two { x: x } = move(e);
+            return;
+    }
+
+    public all_valid() {
+        let x1: Self.PolyEnum<u64>;
+        let y1: Self.MonoEnum;
+
+        let x2: Self.PolyEnum<u64>;
+        let y2: Self.MonoEnum;
+        label b0:
+            x1 = PolyEnum.One<u64> {};
+            y1 = MonoEnum.One {};
+
+            x2 = PolyEnum.Two<u64> {x: 0};
+            y2 = MonoEnum.Two {x: 0u8};
+
+            Self.poly_unpack_one_mut_ref<u64>(&mut x1);
+            Self.poly_unpack_one_imm_ref<u64>(&x1);
+            Self.poly_unpack_one<u64>(move(x1));
+
+            Self.mono_unpack_one_mut_ref(&mut y1);
+            Self.mono_unpack_one_imm_ref(&y1);
+            Self.mono_unpack_one(move(y1));
+
+            Self.poly_unpack_two_mut_ref<u64>(&mut x2);
+            Self.poly_unpack_two_imm_ref<u64>(&x2);
+            Self.poly_unpack_two<u64>(move(x2));
+
+            Self.mono_unpack_two_mut_ref(&mut y2);
+            Self.mono_unpack_two_imm_ref(&y2);
+            Self.mono_unpack_two(move(y2));
+            return;
+    }
+
+    public poly_invalid1_mut_ref() {
+        let x1: Self.PolyEnum<u64>;
+        label b0:
+            x1 = PolyEnum.One<u64> {};
+            Self.poly_unpack_two_mut_ref<u64>(&mut x1);
+            abort 0;
+    }
+
+    public poly_invalid1_imm_ref() {
+        let x1: Self.PolyEnum<u64>;
+        label b0:
+            x1 = PolyEnum.One<u64> {};
+            Self.poly_unpack_two_imm_ref<u64>(&x1);
+            abort 0;
+    }
+
+    public poly_invalid1() {
+        let x1: Self.PolyEnum<u64>;
+        label b0:
+            x1 = PolyEnum.One<u64> {};
+            Self.poly_unpack_two<u64>(move(x1));
+            return;
+    }
+
+
+    public poly_invalid2_mut_ref() {
+        let x2: Self.PolyEnum<u64>;
+        label b0:
+            x2 = PolyEnum.Two<u64> {x: 0};
+            Self.poly_unpack_one_mut_ref<u64>(&mut x2);
+            abort 0;
+    }
+
+    public poly_invalid2_imm_ref() {
+        let x2: Self.PolyEnum<u64>;
+        label b0:
+            x2 = PolyEnum.Two<u64> {x: 0};
+            Self.poly_unpack_one_imm_ref<u64>(&x2);
+            abort 0;
+    }
+
+    public poly_invalid2() {
+        let x2: Self.PolyEnum<u64>;
+        label b0:
+            x2 = PolyEnum.Two<u64> {x: 0};
+            Self.poly_unpack_one<u64>(move(x2));
+            return;
+    }
+
+    public mono_invalid1_mut_ref() {
+        let x1: Self.MonoEnum;
+        label b0:
+            x1 = MonoEnum.One {};
+            Self.mono_unpack_two_mut_ref(&mut x1);
+            abort 0;
+    }
+
+    public mono_invalid1_imm_ref() {
+        let x1: Self.MonoEnum;
+        label b0:
+            x1 = MonoEnum.One {};
+            Self.mono_unpack_two_imm_ref(&x1);
+            abort 0;
+    }
+
+    public mono_invalid1() {
+        let x1: Self.MonoEnum;
+        label b0:
+            x1 = MonoEnum.One {};
+            Self.mono_unpack_two(move(x1));
+            return;
+    }
+
+    public mono_invalid2_mut_ref() {
+        let x2: Self.MonoEnum;
+        label b0:
+            x2 = MonoEnum.Two {x: 0u8};
+            Self.mono_unpack_one_mut_ref(&mut x2);
+            abort 0;
+    }
+
+    public mono_invalid2_imm_ref() {
+        let x2: Self.MonoEnum;
+        label b0:
+            x2 = MonoEnum.Two {x: 0u8};
+            Self.mono_unpack_one_imm_ref(&x2);
+            abort 0;
+    }
+
+    public mono_invalid2() {
+        let x2: Self.MonoEnum;
+        label b0:
+            x2 = MonoEnum.Two {x: 0u8};
+            Self.mono_unpack_one(move(x2));
+            return;
+    }
+}
+
+//# run 0x6::Enums::all_valid
+
+//# run 0x6::Enums::poly_invalid1_mut_ref
+
+//# run 0x6::Enums::poly_invalid1_imm_ref
+
+//# run 0x6::Enums::poly_invalid1
+
+//# run 0x6::Enums::poly_invalid2_mut_ref
+
+//# run 0x6::Enums::poly_invalid2_imm_ref
+
+//# run 0x6::Enums::poly_invalid2
+
+//# run 0x6::Enums::mono_invalid1_mut_ref
+
+//# run 0x6::Enums::mono_invalid1_imm_ref
+
+//# run 0x6::Enums::mono_invalid1
+
+//# run 0x6::Enums::mono_invalid2_mut_ref
+
+//# run 0x6::Enums::mono_invalid2_imm_ref
+
+//# run 0x6::Enums::mono_invalid2

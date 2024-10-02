@@ -1,0 +1,11 @@
+[package]
+name = "module_publish_view"
+edition = "2024.beta"
+
+[addresses]
+std = "0x1"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+Deps1 = { local = "deps1" }
+Deps2 = { local = "deps2" }

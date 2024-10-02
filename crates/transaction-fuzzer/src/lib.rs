@@ -27,7 +27,7 @@ fn new_gas_coin_with_balance_and_owner(balance: u64, owner: Owner) -> Object {
     Object::new_move(
         MoveObject::new_gas_coin(OBJECT_START_VERSION, ObjectID::random(), balance),
         owner,
-        TransactionDigest::genesis(),
+        TransactionDigest::genesis_marker(),
     )
 }
 
@@ -85,8 +85,8 @@ fn generate_random_gas_data(
         gas_data: GasData {
             payment: object_refs,
             owner: sender,
-            price: rng.gen_range(0..=ProtocolConfig::get_for_max_version().max_gas_price()),
-            budget: rng.gen_range(0..=ProtocolConfig::get_for_max_version().max_tx_gas()),
+            price: rng.gen_range(0..=ProtocolConfig::get_for_max_version_UNSAFE().max_gas_price()),
+            budget: rng.gen_range(0..=ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas()),
         },
         objects: gas_objects,
         sender_key,
@@ -110,16 +110,16 @@ pub struct GasDataGenConfig {
 impl GasDataGenConfig {
     pub fn owned_by_sender_or_immut() -> Self {
         Self {
-            max_num_gas_objects: ProtocolConfig::get_for_max_version().max_gas_payment_objects()
-                as usize,
+            max_num_gas_objects: ProtocolConfig::get_for_max_version_UNSAFE()
+                .max_gas_payment_objects() as usize,
             owned_by_sender: true,
         }
     }
 
     pub fn any_owner() -> Self {
         Self {
-            max_num_gas_objects: ProtocolConfig::get_for_max_version().max_gas_payment_objects()
-                as usize,
+            max_num_gas_objects: ProtocolConfig::get_for_max_version_UNSAFE()
+                .max_gas_payment_objects() as usize,
             owned_by_sender: false,
         }
     }

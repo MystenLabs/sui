@@ -1,0 +1,8 @@
+Command `sandbox publish --bundle --override-ordering M --override-ordering N`:
+Invalid multi-module publishing: VMError with status MISSING_DEPENDENCY at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000042, name: Identifier("M") } at index 0 for function handle
+error[E02007]: invalid 'fun' declaration
+  ┌─ ./sources/example.move:3:16
+  │
+3 │     native fun create_signer(addr: address): signer;
+  │                ^^^^^^^^^^^^^ Missing implementation for the native function M::create_signer
+

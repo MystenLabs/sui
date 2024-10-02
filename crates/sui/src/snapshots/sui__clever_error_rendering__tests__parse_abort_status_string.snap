@@ -1,0 +1,51 @@
+---
+source: crates/sui/src/clever_error_rendering.rs
+expression: "parsed.join(\"\\n------\\n\")"
+---
+original abort message: Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 0, instruction: 1, function_name: Some(\"aborter\") }, 0) in command 0" }
+ address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20
+ module_name: clever_errors
+ function_name: aborter
+ instruction: 1
+ abort_code: 0
+ command_index: 0
+------
+original abort message: Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 1, instruction: 1, function_name: Some(\"aborter_line_no\") }, 9223372105574252543) in command 0" }
+ address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20
+ module_name: clever_errors
+ function_name: aborter_line_no
+ instruction: 1
+ abort_code: 9223372105574252543
+ command_index: 0
+------
+original abort message: Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 2, instruction: 1, function_name: Some(\"clever_aborter\") }, 9223372118459154433) in command 0" }
+ address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20
+ module_name: clever_errors
+ function_name: clever_aborter
+ instruction: 1
+ abort_code: 9223372118459154433
+ command_index: 0
+------
+original abort message: Failure { error: "MoveAbort(MoveLocation { module: ModuleId { address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20, name: Identifier(\"clever_errors\") }, function: 3, instruction: 1, function_name: Some(\"clever_aborter_not_a_string\") }, 9223372135639154691) in command 0" }
+ address: 60197a0c146e31dd12689e890208767fe2fefb2f726710b4a9fa0b857f7a2c20
+ module_name: clever_errors
+ function_name: clever_aborter_not_a_string
+ instruction: 1
+ abort_code: 9223372135639154691
+ command_index: 0
+------
+original abort message: MoveAbort(MoveLocation { module: ModuleId { address: 24bf9e624820625ac1e38076901421d2630b2b225b638aaf0b85264b857a608b, name: Identifier(\"tester\") }, function: 0, instruction: 1, function_name: Some(\"test\") }, 9223372071214514177) in command 0
+ address: 24bf9e624820625ac1e38076901421d2630b2b225b638aaf0b85264b857a608b
+ module_name: tester
+ function_name: test
+ instruction: 1
+ abort_code: 9223372071214514177
+ command_index: 0
+------
+original abort message: MoveAbort(MoveLocation { module: ModuleId { address: 24bf9e624820625ac1e38076901421d2630b2b225b638aaf0b85264b857a608b, name: Identifier("tester") }, function: 0, instruction: 1, function_name: Some("test") }, 9223372071214514177) in command 0
+ address: 24bf9e624820625ac1e38076901421d2630b2b225b638aaf0b85264b857a608b
+ module_name: tester
+ function_name: test
+ instruction: 1
+ abort_code: 9223372071214514177
+ command_index: 0

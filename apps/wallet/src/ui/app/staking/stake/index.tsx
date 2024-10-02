@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import Overlay from '_components/overlay';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { SelectValidatorCard } from '../validators/SelectValidatorCard';
 import StakingCard from './StakingCard';
-import Overlay from '_components/overlay';
 
 function StakePage() {
 	const [searchParams] = useSearchParams();

@@ -1,0 +1,20 @@
+{
+	"name": "mev-bot",
+	"version": "1.0.10",
+	"main": "src/index.ts",
+	"type": "module",
+	"author": "Patrick <patrick@mystenlabs.com>",
+	"license": "MIT",
+	"scripts": {
+		"start": "npx ts-node --esm src/index.ts"
+	},
+	"dependencies": {
+		"@mysten/bcs": "workspace:*",
+		"@mysten/sui": "workspace:*",
+		"p-limit": "^6.1.0"
+	},
+	"devDependencies": {
+		"ts-node": "^10.9.2",
+		"typescript": "^5.5.3"
+	}
+}

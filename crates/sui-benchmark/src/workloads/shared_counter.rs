@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
 use crate::workloads::payload::Payload;
@@ -20,7 +21,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::get_key_pair;
 use sui_types::{
     base_types::{ObjectDigest, ObjectID, SequenceNumber},
-    transaction::VerifiedTransaction,
+    transaction::Transaction,
 };
 use tracing::{debug, error, info};
 
@@ -47,11 +48,11 @@ impl Payload for SharedCounterTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() {
             effects.print_gas_summary();
-            error!("Shared counter tx failed...");
+            error!("Shared counter tx failed... Status: {:?}", effects.status());
         }
         self.gas.0 = effects.gas_object().0;
     }
-    fn make_transaction(&mut self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> Transaction {
         let rgp = self
             .system_state_observer
             .state
@@ -88,22 +89,30 @@ impl SharedCounterWorkloadBuilder {
         num_workers: u64,
         in_flight_ratio: u64,
         shared_counter_hotness_factor: u32,
+        num_shared_counters: Option<u64>,
         shared_counter_max_tip_amount: u64,
         reference_gas_price: u64,
+        duration: Interval,
+        group: u32,
     ) -> Option<WorkloadBuilderInfo> {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
         let max_ops = target_qps * in_flight_ratio;
         let shared_counter_ratio =
             1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
-        let num_shared_counters = (max_ops as f32 * shared_counter_ratio) as u64;
-        if num_shared_counters == 0 || num_workers == 0 {
+        let num_shared_counters = num_shared_counters.unwrap_or(std::cmp::max(
+            1,
+            (max_ops as f32 * shared_counter_ratio) as u64,
+        ));
+        if max_ops == 0 || num_shared_counters == 0 || num_workers == 0 {
             None
         } else {
             let workload_params = WorkloadParams {
+                group,
                 target_qps,
                 num_workers,
                 max_ops,
+                duration,
             };
             let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
                 SharedCounterWorkloadBuilder {
@@ -209,6 +218,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 .await
                 .0,
         );
+        info!("Basics package id {:?}", self.basics_package_id);
         if !self.counters.is_empty() {
             // We already initialized the workload with some counters
             return;
@@ -220,14 +230,12 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                if let Ok(effects) = proxy_ref
-                    .execute_transaction_block(transaction.into())
+                proxy_ref
+                    .execute_transaction_block(transaction)
                     .await
-                {
-                    effects.created()[0].0
-                } else {
-                    panic!("Failed to create shared counter!");
-                }
+                    .unwrap()
+                    .created()[0]
+                    .0
             });
         }
         self.counters = join_all(futures).await;

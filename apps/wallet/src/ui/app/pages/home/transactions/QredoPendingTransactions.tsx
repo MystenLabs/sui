@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { QredoTransaction } from './QredoTransaction';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { NoActivityCard } from '_components/transactions-card/NoActivityCard';
-import { AccountType } from '_src/background/keyring/Account';
+import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
 import { type TransactionStatus } from '_src/shared/qredo-api';
 import Alert from '_src/ui/app/components/alert';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
-import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import { useGetQredoTransactions } from '_src/ui/app/hooks/useGetQredoTransactions';
+
+import { QredoTransaction } from './QredoTransaction';
 
 const PENDING_QREDO_TRANSACTION_STATUSES: TransactionStatus[] = [
 	'approved',
@@ -23,13 +23,13 @@ const PENDING_QREDO_TRANSACTION_STATUSES: TransactionStatus[] = [
 ];
 
 export function QredoPendingTransactions() {
-	const activeAddress = useActiveAddress();
 	const activeAccount = useActiveAccount();
-	const isQredoAccount = activeAccount?.type === AccountType.QREDO;
-	const qredoID = isQredoAccount ? activeAccount.qredoConnectionID : undefined;
+	const activeAddress = activeAccount?.address;
+	const isQredoAccount = !!(activeAccount && isQredoAccountSerializedUI(activeAccount));
+	const qredoID = isQredoAccount ? activeAccount.sourceID : undefined;
 	const {
 		data: qredoTransactions,
-		isLoading,
+		isPending,
 		error,
 	} = useGetQredoTransactions({
 		qredoID,
@@ -39,7 +39,7 @@ export function QredoPendingTransactions() {
 		return <Alert>{(error as Error)?.message}</Alert>;
 	}
 	return (
-		<Loading loading={isLoading}>
+		<Loading loading={isPending}>
 			{qredoTransactions?.length && activeAddress ? (
 				qredoTransactions.map((txn) => (
 					<ErrorBoundary key={txn.txID}>

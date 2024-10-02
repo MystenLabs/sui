@@ -1,0 +1,22 @@
+//# publish
+module 0x5.A {
+    public sum(o: u64, k: u64, t: u64): u64 {
+    label b0:
+        return move(o) + move(k) + move(t);
+    }
+}
+
+
+//# run
+module 0x43.m {
+import 0x5.A;
+
+entry foo() {
+    let s: u64;
+label b0:
+    (3, 4, 3);
+    s = A.sum();
+    assert(move(s) == 10, 42);
+    return;
+}
+}

@@ -1,35 +1,29 @@
 [package]
 name = "sui-archival"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 publish = false
 license = "Apache-2.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 
 [dependencies]
-integer-encoding.workspace = true
+indicatif.workspace = true
 anyhow.workspace = true
 serde.workspace = true
-bcs.workspace = true
 byteorder.workspace = true
 tracing.workspace = true
 bytes.workspace = true
-tokio-stream.workspace = true
 num_enum.workspace = true
 futures.workspace = true
-backoff.workspace = true
 rand.workspace = true
 object_store.workspace = true
 prometheus.workspace = true
-zstd.workspace = true
-typed-store.workspace = true
-typed-store-derive.workspace = true
-sui-types.workspace = true
+sui-config.workspace = true
+sui-types = { workspace = true, features = ["test-utils"]}
 sui-storage.workspace = true
-sui-protocol-config.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 tokio = { workspace = true, features = ["full"] }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+serde_json = "1.0.95"
 
 [dev-dependencies]
 tempfile.workspace = true

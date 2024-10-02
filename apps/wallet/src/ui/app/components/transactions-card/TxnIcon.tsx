@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-	WalletActionStake24,
+	Account24,
 	ArrowRight16,
 	Info16,
+	Sui,
 	Swap16,
 	Unstaked,
-	Sui,
-	Account24,
+	WalletActionStake24,
 } from '@mysten/icons';
-import cl from 'classnames';
+import cl from 'clsx';
 
 import LoadingIndicator from '../loading/LoadingIndicator';
 
@@ -18,8 +18,11 @@ const icons = {
 	Send: (
 		<ArrowRight16 fill="currentColor" className="text-gradient-blue-start text-body -rotate-45" />
 	),
-	Received: (
+	Receive: (
 		<ArrowRight16 fill="currentColor" className="text-gradient-blue-start text-body rotate-135" />
+	),
+	Transaction: (
+		<ArrowRight16 fill="currentColor" className="text-gradient-blue-start text-body -rotate-45" />
 	),
 	Staked: <WalletActionStake24 className="text-gradient-blue-start text-heading2 bg-transparent" />,
 	Unstaked: <Unstaked className="text-gradient-blue-start text-heading3" />,

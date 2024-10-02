@@ -8,7 +8,7 @@
 //# publish
 module test::m {
 
-struct S<phantom T: copy> {}
+public struct S<phantom T: copy> {}
 
 entry fun foo<T>() {}
 

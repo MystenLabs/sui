@@ -1,0 +1,62 @@
+[package]
+name = "sui-analytics-indexer"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+bcs.workspace = true
+byteorder.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+clap.workspace = true
+csv.workspace = true
+move-core-types.workspace = true
+object_store.workspace = true
+num_enum.workspace = true
+prometheus.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-stream.workspace = true
+url.workspace = true
+serde_json.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+parquet.workspace = true
+arrow-array.workspace = true
+fastcrypto = { workspace = true, features = ["copy_key"] }
+mysten-metrics.workspace = true
+sui-analytics-indexer-derive.workspace = true
+sui-data-ingestion-core.workspace = true
+sui-indexer.workspace = true
+eyre.workspace = true
+tempfile.workspace = true
+sui-types.workspace = true
+telemetry-subscribers.workspace = true
+sui-rest-api.workspace = true
+sui-storage.workspace = true
+sui-config.workspace = true
+typed-store.workspace = true
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+sui-json-rpc-types.workspace = true
+sui-package-resolver.workspace = true
+simulacrum.workspace = true
+arrow.workspace = true
+gcp-bigquery-client = "0.18.0"
+snowflake-api.workspace = true
+tap.workspace = true
+
+[dev-dependencies]
+
+[[bin]]
+name = "sui-analytics-indexer"
+path = "src/main.rs"

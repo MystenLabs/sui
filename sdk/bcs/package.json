@@ -1,31 +1,29 @@
 {
 	"name": "@mysten/bcs",
-	"version": "0.7.2",
+	"version": "1.1.0",
 	"description": "BCS - Canonical Binary Serialization implementation for JavaScript",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
-	"main": "./dist/index.js",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.ts",
+	"sideEffects": false,
+	"type": "commonjs",
+	"main": "./dist/cjs/index.js",
+	"module": "./dist/esm/index.js",
+	"types": "./dist/cjs/index.d.ts",
 	"exports": {
 		".": {
-			"types": "./dist/index.d.ts",
-			"source": "./src/index.ts",
-			"import": "./dist/index.mjs",
-			"require": "./dist/index.js"
+			"import": "./dist/esm/index.js",
+			"require": "./dist/cjs/index.js"
 		}
 	},
 	"files": [
+		"CHANGELOG.md",
 		"dist",
-		"src",
-		"CHANGELOG.md"
+		"src"
 	],
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"dev": "pnpm build --watch",
-		"build": "pnpm build:types && pnpm build:tsup",
-		"build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
-		"build:types": "tsc --build",
+		"build": "build-package",
 		"prepublishOnly": "pnpm build",
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -63,13 +61,13 @@
 	],
 	"homepage": "https://github.com/mystenlabs/sui#readme",
 	"devDependencies": {
-		"@size-limit/preset-small-lib": "^8.2.4",
-		"size-limit": "^8.2.4",
-		"tsup": "^6.7.0",
-		"typescript": "^5.0.4",
-		"vitest": "^0.32.0"
+		"@mysten/build-scripts": "workspace:*",
+		"@size-limit/preset-small-lib": "^11.1.4",
+		"size-limit": "^11.1.4",
+		"typescript": "^5.5.3",
+		"vitest": "^2.0.1"
 	},
 	"dependencies": {
-		"bs58": "^5.0.0"
+		"bs58": "^6.0.0"
 	}
 }

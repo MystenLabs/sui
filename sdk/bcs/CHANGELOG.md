@@ -1,5 +1,119 @@
 # Change Log
 
+## 1.1.0
+
+### Minor Changes
+
+- 489f421: Updated hex, base64, and base58 utility names for better consistency
+
+  All existing methods will continue to work, but the following methods have been deprecated and
+  replaced with methods with improved names:
+
+  - `toHEX` -> `toHEX`
+  - `fromHEX` -> `fromHex`
+  - `toB64` -> `toBase64`
+  - `fromB64` -> `fromBase64`
+  - `toB58` -> `toBase58`
+  - `fromB58` -> `fromBase58`
+
+## 1.0.4
+
+### Patch Changes
+
+- f37b3c2: Improve error message when bcs enum contains unknown value
+
+## 1.0.3
+
+### Patch Changes
+
+- 7fc464a: Remove unique symbols from types to improve compatability between version
+- 0f27a97: Update dependencies
+
+## 1.0.2
+
+### Patch Changes
+
+- 369b924343: Improve error messages when attempting to serialze non-array values that should be
+  arrays
+
+## 1.0.1
+
+### Patch Changes
+
+- f1e828f557: Remove undefined from bcs.option output types
+
+## 1.0.0
+
+### Major Changes
+
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features
+  and breaking changes. See the
+  [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on
+  how to upgrade.
+
+## 0.11.1
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+
+## 0.11.0
+
+### Minor Changes
+
+- bae8802fe3: Update base64 encoding to use global `atob` and `btoa` functions.
+
+## 0.10.1
+
+### Patch Changes
+
+- 9ac0a4ec01: Add extensions to all sdk import paths
+
+## 0.10.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+## 0.9.1
+
+### Patch Changes
+
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+
+## 0.9.0
+
+### Minor Changes
+
+- fce0a08d0f: Deprecate the bcs.generic helper. This helper causes typescript performance issues,
+  and the generated generics can't be exported
+
+## 0.8.1
+
+### Patch Changes
+
+- b48289346: Mark packages as being side-effect free.
+
+## 0.8.0
+
+### Minor Changes
+
+- 1bc430161: Add new type-safe schema builder. See https://sdk.mystenlabs.com/bcs for updated
+  documentation
+- e4484852b: Add isSerializedBcs helper
+
+## 0.7.4
+
+### Patch Changes
+
+- 290c8e640: Fix parsing of hex strings where leading 0s have been trimmed
+
+## 0.7.3
+
+### Patch Changes
+
+- 36f2edff3: Fix an issue with parsing struct types with nested type parameters
+
 ## 0.7.2
 
 ### Patch Changes
@@ -17,33 +131,39 @@
 
 ### Minor Changes
 
-- 19b567f21: Unified self- and delegated staking flows. Removed fields from `Validator` (`stake_amount`, `pending_stake`, and `pending_withdraw`) and renamed `delegation_staking_pool` to `staking_pool`. Additionally removed the `validator_stake` and `delegated_stake` fields in the `ValidatorSet` type and replaced them with a `total_stake` field.
+- 19b567f21: Unified self- and delegated staking flows. Removed fields from `Validator`
+  (`stake_amount`, `pending_stake`, and `pending_withdraw`) and renamed `delegation_staking_pool` to
+  `staking_pool`. Additionally removed the `validator_stake` and `delegated_stake` fields in the
+  `ValidatorSet` type and replaced them with a `total_stake` field.
 - 5c3b00cde: Add object id to staking pool and pool id to staked sui.
-- 3d9a04648: Adds `deactivation_epoch` to staking pool object, and adds `inactive_pools` to the validator set object.
+- 3d9a04648: Adds `deactivation_epoch` to staking pool object, and adds `inactive_pools` to the
+  validator set object.
 - a8049d159: Fixes the issue with deep nested generics by introducing array type names
 
-  - all of the methods (except for aliasing) now allow passing in arrays instead
-    of strings to allow for easier composition of generics and avoid using template
-    strings
+  - all of the methods (except for aliasing) now allow passing in arrays instead of strings to allow
+    for easier composition of generics and avoid using template strings
 
   ```js
   // new syntax
-  bcs.registerStructType(["VecMap", "K", "V"], {
-    keys: ["vector", "K"],
-    values: ["vector", "V"],
+  bcs.registerStructType(['VecMap', 'K', 'V'], {
+  	keys: ['vector', 'K'],
+  	values: ['vector', 'V'],
   });
 
   // is identical to an old string definition
-  bcs.registerStructType("VecMap<K, V>", {
-    keys: "vector<K>",
-    values: "vector<V>",
+  bcs.registerStructType('VecMap<K, V>', {
+  	keys: 'vector<K>',
+  	values: 'vector<V>',
   });
   ```
 
   Similar approach applies to `bcs.ser()` and `bcs.de()` as well as to other register\* methods
 
 - a0955c479: Switch from 20 to 32-byte address. Match Secp256k1.deriveKeypair with Ed25519.
-- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument names, RPC endpoints, Move functions, and object fields have been updated with this new naming convention.
+- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various
+  capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument
+  names, RPC endpoints, Move functions, and object fields have been updated with this new naming
+  convention.
 - 77bdf907f: When parsing u64, u128, and u256 values with bcs, they are now string encoded.
 
 ## 0.6.1
@@ -56,15 +176,15 @@
 
 ```js
 // new syntax
-bcs.registerStructType(["VecMap", "K", "V"], {
-  keys: ["vector", "K"],
-  values: ["vector", "V"],
+bcs.registerStructType(['VecMap', 'K', 'V'], {
+	keys: ['vector', 'K'],
+	values: ['vector', 'V'],
 });
 
 // is identical to an old string definition
-bcs.registerStructType("VecMap<K, V>", {
-  keys: "vector<K>",
-  values: "vector<V>",
+bcs.registerStructType('VecMap<K, V>', {
+	keys: 'vector<K>',
+	values: 'vector<V>',
 });
 ```
 
@@ -78,10 +198,10 @@ bcs.registerStructType("VecMap<K, V>", {
 - adds constants for the built-ins: `BCS.BASE64`, `BCS.BASE58` and `BCS.HEX`
 
 ```js
-bcs.registerStructType("TestStruct", {
-  hex: BCS.HEX,
-  base58: BCS.BASE58,
-  base64: BCS.BASE64,
+bcs.registerStructType('TestStruct', {
+	hex: BCS.HEX,
+	base58: BCS.BASE58,
+	base64: BCS.BASE64,
 });
 ```
 
@@ -94,17 +214,17 @@ bcs.registerStructType("TestStruct", {
 
 ```js
 // inline definition example
-let struct = { name: "Alice", age: 25 };
-let bytes = bcs.ser({ name: "string", age: "u8" }, struct).toBytes();
-let restored = bcs.de({ name: "string", age: "u8" }, bytes);
+let struct = { name: 'Alice', age: 25 };
+let bytes = bcs.ser({ name: 'string', age: 'u8' }, struct).toBytes();
+let restored = bcs.de({ name: 'string', age: 'u8' }, bytes);
 
 // `restored` deeply equals `struct`
 ```
 
 ```js
 // aliases for types
-bcs.registerAlias("Name", "string");
-bcs.ser("Name", "Palpatine");
+bcs.registerAlias('Name', 'string');
+bcs.ser('Name', 'Palpatine');
 ```
 
 ## 0.5.0

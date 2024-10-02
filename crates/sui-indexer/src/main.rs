@@ -2,67 +2,95 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use tracing::{error, info};
-
-use sui_indexer::errors::IndexerError;
-use sui_indexer::metrics::IndexerMetrics;
-use sui_indexer::start_prometheus_server;
+use sui_indexer::backfill::backfill_runner::BackfillRunner;
+use sui_indexer::config::{Command, UploadOptions};
+use sui_indexer::database::ConnectionPool;
+use sui_indexer::db::{check_db_migration_consistency, reset_database, run_migrations};
+use sui_indexer::indexer::Indexer;
+use sui_indexer::metrics::{
+    spawn_connection_pool_metric_collector, start_prometheus_server, IndexerMetrics,
+};
+use sui_indexer::restorer::formal_snapshot::IndexerFormalSnapshotRestorer;
 use sui_indexer::store::PgIndexerStore;
-use sui_indexer::utils::reset_database;
-use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, Indexer, IndexerConfig};
+use tokio_util::sync::CancellationToken;
+use tracing::warn;
 
 #[tokio::main]
-async fn main() -> Result<(), IndexerError> {
+async fn main() -> anyhow::Result<()> {
+    let opts = sui_indexer::config::IndexerConfig::parse();
+
     // NOTE: this is to print out tracing like info, warn & error.
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
+    warn!("WARNING: Sui indexer is still experimental and we expect occasional breaking changes that require backfills.");
 
-    let indexer_config = IndexerConfig::parse();
-    info!("Parsed indexer config: {:#?}", indexer_config);
-    let (_registry_service, registry) = start_prometheus_server(
-        // NOTE: this parses the input host addr and port number for socket addr,
-        // so unwrap() is safe here.
-        format!(
-            "{}:{}",
-            indexer_config.client_metric_host, indexer_config.client_metric_port
-        )
-        .parse()
-        .unwrap(),
-        indexer_config.rpc_client_url.as_str(),
-    )?;
+    let (_registry_service, registry) = start_prometheus_server(opts.metrics_address)?;
+    mysten_metrics::init_metrics(&registry);
     let indexer_metrics = IndexerMetrics::new(&registry);
-    let db_url = indexer_config.get_db_url().map_err(|e| {
-        IndexerError::PgPoolConnectionError(format!(
-            "Failed parsing database url with error {:?}",
-            e
-        ))
-    })?;
-    let blocking_cp = new_pg_connection_pool(&db_url).await.map_err(|e| {
-        error!(
-            "Failed creating Postgres connection pool with error {:?}",
-            e
-        );
-        e
-    })?;
-    if indexer_config.reset_db {
-        let mut conn = get_pg_pool_connection(&blocking_cp).map_err(|e| {
-            error!(
-                "Failed getting Postgres connection from connection pool with error {:?}",
-                e
-            );
-            e
-        })?;
-        reset_database(&mut conn, /* drop_all */ true).map_err(|e| {
-            let db_err_msg = format!(
-                "Failed resetting database with url: {:?} and error: {:?}",
-                db_url, e
-            );
-            error!("{}", db_err_msg);
-            IndexerError::PostgresResetError(db_err_msg)
-        })?;
-    }
-    let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone()).await;
 
-    Indexer::start(&indexer_config, &registry, store, indexer_metrics, None).await
+    let pool = ConnectionPool::new(
+        opts.database_url.clone(),
+        opts.connection_pool_config.clone(),
+    )
+    .await?;
+    spawn_connection_pool_metric_collector(indexer_metrics.clone(), pool.clone());
+
+    match opts.command {
+        Command::Indexer {
+            ingestion_config,
+            snapshot_config,
+            pruning_options,
+            upload_options,
+        } => {
+            // Make sure to run all migrations on startup, and also serve as a compatibility check.
+            run_migrations(pool.dedicated_connection().await?).await?;
+            let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
+
+            Indexer::start_writer_with_config(
+                &ingestion_config,
+                store,
+                indexer_metrics,
+                snapshot_config,
+                pruning_options,
+                CancellationToken::new(),
+            )
+            .await?;
+        }
+        Command::JsonRpcService(json_rpc_config) => {
+            check_db_migration_consistency(&mut pool.get().await?).await?;
+
+            Indexer::start_reader(&json_rpc_config, &registry, pool).await?;
+        }
+        Command::ResetDatabase { force } => {
+            if !force {
+                return Err(anyhow::anyhow!(
+                    "Resetting the DB requires use of the `--force` flag",
+                ));
+            }
+
+            reset_database(pool.dedicated_connection().await?).await?;
+        }
+        Command::RunMigrations => {
+            run_migrations(pool.dedicated_connection().await?).await?;
+        }
+        Command::RunBackFill {
+            start,
+            end,
+            runner_kind,
+            backfill_config,
+        } => {
+            let total_range = start..=end;
+            BackfillRunner::run(runner_kind, pool, backfill_config, total_range).await;
+        }
+        Command::Restore(restore_config) => {
+            let store =
+                PgIndexerStore::new(pool, UploadOptions::default(), indexer_metrics.clone());
+            let mut formal_restorer =
+                IndexerFormalSnapshotRestorer::new(store, restore_config).await?;
+            formal_restorer.restore().await?;
+        }
+    }
+
+    Ok(())
 }

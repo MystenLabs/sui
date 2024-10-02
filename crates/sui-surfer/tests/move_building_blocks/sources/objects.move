@@ -12,13 +12,13 @@ module move_building_blocks::objects {
     use sui::transfer;
     use sui::tx_context;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         wrapped: Option<Child>,
         table: Table<u8, Child>,
     }
 
-    struct Child has key, store {
+    public struct Child has key, store {
         id: UID,
     }
 
@@ -42,7 +42,7 @@ module move_building_blocks::objects {
     }
 
     public fun create_owned_children(count: u8, ctx: &mut TxContext) {
-        let i = 0;
+        let mut i = 0;
         while (i < count) {
             create_owned_child(ctx);
             i = i + 1;
@@ -114,6 +114,17 @@ module move_building_blocks::objects {
             let child = table::remove(&mut object.table, index);
             delete_child(child);
         }
+    }
+    
+    public fun delete(object: Object) {
+        let Object { id, mut wrapped, table } = object;
+        object::delete(id);
+        if (option::is_some(&wrapped)) {
+            let child = option::extract(&mut wrapped);
+            delete_child(child);
+        };
+        option::destroy_none(wrapped);
+        table::destroy_empty(table);
     }
 
     fun new_object(ctx: &mut TxContext): Object {

@@ -2,41 +2,40 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics,
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::checkpoints::CheckpointStore;
-use anyhow::{anyhow, Context, Result};
+use crate::rest_index::RestIndexStore;
+use anyhow::Result;
 use bytes::Bytes;
 use futures::future::try_join_all;
 use object_store::path::Path;
-use object_store::{DynObjectStore, Error};
-use oneshot::channel;
+use object_store::DynObjectStore;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
-use std::collections::BTreeMap;
-use std::collections::Bound::{Included, Unbounded};
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::node::AuthorityStorePruningConfig;
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::mutex_table::RwLockTable;
 use sui_storage::object_store::util::{
-    copy_recursively, delete_recursively, path_to_filesystem, put,
+    copy_recursively, find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs,
+    path_to_filesystem, put, run_manifest_update_loop, write_snapshot_manifest,
 };
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
-use tokio::sync::oneshot;
-use tokio::sync::oneshot::Sender;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use typed_store::rocks::MetricConf;
 
 pub const SUCCESS_MARKER: &str = "_SUCCESS";
 pub const TEST_MARKER: &str = "_TEST";
 pub const UPLOAD_COMPLETED_MARKER: &str = "_UPLOAD_COMPLETED";
+pub const STATE_SNAPSHOT_COMPLETED_MARKER: &str = "_STATE_SNAPSHOT_COMPLETED";
 
 pub struct DBCheckpointMetrics {
     pub first_missing_db_checkpoint_epoch: IntGauge,
+    pub num_local_db_checkpoints: IntGauge,
 }
 
 impl DBCheckpointMetrics {
@@ -45,6 +44,12 @@ impl DBCheckpointMetrics {
             first_missing_db_checkpoint_epoch: register_int_gauge_with_registry!(
                 "first_missing_db_checkpoint_epoch",
                 "First epoch for which we have no db checkpoint in remote store",
+                registry
+            )
+            .unwrap(),
+            num_local_db_checkpoints: register_int_gauge_with_registry!(
+                "num_local_db_checkpoints",
+                "Number of RocksDB checkpoints currently residing on local disk (i.e. not yet garbage collected)",
                 registry
             )
             .unwrap(),
@@ -59,7 +64,7 @@ pub struct DBCheckpointHandler {
     /// DB checkpoint directory on local filesystem
     input_root_path: PathBuf,
     /// Bucket on cloud object store where db checkpoints will be copied
-    output_object_store: Arc<DynObjectStore>,
+    output_object_store: Option<Arc<DynObjectStore>>,
     /// Time interval to check for presence of new db checkpoint
     interval: Duration,
     /// File markers which signal that local db checkpoint can be garbage collected
@@ -68,6 +73,8 @@ pub struct DBCheckpointHandler {
     prune_and_compact_before_upload: bool,
     /// Indirect object config for pruner
     indirect_objects_threshold: usize,
+    /// If true, upload will block on state snapshot upload completed marker
+    state_snapshot_enabled: bool,
     /// Pruning objects
     pruning_config: AuthorityStorePruningConfig,
     metrics: Arc<DBCheckpointMetrics>,
@@ -76,81 +83,187 @@ pub struct DBCheckpointHandler {
 impl DBCheckpointHandler {
     pub fn new(
         input_path: &std::path::Path,
-        output_object_store_config: &ObjectStoreConfig,
+        output_object_store_config: Option<&ObjectStoreConfig>,
         interval_s: u64,
         prune_and_compact_before_upload: bool,
         indirect_objects_threshold: usize,
         pruning_config: AuthorityStorePruningConfig,
         registry: &Registry,
-    ) -> Result<Self> {
+        state_snapshot_enabled: bool,
+    ) -> Result<Arc<Self>> {
         let input_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
             directory: Some(input_path.to_path_buf()),
             ..Default::default()
         };
-        Ok(DBCheckpointHandler {
+        let mut gc_markers = vec![UPLOAD_COMPLETED_MARKER.to_string()];
+        if state_snapshot_enabled {
+            gc_markers.push(STATE_SNAPSHOT_COMPLETED_MARKER.to_string());
+        }
+        Ok(Arc::new(DBCheckpointHandler {
             input_object_store: input_store_config.make()?,
             input_root_path: input_path.to_path_buf(),
-            output_object_store: output_object_store_config.make()?,
+            output_object_store: output_object_store_config
+                .map(|config| config.make().expect("Failed to make object store")),
             interval: Duration::from_secs(interval_s),
-            gc_markers: vec![UPLOAD_COMPLETED_MARKER.to_string()],
+            gc_markers,
             prune_and_compact_before_upload,
             indirect_objects_threshold,
+            state_snapshot_enabled,
             pruning_config,
             metrics: DBCheckpointMetrics::new(registry),
-        })
+        }))
     }
     pub fn new_for_test(
         input_object_store_config: &ObjectStoreConfig,
-        output_object_store_config: &ObjectStoreConfig,
+        output_object_store_config: Option<&ObjectStoreConfig>,
         interval_s: u64,
         prune_and_compact_before_upload: bool,
-    ) -> Result<Self> {
-        Ok(DBCheckpointHandler {
+        state_snapshot_enabled: bool,
+    ) -> Result<Arc<Self>> {
+        Ok(Arc::new(DBCheckpointHandler {
             input_object_store: input_object_store_config.make()?,
             input_root_path: input_object_store_config
                 .directory
                 .as_ref()
                 .unwrap()
                 .clone(),
-            output_object_store: output_object_store_config.make()?,
+            output_object_store: output_object_store_config
+                .map(|config| config.make().expect("Failed to make object store")),
             interval: Duration::from_secs(interval_s),
             gc_markers: vec![UPLOAD_COMPLETED_MARKER.to_string(), TEST_MARKER.to_string()],
             prune_and_compact_before_upload,
             indirect_objects_threshold: 0,
+            state_snapshot_enabled,
             pruning_config: AuthorityStorePruningConfig::default(),
             metrics: DBCheckpointMetrics::new(&Registry::default()),
-        })
+        }))
     }
-    pub fn start(self) -> Sender<()> {
-        let (sender, mut recv) = channel::<()>();
+    pub fn start(self: Arc<Self>) -> tokio::sync::broadcast::Sender<()> {
+        let (kill_sender, _kill_receiver) = tokio::sync::broadcast::channel::<()>(1);
+        if self.output_object_store.is_some() {
+            tokio::task::spawn(Self::run_db_checkpoint_upload_loop(
+                self.clone(),
+                kill_sender.subscribe(),
+            ));
+            tokio::task::spawn(run_manifest_update_loop(
+                self.output_object_store.as_ref().unwrap().clone(),
+                kill_sender.subscribe(),
+            ));
+        } else {
+            // if db checkpoint remote store is not specified, cleanup loop
+            // is run to immediately mark db checkpoint upload as successful
+            // so that they can be snapshotted and garbage collected
+            tokio::task::spawn(Self::run_db_checkpoint_cleanup_loop(
+                self.clone(),
+                kill_sender.subscribe(),
+            ));
+        }
+        tokio::task::spawn(Self::run_db_checkpoint_gc_loop(
+            self,
+            kill_sender.subscribe(),
+        ));
+        kill_sender
+    }
+    async fn run_db_checkpoint_upload_loop(
+        self: Arc<Self>,
+        mut recv: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<()> {
         let mut interval = tokio::time::interval(self.interval);
-        tokio::task::spawn(async move {
-            info!("DB checkpoint handler loop started");
-            loop {
-                tokio::select! {
-                    _now = interval.tick() => {
-                        if let Ok(epoch) = self.find_first_missing_checkpoint_epoch().await {
-                            self.metrics.first_missing_db_checkpoint_epoch.set(epoch);
+        info!("DB checkpoint upload loop started");
+        loop {
+            tokio::select! {
+                _now = interval.tick() => {
+                    let local_checkpoints_by_epoch =
+                        find_all_dirs_with_epoch_prefix(&self.input_object_store, None).await?;
+                    self.metrics.num_local_db_checkpoints.set(local_checkpoints_by_epoch.len() as i64);
+                    match find_missing_epochs_dirs(self.output_object_store.as_ref().unwrap(), SUCCESS_MARKER).await {
+                        Ok(epochs) => {
+                            self.metrics.first_missing_db_checkpoint_epoch.set(epochs.first().cloned().unwrap_or(0) as i64);
+                            if let Err(err) = self.upload_db_checkpoints_to_object_store(epochs).await {
+                                error!("Failed to upload db checkpoint to remote store with err: {:?}", err);
+                            }
                         }
-                        if let Err(err) = self.upload_db_checkpoint_to_object_store().await {
-                            error!("Failed to upload db checkpoint to remote store with err: {:?}", err);
+                        Err(err) => {
+                            error!("Failed to find missing db checkpoints in remote store: {:?}", err);
                         }
-                    },
-                    _ = &mut recv => break,
-                }
+                    }
+                },
+                 _ = recv.recv() => break,
             }
-        });
-        sender
+        }
+        Ok(())
     }
-    async fn prune_and_compact(&self, db_path: PathBuf, epoch: u32) -> Result<()> {
+    async fn run_db_checkpoint_cleanup_loop(
+        self: Arc<Self>,
+        mut recv: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<()> {
+        let mut interval = tokio::time::interval(self.interval);
+        info!("DB checkpoint upload disabled. DB checkpoint cleanup loop started");
+        loop {
+            tokio::select! {
+                _now = interval.tick() => {
+                    let local_checkpoints_by_epoch =
+                        find_all_dirs_with_epoch_prefix(&self.input_object_store, None).await?;
+                    self.metrics.num_local_db_checkpoints.set(local_checkpoints_by_epoch.len() as i64);
+                    let mut dirs: Vec<_> = local_checkpoints_by_epoch.iter().collect();
+                    dirs.sort_by_key(|(epoch_num, _path)| *epoch_num);
+                    for (_, db_path) in dirs {
+                        // If db checkpoint marked as completed, skip
+                        let local_db_path = path_to_filesystem(self.input_root_path.clone(), db_path)?;
+                        let upload_completed_path = local_db_path.join(UPLOAD_COMPLETED_MARKER);
+                        if upload_completed_path.exists() {
+                            continue;
+                        }
+                        let bytes = Bytes::from_static(b"success");
+                        let upload_completed_marker = db_path.child(UPLOAD_COMPLETED_MARKER);
+                        put(&self.input_object_store,
+                            &upload_completed_marker,
+                            bytes.clone(),
+                        )
+                        .await?;
+                    }
+                },
+                 _ = recv.recv() => break,
+            }
+        }
+        Ok(())
+    }
+    async fn run_db_checkpoint_gc_loop(
+        self: Arc<Self>,
+        mut recv: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<()> {
+        let mut gc_interval = tokio::time::interval(Duration::from_secs(30));
+        info!("DB checkpoint garbage collection loop started");
+        loop {
+            tokio::select! {
+                _now = gc_interval.tick() => {
+                    if let Ok(deleted) = self.garbage_collect_old_db_checkpoints().await {
+                        if !deleted.is_empty() {
+                            info!("Garbage collected local db checkpoints: {:?}", deleted);
+                        }
+                    }
+                },
+                 _ = recv.recv() => break,
+            }
+        }
+        Ok(())
+    }
+
+    async fn prune_and_compact(
+        &self,
+        db_path: PathBuf,
+        epoch: u64,
+        epoch_duration_ms: u64,
+    ) -> Result<()> {
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
         let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
             db_path.join("checkpoints"),
-            MetricConf::default(),
+            MetricConf::new("db_checkpoint"),
             None,
             None,
         ));
+        let rest_index = RestIndexStore::new_without_init(db_path.join("rest_index"));
         let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
         let lock_table = Arc::new(RwLockTable::new(1));
         info!(
@@ -160,10 +273,12 @@ impl DBCheckpointHandler {
         AuthorityStorePruner::prune_objects_for_eligible_epochs(
             &perpetual_db,
             &checkpoint_store,
+            Some(&rest_index),
             &lock_table,
-            self.pruning_config,
+            self.pruning_config.clone(),
             metrics,
             self.indirect_objects_threshold,
+            epoch_duration_ms,
         )
         .await?;
         info!(
@@ -173,119 +288,72 @@ impl DBCheckpointHandler {
         AuthorityStorePruner::compact(&perpetual_db)?;
         Ok(())
     }
-    async fn find_first_missing_checkpoint_epoch(&self) -> Result<i64> {
-        let remote_checkpoints_by_epoch = self
-            .read_checkpoint_dir(self.output_object_store.clone())
-            .await?;
-        let mut dirs: Vec<_> = remote_checkpoints_by_epoch.iter().collect();
+    async fn upload_db_checkpoints_to_object_store(
+        &self,
+        missing_epochs: Vec<u64>,
+    ) -> Result<(), anyhow::Error> {
+        let last_missing_epoch = missing_epochs.last().cloned().unwrap_or(0);
+        let local_checkpoints_by_epoch =
+            find_all_dirs_with_epoch_prefix(&self.input_object_store, None).await?;
+        let mut dirs: Vec<_> = local_checkpoints_by_epoch.iter().collect();
         dirs.sort_by_key(|(epoch_num, _path)| *epoch_num);
-        let mut candidate_epoch: u32 = 0;
-        for (epoch_num, path) in dirs {
-            if *epoch_num != candidate_epoch {
-                // The whole epoch directory is missing
-                break;
-            }
-            let success_marker = path.child(SUCCESS_MARKER);
-            let get_result = self.output_object_store.get(&success_marker).await;
-            match get_result {
-                Err(Error::NotFound { .. }) => {
-                    error!("No success marker found in db checkpoint for epoch: {epoch_num}");
-                    break;
+        let object_store = self
+            .output_object_store
+            .as_ref()
+            .expect("Expected object store to exist")
+            .clone();
+        for (epoch, db_path) in dirs {
+            // Convert `db_path` to the local filesystem path to where db checkpoint is stored
+            let local_db_path = path_to_filesystem(self.input_root_path.clone(), db_path)?;
+            if missing_epochs.contains(epoch) || *epoch >= last_missing_epoch {
+                if self.state_snapshot_enabled {
+                    let snapshot_completed_marker =
+                        local_db_path.join(STATE_SNAPSHOT_COMPLETED_MARKER);
+                    if !snapshot_completed_marker.exists() {
+                        info!("DB checkpoint upload for epoch {} to wait until state snasphot uploaded", *epoch);
+                        continue;
+                    }
                 }
-                Err(_) => {
-                    // Probably a transient error
-                    warn!("Failed while trying to read success marker in db checkpoint for epoch: {epoch_num}");
-                }
-                Ok(_) => {
-                    // Nothing to do
-                }
-            }
-            candidate_epoch += 1
-        }
-        Ok(candidate_epoch as i64)
-    }
-    async fn upload_db_checkpoint_to_object_store(&self) -> Result<()> {
-        let local_checkpoints_by_epoch = self
-            .read_checkpoint_dir(self.input_object_store.clone())
-            .await?;
-        let remote_checkpoints_by_epoch = self
-            .read_checkpoint_dir(self.output_object_store.clone())
-            .await?;
 
-        let next_epoch = if let Some((last_epoch, path)) =
-            remote_checkpoints_by_epoch.iter().next_back()
-        {
-            let success_marker = path.child(SUCCESS_MARKER);
-            let get_result = self.output_object_store.get(&success_marker).await;
-            match get_result {
-                Ok(_) => last_epoch + 1,
-                Err(Error::NotFound { .. }) => {
-                    // delete this path recursively and try uploading the last epoch db checkpoint again
-                    delete_recursively(
-                        path,
-                        self.output_object_store.clone(),
-                        NonZeroUsize::new(20).unwrap(),
-                    )
+                if self.prune_and_compact_before_upload {
+                    // Invoke pruning and compaction on the db checkpoint
+                    self.prune_and_compact(local_db_path, *epoch, EPOCH_DURATION_MS_FOR_TESTING)
+                        .await?;
+                }
+
+                info!("Copying db checkpoint for epoch: {epoch} to remote storage");
+                copy_recursively(
+                    db_path,
+                    &self.input_object_store,
+                    &object_store,
+                    NonZeroUsize::new(20).unwrap(),
+                )
+                .await?;
+
+                // This writes a single "MANIFEST" file which contains a list of all files that make up a db snapshot
+                write_snapshot_manifest(db_path, &object_store, format!("epoch_{}/", epoch))
                     .await?;
-                    *last_epoch
-                }
-                Err(err) => {
-                    return Err(anyhow!("Failed to determine if last checkpoint was uploaded successfully with error: {:?}", err));
-                }
+                // Drop marker in the output directory that upload completed successfully
+                let bytes = Bytes::from_static(b"success");
+                let success_marker = db_path.child(SUCCESS_MARKER);
+                put(&object_store, &success_marker, bytes.clone()).await?;
             }
-        } else {
-            0
-        };
-        let next_db_checkpoint_to_copy = local_checkpoints_by_epoch
-            .range((Included(next_epoch), Unbounded))
-            .next();
-        if let Some((epoch, db_path)) = next_db_checkpoint_to_copy {
-            if self.prune_and_compact_before_upload {
-                // Convert `db_path` to the local filesystem path to where db checkpoint is stored
-                let local_db_path = path_to_filesystem(self.input_root_path.clone(), db_path)?;
-                // Invoke pruning and compaction on the db checkpoint
-                self.prune_and_compact(local_db_path, *epoch).await?;
-            }
-            info!("Copying db checkpoint for epoch: {epoch} to remote storage");
-            copy_recursively(
-                db_path,
-                self.input_object_store.clone(),
-                self.output_object_store.clone(),
-                NonZeroUsize::new(20).unwrap(),
-            )
-            .await?;
-            // Drop marker in the output directory that upload completed successfully
             let bytes = Bytes::from_static(b"success");
-            let success_marker = db_path.child(SUCCESS_MARKER);
+            let upload_completed_marker = db_path.child(UPLOAD_COMPLETED_MARKER);
             put(
-                &success_marker,
+                &self.input_object_store,
+                &upload_completed_marker,
                 bytes.clone(),
-                self.output_object_store.clone(),
             )
             .await?;
-            // Drop marker in the db checkpoint directory that upload completed
-            // This is a signal that it is possible to garbage collect it now (although
-            // after state snapshot, gc will also wait on a successful state snapshot
-            // done marker)
-            for (gc_epoch, gc_path) in &local_checkpoints_by_epoch {
-                if *gc_epoch <= *epoch {
-                    let upload_completed_marker = gc_path.child(UPLOAD_COMPLETED_MARKER);
-                    put(
-                        &upload_completed_marker,
-                        bytes.clone(),
-                        self.input_object_store.clone(),
-                    )
-                    .await?;
-                }
-            }
         }
-        self.garbage_collect_old_db_checkpoints().await?;
         Ok(())
     }
-    async fn garbage_collect_old_db_checkpoints(&self) -> Result<()> {
-        let local_checkpoints_by_epoch = self
-            .read_checkpoint_dir(self.input_object_store.clone())
-            .await?;
+
+    async fn garbage_collect_old_db_checkpoints(&self) -> Result<Vec<u64>> {
+        let local_checkpoints_by_epoch =
+            find_all_dirs_with_epoch_prefix(&self.input_object_store, None).await?;
+        let mut deleted = Vec::new();
         for (epoch, path) in local_checkpoints_by_epoch.iter() {
             let marker_paths: Vec<Path> = self
                 .gc_markers
@@ -303,6 +371,7 @@ impl DBCheckpointHandler {
                 // upload completed marker
                 Ok(_) => {
                     info!("Deleting db checkpoint dir: {path} for epoch: {epoch}");
+                    deleted.push(*epoch);
                     let local_fs_path = path_to_filesystem(self.input_root_path.clone(), path)?;
                     fs::remove_dir_all(&local_fs_path)?;
                 }
@@ -311,24 +380,7 @@ impl DBCheckpointHandler {
                 }
             }
         }
-        Ok(())
-    }
-    async fn read_checkpoint_dir(&self, store: Arc<DynObjectStore>) -> Result<BTreeMap<u32, Path>> {
-        let mut checkpoints_by_epoch = BTreeMap::new();
-        let entries = store.list_with_delimiter(None).await?;
-        for entry in entries.common_prefixes {
-            if let Some(filename) = entry.filename() {
-                if !filename.starts_with("epoch_") {
-                    continue;
-                }
-                let epoch = filename
-                    .split_once('_')
-                    .context("Failed to split dir name")
-                    .map(|(_, epoch)| epoch.parse::<u32>())??;
-                checkpoints_by_epoch.insert(epoch, entry);
-            }
-        }
-        Ok(checkpoints_by_epoch)
+        Ok(deleted)
     }
 }
 
@@ -337,9 +389,12 @@ mod tests {
     use crate::db_checkpoint_handler::{
         DBCheckpointHandler, SUCCESS_MARKER, TEST_MARKER, UPLOAD_COMPLETED_MARKER,
     };
+    use itertools::Itertools;
     use std::fs;
-    use sui_storage::object_store::util::path_to_filesystem;
-    use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+    use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
+    use sui_storage::object_store::util::{
+        find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs, path_to_filesystem,
+    };
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -373,13 +428,14 @@ mod tests {
         };
         let db_checkpoint_handler = DBCheckpointHandler::new_for_test(
             &input_store_config,
-            &output_store_config,
+            Some(&output_store_config),
             10,
             false,
+            false,
         )?;
-        let local_checkpoints_by_epoch = db_checkpoint_handler
-            .read_checkpoint_dir(db_checkpoint_handler.input_object_store.clone())
-            .await?;
+        let local_checkpoints_by_epoch =
+            find_all_dirs_with_epoch_prefix(&db_checkpoint_handler.input_object_store, None)
+                .await?;
         assert!(!local_checkpoints_by_epoch.is_empty());
         assert_eq!(*local_checkpoints_by_epoch.first_key_value().unwrap().0, 0);
         assert_eq!(
@@ -390,8 +446,13 @@ mod tests {
             .unwrap(),
             std::fs::canonicalize(local_epoch0_checkpoint.clone()).unwrap()
         );
+        let missing_epochs = find_missing_epochs_dirs(
+            db_checkpoint_handler.output_object_store.as_ref().unwrap(),
+            SUCCESS_MARKER,
+        )
+        .await?;
         db_checkpoint_handler
-            .upload_db_checkpoint_to_object_store()
+            .upload_db_checkpoints_to_object_store(missing_epochs)
             .await?;
 
         assert!(remote_epoch0_checkpoint.join("file1").exists());
@@ -413,7 +474,6 @@ mod tests {
         assert!(!local_epoch0_checkpoint.join("file1").exists());
         assert!(!local_epoch0_checkpoint.join("file2").exists());
         assert!(!local_epoch0_checkpoint.join("data").join("file3").exists());
-
         Ok(())
     }
 
@@ -439,8 +499,9 @@ mod tests {
         };
         let db_checkpoint_handler = DBCheckpointHandler::new_for_test(
             &input_store_config,
-            &output_store_config,
+            Some(&output_store_config),
             10,
+            false,
             false,
         )?;
 
@@ -454,8 +515,13 @@ mod tests {
         let file3 = nested_dir.join("file3");
         fs::write(file3, b"Lorem ipsum")?;
 
+        let missing_epochs = find_missing_epochs_dirs(
+            db_checkpoint_handler.output_object_store.as_ref().unwrap(),
+            SUCCESS_MARKER,
+        )
+        .await?;
         db_checkpoint_handler
-            .upload_db_checkpoint_to_object_store()
+            .upload_db_checkpoints_to_object_store(missing_epochs)
             .await?;
         assert!(remote_epoch0_checkpoint.join("file1").exists());
         assert!(remote_epoch0_checkpoint.join("file2").exists());
@@ -483,8 +549,13 @@ mod tests {
 
         // Checkpoint handler should copy checkpoint for epoch_0 first before copying
         // epoch_1
+        let missing_epochs = find_missing_epochs_dirs(
+            db_checkpoint_handler.output_object_store.as_ref().unwrap(),
+            SUCCESS_MARKER,
+        )
+        .await?;
         db_checkpoint_handler
-            .upload_db_checkpoint_to_object_store()
+            .upload_db_checkpoints_to_object_store(missing_epochs)
             .await?;
         assert!(remote_epoch0_checkpoint.join("file1").exists());
         assert!(remote_epoch0_checkpoint.join("file2").exists());
@@ -494,9 +565,6 @@ mod tests {
             .join(UPLOAD_COMPLETED_MARKER)
             .exists());
 
-        db_checkpoint_handler
-            .upload_db_checkpoint_to_object_store()
-            .await?;
         let remote_epoch1_checkpoint = remote_checkpoint_dir_path.join("epoch_1");
         assert!(remote_epoch1_checkpoint.join("file1").exists());
         assert!(remote_epoch1_checkpoint.join("file2").exists());
@@ -553,34 +621,96 @@ mod tests {
         };
         let db_checkpoint_handler = DBCheckpointHandler::new_for_test(
             &input_store_config,
-            &output_store_config,
+            Some(&output_store_config),
             10,
+            false,
             false,
         )?;
 
+        let missing_epochs = find_missing_epochs_dirs(
+            db_checkpoint_handler.output_object_store.as_ref().unwrap(),
+            SUCCESS_MARKER,
+        )
+        .await?;
         db_checkpoint_handler
-            .upload_db_checkpoint_to_object_store()
-            .await?;
-        db_checkpoint_handler
-            .upload_db_checkpoint_to_object_store()
-            .await?;
-        db_checkpoint_handler
-            .upload_db_checkpoint_to_object_store()
+            .upload_db_checkpoints_to_object_store(missing_epochs)
             .await?;
 
-        let first_missing_epoch = db_checkpoint_handler
-            .find_first_missing_checkpoint_epoch()
-            .await?;
+        let first_missing_epoch = find_missing_epochs_dirs(
+            db_checkpoint_handler.output_object_store.as_ref().unwrap(),
+            SUCCESS_MARKER,
+        )
+        .await?
+        .first()
+        .cloned()
+        .unwrap();
         assert_eq!(first_missing_epoch, 2);
 
         let remote_epoch0_checkpoint = remote_checkpoint_dir_path.join("epoch_0");
         fs::remove_file(remote_epoch0_checkpoint.join(SUCCESS_MARKER))?;
 
-        let first_missing_epoch = db_checkpoint_handler
-            .find_first_missing_checkpoint_epoch()
-            .await?;
+        let first_missing_epoch = find_missing_epochs_dirs(
+            db_checkpoint_handler.output_object_store.as_ref().unwrap(),
+            SUCCESS_MARKER,
+        )
+        .await?
+        .first()
+        .cloned()
+        .unwrap();
         assert_eq!(first_missing_epoch, 0);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_range_missing_epochs() -> anyhow::Result<()> {
+        let checkpoint_dir = TempDir::new()?;
+        let checkpoint_dir_path = checkpoint_dir.path();
+        let local_epoch100_checkpoint = checkpoint_dir_path.join("epoch_100");
+        fs::create_dir(&local_epoch100_checkpoint)?;
+        let local_epoch200_checkpoint = checkpoint_dir_path.join("epoch_200");
+        fs::create_dir(&local_epoch200_checkpoint)?;
+        let remote_checkpoint_dir = TempDir::new()?;
+        let remote_checkpoint_dir_path = remote_checkpoint_dir.path();
+
+        let input_store_config = ObjectStoreConfig {
+            object_store: Some(ObjectStoreType::File),
+            directory: Some(checkpoint_dir_path.to_path_buf()),
+            ..Default::default()
+        };
+
+        let output_store_config = ObjectStoreConfig {
+            object_store: Some(ObjectStoreType::File),
+            directory: Some(remote_checkpoint_dir_path.to_path_buf()),
+            ..Default::default()
+        };
+        let db_checkpoint_handler = DBCheckpointHandler::new_for_test(
+            &input_store_config,
+            Some(&output_store_config),
+            10,
+            false,
+            false,
+        )?;
+
+        let missing_epochs = find_missing_epochs_dirs(
+            db_checkpoint_handler.output_object_store.as_ref().unwrap(),
+            SUCCESS_MARKER,
+        )
+        .await?;
+        assert_eq!(missing_epochs, vec![0]);
+        db_checkpoint_handler
+            .upload_db_checkpoints_to_object_store(missing_epochs)
+            .await?;
+
+        let missing_epochs = find_missing_epochs_dirs(
+            db_checkpoint_handler.output_object_store.as_ref().unwrap(),
+            SUCCESS_MARKER,
+        )
+        .await?;
+        let mut expected_missing_epochs: Vec<u64> = (0..100).collect();
+        expected_missing_epochs.extend((101..200).collect_vec().iter());
+        expected_missing_epochs.push(201);
+        assert_eq!(missing_epochs, expected_missing_epochs);
         Ok(())
     }
 }

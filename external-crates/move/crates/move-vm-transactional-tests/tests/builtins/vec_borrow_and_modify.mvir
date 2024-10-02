@@ -1,0 +1,40 @@
+//# publish
+module 0x5.M {
+    import 0x1.vector;
+
+    public new(): vector<u64> {
+        let v: vector<u64>;
+    label b0:
+        v = vector.empty<u64>();
+        vector.push_back<u64>(&mut v, 100);
+        vector.push_back<u64>(&mut v, 200);
+        return move(v);
+    }
+
+    public borrow_and_modify(v: &mut vector<u64>) {
+    label b0:
+        *vector.borrow_mut<u64>(move(v), 0) = 300;
+        return;
+    }
+
+    public verify_effects(v: &vector<u64>) {
+    label b0:
+        assert(*vector.borrow<u64>(move(v), 0) == 300, 1000);
+        return;
+    }
+}
+
+//# publish
+module 0x6.test {
+    import 0x5.M;
+    public test() {
+        let v: vector<u64>;
+    label b0:
+        v = M.new();
+        M.borrow_and_modify(&mut v);
+        M.verify_effects(& v);
+        return;
+    }
+}
+
+//# run 0x6::test::test

@@ -1,0 +1,12 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+  let x: u64;
+label b0:
+  return;
+  // invalid fall through
+  x = 7;
+}
+
+}

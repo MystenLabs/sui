@@ -42,12 +42,12 @@ fn publish_coin_factory(
     );
     let package = effects
         .created()
-        .iter()
+        .into_iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap();
     let cap = effects
         .created()
-        .iter()
+        .into_iter()
         .find(|(obj_ref, _)| {
             if let Some(stag) = exec
                 .rt
@@ -104,7 +104,7 @@ pub fn run_pt_success(
     );
     let new_cap = effects
         .mutated()
-        .iter()
+        .into_iter()
         .find(|(obj_ref, _)| {
             if let Some(stag) = exec
                 .rt

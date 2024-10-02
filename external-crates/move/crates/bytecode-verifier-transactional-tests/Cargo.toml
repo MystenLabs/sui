@@ -1,0 +1,17 @@
+[package]
+name = "bytecode-verifier-transactional-tests"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+publish = false
+edition = "2021"
+license = "Apache-2.0"
+
+[dev-dependencies]
+datatest-stable.workspace = true
+move-transactional-test-runner.workspace = true
+
+[[test]]
+name = "tests"
+harness = false
+
+[dependencies]

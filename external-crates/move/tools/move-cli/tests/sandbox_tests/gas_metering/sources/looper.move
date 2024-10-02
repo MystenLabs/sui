@@ -1,5 +1,0 @@
-script {
-    fun looper() {
-        loop {}
-    }
-}

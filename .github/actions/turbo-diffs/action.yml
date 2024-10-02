@@ -7,12 +7,15 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       with:
         fetch-depth: 0
-    - uses: pnpm/action-setup@v2.2.2
+    - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
       with:
-        version: 8
+        version: 9.1.1
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      shell: bash
     - id: changes
       name: Detect changes
       shell: bash

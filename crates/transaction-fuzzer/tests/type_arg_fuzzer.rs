@@ -22,7 +22,7 @@ fn publish_type_factory(exec: &mut Executor, account: &mut AccountCurrent) -> Ob
     let effects = exec.publish("type_factory", vec![], account);
     let package = effects
         .created()
-        .iter()
+        .into_iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap();
     package.0

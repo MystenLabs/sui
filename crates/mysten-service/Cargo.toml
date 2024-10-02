@@ -1,0 +1,22 @@
+[package]
+name = "mysten-service"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+tokio.workspace = true
+serde.workspace = true
+prometheus.workspace = true
+simple-server-timing-header.workspace = true
+mysten-metrics.workspace = true
+telemetry-subscribers.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tower.workspace = true
+serde_json.workspace = true

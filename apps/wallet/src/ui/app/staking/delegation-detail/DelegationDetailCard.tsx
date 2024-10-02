@@ -1,24 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	useGetValidatorsApy,
-	useGetSystemState,
-	useCoinMetadata,
-	useGetCoinBalance,
-} from '@mysten/core';
-import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
-import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js';
-import BigNumber from 'bignumber.js';
-import { useMemo } from 'react';
-
-import { useActiveAddress } from '../../hooks/useActiveAddress';
-import { Heading } from '../../shared/heading';
-import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
-import { StakeAmount } from '../home/StakeAmount';
-import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
+import { Button } from '_app/shared/ButtonUI';
 import { Card } from '_app/shared/card';
 import { CardItem } from '_app/shared/card/CardItem';
 import { Text } from '_app/shared/text';
@@ -28,8 +12,24 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
-import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
+import {
+	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	DELEGATED_STAKES_QUERY_STALE_TIME,
+	MIN_NUMBER_SUI_TO_STAKE,
+} from '_src/shared/constants';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
+import { useCoinMetadata, useGetDelegatedStake, useGetValidatorsApy } from '@mysten/core';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
+import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
+import type { StakeObject } from '@mysten/sui/client';
+import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui/utils';
+import BigNumber from 'bignumber.js';
+import { useMemo } from 'react';
+
+import { useActiveAddress } from '../../hooks/useActiveAddress';
+import { Heading } from '../../shared/heading';
+import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
+import { StakeAmount } from '../home/StakeAmount';
 
 type DelegationDetailCardProps = {
 	validatorAddress: string;
@@ -39,21 +39,28 @@ type DelegationDetailCardProps = {
 export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationDetailCardProps) {
 	const {
 		data: system,
-		isLoading: loadingValidators,
+		isPending: loadingValidators,
 		isError: errorValidators,
-	} = useGetSystemState();
+	} = useSuiClientQuery('getLatestSuiSystemState');
 
 	const accountAddress = useActiveAddress();
 
-	const { data: allDelegation, isLoading, isError } = useGetDelegatedStake(accountAddress || '');
+	const {
+		data: allDelegation,
+		isPending,
+		isError,
+	} = useGetDelegatedStake({
+		address: accountAddress || '',
+		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
+		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	});
 
 	const apiEnv = useAppSelector(({ app }) => app.apiEnv);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const { data: suiCoinBalance } = useGetCoinBalance(
-		SUI_TYPE_ARG,
-		accountAddress,
-		refetchInterval,
-		staleTime,
+	const { data: suiCoinBalance } = useSuiClientQuery(
+		'getBalance',
+		{ coinType: SUI_TYPE_ARG, owner: accountAddress!! },
+		{ refetchInterval, staleTime, enabled: !!accountAddress },
 	);
 	const { data: metadata } = useCoinMetadata(SUI_TYPE_ARG);
 	// set minimum stake amount to 1 SUI
@@ -78,7 +85,9 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 
 	const totalStake = BigInt(delegationData?.principal || 0n);
 
-	const suiEarned = BigInt(delegationData?.estimatedReward || 0n);
+	const suiEarned = BigInt(
+		(delegationData as Extract<StakeObject, { estimatedReward: string }>)?.estimatedReward || 0n,
+	);
 	const { apy, isApyApproxZero } = rollingAverageApys?.[validatorAddress] ?? {
 		apy: 0,
 	};
@@ -97,7 +106,7 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 
 	const commission = validatorData ? Number(validatorData.commissionRate) / 100 : 0;
 
-	if (isLoading || loadingValidators) {
+	if (isPending || loadingValidators) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />

@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
-use consensus::bullshark::Bullshark;
-use consensus::consensus::ConsensusRound;
-use consensus::metrics::ConsensusMetrics;
-use consensus::Consensus;
 use fastcrypto::hash::Hash;
 use narwhal_executor::get_restored_consensus_output;
 use narwhal_executor::MockExecutionState;
+use primary::consensus::{
+    Bullshark, Consensus, ConsensusMetrics, ConsensusRound, LeaderSchedule, LeaderSwapTable,
+};
 use primary::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
 use std::collections::BTreeSet;
@@ -34,7 +33,7 @@ async fn test_recovery() {
 
     // Make certificates for rounds 1 and 2.
     let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
-    let genesis = Certificate::genesis(&committee)
+    let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -82,6 +81,7 @@ async fn test_recovery() {
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -159,7 +159,7 @@ async fn test_internal_consensus_output() {
     // nodes logs.
     let _guard = setup_tracing();
 
-    let mut cluster = Cluster::new(None, true);
+    let mut cluster = Cluster::new(None);
 
     // start the cluster
     cluster.start(Some(4), Some(1), None).await;
@@ -187,7 +187,7 @@ async fn test_internal_consensus_output() {
         // serialise and send
         let tr = bcs::to_bytes(&tx).unwrap();
         let txn = TransactionProto {
-            transaction: Bytes::from(tr),
+            transactions: vec![Bytes::from(tr)],
         };
         client.submit_transaction(txn).await.unwrap();
 

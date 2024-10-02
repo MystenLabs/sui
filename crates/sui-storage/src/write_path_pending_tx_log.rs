@@ -14,8 +14,8 @@ use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
 use typed_store::rocks::MetricConf;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
+use typed_store::DBMapUtils;
 use typed_store::{rocks::DBMap, traits::Map};
-use typed_store_derive::DBMapUtils;
 
 pub type IsFirstRecord = bool;
 
@@ -32,7 +32,7 @@ impl WritePathPendingTransactionLog {
     pub fn new(path: PathBuf) -> Self {
         let pending_transactions = WritePathPendingTransactionTable::open_tables_transactional(
             path,
-            MetricConf::default(),
+            MetricConf::new("pending_tx_log"),
             None,
             None,
         );
@@ -102,7 +102,7 @@ mod tests {
     async fn test_pending_tx_log_basic() -> anyhow::Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
         let pending_txes = WritePathPendingTransactionLog::new(temp_dir.path().to_path_buf());
-        let tx = create_fake_transaction();
+        let tx = VerifiedTransaction::new_unchecked(create_fake_transaction());
         let tx_digest = *tx.digest();
         assert!(pending_txes
             .write_pending_transaction_maybe(&tx)
@@ -125,7 +125,9 @@ mod tests {
         pending_txes.finish_transaction(&tx_digest).unwrap();
 
         // Test writing and finishing more transactions
-        let txes: Vec<_> = (0..10).map(|_| create_fake_transaction()).collect();
+        let txes: Vec<_> = (0..10)
+            .map(|_| VerifiedTransaction::new_unchecked(create_fake_transaction()))
+            .collect();
         for tx in txes.iter().take(10) {
             assert!(pending_txes
                 .write_pending_transaction_maybe(tx)

@@ -1,0 +1,15 @@
+// Tests if in presence of pre-typing (e.g. in naming) errors for one module (M1), symbolication
+// information will still be correctly constructed for another independent module (M2).
+{
+  "UseDef": {
+    "project": "tests/pre-type-error",
+    "file_tests": {
+      "M2.move": [
+        {
+          "use_line": 3,
+          "use_ndx": 0
+        }
+      ]
+    }
+  }
+}

@@ -17,7 +17,7 @@ Run the following command to see available commands:
 cargo run --bin sui-rpc-loadgen -- -h
 ```
 
-To try this locally, refer to [sef](../sui-test-validator/README.md). Recommend setting `database-url` to an env variable. Note: run `RUST_LOG="consensus=off" cargo run sui-test-validator -- --with-indexer` to rebuild.
+To try this locally, refer to the [docs](https://docs.sui.io/guides/developer/getting-started/local-network). Recommend setting `database-url` to an env variable. Note: run `RUST_LOG="consensus=off" cargo run sui -- start --with-faucet --force-regenesis --with-indexer` to rebuild.
 
 ### Example 1: Get All Checkpoints
 

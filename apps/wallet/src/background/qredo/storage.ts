@@ -4,18 +4,14 @@
 import { v4 as uuid } from 'uuid';
 
 import {
-	setToSessionStorage,
 	getFromSessionStorage,
 	isSessionStorageSupported,
-	getFromLocalStorage,
-	setToLocalStorage,
+	setToSessionStorage,
 } from '../storage-utils';
+import type { QredoConnectIdentity, QredoConnectPendingRequest } from './types';
 import { isSameQredoConnection } from './utils';
 
-import type { QredoConnectPendingRequest, QredoConnectIdentity, QredoConnection } from './types';
-
 const SESSION_STORAGE_KEY = 'qredo-connect-requests';
-const STORAGE_ACCEPTED_CONNECTIONS_KEY = 'qredo-connections';
 
 function sessionStorageAssert() {
 	if (!isSessionStorageSupported()) {
@@ -41,7 +37,7 @@ export async function getPendingRequest(requestIdentity: QredoConnectIdentity | 
 	);
 }
 
-export async function storePendingRequest(request: QredoConnectPendingRequest) {
+async function storePendingRequest(request: QredoConnectPendingRequest) {
 	const allPendingRequests = await getAllPendingRequests();
 	const existingIndex = allPendingRequests.findIndex((aRequest) => aRequest.id === request.id);
 	if (existingIndex >= 0) {
@@ -103,37 +99,4 @@ export async function updatePendingRequest(
 		request.accessToken = change.accessToken;
 	}
 	await storePendingRequest(request);
-}
-
-export async function getAllQredoConnections() {
-	return (await getFromLocalStorage<QredoConnection[]>(STORAGE_ACCEPTED_CONNECTIONS_KEY, [])) || [];
-}
-
-export function storeAllQredoConnections(qredoConnections: QredoConnection[]) {
-	return setToLocalStorage<QredoConnection[]>(STORAGE_ACCEPTED_CONNECTIONS_KEY, qredoConnections);
-}
-
-export async function getQredoConnection(identity: QredoConnectIdentity | string) {
-	return (
-		(await getAllQredoConnections()).find((aConnection) =>
-			isSameQredoConnection(identity, aConnection),
-		) || null
-	);
-}
-
-export async function storeQredoConnection(qredoConnection: QredoConnection) {
-	const allConnections = await getAllQredoConnections();
-	const newConnections = allConnections.filter(
-		(aConnection) => !isSameQredoConnection(qredoConnection.id, aConnection),
-	);
-	newConnections.push(qredoConnection);
-	await storeAllQredoConnections(newConnections);
-}
-
-export async function storeQredoConnectionAccessToken(qredoID: string, accessToken: string) {
-	const existingConnection = await getQredoConnection(qredoID);
-	if (existingConnection) {
-		existingConnection.accessToken = accessToken;
-		await storeQredoConnection(existingConnection);
-	}
 }

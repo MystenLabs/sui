@@ -1,0 +1,27 @@
+---
+title: Validator Staking and Rewards
+draft: true
+---
+
+Sui is a Delegated-Proof-of-Stake (DPoS) system, where the voting power of validators is granted by stakes delegated to them from SUI token holders. When rewards are distributed at the end of each epoch, validators receive their share of the rewards based on their performance and their commission rate. The rewards auto-compound as validators staking pools receive new delegated stakes.
+
+## Staking on Sui versus other blockchains
+
+The Sui staking mechanism has a few features that might be different from staking on other blockchains:
+
+- Staking is self-custodial on Sui: stakers keep their staked SUI tokens in an owned object.
+- Staking rewards auto-compound on Sui due to its liquidity-pool-inspired design.
+- When a user requests to stake with a validator, their stake starts counting towards the voting power of that validator for the epoch after the current epoch. Similarly, when a user withdraws their stake, their stake stops counting the epoch after the current epoch.
+
+{@include: ../../snippets/staking-pool-reqs.mdx}
+
+## Rewards distribution
+
+At the end of each epoch, gas fees collected, together with stake subsidies, are distributed among validators and stakers as staking rewards. The amount of rewards a validator gets depends on the following factors:
+
+- Performance. If a validator does not operate performantly, other validators may choose to report them via the tallying rule. The entire staking rewards of the reported validator are slashed for the epoch.
+- Commission rate. Commission rate determines the cut of staking rewards a validator is taking from their stakers. For example, if a validator has commission rate at 10%, then 10% of all staking rewards of stakers with this validator are given to the validator each epoch as new stake objects owned by the validator.
+
+## Rewards withdrawal
+
+Because validator rewards are distributed to them as regular stake objects, staking rewards withdrawal works exactly the same for validators as for stakers. More precisely, a validator can call the  [`0x3::sui_system::request_withdraw_stake`](https://github.com/MystenLabs/sui/blob/6234ae2cc8137f3a2a34cd0aa1ac4fd5f31260e2/crates/sui-framework/packages/sui-system/sources/sui_system.move#L272) function to withdraw their stake and receive their rewards.

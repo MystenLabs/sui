@@ -1,0 +1,29 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────╮
+│ PTB Preview              │
+├──────────────────────────┤
+│ command                  │
+├──────────────────────────┤
+│ assign x 10u64           │
+│ assign y 11u64           │
+│ split-coins gas [x, y]   │
+│ assign coins             │
+│ assign c0 coins.0        │
+│ assign c1 coins.1        │
+│ merge-coins gas [c0, c1] │
+│ gas-budget 10000000      │
+╰──────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
+ === BUILT PTB === 
+Input 0: Pure([10, 0, 0, 0, 0, 0, 0, 0])
+Input 1: Pure([11, 0, 0, 0, 0, 0, 0, 0])
+Command 0: SplitCoins(GasCoinInput(0),Input(1))
+Command 1: MergeCoins(GasCoin,NestedResult(0,0),NestedResult(0,1))

@@ -1,36 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::errors::IndexerError;
 use crate::schema::packages;
+use crate::types::IndexedPackage;
 
 use diesel::prelude::*;
 
-use crate::models::objects::NamedBcsBytes;
-use sui_json_rpc_types::SuiRawMovePackage;
-use sui_types::base_types::SuiAddress;
-
-#[derive(Queryable, Insertable, Debug, Identifiable)]
-#[diesel(table_name = packages, primary_key(package_id, version))]
-pub struct Package {
-    pub package_id: String,
-    pub version: i64,
-    pub author: String,
-    pub data: Vec<NamedBcsBytes>,
+#[derive(Queryable, Insertable, Selectable, Clone, Debug, Identifiable)]
+#[diesel(table_name = packages, primary_key(package_id))]
+pub struct StoredPackage {
+    pub package_id: Vec<u8>,
+    pub original_id: Vec<u8>,
+    pub package_version: i64,
+    pub move_package: Vec<u8>,
+    pub checkpoint_sequence_number: i64,
 }
 
-impl Package {
-    pub fn try_from(sender: SuiAddress, package: &SuiRawMovePackage) -> Result<Self, IndexerError> {
-        Ok(Self {
-            package_id: package.id.to_string(),
-            version: package.version.value() as i64,
-            author: sender.to_string(),
-            data: package
-                .module_map
-                .clone()
-                .into_iter()
-                .map(|(k, v)| NamedBcsBytes(k, v))
-                .collect(),
-        })
+impl From<IndexedPackage> for StoredPackage {
+    fn from(p: IndexedPackage) -> Self {
+        Self {
+            package_id: p.package_id.to_vec(),
+            original_id: p.move_package.original_package_id().to_vec(),
+            package_version: p.move_package.version().value() as i64,
+            move_package: bcs::to_bytes(&p.move_package).unwrap(),
+            checkpoint_sequence_number: p.checkpoint_sequence_number as i64,
+        }
     }
 }

@@ -6,7 +6,7 @@ use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::quorum_driver::reconfig_observer::OnsiteReconfigObserver;
 use sui_core::quorum_driver::reconfig_observer::ReconfigObserver;
 use sui_core::safe_client::SafeClientMetricsBase;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 use tracing::info;
 
 use sui_macros::sim_test;
@@ -31,7 +31,7 @@ async fn test_onsite_reconfig_observer_basic() {
     let registry = Registry::new();
     let mut observer = OnsiteReconfigObserver::new(
         rx,
-        fullnode.with(|node| node.clone_authority_store()),
+        fullnode.with(|node| node.state().get_object_cache_reader().clone()),
         fullnode.with(|node| node.clone_committee_store()),
         SafeClientMetricsBase::new(&registry),
         AuthAggMetrics::new(&registry),

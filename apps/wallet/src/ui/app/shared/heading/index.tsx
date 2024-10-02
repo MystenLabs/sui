@@ -39,6 +39,7 @@ const headingStyles = cva(
 				'steel-darker': 'text-steel-darker',
 				'success-dark': 'text-success-dark',
 				'hero-dark': 'text-hero-dark',
+				white: 'text-white',
 			},
 			weight: {
 				medium: 'font-medium',
@@ -55,6 +56,10 @@ const headingStyles = cva(
 			},
 			truncate: {
 				true: 'truncate',
+				false: '',
+			},
+			centered: {
+				true: 'text-center',
 				false: '',
 			},
 			/** Fix the header size, and disable responsive sizing of the heading. */

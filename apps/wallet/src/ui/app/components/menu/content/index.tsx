@@ -1,17 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback } from 'react';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-
-import { ConnectLedgerModalContainer } from '../../ledger/ConnectLedgerModalContainer';
-import { ImportLedgerAccounts } from '../../ledger/ImportLedgerAccounts';
-import { AccountsSettings } from './AccountsSettings';
-import { AutoLockSettings } from './AutoLockSettings';
-import { ExportAccount } from './ExportAccount';
-import { ImportPrivateKey } from './ImportPrivateKey';
-import MenuList from './MenuList';
-import { NetworkSettings } from './NetworkSettings';
 import { ErrorBoundary } from '_components/error-boundary';
 import {
 	MainLocationContext,
@@ -19,10 +8,15 @@ import {
 	useMenuUrl,
 	useNextMenuUrl,
 } from '_components/menu/hooks';
-import { RecoveryPassphrase } from '_components/recovery-passphrase/RecoveryPassphrase';
 import { useOnKeyboardEvent } from '_hooks';
-
+import { useCallback } from 'react';
 import type { MouseEvent } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+
+import { AutoLockAccounts } from './AutoLockAccounts';
+import { MoreOptions } from './MoreOptions';
+import { NetworkSettings } from './NetworkSettings';
+import WalletSettingsMenuList from './WalletSettingsMenuList';
 
 const CLOSE_KEY_CODES: string[] = ['Escape'];
 
@@ -42,27 +36,22 @@ function MenuContent() {
 		},
 		[isOpen, navigate, closeMenuUrl],
 	);
+
 	useOnKeyboardEvent('keydown', CLOSE_KEY_CODES, handleOnCloseMenu, isOpen);
 	if (!isOpen) {
 		return null;
 	}
 
 	return (
-		<div className="absolute flex flex-col justify-items-stretch inset-0 bg-white pb-8 px-2.5 z-50 rounded-tl-20 rounded-tr-20 overflow-y-auto">
+		<div className="absolute flex flex-col justify-items-stretch inset-0 bg-white pb-8 px-2.5 z-50 rounded-t-xl overflow-y-auto">
 			<ErrorBoundary>
 				<MainLocationContext.Provider value={mainLocation}>
 					<Routes location={menuUrl || ''}>
-						<Route path="/" element={<MenuList />} />
-						<Route path="/accounts" element={<AccountsSettings />}>
-							<Route path="connect-ledger-modal" element={<ConnectLedgerModalContainer />} />
-						</Route>
-						<Route path="/export/:account" element={<ExportAccount />} />
-						<Route path="/import-private-key" element={<ImportPrivateKey />} />
+						<Route path="/" element={<WalletSettingsMenuList />} />
 						<Route path="/network" element={<NetworkSettings />} />
-						<Route path="/auto-lock" element={<AutoLockSettings />} />
+						<Route path="/auto-lock" element={<AutoLockAccounts />} />
+						<Route path="/more-options" element={<MoreOptions />} />
 						<Route path="*" element={<Navigate to={menuHomeUrl} replace={true} />} />
-						<Route path="/import-ledger-accounts" element={<ImportLedgerAccounts />} />
-						<Route path="/recovery-passphrase" element={<RecoveryPassphrase />} />
 					</Routes>
 				</MainLocationContext.Provider>
 			</ErrorBoundary>

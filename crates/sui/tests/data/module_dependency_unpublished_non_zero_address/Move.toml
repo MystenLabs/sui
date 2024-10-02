@@ -1,6 +1,7 @@
 [package]
 name = "UnpublishedNonZeroAddress"
 version = "0.0.1"
+edition = "2024.beta"
 # No published-at address for this package.
 # published-at = "0x0"
 

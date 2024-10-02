@@ -1,0 +1,6 @@
+--assign a 1
+--assign a 2
+--assign b 4
+--assign a a
+--assign a 4
+--warn-shadows

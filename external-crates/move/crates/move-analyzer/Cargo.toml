@@ -1,0 +1,43 @@
+[package]
+name = "move-analyzer"
+version = "1.0.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "A language server for Move"
+repository = "https://github.com/move-language/move"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+codespan-reporting.workspace = true
+crossbeam.workspace = true
+derivative.workspace = true
+dunce.workspace = true
+im.workspace = true
+itertools.workspace = true
+json_comments.workspace = true
+lsp-server.workspace = true
+lsp-types.workspace = true
+move-command-line-common.workspace = true
+move-compiler.workspace = true
+move-ir-types.workspace = true
+move-core-types.workspace = true
+move-package.workspace = true
+move-symbol-pool.workspace = true
+once_cell.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+url.workspace = true
+vfs.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+
+[[test]]
+name = "ide_testsuite"
+harness = false
+

@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState } from 'react';
+
 import { Button } from './ui/button';
 import {
 	Dialog,
 	DialogContent,
-	DialogHeader,
-	DialogTitle,
 	DialogDescription,
 	DialogFooter,
+	DialogHeader,
+	DialogTitle,
 } from './ui/dialog';
 
 const WARNING_STATE = 'demo-warning';

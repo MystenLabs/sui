@@ -1,8 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+	decrypt,
+	encrypt,
+	getRandomPassword,
+	makeEphemeraPassword,
+	type Serializable,
+} from '_src/shared/cryptography/keystore';
+import { v4 as uuidV4 } from 'uuid';
 import Browser from 'webextension-polyfill';
-
 import type { Storage } from 'webextension-polyfill';
 
 const SESSION_STORAGE: Storage.LocalStorageArea | null =
@@ -51,4 +58,35 @@ export async function setToSessionStorage<T>(...params: SetParams<T>) {
 		return;
 	}
 	return setToStorage<T>(SESSION_STORAGE, ...params);
+}
+export async function removeFromSessionStorage(key: string) {
+	if (!SESSION_STORAGE) {
+		return;
+	}
+	await SESSION_STORAGE.remove(key);
+}
+export async function setToSessionStorageEncrypted<T extends Serializable>(key: string, value: T) {
+	const random = getRandomPassword();
+	await setToSessionStorage(key, {
+		random,
+		data: await encrypt(makeEphemeraPassword(random), value),
+	});
+}
+export async function getEncryptedFromSessionStorage<T extends Serializable>(key: string) {
+	const encryptedData = await getFromSessionStorage<{ random: string; data: string }>(key, null);
+	if (!encryptedData) {
+		return null;
+	}
+	try {
+		return decrypt<T>(makeEphemeraPassword(encryptedData.random), encryptedData.data);
+	} catch (e) {
+		return null;
+	}
+}
+
+/**
+ * Generates a unique id using uuid, that can be used as a key for storage data
+ */
+export function makeUniqueKey() {
+	return uuidV4();
 }

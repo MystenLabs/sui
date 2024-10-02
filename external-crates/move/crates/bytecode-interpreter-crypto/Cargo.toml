@@ -1,0 +1,16 @@
+[package]
+name = "bytecode-interpreter-crypto"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+publish = false
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+
+# external dependencies
+anyhow.workspace = true
+curve25519-dalek.workspace = true
+ed25519-dalek.workspace = true
+sha2.workspace = true
+sha3.workspace = true

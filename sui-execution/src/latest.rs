@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashSet},
-    sync::Arc,
-};
+use std::path::PathBuf;
+use std::{collections::HashSet, sync::Arc};
 
 use move_binary_format::CompiledModule;
-use move_vm_config::verifier::VerifierConfig;
+use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TxContext},
@@ -15,98 +13,87 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{ExecutionError, SuiError, SuiResult},
-    execution::{ExecutionState, TypeLayoutStore},
-    execution_mode::{self, ExecutionResult},
+    execution::{ExecutionResult, TypeLayoutStore},
     gas::SuiGasStatus,
+    inner_temporary_store::InnerTemporaryStore,
+    layout_resolver::LayoutResolver,
     metrics::{BytecodeVerifierMetrics, LimitsMetrics},
-    temporary_store::{InnerTemporaryStore, TemporaryStore},
-    transaction::{ProgrammableTransaction, TransactionKind},
-    type_resolver::LayoutResolver,
+    transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
 
+use move_bytecode_verifier_meter::Meter;
 use move_vm_runtime_latest::move_vm::MoveVM;
-use sui_adapter_latest::adapter::{
-    default_verifier_config, new_move_vm, run_metered_move_bytecode_verifier,
+use sui_adapter_latest::adapter::{new_move_vm, run_metered_move_bytecode_verifier};
+use sui_adapter_latest::execution_engine::{
+    execute_genesis_state_update, execute_transaction_to_effects,
 };
-use sui_adapter_latest::execution_engine::execute_transaction_to_effects;
-use sui_adapter_latest::programmable_transactions;
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
+use sui_types::storage::BackingStore;
 use sui_verifier_latest::meter::SuiVerifierMeter;
 
 use crate::executor;
 use crate::verifier;
+use sui_adapter_latest::execution_mode;
 
 pub(crate) struct Executor(Arc<MoveVM>);
 
 pub(crate) struct Verifier<'m> {
     config: VerifierConfig,
     metrics: &'m Arc<BytecodeVerifierMetrics>,
-    meter: SuiVerifierMeter,
 }
 
 impl Executor {
     pub(crate) fn new(
         protocol_config: &ProtocolConfig,
-        paranoid_type_checks: bool,
         silent: bool,
+        enable_profiler: Option<PathBuf>,
     ) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
-            all_natives(silent),
+            all_natives(silent, protocol_config),
             protocol_config,
-            paranoid_type_checks,
+            enable_profiler,
         )?)))
     }
 }
 
 impl<'m> Verifier<'m> {
-    pub(crate) fn new(
-        protocol_config: &ProtocolConfig,
-        is_metered: bool,
-        metrics: &'m Arc<BytecodeVerifierMetrics>,
-    ) -> Self {
-        let config = default_verifier_config(protocol_config, is_metered);
-        let meter = SuiVerifierMeter::new(&config);
-        Verifier {
-            config,
-            metrics,
-            meter,
-        }
+    pub(crate) fn new(config: VerifierConfig, metrics: &'m Arc<BytecodeVerifierMetrics>) -> Self {
+        Verifier { config, metrics }
     }
 }
 
 impl executor::Executor for Executor {
     fn execute_transaction_to_effects(
         &self,
+        store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
-        temporary_store: TemporaryStore,
-        shared_object_refs: Vec<ObjectRef>,
+        input_objects: CheckedInputObjects,
+        gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
-        gas: &[ObjectRef],
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        transaction_dependencies: BTreeSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<(), ExecutionError>,
     ) {
         execute_transaction_to_effects::<execution_mode::Normal>(
-            shared_object_refs,
-            temporary_store,
+            store,
+            input_objects,
+            gas_coins,
+            gas_status,
             transaction_kind,
             transaction_signer,
-            gas,
             transaction_digest,
-            transaction_dependencies,
             &self.0,
-            gas_status,
             epoch_id,
             epoch_timestamp_ms,
             protocol_config,
@@ -118,61 +105,79 @@ impl executor::Executor for Executor {
 
     fn dev_inspect_transaction(
         &self,
+        store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
-        temporary_store: TemporaryStore,
-        shared_object_refs: Vec<ObjectRef>,
+        input_objects: CheckedInputObjects,
+        gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
-        gas: &[ObjectRef],
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        transaction_dependencies: BTreeSet<TransactionDigest>,
+        skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
-        execute_transaction_to_effects::<execution_mode::DevInspect>(
-            shared_object_refs,
-            temporary_store,
-            transaction_kind,
-            transaction_signer,
-            gas,
-            transaction_digest,
-            transaction_dependencies,
-            &self.0,
-            gas_status,
-            epoch_id,
-            epoch_timestamp_ms,
-            protocol_config,
-            metrics,
-            enable_expensive_checks,
-            certificate_deny_set,
-        )
+        if skip_all_checks {
+            execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
+                store,
+                input_objects,
+                gas_coins,
+                gas_status,
+                transaction_kind,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                certificate_deny_set,
+            )
+        } else {
+            execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
+                store,
+                input_objects,
+                gas_coins,
+                gas_status,
+                transaction_kind,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                certificate_deny_set,
+            )
+        }
     }
 
     fn update_genesis_state(
         &self,
+        store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        state_view: &mut dyn ExecutionState,
         tx_context: &mut TxContext,
-        gas_status: &mut SuiGasStatus,
+        input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
-    ) -> Result<(), ExecutionError> {
-        programmable_transactions::execution::execute::<execution_mode::Genesis>(
+    ) -> Result<InnerTemporaryStore, ExecutionError> {
+        execute_genesis_state_update(
+            store,
             protocol_config,
             metrics,
             &self.0,
-            state_view,
             tx_context,
-            gas_status,
-            None,
+            input_objects,
             pt,
         )
     }
@@ -186,17 +191,16 @@ impl executor::Executor for Executor {
 }
 
 impl<'m> verifier::Verifier for Verifier<'m> {
+    fn meter(&self, config: MeterConfig) -> Box<dyn Meter> {
+        Box::new(SuiVerifierMeter::new(config))
+    }
+
     fn meter_compiled_modules(
         &mut self,
-        protocol_config: &ProtocolConfig,
+        _protocol_config: &ProtocolConfig,
         modules: &[CompiledModule],
+        meter: &mut dyn Meter,
     ) -> SuiResult<()> {
-        run_metered_move_bytecode_verifier(
-            modules,
-            protocol_config,
-            &self.config,
-            &mut self.meter,
-            self.metrics,
-        )
+        run_metered_move_bytecode_verifier(modules, &self.config, meter, self.metrics)
     }
 }

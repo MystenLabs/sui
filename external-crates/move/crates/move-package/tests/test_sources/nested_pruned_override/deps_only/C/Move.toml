@@ -1,0 +1,5 @@
+[package]
+name = "C"
+
+[dependencies]
+A = { local = "../A2" }

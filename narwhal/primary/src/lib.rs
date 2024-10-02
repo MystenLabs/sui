@@ -9,17 +9,13 @@
 )]
 
 mod aggregators;
-mod block_remover;
-pub mod block_synchronizer;
-mod block_waiter;
 mod certificate_fetcher;
 mod certifier;
-mod grpc_server;
+pub mod consensus;
 mod primary;
 mod proposer;
 mod state_handler;
 mod synchronizer;
-mod utils;
 
 #[cfg(test)]
 #[path = "tests/common.rs"]
@@ -30,11 +26,11 @@ mod metrics;
 #[path = "tests/certificate_tests.rs"]
 mod certificate_tests;
 
+#[cfg(test)]
+#[path = "tests/rpc_tests.rs"]
+mod rpc_tests;
+
 pub use crate::{
-    block_remover::BlockRemover,
-    block_synchronizer::{mock::MockBlockSynchronizer, BlockHeader},
-    block_waiter::{BlockWaiter, GetBlockResponse},
-    grpc_server::metrics::EndpointMetrics,
     metrics::PrimaryChannelMetrics,
     primary::{Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS},
 };

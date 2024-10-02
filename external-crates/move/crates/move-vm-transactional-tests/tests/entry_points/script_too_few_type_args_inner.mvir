@@ -1,0 +1,14 @@
+//# publish
+module 0x5.M {
+    struct Ex<T> { flag: bool }
+}
+
+//# run --type-args 0x5::M::Ex
+module 0x42.m {
+
+entry foo<T>() { // too few type args for inner type
+label b0:
+    return;
+}
+
+}

@@ -1,0 +1,23 @@
+# Rather than listing out what files are *not* included in the extension,
+# list out the small subset of files that *are* included.
+# For more information on `.vscodeignore` files, see:
+# https://code.visualstudio.com/api/working-with-extensions/publishing-extension#.vscodeignore
+
+**/*
+!images/move.png
+!out/src/**/*
+!node_modules/lru-cache/**/*
+!node_modules/command-exists/**/*
+!node_modules/vscode-jsonrpc/**/*
+!node_modules/vscode-languageclient/**/*
+!node_modules/vscode-languageserver-protocol/**/*
+!node_modules/vscode-languageserver-types/**/*
+!node_modules/balanced-match/**/*
+!node_modules/semver/**/*
+!language-configuration.json
+!language-server/**/*
+!move.tmLanguage.json
+!package-lock.json
+!package.json
+!LICENSE
+!README.md
