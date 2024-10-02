@@ -4,7 +4,7 @@
 /// Group operations of BLS12-381.
 module sui::bls12381;
 
-use sui::group_ops::{Self, Element};
+use sui::group_ops::{Self, Element, Uncompressed};
 
 /// @param signature: A 48-bytes signature that is a point on the G1 subgroup.
 /// @param public_key: A 96-bytes public key that is a point on the G2 subgroup.
@@ -169,6 +169,18 @@ public fun g1_multi_scalar_multiplication(
     elements: &vector<Element<G1>>,
 ): Element<G1> {
     group_ops::multi_scalar_multiplication(G1_TYPE, scalars, elements)
+}
+
+public fun g1_to_uncompressed(e: &Element<G1>): Uncompressed<G1> {
+    group_ops::to_uncompressed(G1_TYPE, e)
+}
+
+public fun g1_from_uncompressed(e: &Uncompressed<G1>): Element<G1> {
+    group_ops::from_uncompressed(G1_TYPE, e)
+}
+
+public fun g1_sum_of_uncompressed(terms: &vector<Uncompressed<G1>>): Element<G1> {
+    group_ops::sum_of_uncompressed(G1_TYPE, terms)
 }
 
 /////////////////////////////////
