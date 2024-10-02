@@ -4,19 +4,19 @@
 use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 use reqwest::Url;
-use sui_sdk2::types::Address;
-use sui_sdk2::types::CheckpointData;
-use sui_sdk2::types::CheckpointDigest;
-use sui_sdk2::types::CheckpointSequenceNumber;
-use sui_sdk2::types::EpochId;
-use sui_sdk2::types::Object;
-use sui_sdk2::types::ObjectId;
-use sui_sdk2::types::SignedCheckpointSummary;
-use sui_sdk2::types::SignedTransaction;
-use sui_sdk2::types::StructTag;
-use sui_sdk2::types::TransactionDigest;
-use sui_sdk2::types::ValidatorCommittee;
-use sui_sdk2::types::Version;
+use sui_sdk_types::types::Address;
+use sui_sdk_types::types::CheckpointData;
+use sui_sdk_types::types::CheckpointDigest;
+use sui_sdk_types::types::CheckpointSequenceNumber;
+use sui_sdk_types::types::EpochId;
+use sui_sdk_types::types::Object;
+use sui_sdk_types::types::ObjectId;
+use sui_sdk_types::types::SignedCheckpointSummary;
+use sui_sdk_types::types::SignedTransaction;
+use sui_sdk_types::types::StructTag;
+use sui_sdk_types::types::TransactionDigest;
+use sui_sdk_types::types::ValidatorCommittee;
+use sui_sdk_types::types::Version;
 use tap::Pipe;
 
 use crate::accounts::AccountOwnedObjectInfo;
@@ -667,8 +667,8 @@ impl From<url::ParseError> for Error {
     }
 }
 
-impl From<sui_types::sui_sdk2_conversions::SdkTypeConversionError> for Error {
-    fn from(value: sui_types::sui_sdk2_conversions::SdkTypeConversionError) -> Self {
+impl From<sui_types::sui_sdk_types_conversions::SdkTypeConversionError> for Error {
+    fn from(value: sui_types::sui_sdk_types_conversions::SdkTypeConversionError) -> Self {
         Self::from_error(value)
     }
 }

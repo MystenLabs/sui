@@ -11,11 +11,11 @@ use crate::{
 use axum::extract::Query;
 use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
-use sui_sdk2::types::{Object, ObjectId, TypeTag, Version};
-use sui_types::sui_sdk2_conversions::type_tag_core_to_sdk;
+use sui_sdk_types::types::{Object, ObjectId, TypeTag, Version};
+use sui_types::sui_sdk_types_conversions::type_tag_core_to_sdk;
 use sui_types::{
     storage::{DynamicFieldIndexInfo, DynamicFieldKey},
-    sui_sdk2_conversions::SdkTypeConversionError,
+    sui_sdk_types_conversions::SdkTypeConversionError,
 };
 use tap::Pipe;
 

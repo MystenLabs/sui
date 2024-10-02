@@ -592,11 +592,7 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697e
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
 
 # core-types with json format for REST api
-sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "bd233b6879b917fb95e17f21927c198e7a60c924", features = [
-    "hash",
-    "serde",
-    "schemars",
-] }
+sui-sdk-types = { version = "0.0.1", features = ["hash", "serde", "schemars"] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

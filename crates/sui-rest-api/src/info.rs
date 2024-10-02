@@ -7,7 +7,7 @@ use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandle
 use crate::{RestService, Result};
 use axum::extract::State;
 use axum::Json;
-use sui_sdk2::types::CheckpointDigest;
+use sui_sdk_types::types::CheckpointDigest;
 use tap::Pipe;
 
 pub struct GetNodeInfo;

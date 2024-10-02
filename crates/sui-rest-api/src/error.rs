@@ -47,8 +47,8 @@ impl From<anyhow::Error> for RestError {
     }
 }
 
-impl From<sui_types::sui_sdk2_conversions::SdkTypeConversionError> for RestError {
-    fn from(value: sui_types::sui_sdk2_conversions::SdkTypeConversionError) -> Self {
+impl From<sui_types::sui_sdk_types_conversions::SdkTypeConversionError> for RestError {
+    fn from(value: sui_types::sui_sdk_types_conversions::SdkTypeConversionError) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: Some(value.to_string()),

@@ -9,9 +9,11 @@ pub use execution::TransactionExecutionResponse;
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use sui_sdk2::types::CheckpointSequenceNumber;
-use sui_sdk2::types::Transaction;
-use sui_sdk2::types::{TransactionDigest, TransactionEffects, TransactionEvents, UserSignature};
+use sui_sdk_types::types::CheckpointSequenceNumber;
+use sui_sdk_types::types::Transaction;
+use sui_sdk_types::types::{
+    TransactionDigest, TransactionEffects, TransactionEvents, UserSignature,
+};
 use tap::Pipe;
 
 use crate::openapi::ApiEndpoint;
