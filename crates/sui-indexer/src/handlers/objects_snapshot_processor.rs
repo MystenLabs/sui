@@ -16,8 +16,8 @@ use crate::types::IndexerResult;
 use crate::{metrics::IndexerMetrics, store::IndexerStore};
 
 use super::checkpoint_handler::CheckpointHandler;
-use super::Handler;
 use super::TransactionObjectChangesToCommit;
+use super::{CommonHandler, Handler};
 
 #[derive(Clone)]
 pub struct ObjectsSnapshotHandler {
@@ -113,8 +113,8 @@ pub async fn start_objects_snapshot_handler(
         ObjectsSnapshotHandler::new(store.clone(), cp_sender, metrics.clone(), snapshot_config);
 
     let watermark_hi = objects_snapshot_handler.get_watermark_hi().await?;
-    let handler_clone = objects_snapshot_handler.clone();
-    spawn_monitored_task!(handler_clone.start_transform_and_load(cp_receiver, cancel,));
+    let common_handler = CommonHandler::new(Box::new(objects_snapshot_handler.clone()));
+    spawn_monitored_task!(common_handler.start_transform_and_load(cp_receiver, cancel));
     Ok((objects_snapshot_handler, watermark_hi.unwrap_or_default()))
 }
 

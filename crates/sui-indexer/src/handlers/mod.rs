@@ -54,8 +54,15 @@ pub struct EpochToCommit {
     pub network_total_transactions: u64,
 }
 
-#[async_trait]
-pub trait Handler<T>: Send + Sync {
+pub struct CommonHandler<T> {
+    handler: Box<dyn Handler<T>>,
+}
+
+impl<T> CommonHandler<T> {
+    pub fn new(handler: Box<dyn Handler<T>>) -> Self {
+        Self { handler }
+    }
+
     async fn start_transform_and_load(
         &self,
         cp_receiver: mysten_metrics::metered_channel::Receiver<CheckpointData>,
@@ -71,6 +78,7 @@ pub trait Handler<T>: Send + Sync {
         let mut unprocessed = BTreeMap::new();
         let mut batch: Vec<CheckpointData> = vec![];
         let mut next_cp_to_process = self
+            .handler
             .get_watermark_hi()
             .await?
             .map(|n| n.saturating_add(1))
@@ -97,7 +105,7 @@ pub trait Handler<T>: Send + Sync {
             }
 
             // Process unprocessed checkpoints, even no new checkpoints from stream
-            let checkpoint_lag_limiter = self.get_checkpoint_lag_limiter().await?;
+            let checkpoint_lag_limiter = self.handler.get_checkpoint_lag_limiter().await?;
             while next_cp_to_process <= checkpoint_lag_limiter {
                 if let Some(checkpoint) = unprocessed.remove(&next_cp_to_process) {
                     batch.push(checkpoint);
@@ -109,30 +117,33 @@ pub trait Handler<T>: Send + Sync {
 
             if !batch.is_empty() {
                 let last_checkpoint_seq = batch.last().unwrap().checkpoint_summary.sequence_number;
-                let transformed_data = self.transform(batch).await.map_err(|e| {
+                let transformed_data = self.handler.transform(batch).await.map_err(|e| {
                     IndexerError::DataTransformationError(format!(
                         "Failed to transform checkpoint batch: {}. Handler: {}",
                         e,
-                        self.name()
+                        self.handler.name()
                     ))
                 })?;
-                self.load(transformed_data).await.map_err(|e| {
+                self.handler.load(transformed_data).await.map_err(|e| {
                     IndexerError::PostgresWriteError(format!(
                         "Failed to load transformed data into DB for handler {}: {}",
-                        self.name(),
+                        self.handler.name(),
                         e
                     ))
                 })?;
-                self.set_watermark_hi(last_checkpoint_seq).await?;
+                self.handler.set_watermark_hi(last_checkpoint_seq).await?;
                 batch = vec![];
             }
         }
         Err(IndexerError::ChannelClosed(format!(
             "Checkpoint channel is closed unexpectedly for handler {}",
-            self.name()
+            self.handler.name()
         )))
     }
+}
 
+#[async_trait]
+pub trait Handler<T>: Send + Sync {
     /// return handler name
     fn name(&self) -> String;
 
