@@ -25,11 +25,11 @@ export function BuyNLargeHomePanel() {
 
 	return (
 		<>
-			{bnl.map((item) => {
+			{bnl.map((item, index) => {
 				if (!item || !item.enabled || !item.asset || seen.includes(item?.objectType)) return null;
 
 				return (
-					<div>
+					<div key={index}>
 						<div
 							role="button"
 							onClick={() => {
