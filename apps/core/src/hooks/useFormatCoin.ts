@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeatureValue } from '@growthbook/growthbook-react';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { CoinMetadata } from '@mysten/sui/client';
 import { SUI_TYPE_ARG } from '@mysten/sui/utils';
@@ -9,7 +10,6 @@ import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
 import { formatAmount } from '../utils/formatAmount';
-import { useFeatureValue } from '@growthbook/growthbook-react';
 
 type FormattedCoin = [
 	formattedBalance: string,
@@ -51,7 +51,7 @@ type CoinMetadataOverrides = {
 		iconUrl?: string;
 		symbol?: string;
 	};
-}
+};
 
 export function useCoinMetadata(coinType?: string | null) {
 	const client = useSuiClient();
@@ -86,12 +86,21 @@ export function useCoinMetadata(coinType?: string | null) {
 		select(data) {
 			if (!data) return null;
 
-			const symbol = (coinType && tokenMetadataOverrides[coinType]?.symbol) ? tokenMetadataOverrides[coinType].symbol : data.symbol;
-			const name = (coinType && tokenMetadataOverrides[coinType]?.name) ? tokenMetadataOverrides[coinType].name : data.name;
+			const symbol =
+				coinType && tokenMetadataOverrides[coinType]?.symbol
+					? tokenMetadataOverrides[coinType].symbol
+					: data.symbol;
+			const name =
+				coinType && tokenMetadataOverrides[coinType]?.name
+					? tokenMetadataOverrides[coinType].name
+					: data.name;
 
 			return {
 				...data,
-				iconUrl: (coinType && tokenMetadataOverrides[coinType]?.iconUrl) ? tokenMetadataOverrides[coinType].iconUrl : data.iconUrl,
+				iconUrl:
+					coinType && tokenMetadataOverrides[coinType]?.iconUrl
+						? tokenMetadataOverrides[coinType].iconUrl
+						: data.iconUrl,
 				symbol:
 					symbol.length > SYMBOL_TRUNCATE_LENGTH
 						? symbol.slice(0, SYMBOL_TRUNCATE_LENGTH) + ELLIPSIS
