@@ -94,7 +94,8 @@ impl Indexer {
             );
             assert!(epochs_to_keep > 0, "Epochs to keep must be positive");
             let pruner = Pruner::new(store.clone(), epochs_to_keep, metrics.clone())?;
-            spawn_monitored_task!(pruner.start(CancellationToken::new()));
+            let cancel_clone = cancel.clone();
+            spawn_monitored_task!(pruner.start(cancel_clone));
         }
 
         // If we already have chain identifier indexed (i.e. the first checkpoint has been indexed),
@@ -183,13 +184,14 @@ impl Indexer {
         config: &JsonRpcConfig,
         registry: &Registry,
         pool: ConnectionPool,
+        cancel: CancellationToken,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Reader (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
         let indexer_reader = IndexerReader::new(pool);
-        let handle = build_json_rpc_server(registry, indexer_reader, config)
+        let handle = build_json_rpc_server(registry, indexer_reader, config, cancel)
             .await
             .expect("Json rpc server should not run into errors upon start.");
         tokio::spawn(async move { handle.stopped().await })

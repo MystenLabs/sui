@@ -60,7 +60,8 @@ async fn main() -> anyhow::Result<()> {
         Command::JsonRpcService(json_rpc_config) => {
             check_db_migration_consistency(&mut pool.get().await?).await?;
 
-            Indexer::start_reader(&json_rpc_config, &registry, pool).await?;
+            Indexer::start_reader(&json_rpc_config, &registry, pool, CancellationToken::new())
+                .await?;
         }
         Command::ResetDatabase { force } => {
             if !force {
