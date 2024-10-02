@@ -118,3 +118,21 @@ module Test::M1 {
     }
   }
 }
+
+//# run-graphql
+{
+  transactionBlocks {
+    nodes {
+      digest
+      effects {
+        events {
+          nodes {
+            transactionBlock {
+              digest
+            }
+          }
+        }
+      }
+    }
+  }
+}

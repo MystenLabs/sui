@@ -51,6 +51,7 @@ use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
 };
 use sui_types::TypeTag;
+
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
     pub address: SuiAddress,
@@ -632,9 +633,12 @@ impl ObjectImpl<'_> {
         };
         let digest = native.previous_transaction;
 
-        TransactionBlock::query(ctx, digest.into(), self.0.checkpoint_viewed_at)
-            .await
-            .extend()
+        TransactionBlock::query(
+            ctx,
+            TransactionBlock::by_digest(digest.into(), self.0.checkpoint_viewed_at),
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn storage_rebate(&self) -> Option<BigInt> {

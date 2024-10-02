@@ -6,7 +6,7 @@ use std::str::FromStr;
 use super::cursor::{Page, Target};
 use super::{
     address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
-    move_value::MoveValue,
+    move_value::MoveValue, transaction_block::TransactionBlock,
 };
 use crate::data::{self, DbConnection, QueryExecutor};
 use crate::query;
@@ -50,6 +50,22 @@ type Query<ST, GB> = data::Query<ST, events::table, GB>;
 
 #[Object]
 impl Event {
+    /// The transaction block that emitted this event. This information is only available for
+    /// events from indexed transactions, and not from transactions that have just been executed or
+    /// dry-run.
+    async fn transaction_block(&self, ctx: &Context<'_>) -> Result<Option<TransactionBlock>> {
+        let Some(stored) = &self.stored else {
+            return Ok(None);
+        };
+
+        Ok(TransactionBlock::query(
+            ctx,
+            TransactionBlock::by_seq(stored.tx_sequence_number as u64, self.checkpoint_viewed_at),
+        )
+        .await
+        .extend()?)
+    }
+
     /// The Move module containing some function that when called by
     /// a programmable transaction block (PTB) emitted this event.
     /// For example, if a PTB invokes A::m1::foo, which internally

@@ -1240,6 +1240,12 @@ type EpochEdge {
 
 type Event {
 	"""
+	The transaction block that emitted this event. This information is only available for
+	events from indexed transactions, and not from transactions that have just been executed or
+	dry-run.
+	"""
+	transactionBlock: TransactionBlock
+	"""
 	The Move module containing some function that when called by
 	a programmable transaction block (PTB) emitted this event.
 	For example, if a PTB invokes A::m1::foo, which internally
