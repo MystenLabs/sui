@@ -1360,6 +1360,7 @@
                 "simplified_unwrap_then_delete": false,
                 "soft_bundle": false,
                 "throughput_aware_consensus_submission": false,
+                "transaction_context_native": false,
                 "txn_base_cost_as_multiplier": false,
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,

@@ -42,8 +42,11 @@ mod checked {
     };
     use move_vm_types::data_store::DataStore;
     use move_vm_types::loaded_data::runtime_types::Type;
-    use sui_move_natives::object_runtime::{
-        self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
+    use sui_move_natives::{
+        native_tx_context::NativeTxContext,
+        object_runtime::{
+            self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
+        },
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution::ExecutionResults;
@@ -189,7 +192,7 @@ mod checked {
                 !gas_charger.is_unmetered(),
                 protocol_config,
                 metrics.clone(),
-                tx_context.epoch(),
+                tx_context,
             );
 
             // Set the profiler if in CLI
@@ -232,6 +235,16 @@ mod checked {
 
         pub fn object_runtime(&mut self) -> &ObjectRuntime {
             self.native_extensions.get()
+        }
+
+        pub fn native_tx_context(&mut self) -> &NativeTxContext {
+            // TODO: this is not going to fly with config versions
+            self.native_extensions.get()
+        }
+
+        pub fn native_tx_context_mut(&mut self) -> &mut NativeTxContext {
+            // TODO: this is not going to fly with config versions
+            self.native_extensions.get_mut()
         }
 
         /// Create a new ID and update the state
