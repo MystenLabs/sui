@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    handlers::CommitterWatermark,
-    schema::watermarks::{self},
-};
+use std::str::FromStr;
+
 use diesel::prelude::*;
 
+use crate::{
+    handlers::{pruner::PrunableTable, CommitterWatermark},
+    schema::watermarks::{self},
+};
+
 /// Represents a row in the `watermarks` table.
-#[derive(Queryable, Insertable, Default, QueryableByName)]
+#[derive(Queryable, Insertable, Default, QueryableByName, Clone)]
 #[diesel(table_name = watermarks, primary_key(entity))]
 pub struct StoredWatermark {
     /// The table governed by this watermark, i.e `epochs`, `checkpoints`, `transactions`.
@@ -39,6 +42,48 @@ pub struct StoredWatermark {
     pub pruned_lo: Option<i64>,
 }
 
+#[derive(Debug)]
+pub struct PrunableWatermark {
+    pub entity: PrunableTable,
+    pub epoch_hi: u64,
+    pub epoch_lo: u64,
+    pub checkpoint_hi: u64,
+    pub tx_hi: u64,
+    pub reader_lo: u64,
+    /// Timestamp when the watermark's lower bound was last updated.
+    pub timestamp_ms: i64,
+    /// Latest timestamp read from db.
+    pub current_timestamp_ms: i64,
+    /// Data at and below `pruned_lo` is considered pruned by the pruner.
+    pub pruned_lo: Option<u64>,
+}
+
+impl PrunableWatermark {
+    pub fn new(stored: StoredWatermark, latest_db_timestamp: i64) -> Option<Self> {
+        let Some(entity) = PrunableTable::from_str(&stored.entity).ok() else {
+            return None;
+        };
+
+        Some(PrunableWatermark {
+            entity,
+            epoch_hi: stored.epoch_hi as u64,
+            epoch_lo: stored.epoch_lo as u64,
+            checkpoint_hi: stored.checkpoint_hi as u64,
+            tx_hi: stored.tx_hi as u64,
+            reader_lo: stored.reader_lo as u64,
+            timestamp_ms: stored.timestamp_ms,
+            current_timestamp_ms: latest_db_timestamp,
+            pruned_lo: stored.pruned_lo.map(|lo| lo as u64),
+        })
+    }
+
+    /// Represents the first `unit` (checkpoint, tx, epoch) that has not yet been pruned. If
+    /// `pruned_lo` is not set in db, default to 0. Otherwise, this is `pruned_lo + `.
+    pub fn pruner_lo(&self) -> u64 {
+        self.pruned_lo.map_or(0, |lo| lo.saturating_add(1))
+    }
+}
+
 impl StoredWatermark {
     pub fn from_upper_bound_update(entity: &str, watermark: CommitterWatermark) -> Self {
         StoredWatermark {
@@ -46,6 +91,15 @@ impl StoredWatermark {
             epoch_hi: watermark.epoch as i64,
             checkpoint_hi: watermark.cp as i64,
             tx_hi: watermark.tx as i64,
+            ..StoredWatermark::default()
+        }
+    }
+
+    pub fn from_lower_bound_update(entity: &str, epoch_lo: u64, reader_lo: u64) -> Self {
+        StoredWatermark {
+            entity: entity.to_string(),
+            epoch_lo: epoch_lo as i64,
+            reader_lo: reader_lo as i64,
             ..StoredWatermark::default()
         }
     }

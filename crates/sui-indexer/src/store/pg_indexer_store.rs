@@ -55,7 +55,7 @@ use crate::schema::{
     tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
     tx_recipients, tx_senders, watermarks,
 };
-use crate::store::transaction_with_retry;
+use crate::store::{read_with_retry, transaction_with_retry};
 use crate::types::{EventIndex, IndexedDeletedObject, IndexedObject};
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 
@@ -251,7 +251,7 @@ impl PgIndexerStore {
             .context("Failed reading min prunable checkpoint sequence number from PostgresDB")
     }
 
-    async fn get_checkpoint_range_for_epoch(
+    pub async fn get_checkpoint_range_for_epoch(
         &self,
         epoch: u64,
     ) -> Result<(u64, Option<u64>), IndexerError> {
@@ -269,7 +269,7 @@ impl PgIndexerStore {
             .context("Failed reading checkpoint range from PostgresDB")
     }
 
-    async fn get_transaction_range_for_checkpoint(
+    pub async fn get_transaction_range_for_checkpoint(
         &self,
         checkpoint: u64,
     ) -> Result<(u64, u64), IndexerError> {
@@ -1575,6 +1575,87 @@ impl PgIndexerStore {
             tracing::error!("Failed to persist watermarks with error: {}", e);
         })
     }
+
+    async fn update_watermarks_lower_bound(
+        &self,
+        watermarks: Vec<StoredWatermark>,
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_watermarks
+            .start_timer();
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            let lower_bound_updates = watermarks.clone();
+            async {
+                use diesel::dsl::sql;
+                use diesel::query_dsl::methods::FilterDsl;
+
+                diesel::insert_into(watermarks::table)
+                    .values(lower_bound_updates)
+                    .on_conflict(watermarks::entity)
+                    .do_update()
+                    .set((
+                        watermarks::reader_lo.eq(excluded(watermarks::reader_lo)),
+                        watermarks::epoch_lo.eq(excluded(watermarks::epoch_lo)),
+                        watermarks::timestamp_ms.eq(sql::<diesel::sql_types::BigInt>(
+                            "(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint",
+                        )),
+                    ))
+                    .filter(excluded(watermarks::reader_lo).gt(watermarks::reader_lo))
+                    .filter(excluded(watermarks::epoch_lo).gt(watermarks::epoch_lo))
+                    .filter(
+                        diesel::dsl::sql::<diesel::sql_types::BigInt>(
+                            "(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint",
+                        )
+                        .gt(watermarks::timestamp_ms),
+                    )
+                    .execute(conn)
+                    .await?;
+
+                Ok::<(), IndexerError>(())
+            }
+            .scope_boxed()
+        })
+        .await
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted watermarks");
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist watermarks with error: {}", e);
+        })
+    }
+
+    async fn get_watermarks(&self) -> Result<(Vec<StoredWatermark>, i64), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        // read_only transaction, otherwise this will block and get blocked by write transactions to
+        // the same table.
+        read_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                let stored = watermarks::table
+                    .load::<StoredWatermark>(conn)
+                    .await
+                    .map_err(|e| IndexerError::from(e))
+                    .context("Failed reading watermarks from PostgresDB")?;
+
+                let timestamp = diesel::select(diesel::dsl::sql::<diesel::sql_types::BigInt>(
+                    "(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint",
+                ))
+                .get_result(conn)
+                .await
+                .map_err(|e| IndexerError::from(e))
+                .context("Failed reading current timestamp from PostgresDB")?;
+
+                Ok((stored, timestamp))
+            }
+            .scope_boxed()
+        })
+        .await
+    }
 }
 
 #[async_trait]
@@ -2245,6 +2326,17 @@ impl IndexerStore for PgIndexerStore {
         E::Iterator: Iterator<Item: AsRef<str>>,
     {
         self.update_watermarks_upper_bound::<E>(watermark).await
+    }
+
+    async fn update_watermarks_lower_bound(
+        &self,
+        watermarks: Vec<StoredWatermark>,
+    ) -> Result<(), IndexerError> {
+        self.update_watermarks_lower_bound(watermarks).await
+    }
+
+    async fn get_watermarks(&self) -> Result<(Vec<StoredWatermark>, i64), IndexerError> {
+        self.get_watermarks().await
     }
 }
 
