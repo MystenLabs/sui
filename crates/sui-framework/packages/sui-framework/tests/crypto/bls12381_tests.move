@@ -383,6 +383,14 @@ module sui::bls12381_tests {
     }
 
     #[test]
+    fun test_to_from_uncompressed() {
+        let a = bls12381::g1_generator();
+        let a_uncompressed = bls12381::g1_to_uncompressed(&a);
+        let reconstructed = bls12381::g1_from_uncompressed(&a_uncompressed);
+        assert!(group_ops::equal(&a, &reconstructed));
+    }
+
+    #[test]
     fun test_g2_ops() {
         let id = bls12381::g2_identity();
         let g = bls12381::g2_generator();
