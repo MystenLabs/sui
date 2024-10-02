@@ -740,30 +740,12 @@ impl Core {
     /// quorum round per authority for ancestor state manager.
     pub(crate) fn set_propagation_delay_and_quorum_rounds(
         &mut self,
+        propagation_delay: u32,
         quorum_rounds: Vec<QuorumRound>,
     ) {
-        let own_index = self.context.own_index;
-        let last_proposed_round = self
-            .dag_state
-            .read()
-            .get_last_block_for_authority(own_index)
-            .round();
-        let propagation_delay = last_proposed_round.saturating_sub(quorum_rounds[own_index].0);
-
         info!("Quorum round per authority in ancestor state manager set to: {quorum_rounds:?}");
         self.ancestor_state_manager
             .set_quorum_round_per_authority(quorum_rounds);
-        self.context
-            .metrics
-            .node_metrics
-            .round_prober_propagation_delays
-            .observe(propagation_delay as f64);
-        self.context
-            .metrics
-            .node_metrics
-            .round_prober_last_propagation_delay
-            .set(propagation_delay as i64);
-
         info!("Propagation round delay for own authority set to: {propagation_delay}");
         self.propagation_delay = propagation_delay;
     }

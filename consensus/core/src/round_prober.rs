@@ -117,7 +117,7 @@ impl<C: NetworkClient> RoundProber<C> {
     // Probes each peer for the latest rounds they received from others.
     // Returns the quorum round for each authority, and the propagation delay
     // of own blocks.
-    pub(crate) async fn probe(&self) -> Vec<QuorumRound> {
+    pub(crate) async fn probe(&self) -> (Vec<QuorumRound>, Round) {
         let _scope = monitored_scope("RoundProber");
 
         let node_metrics = &self.context.metrics.node_metrics;
@@ -235,7 +235,7 @@ impl<C: NetworkClient> RoundProber<C> {
             .set(propagation_delay as i64);
         if let Err(e) = self
             .core_thread_dispatcher
-            .set_propagation_delay_and_quorum_rounds(quorum_rounds.clone())
+            .set_propagation_delay_and_quorum_rounds(propagation_delay, quorum_rounds.clone())
         {
             tracing::warn!(
                 "Failed to set propagation delay and quorum rounds {quorum_rounds:?} on Core: {:?}",
@@ -243,7 +243,7 @@ impl<C: NetworkClient> RoundProber<C> {
             );
         }
 
-        quorum_rounds
+        (quorum_rounds, propagation_delay)
     }
 }
 
@@ -315,6 +315,7 @@ mod test {
     struct FakeThreadDispatcher {
         highest_received_rounds: Vec<Round>,
         quorum_rounds: Mutex<Vec<QuorumRound>>,
+        propagation_delay: Mutex<u32>,
     }
 
     impl FakeThreadDispatcher {
@@ -322,6 +323,7 @@ mod test {
             Self {
                 highest_received_rounds,
                 quorum_rounds: Mutex::new(vec![]),
+                propagation_delay: Mutex::new(0),
             }
         }
 
@@ -353,10 +355,13 @@ mod test {
 
         fn set_propagation_delay_and_quorum_rounds(
             &self,
+            propagation_delay: u32,
             quorum_rounds: Vec<QuorumRound>,
         ) -> Result<(), CoreError> {
             let mut quorum_round_per_authority = self.quorum_rounds.lock();
             *quorum_round_per_authority = quorum_rounds;
+            let mut delay = self.propagation_delay.lock();
+            *delay = propagation_delay;
             Ok(())
         }
 
@@ -450,7 +455,6 @@ mod test {
     async fn test_round_prober() {
         const NUM_AUTHORITIES: usize = 7;
         let context = Arc::new(Context::new_for_test(NUM_AUTHORITIES).0);
-        let own_index = context.own_index;
         let last_proposed_round = 110;
         let core_thread_dispatcher = Arc::new(FakeThreadDispatcher::new(vec![
             110, 120, 130, 140, 150, 160, 170,
@@ -488,7 +492,7 @@ mod test {
         // 105, 115, 103, 0,   125, 126, 127,
         // 0,   0,   0,   0,   0,   0,   0,
 
-        let quorum_rounds = prober.probe().await;
+        let (quorum_rounds, propagation_delay) = prober.probe().await;
 
         assert_eq!(
             quorum_rounds,
@@ -515,9 +519,7 @@ mod test {
             ]
         );
 
-        // 110 - 100 = 10
-        let propogation_delay = last_proposed_round.saturating_sub(quorum_rounds[own_index].0);
-        assert_eq!(propogation_delay, 10);
+        assert_eq!(propagation_delay, 10);
     }
 
     #[tokio::test]

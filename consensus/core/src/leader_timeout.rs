@@ -174,6 +174,7 @@ mod tests {
 
         fn set_propagation_delay_and_quorum_rounds(
             &self,
+            _propagation_delay: u32,
             _quorum_rounds: Vec<QuorumRound>,
         ) -> Result<(), CoreError> {
             todo!()

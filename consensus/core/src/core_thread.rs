@@ -71,6 +71,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     /// manager.
     fn set_propagation_delay_and_quorum_rounds(
         &self,
+        propagation_delay: u32,
         quorum_rounds: Vec<QuorumRound>,
     ) -> Result<(), CoreError>;
 
@@ -97,7 +98,7 @@ struct CoreThread {
     core: Core,
     receiver: Receiver<CoreThreadCommand>,
     rx_subscriber_exists: watch::Receiver<bool>,
-    rx_quorum_rounds: watch::Receiver<Vec<QuorumRound>>,
+    rx_quorum_rounds: watch::Receiver<(u32, Vec<QuorumRound>)>,
     rx_last_known_proposed_round: watch::Receiver<Round>,
     context: Arc<Context>,
 }
@@ -150,8 +151,8 @@ impl CoreThread {
                 _ = self.rx_quorum_rounds.changed() => {
                     let _scope = monitored_scope("CoreThread::loop::set_propagation_delay_per_authority");
                     let should_propose_before = self.core.should_propose();
-                    let quorum_rounds = self.rx_quorum_rounds.borrow().clone();
-                    self.core.set_propagation_delay_and_quorum_rounds(quorum_rounds);
+                    let (propagation_delay, quorum_rounds) = self.rx_quorum_rounds.borrow().clone();
+                    self.core.set_propagation_delay_and_quorum_rounds(propagation_delay, quorum_rounds);
                     if !should_propose_before && self.core.should_propose() {
                         // If core cannnot propose before but can propose now, try to produce a new block to ensure liveness,
                         // because block proposal could have been skipped.
@@ -170,7 +171,7 @@ pub(crate) struct ChannelCoreThreadDispatcher {
     context: Arc<Context>,
     sender: WeakSender<CoreThreadCommand>,
     tx_subscriber_exists: Arc<watch::Sender<bool>>,
-    tx_quorum_rounds: Arc<watch::Sender<Vec<QuorumRound>>>,
+    tx_quorum_rounds: Arc<watch::Sender<(u32, Vec<QuorumRound>)>>,
     tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
     highest_received_rounds: Arc<Vec<AtomicU32>>,
 }
@@ -197,7 +198,7 @@ impl ChannelCoreThreadDispatcher {
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
         let (tx_subscriber_exists, mut rx_subscriber_exists) = watch::channel(false);
         let (tx_quorum_rounds, mut rx_quorum_rounds) =
-            watch::channel(vec![(0, 0); context.committee.size()]);
+            watch::channel((0, vec![(0, 0); context.committee.size()]));
         let (tx_last_known_proposed_round, mut rx_last_known_proposed_round) = watch::channel(0);
         rx_subscriber_exists.mark_unchanged();
         rx_quorum_rounds.mark_unchanged();
@@ -288,10 +289,11 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
 
     fn set_propagation_delay_and_quorum_rounds(
         &self,
+        propagation_delay: u32,
         quorum_rounds: Vec<QuorumRound>,
     ) -> Result<(), CoreError> {
         self.tx_quorum_rounds
-            .send(quorum_rounds)
+            .send((propagation_delay, quorum_rounds))
             .map_err(|e| Shutdown(e.to_string()))
     }
 
@@ -368,6 +370,7 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
 
     fn set_propagation_delay_and_quorum_rounds(
         &self,
+        _propagation_delay: u32,
         _quorum_rounds: Vec<QuorumRound>,
     ) -> Result<(), CoreError> {
         todo!()
