@@ -15,6 +15,7 @@ use tokio::sync::Notify;
 pub struct IngestionBackfillTask<T: IngestionBackfillTrait> {
     ready_checkpoints: Arc<DashMap<CheckpointSequenceNumber, T::ProcessedType>>,
     notify: Arc<Notify>,
+    _exit_sender: tokio::sync::oneshot::Sender<()>,
 }
 
 impl<T: IngestionBackfillTrait + 'static> IngestionBackfillTask<T> {
@@ -35,6 +36,7 @@ impl<T: IngestionBackfillTrait + 'static> IngestionBackfillTask<T> {
         Self {
             ready_checkpoints,
             notify,
+            _exit_sender,
         }
     }
 }
@@ -61,7 +63,7 @@ impl<T: IngestionBackfillTrait> BackfillTask for IngestionBackfillTask<T> {
         let mut checkpoints = vec![];
         let mut start = *range.start();
         let end = *range.end();
-        while start <= end {
+        loop {
             while start <= end {
                 if let Some(checkpoint) = self
                     .ready_checkpoints
@@ -75,6 +77,8 @@ impl<T: IngestionBackfillTrait> BackfillTask for IngestionBackfillTask<T> {
             }
             if start <= end {
                 self.notify.notified().await;
+            } else {
+                break;
             }
         }
         T::commit_chunk(pool.clone(), checkpoints).await;
