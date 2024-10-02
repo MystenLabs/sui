@@ -5,6 +5,7 @@ use clap::*;
 use ethers::providers::Middleware;
 use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::{Encoding, Hex};
+use reqwest::Client;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
 use std::collections::HashMap;
@@ -12,6 +13,7 @@ use std::str::from_utf8;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 use sui_bridge::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use sui_bridge::crypto::{BridgeAuthorityPublicKey, BridgeAuthorityPublicKeyBytes};
 use sui_bridge::eth_transaction_builder::build_eth_transaction;
@@ -351,6 +353,7 @@ async fn main() -> anyhow::Result<()> {
                     stake: *stake,
                     blocklisted: None,
                     status: None,
+                    latency_ms: None,
                 });
             }
             output_wrapper.inner = output;
@@ -414,7 +417,7 @@ async fn main() -> anyhow::Result<()> {
                 let name = names.get(&sui_address).unwrap();
                 if ping {
                     let client_clone = client.clone();
-                    ping_tasks.push(client_clone.get(url.clone()).send());
+                    ping_tasks.push(fetch_with_latency(client_clone, url.clone()));
                 }
                 authorities.push((
                     name,
@@ -438,10 +441,10 @@ async fn main() -> anyhow::Result<()> {
                 futures::future::join_all(ping_tasks)
                     .await
                     .into_iter()
-                    .map(|resp| {
+                    .map(|(resp, latency)| {
                         Some(match resp {
-                            Ok(resp) => resp.status().is_success(),
-                            Err(_e) => false,
+                            Ok(resp) => (resp.status().is_success(), latency),
+                            Err(_e) => (false, latency),
                         })
                     })
                     .collect::<Vec<_>>()
@@ -449,16 +452,18 @@ async fn main() -> anyhow::Result<()> {
                 vec![None; authorities.len()]
             };
             let mut total_online_stake = 0;
-            for ((name, sui_address, pubkey, eth_address, url, stake, blocklisted), ping_resp) in
-                authorities.into_iter().zip(ping_tasks_resp)
+            for (
+                (name, sui_address, pubkey, eth_address, url, stake, blocklisted),
+                ping_resp_and_latency,
+            ) in authorities.into_iter().zip(ping_tasks_resp)
             {
                 let pubkey = if hex {
                     Hex::encode(pubkey.as_bytes())
                 } else {
                     pubkey.to_string()
                 };
-                match ping_resp {
-                    Some(resp) => {
+                match ping_resp_and_latency {
+                    Some((resp, latency)) => {
                         if resp {
                             total_online_stake += stake;
                         }
@@ -475,6 +480,7 @@ async fn main() -> anyhow::Result<()> {
                             } else {
                                 "offline".to_string()
                             }),
+                            latency_ms: Some(latency.as_millis() as u64),
                         });
                     }
                     None => {
@@ -487,6 +493,7 @@ async fn main() -> anyhow::Result<()> {
                             stake,
                             blocklisted: Some(blocklisted),
                             status: None,
+                            latency_ms: None,
                         });
                     }
                 }
@@ -582,10 +589,21 @@ struct OutputMember {
     blocklisted: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     status: Option<String>,
+    latency_ms: Option<u64>,
 }
 
 #[derive(serde::Serialize, Default)]
 struct OutputSuiBridgeRegistration {
     total_registered_stake: f32,
     committee: Vec<OutputMember>,
+}
+
+async fn fetch_with_latency(
+    client: Client,
+    url: String,
+) -> (Result<reqwest::Response, reqwest::Error>, Duration) {
+    let start = Instant::now();
+    let response = client.get(url).send().await;
+    let duration = start.elapsed();
+    (response, duration)
 }
