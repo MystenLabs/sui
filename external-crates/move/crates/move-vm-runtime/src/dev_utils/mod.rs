@@ -6,7 +6,6 @@
 
 pub mod in_memory_test_adapter;
 pub mod storage;
-pub mod test_store;
 pub mod vm_test_adapter;
 
 #[cfg(not(feature = "tiered-gas"))]

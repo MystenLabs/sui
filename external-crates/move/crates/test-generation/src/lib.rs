@@ -35,8 +35,8 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
-    test_utils::{DeltaStorage, InMemoryStorage},
-    vm::vm::VirtualMachine,
+    dev_utils::{DeltaStorage, InMemoryStorage},
+    execution::vm::VirtualMachine,
 };
 use move_vm_types::gas::UnmeteredGasMeter;
 use once_cell::sync::Lazy;

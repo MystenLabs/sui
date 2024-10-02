@@ -1,32 +1,17 @@
-// Copyright (c) The Move Contributors
-// SPDX-License-Identifier: Apache-2.0
+use std::collections::BTreeMap;
+
+use crate::shared::types::{PackageStorageId, RuntimePackageId};
 
 use move_binary_format::CompiledModule;
 use move_core_types::{
-    account_address::AccountAddress,
     language_storage::ModuleId,
     resolver::{SerializedPackage, TypeOrigin},
 };
-use std::collections::BTreeMap;
-
-// -------------------------------------------------------------------------------------------------
-// Types
-// -------------------------------------------------------------------------------------------------
-
-pub type DefiningTypeId = AccountAddress;
-
-/// On-chain storage ID for the package we are linking account (e.g., v0 and v1 will use different
-/// Packge Storage IDs).
-pub type PackageStorageId = AccountAddress;
-
-/// Runtime ID: An ID used at runtime. This is consistent between versions (e.g., v0 and v1 will
-/// use the same Runtime Package ID).
-pub type RuntimePackageId = AccountAddress;
 
 #[derive(Debug, Clone)]
-pub(crate) struct DeserializedPackage {
-    pub(crate) storage_id: PackageStorageId,
+pub(crate) struct Package {
     pub(crate) runtime_id: RuntimePackageId,
+    pub(crate) storage_id: PackageStorageId,
     pub(crate) modules: BTreeMap<ModuleId, CompiledModule>,
     pub(crate) type_origin_table: Vec<TypeOrigin>,
     pub(crate) linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>,
@@ -36,7 +21,7 @@ pub(crate) struct DeserializedPackage {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-impl DeserializedPackage {
+impl Package {
     pub fn new(
         runtime_id: RuntimePackageId,
         modules: Vec<CompiledModule>,
@@ -51,10 +36,12 @@ impl DeserializedPackage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn into_modules(self) -> Vec<CompiledModule> {
         self.modules.into_values().collect()
     }
 
+    #[allow(dead_code)]
     pub fn as_modules(&self) -> impl IntoIterator<Item = &CompiledModule> {
         self.modules.values()
     }

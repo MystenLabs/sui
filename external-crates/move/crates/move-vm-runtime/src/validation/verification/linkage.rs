@@ -12,8 +12,8 @@
 // dependencies fail the linkage checks in this module.
 
 use crate::{
-    jit::runtime::ast::Package,
-    on_chain::ast::{DeserializedPackage, PackageStorageId, RuntimePackageId},
+    shared::types::{PackageStorageId, RuntimePackageId},
+    validation::verification::ast::{Module, Package},
 };
 use move_binary_format::{
     errors::{Location, PartialVMError, VMResult},
@@ -21,15 +21,12 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::{cyclic_dependencies, dependencies};
 use move_core_types::vm_status::StatusCode;
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, HashMap};
 
 /// Verifies that all packages in the provided map have valid linkage and no cyclic dependencies
 /// between them.
 pub fn verify_linkage_and_cyclic_checks(
-    cached_packages: &BTreeMap<PackageStorageId, Arc<Package>>,
+    cached_packages: &BTreeMap<PackageStorageId, &Package>,
 ) -> VMResult<()> {
     let relocation_map: HashMap<RuntimePackageId, PackageStorageId> = cached_packages
         .iter()
@@ -39,12 +36,7 @@ pub fn verify_linkage_and_cyclic_checks(
         })
         .collect();
     for package in cached_packages.values() {
-        let package_modules = package
-            .compiled_modules
-            .binaries
-            .iter()
-            .map(|m| m.as_ref())
-            .collect::<Vec<_>>();
+        let package_modules = package.as_modules().into_iter().collect::<Vec<_>>();
         verify_package_valid_linkage(&package_modules, cached_packages, &relocation_map)?;
         verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
     }
@@ -57,8 +49,8 @@ pub fn verify_linkage_and_cyclic_checks(
 /// the cache (i.e., that at least in the current linking context the package is valid w.r.t. its
 /// dependencies).
 pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
-    package_to_publish: &DeserializedPackage,
-    cached_packages: &BTreeMap<PackageStorageId, Arc<Package>>,
+    package_to_publish: &Package,
+    cached_packages: &BTreeMap<PackageStorageId, &Package>,
 ) -> VMResult<()> {
     let relocation_map: HashMap<RuntimePackageId, PackageStorageId> = cached_packages
         .iter()
@@ -74,12 +66,7 @@ pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
 
     // Verify the dependencies of the package to publish.
     for package in cached_packages.values() {
-        let package_modules = package
-            .compiled_modules
-            .binaries
-            .iter()
-            .map(|m| m.as_ref())
-            .collect::<Vec<_>>();
+        let package_modules = package.as_modules().into_iter().collect::<Vec<_>>();
         verify_package_valid_linkage(&package_modules, cached_packages, &relocation_map)?;
         verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
     }
@@ -99,34 +86,36 @@ pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
 /// publication it will simply be a mapping of the package's original package ID to itself (since
 /// they are the same for publication).
 fn verify_package_no_cyclic_relationships(
-    package: &[&CompiledModule],
-    cached_packages: &BTreeMap<PackageStorageId, Arc<Package>>,
+    package: &[&Module],
+    cached_packages: &BTreeMap<PackageStorageId, &Package>,
     relocation_map: &HashMap<PackageStorageId, RuntimePackageId>,
 ) -> VMResult<()> {
     let (module, bundle_verified) = if package.len() == 1 {
         (&package[0], BTreeMap::new())
     } else {
         let module = &package[0];
-        let module_map = package.iter().skip(1).map(|m| (m.self_id(), m)).collect();
+        let module_map = package
+            .iter()
+            .skip(1)
+            .map(|m| (m.value.self_id(), m))
+            .collect();
         (module, module_map)
     };
 
-    cyclic_dependencies::verify_module(module, |runtime_module_id| {
+    cyclic_dependencies::verify_module(&module.value, |runtime_module_id| {
         let module = if let Some(bundled) = bundle_verified.get(runtime_module_id) {
             Some(**bundled)
         } else {
             let storage_id = relocation_map
                 .get(runtime_module_id.address())
                 .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))?;
-            cached_packages.get(storage_id).and_then(|p| {
-                p.compiled_modules
-                    .get(&runtime_module_id.name().to_owned())
-                    .map(|m| m.as_ref())
-            })
+            cached_packages
+                .get(storage_id)
+                .and_then(|p| p.modules.get(&runtime_module_id.to_owned()))
         };
 
         module
-            .map(|m| m.immediate_dependencies())
+            .map(|m| m.value.immediate_dependencies())
             .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
     })?;
 
@@ -136,21 +125,21 @@ fn verify_package_no_cyclic_relationships(
 // Given the package, the cached packages, and the relocation map, this function verifies that
 // all modules in the provided package have valid linkage to their dependencies.
 fn verify_package_valid_linkage(
-    package: &[&CompiledModule],
-    cached_packages: &BTreeMap<PackageStorageId, Arc<Package>>,
+    package: &[&Module],
+    cached_packages: &BTreeMap<PackageStorageId, &Package>,
     relocation_map: &HashMap<PackageStorageId, RuntimePackageId>,
 ) -> VMResult<()> {
     let package_module_map = package
         .iter()
-        .map(|m| (m.self_id(), m))
+        .map(|m| (m.value.self_id(), m))
         .collect::<BTreeMap<_, _>>();
     for m in package {
-        let imm_deps = m.immediate_dependencies();
+        let imm_deps = m.value.immediate_dependencies();
         let module_deps = imm_deps
             .iter()
             .map(|module_id| {
                 if let Some(m) = package_module_map.get(module_id) {
-                    Ok(**m)
+                    Ok(&m.value)
                 } else {
                     let package = relocation_map
                         .get(module_id.address())
@@ -159,18 +148,15 @@ fn verify_package_valid_linkage(
                             PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
                                 .finish(Location::Undefined)
                         })?;
-                    package
-                        .compiled_modules
-                        .get(&module_id.name().to_owned())
-                        .map(|m| m.as_ref())
-                        .ok_or_else(|| {
-                            PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                                .finish(Location::Undefined)
-                        })
+                    let module = package.modules.get(&module_id.to_owned()).ok_or_else(|| {
+                        PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
+                            .finish(Location::Undefined)
+                    })?;
+                    Ok(&module.value)
                 }
             })
             .collect::<VMResult<Vec<&CompiledModule>>>()?;
-        dependencies::verify_module(m, module_deps)?;
+        dependencies::verify_module(&m.value, module_deps)?;
     }
     Ok(())
 }

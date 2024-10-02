@@ -11,7 +11,7 @@ use move_core_types::{
     resolver::{LinkageResolver, ModuleResolver},
     vm_status::{StatusCode, StatusType},
 };
-use move_vm_runtime::{move_vm::MoveVM, test_utils::InMemoryStorage};
+use move_vm_runtime::{dev_utils::InMemoryStorage, move_vm::MoveVM};
 use move_vm_types::gas::UnmeteredGasMeter;
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);

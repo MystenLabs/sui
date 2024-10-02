@@ -15,7 +15,7 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
-use move_vm_runtime::test_utils::InMemoryStorage;
+use move_vm_runtime::dev_utils::InMemoryStorage;
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use move_vm_types::gas::UnmeteredGasMeter;
 

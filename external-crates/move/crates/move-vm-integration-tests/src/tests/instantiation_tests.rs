@@ -26,12 +26,12 @@ use move_core_types::{
 #[cfg(feature = "gas-profiler")]
 use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{
-    move_vm::MoveVM,
-    session::{SerializedReturnValues, Session},
-    test_utils::{
+    dev_utils::{
         gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
         InMemoryStorage,
     },
+    move_vm::MoveVM,
+    session::{SerializedReturnValues, Session},
 };
 #[cfg(feature = "gas-profiler")]
 use move_vm_types::gas::GasMeter;

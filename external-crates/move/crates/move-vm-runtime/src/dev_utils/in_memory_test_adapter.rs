@@ -2,45 +2,49 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::linkage_context::LinkageContext,
-    natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
-    on_chain::ast::{PackageStorageId, RuntimePackageId},
-    test_utils::{
-        gas_schedule::GasStatus, storage::InMemoryStorage, test_store::TestStore,
-        vm_test_adapter::VMTestAdapter,
+    dev_utils::{
+        gas_schedule::GasStatus, storage::InMemoryStorage, vm_test_adapter::VMTestAdapter,
     },
-    vm::{vm::VirtualMachine, vm_instance::VirtualMachineExecutionInstance},
+    execution::vm::MoveVM,
+    natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
+    runtime::MoveRuntime,
+    shared::{
+        linkage_context::LinkageContext,
+        types::{PackageStorageId, RuntimePackageId},
+    },
 };
 
-use move_binary_format::errors::VMResult;
+use move_binary_format::errors::{Location, PartialVMError, VMResult};
 use move_binary_format::file_format::CompiledModule;
 
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{
+    account_address::AccountAddress, resolver::ModuleResolver, vm_status::StatusCode,
+};
 use move_vm_config::runtime::VMConfig;
 
 use std::collections::BTreeSet;
 
 pub struct InMemoryTestAdapter {
-    vm: VirtualMachine,
-    storage: TestStore,
+    runtime: MoveRuntime,
+    storage: InMemoryStorage,
 }
 
 impl InMemoryTestAdapter {
     pub fn new() -> Self {
-        let storage = TestStore::new(InMemoryStorage::new());
+        let storage = InMemoryStorage::new();
         let native_functions = NativeFunctions::empty_for_testing().unwrap();
         let vm_config = VMConfig::default();
-        let vm = VirtualMachine::new(native_functions, vm_config);
-        Self { vm, storage }
+        let runtime = MoveRuntime::new(native_functions, vm_config);
+        Self { runtime, storage }
     }
 
-    pub fn new_with_vm(vm: VirtualMachine) -> Self {
-        let storage = TestStore::new(InMemoryStorage::new());
-        Self { vm, storage }
+    pub fn new_with_runtime(runtime: MoveRuntime) -> Self {
+        let storage = InMemoryStorage::new();
+        Self { runtime, storage }
     }
 
-    pub fn new_with_vm_and_storage(vm: VirtualMachine, storage: TestStore) -> Self {
-        Self { vm, storage }
+    pub fn new_with_runtime_and_storage(runtime: MoveRuntime, storage: InMemoryStorage) -> Self {
+        Self { runtime, storage }
     }
 
     /// Insert package into storage without any checking or validation. This is useful for
@@ -59,14 +63,79 @@ impl InMemoryTestAdapter {
             let mut module_bytes = vec![];
             module.serialize_with_version(module.version, &mut module_bytes)?;
             self.storage
-                .store
                 .publish_or_overwrite_module(module_id, module_bytes);
         }
         Ok(())
     }
+
+    pub fn get_compiled_modules(
+        &self,
+        package_id: &RuntimePackageId,
+    ) -> VMResult<Vec<CompiledModule>> {
+        let Ok([Some(pkg)]) = self.storage.get_packages_static([*package_id]) else {
+            return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
+                .with_message(format!(
+                    "Cannot find {:?} in data cache when building linkage context",
+                    package_id
+                ))
+                .finish(Location::Undefined));
+        };
+        Ok(pkg
+            .modules
+            .iter()
+            .map(|module| CompiledModule::deserialize_with_defaults(module).unwrap())
+            .collect())
+    }
+
+    /// Compute all of the transitive dependencies for a `root_package`, including itself.
+    pub fn transitive_dependencies(
+        &self,
+        root_package: &AccountAddress,
+    ) -> VMResult<BTreeSet<AccountAddress>> {
+        let mut seen: BTreeSet<AccountAddress> = BTreeSet::new();
+        let mut to_process: Vec<AccountAddress> = vec![*root_package];
+
+        while let Some(package_id) = to_process.pop() {
+            // If we've already processed this package, skip it
+            if seen.contains(&package_id) {
+                continue;
+            }
+
+            // Add the current package to the seen set
+            seen.insert(package_id);
+
+            // Attempt to retrieve the package's modules from the store
+            let Ok([Some(pkg)]) = self.storage.get_packages_static([package_id]) else {
+                return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
+                    .with_message(format!(
+                        "Cannot find {:?} in data cache when building linkage context",
+                        package_id
+                    ))
+                    .finish(Location::Undefined));
+            };
+
+            // Process each module and add its dependencies to the to_process list
+            for module in &pkg.modules {
+                let module = CompiledModule::deserialize_with_defaults(module).unwrap();
+                let deps = module
+                    .immediate_dependencies()
+                    .into_iter()
+                    .map(|module| *module.address());
+
+                // Add unprocessed dependencies to the queue
+                for dep in deps {
+                    if !seen.contains(&dep) {
+                        to_process.push(dep);
+                    }
+                }
+            }
+        }
+
+        Ok(seen)
+    }
 }
 
-impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
+impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
     fn publish_package(
         &mut self,
         linkage_context: LinkageContext,
@@ -89,7 +158,7 @@ impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
             .collect::<Vec<_>>();
 
         let mut gas_meter = GasStatus::new_unmetered();
-        let (changeset, _) = self.vm.publish_package(
+        let (changeset, _) = self.runtime.validate_package(
             &self.storage,
             &linkage_context,
             runtime_id,
@@ -98,28 +167,27 @@ impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
             &mut gas_meter,
         );
         self.storage
-            .store
             .apply(changeset?)
             .expect("Failed to apply change set");
         Ok(())
     }
 
-    fn make_vm_instance<'extensions>(
+    fn make_vm<'extensions>(
         &self,
         linkage_context: LinkageContext,
-    ) -> VMResult<VirtualMachineExecutionInstance<'extensions, &TestStore>> {
-        let Self { vm, storage } = self;
-        let storage: &TestStore = storage;
-        vm.make_instance(storage, linkage_context)
+    ) -> VMResult<MoveVM<'extensions, &InMemoryStorage>> {
+        let Self { runtime, storage } = self;
+        let storage: &InMemoryStorage = storage;
+        runtime.make_vm(storage, linkage_context)
     }
 
-    fn make_vm_instance_with_native_extensions<'extensions>(
+    fn mave_vm_with_native_extensions<'extensions>(
         &self,
         linkage_context: LinkageContext,
         native_extensions: NativeContextExtensions<'extensions>,
-    ) -> VMResult<VirtualMachineExecutionInstance<'extensions, &TestStore>> {
-        let Self { vm, storage } = self;
-        vm.make_instance_with_native_extensions(storage, linkage_context, native_extensions)
+    ) -> VMResult<MoveVM<'extensions, &InMemoryStorage>> {
+        let Self { runtime, storage } = self;
+        runtime.make_vm_with_native_extensions(storage, linkage_context, native_extensions)
     }
 
     // Generate a linkage context for a given runtime ID, storage ID, and list of compiled modules.
@@ -145,12 +213,13 @@ impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
                 if all_dependencies.contains(dep) {
                     continue;
                 }
-                let new_dependencies = self.storage.transitive_dependencies(dep)?;
+                let new_dependencies = self.transitive_dependencies(dep)?;
                 all_dependencies.extend(new_dependencies.into_iter());
             }
         }
         // Consider making tehse into VM errors on failure instead.
-        assert!(!all_dependencies.remove(&storage_id),
+        assert!(
+            !all_dependencies.remove(&storage_id),
             "Found circular dependencies during linkage generation."
         );
         assert!(
@@ -172,18 +241,18 @@ impl VMTestAdapter<TestStore> for InMemoryTestAdapter {
         &self,
         package_id: &PackageStorageId,
     ) -> VMResult<Vec<CompiledModule>> {
-        self.storage.get_compiled_modules(package_id)
+        self.get_compiled_modules(package_id)
     }
 
-    fn vm(&mut self) -> &mut VirtualMachine {
-        &mut self.vm
+    fn runtime(&mut self) -> &mut MoveRuntime {
+        &mut self.runtime
     }
 
-    fn storage(&self) -> &TestStore {
+    fn storage(&self) -> &InMemoryStorage {
         &self.storage
     }
 
-    fn storage_mut(&mut self) -> &mut TestStore {
+    fn storage_mut(&mut self) -> &mut InMemoryStorage {
         &mut self.storage
     }
 }

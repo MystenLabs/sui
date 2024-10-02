@@ -5,8 +5,8 @@ use move_binary_format::{file_format::basic_test_module, file_format_common::VER
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::{
-    natives::move_stdlib::stdlib_native_functions, test_utils::InMemoryStorage,
-    vm::vm::VirtualMachine,
+    dev_utils::InMemoryStorage, execution::vm::VirtualMachine,
+    natives::move_stdlib::stdlib_native_functions,
 };
 use move_vm_types::gas::UnmeteredGasMeter;
 

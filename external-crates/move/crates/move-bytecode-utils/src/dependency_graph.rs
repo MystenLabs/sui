@@ -86,7 +86,10 @@ impl<'a> DependencyGraph<'a> {
             }
 
             // For each incoming edge (dependency), add the address and push to the stack
-            for neighbor in self.graph.neighbors_directed(module_idx, petgraph::Direction::Incoming) {
+            for neighbor in self
+                .graph
+                .neighbors_directed(module_idx, petgraph::Direction::Incoming)
+            {
                 let dependency_address = self.modules[neighbor.0].address();
                 if dependency_address != target_address {
                     dependencies.insert(*dependency_address);

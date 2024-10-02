@@ -14,10 +14,11 @@ mod jit;
 pub mod shared;
 
 pub mod cache;
+pub mod dev_utils;
+pub mod execution;
 pub mod natives;
-pub mod on_chain;
-pub mod test_utils;
-pub mod vm;
+pub mod runtime;
+pub mod validation;
 
 // #[macro_use]
 // mod tracing;

@@ -4,7 +4,7 @@
 
 use move_command_line_common::files::find_filenames;
 use move_vm_runtime::{
-    natives::functions::NativeFunctionTable, test_utils::gas_schedule::CostTable,
+    dev_utils::gas_schedule::CostTable, natives::functions::NativeFunctionTable,
 };
 
 use crate::UnitTestingConfig;

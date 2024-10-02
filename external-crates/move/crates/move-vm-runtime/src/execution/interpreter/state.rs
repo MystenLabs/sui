@@ -6,11 +6,11 @@ use crate::{
         arena::ArenaPointer,
         type_cache::{self, TypeCache},
     },
+    execution::dispatch_tables::VMDispatchTables,
     jit::runtime::ast::{CallType, Function, Module},
     shared::constants::{
         CALL_STACK_SIZE_LIMIT, MAX_TYPE_INSTANTIATION_NODES, OPERAND_STACK_SIZE_LIMIT,
     },
-    vm::runtime_vtables::RuntimeVTables,
 };
 use move_binary_format::{
     errors::*,
@@ -498,7 +498,7 @@ impl ModuleDefinitionResolver {
     // Creation: From a set of Runtime VTables and a ModuleId.
     //
 
-    pub fn new(vtables: &RuntimeVTables, module_id: &ModuleId) -> PartialVMResult<Self> {
+    pub fn new(vtables: &VMDispatchTables, module_id: &ModuleId) -> PartialVMResult<Self> {
         let compiled = vtables.resolve_compiled_module(module_id)?;
         let loaded = vtables.resolve_loaded_module(module_id)?;
         Ok(Self { compiled, loaded })
@@ -509,6 +509,7 @@ impl ModuleDefinitionResolver {
     //
 
     pub(crate) fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
+        // TODO: Carry these into `laoded` to avoid this.
         self.compiled.constant_at(idx)
     }
 

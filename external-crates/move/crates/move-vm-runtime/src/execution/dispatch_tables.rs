@@ -10,7 +10,7 @@
 use crate::{
     cache::{arena::ArenaPointer, type_cache::TypeCache},
     jit::runtime::ast::{Function, Module, Package, VTableKey},
-    on_chain::ast::RuntimePackageId,
+    shared::types::RuntimePackageId,
 };
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult, VMResult},
@@ -33,14 +33,14 @@ use std::{collections::HashMap, sync::Arc};
 /// TODO(tzakian): The representation can be optimized to use a more efficient data structure for
 /// vtable/cross-package function resolution but we will keep it simple for now.
 #[derive(Clone)]
-pub struct RuntimeVTables {
+pub struct VMDispatchTables {
     pub(crate) loaded_packages: HashMap<RuntimePackageId, Arc<Package>>,
     cached_types: Arc<RwLock<TypeCache>>,
 }
 
 /// The VM API that it will use to resolve packages and functions during execution of the
 /// transaction.
-impl RuntimeVTables {
+impl VMDispatchTables {
     /// Create a new RuntimeVTables instance.
     /// NOTE: This assumes linkage has already occured.
     pub fn new(

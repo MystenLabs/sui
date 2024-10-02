@@ -15,7 +15,7 @@ use move_core_types::{
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
-use move_vm_runtime::{cache::linkage_context::LinkageContext, on_chain::ast::PackageStorageId};
+use move_vm_runtime::shared::{linkage_context::LinkageContext, types::PackageStorageId};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

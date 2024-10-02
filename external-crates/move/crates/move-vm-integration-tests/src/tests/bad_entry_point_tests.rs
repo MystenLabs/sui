@@ -11,8 +11,8 @@ use move_core_types::{
     vm_status::StatusType,
 };
 use move_vm_runtime::{
+    dev_utils::{BlankStorage, InMemoryStorage},
     move_vm::MoveVM,
-    test_utils::{BlankStorage, InMemoryStorage},
 };
 use move_vm_types::gas::UnmeteredGasMeter;
 

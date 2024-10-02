@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::CompiledModule;
+use move_binary_format::{errors::VMResult, CompiledModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::WarningFilters,
@@ -9,14 +9,17 @@ use move_compiler::{
     shared::PackageConfig,
     Compiler as MoveCompiler,
 };
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, resolver::MoveResolver};
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::{
-    cache::{linkage_context::LinkageContext, vm_cache::VMCache},
+    cache::move_cache::{MoveCache, Package},
+    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
     natives::functions::NativeFunctions,
-    on_chain::ast::RuntimePackageId,
-    on_chain::data_cache::TransactionDataCache,
-    test_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
+    runtime::{data_cache::TransactionDataCache, package_resolution::resolve_packages},
+    shared::{
+        linkage_context::LinkageContext,
+        types::{PackageStorageId, RuntimePackageId},
+    },
 };
 
 use std::collections::{BTreeMap, HashMap};
@@ -85,6 +88,25 @@ fn compile_packages(
     packages
 }
 
+fn load_linkage_packages_into_runtime<DataSource: MoveResolver + Send + Sync>(
+    adapter: &mut impl VMTestAdapter<DataSource>,
+    linkage: &LinkageContext,
+) -> VMResult<BTreeMap<PackageStorageId, Arc<Package>>> {
+    let cache = adapter.runtime().cache();
+    let natives = adapter.runtime().natives();
+    let vm_config = adapter.runtime().vm_config();
+    let all_packages = linkage.all_packages()?;
+    let storage = TransactionDataCache::new(adapter.storage());
+    resolve_packages(
+        &cache,
+        &natives,
+        &vm_config,
+        &storage,
+        linkage,
+        all_packages,
+    )
+}
+
 #[test]
 fn cache_package_internal_package_calls_only_no_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
@@ -93,18 +115,15 @@ fn cache_package_internal_package_calls_only_no_types() {
         .insert_modules_into_storage(compile_modules_in_file("package1.move", &[]))
         .unwrap();
 
-    let link_context = &adapter.generate_default_linkage(package_address).unwrap();
-    let result = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        link_context,
-    );
+    let link_context = adapter.generate_default_linkage(package_address).unwrap();
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
 
     // Verify that we've loaded the package correctly
     let result = result.unwrap();
     let l_pkg = result.first_key_value().unwrap().1;
-    assert_eq!(l_pkg.loaded_modules.binaries.len(), 3);
-    assert_eq!(l_pkg.storage_id, package_address);
-    assert_eq!(l_pkg.vtable.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.storage_id, package_address);
+    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 3);
 }
 
 #[test]
@@ -116,20 +135,23 @@ fn cache_package_internal_package_calls_only_with_types() {
         .unwrap();
 
     let link_context = adapter.generate_default_linkage(package_address).unwrap();
-    let result = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
 
     // Verify that we've loaded the package correctly
     let result = result.unwrap();
     let l_pkg = result.first_key_value().unwrap().1;
-    assert_eq!(l_pkg.loaded_modules.binaries.len(), 3);
-    assert_eq!(l_pkg.storage_id, package_address);
-    assert_eq!(l_pkg.vtable.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.storage_id, package_address);
+    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 3);
     println!(
         "{:#?}",
-        adapter.vm().cache().type_cache().read().cached_types.id_map
+        adapter
+            .runtime()
+            .cache()
+            .type_cache()
+            .read()
+            .cached_types
+            .id_map
     );
 }
 
@@ -143,29 +165,26 @@ fn cache_package_external_package_calls_no_types() {
         .unwrap();
 
     let link_context = adapter.generate_default_linkage(package2_address).unwrap();
-    let result = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
 
     // Verify that we've loaded the packages correctly
     let results = result.unwrap();
     let l_pkg = results.get(&package1_address).unwrap();
-    assert_eq!(l_pkg.loaded_modules.binaries.len(), 2);
-    assert_eq!(l_pkg.storage_id, package1_address);
-    assert_eq!(l_pkg.vtable.binaries.len(), 2);
+    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 2);
+    assert_eq!(l_pkg.runtime.storage_id, package1_address);
+    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 2);
 
     let l_pkg = results.get(&package2_address).unwrap();
-    assert_eq!(l_pkg.loaded_modules.binaries.len(), 1);
-    assert_eq!(l_pkg.storage_id, package2_address);
-    assert_eq!(l_pkg.vtable.binaries.len(), 1);
+    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 1);
+    assert_eq!(l_pkg.runtime.storage_id, package2_address);
+    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 1);
 }
 
 /// Generate a new, dummy cachce for testing.
-fn dummy_cache_for_testing() -> VMCache {
+fn dummy_cache_for_testing() -> MoveCache {
     let native_functions = Arc::new(NativeFunctions::new(vec![]).unwrap());
     let config = Arc::new(VMConfig::default());
-    VMCache::new(native_functions, config)
+    MoveCache::new(native_functions, config)
 }
 
 #[test]
@@ -175,20 +194,17 @@ fn load_package_internal_package_calls_only_no_types() {
     adapter
         .insert_modules_into_storage(compile_modules_in_file("package1.move", &[]))
         .unwrap();
-    let link_context = adapter.generate_default_linkage(package_address).unwrap();
 
-    let result = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let link_context = adapter.generate_default_linkage(package_address).unwrap();
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
 
     // Verify that we've loaded the package correctly
     let l_pkg = result.unwrap();
     assert_eq!(l_pkg.len(), 1);
     let l_pkg = l_pkg.get(&package_address).unwrap();
-    assert_eq!(l_pkg.loaded_modules.binaries.len(), 3);
-    assert_eq!(l_pkg.storage_id, package_address);
-    assert_eq!(l_pkg.vtable.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.storage_id, package_address);
+    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 3);
 }
 
 #[test]
@@ -201,18 +217,15 @@ fn load_package_internal_package_calls_only_with_types() {
     let link_context = adapter.generate_default_linkage(package_address).unwrap();
 
     let cache = dummy_cache_for_testing();
-    let result = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
 
     // Verify that we've loaded the package correctly
     let l_pkg = result.unwrap();
     assert_eq!(l_pkg.len(), 1);
     let l_pkg = l_pkg.get(&package_address).unwrap();
-    assert_eq!(l_pkg.loaded_modules.binaries.len(), 3);
-    assert_eq!(l_pkg.storage_id, package_address);
-    assert_eq!(l_pkg.vtable.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.storage_id, package_address);
+    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 3);
     println!("{:#?}", cache.type_cache().read().cached_types.id_map);
 }
 
@@ -223,22 +236,19 @@ fn load_package_external_package_calls_no_types() {
     adapter
         .insert_modules_into_storage(compile_modules_in_file("package3.move", &[]))
         .unwrap();
-    let link_context = adapter.generate_default_linkage(package2_address).unwrap();
 
-    let result = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let link_context = adapter.generate_default_linkage(package2_address).unwrap();
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
 
     // Verify that we've loaded the package correctly
     let l_pkg = result.unwrap();
     assert_eq!(l_pkg.len(), 2);
     let l_pkg = l_pkg.get(&package2_address).unwrap();
-    assert_eq!(l_pkg.loaded_modules.binaries.len(), 1);
-    assert_eq!(l_pkg.storage_id, package2_address);
-    assert_eq!(l_pkg.vtable.binaries.len(), 1);
+    assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 1);
+    assert_eq!(l_pkg.runtime.storage_id, package2_address);
+    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 1);
 
-    for fptr in l_pkg.vtable.binaries.iter() {
+    for fptr in l_pkg.runtime.vtable.binaries.iter() {
         println!("{:#?}", fptr.to_ref().code());
     }
 }
@@ -250,17 +260,14 @@ fn cache_package_external_package_type_references() {
     adapter
         .insert_modules_into_storage(compile_modules_in_file("package4.move", &[]))
         .unwrap();
-    let link_context = adapter.generate_default_linkage(package2_address).unwrap();
 
-    let result = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let link_context = adapter.generate_default_linkage(package2_address).unwrap();
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
 
     assert!(result.is_ok());
     assert_eq!(
         adapter
-            .vm()
+            .runtime()
             .cache()
             .type_cache()
             .read()
@@ -322,17 +329,14 @@ fn cache_package_external_package_type_references_cache_reload() {
     adapter
         .insert_modules_into_storage(compile_modules_in_file("package4.move", &[]))
         .unwrap();
-    let link_context = adapter.generate_default_linkage(package1_address).unwrap();
 
-    println!("link context: {link_context:#?}");
-    let result1 = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let link_context = adapter.generate_default_linkage(package1_address).unwrap();
+    let result1 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
+
     assert!(result1.is_ok());
     assert_eq!(
         adapter
-            .vm()
+            .runtime()
             .cache()
             .type_cache()
             .read()
@@ -343,14 +347,12 @@ fn cache_package_external_package_type_references_cache_reload() {
     );
 
     let link_context = adapter.generate_default_linkage(package2_address).unwrap();
-    let result2 = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let result2 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
+
     assert!(result2.is_ok());
     assert_eq!(
         adapter
-            .vm()
+            .runtime()
             .cache()
             .type_cache()
             .read()
@@ -368,17 +370,14 @@ fn cache_package_external_package_type_references_with_shared_dep() {
     adapter
         .insert_modules_into_storage(compile_modules_in_file("package5.move", &[]))
         .unwrap();
-    let link_context = adapter.generate_default_linkage(package3_address).unwrap();
 
-    let result = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let link_context = adapter.generate_default_linkage(package3_address).unwrap();
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
 
     assert!(result.is_ok());
     assert_eq!(
         adapter
-            .vm()
+            .runtime()
             .cache()
             .type_cache()
             .read()
@@ -402,14 +401,11 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
 
     // Load from the bottom up
     let link_context = adapter.generate_default_linkage(package1_address).unwrap();
-    let result1 = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let result1 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result1.is_ok());
     assert_eq!(
         adapter
-            .vm()
+            .runtime()
             .cache()
             .type_cache()
             .read()
@@ -420,14 +416,11 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     );
 
     let link_context = adapter.generate_default_linkage(package2_address).unwrap();
-    let result2 = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let result2 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result2.is_ok());
     assert_eq!(
         adapter
-            .vm()
+            .runtime()
             .cache()
             .type_cache()
             .read()
@@ -438,14 +431,11 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     );
 
     let link_context = adapter.generate_default_linkage(package3_address).unwrap();
-    let result3 = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let result3 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result3.is_ok());
     assert_eq!(
         adapter
-            .vm()
+            .runtime()
             .cache()
             .type_cache()
             .read()
@@ -463,14 +453,11 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
         .unwrap();
 
     let link_context = adapter.generate_default_linkage(package3_address).unwrap();
-    let result3 = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let result3 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result3.is_ok());
     assert_eq!(
         adapter
-            .vm()
+            .runtime()
             .cache()
             .type_cache()
             .read()
@@ -481,14 +468,11 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     );
 
     let link_context = adapter.generate_default_linkage(package1_address).unwrap();
-    let result1 = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let result1 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result1.is_ok());
     assert_eq!(
         adapter
-            .vm()
+            .runtime()
             .cache()
             .type_cache()
             .read()
@@ -499,14 +483,11 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     );
 
     let link_context = adapter.generate_default_linkage(package2_address).unwrap();
-    let result2 = adapter.vm().cache().load_link_context_dependencies(
-        &TransactionDataCache::new(adapter.storage()),
-        &link_context,
-    );
+    let result2 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result2.is_ok());
     assert_eq!(
         adapter
-            .vm()
+            .runtime()
             .cache()
             .type_cache()
             .read()

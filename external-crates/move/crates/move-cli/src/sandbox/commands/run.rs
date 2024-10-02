@@ -19,8 +19,7 @@ use move_core_types::{
 };
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
-    natives::functions::NativeFunctions, test_utils::gas_schedule::CostTable,
-    vm::vm::VirtualMachine,
+    dev_utils::gas_schedule::CostTable, natives::functions::NativeFunctions, runtime::MoveRuntime,
 };
 use std::{fs, path::Path};
 
@@ -53,7 +52,7 @@ pub fn run(
     let vm_args: Vec<Vec<u8>> = convert_txn_args(txn_args);
 
     let natives = NativeFunctions::new(natives)?;
-    let vm = VirtualMachine::new_with_default_config(natives);
+    let runtime = MoveRuntime::new_with_default_config(natives);
 
     let mut gas_status = get_gas_status(cost_table, gas_budget)?;
 
@@ -80,7 +79,7 @@ pub fn run(
         let mut linkage = state.generate_linkage_context(&module.address())?;
         linkage.add_type_arg_addresses_reflexive(&vm_type_tags);
 
-        let mut vm_instance = vm.make_instance(state, linkage)?;
+        let mut vm_instance = runtime.make_vm(state, linkage)?;
         let type_args = vm_type_tags
             .iter()
             .map(|tag| vm_instance.load_type(tag))

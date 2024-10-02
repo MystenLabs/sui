@@ -3,10 +3,10 @@
 
 use crate::{
     cache::{arena::ArenaPointer, type_cache::TypeCache},
+    execution::dispatch_tables::VMDispatchTables,
+    execution::interpreter::state::{CallFrame, MachineState, ModuleDefinitionResolver},
     jit::runtime::ast::Function,
     natives::extensions::NativeContextExtensions,
-    vm::interpreter::state::{CallFrame, MachineState, ModuleDefinitionResolver},
-    vm::runtime_vtables::RuntimeVTables,
 };
 use move_binary_format::errors::*;
 use move_vm_config::runtime::VMConfig;
@@ -24,7 +24,7 @@ pub(crate) fn run(
     function: ArenaPointer<Function>,
     ty_args: Vec<Type>,
     args: Vec<Value>,
-    vtables: &RuntimeVTables,
+    vtables: &VMDispatchTables,
     type_cache: Arc<RwLock<TypeCache>>,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,

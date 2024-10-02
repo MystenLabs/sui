@@ -1,12 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution::vm::MoveVM;
 use crate::natives::extensions::NativeContextExtensions;
-use crate::on_chain::ast::RuntimePackageId;
-use crate::vm::vm_instance::VirtualMachineExecutionInstance;
-use crate::{
-    cache::linkage_context::LinkageContext, on_chain::ast::PackageStorageId, vm::vm::VirtualMachine,
-};
+use crate::runtime::MoveRuntime;
+use crate::shared::linkage_context::LinkageContext;
+use crate::shared::types::{PackageStorageId, RuntimePackageId};
 
 use move_binary_format::errors::VMResult;
 use move_binary_format::file_format::CompiledModule;
@@ -29,18 +28,18 @@ pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
 
     /// Generate a VM instance which holds the relevant virtual tables for the provided linkage
     /// context.
-    fn make_vm_instance<'extensions>(
+    fn make_vm<'extensions>(
         &self,
         linkage_context: LinkageContext,
-    ) -> VMResult<VirtualMachineExecutionInstance<'extensions, &Storage>>;
+    ) -> VMResult<MoveVM<'extensions, &Storage>>;
 
     /// Generate a VM instance which holds the relevant virtual tables for the provided linkage
     /// context, and set that instance's native extensions to those provided.
-    fn make_vm_instance_with_native_extensions<'extensions>(
+    fn mave_vm_with_native_extensions<'extensions>(
         &self,
         linkage_context: LinkageContext,
         native_extensions: NativeContextExtensions<'extensions>,
-    ) -> VMResult<VirtualMachineExecutionInstance<'extensions, &Storage>>;
+    ) -> VMResult<MoveVM<'extensions, &Storage>>;
 
     /// Generate a linkage context for a given runtime ID, storage ID, and list of compiled modules.
     /// This must include all of the transitive dependencies of the provided modules in the linkage
@@ -66,12 +65,12 @@ pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
         package_id: &PackageStorageId,
     ) -> VMResult<Vec<CompiledModule>>;
 
-    /// Get the virtual machine associated with the test adapter.
-    fn vm(&mut self) -> &mut VirtualMachine;
+    /// Get the move runtime associated with the adapter.
+    fn runtime(&mut self) -> &mut MoveRuntime;
 
-    /// Get the storage data cache associated with the test adapter.
+    /// Get the storage data cache associated with the adapter.
     fn storage(&self) -> &Storage;
 
-    /// Get the storage data cache associated with the test adapter.
+    /// Get the storage data cache associated with the adapter.
     fn storage_mut(&mut self) -> &mut Storage;
 }

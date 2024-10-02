@@ -4,7 +4,7 @@
 use crate::compiler::{as_module, compile_units, serialize_module_at_max_version};
 use move_core_types::account_address::AccountAddress;
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
-use move_vm_runtime::{test_utils::InMemoryStorage, vm::vm::VirtualMachine};
+use move_vm_runtime::{dev_utils::InMemoryStorage, execution::vm::VirtualMachine};
 use move_vm_types::gas::UnmeteredGasMeter;
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);

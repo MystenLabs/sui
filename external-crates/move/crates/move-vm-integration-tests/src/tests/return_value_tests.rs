@@ -11,7 +11,7 @@ use move_core_types::{
     runtime_value::{MoveTypeLayout, MoveValue},
 };
 use move_vm_runtime::{
-    move_vm::MoveVM, session::SerializedReturnValues, test_utils::InMemoryStorage,
+    dev_utils::InMemoryStorage, move_vm::MoveVM, session::SerializedReturnValues,
 };
 use move_vm_types::gas::UnmeteredGasMeter;
 

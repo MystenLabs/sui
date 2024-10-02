@@ -12,8 +12,8 @@ use move_core_types::{
 };
 
 use move_vm_runtime::{
-    natives::move_stdlib::stdlib_native_functions, test_utils::InMemoryStorage,
-    vm::vm::VirtualMachine,
+    dev_utils::InMemoryStorage, execution::vm::VirtualMachine,
+    natives::move_stdlib::stdlib_native_functions,
 };
 use move_vm_types::gas::UnmeteredGasMeter;
 use once_cell::sync::Lazy;

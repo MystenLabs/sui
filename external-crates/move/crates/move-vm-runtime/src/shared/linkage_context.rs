@@ -111,6 +111,17 @@ impl LinkageContext {
         self.relocate(module_id)
     }
 
+    /// Gives the root package plus transitive dependencies (as stored package IDs) of the linking
+    /// context. This is computed as the values of the linkage table, which must necessarily
+    /// include the root package address.
+    pub fn all_packages(&self) -> VMResult<BTreeSet<AccountAddress>> {
+        Ok(self
+            .linkage_table
+            .values()
+            .cloned()
+            .collect::<BTreeSet<_>>())
+    }
+
     /// Gives the transitive dependencies (as stored package IDs) of the linking context. This is
     /// computed as the values of the linkage table, minus the root package address.
     pub fn all_package_dependencies(&self) -> VMResult<BTreeSet<AccountAddress>> {

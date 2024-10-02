@@ -15,8 +15,8 @@ use move_core_types::{
     transaction_argument::TransactionArgument,
     vm_status::{StatusCode, StatusType},
 };
-use move_vm_runtime::test_utils::gas_schedule::Gas;
-use move_vm_runtime::test_utils::gas_schedule::{CostTable, GasStatus};
+use move_vm_runtime::dev_utils::gas_schedule::Gas;
+use move_vm_runtime::dev_utils::gas_schedule::{CostTable, GasStatus};
 use std::{fs, path::Path};
 
 pub mod on_disk_state_view;

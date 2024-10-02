@@ -3,10 +3,11 @@
 
 use crate::{
     jit::runtime::ast::{DatatypeInfo, DatatypeTagType},
-    on_chain::ast::DefiningTypeId,
     shared::{
         binary_cache::BinaryCache,
         constants::{MAX_TYPE_INSTANTIATION_NODES, MAX_TYPE_TO_LAYOUT_NODES, VALUE_DEPTH_MAX},
+        linkage_context::LinkageContext,
+        types::DefiningTypeId,
     },
 };
 use move_binary_format::{
@@ -28,8 +29,6 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
-
-use super::linkage_context::LinkageContext;
 
 pub type DatatypeCacheIndex = u64;
 pub type DatatypeKey = (DefiningTypeId, Identifier, Identifier);

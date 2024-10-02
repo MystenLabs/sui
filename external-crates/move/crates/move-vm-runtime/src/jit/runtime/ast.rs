@@ -4,8 +4,10 @@
 use crate::{
     cache::arena::{self, Arena, ArenaPointer},
     natives::functions::{NativeFunction, UnboxedNativeFunction},
-    on_chain::ast::{PackageStorageId, RuntimePackageId},
-    shared::binary_cache::BinaryCache,
+    shared::{
+        binary_cache::BinaryCache,
+        types::{PackageStorageId, RuntimePackageId},
+    },
 };
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
@@ -55,6 +57,7 @@ pub struct Package {
 
     // NB: this is needed for the bytecode verifier. If we update the bytecode verifier we should
     // be able to remove this.
+    // TODO: Remove this!
     pub compiled_modules: BinaryCache<Identifier, CompiledModule>,
 
     // NB: All things except for types are allocated into this arena.

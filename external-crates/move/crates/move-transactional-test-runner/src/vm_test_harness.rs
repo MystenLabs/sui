@@ -2,11 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
-    path::Path,
-};
-
 use crate::{
     framework::{run_test_impl, CompiledState, MaybeNamedCompiledModule, MoveTestAdapter},
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
@@ -32,23 +27,27 @@ use move_stdlib::move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::{
-    cache::linkage_context::LinkageContext,
-    natives::move_stdlib::{stdlib_native_functions, GasParameters},
-    shared::serialization::SerializedReturnValues,
-    test_utils::{
+    dev_utils::{
         gas_schedule::{self, GasStatus},
         in_memory_test_adapter::InMemoryTestAdapter,
-        test_store::TestStore,
+        storage::InMemoryStorage,
         vm_test_adapter::VMTestAdapter,
     },
-    vm::vm::VirtualMachine,
+    natives::move_stdlib::{stdlib_native_functions, GasParameters},
+    runtime::MoveRuntime,
+    shared::{linkage_context::LinkageContext, serialization::SerializedReturnValues},
 };
 use once_cell::sync::Lazy;
-use std::sync::Arc;
+
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+    sync::Arc,
+};
 
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
-struct SimpleVMTestAdapter {
+struct SimpleRuntimeTestAdapter {
     compiled_state: CompiledState,
     default_syntax: SyntaxChoice,
     // NB: We can reuse the in-memory test adapter from the vm runtime tests
@@ -144,7 +143,7 @@ fn parse_type_origin(
 }
 
 #[async_trait]
-impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
+impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
     type ExtraInitArgs = AdapterInitArgs;
     type ExtraPublishArgs = PublishLinkageArgs;
     type ExtraValueArgs = ();
@@ -197,7 +196,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
                 .map_err(|e| e.finish(Location::Undefined))
                 .expect("Failed to initialize natives");
         let vm_config = test_vm_config();
-        let vm = VirtualMachine::new(native_functions, vm_config);
+        let runtime = MoveRuntime::new(native_functions, vm_config);
         println!("creating adapter");
         let mut adapter = Self {
             compiled_state: CompiledState::new(
@@ -208,7 +207,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
                 None,
             ),
             default_syntax,
-            adapter: InMemoryTestAdapter::new_with_vm(vm),
+            adapter: InMemoryTestAdapter::new_with_runtime(runtime),
         };
 
         println!("doing initial publish");
@@ -322,7 +321,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
                 linkage.add_type_arg_addresses_reflexive(&type_arg_tags);
 
                 println!("generating vm instance");
-                let mut vm_instance = inner_adapter.make_vm_instance(linkage)?;
+                let mut vm_instance = inner_adapter.make_vm(linkage)?;
                 println!("Creating type arguments");
                 let type_args: Vec<_> = type_arg_tags
                     .into_iter()
@@ -395,11 +394,11 @@ pub fn format_vm_error(e: &VMError) -> String {
     )
 }
 
-impl SimpleVMTestAdapter {
+impl SimpleRuntimeTestAdapter {
     fn perform_action<Ret>(
         &mut self,
         gas_budget: Option<u64>,
-        f: impl FnOnce(&mut dyn VMTestAdapter<TestStore>, &mut GasStatus) -> VMResult<Ret>,
+        f: impl FnOnce(&mut dyn VMTestAdapter<InMemoryStorage>, &mut GasStatus) -> VMResult<Ret>,
     ) -> VMResult<Ret> {
         println!("creating natives");
         // start session
@@ -478,6 +477,6 @@ fn test_vm_config() -> VMConfig {
 
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    run_test_impl::<SimpleVMTestAdapter>(path, Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
+    run_test_impl::<SimpleRuntimeTestAdapter>(path, Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
         .await
 }

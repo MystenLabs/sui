@@ -11,8 +11,10 @@ use crate::{
 use anyhow::{bail, Result};
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
-    cache::linkage_context::LinkageContext, natives::functions::NativeFunctions,
-    on_chain::ast::PackageStorageId, test_utils::gas_schedule::CostTable, vm::vm::VirtualMachine,
+    dev_utils::gas_schedule::CostTable,
+    natives::functions::NativeFunctions,
+    runtime::MoveRuntime,
+    shared::{linkage_context::LinkageContext, types::PackageStorageId},
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -72,7 +74,7 @@ pub fn publish(
 
     // use the publish_module API from the VM since we don't allow breaking changes
     let natives = NativeFunctions::new(natives)?;
-    let mut vm = VirtualMachine::new_with_default_config(natives);
+    let mut runtime = MoveRuntime::new_with_default_config(natives);
 
     let mut gas_status = get_gas_status(cost_table, None)?;
 
@@ -87,7 +89,7 @@ pub fn publish(
         .collect();
 
     // Publish the package using the VM
-    let (publish_result, _) = vm.publish_package(
+    let (publish_result, _) = runtime.validate_package(
         state,
         &linkage_context,
         package_runtime_id,

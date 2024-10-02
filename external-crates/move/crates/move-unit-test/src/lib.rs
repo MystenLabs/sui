@@ -21,7 +21,7 @@ use move_compiler::{
 };
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{
-    natives::functions::NativeFunctionTable, test_utils::gas_schedule::CostTable,
+    dev_utils::gas_schedule::CostTable, natives::functions::NativeFunctionTable,
 };
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex};
 

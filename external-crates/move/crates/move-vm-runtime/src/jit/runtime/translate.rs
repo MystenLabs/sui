@@ -5,13 +5,15 @@
 use crate::{
     cache::{
         arena::{self, Arena, ArenaPointer},
-        linkage_context::LinkageContext,
         type_cache::TypeCache,
     },
     jit::runtime::ast::*,
     natives::functions::NativeFunctions,
-    on_chain::ast::{PackageStorageId, RuntimePackageId},
-    shared::binary_cache::BinaryCache,
+    shared::{
+        binary_cache::BinaryCache,
+        linkage_context::LinkageContext,
+        types::{PackageStorageId, RuntimePackageId},
+    },
 };
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},

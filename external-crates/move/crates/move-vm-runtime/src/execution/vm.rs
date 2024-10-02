@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, linkage_context::LinkageContext, vm_cache::VMCache},
+    cache::{arena::ArenaPointer, move_cache::MoveCache},
+    execution::{dispatch_tables::VMDispatchTables, interpreter},
     jit::runtime::ast::{Function, VTableKey},
     natives::extensions::NativeContextExtensions,
-    on_chain::data_cache::TransactionDataCache,
-    shared::serialization::{SerializedReturnValues, *},
-    vm::{interpreter, runtime_vtables::RuntimeVTables},
+    runtime::data_cache::TransactionDataCache,
+    shared::{
+        linkage_context::LinkageContext,
+        serialization::{SerializedReturnValues, *},
+    },
 };
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
@@ -36,9 +39,9 @@ use std::{borrow::Borrow, sync::Arc};
 ///
 /// Note this does NOT support publication. See `vm.rs` for publication.
 #[allow(dead_code)]
-pub struct VirtualMachineExecutionInstance<'extensions, S: MoveResolver> {
+pub struct MoveVM<'extensions, S: MoveResolver> {
     /// The VM cache
-    pub(crate) virtual_tables: RuntimeVTables,
+    pub(crate) virtual_tables: VMDispatchTables,
     /// The data store used to create this VM instance
     pub(crate) data_cache: TransactionDataCache<S>,
     /// The linkage context used to create this VM instance
@@ -46,19 +49,19 @@ pub struct VirtualMachineExecutionInstance<'extensions, S: MoveResolver> {
     /// Native context extensions for the interpreter
     pub(crate) native_extensions: NativeContextExtensions<'extensions>,
     /// An arc-lock reference to the VM's cache
-    pub(crate) vm_cache: Arc<VMCache>,
+    pub(crate) vm_cache: Arc<MoveCache>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
 }
 
-pub struct VMInstanceFunction {
+pub struct MoveVMFunction {
     compiled_module: Arc<CompiledModule>,
     function: ArenaPointer<Function>,
     pub parameters: Vec<Type>,
     pub return_type: Vec<Type>,
 }
 
-impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'extensions, DataCache> {
+impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
     // -------------------------------------------
     // Entry Points
     // -------------------------------------------
@@ -126,6 +129,8 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
             }
         }
 
+        println!("running {module}::{function_name}");
+        println!("tables: {:#?}", self.virtual_tables.loaded_packages);
         let bypass_declared_entry_check = true;
         self.execute_function(
             module,
@@ -188,7 +193,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
         };
 
         // Find the function definition
-        let VMInstanceFunction {
+        let MoveVMFunction {
             compiled_module,
             function,
             parameters,
@@ -222,7 +227,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
         runtime_id: &ModuleId,
         function_name: &IdentStr,
         ty_args: &[Type],
-    ) -> VMResult<VMInstanceFunction> {
+    ) -> VMResult<MoveVMFunction> {
         let (package_key, module_id) = runtime_id.clone().into();
         let function_name = function_name.into();
         let vtable_key = VTableKey {
@@ -242,7 +247,6 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
         let fun_ref = function.to_ref();
 
         // See TODO on LoadedModule to avoid this work
-
         let parameters = compiled_module
             .signature_at(fun_ref.parameters)
             .0
@@ -276,7 +280,7 @@ impl<'extensions, DataCache: MoveResolver> VirtualMachineExecutionInstance<'exte
             .verify_ty_args(fun_ref.type_parameters(), ty_args)
             .map_err(|e| e.finish(Location::Module(runtime_id.clone())))?;
 
-        let function = VMInstanceFunction {
+        let function = MoveVMFunction {
             compiled_module,
             function,
             parameters,

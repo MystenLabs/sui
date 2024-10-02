@@ -7,8 +7,8 @@ use move_binary_format::file_format::{
 };
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::{
+    dev_utils::{gas_schedule::GasStatus, InMemoryStorage},
     move_vm::MoveVM,
-    test_utils::{gas_schedule::GasStatus, InMemoryStorage},
 };
 
 use crate::compiler::serialize_module_at_max_version;

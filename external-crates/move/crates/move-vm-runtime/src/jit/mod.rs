@@ -4,10 +4,11 @@
 pub mod runtime;
 
 use crate::{
-    cache::{linkage_context::LinkageContext, type_cache::TypeCache},
+    cache::type_cache::TypeCache,
     jit::runtime::ast::Package,
     natives::functions::NativeFunctions,
-    on_chain::ast::{DeserializedPackage, PackageStorageId},
+    shared::{linkage_context::LinkageContext, types::PackageStorageId},
+    validation::verification,
 };
 
 use move_binary_format::errors::PartialVMResult;
@@ -18,16 +19,21 @@ pub fn translate_package(
     type_cache: &RwLock<TypeCache>,
     natives: &NativeFunctions,
     link_context: &LinkageContext,
-    package_key: PackageStorageId,
-    loaded_package: DeserializedPackage,
+    storage_id: PackageStorageId,
+    loaded_package: verification::ast::Package,
 ) -> PartialVMResult<Package> {
     let runtime_id = loaded_package.runtime_id;
-    let modules = loaded_package.into_modules();
+    let modules = loaded_package
+        .into_modules()
+        .into_iter()
+        .map(|module| module.value)
+        .collect();
+    // FIXME: change this signature to be against a verified module, too.
     runtime::translate::package(
         type_cache,
         natives,
         link_context,
-        package_key,
+        storage_id,
         runtime_id,
         modules,
     )

@@ -3,10 +3,10 @@
 
 use crate::{
     cache::{arena::ArenaPointer, type_cache::TypeCache},
+    execution::dispatch_tables::VMDispatchTables,
+    execution::interpreter::state::{CallFrame, MachineState, TypeWithTypeCache},
     jit::runtime::ast::{Bytecode, CallType, Function},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
-    vm::interpreter::state::{CallFrame, MachineState, TypeWithTypeCache},
-    vm::runtime_vtables::RuntimeVTables,
 };
 use fail::fail_point;
 use move_binary_format::{errors::*, file_format::JumpTableInner};
@@ -42,7 +42,7 @@ enum StepStatus {
 }
 
 struct RunContext<'vm_cache, 'native, 'native_lifetimes> {
-    vtables: &'vm_cache RuntimeVTables,
+    vtables: &'vm_cache VMDispatchTables,
     type_cache: &'vm_cache RwLock<TypeCache>,
     vm_config: Arc<VMConfig>,
     extensions: &'native mut NativeContextExtensions<'native_lifetimes>,
@@ -70,7 +70,7 @@ macro_rules! set_err_info {
 /// calling `step`, until the call stack is empty.
 pub(super) fn run(
     start_state: MachineState,
-    vtables: &RuntimeVTables,
+    vtables: &VMDispatchTables,
     type_cache: &RwLock<TypeCache>,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,

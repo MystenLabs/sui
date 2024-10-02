@@ -29,14 +29,14 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
-    natives::functions::{NativeFunctionTable, NativeFunctions},
-    test_utils::{
+    dev_utils::{
         gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
         in_memory_test_adapter::InMemoryTestAdapter,
-        test_store::TestStore,
+        storage::InMemoryStorage,
         vm_test_adapter::VMTestAdapter,
     },
-    vm::vm::VirtualMachine,
+    natives::functions::{NativeFunctionTable, NativeFunctions},
+    runtime::MoveRuntime,
 };
 use move_vm_types::gas::GasMeter;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -58,7 +58,7 @@ pub struct SharedTestingConfig {
     report_stacktrace_on_abort: bool,
     execution_bound: u64,
     cost_table: CostTable,
-    vm_test_adapter: Arc<RwLock<dyn VMTestAdapter<TestStore> + Sync + Send>>,
+    vm_test_adapter: Arc<RwLock<dyn VMTestAdapter<InMemoryStorage> + Sync + Send>>,
     // native_function_table: NativeFunctionTable,
     prng_seed: Option<u64>,
     num_iters: u64,
@@ -130,9 +130,9 @@ impl TestRunner {
             )
         });
         let native_functions = NativeFunctions::new(native_function_table)?;
-        let vm = VirtualMachine::new_with_default_config(native_functions);
+        let runtime = MoveRuntime::new_with_default_config(native_functions);
 
-        let mut vm_test_adapter = InMemoryTestAdapter::new_with_vm(vm);
+        let mut vm_test_adapter = InMemoryTestAdapter::new_with_runtime(runtime);
 
         let modules = tests.module_info.values().map(|info| &info.module);
         setup_test_storage(&mut vm_test_adapter, modules)?;
@@ -268,7 +268,7 @@ impl SharedTestingConfig {
             let extensions = extensions::new_extensions();
             let adapter = test_config.vm_test_adapter.read();
             let mut vm_instance =
-                adapter.make_vm_instance_with_native_extensions(link_context, extensions)?;
+                adapter.mave_vm_with_native_extensions(link_context, extensions)?;
 
             let function_name = IdentStr::new(function_name).unwrap();
 
@@ -416,8 +416,10 @@ impl SharedTestingConfig {
             }
             TypeTag::Bool => MoveValue::Bool(rng.gen::<bool>()),
             TypeTag::Struct(_) => {
-                unreachable!("Structs are not supported as generated values \
-                             in unit tests and cannot get to this point")
+                unreachable!(
+                    "Structs are not supported as generated values \
+                             in unit tests and cannot get to this point"
+                )
             }
             TypeTag::Signer => unreachable!("Signer arguments not allowed"),
         }
