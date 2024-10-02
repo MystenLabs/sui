@@ -79,7 +79,6 @@ pub(crate) struct Server {
     system_package_task: SystemPackageTask,
     trigger_exchange_rates_task: TriggerExchangeRatesTask,
     state: AppState,
-    db_reader: Db,
 }
 
 impl Server {
@@ -87,15 +86,6 @@ impl Server {
     /// signal is received, the method waits for all tasks to complete before returning.
     pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
-
-        let mut connection = self
-            .db_reader
-            .inner
-            .pool()
-            .get()
-            .await
-            .map_err(|e| Error::Internal(e.to_string()))?;
-        check_db_migration_consistency(&mut connection).await?;
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
@@ -342,7 +332,7 @@ impl ServerBuilder {
         );
 
         let trigger_exchange_rates_task = TriggerExchangeRatesTask::new(
-            db_reader.clone(),
+            db_reader,
             watermark_task.epoch_receiver(),
             state.cancellation_token.clone(),
         );
@@ -364,7 +354,6 @@ impl ServerBuilder {
             system_package_task,
             trigger_exchange_rates_task,
             state,
-            db_reader,
         })
     }
 
@@ -423,6 +412,17 @@ impl ServerBuilder {
         )
         .await
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
+
+        if !config.connection.skip_migration_consistency_check {
+            check_db_migration_consistency(
+                &mut reader
+                    .pool()
+                    .get()
+                    .await
+                    .map_err(|e| Error::Internal(e.to_string()))?,
+            )
+            .await?;
+        }
 
         // DB
         let db = Db::new(
