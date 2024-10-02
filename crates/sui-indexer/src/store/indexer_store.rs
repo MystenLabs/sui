@@ -28,10 +28,6 @@ pub enum ObjectsToCommit {
 pub trait IndexerStore: Clone + Sync + Send + 'static {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError>;
 
-    async fn get_available_epoch_range(&self) -> Result<(u64, u64), IndexerError>;
-
-    async fn get_available_checkpoint_range(&self) -> Result<(u64, u64), IndexerError>;
-
     async fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
     ) -> Result<Option<u64>, IndexerError>;
@@ -104,8 +100,6 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
     /// Updates epoch-partitioned tables to accept data from the new epoch.
     async fn advance_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError>;
 
-    async fn prune_epoch(&self, epoch: u64) -> Result<(), IndexerError>;
-
     async fn get_network_total_transactions_by_end_of_epoch(
         &self,
         epoch: u64,
@@ -135,6 +129,18 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
         watermarks: Vec<(PrunableTable, u64)>,
     ) -> Result<(), IndexerError>;
 
+    async fn update_pruner_watermark(
+        &self,
+        table: PrunableTable,
+        latest_pruned: u64,
+    ) -> Result<(), IndexerError>;
+
     /// Load all watermark entries from the store, and the latest timestamp from the db.
     async fn get_watermarks(&self) -> Result<(Vec<StoredWatermark>, i64), IndexerError>;
+
+    /// Load a single watermark entry and the latest timestamp from db.
+    async fn get_watermark(
+        &self,
+        table: PrunableTable,
+    ) -> Result<(StoredWatermark, i64), IndexerError>;
 }

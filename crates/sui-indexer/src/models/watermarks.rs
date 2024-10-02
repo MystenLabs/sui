@@ -73,4 +73,15 @@ impl StoredWatermark {
             None
         }
     }
+
+    pub fn pruner_upper_bound(&self) -> Option<u64> {
+        let entity = self.entity()?;
+
+        match entity {
+            PrunableTable::ObjectsHistory | PrunableTable::Transactions | PrunableTable::Events => {
+                Some(self.epoch_lo as u64)
+            }
+            _ => Some(self.reader_lo as u64),
+        }
+    }
 }
