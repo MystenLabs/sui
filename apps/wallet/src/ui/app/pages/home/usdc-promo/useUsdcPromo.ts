@@ -20,6 +20,6 @@ export function useUsdcPromo() {
 
 	return {
 		...dynamicConfigs,
-		enabled: true,
+		enabled,
 	};
 }
