@@ -710,6 +710,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         let service = TonicServiceProxy::new(self.context.clone(), service);
         let config = &self.context.parameters.tonic;
 
+        #[allow(deprecated)]
         let consensus_service = Server::builder()
             .layer(
                 TraceLayer::new_for_grpc()
