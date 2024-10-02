@@ -725,8 +725,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                 ConsensusServiceServer::new(service)
                     .max_encoding_message_size(config.message_size_limit)
                     .max_decoding_message_size(config.message_size_limit),
-            )
-            .into_router();
+            );
 
         let inbound_metrics = self.context.metrics.network_metrics.inbound.clone();
         let excessive_message_size = self.context.parameters.tonic.excessive_message_size;
@@ -852,7 +851,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                 trace!("Received TCP connection attempt from {peer_addr}");
 
                 let tls_acceptor = tls_acceptor.clone();
-                let consensus_service = consensus_service.clone();
+                //let consensus_service = consensus_service.clone();
                 let inbound_metrics = inbound_metrics.clone();
                 let http = http.clone();
                 let connections_info = connections_info.clone();
@@ -907,7 +906,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                             inbound_metrics,
                             excessive_message_size,
                         )))
-                        .service(consensus_service.clone());
+                        .service(consensus_service);
 
                     pin! {
                         let connection = http.serve_connection(TokioIo::new(tls_stream), TowerToHyperService::new(svc));

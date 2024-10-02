@@ -17,11 +17,12 @@ prometheus.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
-opentelemetry = { version = "0.20.0", features = ["rt-tokio"], optional = true }
+opentelemetry = { version = "0.25.0", optional = true }
 opentelemetry_api = { version = "0.20.0", optional = true }
-opentelemetry-otlp = { version = "0.13.0", features = ["grpc-tonic"], optional = true }
-tracing-opentelemetry = { version = "0.21.0", optional = true }
-opentelemetry-proto = { version = "0.3", optional = true }
+opentelemetry_sdk = { version = "0.25.0", features = ["rt-tokio"], optional = true }
+opentelemetry-otlp = { version = "0.25.0", features = ["grpc-tonic"], optional = true }
+tracing-opentelemetry = { version = "0.26.0", optional = true }
+opentelemetry-proto = { version = "0.25", optional = true }
 tokio = { workspace = true, features = ["full"] }
 futures.workspace = true
 clap.workspace = true
@@ -30,8 +31,8 @@ bytes-varint = { version = "1" }
 
 # must use same version as opentelemetry for tonic and prost, so we can't use from
 # workspace
-tonic = { version = "0.9" }
-prost = "0.11.9"
+tonic = { version = "0.12.3" }
+prost = "0.13"
 
 [features]
 default = ["otlp"]
@@ -41,7 +42,8 @@ otlp = [
   "opentelemetry",
   "opentelemetry-otlp",
   "opentelemetry-proto",
-  "opentelemetry_api"
+  "opentelemetry_api",
+  "opentelemetry_sdk"
 ]
 
 [dev-dependencies]
