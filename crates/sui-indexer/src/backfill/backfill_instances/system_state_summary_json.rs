@@ -10,7 +10,7 @@ use diesel_async::{AsyncConnection, RunQueryDsl};
 use std::ops::RangeInclusive;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
-pub struct SystemStateSummaryJsonBackfill {}
+pub struct SystemStateSummaryJsonBackfill;
 
 #[async_trait]
 impl BackfillTask for SystemStateSummaryJsonBackfill {
