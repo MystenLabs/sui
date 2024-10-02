@@ -94,6 +94,7 @@ pub struct RestService {
     chain_id: sui_types::digests::ChainIdentifier,
     software_version: &'static str,
     metrics: Option<Arc<RestMetrics>>,
+    config: Config,
 }
 
 impl axum::extract::FromRef<RestService> for StateReader {
@@ -117,11 +118,16 @@ impl RestService {
             chain_id,
             software_version,
             metrics: None,
+            config: Config::default(),
         }
     }
 
     pub fn new_without_version(reader: Arc<dyn RestStateReader>) -> Self {
         Self::new(reader, "unknown")
+    }
+
+    pub fn with_config(&mut self, config: Config) {
+        self.config = config;
     }
 
     pub fn with_executor(&mut self, executor: Arc<dyn TransactionExecutor + Send + Sync>) {
@@ -145,7 +151,12 @@ impl RestService {
 
         let mut api = openapi::Api::new(info());
 
-        api.register_endpoints(ENDPOINTS.to_owned());
+        api.register_endpoints(
+            ENDPOINTS
+                .iter()
+                .copied()
+                .filter(|endpoint| endpoint.stable() || self.config.enable_unstable_apis()),
+        );
 
         Router::new()
             .nest("/v2/", api.to_router().with_state(self.clone()))
@@ -202,6 +213,28 @@ async fn redirect(axum::extract::Path(path): axum::extract::Path<String>) -> Red
     Redirect::permanent(&format!("/v2/{path}"))
 }
 
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Config {
+    /// Enable serving of unstable APIs
+    ///
+    /// Defaults to `false`, with unstable APIs being disabled
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_unstable_apis: Option<bool>,
+
+    // Only include this till we have another field that isn't set with a non-default value for
+    // testing
+    #[doc(hidden)]
+    #[serde(skip)]
+    pub _hidden: (),
+}
+
+impl Config {
+    pub fn enable_unstable_apis(&self) -> bool {
+        self.enable_unstable_apis.unwrap_or(false)
+    }
+}
+
 mod _schemars {
     use schemars::schema::InstanceType;
     use schemars::schema::Metadata;
@@ -246,7 +279,7 @@ mod test {
         let openapi = {
             let mut api = openapi::Api::new(info());
 
-            api.register_endpoints(ENDPOINTS.to_owned());
+            api.register_endpoints(ENDPOINTS.iter().copied());
             api.openapi()
         };
 

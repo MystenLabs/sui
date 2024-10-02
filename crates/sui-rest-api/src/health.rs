@@ -23,7 +23,11 @@ impl ApiEndpoint<RestService> for HealthCheck {
     }
 
     fn path(&self) -> &'static str {
-        "/health"
+        "/-/health"
+    }
+
+    fn stable(&self) -> bool {
+        true
     }
 
     fn operation(

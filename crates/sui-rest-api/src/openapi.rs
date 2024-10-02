@@ -22,10 +22,29 @@ use openapiv3::v3_1::{
 use schemars::{gen::SchemaGenerator, JsonSchema};
 use tap::Pipe;
 
+const STABLE_BADGE_MARKDOWN: &str =
+    "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n";
+
+const UNSTABLE_BADGE_MARKDOWN: &str =
+    "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n";
+
 pub trait ApiEndpoint<S> {
     fn method(&self) -> Method;
     fn path(&self) -> &'static str;
     fn hidden(&self) -> bool {
+        false
+    }
+
+    /// Indicates the stability of the API
+    ///
+    /// Stable APIs are enabled in the REST service by default, unstable ones need to be explicitly
+    /// configured to be enabled via config.
+    ///
+    /// Both stable and unstable APIs have a badge, indicating the api's stability, added to the
+    /// top of the description field of their OpenAPI definition.
+    ///
+    /// By default all apis are unstable, individual apis need to explicitly opt-in to being stable
+    fn stable(&self) -> bool {
         false
     }
 
@@ -200,7 +219,19 @@ impl<'a, S> Api<'a, S> {
             other => panic!("unexpected method `{}`", other),
         };
 
-        let operation = endpoint.operation(generator);
+        let mut operation = endpoint.operation(generator);
+
+        if endpoint.stable() {
+            operation
+                .description
+                .get_or_insert_with(String::new)
+                .insert_str(0, STABLE_BADGE_MARKDOWN);
+        } else {
+            operation
+                .description
+                .get_or_insert_with(String::new)
+                .insert_str(0, UNSTABLE_BADGE_MARKDOWN);
+        }
 
         // Collect tags defined by this operation
         tags.extend(operation.tags.clone());
@@ -279,6 +310,10 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiJson {
         "/openapi.json"
     }
 
+    fn stable(&self) -> bool {
+        true
+    }
+
     fn operation(
         &self,
         _generator: &mut schemars::gen::SchemaGenerator,
@@ -311,6 +346,10 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiYaml {
         "/openapi.yaml"
     }
 
+    fn stable(&self) -> bool {
+        true
+    }
+
     fn operation(
         &self,
         _generator: &mut schemars::gen::SchemaGenerator,
@@ -341,6 +380,10 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiExplorer {
 
     fn path(&self) -> &'static str {
         "/openapi"
+    }
+
+    fn stable(&self) -> bool {
+        true
     }
 
     fn operation(
