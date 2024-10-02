@@ -13,7 +13,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::Notify;
 
 pub struct IngestionBackfillTask<T: IngestionBackfillTrait> {
-    ready_checkpoints: Arc<DashMap<CheckpointSequenceNumber, T::ProcessedType>>,
+    ready_checkpoints: Arc<DashMap<CheckpointSequenceNumber, Vec<T::ProcessedType>>>,
     notify: Arc<Notify>,
     _exit_sender: tokio::sync::oneshot::Sender<()>,
 }
@@ -51,7 +51,7 @@ impl<T: IngestionBackfillTrait + 'static> IngestionBackfillTask<T> {
 }
 
 pub struct Adapter<T: IngestionBackfillTrait> {
-    ready_checkpoints: Arc<DashMap<CheckpointSequenceNumber, T::ProcessedType>>,
+    ready_checkpoints: Arc<DashMap<CheckpointSequenceNumber, Vec<T::ProcessedType>>>,
     notify: Arc<Notify>,
 }
 
@@ -69,16 +69,16 @@ impl<T: IngestionBackfillTrait> Worker for Adapter<T> {
 #[async_trait::async_trait]
 impl<T: IngestionBackfillTrait> BackfillTask for IngestionBackfillTask<T> {
     async fn backfill_range(&self, pool: ConnectionPool, range: &RangeInclusive<usize>) {
-        let mut checkpoints = vec![];
+        let mut processed_data = vec![];
         let mut start = *range.start();
         let end = *range.end();
         loop {
             while start <= end {
-                if let Some(checkpoint) = self
+                if let Some((_, processed)) = self
                     .ready_checkpoints
                     .remove(&(start as CheckpointSequenceNumber))
                 {
-                    checkpoints.push(checkpoint.1);
+                    processed_data.extend(processed);
                     start += 1;
                 } else {
                     break;
@@ -90,6 +90,8 @@ impl<T: IngestionBackfillTrait> BackfillTask for IngestionBackfillTask<T> {
                 break;
             }
         }
-        T::commit_chunk(pool.clone(), checkpoints).await;
+        // TODO: Limit the size of each chunk.
+        // postgres has a parameter limit of 65535, meaning that row_count * col_count <= 65536.
+        T::commit_chunk(pool.clone(), processed_data).await;
     }
 }

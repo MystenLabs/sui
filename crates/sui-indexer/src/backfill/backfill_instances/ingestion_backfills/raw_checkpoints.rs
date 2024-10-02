@@ -14,18 +14,18 @@ pub struct RawCheckpointsBackFill {}
 impl IngestionBackfillTrait for RawCheckpointsBackFill {
     type ProcessedType = StoredRawCheckpoint;
 
-    fn process_checkpoint(checkpoint: &CheckpointData) -> Self::ProcessedType {
-        StoredRawCheckpoint {
+    fn process_checkpoint(checkpoint: &CheckpointData) -> Vec<Self::ProcessedType> {
+        vec![StoredRawCheckpoint {
             sequence_number: checkpoint.checkpoint_summary.sequence_number as i64,
             certified_checkpoint: bcs::to_bytes(&checkpoint.checkpoint_summary).unwrap(),
             checkpoint_contents: bcs::to_bytes(&checkpoint.checkpoint_contents).unwrap(),
-        }
+        }]
     }
 
-    async fn commit_chunk(pool: ConnectionPool, checkpoints: Vec<Self::ProcessedType>) {
+    async fn commit_chunk(pool: ConnectionPool, processed_data: Vec<Self::ProcessedType>) {
         let mut conn = pool.get().await.unwrap();
         diesel::insert_into(raw_checkpoints)
-            .values(checkpoints)
+            .values(processed_data)
             .on_conflict_do_nothing()
             .execute(&mut conn)
             .await

@@ -11,6 +11,6 @@ use sui_types::full_checkpoint_content::CheckpointData;
 pub trait IngestionBackfillTrait: Send + Sync {
     type ProcessedType: Send + Sync;
 
-    fn process_checkpoint(checkpoint: &CheckpointData) -> Self::ProcessedType;
-    async fn commit_chunk(pool: ConnectionPool, checkpoints: Vec<Self::ProcessedType>);
+    fn process_checkpoint(checkpoint: &CheckpointData) -> Vec<Self::ProcessedType>;
+    async fn commit_chunk(pool: ConnectionPool, processed_data: Vec<Self::ProcessedType>);
 }
