@@ -1,7 +1,0 @@
-2023-05-30T11:24:43.0038921Z ##[group]Run pnpm changeset version --snapshot test-do-not-publish
-2023-05-30T11:24:43.0039474Z [36;1mpnpm changeset version --snapshot test-do-not-publish[0m
-2023-05-30T11:24:43.0103136Z shell: /usr/bin/bash -e {0}
-2023-05-30T11:24:43.0103388Z env:
-2023-05-30T11:24:43.0103671Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
-2023-05-30T11:24:43.0103936Z ##[endgroup]
-2023-05-30T11:24:45.5426398Z 🦋  All files have been updated. Review them and commit at your leisure
