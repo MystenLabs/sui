@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import { useGetAllBalances } from '_app/hooks/useGetAllBalances';
-import { filterAndSortTokenBalances } from '_helpers';
-import { useActiveAddress, useCoinsReFetchingConfig } from '_hooks';
+import { useActiveAddress } from '_hooks';
 import { useUsdcPromo } from '_pages/home/usdc-promo/useUsdcPromo';
 import { useCoinMetadata } from '@mysten/core';
-import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { type CoinBalance } from '@mysten/sui/client';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
@@ -49,14 +46,11 @@ export function UsdcPromoBanner() {
 
 	const { data: coinBalances } = useGetAllBalances(activeAccountAddress || '');
 
-	const usdcInUsersBalance = useMemo(() => {
-		if (!coinBalances) {
-			return [];
-		}
-		return coinBalances.filter(
-			(coin) => wrappedUsdcList.includes(coin.coinType) && Number(coin.totalBalance) > 0,
-		);
-	}, [coinBalances, wrappedUsdcList]);
+	const usdcInUsersBalance = coinBalances
+		? coinBalances.filter(
+				(coin) => wrappedUsdcList.includes(coin.coinType) && Number(coin.totalBalance) > 0,
+			)
+		: [];
 
 	const firstUsdcInUsersBalance = usdcInUsersBalance[0];
 
