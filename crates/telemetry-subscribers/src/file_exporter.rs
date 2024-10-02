@@ -2,9 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::{future::BoxFuture, FutureExt};
-use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
 use opentelemetry::trace::TraceError;
-use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
+use opentelemetry_proto::{
+    tonic::collector::trace::v1::ExportTraceServiceRequest,
+    transform::{
+        common::tonic::ResourceAttributesWithSchema,
+        trace::tonic::group_spans_by_resource_and_scope,
+    },
+};
+use opentelemetry_sdk::export::trace::{ExportResult, SpanData, SpanExporter};
 use prost::Message;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -70,12 +76,14 @@ impl CachedOpenFile {
 #[derive(Debug)]
 pub(crate) struct FileExporter {
     pub cached_open_file: CachedOpenFile,
+    resource: ResourceAttributesWithSchema,
 }
 
 impl FileExporter {
     pub fn new(file_path: Option<PathBuf>) -> std::io::Result<Self> {
         Ok(Self {
             cached_open_file: CachedOpenFile::new(file_path)?,
+            resource: ResourceAttributesWithSchema::default(),
         })
     }
 }
@@ -83,13 +91,12 @@ impl FileExporter {
 impl SpanExporter for FileExporter {
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
         let cached_open_file = self.cached_open_file.clone();
+        let resource_spans = group_spans_by_resource_and_scope(batch, &self.resource);
         async move {
             cached_open_file
                 .with_file(|maybe_file| {
                     if let Some(file) = maybe_file {
-                        let request = ExportTraceServiceRequest {
-                            resource_spans: batch.into_iter().map(Into::into).collect(),
-                        };
+                        let request = ExportTraceServiceRequest { resource_spans };
 
                         let buf = request.encode_length_delimited_to_vec();
 
