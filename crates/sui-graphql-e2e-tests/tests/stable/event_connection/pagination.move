@@ -40,14 +40,16 @@ module Test::M1 {
         sendingModule {
           name
         }
-        type {
-          repr
-        }
         sender {
           address
         }
-        json
-        bcs
+        contents {
+          type {
+            repr
+          }
+          json
+          bcs
+        }
       }
     }
   }
@@ -66,14 +68,16 @@ module Test::M1 {
         sendingModule {
           name
         }
-        type {
-          repr
-        }
         sender {
           address
         }
-        json
-        bcs
+        contents {
+          type {
+            repr
+          }
+          json
+          bcs
+        }
       }
     }
   }
@@ -92,14 +96,17 @@ module Test::M1 {
         sendingModule {
           name
         }
-        type {
-          repr
-        }
         sender {
           address
         }
-        json
-        bcs
+        contents {
+          type {
+            repr
+          }
+          json
+          bcs
+        }
+
       }
     }
   }
@@ -118,14 +125,16 @@ module Test::M1 {
         sendingModule {
           name
         }
-        type {
-          repr
-        }
         sender {
           address
+        }        
+        contents {
+          type {
+            repr
+          }
+          json
+          bcs
         }
-        json
-        bcs
       }
     }
   }
