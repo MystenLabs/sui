@@ -68,7 +68,8 @@ impl BackfillRunner {
                     let cur_min_in_progress = in_progress_clone.lock().await.iter().next().cloned();
                     if let Some(cur_min_in_progress) = cur_min_in_progress {
                         println!(
-                            "Minimum range start number still in progress: {:?}.",
+                            "Average backfill speed: {} checkpoints/s. Minimum range start number still in progress: {:?}.",
+                            cur_min_in_progress as f64 / cur_time.elapsed().as_secs_f64(),
                             cur_min_in_progress
                         );
                     }

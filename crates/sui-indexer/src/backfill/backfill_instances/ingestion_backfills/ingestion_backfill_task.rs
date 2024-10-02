@@ -7,7 +7,7 @@ use crate::database::ConnectionPool;
 use dashmap::DashMap;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
-use sui_data_ingestion_core::{setup_single_workflow, Worker};
+use sui_data_ingestion_core::{setup_single_workflow, ReaderOptions, Worker};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::Notify;
@@ -26,10 +26,19 @@ impl<T: IngestionBackfillTrait + 'static> IngestionBackfillTask<T> {
             ready_checkpoints: ready_checkpoints.clone(),
             notify: notify.clone(),
         };
-        let (executor, _exit_sender) =
-            setup_single_workflow(adapter, remote_store_url, start_checkpoint, 200, None)
-                .await
-                .unwrap();
+        let reader_options = ReaderOptions {
+            batch_size: 200,
+            ..Default::default()
+        };
+        let (executor, _exit_sender) = setup_single_workflow(
+            adapter,
+            remote_store_url,
+            start_checkpoint,
+            200,
+            Some(reader_options),
+        )
+        .await
+        .unwrap();
         tokio::task::spawn(async move {
             executor.await.unwrap();
         });
