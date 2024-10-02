@@ -115,7 +115,7 @@ pub async fn start_network_cluster() -> NetworkCluster {
         host: "127.0.0.1".to_owned(),
         db_url: database.database().url().as_str().to_owned(),
         db_pool_size: 5,
-        prom_url: "127.0.0.1".to_owned(),
+        prom_host: "127.0.0.1".to_owned(),
         prom_port: get_available_port(),
     };
     let data_ingestion_path = tempfile::tempdir().unwrap();
@@ -160,7 +160,7 @@ pub async fn serve_executor(
         host: "127.0.0.1".to_owned(),
         db_url: database.database().url().as_str().to_owned(),
         db_pool_size: 5,
-        prom_url: "127.0.0.1".to_owned(),
+        prom_host: "127.0.0.1".to_owned(),
         prom_port: get_available_port(),
     };
     let db_url = graphql_connection_config.db_url.clone();

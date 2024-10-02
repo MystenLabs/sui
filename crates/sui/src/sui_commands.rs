@@ -727,14 +727,13 @@ async fn start(
         let graphql_address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
             .map_err(|_| anyhow!("Invalid graphql host and port"))?;
         tracing::info!("Starting the GraphQL service at {graphql_address}");
-        let graphql_connection_config = ConnectionConfig::new(
-            Some(graphql_address.port()),
-            Some(graphql_address.ip().to_string()),
-            Some(pg_address),
-            None,
-            None,
-            None,
-        );
+        let graphql_connection_config = ConnectionConfig {
+            port: graphql_address.port(),
+            host: graphql_address.ip().to_string(),
+            db_url: pg_address,
+            ..Default::default()
+        };
+
         start_graphql_server_with_fn_rpc(
             graphql_connection_config,
             Some(fullnode_url.clone()),
