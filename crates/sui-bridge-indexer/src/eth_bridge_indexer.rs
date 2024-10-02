@@ -117,8 +117,14 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
                         }
                     }
                     _ = interval.tick() => {
-                        let latest_block = eth_ws_client.get_block_number().await?.as_u64();
-                        progress_metric.set(latest_block as i64);
+                        let Ok(Ok(block_num)) = retry_with_max_elapsed_time!(
+                            eth_ws_client.get_block_number(),
+                            Duration::from_secs(30000)
+                        ) else {
+                            tracing::error!("Failed to get block number");
+                            continue;
+                        };
+                        progress_metric.set(block_num.as_u64() as i64);
                     }
                 }
             }

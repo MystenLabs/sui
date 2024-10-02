@@ -422,7 +422,13 @@ pub trait Datasource<T: Send>: Sync + Send {
         let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(data_rx)
             .ready_chunks(ingestion_batch_size);
         let mut last_saved_checkpoint = None;
-        while let Some(batch) = stream.next().await {
+        loop {
+            let batch_option = stream.next().await;
+            if batch_option.is_none() {
+                tracing::error!(task_name, "Data stream ended unexpectedly");
+                break;
+            }
+            let batch = batch_option.unwrap();
             let mut max_height = 0;
             let mut heights = vec![];
             let mut data = vec![];
@@ -521,7 +527,9 @@ pub trait Datasource<T: Send>: Sync + Send {
         if let Some(m) = &remaining_checkpoints_metric {
             m.set(0)
         }
-        join_handle.await?
+        join_handle.await?.tap_err(|err| {
+            tracing::error!(task_name, "Data retrieval task failed: {:?}", err);
+        })
     }
 
     async fn start_data_retrieval(
