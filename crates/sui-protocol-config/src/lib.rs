@@ -185,6 +185,7 @@ const MAX_PROTOCOL_VERSION: u64 = 71;
 //             Add feature flag for Mysticeti fastpath.
 // Version 62: Makes the event's sending module package upgrade-aware.
 // Version 63: Enable gas based congestion control in consensus commit.
+<<<<<<< HEAD
 // Version 64: Revert congestion control change.
 // Version 65: Enable distributed vote scoring in mainnet.
 // Version 66: Revert distributed vote scoring in mainnet.
@@ -204,6 +205,8 @@ const MAX_PROTOCOL_VERSION: u64 = 71;
 //             Add std::uq64_64 module to Move stdlib.
 //             Improve gas/wall time efficiency of some Move stdlib vector functions
 // Version 71: [SIP-45] Enable consensus amplification.
+//             Framework natives for transaction context and protocol config
+//             feature flag to turn it on/off
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -567,6 +570,7 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     relocate_event_module: bool,
 
+<<<<<<< HEAD
     // Enable uncompressed group elements in BLS123-81 G1
     #[serde(skip_serializing_if = "is_false")]
     uncompressed_g1_group_elements: bool,
@@ -585,6 +589,10 @@ struct FeatureFlags {
     // Enable v2 native charging for natives.
     #[serde(skip_serializing_if = "is_false")]
     native_charging_v2: bool,
+
+    // Make transaction context native and zero out the Move struct
+    #[serde(skip_serializing_if = "is_false")]
+    transaction_context_native: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1703,6 +1711,7 @@ impl ProtocolConfig {
         self.feature_flags.relocate_event_module
     }
 
+<<<<<<< HEAD
     pub fn uncompressed_g1_group_elements(&self) -> bool {
         self.feature_flags.uncompressed_g1_group_elements
     }
@@ -1723,6 +1732,10 @@ impl ProtocolConfig {
 
     pub fn native_charging_v2(&self) -> bool {
         self.feature_flags.native_charging_v2
+    }
+    
+    pub fn transaction_context_native(&self) -> bool {
+        self.feature_flags.transaction_context_native
     }
 }
 
@@ -3096,6 +3109,7 @@ impl ProtocolConfig {
 
                     // Enable bursts for congestion control. (10x the per-commit budget)
                     cfg.allowed_txn_cost_overage_burst_per_object_in_commit = Some(185_000_000);
+                    cfg.feature_flags.transaction_context_native = false;
                 }
                 // Use this template when making changes:
                 //
