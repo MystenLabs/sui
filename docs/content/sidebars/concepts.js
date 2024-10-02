@@ -52,7 +52,6 @@ const concepts = [
 						},
 						items: ['concepts/transfers/custom-rules', 'concepts/transfers/transfer-to-object'],
 					},
-					'concepts/events',
 					'concepts/versioning',
 				],
 			},
