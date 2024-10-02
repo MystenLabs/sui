@@ -4,7 +4,7 @@
 import { ImageIcon } from '_app/shared/image-icon';
 import { useCoinMetadata } from '@mysten/core';
 import { Sui, Unstaked } from '@mysten/icons';
-import { SUI_TYPE_ARG } from '@mysten/sui/utils';
+import { normalizeStructTag, SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { useCoinMetadataOverrides } from '../../hooks/useCoinMetadataOverride';
@@ -63,9 +63,13 @@ export interface CoinIconProps extends VariantProps<typeof imageStyle> {
 }
 
 export function CoinIcon({ coinType, ...styleProps }: CoinIconProps) {
+	const isSui = coinType
+		? normalizeStructTag(coinType) === normalizeStructTag(SUI_TYPE_ARG)
+		: false;
+
 	return (
 		<div className={imageStyle(styleProps)}>
-			{coinType === SUI_TYPE_ARG ? <SuiCoin /> : <NonSuiCoin coinType={coinType} />}
+			{isSui ? <SuiCoin /> : <NonSuiCoin coinType={coinType} />}
 		</div>
 	);
 }
