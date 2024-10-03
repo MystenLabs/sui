@@ -58,12 +58,12 @@ impl Event {
             return Ok(None);
         };
 
-        Ok(TransactionBlock::query(
+        TransactionBlock::query(
             ctx,
             TransactionBlock::by_seq(stored.tx_sequence_number as u64, self.checkpoint_viewed_at),
         )
         .await
-        .extend()?)
+        .extend()
     }
 
     /// The Move module containing some function that when called by
