@@ -249,14 +249,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    pruner_cp_watermark (checkpoint_sequence_number) {
-        checkpoint_sequence_number -> Int8,
-        min_tx_sequence_number -> Int8,
-        max_tx_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
     raw_checkpoints (sequence_number) {
         sequence_number -> Int8,
         certified_checkpoint -> Bytea,
@@ -389,7 +381,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     objects_version,
     packages,
     protocol_configs,
-    pruner_cp_watermark,
     raw_checkpoints,
     transactions,
     tx_affected_addresses,

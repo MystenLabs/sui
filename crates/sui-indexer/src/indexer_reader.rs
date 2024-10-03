@@ -42,7 +42,6 @@ use sui_types::{coin::CoinMetadata, event::EventID};
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
 use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
-use crate::schema::pruner_cp_watermark;
 use crate::schema::tx_digests;
 use crate::{
     errors::IndexerError,
@@ -618,17 +617,23 @@ impl IndexerReader {
 
         let mut connection = self.pool.get().await?;
 
-        let tx_range: (i64, i64) = pruner_cp_watermark::dsl::pruner_cp_watermark
+        let tx_range: (Option<i64>, Option<i64>) = checkpoints::dsl::checkpoints
             .select((
-                pruner_cp_watermark::min_tx_sequence_number,
-                pruner_cp_watermark::max_tx_sequence_number,
+                checkpoints::min_tx_sequence_number,
+                checkpoints::max_tx_sequence_number,
             ))
-            .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(checkpoint_seq as i64))
-            .first::<(i64, i64)>(&mut connection)
+            .filter(checkpoints::sequence_number.eq(checkpoint_seq as i64))
+            .first(&mut connection)
             .await?;
 
+        // A checkpoint must have its min and max tx sequence number populated if it has any
+        // transactions. A None value means it has no transactions.
+        let (Some(min_tx_seq), Some(max_tx_seq)) = tx_range else {
+            return Ok(vec![]);
+        };
+
         let mut query = transactions::table
-            .filter(transactions::tx_sequence_number.between(tx_range.0, tx_range.1))
+            .filter(transactions::tx_sequence_number.between(min_tx_seq, max_tx_seq))
             .into_boxed();
 
         if let Some(cursor_tx_seq) = cursor_tx_seq {
