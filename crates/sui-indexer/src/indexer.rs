@@ -23,7 +23,7 @@ use crate::config::{IngestionConfig, JsonRpcConfig, PruningOptions, SnapshotLagC
 use crate::database::ConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
-use crate::handlers::objects_snapshot_processor::start_objects_snapshot_processor;
+use crate::handlers::objects_snapshot_handler::start_objects_snapshot_handler;
 use crate::handlers::pruner::Pruner;
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
@@ -39,7 +39,7 @@ impl Indexer {
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         let snapshot_config = SnapshotLagConfig::default();
-        Indexer::start_writer_with_config(
+        Indexer::start_writer(
             config,
             store,
             metrics,
@@ -50,7 +50,7 @@ impl Indexer {
         .await
     }
 
-    pub async fn start_writer_with_config(
+    pub async fn start_writer(
         config: &IngestionConfig,
         store: PgIndexerStore,
         metrics: IndexerMetrics,
@@ -62,7 +62,6 @@ impl Indexer {
             "Sui Indexer Writer (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
-
         info!("Sui Indexer Writer config: {config:?}",);
 
         let primary_watermark = store
@@ -80,7 +79,7 @@ impl Indexer {
         };
 
         // Start objects snapshot processor, which is a separate pipeline with its ingestion pipeline.
-        let (object_snapshot_worker, object_snapshot_watermark) = start_objects_snapshot_processor(
+        let (object_snapshot_worker, object_snapshot_watermark) = start_objects_snapshot_handler(
             store.clone(),
             metrics.clone(),
             snapshot_config,
