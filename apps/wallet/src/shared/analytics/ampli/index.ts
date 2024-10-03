@@ -337,7 +337,7 @@ export interface PinnedCoinProperties {
 }
 
 export interface ReceivedOnrampProvidersDataProperties {
-	countryCode: string;
+	countryCode?: string;
 	/**
 	 * | Rule | Value |
 	 * |---|---|
@@ -574,8 +574,8 @@ export interface UnstakedSuiProperties {
 }
 
 export interface VisitedFiatOnRampProperties {
-	countryCode: string;
-	isBestRate: boolean;
+	countryCode?: string;
+	isBestRate?: boolean;
 	/**
 	 * The name of the fiat on-ramp provider.
 	 */
