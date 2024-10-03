@@ -708,6 +708,7 @@ pub mod tests {
             db_pool_size: 5,
             prom_host: "127.0.0.1".to_owned(),
             prom_port: get_available_port(),
+            skip_migration_consistency_check: false,
         };
         let service_config = service_config.unwrap_or_default();
 
