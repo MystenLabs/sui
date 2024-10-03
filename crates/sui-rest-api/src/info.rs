@@ -9,7 +9,10 @@ use axum::extract::State;
 use axum::Json;
 use sui_sdk_types::types::CheckpointDigest;
 use tap::Pipe;
+use documented::Documented;
 
+/// Get basic information about the state of a Node
+#[derive(Documented)]
 pub struct GetNodeInfo;
 
 impl ApiEndpoint<RestService> for GetNodeInfo {
@@ -31,13 +34,15 @@ impl ApiEndpoint<RestService> for GetNodeInfo {
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
             .tag("General")
-            .operation_id("GetNodeInfo")
+            .operation_id("Get NodeInfo")
+            .description(Self::DOCS)
             .response(
                 200,
                 ResponseBuilder::new()
                     .json_content::<NodeInfo>(generator)
                     .build(),
             )
+            .response(500, ResponseBuilder::new().build())
             .build()
     }
 
@@ -73,25 +78,41 @@ async fn get_node_info(State(state): State<RestService>) -> Result<Json<NodeInfo
     .pipe(Ok)
 }
 
+/// Basic information about the state of a Node
 #[serde_with::serde_as]
 #[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct NodeInfo {
+    /// The chain identifier of the chain that this Node is on
     pub chain_id: CheckpointDigest,
+
+    /// Human readable name of the chain that this Node is on
     pub chain: Cow<'static, str>,
+
+    /// Current epoch of the Node based on its highest executed checkpoint
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
     #[schemars(with = "crate::_schemars::U64")]
     pub epoch: u64,
+
+    /// Checkpoint height of the most recently executed checkpoint
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
     #[schemars(with = "crate::_schemars::U64")]
     pub checkpoint_height: u64,
+
+    /// Unix timestamp of the most recently executed checkpoint
     #[serde_as(as = "sui_types::sui_serde::BigInt<u64>")]
     #[schemars(with = "crate::_schemars::U64")]
     pub timestamp_ms: u64,
+
+    /// The lowest checkpoint for which checkpoints and transaction data is available
     #[serde_as(as = "Option<sui_types::sui_serde::BigInt<u64>>")]
     #[schemars(with = "Option<crate::_schemars::U64>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lowest_available_checkpoint: Option<u64>,
+
+    /// The lowest checkpoint for which object data is available
     #[serde_as(as = "Option<sui_types::sui_serde::BigInt<u64>>")]
     #[schemars(with = "Option<crate::_schemars::U64>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lowest_available_checkpoint_objects: Option<u64>,
     pub software_version: Cow<'static, str>,
     //TODO include current protocol version
