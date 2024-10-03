@@ -10,12 +10,7 @@ import Alert from '_components/alert';
 import { CoinIcon } from '_components/coin-icon';
 import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
-import {
-	useAllowedSwapCoinsList,
-	useAppSelector,
-	useCoinsReFetchingConfig,
-	useSortedCoinsByCategories,
-} from '_hooks';
+import { useAppSelector, useCoinsReFetchingConfig, useSortedCoinsByCategories } from '_hooks';
 import { UsdcPromoBanner } from '_pages/home/usdc-promo/UsdcPromoBanner';
 import {
 	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
@@ -116,11 +111,8 @@ export function TokenRow({
 	const params = new URLSearchParams({
 		type: coinBalance.coinType,
 	});
-	const allowedSwapCoinsList = useAllowedSwapCoinsList();
 
 	const balanceInUsd = useBalanceInUSD(coinBalance.coinType, coinBalance.totalBalance);
-
-	const isRenderSwapButton = allowedSwapCoinsList.includes(coinType);
 
 	const coinMetadataOverrides = useCoinMetadataOverrides();
 	return (
@@ -161,24 +153,22 @@ export function TokenRow({
 							>
 								Send
 							</TokenRowButton>
-							{isRenderSwapButton && (
-								<TokenRowButton
-									coinBalance={coinBalance}
-									to={`/swap?${params.toString()}`}
-									onClick={() => {
-										ampli.clickedSwapCoin({
-											coinType: coinBalance.coinType,
-											totalBalance: Number(formatted),
-											sourceFlow: 'TokenRow',
-										});
-									}}
-								>
-									Swap
-								</TokenRowButton>
-							)}
+							<TokenRowButton
+								coinBalance={coinBalance}
+								to={`/swap?${params.toString()}`}
+								onClick={() => {
+									ampli.clickedSwapCoin({
+										coinType: coinBalance.coinType,
+										totalBalance: Number(formatted),
+										sourceFlow: 'TokenRow',
+									});
+								}}
+							>
+								Swap
+							</TokenRowButton>
 						</div>
 					) : (
-						<div className="flex gap-1 items-start">
+						<div className="flex flex-wrap gap-1 items-start">
 							<Text variant="subtitleSmall" weight="semibold" color="gray-90">
 								{symbol}
 							</Text>
