@@ -7,7 +7,7 @@ export function useSupportedCoins() {
 	const { request } = useAppsBackend();
 
 	return useQuery({
-		queryKey: ['supported-coins'],
+		queryKey: ['supported-coins-apps-backend'],
 		queryFn: async () => request<{ supported: string[] }>('swap/coins'),
 	});
 }
