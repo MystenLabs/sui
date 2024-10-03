@@ -24,6 +24,9 @@ use sui_types::committee::StakeUnit;
 use sui_types::committee::TOTAL_VOTING_POWER;
 use tracing::{error, info, warn};
 
+const MAX_TIMEOUT_MS: u64 = 5000;
+const MIN_TIMEOUT_MS: u64 = 1500;
+
 pub struct BridgeAuthorityAggregator {
     pub committee: Arc<BridgeCommittee>,
     pub clients: Arc<BTreeMap<BridgeAuthorityPublicKeyBytes, Arc<BridgeClient>>>,
@@ -235,7 +238,8 @@ async fn request_sign_bridge_action_into_certification(
             })
         },
         // A herustic timeout, we expect the signing to finish within 5 seconds
-        Duration::from_secs(5),
+        Duration::from_secs(MAX_TIMEOUT_MS),
+        Some(Duration::from_secs(MIN_TIMEOUT_MS)),
     )
     .await
     .map_err(|state| {
