@@ -56,11 +56,13 @@ impl BackfillTask for TxAffectedObjectsBackfill {
             })
             .collect();
 
-        diesel::insert_into(tx_affected_objects::table)
-            .values(&affected_objects)
-            .on_conflict_do_nothing()
-            .execute(&mut conn)
-            .await
-            .unwrap();
+        for chunk in affected_objects.chunks(1000) {
+            diesel::insert_into(tx_affected_objects::table)
+                .values(chunk)
+                .on_conflict_do_nothing()
+                .execute(&mut conn)
+                .await
+                .unwrap();
+        }
     }
 }
