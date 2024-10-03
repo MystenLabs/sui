@@ -413,9 +413,12 @@ pub struct AuthorityEpochTables {
     ///     versions from the transaction effect. Next object versions are not updated.
     ///
     /// REQUIRED: all authorities must assign the same shared object versions for each transaction.
-    assigned_shared_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
     assigned_shared_object_versions_v2: DBMap<TransactionKey, Vec<(ObjectID, SequenceNumber)>>,
     next_shared_object_versions: DBMap<ObjectID, SequenceNumber>,
+
+    /// Deprecated table for pre-random-beacon shared object versions.
+    #[allow(dead_code)]
+    assigned_shared_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
 
     /// Certificates that have been received from clients or received from consensus, but not yet
     /// executed. Entries are cleared after execution.
@@ -480,9 +483,11 @@ pub struct AuthorityEpochTables {
     /// Because we don't want to create checkpoints with empty content(see CheckpointBuilder::write_checkpoint),
     /// the sequence number of checkpoint does not match height here.
     #[default_options_override_fn = "pending_checkpoints_table_default_config"]
-    pending_checkpoints: DBMap<CheckpointHeight, PendingCheckpoint>,
-    #[default_options_override_fn = "pending_checkpoints_table_default_config"]
     pending_checkpoints_v2: DBMap<CheckpointHeight, PendingCheckpointV2>,
+
+    /// Deprecated table for pre-random-beacon checkpoints.
+    #[allow(dead_code)]
+    pending_checkpoints: DBMap<CheckpointHeight, PendingCheckpoint>,
 
     /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
     builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
@@ -885,6 +890,19 @@ impl AuthorityPerEpochStore {
             randomness_manager: OnceCell::new(),
             randomness_reporter: OnceCell::new(),
         });
+
+        if matches!(chain_identifier.chain(), Chain::Mainnet | Chain::Testnet) {
+            // If we disable randomness, and if the release in which it was disabled did not have
+            // the commit that added this comment, we will need to revert this commit. This is
+            // because the previous release will have been writing to the deprecated
+            // assigned_shared_object_versions table.
+            //
+            // If we disable randomness *after* this commit has been shipped to all networks, then
+            // we can simply remove this assert, as we will no longer switch back and forth between
+            // the two tables.
+            assert!(s.randomness_state_enabled());
+        }
+
         s.update_buffer_stake_metric();
         s
     }
@@ -1470,15 +1488,9 @@ impl AuthorityPerEpochStore {
         tx_digest: &TransactionDigest,
         assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
-        if self.randomness_state_enabled() {
-            self.tables()?
-                .assigned_shared_object_versions_v2
-                .insert(&TransactionKey::Digest(*tx_digest), assigned_versions)?;
-        } else {
-            self.tables()?
-                .assigned_shared_object_versions
-                .insert(tx_digest, assigned_versions)?;
-        }
+        self.tables()?
+            .assigned_shared_object_versions_v2
+            .insert(&TransactionKey::Digest(*tx_digest), assigned_versions)?;
         Ok(())
     }
 
@@ -1636,17 +1648,7 @@ impl AuthorityPerEpochStore {
         db_batch: &mut DBBatch,
     ) -> SuiResult {
         debug!("set_assigned_shared_object_versions: {:?}", versions);
-
-        if self.randomness_state_enabled() {
-            db_batch.insert_batch(&self.tables()?.assigned_shared_object_versions_v2, versions)?;
-        } else {
-            db_batch.insert_batch(
-                &self.tables()?.assigned_shared_object_versions,
-                versions
-                    .iter()
-                    .map(|(key, versions)| (key.unwrap_digest(), versions)),
-            )?;
-        }
+        db_batch.insert_batch(&self.tables()?.assigned_shared_object_versions_v2, versions)?;
         Ok(())
     }
 
@@ -1661,7 +1663,7 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ObjectCacheRead,
         certificates: &[VerifiedExecutableTransaction],
     ) -> SuiResult {
-        let mut db_batch = self.tables()?.assigned_shared_object_versions.batch();
+        let mut db_batch = self.tables()?.assigned_shared_object_versions_v2.batch();
         let assigned_versions = SharedObjVerManager::assign_versions_from_consensus(
             self,
             cache_reader,
@@ -1848,7 +1850,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
         )
         .await?;
-        let mut db_batch = self.tables()?.assigned_shared_object_versions.batch();
+        let mut db_batch = self.tables()?.assigned_shared_object_versions_v2.batch();
         self.set_assigned_shared_object_versions_with_db_batch(versions, &mut db_batch)
             .await?;
         db_batch.write()?;
@@ -2987,25 +2989,14 @@ impl AuthorityPerEpochStore {
 
     #[cfg(any(test, feature = "test-utils"))]
     pub fn get_highest_pending_checkpoint_height(&self) -> CheckpointHeight {
-        if self.randomness_state_enabled() {
-            self.tables()
-                .expect("test should not cross epoch boundary")
-                .pending_checkpoints_v2
-                .unbounded_iter()
-                .skip_to_last()
-                .next()
-                .map(|(key, _)| key)
-                .unwrap_or_default()
-        } else {
-            self.tables()
-                .expect("test should not cross epoch boundary")
-                .pending_checkpoints
-                .unbounded_iter()
-                .skip_to_last()
-                .next()
-                .map(|(key, _)| key)
-                .unwrap_or_default()
-        }
+        self.tables()
+            .expect("test should not cross epoch boundary")
+            .pending_checkpoints_v2
+            .unbounded_iter()
+            .skip_to_last()
+            .next()
+            .map(|(key, _)| key)
+            .unwrap_or_default()
     }
 
     // Caller is not required to set ExecutionIndices with the right semantics in
@@ -3740,34 +3731,18 @@ impl AuthorityPerEpochStore {
         last: Option<CheckpointHeight>,
     ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
         let tables = self.tables()?;
-        if self.randomness_state_enabled() {
-            let mut iter = tables.pending_checkpoints_v2.unbounded_iter();
-            if let Some(last_processed_height) = last {
-                iter = iter.skip_to(&(last_processed_height + 1))?;
-            }
-            Ok(iter.collect())
-        } else {
-            let mut iter = tables.pending_checkpoints.unbounded_iter();
-            if let Some(last_processed_height) = last {
-                iter = iter.skip_to(&(last_processed_height + 1))?;
-            }
-            Ok(iter.map(|(height, cp)| (height, cp.into())).collect())
+        let mut iter = tables.pending_checkpoints_v2.unbounded_iter();
+        if let Some(last_processed_height) = last {
+            iter = iter.skip_to(&(last_processed_height + 1))?;
         }
+        Ok(iter.collect())
     }
 
     pub fn get_pending_checkpoint(
         &self,
         index: &CheckpointHeight,
     ) -> SuiResult<Option<PendingCheckpointV2>> {
-        if self.randomness_state_enabled() {
-            Ok(self.tables()?.pending_checkpoints_v2.get(index)?)
-        } else {
-            Ok(self
-                .tables()?
-                .pending_checkpoints
-                .get(index)?
-                .map(|c| c.into()))
-        }
+        Ok(self.tables()?.pending_checkpoints_v2.get(index)?)
     }
 
     pub fn process_pending_checkpoint(
@@ -3778,7 +3753,7 @@ impl AuthorityPerEpochStore {
         // All created checkpoints are inserted in builder_checkpoint_summary in a single batch.
         // This means that upon restart we can use BuilderCheckpointSummary::commit_height
         // from the last built summary to resume building checkpoints.
-        let mut batch = self.tables()?.pending_checkpoints.batch();
+        let mut batch = self.tables()?.pending_checkpoints_v2.batch();
         for (position_in_commit, (summary, transactions)) in content_info.into_iter().enumerate() {
             let sequence_number = summary.sequence_number;
             let summary = BuilderCheckpointSummary {
@@ -4188,19 +4163,10 @@ impl ConsensusCommitOutput {
         )?;
 
         if let Some((assigned_versions, next_versions)) = self.shared_object_versions {
-            if epoch_store.randomness_state_enabled() {
-                batch.insert_batch(
-                    &tables.assigned_shared_object_versions_v2,
-                    assigned_versions,
-                )?;
-            } else {
-                batch.insert_batch(
-                    &tables.assigned_shared_object_versions,
-                    assigned_versions
-                        .into_iter()
-                        .map(|(key, versions)| (*key.unwrap_digest(), versions)),
-                )?;
-            }
+            batch.insert_batch(
+                &tables.assigned_shared_object_versions_v2,
+                assigned_versions,
+            )?;
 
             batch.insert_batch(&tables.next_shared_object_versions, next_versions)?;
         }
@@ -4213,21 +4179,12 @@ impl ConsensusCommitOutput {
             self.user_signatures_for_checkpoints,
         )?;
 
-        if epoch_store.randomness_state_enabled() {
-            batch.insert_batch(
-                &tables.pending_checkpoints_v2,
-                self.pending_checkpoints
-                    .into_iter()
-                    .map(|cp| (cp.height(), cp)),
-            )?;
-        } else {
-            batch.insert_batch(
-                &tables.pending_checkpoints,
-                self.pending_checkpoints
-                    .into_iter()
-                    .map(|cp| (cp.height(), cp.expect_v1())),
-            )?;
-        }
+        batch.insert_batch(
+            &tables.pending_checkpoints_v2,
+            self.pending_checkpoints
+                .into_iter()
+                .map(|cp| (cp.height(), cp)),
+        )?;
 
         if let Some((round, commit_timestamp)) = self.next_randomness_round {
             batch.insert_batch(&tables.randomness_next_round, [(SINGLETON_KEY, round)])?;
@@ -4271,19 +4228,11 @@ impl GetSharedLocks for AuthorityPerEpochStore {
         &self,
         key: &TransactionKey,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
-        if self.randomness_state_enabled() {
-            Ok(self
-                .tables()?
-                .assigned_shared_object_versions_v2
-                .get(key)?
-                .unwrap_or_default())
-        } else {
-            Ok(self
-                .tables()?
-                .assigned_shared_object_versions
-                .get(key.unwrap_digest())?
-                .unwrap_or_default())
-        }
+        Ok(self
+            .tables()?
+            .assigned_shared_object_versions_v2
+            .get(key)?
+            .unwrap_or_default())
     }
 }
 
