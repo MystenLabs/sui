@@ -158,7 +158,9 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 100
-    execution-cache: passthrough-cache
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -322,7 +324,9 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 100
-    execution-cache: passthrough-cache
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -486,7 +490,9 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 100
-    execution-cache: passthrough-cache
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -650,7 +656,9 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 100
-    execution-cache: passthrough-cache
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -814,7 +822,9 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 100
-    execution-cache: passthrough-cache
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -978,7 +988,9 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 100
-    execution-cache: passthrough-cache
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -1142,7 +1154,9 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 100
-    execution-cache: passthrough-cache
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -1158,3 +1172,4 @@ account_keys:
   - mfPjCoE6SX0Sl84MnmNS/LS+tfPpkn7I8tziuk2g0WM=
   - 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
 genesis: "[fake genesis]"
+

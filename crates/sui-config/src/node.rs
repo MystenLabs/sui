@@ -206,14 +206,23 @@ pub struct NodeConfig {
     pub enable_db_write_stall: Option<bool>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ExecutionCacheConfig {
-    #[default]
     PassthroughCache,
     WritebackCache {
+        /// Maximum number of entries in each cache. (There are several different caches).
+        /// If None, the default of 10000 is used.
         max_cache_size: Option<usize>,
     },
+}
+
+impl Default for ExecutionCacheConfig {
+    fn default() -> Self {
+        ExecutionCacheConfig::WritebackCache {
+            max_cache_size: None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]

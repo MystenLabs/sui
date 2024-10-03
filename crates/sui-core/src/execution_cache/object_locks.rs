@@ -128,7 +128,6 @@ impl ObjectLocks {
 
         let live_digest = live_object.digest();
         if obj_ref.2 != live_digest {
-            debug!("object digest mismatch: {:?} vs {:?}", obj_ref, live_digest);
             return Err(SuiError::UserInputError {
                 error: UserInputError::InvalidObjectDigest {
                     object_id: obj_ref.0,

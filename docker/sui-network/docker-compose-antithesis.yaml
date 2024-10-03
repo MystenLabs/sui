@@ -65,6 +65,7 @@ services:
     container_name: validator3
     hostname: validator3
     environment:
+      - DISABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,consensus=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
@@ -92,6 +93,7 @@ services:
     container_name: validator4
     hostname: validator4
     environment:
+      - DISABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,consensus=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
