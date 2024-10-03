@@ -132,12 +132,12 @@ impl MetricsCallbackProvider for RequestMetrics {
             .inc();
     }
 
-    fn on_response(&self, path: String, latency: Duration, _status: u16, faucet_status_code: Code) {
+    fn on_response(&self, path: String, latency: Duration, _status: u16, grpc_status_code: Code) {
         self.process_latency
             .with_label_values(&[path.as_str()])
             .observe(latency.as_secs_f64());
 
-        match faucet_status_code {
+        match grpc_status_code {
             Code::Ok => {
                 self.total_requests_succeeded
                     .with_label_values(&[path.as_str()])
