@@ -17,12 +17,12 @@ use crate::{metrics::IndexerMetrics, store::IndexerStore};
 
 use super::checkpoint_handler::CheckpointHandler;
 use super::TransactionObjectChangesToCommit;
-use super::{CommitDataEnvelope, CommonHandler, Handler};
+use super::{CommonHandler, Handler};
 
 #[derive(Clone)]
 pub struct ObjectsSnapshotHandler {
     pub store: PgIndexerStore,
-    pub sender: Sender<ObjectsSnapshotCommitDataEnvelope>,
+    pub sender: Sender<(u64, TransactionObjectChangesToCommit)>,
     snapshot_config: SnapshotLagConfig,
     metrics: IndexerMetrics,
 }
@@ -37,10 +37,10 @@ impl Worker for ObjectsSnapshotHandler {
     async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
         let transformed_data = CheckpointHandler::index_objects(checkpoint, &self.metrics).await?;
         self.sender
-            .send(ObjectsSnapshotCommitDataEnvelope {
-                sequence_number: checkpoint.checkpoint_summary.sequence_number,
-                data: transformed_data,
-            })
+            .send((
+                checkpoint.checkpoint_summary.sequence_number,
+                transformed_data,
+            ))
             .await?;
         Ok(())
     }
@@ -77,7 +77,7 @@ impl Handler<TransactionObjectChangesToCommit> for ObjectsSnapshotHandler {
         Ok(())
     }
 
-    async fn get_checkpoint_lag_limiter(&self) -> IndexerResult<u64> {
+    async fn get_max_committable_checkpoint(&self) -> IndexerResult<u64> {
         let latest_checkpoint = self.store.get_latest_checkpoint_sequence_number().await?;
         Ok(latest_checkpoint
             .map(|seq| seq.saturating_sub(self.snapshot_config.snapshot_min_lag as u64))
@@ -113,7 +113,7 @@ pub async fn start_objects_snapshot_handler(
 impl ObjectsSnapshotHandler {
     pub fn new(
         store: PgIndexerStore,
-        sender: Sender<ObjectsSnapshotCommitDataEnvelope>,
+        sender: Sender<(u64, TransactionObjectChangesToCommit)>,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
     ) -> ObjectsSnapshotHandler {
@@ -123,20 +123,5 @@ impl ObjectsSnapshotHandler {
             metrics,
             snapshot_config,
         }
-    }
-}
-
-pub struct ObjectsSnapshotCommitDataEnvelope {
-    pub sequence_number: u64,
-    pub data: TransactionObjectChangesToCommit,
-}
-
-impl CommitDataEnvelope<TransactionObjectChangesToCommit> for ObjectsSnapshotCommitDataEnvelope {
-    fn sequence_number(&self) -> u64 {
-        self.sequence_number
-    }
-
-    fn data(self) -> TransactionObjectChangesToCommit {
-        self.data
     }
 }

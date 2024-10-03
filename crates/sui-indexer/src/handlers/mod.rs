@@ -62,14 +62,11 @@ impl<T> CommonHandler<T> {
         Self { handler }
     }
 
-    async fn start_transform_and_load<E>(
+    async fn start_transform_and_load(
         &self,
-        cp_receiver: mysten_metrics::metered_channel::Receiver<E>,
+        cp_receiver: mysten_metrics::metered_channel::Receiver<(u64, T)>,
         cancel: CancellationToken,
-    ) -> IndexerResult<()>
-    where
-        E: CommitDataEnvelope<T>,
-    {
+    ) -> IndexerResult<()> {
         let checkpoint_commit_batch_size = std::env::var("CHECKPOINT_COMMIT_BATCH_SIZE")
             .unwrap_or(CHECKPOINT_COMMIT_BATCH_SIZE.to_string())
             .parse::<usize>()
@@ -78,7 +75,7 @@ impl<T> CommonHandler<T> {
             .ready_chunks(checkpoint_commit_batch_size);
 
         let mut unprocessed = BTreeMap::new();
-        let mut envelope_batch = vec![];
+        let mut tuple_batch = vec![];
         let mut next_cp_to_process = self
             .handler
             .get_watermark_hi()
@@ -91,34 +88,34 @@ impl<T> CommonHandler<T> {
                 return Ok(());
             }
 
-            // Try to fetch new data envelope from the stream
+            // Try to fetch new data tuple from the stream
             match stream.next().now_or_never() {
-                Some(Some(envelope_chunk)) => {
+                Some(Some(tuple_chunk)) => {
                     if cancel.is_cancelled() {
                         return Ok(());
                     }
-                    for envelope in envelope_chunk {
-                        unprocessed.insert(envelope.sequence_number(), envelope);
+                    for tuple in tuple_chunk {
+                        unprocessed.insert(tuple.0, tuple);
                     }
                 }
                 Some(None) => break, // Stream has ended
-                None => {}           // No new data envelope available right now
+                None => {}           // No new data tuple available right now
             }
 
             // Process unprocessed checkpoints, even no new checkpoints from stream
-            let checkpoint_lag_limiter = self.handler.get_checkpoint_lag_limiter().await?;
+            let checkpoint_lag_limiter = self.handler.get_max_committable_checkpoint().await?;
             while next_cp_to_process <= checkpoint_lag_limiter {
-                if let Some(data_envelope) = unprocessed.remove(&next_cp_to_process) {
-                    envelope_batch.push(data_envelope);
+                if let Some(data_tuple) = unprocessed.remove(&next_cp_to_process) {
+                    tuple_batch.push(data_tuple);
                     next_cp_to_process += 1;
                 } else {
                     break;
                 }
             }
 
-            if !envelope_batch.is_empty() {
-                let last_checkpoint_seq = envelope_batch.last().unwrap().sequence_number();
-                let batch = envelope_batch.into_iter().map(|c| c.data()).collect();
+            if !tuple_batch.is_empty() {
+                let last_checkpoint_seq = tuple_batch.last().unwrap().0;
+                let batch = tuple_batch.into_iter().map(|t| t.1).collect();
                 self.handler.load(batch).await.map_err(|e| {
                     IndexerError::PostgresWriteError(format!(
                         "Failed to load transformed data into DB for handler {}: {}",
@@ -127,7 +124,7 @@ impl<T> CommonHandler<T> {
                     ))
                 })?;
                 self.handler.set_watermark_hi(last_checkpoint_seq).await?;
-                envelope_batch = vec![];
+                tuple_batch = vec![];
             }
         }
         Err(IndexerError::ChannelClosed(format!(
@@ -151,13 +148,11 @@ pub trait Handler<T>: Send + Sync {
     /// set high watermark of the table DB, also update metrics.
     async fn set_watermark_hi(&self, watermark_hi: u64) -> IndexerResult<()>;
 
-    /// get checkpoint lag limiter, for handlers without lag limiter, return u64::MAX
-    async fn get_checkpoint_lag_limiter(&self) -> IndexerResult<u64> {
+    /// By default, return u64::MAX, which means no extra waiting is needed before commiting;
+    /// get max committable checkpoint, for handlers that want to wait for some condition before commiting,
+    /// one use-case is the objects snapshot handler,
+    /// which waits for the lag between snapshot and latest checkpoint to reach a certain threshold.
+    async fn get_max_committable_checkpoint(&self) -> IndexerResult<u64> {
         Ok(u64::MAX)
     }
-}
-
-pub trait CommitDataEnvelope<T>: Send + Sync {
-    fn sequence_number(&self) -> u64;
-    fn data(self) -> T;
 }
