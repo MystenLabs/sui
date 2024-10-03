@@ -7,9 +7,9 @@ use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandle
 use crate::{RestService, Result};
 use axum::extract::State;
 use axum::Json;
+use documented::Documented;
 use sui_sdk_types::types::CheckpointDigest;
 use tap::Pipe;
-use documented::Documented;
 
 /// Get basic information about the state of a Node
 #[derive(Documented)]
