@@ -25,7 +25,6 @@ use std::collections::VecDeque;
 pub const NOT_SUPPORTED_ERROR: u64 = 0;
 pub const INVALID_INPUT_ERROR: u64 = 1;
 pub const INPUT_TOO_LONG_ERROR: u64 = 2;
-pub const UNCOMPRESSED_G1_BYTE_LENGTH: usize = 2 * bls::G1Element::BYTE_LENGTH;
 
 fn is_supported(context: &NativeContext) -> bool {
     context
@@ -833,13 +832,12 @@ pub fn internal_from_uncompressed(
                 context,
                 cost_params.bls12381_g1_from_uncompressed_cost
             );
-
-            if e.len() != UNCOMPRESSED_G1_BYTE_LENGTH {
-                return Ok(NativeResult::err(cost, INVALID_INPUT_ERROR));
-            }
-            let e: [u8; UNCOMPRESSED_G1_BYTE_LENGTH] = e.to_vec().try_into().unwrap();
-            let uncompressed = bls::G1ElementUncompressed::from_trusted_byte_array(e);
-            bls::G1Element::try_from(&uncompressed).map(|e| e.to_byte_array().to_vec())
+            e.to_vec()
+                .try_into()
+                .map_err(|_| FastCryptoError::InvalidInput)
+                .map(bls::G1ElementUncompressed::from_trusted_byte_array)
+                .and_then(|e| bls::G1Element::try_from(&e))
+                .map(|e| e.to_byte_array().to_vec())
         }
         _ => Err(FastCryptoError::InvalidInput),
     };
@@ -898,7 +896,7 @@ pub fn internal_sum_of_uncompressed(
                         .bls12381_g1_sum_of_uncompressed_cost_per_term
                         .map(|per_term| base + per_term * length.into()))
             );
-            let terms = terms
+            terms
                 .iter()
                 .map(|e| {
                     e.to_vec()
@@ -906,11 +904,9 @@ pub fn internal_sum_of_uncompressed(
                         .map_err(|_| FastCryptoError::InvalidInput)
                         .map(bls::G1ElementUncompressed::from_trusted_byte_array)
                 })
-                .collect::<Result<Vec<_>, _>>();
-            if terms.is_err() {
-                return Ok(NativeResult::err(cost, INVALID_INPUT_ERROR));
-            }
-            bls::G1ElementUncompressed::sum(&terms.unwrap()).map(|e| e.to_byte_array().to_vec())
+                .collect::<FastCryptoResult<Vec<_>>>()
+                .and_then(|terms| bls::G1ElementUncompressed::sum(&terms))
+                .map(|e| e.to_byte_array().to_vec())
         }
         _ => Err(FastCryptoError::InvalidInput),
     };

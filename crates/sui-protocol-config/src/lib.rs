@@ -2843,8 +2843,8 @@ impl ProtocolConfig {
 
                         cfg.group_ops_bls12381_g1_to_uncompressed_cost = Some(26);
                         cfg.group_ops_bls12381_g1_from_uncompressed_cost = Some(52);
-                        cfg.group_ops_bls12381_g1_sum_of_uncompressed_base_cost = Some(52);
-                        cfg.group_ops_bls12381_g1_sum_of_uncompressed_cost_per_term = Some(10);
+                        cfg.group_ops_bls12381_g1_sum_of_uncompressed_base_cost = Some(26);
+                        cfg.group_ops_bls12381_g1_sum_of_uncompressed_cost_per_term = Some(13);
                     }
                 }
                 63 => {

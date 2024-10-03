@@ -171,14 +171,18 @@ public fun g1_multi_scalar_multiplication(
     group_ops::multi_scalar_multiplication(G1_TYPE, scalars, elements)
 }
 
+/// Convert an `Element<G1>` to uncompressed form.
 public fun g1_to_uncompressed(e: &Element<G1>): Uncompressed<G1> {
     group_ops::to_uncompressed(G1_TYPE, e)
 }
 
+/// Create a `Element<G1>` from its uncompressed form.
 public fun g1_from_uncompressed(e: &Uncompressed<G1>): Element<G1> {
     group_ops::from_uncompressed(G1_TYPE, e)
 }
 
+/// Compute the sum of a vector of uncompressed points.
+/// This is much faster than computing the sum using `g1_add`.
 public fun g1_sum_of_uncompressed(terms: &vector<Uncompressed<G1>>): Element<G1> {
     group_ops::sum_of_uncompressed(G1_TYPE, terms)
 }
