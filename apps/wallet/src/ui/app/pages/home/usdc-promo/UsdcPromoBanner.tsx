@@ -54,7 +54,7 @@ function BannerImage({ balance }: { balance: CoinBalance }) {
 				);
 			}}
 		>
-			<img className="w-full cursor-pointer" alt="USDC Promo" src={promoBannerBackground} />
+			<img className="w-full cursor-pointer h-16" alt="USDC Promo" src={promoBannerBackground} />
 			<div className="absolute top-1/2 -translate-y-1/2 w-full flex flex-row gap-4 px-3">
 				<img
 					alt="USDC"
