@@ -133,7 +133,7 @@ impl FaucetMetrics {
     }
 }
 
-impl MetricsCallbackProvider for FaucetMetrics {
+impl MetricsCallbackProvider for RequestMetrics {
     fn on_request(&self, _path: String) {}
 
     fn on_response(&self, path: String, latency: Duration, _status: u16, faucet_status_code: Code) {
