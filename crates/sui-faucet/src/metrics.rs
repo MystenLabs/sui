@@ -5,8 +5,8 @@
 use mysten_network::metrics::MetricsCallbackProvider;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, register_int_counter_with_registry
-    Histogram, IntCounter, IntGauge, Registry, IntCounterVec
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
+    Histogram, IntGauge, Registry, IntCounterVec
 };
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
@@ -14,11 +14,11 @@ use prometheus::{
 /// Metrics relevant to the requests coming into the service
 #[derive(Clone, Debug)]
 pub struct RequestMetrics {
-    pub(crate) total_requests_received: IntCounter,
-    pub(crate) total_requests_succeeded: IntCounter,
-    pub(crate) total_requests_shed: IntCounter,
-    pub(crate) total_requests_failed: IntCounter,
-    pub(crate) total_requests_disconnected: IntCounter,
+    pub(crate) total_requests_received: IntCounterVec,
+    pub(crate) total_requests_succeeded: IntCounterVec,
+    pub(crate) total_requests_shed: IntCounterVec,
+    pub(crate) total_requests_failed: IntCounterVec,
+    pub(crate) total_requests_disconnected: IntCounterVec,
     pub(crate) current_requests_in_flight: IntGaugeVec,
     pub(crate) process_latency: HistogramVec,
     pub(crate) faucet_requests: IntCounterVec,  // Adding this to track by route
@@ -40,34 +40,39 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 impl RequestMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            total_requests_received: register_int_counter_with_registry!(
+            total_requests_received: register_int_gauge_vec_with_registry!(
                 "total_requests_received",
                 "Total number of requests received in Faucet",
+                &["path"],
                 registry,
             )
             .unwrap(),
-            total_requests_succeeded: register_int_counter_with_registry!(
+            total_requests_succeeded: register_int_gauge_vec_with_registry!(
                 "total_requests_succeeded",
                 "Total number of requests processed successfully in Faucet",
+                &["path"],
                 registry,
             )
             .unwrap(),
-            total_requests_shed: register_int_counter_with_registry!(
+            total_requests_shed: register_int_gauge_vec_with_registry!(
                 "total_requests_shed",
                 "Total number of requests that were dropped because the service was saturated",
+                &["path"],
                 registry,
             )
             .unwrap(),
-            total_requests_failed: register_int_counter_with_registry!(
+            total_requests_failed: register_int_gauge_vec_with_registry!(
                 "total_requests_failed",
                 "Total number of requests that started but failed with an uncaught error",
+                &["path"],
                 registry,
             )
             .unwrap(),
-            total_requests_disconnected: register_int_counter_with_registry!(
+            total_requests_disconnected: register_int_gauge_vec_with_registry!(
                 "total_requests_disconnected",
                 "Total number of requests where the client disconnected before the service \
-                 returned a response",
+                returned a response",
+                &["path"],
                 registry,
             )
             .unwrap(),
