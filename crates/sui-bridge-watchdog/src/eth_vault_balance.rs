@@ -12,6 +12,8 @@ use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use tokio::time::Duration;
 use tracing::{error, info};
 
+const TEN_ZEROS: u64 = 10_u64.pow(10);
+
 pub struct EthVaultBalance {
     coin_contract: EthERC20<Provider<MeteredEthHttpProvier>>,
     vault_address: EthAddress,
@@ -26,7 +28,7 @@ impl EthVaultBalance {
         coin_address: EthAddress, // for now this only support one coin which is WETH
         metric: IntGauge,
     ) -> Self {
-        let ten_zeros = U256::from(10_u64.pow(10));
+        let ten_zeros = U256::from(TEN_ZEROS);
         let coin_contract = EthERC20::new(coin_address, provider);
         Self {
             coin_contract,
