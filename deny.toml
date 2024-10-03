@@ -36,7 +36,8 @@ ignore = [
     "RUSTSEC-2024-0320",
     # allow unmaintained proc-macro-error used in transitive dependencies
     "RUSTSEC-2024-0370",
-
+    # allow tonic version to be 0.12
+    "RUSTSEC-2024-0376",
     # Temporarily allow until arrow family of crates updates `lexical-core` to 1.0
     "RUSTSEC-2023-0086",
 ]
