@@ -631,7 +631,7 @@ impl SimpleFaucet {
                 ?balance,
                 "Balance before transfer"
             );
-            self.metrics.balance.set((balance as f64 / 9 as f64) as i64);
+            self.metrics.balance.set((balance as f64 / 9_f64) as i64);
         }
 
         Ok(client
