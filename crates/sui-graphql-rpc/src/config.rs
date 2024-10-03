@@ -42,15 +42,25 @@ pub struct ServerConfig {
 /// specific connections between this service and other services, and might differ from instance to
 /// instance of the GraphQL service.
 #[GraphQLConfig]
-#[derive(Clone, Eq, PartialEq)]
+#[derive(clap::Args, Clone, Eq, PartialEq)]
 pub struct ConnectionConfig {
     /// Port to bind the server to
+    #[clap(short, long, default_value_t = ConnectionConfig::default().port)]
     pub port: u16,
     /// Host to bind the server to
+    #[clap(long, default_value_t = ConnectionConfig::default().host)]
     pub host: String,
+    /// DB URL for data fetching
+    #[clap(short, long, default_value_t = ConnectionConfig::default().db_url)]
     pub db_url: String,
+    /// Pool size for DB connections
+    #[clap(long, default_value_t = ConnectionConfig::default().db_pool_size)]
     pub db_pool_size: u32,
-    pub prom_url: String,
+    /// Host to bind the prom server to
+    #[clap(long, default_value_t = ConnectionConfig::default().prom_host)]
+    pub prom_host: String,
+    /// Port to bind the prom server to
+    #[clap(long, default_value_t = ConnectionConfig::default().prom_port)]
     pub prom_port: u16,
 }
 
@@ -172,8 +182,11 @@ impl Version {
 }
 
 #[GraphQLConfig]
+#[derive(clap::Args)]
 pub struct Ide {
-    pub(crate) ide_title: String,
+    /// The title to display at the top of the web-based GraphiQL IDE.
+    #[clap(short, long, default_value_t = Ide::default().ide_title)]
+    pub ide_title: String,
 }
 
 #[GraphQLConfig]
@@ -199,8 +212,9 @@ pub struct InternalFeatureConfig {
 }
 
 #[GraphQLConfig]
-#[derive(Default)]
+#[derive(clap::Args, Default)]
 pub struct TxExecFullNodeConfig {
+    /// RPC URL for the fullnode to send transactions to execute and dry-run.
     pub(crate) node_rpc_url: Option<String>,
 }
 
@@ -337,25 +351,6 @@ impl TxExecFullNodeConfig {
 }
 
 impl ConnectionConfig {
-    pub fn new(
-        port: Option<u16>,
-        host: Option<String>,
-        db_url: Option<String>,
-        db_pool_size: Option<u32>,
-        prom_url: Option<String>,
-        prom_port: Option<u16>,
-    ) -> Self {
-        let default = Self::default();
-        Self {
-            port: port.unwrap_or(default.port),
-            host: host.unwrap_or(default.host),
-            db_url: db_url.unwrap_or(default.db_url),
-            db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
-            prom_url: prom_url.unwrap_or(default.prom_url),
-            prom_port: prom_port.unwrap_or(default.prom_port),
-        }
-    }
-
     pub fn db_name(&self) -> String {
         self.db_url.split('/').last().unwrap().to_string()
     }
@@ -432,14 +427,6 @@ impl Limits {
     }
 }
 
-impl Ide {
-    pub fn new(ide_title: Option<String>) -> Self {
-        ide_title
-            .map(|ide_title| Ide { ide_title })
-            .unwrap_or_default()
-    }
-}
-
 impl BackgroundTasksConfig {
     pub fn test_defaults() -> Self {
         Self {
@@ -481,7 +468,7 @@ impl Default for ConnectionConfig {
             host: "127.0.0.1".to_string(),
             db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer".to_string(),
             db_pool_size: 10,
-            prom_url: "0.0.0.0".to_string(),
+            prom_host: "0.0.0.0".to_string(),
             prom_port: 9184,
         }
     }

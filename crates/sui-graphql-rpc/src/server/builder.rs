@@ -378,13 +378,13 @@ impl ServerBuilder {
         // PROMETHEUS
         let prom_addr: SocketAddr = format!(
             "{}:{}",
-            config.connection.prom_url, config.connection.prom_port
+            config.connection.prom_host, config.connection.prom_port
         )
         .parse()
         .map_err(|_| {
             Error::Internal(format!(
                 "Failed to parse url {}, port {} into socket address",
-                config.connection.prom_url, config.connection.prom_port
+                config.connection.prom_host, config.connection.prom_port
             ))
         })?;
 
@@ -706,7 +706,7 @@ pub mod tests {
             host: "127.0.0.1".to_owned(),
             db_url,
             db_pool_size: 5,
-            prom_url: "127.0.0.1".to_owned(),
+            prom_host: "127.0.0.1".to_owned(),
             prom_port: get_available_port(),
         };
         let service_config = service_config.unwrap_or_default();
