@@ -885,6 +885,19 @@ impl AuthorityPerEpochStore {
             randomness_manager: OnceCell::new(),
             randomness_reporter: OnceCell::new(),
         });
+
+        if matches!(chain_identifier.chain(), Chain::Mainnet | Chain::Testnet) {
+            // If we disable randomness, and if the release in which it was disabled did not have
+            // the commit that added this comment, we will need to revert this commit. This is
+            // because the previous release will have been writing to the deprecated
+            // assigned_shared_object_versions table.
+            //
+            // If we disable randomness *after* this commit has been shipped to all networks, then
+            // we can simply remove this assert, as we will no longer switch back and forth between
+            // the two tables.
+            assert!(s.randomness_state_enabled());
+        }
+
         s.update_buffer_stake_metric();
         s
     }
@@ -1470,15 +1483,9 @@ impl AuthorityPerEpochStore {
         tx_digest: &TransactionDigest,
         assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
-        if self.randomness_state_enabled() {
-            self.tables()?
-                .assigned_shared_object_versions_v2
-                .insert(&TransactionKey::Digest(*tx_digest), assigned_versions)?;
-        } else {
-            self.tables()?
-                .assigned_shared_object_versions
-                .insert(tx_digest, assigned_versions)?;
-        }
+        self.tables()?
+            .assigned_shared_object_versions_v2
+            .insert(&TransactionKey::Digest(*tx_digest), assigned_versions)?;
         Ok(())
     }
 
@@ -1636,17 +1643,7 @@ impl AuthorityPerEpochStore {
         db_batch: &mut DBBatch,
     ) -> SuiResult {
         debug!("set_assigned_shared_object_versions: {:?}", versions);
-
-        if self.randomness_state_enabled() {
-            db_batch.insert_batch(&self.tables()?.assigned_shared_object_versions_v2, versions)?;
-        } else {
-            db_batch.insert_batch(
-                &self.tables()?.assigned_shared_object_versions,
-                versions
-                    .iter()
-                    .map(|(key, versions)| (key.unwrap_digest(), versions)),
-            )?;
-        }
+        db_batch.insert_batch(&self.tables()?.assigned_shared_object_versions_v2, versions)?;
         Ok(())
     }
 
@@ -1661,7 +1658,7 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ObjectCacheRead,
         certificates: &[VerifiedExecutableTransaction],
     ) -> SuiResult {
-        let mut db_batch = self.tables()?.assigned_shared_object_versions.batch();
+        let mut db_batch = self.tables()?.assigned_shared_object_versions_v2.batch();
         let assigned_versions = SharedObjVerManager::assign_versions_from_consensus(
             self,
             cache_reader,
@@ -1848,7 +1845,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
         )
         .await?;
-        let mut db_batch = self.tables()?.assigned_shared_object_versions.batch();
+        let mut db_batch = self.tables()?.assigned_shared_object_versions_v2.batch();
         self.set_assigned_shared_object_versions_with_db_batch(versions, &mut db_batch)
             .await?;
         db_batch.write()?;
@@ -4188,19 +4185,10 @@ impl ConsensusCommitOutput {
         )?;
 
         if let Some((assigned_versions, next_versions)) = self.shared_object_versions {
-            if epoch_store.randomness_state_enabled() {
-                batch.insert_batch(
-                    &tables.assigned_shared_object_versions_v2,
-                    assigned_versions,
-                )?;
-            } else {
-                batch.insert_batch(
-                    &tables.assigned_shared_object_versions,
-                    assigned_versions
-                        .into_iter()
-                        .map(|(key, versions)| (*key.unwrap_digest(), versions)),
-                )?;
-            }
+            batch.insert_batch(
+                &tables.assigned_shared_object_versions_v2,
+                assigned_versions,
+            )?;
 
             batch.insert_batch(&tables.next_shared_object_versions, next_versions)?;
         }
@@ -4271,19 +4259,11 @@ impl GetSharedLocks for AuthorityPerEpochStore {
         &self,
         key: &TransactionKey,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
-        if self.randomness_state_enabled() {
-            Ok(self
-                .tables()?
-                .assigned_shared_object_versions_v2
-                .get(key)?
-                .unwrap_or_default())
-        } else {
-            Ok(self
-                .tables()?
-                .assigned_shared_object_versions
-                .get(key.unwrap_digest())?
-                .unwrap_or_default())
-        }
+        Ok(self
+            .tables()?
+            .assigned_shared_object_versions_v2
+            .get(key)?
+            .unwrap_or_default())
     }
 }
 
