@@ -5,7 +5,10 @@ use mysten_metrics::init_metrics;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use simulacrum::Simulacrum;
+use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 
@@ -16,6 +19,8 @@ use crate::db::ConnectionPoolConfig;
 use crate::errors::IndexerError;
 use crate::indexer::Indexer;
 use crate::store::PgIndexerStore;
+use crate::tempdb::get_available_port;
+use crate::tempdb::TempDb;
 use crate::IndexerMetrics;
 
 pub enum ReaderWriterConfig {
@@ -78,7 +83,7 @@ pub async fn start_test_indexer_impl(
     data_ingestion_path: Option<PathBuf>,
     cancel: CancellationToken,
 ) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
-    // Reduce the connection pool size to 10 for testing
+    // Reduce the connection pool size to 5 for testing
     // to prevent maxing out
     let pool_config = ConnectionPoolConfig {
         pool_size: 5,
@@ -230,4 +235,56 @@ impl<'a> SuiTransactionBlockResponseBuilder<'a> {
             ..self.full_response.clone()
         }
     }
+}
+
+/// Set up a test indexer fetching from a REST endpoint served by the given Simulacrum.
+pub async fn set_up(
+    sim: Arc<Simulacrum>,
+    data_ingestion_path: PathBuf,
+) -> (
+    JoinHandle<()>,
+    PgIndexerStore,
+    JoinHandle<Result<(), IndexerError>>,
+    TempDb,
+) {
+    let database = TempDb::new().unwrap();
+    let server_url: SocketAddr = format!("127.0.0.1:{}", get_available_port())
+        .parse()
+        .unwrap();
+
+    let server_handle = tokio::spawn(async move {
+        sui_rest_api::RestService::new_without_version(sim)
+            .start_service(server_url)
+            .await;
+    });
+    // Starts indexer
+    let (pg_store, pg_handle, _) = start_test_indexer(
+        database.database().url().as_str().to_owned(),
+        format!("http://{}", server_url),
+        ReaderWriterConfig::writer_mode(None, None),
+        data_ingestion_path,
+    )
+    .await;
+    (server_handle, pg_store, pg_handle, database)
+}
+
+/// Wait for the indexer to catch up to the given checkpoint sequence number.
+pub async fn wait_for_checkpoint(
+    pg_store: &PgIndexerStore,
+    checkpoint_sequence_number: u64,
+) -> Result<(), IndexerError> {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while {
+            let cp_opt = pg_store
+                .get_latest_checkpoint_sequence_number()
+                .await
+                .unwrap();
+            cp_opt.is_none() || (cp_opt.unwrap() < checkpoint_sequence_number)
+        } {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .expect("Timeout waiting for indexer to catchup to checkpoint");
+    Ok(())
 }

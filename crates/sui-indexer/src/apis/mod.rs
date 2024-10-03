@@ -15,6 +15,6 @@ mod extended_api;
 pub mod governance_api;
 mod indexer_api;
 mod move_utils;
-mod read_api;
+pub mod read_api;
 mod transaction_builder_api;
 mod write_api;
