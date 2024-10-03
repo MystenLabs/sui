@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cache::type_cache::TypeCache;
+use crate::execution::dispatch_tables::VMDispatchTables;
 
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
@@ -14,7 +14,6 @@ use move_vm_types::{
     values::{Locals, Reference, VMValueCast, Value},
 };
 
-use parking_lot::RwLock;
 use tracing::warn;
 
 use std::borrow::Borrow;
@@ -39,11 +38,11 @@ pub struct SerializedReturnValues {
 // -------------------------------------------------------------------------------------------------
 
 pub fn deserialize_value(
-    type_cache: &RwLock<TypeCache>,
+    vtables: &VMDispatchTables,
     ty: &Type,
     arg: impl Borrow<[u8]>,
 ) -> PartialVMResult<Value> {
-    let layout = match type_cache.write().type_to_type_layout(ty) {
+    let layout = match vtables.type_to_type_layout(ty) {
         Ok(layout) => layout,
         Err(_err) => {
             warn!("[VM] failed to get layout from type");
@@ -65,7 +64,7 @@ pub fn deserialize_value(
 }
 
 pub fn deserialize_args(
-    type_cache: &RwLock<TypeCache>,
+    vtables: &VMDispatchTables,
     vm_config: &VMConfig,
     arg_tys: Vec<Type>,
     serialized_args: Vec<impl Borrow<[u8]>>,
@@ -92,19 +91,19 @@ pub fn deserialize_args(
             Type::MutableReference(inner_t) | Type::Reference(inner_t) => {
                 dummy_locals.store_loc(
                     idx,
-                    deserialize_value(type_cache, inner_t, arg_bytes)?,
+                    deserialize_value(vtables, inner_t, arg_bytes)?,
                     vm_config.enable_invariant_violation_check_in_swap_loc,
                 )?;
                 dummy_locals.borrow_loc(idx)
             }
-            _ => deserialize_value(type_cache, &arg_ty, arg_bytes),
+            _ => deserialize_value(vtables, &arg_ty, arg_bytes),
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
     Ok((dummy_locals, deserialized_args))
 }
 
 pub fn serialize_return_value(
-    type_cache: &RwLock<TypeCache>,
+    vtables: &VMDispatchTables,
     vm_config: &VMConfig,
     ty: &Type,
     value: Value,
@@ -123,9 +122,9 @@ pub fn serialize_return_value(
     };
 
     let layout = if vm_config.rethrow_serialization_type_layout_errors {
-        type_cache.write().type_to_type_layout(ty)?
+        vtables.type_to_type_layout(ty)?
     } else {
-        type_cache.write().type_to_type_layout(ty).map_err(|_err| {
+        vtables.type_to_type_layout(ty).map_err(|_err| {
             PartialVMError::new(StatusCode::VERIFICATION_ERROR).with_message(
                 "entry point functions cannot have non-serializable return types".to_string(),
             )
@@ -140,7 +139,7 @@ pub fn serialize_return_value(
 }
 
 pub fn serialize_return_values(
-    type_cache: &RwLock<TypeCache>,
+    vtables: &VMDispatchTables,
     vm_config: &VMConfig,
     return_types: &[Type],
     return_values: Vec<Value>,
@@ -160,6 +159,6 @@ pub fn serialize_return_values(
     return_types
         .iter()
         .zip(return_values)
-        .map(|(ty, value)| serialize_return_value(type_cache, vm_config, ty, value))
+        .map(|(ty, value)| serialize_return_value(vtables, vm_config, ty, value))
         .collect()
 }

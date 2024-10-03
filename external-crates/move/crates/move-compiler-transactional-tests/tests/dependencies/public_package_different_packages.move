@@ -8,7 +8,7 @@ module 0x42::X {
     }
 }
 
-//# publish
+//# publish --location 0x43
 module 0x42::Y {
     use 0x42::X;
     public fun foo(): X::T {

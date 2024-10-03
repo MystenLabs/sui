@@ -13,7 +13,9 @@ pub(crate) struct Package {
     pub(crate) runtime_id: RuntimePackageId,
     pub(crate) storage_id: PackageStorageId,
     pub(crate) modules: BTreeMap<ModuleId, CompiledModule>,
+    #[allow(dead_code)]
     pub(crate) type_origin_table: Vec<TypeOrigin>,
+    #[allow(dead_code)]
     pub(crate) linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>,
 }
 

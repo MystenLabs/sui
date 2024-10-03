@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::{self, Arena, ArenaPointer},
+    cache::{
+        arena::{self, Arena, ArenaPointer},
+        type_cache::CrossVersionPackageCache,
+    },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
     shared::{
         binary_cache::BinaryCache,
@@ -27,24 +30,24 @@ use move_core_types::{
     runtime_value as R,
     vm_status::StatusCode,
 };
-use move_vm_types::loaded_data::runtime_types::{CachedTypeIndex, Type};
-use std::collections::{BTreeMap, HashMap};
+use move_vm_types::loaded_data::runtime_types::{IntraPackageKey, Type, VTableKey};
+use parking_lot::RwLock;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
 
-/// runtime_address::module_name::function_name
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct VTableKey {
-    pub package_key: RuntimePackageId,
-    pub module_name: Identifier,
-    pub function_name: Identifier,
-}
-
 /// A `PackageVTable` is a collection of function pointers indexed by the module and function name
 /// within the package.
-pub type PackageVTable = BinaryCache<(Identifier, Identifier), ArenaPointer<Function>>;
+#[derive(Debug)]
+pub struct PackageVTable {
+    pub functions: BinaryCache<IntraPackageKey, ArenaPointer<Function>>,
+    pub types: Arc<RwLock<CrossVersionPackageCache>>,
+}
 
 /// Representation of a loaded package.
 pub struct Package {
@@ -75,10 +78,10 @@ pub struct Module {
     pub id: ModuleId,
 
     //
-    // types as indexes into the Loader type list
+    // types as indexes into the package's vtable
     //
     #[allow(dead_code)]
-    pub type_refs: Vec<CachedTypeIndex>,
+    pub type_refs: Vec<IntraPackageKey>,
 
     // struct references carry the index into the global vector of types.
     // That is effectively an indirection over the ref table:
@@ -175,7 +178,7 @@ pub struct StructDef {
     // struct field count
     pub field_count: u16,
     // `ModuelCache::structs` global table index
-    pub idx: CachedTypeIndex,
+    pub idx: VTableKey,
 }
 
 #[derive(Debug)]
@@ -183,7 +186,7 @@ pub struct StructInstantiation {
     // struct field count
     pub field_count: u16,
     // `ModuleCache::structs` global table index. It is the generic type.
-    pub def: CachedTypeIndex,
+    pub def: VTableKey,
     pub instantiation_idx: SignatureIndex,
 }
 
@@ -192,7 +195,7 @@ pub struct StructInstantiation {
 pub struct FieldHandle {
     pub offset: usize,
     // `ModuelCache::structs` global table index. It is the generic type.
-    pub owner: CachedTypeIndex,
+    pub owner: VTableKey,
 }
 
 // A field instantiation. The offset is the only used information when operating on a field
@@ -201,7 +204,7 @@ pub struct FieldInstantiation {
     pub offset: usize,
     // `ModuleCache::structs` global table index. It is the generic type.
     #[allow(unused)]
-    pub owner: CachedTypeIndex,
+    pub owner: VTableKey,
 }
 
 #[derive(Debug)]
@@ -211,7 +214,7 @@ pub struct EnumDef {
     pub variant_count: u16,
     pub variants: Vec<VariantDef>,
     // `ModuelCache::types` global table index
-    pub idx: CachedTypeIndex,
+    pub idx: VTableKey,
 }
 
 #[derive(Debug)]
@@ -219,7 +222,7 @@ pub struct EnumInstantiation {
     // enum variant count
     pub variant_count_map: Vec<u16>,
     // `ModuelCache::types` global table index
-    pub def: CachedTypeIndex,
+    pub def: VTableKey,
     pub instantiation_idx: SignatureIndex,
 }
 
@@ -236,7 +239,7 @@ pub struct VariantDef {
 // Cache for data associated to a Struct, used for de/serialization and more
 //
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DatatypeInfo {
     pub runtime_tag: Option<StructTag>,
     pub defining_tag: Option<StructTag>,
@@ -757,9 +760,18 @@ pub enum Bytecode {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
+impl PackageVTable {
+    pub fn new(package_cache: Arc<RwLock<CrossVersionPackageCache>>) -> Self {
+        Self {
+            functions: BinaryCache::new(),
+            types: package_cache,
+        }
+    }
+}
+
 impl Module {
-    pub fn struct_at(&self, idx: StructDefinitionIndex) -> CachedTypeIndex {
-        self.structs[idx.0 as usize].idx
+    pub fn struct_at(&self, idx: StructDefinitionIndex) -> VTableKey {
+        self.structs[idx.0 as usize].idx.clone()
     }
 
     pub fn struct_instantiation_at(&self, idx: u16) -> &StructInstantiation {
@@ -800,8 +812,8 @@ impl Module {
         })
     }
 
-    pub fn enum_at(&self, idx: EnumDefinitionIndex) -> CachedTypeIndex {
-        self.enums[idx.0 as usize].idx
+    pub fn enum_at(&self, idx: EnumDefinitionIndex) -> VTableKey {
+        self.enums[idx.0 as usize].idx.clone()
     }
 
     pub fn enum_instantiation_at(&self, idx: EnumDefInstantiationIndex) -> &EnumInstantiation {
@@ -987,7 +999,7 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::VirtualCall(a) => write!(
                 f,
                 "Call(~{}::{}::{})",
-                a.package_key, a.module_name, a.function_name
+                a.package_key, a.inner_pkg_key.module_name, a.inner_pkg_key.member_name
             ),
             Bytecode::CallGeneric(ndx) => write!(f, "CallGeneric({})", ndx),
             Bytecode::Pack(a) => write!(f, "Pack({})", a),
@@ -1064,7 +1076,9 @@ impl std::fmt::Debug for CallType {
             CallType::Virtual(vtable) => write!(
                 f,
                 "Virtual({}::{}::{})",
-                vtable.package_key, vtable.module_name, vtable.function_name
+                vtable.package_key,
+                vtable.inner_pkg_key.module_name,
+                vtable.inner_pkg_key.member_name
             ),
         }
     }

@@ -4,6 +4,7 @@
 
 #![allow(clippy::new_without_default)]
 
+pub(crate) mod dbg_print;
 pub mod in_memory_test_adapter;
 pub mod storage;
 pub mod vm_test_adapter;

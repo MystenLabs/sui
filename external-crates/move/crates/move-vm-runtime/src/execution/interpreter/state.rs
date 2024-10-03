@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{
-        arena::ArenaPointer,
-        type_cache::{self, TypeCache},
-    },
+    cache::{arena::ArenaPointer, type_cache},
     execution::dispatch_tables::VMDispatchTables,
     jit::runtime::ast::{CallType, Function, Module},
     shared::constants::{
@@ -26,11 +23,10 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_types::{
-    loaded_data::runtime_types::{CachedTypeIndex, Type},
+    loaded_data::runtime_types::{Type, VTableKey},
     values::{self, Locals, VMValueCast, Value},
     views::TypeView,
 };
-use parking_lot::RwLock;
 
 use std::{cmp::min, fmt::Write, sync::Arc};
 use tracing::error;
@@ -109,7 +105,7 @@ pub(super) struct CallFrame {
 
 pub(super) struct TypeWithTypeCache<'a, 'b> {
     pub(super) ty: &'a Type,
-    pub(super) type_cache: &'b RwLock<TypeCache>,
+    pub(super) vtables: &'b VMDispatchTables,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -219,7 +215,7 @@ impl MachineState {
     pub(super) fn debug_print_frame<B: Write>(
         &self,
         buf: &mut B,
-        type_cache: &RwLock<TypeCache>,
+        vtables: &VMDispatchTables,
         idx: usize,
         frame: &CallFrame,
     ) -> PartialVMResult<()> {
@@ -235,7 +231,7 @@ impl MachineState {
         let ty_args = frame.ty_args();
         let mut ty_tags = vec![];
         for ty in ty_args {
-            ty_tags.push(type_cache.write().type_to_type_tag(ty)?);
+            ty_tags.push(vtables.type_to_type_tag(ty)?);
         }
         if !ty_tags.is_empty() {
             debug_write!(buf, "<")?;
@@ -284,12 +280,12 @@ impl MachineState {
     pub(crate) fn debug_print_stack_trace<B: Write>(
         &self,
         buf: &mut B,
-        type_cache: &RwLock<TypeCache>,
+        vtables: &VMDispatchTables,
     ) -> PartialVMResult<()> {
         debug_writeln!(buf, "Call Stack:")?;
-        self.debug_print_frame(buf, type_cache, 0, &self.current_frame)?;
+        self.debug_print_frame(buf, vtables, 0, &self.current_frame)?;
         for (i, frame) in self.call_stack.0.iter().enumerate() {
-            self.debug_print_frame(buf, type_cache, i + 1, frame)?;
+            self.debug_print_frame(buf, vtables, i + 1, frame)?;
         }
         debug_writeln!(buf, "Operand Stack:")?;
         for (idx, val) in self.operand_stack.value.iter().enumerate() {
@@ -570,7 +566,7 @@ impl ModuleDefinitionResolver {
         let struct_inst = loaded_module.struct_instantiation_at(idx.0);
         let instantiation =
             loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
-        self.instantiate_type_common(struct_inst.def, instantiation, ty_args)
+        self.instantiate_type_common(&struct_inst.def, instantiation, ty_args)
     }
 
     pub(crate) fn instantiate_enum_type(
@@ -583,12 +579,12 @@ impl ModuleDefinitionResolver {
         let enum_inst = loaded_module.enum_instantiation_at(handle.enum_def);
         let instantiation =
             loaded_module.instantiation_signature_at(enum_inst.instantiation_idx)?;
-        self.instantiate_type_common(enum_inst.def, instantiation, ty_args)
+        self.instantiate_type_common(&enum_inst.def, instantiation, ty_args)
     }
 
     fn instantiate_type_common(
         &self,
-        gt_idx: CachedTypeIndex,
+        gt_idx: &VTableKey,
         type_params: &[Type],
         ty_args: &[Type],
     ) -> PartialVMResult<Type> {
@@ -605,7 +601,7 @@ impl ModuleDefinitionResolver {
         }
 
         Ok(Type::DatatypeInstantiation(Box::new((
-            gt_idx,
+            gt_idx.clone(),
             type_params
                 .iter()
                 .map(|ty| type_cache::subst(ty, ty_args))
@@ -672,6 +668,6 @@ impl ModuleDefinitionResolver {
 
 impl<'a, 'b> TypeView for TypeWithTypeCache<'a, 'b> {
     fn to_type_tag(&self) -> TypeTag {
-        self.type_cache.write().type_to_type_tag(self.ty).unwrap()
+        self.vtables.type_to_type_tag(self.ty).unwrap()
     }
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, type_cache::TypeCache},
+    cache::arena::ArenaPointer,
     execution::dispatch_tables::VMDispatchTables,
     execution::interpreter::state::{CallFrame, MachineState, ModuleDefinitionResolver},
     jit::runtime::ast::Function,
@@ -12,7 +12,6 @@ use move_binary_format::errors::*;
 use move_vm_config::runtime::VMConfig;
 use move_vm_profiler::{profile_close_frame, profile_open_frame};
 use move_vm_types::{gas::GasMeter, loaded_data::runtime_types::Type, values::Value};
-use parking_lot::RwLock;
 use std::sync::Arc;
 
 mod eval;
@@ -25,7 +24,6 @@ pub(crate) fn run(
     ty_args: Vec<Type>,
     args: Vec<Value>,
     vtables: &VMDispatchTables,
-    type_cache: Arc<RwLock<TypeCache>>,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,
     gas_meter: &mut impl GasMeter,
@@ -36,7 +34,7 @@ pub(crate) fn run(
     if fun_ref.is_native() {
         let return_values = eval::call_native_with_args(
             None,
-            &type_cache,
+            vtables,
             gas_meter,
             &vm_config.runtime_limits_config,
             extensions,
@@ -58,13 +56,6 @@ pub(crate) fn run(
             .map_err(|err| err.finish(Location::Module(fun_ref.module_id().clone())))?;
         let initial_frame = CallFrame::new(resolver, function, ty_args, args);
         let state = MachineState::new(initial_frame);
-        eval::run(
-            state,
-            vtables,
-            &type_cache,
-            vm_config,
-            extensions,
-            gas_meter,
-        )
+        eval::run(state, vtables, vm_config, extensions, gas_meter)
     }
 }

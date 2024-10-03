@@ -3,10 +3,10 @@
 
 use crate::{
     cache::move_cache::MoveCache,
+    dbg_println,
     execution::{dispatch_tables::VMDispatchTables, vm::MoveVM},
     jit,
-    natives::extensions::NativeContextExtensions,
-    natives::functions::NativeFunctions,
+    natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
     shared::{
         linkage_context::LinkageContext,
         types::{PackageStorageId, RuntimePackageId},
@@ -14,7 +14,6 @@ use crate::{
     try_block,
     validation::{validate_for_publish, validate_for_vm_execution},
 };
-
 use move_binary_format::{
     errors::{Location, PartialVMResult, VMResult},
     CompiledModule,
@@ -25,14 +24,8 @@ use move_core_types::{
 };
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::gas::GasMeter;
+use std::{collections::HashMap, sync::Arc};
 use tracing::warn;
-
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
-
-mod dependencies;
 
 // FIXME(cswords): This is only public for testing...
 pub mod package_resolution;
@@ -50,8 +43,6 @@ pub struct MoveRuntime {
     /// The Move VM's configuration.
     vm_config: Arc<VMConfig>,
 }
-
-const DEBUG_PRINT: bool = true;
 
 impl MoveRuntime {
     pub fn new(natives: NativeFunctions, vm_config: VMConfig) -> Self {
@@ -139,8 +130,7 @@ impl MoveRuntime {
             .map(|(_, pkg)| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
             .collect::<HashMap<RuntimePackageId, Arc<jit::runtime::ast::Package>>>();
 
-        let virtual_tables =
-            VMDispatchTables::new(runtime_packages, Arc::clone(&self.cache.type_cache))?;
+        let virtual_tables = VMDispatchTables::new(runtime_packages)?;
 
         // Called and checked linkage, etc.
         let instance = MoveVM {
@@ -179,9 +169,7 @@ impl MoveRuntime {
         package: Vec<Vec<u8>>,
         _gas_meter: &mut impl GasMeter,
     ) -> (VMResult<ChangeSet>, DataCache) {
-        if DEBUG_PRINT {
-            println!("\n\nPublishing module at {pkg_storage_id} (=> {pkg_runtime_id})\n\n");
-        }
+        dbg_println!("\n\nPublishing module at {pkg_storage_id} (=> {pkg_runtime_id})\n\n");
         // TODO: Don't deserialize just for names. Reserialize off the verified ones or something.
         let compiled_modules = match package
             .iter()
@@ -197,9 +185,7 @@ impl MoveRuntime {
                 return (Err(err.finish(Location::Undefined)), data_cache);
             }
         };
-        if DEBUG_PRINT {
-            println!("\n\nGrabbed modules\n\n");
-        }
+        dbg_println!("\n\nGrabbed modules\n\n");
 
         // FIXME: Should this come in a bit differently?
         let pkg = SerializedPackage {
@@ -240,14 +226,10 @@ impl MoveRuntime {
             let data_cache = data_cache.into_remote();
             return (Err(err), data_cache);
         }
-        if DEBUG_PRINT {
-            println!("\n\nVerified package\n\n");
-        }
+        dbg_println!("\n\nVerified package\n\n");
 
         data_cache.publish_package(pkg_storage_id, compiled_modules);
-        if DEBUG_PRINT {
-            println!("\n\nUpdated data cache\n\n");
-        }
+        dbg_println!("\n\nUpdated data cache\n\n");
 
         let (result, remote) = data_cache.into_effects();
         (result.map_err(|e| e.finish(Location::Undefined)), remote)

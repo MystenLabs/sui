@@ -10,8 +10,11 @@ use move_binary_format::{
     },
 };
 use move_core_types::{
-    account_address::AccountAddress, gas_algebra::AbstractMemorySize, identifier::Identifier,
-    language_storage::ModuleId, vm_status::StatusCode,
+    account_address::AccountAddress,
+    gas_algebra::AbstractMemorySize,
+    identifier::Identifier,
+    language_storage::{ModuleId, StructTag},
+    vm_status::StatusCode,
 };
 use std::fmt::Debug;
 use std::{cmp::max, collections::BTreeMap};
@@ -127,6 +130,11 @@ impl DepthFormula {
     }
 }
 
+// TODO(vm-rewrite): from here down should all reside in the type cache. But it needs to stay in
+// move-vm-types for now since it's used in values_impl.rs. We need to determine what we want to do
+// here and whether we want to combine the move-vm-types crate into the move-vm-runtime crate. But
+// for now the VTableKeys (etc) all live here since `Type` is needed in this crate.
+
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct CachedDatatype {
     pub abilities: AbilitySet,
@@ -187,12 +195,14 @@ impl CachedDatatype {
         }
     }
 
-    pub fn datatype_key(&self) -> (AccountAddress, Identifier, Identifier) {
-        (
-            *self.defining_id.address(),
-            self.defining_id.name().to_owned(),
-            self.name.to_owned(),
-        )
+    pub fn datatype_key(&self) -> VTableKey {
+        VTableKey {
+            package_key: *self.runtime_id.address(),
+            inner_pkg_key: IntraPackageKey {
+                module_name: self.runtime_id.name().to_owned(),
+                member_name: self.name.to_owned(),
+            },
+        }
     }
 }
 
@@ -202,8 +212,22 @@ impl CachedDatatype {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct CachedTypeIndex(pub usize);
+// XXX: This is just here for now, and will be moved into the vm runtime once we determine how we
+// want to slice and dice the crates.
+pub type RuntimePackageId = AccountAddress;
+
+/// runtime_address::module_name::function_name
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct VTableKey {
+    pub package_key: RuntimePackageId,
+    pub inner_pkg_key: IntraPackageKey,
+}
+
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct IntraPackageKey {
+    pub module_name: Identifier,
+    pub member_name: Identifier,
+}
 
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Type {
@@ -214,14 +238,40 @@ pub enum Type {
     Address,
     Signer,
     Vector(Box<Type>),
-    Datatype(CachedTypeIndex),
-    DatatypeInstantiation(Box<(CachedTypeIndex, Vec<Type>)>),
+    Datatype(VTableKey),
+    DatatypeInstantiation(Box<(VTableKey, Vec<Type>)>),
     Reference(Box<Type>),
     MutableReference(Box<Type>),
     TyParam(u16),
     U16,
     U32,
     U256,
+}
+
+impl VTableKey {
+    pub fn from_tag(tag: &StructTag) -> Self {
+        Self {
+            package_key: tag.address,
+            inner_pkg_key: IntraPackageKey {
+                module_name: tag.module.clone(),
+                member_name: tag.name.clone(),
+            },
+        }
+    }
+}
+
+impl From<(RuntimePackageId, Identifier, Identifier)> for VTableKey {
+    fn from(
+        (package_key, module_name, member_name): (RuntimePackageId, Identifier, Identifier),
+    ) -> Self {
+        Self {
+            package_key,
+            inner_pkg_key: IntraPackageKey {
+                module_name,
+                member_name,
+            },
+        }
+    }
 }
 
 impl Type {
@@ -252,14 +302,14 @@ impl Type {
             Type::MutableReference(ty) => {
                 Type::MutableReference(Box::new(ty.apply_subst(subst, depth + 1)?))
             }
-            Type::Datatype(def_idx) => Type::Datatype(*def_idx),
+            Type::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
             Type::DatatypeInstantiation(def_inst) => {
                 let (def_idx, instantiation) = &**def_inst;
                 let mut inst = vec![];
                 for ty in instantiation {
                     inst.push(ty.apply_subst(subst, depth + 1)?)
                 }
-                Type::DatatypeInstantiation(Box::new((*def_idx, inst)))
+                Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
             }
         };
         Ok(res)

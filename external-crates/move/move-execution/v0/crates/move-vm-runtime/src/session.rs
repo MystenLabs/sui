@@ -22,7 +22,7 @@ use move_core_types::{
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
-    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
+    loaded_data::runtime_types::{CachedDatatype, Type, VTableKey},
 };
 use std::{borrow::Borrow, sync::Arc};
 
@@ -202,7 +202,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         &self,
         module_id: &ModuleId,
         struct_name: &IdentStr,
-    ) -> VMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
+    ) -> VMResult<(VTableKey, Arc<CachedDatatype>)> {
         self.runtime
             .loader()
             .load_struct_by_name(struct_name, module_id, &self.data_cache)
@@ -250,7 +250,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
 
     /// Fetch a struct type from cache, if the index is in bounds
     /// Helpful when paired with load_type, or any other API that returns 'Type'
-    pub fn get_struct_type(&self, index: CachedTypeIndex) -> Option<Arc<CachedDatatype>> {
+    pub fn get_struct_type(&self, index: VTableKey) -> Option<Arc<CachedDatatype>> {
         self.runtime.loader().get_struct_type(index)
     }
 

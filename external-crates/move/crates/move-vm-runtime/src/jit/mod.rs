@@ -4,19 +4,18 @@
 pub mod runtime;
 
 use crate::{
-    cache::type_cache::TypeCache,
+    cache::type_cache::CrossVersionPackageCache,
     jit::runtime::ast::Package,
     natives::functions::NativeFunctions,
     shared::{linkage_context::LinkageContext, types::PackageStorageId},
     validation::verification,
 };
-
 use move_binary_format::errors::PartialVMResult;
-
 use parking_lot::RwLock;
+use std::sync::Arc;
 
 pub fn translate_package(
-    type_cache: &RwLock<TypeCache>,
+    package_cache: Arc<RwLock<CrossVersionPackageCache>>,
     natives: &NativeFunctions,
     link_context: &LinkageContext,
     storage_id: PackageStorageId,
@@ -30,7 +29,7 @@ pub fn translate_package(
         .collect();
     // FIXME: change this signature to be against a verified module, too.
     runtime::translate::package(
-        type_cache,
+        package_cache,
         natives,
         link_context,
         storage_id,

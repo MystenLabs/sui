@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, move_cache::MoveCache},
+    cache::{arena::ArenaPointer, move_cache::MoveCache, type_cache},
+    dbg_println,
     execution::{dispatch_tables::VMDispatchTables, interpreter},
-    jit::runtime::ast::{Function, VTableKey},
+    jit::runtime::ast::Function,
     natives::extensions::NativeContextExtensions,
     runtime::data_cache::TransactionDataCache,
     shared::{
@@ -25,7 +26,10 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-use move_vm_types::{gas::GasMeter, loaded_data::runtime_types::Type};
+use move_vm_types::{
+    gas::GasMeter,
+    loaded_data::runtime_types::{IntraPackageKey, Type, VTableKey},
+};
 use std::{borrow::Borrow, sync::Arc};
 
 // -------------------------------------------------------------------------------------------------
@@ -129,8 +133,8 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
             }
         }
 
-        println!("running {module}::{function_name}");
-        println!("tables: {:#?}", self.virtual_tables.loaded_packages);
+        dbg_println!("running {module}::{function_name}");
+        dbg_println!("tables: {:#?}", self.virtual_tables.loaded_packages);
         let bypass_declared_entry_check = true;
         self.execute_function(
             module,
@@ -147,10 +151,7 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
     }
 
     pub fn load_type(&self, tag: &TypeTag) -> VMResult<Type> {
-        self.vm_cache
-            .type_cache
-            .read()
-            .load_type(tag, &self.link_context)
+        self.virtual_tables.load_type(tag)
     }
 
     // -------------------------------------------
@@ -229,11 +230,13 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
         ty_args: &[Type],
     ) -> VMResult<MoveVMFunction> {
         let (package_key, module_id) = runtime_id.clone().into();
-        let function_name = function_name.into();
+        let member_name = function_name.into();
         let vtable_key = VTableKey {
             package_key,
-            module_name: module_id,
-            function_name,
+            inner_pkg_key: IntraPackageKey {
+                module_name: module_id,
+                member_name,
+            },
         };
         let compiled_module = self
             .virtual_tables
@@ -251,12 +254,7 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
             .signature_at(fun_ref.parameters)
             .0
             .iter()
-            .map(|tok| {
-                self.vm_cache
-                    .type_cache
-                    .read()
-                    .make_type(&compiled_module, tok, &self.link_context)
-            })
+            .map(|tok| type_cache::make_type(&compiled_module, tok))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
@@ -264,19 +262,12 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
             .signature_at(fun_ref.return_)
             .0
             .iter()
-            .map(|tok| {
-                self.vm_cache
-                    .type_cache
-                    .read()
-                    .make_type(&compiled_module, tok, &self.link_context)
-            })
+            .map(|tok| type_cache::make_type(&compiled_module, tok))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
         // verify type arguments
-        self.vm_cache
-            .type_cache
-            .read()
+        self.virtual_tables
             .verify_ty_args(fun_ref.type_parameters(), ty_args)
             .map_err(|e| e.finish(Location::Module(runtime_id.clone())))?;
 
@@ -314,7 +305,7 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
             })
             .collect::<Vec<_>>();
         let (mut dummy_locals, deserialized_args) = deserialize_args(
-            &self.vm_cache.type_cache,
+            &self.virtual_tables,
             &self.vm_config,
             arg_types,
             serialized_args,
@@ -331,14 +322,13 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
             ty_args,
             deserialized_args,
             &self.virtual_tables,
-            self.vm_cache.type_cache.clone(),
             self.vm_config.clone(),
             &mut self.native_extensions,
             gas_meter,
         )?;
 
         let serialized_return_values = serialize_return_values(
-            &self.vm_cache.type_cache,
+            &self.virtual_tables,
             &self.vm_config,
             &return_types,
             return_values,
@@ -352,12 +342,8 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
                     idx,
                     self.vm_config.enable_invariant_violation_check_in_swap_loc,
                 )?;
-                let (bytes, layout) = serialize_return_value(
-                    &self.vm_cache.type_cache,
-                    &self.vm_config,
-                    &ty,
-                    local_val,
-                )?;
+                let (bytes, layout) =
+                    serialize_return_value(&self.virtual_tables, &self.vm_config, &ty, local_val)?;
                 Ok((idx as LocalIndex, bytes, layout))
             })
             .collect::<PartialVMResult<_>>()

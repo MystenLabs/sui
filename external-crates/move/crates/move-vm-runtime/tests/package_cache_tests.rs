@@ -123,7 +123,7 @@ fn cache_package_internal_package_calls_only_no_types() {
     let l_pkg = result.first_key_value().unwrap().1;
     assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.runtime.storage_id, package_address);
-    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
 }
 
 #[test]
@@ -142,17 +142,7 @@ fn cache_package_internal_package_calls_only_with_types() {
     let l_pkg = result.first_key_value().unwrap().1;
     assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.runtime.storage_id, package_address);
-    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 3);
-    println!(
-        "{:#?}",
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
-            .read()
-            .cached_types
-            .id_map
-    );
+    assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
 }
 
 #[test]
@@ -172,12 +162,12 @@ fn cache_package_external_package_calls_no_types() {
     let l_pkg = results.get(&package1_address).unwrap();
     assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 2);
     assert_eq!(l_pkg.runtime.storage_id, package1_address);
-    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 2);
+    assert_eq!(l_pkg.runtime.vtable.functions.len(), 2);
 
     let l_pkg = results.get(&package2_address).unwrap();
     assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 1);
     assert_eq!(l_pkg.runtime.storage_id, package2_address);
-    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 1);
+    assert_eq!(l_pkg.runtime.vtable.functions.len(), 1);
 }
 
 /// Generate a new, dummy cachce for testing.
@@ -204,7 +194,7 @@ fn load_package_internal_package_calls_only_no_types() {
     let l_pkg = l_pkg.get(&package_address).unwrap();
     assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.runtime.storage_id, package_address);
-    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 3);
+    assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
 }
 
 #[test]
@@ -216,7 +206,6 @@ fn load_package_internal_package_calls_only_with_types() {
         .unwrap();
     let link_context = adapter.generate_default_linkage(package_address).unwrap();
 
-    let cache = dummy_cache_for_testing();
     let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
 
     // Verify that we've loaded the package correctly
@@ -225,8 +214,8 @@ fn load_package_internal_package_calls_only_with_types() {
     let l_pkg = l_pkg.get(&package_address).unwrap();
     assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.runtime.storage_id, package_address);
-    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 3);
-    println!("{:#?}", cache.type_cache().read().cached_types.id_map);
+    assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
+    assert_eq!(l_pkg.runtime.vtable.types.read().cached_types.len(), 0);
 }
 
 #[test]
@@ -246,15 +235,16 @@ fn load_package_external_package_calls_no_types() {
     let l_pkg = l_pkg.get(&package2_address).unwrap();
     assert_eq!(l_pkg.runtime.loaded_modules.binaries.len(), 1);
     assert_eq!(l_pkg.runtime.storage_id, package2_address);
-    assert_eq!(l_pkg.runtime.vtable.binaries.len(), 1);
+    assert_eq!(l_pkg.runtime.vtable.functions.len(), 1);
 
-    for fptr in l_pkg.runtime.vtable.binaries.iter() {
+    for fptr in l_pkg.runtime.vtable.functions.binaries.iter() {
         println!("{:#?}", fptr.to_ref().code());
     }
 }
 
 #[test]
 fn cache_package_external_package_type_references() {
+    let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
     adapter
@@ -266,15 +256,20 @@ fn cache_package_external_package_type_references() {
 
     assert!(result.is_ok());
     assert_eq!(
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
+        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
             .read()
             .cached_types
             .id_map
             .len(),
-        7
+        3
+    );
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        4
     );
 }
 
@@ -335,10 +330,7 @@ fn cache_package_external_package_type_references_cache_reload() {
 
     assert!(result1.is_ok());
     assert_eq!(
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
+        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
             .read()
             .cached_types
             .id_map
@@ -351,20 +343,28 @@ fn cache_package_external_package_type_references_cache_reload() {
 
     assert!(result2.is_ok());
     assert_eq!(
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
+        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
             .read()
             .cached_types
             .id_map
             .len(),
-        7
+        3
+    );
+
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        4
     );
 }
 
 #[test]
 fn cache_package_external_package_type_references_with_shared_dep() {
+    let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
+    let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
     let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
     let mut adapter = InMemoryTestAdapter::new();
     adapter
@@ -376,15 +376,30 @@ fn cache_package_external_package_type_references_with_shared_dep() {
 
     assert!(result.is_ok());
     assert_eq!(
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
+        adapter.runtime().cache().type_cache().read().package_cache[&package3_address]
             .read()
             .cached_types
             .id_map
             .len(),
-        10
+        3
+    );
+
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        3
+    );
+
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        4
     );
 }
 
@@ -404,10 +419,7 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let result1 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result1.is_ok());
     assert_eq!(
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
+        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
             .read()
             .cached_types
             .id_map
@@ -419,30 +431,48 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let result2 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result2.is_ok());
     assert_eq!(
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
+        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
             .read()
             .cached_types
             .id_map
             .len(),
-        7
+        3
+    );
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        4
     );
 
     let link_context = adapter.generate_default_linkage(package3_address).unwrap();
     let result3 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result3.is_ok());
     assert_eq!(
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
+        adapter.runtime().cache().type_cache().read().package_cache[&package3_address]
             .read()
             .cached_types
             .id_map
             .len(),
-        10
+        3
+    );
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        3
+    );
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        4
     );
 
     // Now load it the other way -- from the top down. We do it in a new adapter to get a new
@@ -456,45 +486,84 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let result3 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result3.is_ok());
     assert_eq!(
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
+        adapter.runtime().cache().type_cache().read().package_cache[&package3_address]
             .read()
             .cached_types
             .id_map
             .len(),
-        10
+        3
+    );
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        3
+    );
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        4
     );
 
     let link_context = adapter.generate_default_linkage(package1_address).unwrap();
     let result1 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result1.is_ok());
     assert_eq!(
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
+        adapter.runtime().cache().type_cache().read().package_cache[&package3_address]
             .read()
             .cached_types
             .id_map
             .len(),
-        10
+        3
+    );
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        3
+    );
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        4
     );
 
     let link_context = adapter.generate_default_linkage(package2_address).unwrap();
     let result2 = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result2.is_ok());
     assert_eq!(
-        adapter
-            .runtime()
-            .cache()
-            .type_cache()
+        adapter.runtime().cache().type_cache().read().package_cache[&package3_address]
             .read()
             .cached_types
             .id_map
             .len(),
-        10
+        3
+    );
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package2_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        3
+    );
+    assert_eq!(
+        adapter.runtime().cache().type_cache().read().package_cache[&package1_address]
+            .read()
+            .cached_types
+            .id_map
+            .len(),
+        4
     );
 }
 
@@ -656,7 +725,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.vm()cache().package_cache().read().len(), 0);
+    assert_eq!(adapter.runtime()cache().package_cache().read().len(), 0);
 
     // publish c v1
     let packages = compile_modules_in_file("rt_c_v1.move", &[]);

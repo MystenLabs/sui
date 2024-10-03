@@ -5,6 +5,7 @@ pub mod deserialization;
 pub mod verification;
 
 use crate::{
+    dbg_println,
     natives::functions::NativeFunctions,
     shared::{linkage_context::LinkageContext, types::RuntimePackageId},
     validation::verification::linkage::verify_linkage_and_cyclic_checks_for_publication,
@@ -37,7 +38,7 @@ pub fn validate_for_publish(
 ) -> VMResult<verification::ast::Package> {
     let loading_package = validate_package(natives, vm_config, package)?;
 
-    println!("doing verification with linkage context {link_context:#?}");
+    dbg_println!("doing verification with linkage context {link_context:#?}");
     // Make sure all modules' self addresses match the `runtime_package_id`.
     for module in loading_package.as_modules().into_iter() {
         if module.value.address() != &runtime_package_id {

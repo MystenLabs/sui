@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::type_cache::TypeCache, execution::interpreter::state::MachineState,
+    execution::{dispatch_tables::VMDispatchTables, interpreter::state::MachineState},
     natives::extensions::NativeContextExtensions,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -20,7 +20,6 @@ use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
 };
-use parking_lot::RwLock;
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
@@ -103,7 +102,7 @@ pub struct NativeContext<'a, 'b, 'c> {
     // If this native was the base invocation, we do not create a machine state. This is only used
     // for printing stack traces, and in that case we will print that there is no call stack.
     state: Option<&'a MachineState>,
-    type_cache: &'a RwLock<TypeCache>,
+    vtables: &'a VMDispatchTables,
     extensions: &'a mut NativeContextExtensions<'b>,
     runtime_limits_config: &'c VMRuntimeLimitsConfig,
     gas_left: RefCell<InternalGas>,
@@ -113,14 +112,14 @@ pub struct NativeContext<'a, 'b, 'c> {
 impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     pub(crate) fn new(
         state: Option<&'a MachineState>,
-        type_cache: &'a RwLock<TypeCache>,
+        vtables: &'a VMDispatchTables,
         extensions: &'a mut NativeContextExtensions<'b>,
         runtime_limits_config: &'c VMRuntimeLimitsConfig,
         gas_budget: InternalGas,
     ) -> Self {
         Self {
             state,
-            type_cache,
+            vtables,
             extensions,
             runtime_limits_config,
             gas_left: RefCell::new(gas_budget),
@@ -145,15 +144,15 @@ macro_rules! debug_writeln {
 
 impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     pub fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.type_cache.write().type_to_type_tag(ty)
+        self.vtables.type_to_type_tag(ty)
     }
 
     pub fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.type_cache.write().type_to_runtime_type_tag(ty)
+        self.vtables.type_to_runtime_type_tag(ty)
     }
 
     pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<Option<R::MoveTypeLayout>> {
-        match self.type_cache.write().type_to_type_layout(ty) {
+        match self.vtables.type_to_type_layout(ty) {
             Ok(ty_layout) => Ok(Some(ty_layout)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
             Err(_) => Ok(None),
@@ -164,7 +163,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
         &self,
         ty: &Type,
     ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
-        match self.type_cache.write().type_to_fully_annotated_layout(ty) {
+        match self.vtables.type_to_fully_annotated_layout(ty) {
             Ok(ty_layout) => Ok(Some(ty_layout)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
             Err(_) => Ok(None),
@@ -202,7 +201,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     pub fn print_stack_trace<B: Write>(&self, buf: &mut B) -> PartialVMResult<()> {
         // If this native was a base invocation, it won't have a stack to speak of.
         if let Some(state) = self.state {
-            state.debug_print_stack_trace(buf, self.type_cache)
+            state.debug_print_stack_trace(buf, self.vtables)
         } else {
             debug_writeln!(buf, "No Call Stack Available")?;
             debug_writeln!(buf, "Base Native Invocations Do Not Create Call Stacks")

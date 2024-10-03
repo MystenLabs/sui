@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, type_cache::TypeCache},
-    execution::dispatch_tables::VMDispatchTables,
-    execution::interpreter::state::{CallFrame, MachineState, TypeWithTypeCache},
+    cache::arena::ArenaPointer,
+    dbg_println,
+    execution::{
+        dispatch_tables::VMDispatchTables,
+        interpreter::state::{CallFrame, MachineState, TypeWithTypeCache},
+    },
     jit::runtime::ast::{Bytecode, CallType, Function},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
 };
@@ -26,14 +29,11 @@ use move_vm_types::{
         Vector, VectorRef,
     },
 };
-use parking_lot::RwLock;
 use smallvec::SmallVec;
 
 use std::{collections::VecDeque, sync::Arc};
 
 use super::state::ModuleDefinitionResolver;
-
-const DEBUG_STEP_PRINT: bool = false;
 
 #[derive(PartialEq, Eq)]
 enum StepStatus {
@@ -43,7 +43,6 @@ enum StepStatus {
 
 struct RunContext<'vm_cache, 'native, 'native_lifetimes> {
     vtables: &'vm_cache VMDispatchTables,
-    type_cache: &'vm_cache RwLock<TypeCache>,
     vm_config: Arc<VMConfig>,
     extensions: &'native mut NativeContextExtensions<'native_lifetimes>,
 }
@@ -71,7 +70,6 @@ macro_rules! set_err_info {
 pub(super) fn run(
     start_state: MachineState,
     vtables: &VMDispatchTables,
-    type_cache: &RwLock<TypeCache>,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,
     gas_meter: &mut impl GasMeter,
@@ -79,28 +77,27 @@ pub(super) fn run(
     let mut run_context = RunContext {
         extensions,
         vtables,
-        type_cache,
         vm_config,
     };
 
     let mut state = start_state;
 
-    if DEBUG_STEP_PRINT {
+    dbg_println!(flag: eval_step, "Call Frame:\n{:?}", state.current_frame);
+    dbg_println!(flag: eval_step, "{}", {
         let mut buf = String::new();
-        let _ = state.debug_print_stack_trace(&mut buf, run_context.type_cache);
-        println!("Call Frame:\n{:?}", state.current_frame);
-        println!("{buf}");
-    }
+        let _ = state.debug_print_stack_trace(&mut buf, run_context.vtables);
+        buf
+    });
 
     // Run until we're done or we produce an error and bail.
     while step(&mut state, &mut run_context, gas_meter)? != StepStatus::Done {
-        if DEBUG_STEP_PRINT {
+        dbg_println!(flag: eval_step, "-------------------------------------");
+        dbg_println!(flag: eval_step, "Call Frame:\n{:?}", state.current_frame);
+        dbg_println!(flag: eval_step, "{}", {
             let mut buf = String::new();
-            println!("-------------------------------------");
-            println!("Call Frame:\n{:?}", state.current_frame);
-            let _ = state.debug_print_stack_trace(&mut buf, run_context.type_cache);
-            println!("{buf}");
-        }
+            let _ = state.debug_print_stack_trace(&mut buf, run_context.vtables);
+            buf
+        });
         continue;
     }
 
@@ -132,9 +129,7 @@ fn step(
     });
 
     profile_open_instr!(gas_meter, format!("{:?}", instruction));
-    if DEBUG_STEP_PRINT {
-        println!("Instruction: {instruction:?}");
-    }
+    dbg_println!(flag: eval_step, "Instruction: {instruction:?}");
     // These are split out because `PartialVMError` and `VMError` are different types. It's unclear
     // why as they hold identical data, but if we could combine them, we could entirely inline
     // `op_step` into this function.
@@ -305,7 +300,7 @@ fn op_step_impl(
         ($ty: expr) => {
             TypeWithTypeCache {
                 ty: $ty,
-                type_cache: run_context.type_cache,
+                vtables: run_context.vtables,
             }
         };
     }
@@ -674,7 +669,7 @@ fn op_step_impl(
                 .instantiate_single_type(*si, state.current_frame.ty_args())?;
             gas_meter.charge_vec_len(TypeWithTypeCache {
                 ty,
-                type_cache: run_context.type_cache,
+                vtables: run_context.vtables,
             })?;
             let value = vec_ref.len(ty)?;
             state.push_operand(value)?;
@@ -876,7 +871,7 @@ fn call_function(
                 fun_ref.name(),
                 ty_args.iter().map(|ty| TypeWithTypeCache {
                     ty,
-                    type_cache: run_context.type_cache,
+                    vtables: run_context.vtables,
                 }),
                 last_n_operands,
                 (fun_ref.local_count() as u64).into(),
@@ -943,13 +938,13 @@ fn call_native_impl(
         .collect::<VecDeque<_>>();
     let RunContext {
         extensions,
-        type_cache,
         vm_config,
+        vtables,
         ..
     } = run_context;
     let return_values = call_native_with_args(
         Some(state),
-        type_cache,
+        vtables,
         gas_meter,
         &vm_config.runtime_limits_config,
         extensions,
@@ -969,7 +964,7 @@ fn call_native_impl(
 
 pub(super) fn call_native_with_args(
     state: Option<&MachineState>,
-    type_cache: &RwLock<TypeCache>,
+    vtables: &VMDispatchTables,
     gas_meter: &mut impl GasMeter,
     runtime_limits_config: &VMRuntimeLimitsConfig,
     extensions: &mut NativeContextExtensions,
@@ -984,7 +979,7 @@ pub(super) fn call_native_with_args(
     }
     let mut native_context = NativeContext::new(
         state,
-        type_cache,
+        vtables,
         extensions,
         runtime_limits_config,
         gas_meter.remaining_gas(),
@@ -992,9 +987,7 @@ pub(super) fn call_native_with_args(
     let native_function = function.get_native()?;
 
     gas_meter.charge_native_function_before_execution(
-        ty_args
-            .iter()
-            .map(|ty| TypeWithTypeCache { ty, type_cache }),
+        ty_args.iter().map(|ty| TypeWithTypeCache { ty, vtables }),
         args.iter(),
     )?;
 
@@ -1103,11 +1096,11 @@ fn check_depth_of_type(run_context: &RunContext, ty: &Type) -> PartialVMResult<u
     else {
         return Ok(1);
     };
-    check_depth_of_type_impl(run_context.type_cache, ty, 0, max_depth)
+    check_depth_of_type_impl(run_context, ty, 0, max_depth)
 }
 
 fn check_depth_of_type_impl(
-    type_cache: &RwLock<TypeCache>,
+    run_context: &RunContext,
     ty: &Type,
     current_depth: u64,
     max_depth: u64,
@@ -1123,59 +1116,46 @@ fn check_depth_of_type_impl(
     }
 
     // Calculate depth of the type itself
-    let ty_depth =
-        match ty {
-            Type::Bool
-            | Type::U8
-            | Type::U16
-            | Type::U32
-            | Type::U64
-            | Type::U128
-            | Type::U256
-            | Type::Address
-            | Type::Signer => check_depth!(1),
-            // Even though this is recursive this is OK since the depth of this recursion is
-            // bounded by the depth of the type arguments, which we have already checked.
-            Type::Reference(ty) | Type::MutableReference(ty) | Type::Vector(ty) => {
-                check_depth_of_type_impl(type_cache, ty, check_depth!(1), max_depth)?
-            }
-            Type::Datatype(si) => {
-                let struct_type = type_cache.read().get_type(*si).map_err(|err| {
-                    err.with_message("Struct Definition not resolved".to_string())
-                })?;
-                check_depth!(struct_type
-                    .depth
-                    .as_ref()
-                    .ok_or_else(|| { PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED) })?
-                    .solve(&[])?)
-            }
-            Type::DatatypeInstantiation(inst) => {
-                let (si, ty_args) = &**inst;
-                // Calculate depth of all type arguments, and make sure they themselves are not too deep.
-                let ty_arg_depths = ty_args
-                    .iter()
-                    .map(|ty| {
-                        // Ty args should be fully resolved and not need any type arguments
-                        check_depth_of_type_impl(type_cache, ty, check_depth!(0), max_depth)
-                    })
-                    .collect::<PartialVMResult<Vec<_>>>()?;
-                let struct_type = type_cache.read().get_type(*si).map_err(|err| {
-                    err.with_message("Struct Definition not resolved".to_string())
-                })?;
-                check_depth!(struct_type
-                    .depth
-                    .as_ref()
-                    .ok_or_else(|| { PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED) })?
-                    .solve(&ty_arg_depths)?)
-            }
-            // NB: substitution must be performed before calling this function
-            Type::TyParam(_) => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Type parameter should be fully resolved".to_string()),
-                )
-            }
-        };
+    let ty_depth = match ty {
+        Type::Bool
+        | Type::U8
+        | Type::U16
+        | Type::U32
+        | Type::U64
+        | Type::U128
+        | Type::U256
+        | Type::Address
+        | Type::Signer => check_depth!(1),
+        // Even though this is recursive this is OK since the depth of this recursion is
+        // bounded by the depth of the type arguments, which we have already checked.
+        Type::Reference(ty) | Type::MutableReference(ty) | Type::Vector(ty) => {
+            check_depth_of_type_impl(run_context, ty, check_depth!(1), max_depth)?
+        }
+        Type::Datatype(si) => {
+            let depth_formula = run_context.vtables.calculate_depth_of_type(si)?;
+            check_depth!(depth_formula.solve(&[])?)
+        }
+        Type::DatatypeInstantiation(inst) => {
+            let (si, ty_args) = &**inst;
+            // Calculate depth of all type arguments, and make sure they themselves are not too deep.
+            let ty_arg_depths = ty_args
+                .iter()
+                .map(|ty| {
+                    // Ty args should be fully resolved and not need any type arguments
+                    check_depth_of_type_impl(run_context, ty, check_depth!(0), max_depth)
+                })
+                .collect::<PartialVMResult<Vec<_>>>()?;
+            let depth_formula = run_context.vtables.calculate_depth_of_type(si)?;
+            check_depth!(depth_formula.solve(&ty_arg_depths)?)
+        }
+        // NB: substitution must be performed before calling this function
+        Type::TyParam(_) => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Type parameter should be fully resolved".to_string()),
+            )
+        }
+    };
 
     Ok(ty_depth)
 }

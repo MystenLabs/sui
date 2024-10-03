@@ -9,9 +9,8 @@
 
 use crate::{
     cache::move_cache::{self, MoveCache},
-    jit,
+    dbg_println, jit,
     natives::functions::NativeFunctions,
-    runtime::dependencies::{compute_dependency_order, compute_immediate_package_dependencies},
     shared::{
         linkage_context::LinkageContext, logging::expect_no_verification_errors,
         types::PackageStorageId,
@@ -40,7 +39,7 @@ pub fn resolve_packages(
     link_context: &LinkageContext,
     packages_to_read: BTreeSet<PackageStorageId>,
 ) -> VMResult<BTreeMap<PackageStorageId, Arc<move_cache::Package>>> {
-    // println!("loading {packages_to_read:#?} in linkage context {link_context:#?}");
+    dbg_println!("loading {packages_to_read:#?} in linkage context {link_context:#?}");
     let allow_loading_failure = true;
 
     let initial_size = packages_to_read.len();
@@ -59,7 +58,6 @@ pub fn resolve_packages(
 
     // Load and cache anything that wasn't already there.
     // NB: packages can be loaded out of order here (e.g., in parallel) if so desired.
-    let mut to_cache = BTreeMap::new();
     for pkg in load_and_verify_packages(
         natives,
         vm_config,
@@ -67,25 +65,8 @@ pub fn resolve_packages(
         allow_loading_failure,
         &pkgs_to_cache,
     )? {
-        let package_deps = compute_immediate_package_dependencies(link_context, &pkg)?;
-        to_cache.insert(pkg.storage_id, (pkg, package_deps));
-    }
-
-    let pkgs_in_dependency_order =
-        compute_dependency_order(to_cache).map_err(|e| e.finish(Location::Undefined))?;
-
-    // Cache each package in reverse dependency order.
-    // NB: the packages must be cached in reverse dependency order (at the moment) otherwise
-    // types may not be cached correctly.
-    for (package_id, deserialized_package) in pkgs_in_dependency_order.into_iter().rev() {
-        let pkg = jit_and_cache_package(
-            cache,
-            natives,
-            link_context,
-            package_id,
-            deserialized_package,
-        )?;
-        cached_packages.insert(package_id, pkg);
+        let pkg = jit_and_cache_package(cache, natives, link_context, pkg.storage_id, pkg)?;
+        cached_packages.insert(pkg.verified.storage_id, pkg);
     }
 
     // The number of cached packages should be the same as the number of packages provided to
@@ -135,8 +116,12 @@ pub fn jit_and_cache_package(
         panic!("Attempting to re-jit a package, which should be impossible -- we already checked.");
     }
 
+    let package_cache = cache
+        .type_cache
+        .write()
+        .get_or_create_package_cache(verified_pkg.runtime_id);
     let runtime_pkg = jit::translate_package(
-        &cache.type_cache(),
+        package_cache,
         natives,
         link_context,
         storage_id,
