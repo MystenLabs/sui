@@ -77,7 +77,6 @@ const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
     &health::HealthCheck,
     &checkpoints::ListCheckpoints,
     &checkpoints::GetCheckpoint,
-
     // unstable APIs
     &accounts::ListAccountObjects,
     &objects::GetObject,
@@ -241,7 +240,10 @@ pub struct Config {
 
 impl Config {
     pub fn enable_unstable_apis(&self) -> bool {
-        self.enable_unstable_apis.unwrap_or(false)
+        // TODO
+        // Until the rest service as a whole is "stabalized" with a sane set of default stable
+        // apis, have the default be to enable all apis
+        self.enable_unstable_apis.unwrap_or(true)
     }
 }
 
