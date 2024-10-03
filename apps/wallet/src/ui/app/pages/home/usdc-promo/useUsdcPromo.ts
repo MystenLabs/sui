@@ -4,6 +4,8 @@ import { useFeatureIsOn, useFeatureValue } from '@growthbook/growthbook-react';
 
 type WalletUsdcPromo = {
 	promoBannerImage: string;
+	promoBannerBackground: string;
+	promoBannerText: string;
 	promoBannerSheetTitle: string;
 	promoBannerSheetContent: string;
 	wrappedUsdcList: string[];
@@ -13,6 +15,8 @@ export function useUsdcPromo() {
 	const enabled = useFeatureIsOn('wallet-usdc-promo-enabled');
 	const dynamicConfigs = useFeatureValue<WalletUsdcPromo>('wallet-usdc-promo', {
 		promoBannerImage: '',
+		promoBannerBackground: '',
+		promoBannerText: '',
 		promoBannerSheetTitle: '',
 		promoBannerSheetContent: '',
 		wrappedUsdcList: [],

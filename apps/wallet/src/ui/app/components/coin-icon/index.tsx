@@ -43,7 +43,7 @@ function NonSuiCoin({ coinType }: NonSuiCoinProps) {
 	const coinMetadataOverrides = useCoinMetadataOverrides();
 
 	return (
-		<div className="flex h-full w-full items-center justify-center text-white bg-steel rounded-full">
+		<div className="flex h-full w-full items-center justify-center text-white bg-steel rounded-full overflow-hidden">
 			{coinMeta?.iconUrl ? (
 				<ImageIcon
 					src={coinMetadataOverrides[coinType]?.iconUrl ?? coinMeta.iconUrl}

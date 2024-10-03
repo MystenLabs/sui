@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useAppDispatch, useAppSelector } from '_hooks';
+import { UsdcPromo } from '_pages/home/usdc-promo/UsdcPromo';
 import { SwapPage } from '_pages/swap';
 import { FromAssets } from '_pages/swap/FromAssets';
 import { setNavVisibility } from '_redux/slices/app';
@@ -168,6 +169,7 @@ const App = () => {
 				<Route path="apps/*" element={<AppsPage />} />
 				<Route path="kiosk" element={<KioskDetailsPage />} />
 				<Route path="nft-details" element={<NFTDetailsPage />} />
+				<Route path="usdc-promo" element={<UsdcPromo />} />
 				<Route path="nft-transfer/:nftId" element={<NftTransferPage />} />
 				<Route path="nfts/*" element={<AssetsPage />} />
 				<Route path="onramp" element={<OnrampPage />} />
