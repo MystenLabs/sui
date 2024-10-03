@@ -863,6 +863,12 @@ pub fn internal_sum_of_uncompressed(
 
     let cost = context.gas_used();
 
+    let cost_params = &context
+        .extensions()
+        .get::<NativesCostTable>()
+        .group_ops_cost_params
+        .clone();
+
     // The input is a reference to a vector of vector<u8>'s
     let inputs = pop_arg!(args, VectorRef);
     let group_type = pop_arg!(args, u8);
@@ -870,21 +876,6 @@ pub fn internal_sum_of_uncompressed(
     let length = inputs
         .len(&Type::Vector(Box::new(Type::U8)))?
         .value_as::<u64>()?;
-
-    // Read the input vector
-    let terms = (0..length)
-        .map(|i| {
-            let reference = inputs.borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))?;
-            let value = reference.value_as::<VectorRef>()?.as_bytes_ref().clone();
-            Ok(value)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()
-        .group_ops_cost_params
-        .clone();
 
     let result = match Groups::from_u8(group_type) {
         Some(Groups::BLS12381G1) => {
@@ -896,12 +887,18 @@ pub fn internal_sum_of_uncompressed(
                         .bls12381_g1_sum_of_uncompressed_cost_per_term
                         .map(|per_term| base + per_term * length.into()))
             );
-            terms
-                .iter()
-                .map(|e| {
-                    e.to_vec()
-                        .try_into()
+
+            // Read the input vector
+            (0..length)
+                .map(|i| {
+                    inputs
+                        .borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))
+                        .and_then(|vectorref| vectorref.value_as::<VectorRef>())
+                        .map(|vectorref| vectorref.as_bytes_ref().to_vec())
                         .map_err(|_| FastCryptoError::InvalidInput)
+                        .and_then(|vector| {
+                            vector.try_into().map_err(|_| FastCryptoError::InvalidInput)
+                        })
                         .map(bls::G1ElementUncompressed::from_trusted_byte_array)
                 })
                 .collect::<FastCryptoResult<Vec<_>>>()
