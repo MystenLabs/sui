@@ -110,9 +110,18 @@ export class EnokiFlow {
 		redirectUrl: string;
 		network?: 'mainnet' | 'testnet' | 'devnet';
 		extraParams?: Record<string, unknown>;
+		nonceData?: {
+			nonce: string;
+			randomness: string;
+			epoch: number;
+			maxEpoch: number;
+			estimatedExpiration: number;
+		}
+		ephemeralKeyPair?: Ed25519Keypair
 	}) {
-		const ephemeralKeyPair = new Ed25519Keypair();
-		const { nonce, randomness, maxEpoch, estimatedExpiration } =
+		const ephemeralKeyPair = input.ephemeralKeyPair || new Ed25519Keypair();
+
+		const { nonce, randomness, maxEpoch, estimatedExpiration } = input.nonceData ||
 			await this.#enokiClient.createZkLoginNonce({
 				network: input.network,
 				ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
