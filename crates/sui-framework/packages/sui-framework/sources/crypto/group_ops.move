@@ -94,25 +94,28 @@ public struct Uncompressed<phantom T> has store, copy, drop {
     bytes: vector<u8>,
 }
 
-/// Converts an element to uncompressed form.
-/// Currently, only BLS12-381 G1 is supported.
-public fun to_uncompressed<G>(type_: u8, e: &Element<G>): Uncompressed<G> {
+public(package) fun uncompressed_from_bytes<G>(type_: u8, bytes: &vector<u8>): Uncompressed<G> {
+    assert!(type_ == 1, ENotSupported);
+    Uncompressed<G> { bytes: *bytes }
+}
+
+public fun as_bytes<G>(e: &Uncompressed<G>): &vector<u8> {
+    &e.bytes
+}
+
+public(package) fun to_uncompressed<G>(type_: u8, e: &Element<G>): Uncompressed<G> {
     assert!(type_ == 1, ENotSupported);
     Uncompressed<G> { bytes: internal_to_uncompressed(type_, &e.bytes) }
 }
 
-/// Converts an uncompressed element to compressed form.
-/// Currently, only BLS12-381 G1 is supported.
-public fun from_uncompressed<G>(type_: u8, e: &Uncompressed<G>): Element<G> {
+public(package) fun from_uncompressed<G>(type_: u8, e: &Uncompressed<G>): Element<G> {
     assert!(type_ == 1, ENotSupported);
     Element<G> { bytes: internal_from_uncompressed(type_, &e.bytes) }
 }
 
-/// Sums a list of uncompressed elements. This is significantly faster and cheaper than summing the elements.
-/// Currently, only BLS12-381 G1 is supported.
-public fun sum_of_uncompressed<G>(type_: u8, e: &vector<Uncompressed<G>>): Element<G> {
+public(package) fun sum_of_uncompressed<G>(type_: u8, e: &vector<Uncompressed<G>>): Element<G> {
     assert!(type_ == 1, ENotSupported);
-    let bytes = internal_sum_of_uncompressed(type_, (*e).map!(|x| x.bytes));
+    let bytes = internal_sum_of_uncompressed(type_, &(*e).map!(|x| x.bytes));
     Element<G> { bytes }
 }
 
@@ -144,7 +147,7 @@ native fun internal_pairing(type_: u8, e1: &vector<u8>, e2: &vector<u8>): vector
 
 native fun internal_to_uncompressed(type_: u8, e: &vector<u8>): vector<u8>;
 native fun internal_from_uncompressed(type_: u8, e: &vector<u8>): vector<u8>;
-native fun internal_sum_of_uncompressed(type_: u8, e: vector<vector<u8>>): vector<u8>;
+native fun internal_sum_of_uncompressed(type_: u8, e: &vector<vector<u8>>): vector<u8>;
 
 // Helper function for encoding a given u64 number as bytes in a given buffer.
 public(package) fun set_as_prefix(x: u64, big_endian: bool, buffer: &mut vector<u8>) {

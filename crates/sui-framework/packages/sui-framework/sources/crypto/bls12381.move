@@ -181,8 +181,8 @@ public fun g1_from_uncompressed(e: &Uncompressed<G1>): Element<G1> {
     group_ops::from_uncompressed(G1_TYPE, e)
 }
 
-/// Compute the sum of a vector of uncompressed points.
-/// This is much faster than computing the sum using `g1_add`.
+/// Compute the sum of a list of uncompressed elements.
+/// This is significantly faster and cheaper than summing the elements.
 public fun g1_sum_of_uncompressed(terms: &vector<Uncompressed<G1>>): Element<G1> {
     group_ops::sum_of_uncompressed(G1_TYPE, terms)
 }
