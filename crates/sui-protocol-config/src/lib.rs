@@ -1219,8 +1219,9 @@ pub struct ProtocolConfig {
     /// 0 was deprecated (and currently not supported), 1 is the default version.
     random_beacon_dkg_version: Option<u64>,
 
-    /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
-    /// `max_tx_size_bytes` with some additional headroom.
+    /// The maximum serialized transaction size (in bytes) accepted by consensus.
+    /// `consensus_max_transaction_size_bytes` should include space for additional metadata, on
+    /// top of the `max_tx_size_bytes` value.
     consensus_max_transaction_size_bytes: Option<u64>,
     /// The maximum size of transactions included in a consensus block.
     consensus_max_transactions_in_block_bytes: Option<u64>,
