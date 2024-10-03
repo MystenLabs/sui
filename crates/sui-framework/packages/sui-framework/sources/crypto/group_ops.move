@@ -94,11 +94,6 @@ public struct Uncompressed<phantom T> has store, copy, drop {
     bytes: vector<u8>,
 }
 
-public(package) fun uncompressed_from_bytes<G>(type_: u8, bytes: &vector<u8>): Uncompressed<G> {
-    assert!(type_ == 1, ENotSupported);
-    Uncompressed<G> { bytes: *bytes }
-}
-
 public fun as_bytes<G>(e: &Uncompressed<G>): &vector<u8> {
     &e.bytes
 }
