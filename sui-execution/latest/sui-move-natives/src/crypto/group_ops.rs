@@ -893,11 +893,13 @@ pub fn internal_sum_of_uncompressed(
                 .map(|i| {
                     inputs
                         .borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))
-                        .and_then(|vectorref| vectorref.value_as::<VectorRef>())
-                        .map(|vectorref| vectorref.as_bytes_ref().to_vec())
+                        .and_then(Value::value_as::<VectorRef>)
                         .map_err(|_| FastCryptoError::InvalidInput)
-                        .and_then(|vector| {
-                            vector.try_into().map_err(|_| FastCryptoError::InvalidInput)
+                        .and_then(|v| {
+                            v.as_bytes_ref()
+                                .to_vec()
+                                .try_into()
+                                .map_err(|_| FastCryptoError::InvalidInput)
                         })
                         .map(bls::G1ElementUncompressed::from_trusted_byte_array)
                 })
