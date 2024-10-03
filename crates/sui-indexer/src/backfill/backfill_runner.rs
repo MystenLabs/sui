@@ -11,7 +11,8 @@ use std::collections::BTreeSet;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
+use tokio_stream::wrappers::ReceiverStream;
 
 pub struct BackfillRunner {}
 
@@ -22,7 +23,7 @@ impl BackfillRunner {
         backfill_config: BackFillConfig,
         total_range: RangeInclusive<usize>,
     ) {
-        let task = get_backfill_task(runner_kind);
+        let task = get_backfill_task(runner_kind, *total_range.start()).await;
         Self::run_impl(pool, backfill_config, total_range, task).await;
     }
 
@@ -38,13 +39,19 @@ impl BackfillRunner {
         // that are in progress.
         let in_progress = Arc::new(Mutex::new(BTreeSet::new()));
 
-        // Generate chunks from the total range
-        let chunks = create_chunks(total_range.clone(), config.chunk_size);
-
-        // Create a stream from the ranges
-        let stream = tokio_stream::iter(chunks);
-
         let concurrency = config.max_concurrency;
+        let (tx, rx) = mpsc::channel(concurrency * 10);
+        // Spawn a task to send chunks lazily over the channel
+        tokio::spawn(async move {
+            for chunk in create_chunk_iter(total_range, config.chunk_size) {
+                if tx.send(chunk).await.is_err() {
+                    // Channel closed, stop producing chunks
+                    break;
+                }
+            }
+        });
+        // Convert the receiver into a stream
+        let stream = ReceiverStream::new(rx);
 
         // Process chunks in parallel, limiting the number of concurrent query tasks
         stream
@@ -59,10 +66,13 @@ impl BackfillRunner {
                     println!("Finished range: {:?}.", range);
                     in_progress_clone.lock().await.remove(range.start());
                     let cur_min_in_progress = in_progress_clone.lock().await.iter().next().cloned();
-                    println!(
-                        "Minimum range start number still in progress: {:?}.",
-                        cur_min_in_progress
-                    );
+                    if let Some(cur_min_in_progress) = cur_min_in_progress {
+                        println!(
+                            "Average backfill speed: {} checkpoints/s. Minimum range start number still in progress: {:?}.",
+                            cur_min_in_progress as f64 / cur_time.elapsed().as_secs_f64(),
+                            cur_min_in_progress
+                        );
+                    }
                 }
             })
             .await;
@@ -72,16 +82,13 @@ impl BackfillRunner {
 }
 
 /// Creates chunks based on the total range and chunk size.
-fn create_chunks(
+fn create_chunk_iter(
     total_range: RangeInclusive<usize>,
     chunk_size: usize,
-) -> Vec<RangeInclusive<usize>> {
+) -> impl Iterator<Item = RangeInclusive<usize>> {
     let end = *total_range.end();
-    total_range
-        .step_by(chunk_size)
-        .map(|chunk_start| {
-            let chunk_end = std::cmp::min(chunk_start + chunk_size - 1, end);
-            chunk_start..=chunk_end
-        })
-        .collect()
+    total_range.step_by(chunk_size).map(move |chunk_start| {
+        let chunk_end = std::cmp::min(chunk_start + chunk_size - 1, end);
+        chunk_start..=chunk_end
+    })
 }
