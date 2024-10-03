@@ -618,6 +618,22 @@ impl SimpleFaucet {
 
         let tx_digest = tx.digest();
         let client = self.wallet.get_client().await?;
+        let balance = client
+            .coin_read_api()
+            .get_balance(self.active_address, None)
+            .await;
+        if let Ok(balance) = balance {
+            let balance = balance.total_balance;
+            info!(
+                ?uuid,
+                ?recipient,
+                ?coin_id,
+                ?balance,
+                "Balance before transfer"
+            );
+            self.metrics.balance.set((balance as f64 / 9 as f64) as i64);
+        }
+
         Ok(client
             .quorum_driver_api()
             .execute_transaction_block(
