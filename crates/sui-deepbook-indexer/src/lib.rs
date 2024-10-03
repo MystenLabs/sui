@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::JsonRpcConfig;
+use std::net::SocketAddr;
+
 use deepbook_api::DeepBookApi;
 use errors::IndexerError;
 use prometheus::Registry;
@@ -26,7 +27,7 @@ pub mod sui_deepbook_indexer;
 pub async fn build_json_rpc_server(
     prometheus_registry: &Registry,
     pool: PgDeepbookPersistent,
-    config: &JsonRpcConfig,
+    json_rpc_address: SocketAddr,
 ) -> Result<ServerHandle, IndexerError> {
     let mut builder =
         JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry, None, None);
@@ -35,6 +36,6 @@ pub async fn build_json_rpc_server(
     let cancel = CancellationToken::new();
 
     Ok(builder
-        .start(config.rpc_address, None, ServerType::Http, Some(cancel))
+        .start(json_rpc_address, None, ServerType::Http, Some(cancel))
         .await?)
 }

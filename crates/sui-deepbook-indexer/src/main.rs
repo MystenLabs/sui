@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
         )),
     );
 
-    let handle = build_json_rpc_server(&registry, datastore.clone(), &config.json_rpc_config)
+    let handle = build_json_rpc_server(&registry, datastore.clone(), config.json_rpc_address)
         .await
         .expect("DeepBook json rpc server should not run into errors upon start.");
     tokio::spawn(async move { handle.stopped().await });
