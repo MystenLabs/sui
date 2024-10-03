@@ -295,7 +295,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .inc();
 
         {
-            let span = trace_span!("process_consensus_certs");
+            let span = trace_span!("ConsensusHandler::HandleCommit::process_consensus_txns");
             let _guard = span.enter();
             for (authority_index, parsed_transactions) in consensus_commit.transactions() {
                 // TODO: consider only messages within 1~3 rounds of the leader?
