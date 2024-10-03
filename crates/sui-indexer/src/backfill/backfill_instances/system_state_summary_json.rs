@@ -24,12 +24,21 @@ impl BackfillTask for SystemStateSummaryJsonBackfill {
             .await
             .unwrap();
 
-        let system_states = results.into_iter().filter_map(|bytes| {
-            let bytes = bytes?;
+        let mut system_states = vec![];
+        for bytes in results {
+            let Some(bytes) = bytes else {
+                continue;
+            };
             let system_state_summary: SuiSystemStateSummary = bcs::from_bytes(&bytes).unwrap();
             let json_ser = serde_json::to_value(&system_state_summary).unwrap();
-            Some((system_state_summary.epoch, json_ser))
-        });
+            if system_state_summary.epoch == 1 {
+                // Each existing system state's epoch is off by 1.
+                // This means there won't be any row with a system state summary for epoch 0.
+                // We need to manually insert a row for epoch 0.
+                system_states.push((0, json_ser.clone()));
+            }
+            system_states.push((system_state_summary.epoch, json_ser));
+        }
         conn.transaction::<_, diesel::result::Error, _>(|conn| {
             Box::pin(async move {
                 for (epoch, json_ser) in system_states {
