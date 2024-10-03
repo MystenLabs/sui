@@ -413,9 +413,12 @@ pub struct AuthorityEpochTables {
     ///     versions from the transaction effect. Next object versions are not updated.
     ///
     /// REQUIRED: all authorities must assign the same shared object versions for each transaction.
-    assigned_shared_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
     assigned_shared_object_versions_v2: DBMap<TransactionKey, Vec<(ObjectID, SequenceNumber)>>,
     next_shared_object_versions: DBMap<ObjectID, SequenceNumber>,
+
+    /// Deprecated table for pre-random-beacon shared object versions.
+    #[allow(dead_code)]
+    assigned_shared_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
 
     /// Certificates that have been received from clients or received from consensus, but not yet
     /// executed. Entries are cleared after execution.
