@@ -1,6 +1,6 @@
 module prover::opaque_tests;
 
-use prover::prover::{requires, ensures, asserts, old, max_u64, drop};
+use prover::prover::{requires, ensures, asserts, old, max_u64, fresh};
 
 fun inc(x: u64): u64 {
     x + 1
@@ -136,4 +136,12 @@ fun scale_spec<T>(r: &mut Range<T>, k: u64) {
 
     ensures(r.x == old_r.x * k);
     ensures(r.y == old_r.y * k);
+}
+
+fun fresh_with_type_withness<T, U>(_: &T): U {
+    fresh()
+}
+
+fun fresh_with_type_withness_spec<T, U>(x: &T): U {
+    fresh_with_type_withness(x)
 }

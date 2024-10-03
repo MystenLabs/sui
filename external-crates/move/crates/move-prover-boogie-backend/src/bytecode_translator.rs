@@ -212,6 +212,13 @@ impl<'env> BoogieTranslator<'env> {
         self.spec_translator
             .translate_axioms(env, mono_info.as_ref());
 
+        let ghost_module_id = self
+            .env
+            .find_module_by_name(self.env.symbol_pool().make("ghost"))
+            .unwrap()
+            .get_id();
+        let global_function_id = FunId::new(self.env.symbol_pool().make("global"));
+
         let mut translated_types = BTreeSet::new();
         // let mut translated_funs = BTreeSet::new();
         let mut verified_functions_count = 0;
@@ -248,7 +255,9 @@ impl<'env> BoogieTranslator<'env> {
             }
 
             for ref fun_env in module_env.get_functions() {
-                if fun_env.is_native_or_intrinsic() {
+                if fun_env.is_native_or_intrinsic()
+                    && fun_env.get_qualified_id() != ghost_module_id.qualified(global_function_id)
+                {
                     continue;
                 }
 
@@ -475,7 +484,7 @@ impl<'env> BoogieTranslator<'env> {
         for bc in code.into_iter() {
             match style {
                 FunctionTranslationStyle::Default => match bc {
-                    Bytecode::Call(_, _, op, _, _) if op == asserts_function => {}
+                    Call(_, _, op, _, _) if op == asserts_function => {}
                     Call(_, _, Operation::Function(module_id, fun_id, _), _, _)
                         if self.targets.get_fun_by_opaque_spec(
                             &spec_fun_target.func_env.get_qualified_id(),
@@ -511,7 +520,7 @@ impl<'env> BoogieTranslator<'env> {
                     ),
                 },
                 FunctionTranslationStyle::Opaque => match bc {
-                    Bytecode::Call(_, _, op, _, _) if op == asserts_function => {}
+                    Call(_, _, op, _, _) if op == asserts_function => {}
                     _ => builder.emit(
                         bc.substitute_operations(&ensures_requires_swap_subst)
                             .update_abort_action(|_| None),
@@ -587,6 +596,32 @@ impl<'env> BoogieTranslator<'env> {
             .get_fun_by_opaque_spec(spec_fun_qid)
             .map(|qid| self.env.get_function(*qid))
     }
+}
+
+fn get_ghost_global_instances(fun_target: &FunctionTarget) -> BTreeSet<Vec<Type>> {
+    let ghost_module_id = fun_target
+        .func_env
+        .module_env
+        .env
+        .find_module_by_name(fun_target.func_env.symbol_pool().make("ghost"))
+        .unwrap()
+        .get_id();
+    let global_function_id = FunId::new(fun_target.func_env.symbol_pool().make("global"));
+
+    fun_target
+        .data
+        .code
+        .iter()
+        .filter_map(|bc| match bc {
+            Bytecode::Call(_, _, Operation::Function(module_id, fun_id, type_inst), _, _)
+                if module_id.qualified(fun_id)
+                    == ghost_module_id.qualified(&global_function_id) =>
+            {
+                Some(type_inst.clone())
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 // =================================================================================================
@@ -868,8 +903,51 @@ impl<'env> FunctionTranslator<'env> {
             fun_target.get_loc().display(env)
         );
         self.generate_function_sig();
-        self.generate_function_body();
+
+        let ghost_module_id = self
+            .fun_target
+            .func_env
+            .module_env
+            .env
+            .find_module_by_name(self.fun_target.func_env.symbol_pool().make("ghost"))
+            .unwrap()
+            .get_id();
+        let global_function_id = FunId::new(self.fun_target.func_env.symbol_pool().make("global"));
+        if self.fun_target.func_env.get_qualified_id()
+            == ghost_module_id.qualified(global_function_id)
+        {
+            self.generate_ghost_global_body();
+        } else {
+            self.generate_function_body();
+        }
         emitln!(self.parent.writer);
+    }
+
+    fn generate_ghost_global_body(&self) {
+        assert!(
+            self.fun_target.func_env.is_native()
+                && self.fun_target.get_type_parameter_count() == 2
+                && self.fun_target.get_parameter_count() == 0
+                && self.fun_target.get_return_count() == 1
+        );
+        let global_var_name = format!("$global_var__{}", self.function_variant_name(self.style));
+        let global_var_type = self.boogie_type_for_fun(
+            self.parent.env,
+            &self.inst(self.fun_target.get_return_type(0)),
+            &Bottom,
+        );
+        emitln!(self.writer(), "{");
+        self.writer().indent();
+        emitln!(self.writer(), "$ret0 := {};", global_var_name);
+        self.writer().unindent();
+        emitln!(self.writer(), "}");
+        emitln!(self.writer());
+        emitln!(
+            self.writer(),
+            "var {}: {};",
+            global_var_name,
+            global_var_type
+        );
     }
 
     fn function_variant_name(&self, style: FunctionTranslationStyle) -> String {
@@ -1911,6 +1989,44 @@ impl<'env> FunctionTranslator<'env> {
                                 );
                             }
                         }
+
+                        if self
+                            .parent
+                            .targets
+                            .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
+                            == Some(&mid.qualified(*fid))
+                            && (self.style == FunctionTranslationStyle::SpecNoAbortCheck
+                                || self.style == FunctionTranslationStyle::Opaque)
+                        {
+                            let ghost_module_id = self
+                                .fun_target
+                                .func_env
+                                .module_env
+                                .env
+                                .find_module_by_name(
+                                    self.fun_target.func_env.symbol_pool().make("ghost"),
+                                )
+                                .unwrap()
+                                .get_id();
+                            let global_function_id =
+                                FunId::new(self.fun_target.func_env.symbol_pool().make("global"));
+
+                            for type_inst in get_ghost_global_instances(self.fun_target) {
+                                let global_name = format!(
+                                    "$global_var__{}",
+                                    boogie_function_name(
+                                        &self
+                                            .parent
+                                            .env
+                                            .get_module(ghost_module_id)
+                                            .into_function(global_function_id),
+                                        &type_inst,
+                                        FunctionTranslationStyle::Default,
+                                    )
+                                );
+                                emitln!(self.writer(), "havoc {};", global_name,);
+                            }
+                        };
 
                         if *mid == self.fun_target.module_env().get_id()
                             && *fid == self.fun_target.get_id()

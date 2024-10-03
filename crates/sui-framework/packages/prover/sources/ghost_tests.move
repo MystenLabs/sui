@@ -1,0 +1,41 @@
+module prover::ghost_tests;
+
+use prover::prover::{requires, ensures, asserts, max_u64};
+use prover::ghost::Self;
+
+fun inc(x: u64): u64 {
+    x + 1
+}
+
+public struct GhostStruct {}
+
+fun inc_no_verify_spec(x: u64): u64 {
+    requires(ghost::global<GhostStruct, _>() == false);
+
+    asserts((x as u128) + 1 <= max_u64() as u128);
+
+    let result = inc(x);
+
+    ensures(result == x + 1);
+    ensures(ghost::global<GhostStruct, _>() == true);
+
+    result
+}
+
+fun inc_saturated(x: u64): u64 {
+    if (x == max_u64()) {
+        x
+    } else {
+        inc(x)
+    }
+}
+
+fun inc_saturated_spec(x: u64): u64 {
+    requires(ghost::global<GhostStruct, _>() == false);
+
+    let result = inc_saturated(x);
+
+    ensures((ghost::global<GhostStruct, _>() == true) == (x != max_u64()));
+
+    result
+}
