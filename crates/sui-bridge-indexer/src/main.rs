@@ -5,6 +5,7 @@ use anyhow::Result;
 use clap::*;
 use ethers::providers::{Http, Provider};
 use ethers::types::Address as EthAddress;
+use prometheus::Registry;
 use std::collections::HashSet;
 use std::env;
 use std::net::IpAddr;
@@ -13,10 +14,12 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::eth_client::EthClient;
-use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
+use sui_bridge::metered_eth_provider::{new_metered_eth_provider, MeteredEthHttpProvier};
+use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::utils::get_eth_contract_addresses;
 use sui_bridge_indexer::eth_bridge_indexer::EthFinalizedSyncDatasource;
 use sui_bridge_indexer::eth_bridge_indexer::EthSubscriptionDatasource;
+use sui_config::Config;
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -34,7 +37,10 @@ use sui_bridge_indexer::sui_bridge_indexer::SuiBridgeDataMapper;
 use sui_bridge_indexer::sui_datasource::SuiCheckpointDatasource;
 use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
-use sui_config::Config;
+use sui_bridge_watchdog::{
+    eth_bridge_status::EthBridgeStatus, eth_vault_balance::EthVaultBalance,
+    metrics::WatchdogMetrics, sui_bridge_status::SuiBridgeStatus, BridgeWatchDog,
+};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
 use sui_indexer_builder::progress::{
@@ -101,7 +107,7 @@ async fn main() -> Result<()> {
         )
         .await?,
     );
-
+    let eth_bridge_proxy_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
     let mut tasks = vec![];
     if Some(true) == config.disable_eth {
         info!("Eth indexer is disabled");
@@ -174,11 +180,12 @@ async fn main() -> Result<()> {
             .await?,
     );
     let sui_checkpoint_datasource = SuiCheckpointDatasource::new(
-        config.remote_store_url,
+        config.remote_store_url.clone(),
         sui_client,
         config.concurrency as usize,
         config
             .checkpoints_path
+            .clone()
             .map(|p| p.into())
             .unwrap_or(tempfile::tempdir()?.into_path()),
         config.sui_bridge_genesis_checkpoint,
@@ -196,9 +203,59 @@ async fn main() -> Result<()> {
     .build();
     tasks.push(spawn_logged_monitored_task!(indexer.start()));
 
+    let sui_bridge_client =
+        Arc::new(SuiBridgeClient::new(&config.sui_rpc_url, bridge_metrics.clone()).await?);
+    start_watchdog(
+        config,
+        eth_bridge_proxy_address,
+        sui_bridge_client,
+        &registry,
+        bridge_metrics.clone(),
+    )
+    .await?;
+
     // Wait for tasks in `tasks` to finish. Return when anyone of them returns an error.
     futures::future::try_join_all(tasks).await?;
     unreachable!("Indexer tasks finished unexpectedly");
+}
+
+async fn start_watchdog(
+    config: IndexerConfig,
+    eth_bridge_proxy_address: EthAddress,
+    sui_client: Arc<SuiBridgeClient>,
+    registry: &Registry,
+    bridge_metrics: Arc<BridgeMetrics>,
+) -> Result<()> {
+    let watchdog_metrics = WatchdogMetrics::new(registry);
+    let eth_provider =
+        Arc::new(new_metered_eth_provider(&config.eth_rpc_url, bridge_metrics.clone()).unwrap());
+    let (_committee_address, _limiter_address, vault_address, _config_address, weth_address) =
+        get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider).await?;
+
+    let eth_vault_balance = EthVaultBalance::new(
+        eth_provider.clone(),
+        vault_address,
+        weth_address,
+        watchdog_metrics.eth_vault_balance.clone(),
+    );
+
+    let eth_bridge_status = EthBridgeStatus::new(
+        eth_provider,
+        eth_bridge_proxy_address,
+        watchdog_metrics.eth_bridge_paused.clone(),
+    );
+
+    let sui_bridge_status =
+        SuiBridgeStatus::new(sui_client, watchdog_metrics.sui_bridge_paused.clone());
+
+    BridgeWatchDog::new(vec![
+        Arc::new(eth_vault_balance),
+        Arc::new(eth_bridge_status),
+        Arc::new(sui_bridge_status),
+    ])
+    .run()
+    .await;
+    Ok(())
 }
 
 #[allow(unused)]
