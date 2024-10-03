@@ -6,6 +6,7 @@ import PageTitle from '_app/shared/PageTitle';
 import { Text } from '_app/shared/text';
 import { useUsdcPromo } from '_pages/home/usdc-promo/useUsdcPromo';
 import { USDC_TYPE_ARG } from '_pages/swap/utils';
+import { ampli } from '_shared/analytics/ampli';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export function UsdcPromo() {
@@ -34,6 +35,12 @@ export function UsdcPromo() {
 			<Button
 				text="Swap wUSDC"
 				onClick={() => {
+					ampli.clickedSwapCoin({
+						sourceFlow: 'UsdcPromoBanner',
+						coinType: fromCoinType || '',
+						totalBalance: Number(presetAmount || 0),
+					});
+
 					navigate(
 						`/swap?${new URLSearchParams({
 							type: fromCoinType || '',
