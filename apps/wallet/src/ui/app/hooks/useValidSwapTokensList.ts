@@ -44,7 +44,7 @@ export function useValidSwapTokensList() {
 
 	const validSwaps = useMemo(
 		() =>
-			supported.sort((a, b) => {
+			supported?.sort((a, b) => {
 				const suiType = normalizeStructTag(SUI_TYPE_ARG);
 				const balanceA = BigInt(
 					coinBalances?.find(

@@ -96,28 +96,6 @@ export const maxSlippageFormSchema = z.object({
 		.max(100, 'Value must be between 0 and 100'),
 });
 
-export const amountSchema = z
-	.number({
-		coerce: true,
-		invalid_type_error: 'Input must be number only',
-	})
-	.superRefine((value, ctx) => {
-		const bigValue = new BigNumber(value);
-		if (!bigValue.gt(0)) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: 'Value must be greater than 0',
-			});
-		}
-		if (!bigValue.isFinite() || !bigValue.isPositive()) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: 'Expected a valid number',
-			});
-		}
-	})
-	.pipe(z.coerce.string());
-
 export function useCoinTypesFromRouteParams() {
 	const [searchParams] = useSearchParams();
 	const fromCoinType = searchParams.get('type');

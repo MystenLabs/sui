@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetAllBalances } from '_app/hooks/useGetAllBalances';
+import { useValidSwapTokensList } from '_app/hooks/useValidSwapTokensList';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import { useActiveAddress, useSortedCoinsByCategories } from '_hooks';
@@ -14,9 +15,20 @@ export function CoinsSelectionPage() {
 	const navigate = useNavigate();
 	const selectedAddress = useActiveAddress();
 	const [searchParams] = useSearchParams();
-	const allowedCoinTypes = (searchParams.get('allowedCoinTypes') || '').split(',');
 	const fromCoinType = searchParams.get('fromCoinType');
 	const toCoinType = searchParams.get('toCoinType');
+	const source = searchParams.get('source');
+	const currentAmount = searchParams.get('currentAmount');
+
+	const { data: swapFromTokensList, isLoading } = useValidSwapTokensList();
+	const swapToTokensList = swapFromTokensList.filter((token) => {
+		if (!fromCoinType) {
+			return true;
+		}
+		return normalizeStructTag(token) !== normalizeStructTag(fromCoinType);
+	});
+
+	const allowedCoinTypes = source === 'fromCoinType' ? swapFromTokensList : swapToTokensList;
 
 	const { data: coinBalances, isPending } = useGetAllBalances(selectedAddress || '');
 
@@ -24,7 +36,7 @@ export function CoinsSelectionPage() {
 
 	return (
 		<Overlay showModal title="Select a Coin" closeOverlay={() => navigate(-1)}>
-			<Loading loading={isPending}>
+			<Loading loading={isPending || isLoading}>
 				<div className="flex flex-shrink-0 justify-start flex-col w-full">
 					{allowedCoinTypes.map((coinType, index) => {
 						const coinBalance = recognized?.find((coin) => coin.coinType === coinType) || {};
@@ -45,8 +57,12 @@ export function CoinsSelectionPage() {
 									}}
 									onClick={() => {
 										const params = fromCoinType
-											? { type: fromCoinType, toType: coinType }
-											: { type: coinType, toType: toCoinType || '' };
+											? { type: fromCoinType, toType: coinType, presetAmount: currentAmount || '0' }
+											: {
+													type: coinType,
+													toType: toCoinType || '',
+													presetAmount: currentAmount || '0',
+												};
 										navigate(`/swap?${new URLSearchParams(params)}`);
 									}}
 								/>

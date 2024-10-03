@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import { useSigner } from '_app/hooks/useSigner';
-import { useValidSwapTokensList } from '_app/hooks/useValidSwapTokensList';
 import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
 import { Button } from '_app/shared/ButtonUI';
 import { Form } from '_app/shared/forms/Form';
@@ -20,7 +19,6 @@ import { GasFeesSummary } from '_pages/swap/GasFeesSummary';
 import { MaxSlippage, MaxSlippageModal } from '_pages/swap/MaxSlippage';
 import { useSwapTransaction } from '_pages/swap/useSwapTransaction';
 import {
-	amountSchema,
 	DEFAULT_MAX_SLIPPAGE_PERCENTAGE,
 	formatSwapQuote,
 	maxSlippageFormSchema,
@@ -62,13 +60,19 @@ export function SwapPage() {
 	const validationSchema = useMemo(() => {
 		return z
 			.object({
-				amount: amountSchema,
+				amount: z
+					.number({
+						coerce: true,
+						invalid_type_error: 'Input must be number only',
+					})
+					.pipe(z.coerce.string()),
 			})
 			.merge(maxSlippageFormSchema)
 			.superRefine(async ({ amount }, ctx) => {
-				if (!fromCoinType) {
+				if (!fromCoinType || !toCoinType) {
 					return;
 				}
+
 				const { totalBalance } = await client.getBalance({
 					owner: currentAddress || '',
 					coinType: fromCoinType,
@@ -77,6 +81,20 @@ export function SwapPage() {
 				const bnAmount = new BigNumber(amount);
 				const bnMaxBalance = new BigNumber(totalBalance || 0).shiftedBy(-1 * (data?.decimals ?? 0));
 
+				if (!bnAmount.gt(0)) {
+					ctx.addIssue({
+						path: ['amount'],
+						code: z.ZodIssueCode.custom,
+						message: 'Value must be greater than 0',
+					});
+				}
+				if (!bnAmount.isFinite() || !bnAmount.isPositive()) {
+					ctx.addIssue({
+						path: ['amount'],
+						code: z.ZodIssueCode.custom,
+						message: 'Expected a valid number',
+					});
+				}
 				if (bnAmount.isGreaterThan(bnMaxBalance)) {
 					ctx.addIssue({
 						path: ['amount'],
@@ -130,15 +148,6 @@ export function SwapPage() {
 					.toString()
 			: bnBalance.decimalPlaces(fromCoinData?.decimals ?? 0).toString();
 	}, [balance?.totalBalance, fromCoinData?.decimals, isSui]);
-
-	const { data: swapFromTokensList, isLoading: isValidTokensListLoading } =
-		useValidSwapTokensList();
-	const swapToTokensList = swapFromTokensList.filter((token) => {
-		if (!fromCoinType) {
-			return true;
-		}
-		return normalizeStructTag(token) !== normalizeStructTag(fromCoinType);
-	});
 
 	const { data: toCoinData } = useCoinMetadata(toCoinType);
 	const fromCoinSymbol = fromCoinData?.symbol;
@@ -206,11 +215,11 @@ export function SwapPage() {
 		},
 	});
 
-	const isLoading = isValidTokensListLoading || swapTransactionLoading;
-
 	const handleOnsubmit: SubmitHandler<FormType> = (formData) => {
 		handleSwap(formData);
 	};
+
+	const showGasFeeBanner = !swapTransactionPending && swapData && isSui && isMaxBalance;
 
 	return (
 		<Overlay showModal title="Swap" closeOverlay={() => navigate('/')}>
@@ -227,8 +236,9 @@ export function SwapPage() {
 								<AssetData
 									coinType={fromCoinType || ''}
 									to={`/swap/coins-select?${new URLSearchParams({
-										allowedCoinTypes: swapFromTokensList.join(','),
 										toCoinType: toCoinType || '',
+										source: 'fromCoinType',
+										currentAmount: amount,
 									})}`}
 								/>
 								<div>
@@ -257,6 +267,14 @@ export function SwapPage() {
 										}}
 									/>
 								</div>
+								{showGasFeeBanner && (
+									<Alert mode="warning">
+										<Text variant="pBodySmall">
+											{GAS_RESERVE} {fromCoinSymbol} has been set aside to cover estimated max gas
+											fees for this transaction
+										</Text>
+									</Alert>
+								)}
 							</div>
 
 							<ButtonOrLink
@@ -288,8 +306,9 @@ export function SwapPage() {
 									<AssetData
 										coinType={toCoinType || ''}
 										to={`/swap/coins-select?${new URLSearchParams({
-											allowedCoinTypes: swapToTokensList.join(','),
 											fromCoinType: fromCoinType || '',
+											source: 'toCoinType',
+											currentAmount: amount,
 										})}`}
 									/>
 									<div
@@ -301,7 +320,7 @@ export function SwapPage() {
 											},
 										)}
 									>
-										{isLoading ? (
+										{swapTransactionLoading ? (
 											<div className="flex items-center gap-1 text-steel">
 												<LoadingIndicator color="inherit" />
 												<Text variant="body" color="steel">
@@ -325,11 +344,9 @@ export function SwapPage() {
 										)}
 									</div>
 
-									{isFormValid && swapData?.formattedToAmount && amount ? (
-										<div className="ml-3">
-											<MaxSlippage onOpen={() => setSlippageModalOpen(true)} />
-										</div>
-									) : null}
+									<div className="ml-3">
+										<MaxSlippage onOpen={() => setSlippageModalOpen(true)} />
+									</div>
 									<MaxSlippageModal
 										isOpen={isSlippageModalOpen}
 										onClose={() => setSlippageModalOpen(false)}
@@ -376,7 +393,9 @@ export function SwapPage() {
 							type="submit"
 							variant="primary"
 							loading={isSubmitting || handleSwapPending}
-							disabled={!isFormValid || isSubmitting || isLoading || swapTransactionPending}
+							disabled={
+								!isFormValid || isSubmitting || swapTransactionLoading || swapTransactionPending
+							}
 							size="tall"
 							text={
 								fromCoinSymbol && toCoinSymbol
