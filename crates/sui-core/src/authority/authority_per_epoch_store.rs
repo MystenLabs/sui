@@ -3146,6 +3146,8 @@ impl AuthorityPerEpochStore {
         bool,                   // true if final round
         Option<TransactionKey>, // consensus commit prologue root
     )> {
+        let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_transactions");
+
         if randomness_round.is_some() {
             assert!(!dkg_failed); // invariant check
         }
@@ -3440,7 +3442,8 @@ impl AuthorityPerEpochStore {
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<ConsensusCertificateResult> {
-        let _scope = monitored_scope("HandleConsensusTransaction");
+        let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_transaction");
+
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
             certificate_author_index: _,
             certificate_author,
@@ -3640,11 +3643,30 @@ impl AuthorityPerEpochStore {
             }
 
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(_tx),
+                kind: ConsensusTransactionKind::UserTransaction(tx),
                 ..
             }) => {
-                // TODO(fastpath): implement handling of user transactions from consensus commits.
-                Ok(ConsensusCertificateResult::Ignored)
+                // Ignore consensus certified user transaction if Mysticeti fastpath is not enabled.
+                if !self.protocol_config().mysticeti_fastpath() {
+                    return Ok(ConsensusCertificateResult::Ignored);
+                }
+                // Safe because transactions are certified by consensus.
+                let tx = VerifiedTransaction::new_unchecked(*tx.clone());
+                // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
+                let transaction =
+                    VerifiedExecutableTransaction::new_from_consensus(tx, self.epoch());
+
+                self.process_consensus_user_transaction(
+                    transaction,
+                    certificate_author,
+                    commit_round,
+                    tracking_id,
+                    previously_deferred_tx_digests,
+                    dkg_failed,
+                    generating_randomness,
+                    shared_object_congestion_tracker,
+                    authority_metrics,
+                )
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
                 Ok(self.process_consensus_system_transaction(system_transaction))
@@ -3681,6 +3703,8 @@ impl AuthorityPerEpochStore {
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<ConsensusCertificateResult> {
+        let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_user_transaction");
+
         if self.has_sent_end_of_publish(block_author)?
             && !previously_deferred_tx_digests.contains_key(transaction.digest())
         {
