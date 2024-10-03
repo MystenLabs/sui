@@ -134,6 +134,19 @@ impl ThDbBatch {
             .write_batch(self.batch)
             .map_err(typed_store_error_from_db_error)
     }
+
+    pub fn schedule_delete_range_inclusive<K: Serialize + DeserializeOwned, V: Serialize + DeserializeOwned>(
+        &mut self,
+        db: &ThDbMap<K, V>,
+        from: &K,
+        to: &K,
+    ) -> Result<(), TypedStoreError> {
+        let delete: Vec<_> = db.range_iter(from..=to)
+            .map(|(k, _)|k)
+            .collect();
+        self.delete_batch(&db, delete)?;
+        Ok(())
+    }
 }
 
 impl<'a, K, V> Map<'a, K, V> for ThDbMap<K, V>

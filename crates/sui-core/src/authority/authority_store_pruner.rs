@@ -189,11 +189,8 @@ impl AuthorityStorePruner {
                 object_id, min_version, max_version
             );
             let start_range = ObjectKey(object_id, min_version);
-            let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
-            let delete: Vec<_> = perpetual_db.objects.range_iter(start_range..=end_range)
-                .map(|(k, _)|k)
-                .collect();
-            wb.delete_batch(&perpetual_db.objects, delete)?;
+            let end_range = ObjectKey(object_id, max_version);
+            wb.schedule_delete_range_inclusive(&perpetual_db.objects, &start_range, &end_range)?;
         }
 
         // When enable_pruning_tombstones is enabled, instead of using range deletes, we need to do a scan of all the keys
@@ -244,73 +241,70 @@ impl AuthorityStorePruner {
         effects_to_prune: &Vec<TransactionEffects>,
         metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
-        return Ok(());
-        // let _scope = monitored_scope("EffectsLivePruner");
-        //
-        // let mut perpetual_batch = perpetual_db.objects.batch();
-        // let transactions: Vec<_> = checkpoint_content_to_prune
-        //     .iter()
-        //     .flat_map(|content| content.iter().map(|tx| tx.transaction))
-        //     .collect();
-        //
-        // perpetual_batch.delete_batch(&perpetual_db.transactions, transactions.iter())?;
-        // perpetual_batch.delete_batch(&perpetual_db.executed_effects, transactions.iter())?;
-        // perpetual_batch.delete_batch(
-        //     &perpetual_db.executed_transactions_to_checkpoint,
-        //     transactions,
-        // )?;
-        //
-        // let mut effect_digests = vec![];
-        // for effects in effects_to_prune {
-        //     let effects_digest = effects.digest();
-        //     debug!("Pruning effects {:?}", effects_digest);
-        //     effect_digests.push(effects_digest);
-        //
-        //     if let Some(event_digest) = effects.events_digest() {
-        //         if let Some(next_digest) = event_digest.next_lexicographical() {
-        //             perpetual_batch.schedule_delete_range(
-        //                 &perpetual_db.events,
-        //                 &(*event_digest, 0),
-        //                 &(next_digest, 0),
-        //             )?;
-        //         }
-        //     }
-        // }
-        // perpetual_batch.delete_batch(&perpetual_db.effects, effect_digests)?;
-        //
-        // let mut checkpoints_batch = checkpoint_db.certified_checkpoints.batch();
-        //
-        // let checkpoint_content_digests =
-        //     checkpoint_content_to_prune.iter().map(|ckpt| ckpt.digest());
-        // checkpoints_batch.delete_batch(
-        //     &checkpoint_db.checkpoint_content,
-        //     checkpoint_content_digests.clone(),
-        // )?;
-        // checkpoints_batch.delete_batch(
-        //     &checkpoint_db.checkpoint_sequence_by_contents_digest,
-        //     checkpoint_content_digests,
-        // )?;
-        //
-        // checkpoints_batch
-        //     .delete_batch(&checkpoint_db.checkpoint_by_digest, checkpoints_to_prune)?;
-        //
-        // checkpoints_batch.insert_batch(
-        //     &checkpoint_db.watermarks,
-        //     [(
-        //         &CheckpointWatermark::HighestPruned,
-        //         &(checkpoint_number, CheckpointDigest::random()),
-        //     )],
-        // )?;
-        //
-        // if let Some(rest_index) = rest_index {
-        //     rest_index.prune(&checkpoint_content_to_prune)?;
-        // }
-        // perpetual_batch.write()?;
-        // checkpoints_batch.write()?;
-        // metrics
-        //     .last_pruned_effects_checkpoint
-        //     .set(checkpoint_number as i64);
-        // Ok(())
+        let _scope = monitored_scope("EffectsLivePruner");
+
+        let mut perpetual_batch = perpetual_db.objects.batch();
+        let transactions: Vec<_> = checkpoint_content_to_prune
+            .iter()
+            .flat_map(|content| content.iter().map(|tx| tx.transaction))
+            .collect();
+
+        perpetual_batch.delete_batch(&perpetual_db.transactions, transactions.iter())?;
+        perpetual_batch.delete_batch(&perpetual_db.executed_effects, transactions.iter())?;
+        perpetual_batch.delete_batch(
+            &perpetual_db.executed_transactions_to_checkpoint,
+            transactions,
+        )?;
+
+        let mut effect_digests = vec![];
+        for effects in effects_to_prune {
+            let effects_digest = effects.digest();
+            debug!("Pruning effects {:?}", effects_digest);
+            effect_digests.push(effects_digest);
+
+            if let Some(event_digest) = effects.events_digest() {
+                perpetual_batch.schedule_delete_range_inclusive(
+                    &perpetual_db.events,
+                    &(*event_digest, 0),
+                    &(*event_digest, usize::MAX),
+                )?;
+            }
+        }
+        perpetual_batch.delete_batch(&perpetual_db.effects, effect_digests)?;
+
+        let mut checkpoints_batch = checkpoint_db.certified_checkpoints.batch();
+
+        let checkpoint_content_digests =
+            checkpoint_content_to_prune.iter().map(|ckpt| ckpt.digest());
+        checkpoints_batch.delete_batch(
+            &checkpoint_db.checkpoint_content,
+            checkpoint_content_digests.clone(),
+        )?;
+        checkpoints_batch.delete_batch(
+            &checkpoint_db.checkpoint_sequence_by_contents_digest,
+            checkpoint_content_digests,
+        )?;
+
+        checkpoints_batch
+            .delete_batch(&checkpoint_db.checkpoint_by_digest, checkpoints_to_prune)?;
+
+        checkpoints_batch.insert_batch(
+            &checkpoint_db.watermarks,
+            [(
+                &CheckpointWatermark::HighestPruned,
+                &(checkpoint_number, CheckpointDigest::random()),
+            )],
+        )?;
+
+        if let Some(rest_index) = rest_index {
+            rest_index.prune(&checkpoint_content_to_prune)?;
+        }
+        perpetual_batch.write()?;
+        checkpoints_batch.write()?;
+        metrics
+            .last_pruned_effects_checkpoint
+            .set(checkpoint_number as i64);
+        Ok(())
     }
 
     /// Prunes old data based on effects from all checkpoints from epochs eligible for pruning
