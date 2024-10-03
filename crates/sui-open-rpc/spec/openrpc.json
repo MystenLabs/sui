@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "61",
+              "maxSupportedProtocolVersion": "62",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1342,6 +1342,7 @@
                 "recompute_has_public_transfer_in_execution": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "reject_mutable_random_on_entry_functions": false,
+                "relocate_event_module": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
                 "rethrow_serialization_type_layout_errors": false,

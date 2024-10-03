@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 61;
+const MAX_PROTOCOL_VERSION: u64 = 62;
 
 // Record history of protocol version allocations here:
 //
@@ -183,6 +183,7 @@ const MAX_PROTOCOL_VERSION: u64 = 61;
 // Version 61: Switch to distributed vote scoring in consensus in testnet
 //             Further reduce minimum number of random beacon shares.
 //             Add feature flag for Mysticeti fastpath.
+// Version 62: Makes the event's sending module package upgrade-aware.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -541,6 +542,10 @@ struct FeatureFlags {
     // Enables Mysticeti fastpath.
     #[serde(skip_serializing_if = "is_false")]
     mysticeti_fastpath: bool,
+
+    // Makes the event's sending module version-aware.
+    #[serde(skip_serializing_if = "is_false")]
+    relocate_event_module: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1614,6 +1619,10 @@ impl ProtocolConfig {
 
     pub fn mysticeti_fastpath(&self) -> bool {
         self.feature_flags.mysticeti_fastpath
+    }
+
+    pub fn relocate_event_module(&self) -> bool {
+        self.feature_flags.relocate_event_module
     }
 }
 
@@ -2807,6 +2816,9 @@ impl ProtocolConfig {
                         // Enable Mysticeti fastpath for devnet
                         cfg.feature_flags.mysticeti_fastpath = true;
                     }
+                }
+                62 => {
+                    cfg.feature_flags.relocate_event_module = true;
                 }
                 // Use this template when making changes:
                 //
