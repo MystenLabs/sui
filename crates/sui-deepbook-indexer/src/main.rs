@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::Config;
 use sui_data_ingestion_core::DataIngestionMetrics;
+use sui_deepbook_indexer::build_json_rpc_server;
 use sui_deepbook_indexer::config::IndexerConfig;
 use sui_deepbook_indexer::metrics::DeepBookIndexerMetrics;
 use sui_deepbook_indexer::postgres_manager::get_connection_pool;
@@ -66,6 +67,11 @@ async fn main() -> Result<()> {
             tokio::time::Duration::from_secs(30),
         )),
     );
+
+    let handle = build_json_rpc_server(&registry, datastore.clone(), &config.json_rpc_config)
+        .await
+        .expect("DeepBook json rpc server should not run into errors upon start.");
+    tokio::spawn(async move { handle.stopped().await });
 
     let sui_client = Arc::new(
         SuiClientBuilder::default()
