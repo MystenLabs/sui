@@ -126,12 +126,34 @@ impl FaucetMetrics {
 }
 
 impl MetricsCallbackProvider for RequestMetrics {
-    fn on_request(&self, _path: String) {}
+    fn on_request(&self, path: String) {
+        self.total_requests_received
+            .with_label_values(&[path.as_str()])
+            .inc();
+    }
 
     fn on_response(&self, path: String, latency: Duration, _status: u16, faucet_status_code: Code) {
         self.process_latency
             .with_label_values(&[path.as_str()])
             .observe(latency.as_secs_f64());
+
+        match faucet_status_code {
+            Code::Ok => {
+                self.total_requests_succeeded
+                    .with_label_values(&[path.as_str()])
+                    .inc();
+            }
+            Code::Unavailable | Code::ResourceExhausted => {
+                self.total_requests_shed
+                    .with_label_values(&[path.as_str()])
+                    .inc();
+            }
+            _ => {
+                self.total_requests_failed
+                    .with_label_values(&[path.as_str()])
+                    .inc();
+            }
+        }
     }
 
     fn on_start(&self, path: &str) {
@@ -139,6 +161,9 @@ impl MetricsCallbackProvider for RequestMetrics {
     }
 
     fn on_drop(&self, path: &str) {
+        self.total_requests_disconnected
+            .with_label_values(&[path])
+            .inc();
         self.current_requests_in_flight.with_label_values(&[path]).dec();
     }
 }
