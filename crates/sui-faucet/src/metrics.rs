@@ -21,7 +21,6 @@ pub struct RequestMetrics {
     pub(crate) total_requests_disconnected: IntCounterVec,
     pub(crate) current_requests_in_flight: IntGaugeVec,
     pub(crate) process_latency: HistogramVec,
-    pub(crate) faucet_requests: IntCounterVec,  // Adding this to track by route
 }
 
 /// Metrics relevant to the running of the service
@@ -91,13 +90,6 @@ impl RequestMetrics {
                 registry,
             )
             .unwrap(),
-            faucet_requests: register_int_counter_vec_with_registry!(
-                "requests_by_route",
-                "Number of requests to the faucet by route and status",
-                &["path", "status"],
-                registry,
-            )
-            .unwrap(),
         }
     }
 }
@@ -137,9 +129,6 @@ impl MetricsCallbackProvider for RequestMetrics {
     fn on_request(&self, _path: String) {}
 
     fn on_response(&self, path: String, latency: Duration, _status: u16, faucet_status_code: Code) {
-        self.faucet_requests
-            .with_label_values(&[path.as_str(), format!("{faucet_status_code:?}").as_str()])
-            .inc();
         self.process_latency
             .with_label_values(&[path.as_str()])
             .observe(latency.as_secs_f64());
