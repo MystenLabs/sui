@@ -113,6 +113,7 @@ pub struct BridgeMetrics {
 
     pub(crate) sui_rpc_errors: IntCounterVec,
     pub(crate) observed_governance_actions: IntCounterVec,
+    pub(crate) current_bridge_voting_right: IntGauge,
 }
 
 impl BridgeMetrics {
@@ -315,6 +316,12 @@ impl BridgeMetrics {
                 "Total number of observed governance actions",
                 &["action_type", "chain_id"],
                 registry,
+            )
+            .unwrap(),
+            current_bridge_voting_right: register_int_gauge_with_registry!(
+                "current_bridge_voting_right",
+                "Current voting power in the bridge committee",
+                registry
             )
             .unwrap(),
         }

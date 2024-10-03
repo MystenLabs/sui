@@ -119,6 +119,13 @@ impl BridgeCommittee {
     pub fn total_blocklisted_stake(&self) -> StakeUnit {
         self.total_blocklisted_stake
     }
+
+    pub fn active_stake(&self, member: &BridgeAuthorityPublicKeyBytes) -> StakeUnit {
+        self.members
+            .get(member)
+            .map(|a| if a.is_blocklisted { 0 } else { a.voting_power })
+            .unwrap_or(0)
+    }
 }
 
 impl core::fmt::Display for BridgeCommittee {
