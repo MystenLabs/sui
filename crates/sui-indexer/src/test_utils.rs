@@ -118,18 +118,17 @@ pub async fn start_indexer_writer_for_testing(
         ingestion_config.sources.data_ingestion_path = data_ingestion_path;
         let token_clone = token.clone();
 
-            tokio::spawn(async move {
-                Indexer::start_writer(
-                    &ingestion_config,
-                    store_clone,
-                    indexer_metrics,
-                    snapshot_config,
-                    pruning_options,
-                    cancel,
-                )
-                .await
-            })
-        }
+        tokio::spawn(async move {
+            Indexer::start_writer(
+                &ingestion_config,
+                store_clone,
+                indexer_metrics,
+                snapshot_config,
+                pruning_options,
+                token_clone,
+            )
+            .await
+        })
     };
 
     (store, handle, token)
@@ -242,17 +241,12 @@ pub async fn set_up(
             .await;
     });
     // Starts indexer
-    let (pg_store, pg_handle, _) = start_test_indexer(
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
         database.database().url().as_str().to_owned(),
-        format!("http://{}", server_url),
-        ReaderWriterConfig::writer_mode(
-            Some(SnapshotLagConfig {
-                snapshot_min_lag: 5,
-                sleep_duration: 0,
-            }),
-            None,
-        ),
-        data_ingestion_path,
+        None,
+        None,
+        Some(data_ingestion_path),
+        None, /* cancel */
     )
     .await;
     (server_handle, pg_store, pg_handle, database)

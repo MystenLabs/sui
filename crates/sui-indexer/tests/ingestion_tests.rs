@@ -17,60 +17,6 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GasCoin;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use tempfile::tempdir;
-use tokio::task::JoinHandle;
-
-/// Set up a test indexer fetching from a REST endpoint served by the given Simulacrum.
-async fn set_up(
-    sim: Arc<Simulacrum>,
-    data_ingestion_path: PathBuf,
-) -> (
-    JoinHandle<()>,
-    PgIndexerStore,
-    JoinHandle<Result<(), IndexerError>>,
-    TempDb,
-) {
-    let database = TempDb::new().unwrap();
-    let server_url: SocketAddr = format!("127.0.0.1:{}", get_available_port())
-        .parse()
-        .unwrap();
-
-    let server_handle = tokio::spawn(async move {
-        sui_rest_api::RestService::new_without_version(sim)
-            .start_service(server_url)
-            .await;
-    });
-    // Starts indexer
-    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
-        database.database().url().as_str().to_owned(),
-        None,
-        None,
-        Some(data_ingestion_path),
-        None, /* cancel */
-    )
-    .await;
-    (server_handle, pg_store, pg_handle, database)
-}
-
-/// Wait for the indexer to catch up to the given checkpoint sequence number.
-async fn wait_for_checkpoint(
-    pg_store: &PgIndexerStore,
-    checkpoint_sequence_number: u64,
-) -> Result<(), IndexerError> {
-    tokio::time::timeout(Duration::from_secs(30), async {
-        while {
-            let cp_opt = pg_store
-                .get_latest_checkpoint_sequence_number()
-                .await
-                .unwrap();
-            cp_opt.is_none() || (cp_opt.unwrap() < checkpoint_sequence_number)
-        } {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    })
-    .await
-    .expect("Timeout waiting for indexer to catchup to checkpoint");
-    Ok(())
-}
 
 #[tokio::test]
 pub async fn test_transaction_table() -> Result<(), IndexerError> {
