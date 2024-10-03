@@ -2,9 +2,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_network::metrics::MetricsCallbackProvider;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_gauge_vec_with_registry,
+    Histogram, IntCounter, IntGauge, Registry, IntCounterVec
 };
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
@@ -17,8 +19,9 @@ pub struct RequestMetrics {
     pub(crate) total_requests_shed: IntCounter,
     pub(crate) total_requests_failed: IntCounter,
     pub(crate) total_requests_disconnected: IntCounter,
-    pub(crate) current_requests_in_flight: IntGauge,
-    pub(crate) process_latency: Histogram,
+    pub(crate) current_requests_in_flight: IntGaugeVec,
+    pub(crate) process_latency: HistogramVec,
+    pub(crate) faucet_requests: IntCounterVec,  // Adding this to track by route
 }
 
 /// Metrics relevant to the running of the service
@@ -68,16 +71,25 @@ impl RequestMetrics {
                 registry,
             )
             .unwrap(),
-            current_requests_in_flight: register_int_gauge_with_registry!(
+            current_requests_in_flight: register_int_gauge_vec_with_registry!(
                 "current_requests_in_flight",
                 "Current number of requests being processed in Faucet",
+                &["path"],
                 registry,
             )
             .unwrap(),
-            process_latency: register_histogram_with_registry!(
+            process_latency: register_histogram_vec_with_registry!(
                 "process_latency",
                 "Latency of processing a Faucet request",
+                &["path"],
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            faucet_requests: register_int_counter_vec_with_registry!(
+                "requests_by_route",
+                "Number of requests to the faucet by route and status",
+                &["path", "status"],
                 registry,
             )
             .unwrap(),
@@ -113,5 +125,26 @@ impl FaucetMetrics {
             )
             .unwrap(),
         }
+    }
+}
+
+impl MetricsCallbackProvider for FaucetMetrics {
+    fn on_request(&self, _path: String) {}
+
+    fn on_response(&self, path: String, latency: Duration, _status: u16, faucet_status_code: Code) {
+        self.faucet_requests
+            .with_label_values(&[path.as_str(), format!("{faucet_status_code:?}").as_str()])
+            .inc();
+        self.process_latency
+            .with_label_values(&[path.as_str()])
+            .observe(latency.as_secs_f64());
+    }
+
+    fn on_start(&self, path: &str) {
+        self.current_requests_in_flight.with_label_values(&[path]).inc();
+    }
+
+    fn on_drop(&self, path: &str) {
+        self.current_requests_in_flight.with_label_values(&[path]).dec();
     }
 }

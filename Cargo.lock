@@ -13364,6 +13364,7 @@ dependencies = [
  "sui-config",
  "sui-json-rpc-types",
  "sui-keys",
+ "sui-network",
  "sui-sdk 1.35.0",
  "sui-types",
  "tap",

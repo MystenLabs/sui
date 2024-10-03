@@ -38,6 +38,7 @@ telemetry-subscribers.workspace = true
 typed-store.workspace = true
 shared-crypto.workspace = true
 async-recursion.workspace = true
+mysten-metrics.workspace = true
 
 [dev-dependencies]
 test-cluster.workspace = true
