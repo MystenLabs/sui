@@ -23,7 +23,7 @@ use crate::config::{IngestionConfig, JsonRpcConfig, PruningOptions, SnapshotLagC
 use crate::database::ConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
-use crate::handlers::objects_snapshot_processor::start_objects_snapshot_handler;
+use crate::handlers::objects_snapshot_handler::start_objects_snapshot_handler;
 use crate::handlers::pruner::Pruner;
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
