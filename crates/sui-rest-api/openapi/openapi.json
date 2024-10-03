@@ -24,8 +24,8 @@
         "tags": [
           "General"
         ],
-        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n",
-        "operationId": "GetNodeInfo",
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nGet basic information about the state of a Node",
+        "operationId": "Get NodeInfo",
         "responses": {
           "200": {
             "description": "",
@@ -36,6 +36,9 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": ""
           }
         }
       }
@@ -45,13 +48,15 @@
         "tags": [
           "General"
         ],
-        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n",
-        "operationId": "HealthCheck",
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nPerform a service health check\n\nBy default the health check only verifies that the latest checkpoint can be fetched from the\nnode's store before returning a 200. Optionally the `threshold_seconds` parameter can be\nprovided to test for how up to date the node needs to be to be considered healthy.",
+        "operationId": "Health Check",
         "parameters": [
           {
             "in": "query",
             "name": "threshold_seconds",
+            "description": "The threshold, or delta, between the server's system time and the timestamp in the most recently executed checkpoint for which the server is considered to be healthy.\n\nIf not provided, the server will be considered healthy if it can simply fetch the latest checkpoint from its store.",
             "schema": {
+              "description": "The threshold, or delta, between the server's system time and the timestamp in the most recently executed checkpoint for which the server is considered to be healthy.\n\nIf not provided, the server will be considered healthy if it can simply fetch the latest checkpoint from its store.",
               "type": "integer",
               "format": "uint32",
               "minimum": 0.0
@@ -65,6 +70,9 @@
             "content": {
               "text/plain; charset=utf-8": {}
             }
+          },
+          "500": {
+            "description": ""
           }
         }
       }
@@ -74,7 +82,7 @@
         "tags": [
           "Account"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "ListAccountObjects",
         "parameters": [
           {
@@ -135,7 +143,7 @@
         "tags": [
           "Objects"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetObject",
         "parameters": [
           {
@@ -171,7 +179,7 @@
         "tags": [
           "Objects"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetObjectWithVersion",
         "parameters": [
           {
@@ -218,7 +226,7 @@
         "tags": [
           "Objects"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "ListDynamicFields",
         "parameters": [
           {
@@ -279,7 +287,7 @@
         "tags": [
           "Checkpoint"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "ListCheckpoints",
         "parameters": [
           {
@@ -347,7 +355,7 @@
         "tags": [
           "Checkpoint"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetCheckpoint",
         "parameters": [
           {
@@ -388,7 +396,7 @@
         "tags": [
           "Transactions"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetTransaction",
         "parameters": [
           {
@@ -424,7 +432,7 @@
         "tags": [
           "Transactions"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "ListTransactions",
         "parameters": [
           {
@@ -486,7 +494,7 @@
         "tags": [
           "Transactions"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "ExecuteTransaction",
         "parameters": [
           {
@@ -559,7 +567,7 @@
         "tags": [
           "System"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetCommittee",
         "parameters": [
           {
@@ -597,7 +605,7 @@
         "tags": [
           "System"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetLatestCommittee",
         "responses": {
           "200": {
@@ -619,7 +627,7 @@
         "tags": [
           "System"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetSystemStateSummary",
         "responses": {
           "200": {
@@ -640,7 +648,7 @@
         "tags": [
           "System"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetCurrentProtocolConfig",
         "responses": {
           "200": {
@@ -675,7 +683,7 @@
         "tags": [
           "System"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetProtocolConfig",
         "parameters": [
           {
@@ -726,7 +734,7 @@
         "tags": [
           "System"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetGasInfo",
         "responses": {
           "200": {
@@ -747,7 +755,7 @@
         "tags": [
           "Coins"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetCoinInfo",
         "parameters": [
           {
@@ -780,10 +788,10 @@
     "/openapi": {
       "get": {
         "tags": [
-          "OpenApi"
+          "OpenAPI"
         ],
-        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n",
-        "operationId": "OpenApi Explorer",
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nProvides a web UI for exploring the OpenAPI v3.1.0 definition for this service",
+        "operationId": "OpenAPI Explorer",
         "responses": {
           "200": {
             "description": "",
@@ -797,9 +805,9 @@
     "/openapi.json": {
       "get": {
         "tags": [
-          "OpenApi"
+          "OpenAPI"
         ],
-        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n",
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nReturn the OpenAPI v3.1.0 definition for this service as a JSON document",
         "operationId": "openapi.json",
         "responses": {
           "200": {
@@ -814,9 +822,9 @@
     "/openapi.yaml": {
       "get": {
         "tags": [
-          "OpenApi"
+          "OpenAPI"
         ],
-        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n",
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nReturn the OpenAPI v3.1.0 definition for this service as a YAML document",
         "operationId": "openapi.yaml",
         "responses": {
           "200": {
@@ -3328,6 +3336,7 @@
         ]
       },
       "NodeInfo": {
+        "description": "Basic information about the state of a Node",
         "type": "object",
         "required": [
           "chain",
@@ -3339,30 +3348,34 @@
         ],
         "properties": {
           "chain": {
+            "description": "Human readable name of the chain that this Node is on",
             "type": "string"
           },
           "chain_id": {
-            "$ref": "#/components/schemas/CheckpointDigest"
+            "description": "The chain identifier of the chain that this Node is on",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointDigest"
+              }
+            ]
           },
           "checkpoint_height": {
-            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "description": "Checkpoint height of the most recently executed checkpoint",
             "type": "string",
             "format": "u64"
           },
           "epoch": {
-            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "description": "Current epoch of the Node based on its highest executed checkpoint",
             "type": "string",
             "format": "u64"
           },
           "lowest_available_checkpoint": {
-            "description": "Radix-10 encoded 64-bit unsigned integer",
-            "default": null,
+            "description": "The lowest checkpoint for which checkpoints and transaction data is available",
             "type": "string",
             "format": "u64"
           },
           "lowest_available_checkpoint_objects": {
-            "description": "Radix-10 encoded 64-bit unsigned integer",
-            "default": null,
+            "description": "The lowest checkpoint for which object data is available",
             "type": "string",
             "format": "u64"
           },
@@ -3370,7 +3383,7 @@
             "type": "string"
           },
           "timestamp_ms": {
-            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "description": "Unix timestamp of the most recently executed checkpoint",
             "type": "string",
             "format": "u64"
           }
@@ -5669,7 +5682,7 @@
       "name": "Objects"
     },
     {
-      "name": "OpenApi"
+      "name": "OpenAPI"
     },
     {
       "name": "System"

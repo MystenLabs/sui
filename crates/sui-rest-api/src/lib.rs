@@ -66,8 +66,11 @@ impl<T: serde::Serialize, C: std::fmt::Display> axum::response::IntoResponse for
 }
 
 const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
+    // stable APIs
     &info::GetNodeInfo,
     &health::HealthCheck,
+
+    // unstable APIs
     &accounts::ListAccountObjects,
     &objects::GetObject,
     &objects::GetObjectWithVersion,

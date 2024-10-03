@@ -15,6 +15,7 @@ use axum::{
     routing::{get, MethodRouter},
     Router,
 };
+use documented::Documented;
 use openapiv3::v3_1::{
     Components, Header, Info, MediaType, OpenApi, Operation, Parameter, ParameterData, PathItem,
     Paths, ReferenceOr, RequestBody, Response, SchemaObject, Tag,
@@ -23,10 +24,10 @@ use schemars::{gen::SchemaGenerator, JsonSchema};
 use tap::Pipe;
 
 const STABLE_BADGE_MARKDOWN: &str =
-    "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n";
+    "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\n";
 
 const UNSTABLE_BADGE_MARKDOWN: &str =
-    "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n";
+    "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n";
 
 pub trait ApiEndpoint<S> {
     fn method(&self) -> Method;
@@ -299,6 +300,8 @@ impl OpenApiDocument {
     }
 }
 
+/// Return the OpenAPI v3.1.0 definition for this service as a JSON document
+#[derive(Documented)]
 pub struct OpenApiJson;
 
 impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiJson {
@@ -319,8 +322,9 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiJson {
         _generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
-            .tag("OpenApi")
+            .tag("OpenAPI")
             .operation_id("openapi.json")
+            .description(Self::DOCS)
             .response(
                 200,
                 ResponseBuilder::new()
@@ -335,6 +339,8 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiJson {
     }
 }
 
+/// Return the OpenAPI v3.1.0 definition for this service as a YAML document
+#[derive(Documented)]
 pub struct OpenApiYaml;
 
 impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiYaml {
@@ -355,8 +361,9 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiYaml {
         _generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
-            .tag("OpenApi")
+            .tag("OpenAPI")
             .operation_id("openapi.yaml")
+            .description(Self::DOCS)
             .response(
                 200,
                 ResponseBuilder::new()
@@ -371,6 +378,8 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiYaml {
     }
 }
 
+/// Provides a web UI for exploring the OpenAPI v3.1.0 definition for this service
+#[derive(Documented)]
 pub struct OpenApiExplorer;
 
 impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiExplorer {
@@ -391,8 +400,9 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiExplorer {
         _generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
-            .tag("OpenApi")
-            .operation_id("OpenApi Explorer")
+            .tag("OpenAPI")
+            .operation_id("OpenAPI Explorer")
+            .description(Self::DOCS)
             .response(
                 200,
                 ResponseBuilder::new()
