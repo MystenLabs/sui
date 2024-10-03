@@ -5,6 +5,7 @@ mod executor;
 mod metrics;
 mod progress_store;
 mod reader;
+mod remote_fetcher;
 #[cfg(test)]
 mod tests;
 mod util;
