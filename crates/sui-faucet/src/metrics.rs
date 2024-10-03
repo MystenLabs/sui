@@ -5,7 +5,7 @@
 use mysten_network::metrics::MetricsCallbackProvider;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry,
+    register_int_gauge_vec_with_registry, register_int_counter_with_registry
     Histogram, IntCounter, IntGauge, Registry, IntCounterVec
 };
 
