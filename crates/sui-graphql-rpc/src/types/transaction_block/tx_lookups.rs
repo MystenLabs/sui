@@ -222,18 +222,18 @@ impl TxBounds {
         };
 
         let cursor_lo_exclusive = page.after().map(|a| a.tx_sequence_number);
+        let cursor_lo = cursor_lo_exclusive.map(|a| a.saturating_add(1));
         let cursor_hi = page.before().map(|b| b.tx_sequence_number);
 
-        if !match (cursor_lo_exclusive.map(|a| a.saturating_add(1)), cursor_hi) {
-            (Some(a), Some(b)) => tx_lo < a && a < b && b <= tx_hi,
-            // a must be strictly less than tx_hi
-            (Some(a), None) => tx_lo < a && a < tx_hi,
-            // b can be equal to tx_hi because both are exclusive
-            (None, Some(b)) => tx_lo < b && b <= tx_hi,
-            // tx_lo must be strictly less than tx_hi for the right-open interval
-            (None, None) => tx_lo < tx_hi,
-        } {
-            return Ok(None);
+        match (cursor_lo, cursor_hi) {
+            (Some(lo), _) if tx_hi <= lo => return Ok(None),
+            (_, Some(hi)) if hi <= tx_lo => return Ok(None),
+            (Some(lo), Some(hi)) if hi <= lo => return Ok(None),
+            _ => {
+                if tx_hi <= tx_lo {
+                    return Ok(None);
+                }
+            }
         }
 
         Ok(Some(Self {

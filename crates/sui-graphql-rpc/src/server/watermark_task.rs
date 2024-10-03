@@ -89,7 +89,7 @@ impl WatermarkTask {
                     return;
                 },
                 _ = interval.tick() => {
-                    let Watermark {lo_cp, lo_tx, hi_cp, hi_cp_timestamp_ms, epoch } = match Watermark::query(&self.db).await {
+                    let Watermark { lo_cp, lo_tx, hi_cp, hi_cp_timestamp_ms, epoch } = match Watermark::query(&self.db).await {
                         Ok(Some(watermark)) => watermark,
                         Ok(None) => continue,
                         Err(e) => {
@@ -215,24 +215,30 @@ impl Watermark {
             return Ok(None);
         };
 
-        if result.len() != 2 {
+        let (lo_cp, lo_tx) = if let Some((cp, _, _, Some(tx))) = result.first() {
+            (cp, tx)
+        } else {
             return Err(Error::Internal(
-                "Expected 2 rows from watermark query".to_string(),
-            ));
-        }
-
-        let Some(lo_tx) = result[0].3 else {
-            return Err(Error::Internal(
-                "Expected min_tx_sequence_number to be non-null".to_string(),
+                "Expected entry for tx lower bound and min_tx_sequence_number to be non-null"
+                    .to_string(),
             ));
         };
 
+        let (hi_cp, hi_cp_timestamp_ms, epoch) =
+            if let Some((cp, timestamp_ms, epoch, _)) = result.last() {
+                (cp, timestamp_ms, epoch)
+            } else {
+                return Err(Error::Internal(
+                    "Expected entry for tx upper bound".to_string(),
+                ));
+            };
+
         Ok(Some(Watermark {
-            hi_cp: result[1].0 as u64,
-            hi_cp_timestamp_ms: result[1].1 as u64,
-            epoch: result[1].2 as u64,
-            lo_cp: result[0].0 as u64,
-            lo_tx: lo_tx as u64,
+            hi_cp: *hi_cp as u64,
+            hi_cp_timestamp_ms: *hi_cp_timestamp_ms as u64,
+            epoch: *epoch as u64,
+            lo_cp: *lo_cp as u64,
+            lo_tx: *lo_tx as u64,
         }))
     }
 }

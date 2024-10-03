@@ -282,6 +282,8 @@ impl TransactionBlock {
     /// `function` should provide a value for `scan_limit`. This modifies querying behavior by
     /// limiting how many transactions to scan through before applying filters, and also affects
     /// pagination behavior.
+    ///
+    /// Queries for data that have been pruned
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         page: Page<Cursor>,
@@ -290,6 +292,10 @@ impl TransactionBlock {
         scan_limit: Option<u64>,
     ) -> Result<ScanConnection<String, TransactionBlock>, Error> {
         let limits = &ctx.data_unchecked::<ServiceConfig>().limits;
+        let db: &Db = ctx.data_unchecked();
+        // If we've entered this function, we already fetched `checkpoint_viewed_at` from the
+        // `Watermark`, and so we must be able to retrieve `lo_cp` as well.
+        let Watermark { lo_cp, .. } = *ctx.data_unchecked();
 
         // If the caller has provided some arbitrary combination of `function`, `kind`,
         // `recvAddress`, `inputObject`, or `changedObject`, we require setting a `scanLimit`.
@@ -317,31 +323,10 @@ impl TransactionBlock {
 
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
-        let db: &Db = ctx.data_unchecked();
         let is_from_front = page.is_from_front();
-        // If we've entered this function, we already fetched `checkpoint_viewed_at` from the
-        // `Watermark`, and so we must be able to retrieve `lo_cp` as well.
-        let Watermark { lo_cp, lo_tx, .. } = *ctx.data_unchecked();
         let cp_after = filter.after_checkpoint.map(u64::from);
         let cp_at = filter.at_checkpoint.map(u64::from);
         let cp_before = filter.before_checkpoint.map(u64::from);
-
-        // Check that requested data is not already pruned. This should catch most cases, except on
-        // epoch boundary where a request is made just before the epoch pruning process is kicked
-        // off.
-        if checkpoint_viewed_at < lo_cp
-            || cp_after.map_or(false, |cp| cp < lo_cp)
-            || cp_at.map_or(false, |cp| cp < lo_cp)
-            || cp_before.map_or(false, |cp| cp < lo_cp)
-            || page.after().map_or(false, |c| c.tx_sequence_number < lo_tx)
-            || page
-                .before()
-                .map_or(false, |c| c.tx_sequence_number < lo_tx)
-        {
-            return Err(Error::Client(
-                "Requested data is pruned and no longer available".to_string(),
-            ));
-        }
 
         // If page size or scan limit is 0, we want to standardize behavior by returning an empty
         // connection
