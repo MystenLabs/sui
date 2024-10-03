@@ -1464,6 +1464,14 @@ impl AuthorityPerEpochStore {
         // Now that the transaction effects are committed, we will never re-execute, so we
         // don't need to worry about equivocating.
         batch.delete_batch(&tables.signed_effects_digests, digests)?;
+
+        batch.delete_batch(
+            &tables.assigned_shared_object_versions_v2,
+            digests.iter().map(|d| TransactionKey::from(*d)),
+        )?;
+
+        batch.delete_batch(&tables.user_signatures_for_checkpoints, digests)?;
+
         batch.write()?;
         Ok(())
     }
@@ -3750,10 +3758,11 @@ impl AuthorityPerEpochStore {
         commit_height: CheckpointHeight,
         content_info: Vec<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult<()> {
+        let tables = self.tables()?;
         // All created checkpoints are inserted in builder_checkpoint_summary in a single batch.
         // This means that upon restart we can use BuilderCheckpointSummary::commit_height
         // from the last built summary to resume building checkpoints.
-        let mut batch = self.tables()?.pending_checkpoints_v2.batch();
+        let mut batch = tables.pending_checkpoints_v2.batch();
         for (position_in_commit, (summary, transactions)) in content_info.into_iter().enumerate() {
             let sequence_number = summary.sequence_number;
             let summary = BuilderCheckpointSummary {
@@ -3762,15 +3771,25 @@ impl AuthorityPerEpochStore {
                 position_in_commit,
             };
             batch.insert_batch(
-                &self.tables()?.builder_checkpoint_summary_v2,
+                &tables.builder_checkpoint_summary_v2,
                 [(&sequence_number, summary)],
             )?;
             batch.insert_batch(
-                &self.tables()?.builder_digest_to_checkpoint,
+                &tables.builder_digest_to_checkpoint,
                 transactions
                     .iter()
                     .map(|tx| (tx.transaction, sequence_number)),
             )?;
+
+            // find all pending checkpoints <= commit_height and remove them
+            let iter = tables
+                .pending_checkpoints_v2
+                .safe_range_iter(0..=commit_height);
+            let keys = iter
+                .map(|c| c.map(|(h, _)| h))
+                .collect::<Result<Vec<_>, _>>()?;
+
+            batch.delete_batch(&tables.pending_checkpoints_v2, &keys)?;
         }
 
         Ok(batch.write()?)
