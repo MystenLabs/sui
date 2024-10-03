@@ -6,10 +6,7 @@ use std::ops::RangeInclusive;
 use async_trait::async_trait;
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl};
 use diesel_async::RunQueryDsl;
-use sui_types::{
-    base_types::ObjectID,
-    effects::{TransactionEffects, TransactionEffectsAPI},
-};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 
 use crate::{
     backfill::backfill_task::BackfillTask,
