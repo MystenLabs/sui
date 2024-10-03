@@ -4,7 +4,6 @@
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, LockDetails};
 use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
-use mysten_common::fatal;
 use mysten_common::*;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
