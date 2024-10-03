@@ -11,6 +11,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 mod ingestion_backfills;
 mod sql_backfill;
 mod system_state_summary_json;
+mod tx_affected_objects;
 
 pub async fn get_backfill_task(
     kind: BackfillTaskKind,
@@ -18,7 +19,10 @@ pub async fn get_backfill_task(
 ) -> Arc<dyn BackfillTask> {
     match kind {
         BackfillTaskKind::SystemStateSummaryJson => {
-            Arc::new(system_state_summary_json::SystemStateSummaryJsonBackfill {})
+            Arc::new(system_state_summary_json::SystemStateSummaryJsonBackfill)
+        }
+        BackfillTaskKind::TxAffectedObjects => {
+            Arc::new(tx_affected_objects::TxAffectedObjectsBackfill)
         }
         BackfillTaskKind::Sql { sql, key_column } => {
             Arc::new(sql_backfill::SqlBackFill::new(sql, key_column))
