@@ -24,6 +24,9 @@ use sui_types::committee::StakeUnit;
 use sui_types::committee::TOTAL_VOTING_POWER;
 use tracing::{error, info, warn};
 
+const MAX_TIMEOUT_MS: u64 = 5000;
+const MIN_TIMEOUT_MS: u64 = 1500;
+
 pub struct BridgeAuthorityAggregator {
     pub committee: Arc<BridgeCommittee>,
     pub clients: Arc<BTreeMap<BridgeAuthorityPublicKeyBytes, Arc<BridgeClient>>>,
@@ -235,7 +238,8 @@ async fn request_sign_bridge_action_into_certification(
             })
         },
         // A herustic timeout, we expect the signing to finish within 5 seconds
-        Duration::from_secs(5),
+        Duration::from_secs(MAX_TIMEOUT_MS),
+        Some(Duration::from_secs(MIN_TIMEOUT_MS)),
     )
     .await
     .map_err(|state| {
@@ -416,6 +420,107 @@ mod tests {
             err,
             BridgeError::AuthoritySignatureAggregationTooManyError(_)
         ));
+    }
+
+    #[tokio::test]
+    async fn test_bridge_auth_agg_optimized() {
+        telemetry_subscribers::init_for_testing();
+
+        let mock0 = BridgeRequestMockHandler::new();
+        let mock1 = BridgeRequestMockHandler::new();
+        let mock2 = BridgeRequestMockHandler::new();
+        let mock3 = BridgeRequestMockHandler::new();
+        let mock4 = BridgeRequestMockHandler::new();
+        let mock5 = BridgeRequestMockHandler::new();
+        let mock6 = BridgeRequestMockHandler::new();
+        let mock7 = BridgeRequestMockHandler::new();
+        let mock8 = BridgeRequestMockHandler::new();
+
+        // start servers - there is only one permutation of size 2 (1112, 2222) that will achieve quorum
+        let (_handles, authorities, secrets) = get_test_authorities_and_run_mock_bridge_server(
+            vec![666, 1000, 1000, 1000, 1000, 1000, 1000, 1112, 2222],
+            vec![
+                mock0.clone(),
+                mock1.clone(),
+                mock2.clone(),
+                mock3.clone(),
+                mock4.clone(),
+                mock5.clone(),
+                mock6.clone(),
+                mock7.clone(),
+                mock8.clone(),
+            ],
+        );
+
+        let committee = BridgeCommittee::new(authorities).unwrap();
+
+        let agg = BridgeAuthorityAggregator::new(Arc::new(committee));
+
+        let sui_tx_digest = TransactionDigest::random();
+        let sui_tx_event_index = 0;
+        let nonce = 0;
+        let amount = 1000;
+        let action = get_test_sui_to_eth_bridge_action(
+            Some(sui_tx_digest),
+            Some(sui_tx_event_index),
+            Some(nonce),
+            Some(amount),
+            None,
+            None,
+            None,
+        );
+
+        // All authorities return signatures
+        mock0.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[0])),
+        );
+        mock1.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[1])),
+        );
+        mock2.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[2])),
+        );
+        mock3.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[3])),
+        );
+        mock4.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[4])),
+        );
+        mock5.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[5])),
+        );
+        mock6.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[6])),
+        );
+        mock7.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[7])),
+        );
+        mock8.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[8])),
+        );
+        let resp = agg
+            .request_committee_signatures(action.clone())
+            .await
+            .unwrap();
+        assert_eq!(resp.auth_sig().signatures.len(), 2);
     }
 
     #[tokio::test]
