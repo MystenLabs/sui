@@ -210,7 +210,11 @@ pub struct NodeConfig {
 #[serde(rename_all = "kebab-case")]
 pub enum ExecutionCacheConfig {
     PassthroughCache,
-    WritebackCache { max_cache_size: Option<usize> },
+    WritebackCache {
+        /// Maximum number of entries in each cache. (There are several different caches).
+        /// If None, the default of 10000 is used.
+        max_cache_size: Option<usize>,
+    },
 }
 
 impl Default for ExecutionCacheConfig {
