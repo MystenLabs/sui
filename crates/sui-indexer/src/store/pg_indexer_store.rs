@@ -1226,60 +1226,56 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_event_indices_table(
-        &self,
-        min_tx: u64,
-        max_tx: u64,
-    ) -> Result<(), IndexerError> {
+    async fn prune_event_indices_table(&self, inclusive_end: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
-        let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
+        let max_tx = inclusive_end as i64;
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::delete(
                     event_emit_module::table
-                        .filter(event_emit_module::tx_sequence_number.between(min_tx, max_tx)),
+                        .filter(event_emit_module::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
                 diesel::delete(
                     event_emit_package::table
-                        .filter(event_emit_package::tx_sequence_number.between(min_tx, max_tx)),
+                        .filter(event_emit_package::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
                 diesel::delete(
-                    event_senders::table
-                        .filter(event_senders::tx_sequence_number.between(min_tx, max_tx)),
+                    event_senders::table.filter(event_senders::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
-                diesel::delete(event_struct_instantiation::table.filter(
-                    event_struct_instantiation::tx_sequence_number.between(min_tx, max_tx),
-                ))
+                diesel::delete(
+                    event_struct_instantiation::table
+                        .filter(event_struct_instantiation::tx_sequence_number.le(max_tx)),
+                )
                 .execute(conn)
                 .await?;
 
                 diesel::delete(
                     event_struct_module::table
-                        .filter(event_struct_module::tx_sequence_number.between(min_tx, max_tx)),
+                        .filter(event_struct_module::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
                 diesel::delete(
                     event_struct_name::table
-                        .filter(event_struct_name::tx_sequence_number.between(min_tx, max_tx)),
+                        .filter(event_struct_name::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
                 diesel::delete(
                     event_struct_package::table
-                        .filter(event_struct_package::tx_sequence_number.between(min_tx, max_tx)),
+                        .filter(event_struct_package::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
@@ -1293,91 +1289,68 @@ impl PgIndexerStore {
 
     async fn prune_tx_indices_table(&self, inclusive_end: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
-        // TODO: (wlmyng) magic number ... roughly the amount of transactions in a checkpoint
-        let chunk_size = 100000;
 
         let max_tx = inclusive_end as i64;
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
-                loop {
-                    let affected_rows = diesel::delete(
-                        tx_affected_addresses::table
-                            .filter(tx_affected_addresses::tx_sequence_number.le(max_tx))
-                            .limit(chunk_size),
-                    )
-                    .execute(conn)
-                    .await?;
+                diesel::delete(
+                    tx_affected_addresses::table
+                        .filter(tx_affected_addresses::tx_sequence_number.le(max_tx)),
+                )
+                .execute(conn)
+                .await?;
 
-                    if affected_rows == 0 {
-                        break;
-                    }
-
-                    // Optional: Add a small delay to reduce database load
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                }
-
-                let hmm = diesel::delete(
+                diesel::delete(
                     tx_affected_objects::table
                         .filter(tx_affected_objects::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
+                diesel::delete(tx_senders::table.filter(tx_senders::tx_sequence_number.le(max_tx)))
+                    .execute(conn)
+                    .await?;
+
                 diesel::delete(
-                    tx_senders::table
-                        .filter(tx_senders::tx_sequence_number.between(min_tx, max_tx)),
+                    tx_recipients::table.filter(tx_recipients::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
                 diesel::delete(
-                    tx_recipients::table
-                        .filter(tx_recipients::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
-
-                diesel::delete(
-                    tx_input_objects::table
-                        .filter(tx_input_objects::tx_sequence_number.between(min_tx, max_tx)),
+                    tx_input_objects::table.filter(tx_input_objects::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
                 diesel::delete(
                     tx_changed_objects::table
-                        .filter(tx_changed_objects::tx_sequence_number.between(min_tx, max_tx)),
+                        .filter(tx_changed_objects::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
                 diesel::delete(
-                    tx_calls_pkg::table
-                        .filter(tx_calls_pkg::tx_sequence_number.between(min_tx, max_tx)),
+                    tx_calls_pkg::table.filter(tx_calls_pkg::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
                 diesel::delete(
-                    tx_calls_mod::table
-                        .filter(tx_calls_mod::tx_sequence_number.between(min_tx, max_tx)),
+                    tx_calls_mod::table.filter(tx_calls_mod::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
                 diesel::delete(
-                    tx_calls_fun::table
-                        .filter(tx_calls_fun::tx_sequence_number.between(min_tx, max_tx)),
+                    tx_calls_fun::table.filter(tx_calls_fun::tx_sequence_number.le(max_tx)),
                 )
                 .execute(conn)
                 .await?;
 
-                diesel::delete(
-                    tx_digests::table
-                        .filter(tx_digests::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                diesel::delete(tx_digests::table.filter(tx_digests::tx_sequence_number.le(max_tx)))
+                    .execute(conn)
+                    .await?;
 
                 Ok(())
             }
@@ -1834,7 +1807,7 @@ impl IndexerStore for PgIndexerStore {
             // 1. prune checkpoints table, checkpoints table is the source table of available range,
             // we prune it first to make sure that we always have full data for checkpoints within the available range;
             // 2. then prune the lookup tables;
-            let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp).await?;
+            let (_, max_tx) = self.get_transaction_range_for_checkpoint(cp).await?;
 
             info!(
                 "Pruning data up to and including checkpoint {} of epoch {}",
@@ -1842,20 +1815,16 @@ impl IndexerStore for PgIndexerStore {
             );
             self.prune_checkpoints_table(cp).await?;
 
-            // A checkpoint has transactions only if it has a non-empty range.
-            let (Some(min_tx), Some(max_tx)) = (min_tx, max_tx) else {
+            let Some(max_tx) = max_tx else {
                 continue;
             };
 
-            self.prune_tx_indices_table(min_tx, max_tx).await?;
+            self.prune_tx_indices_table(max_tx).await?;
+            info!("Pruned transactions up to and including tx {}", max_tx);
+            self.prune_event_indices_table(max_tx).await?;
             info!(
-                "Pruned transactions for checkpoint {} from tx {} to tx {}",
-                cp, min_tx, max_tx
-            );
-            self.prune_event_indices_table(min_tx, max_tx).await?;
-            info!(
-                "Pruned events of transactions for checkpoint {} from tx {} to tx {}",
-                cp, min_tx, max_tx
+                "Pruned events of transactions up to and including tx {}",
+                max_tx
             );
             self.metrics.last_pruned_transaction.set(max_tx as i64);
 
