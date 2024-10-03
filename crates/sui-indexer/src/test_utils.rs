@@ -31,7 +31,7 @@ pub async fn start_indexer_jsonrpc_for_testing(
     json_rpc_url: String,
     cancel: Option<CancellationToken>,
 ) -> (JoinHandle<Result<(), IndexerError>>, CancellationToken) {
-    let token = cancel.unwrap_or_else(CancellationToken::new);
+    let token = cancel.unwrap_or_default();
 
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
@@ -67,7 +67,8 @@ pub async fn start_indexer_jsonrpc_for_testing(
 }
 
 /// Wrapper over `Indexer::start_writer_with_config` to make it easier to configure an indexer
-/// writer for testing.
+/// writer for testing. If the config options are null, default values that have historically worked
+/// for testing will be used.
 pub async fn start_indexer_writer_for_testing(
     db_url: String,
     snapshot_config: Option<SnapshotLagConfig>,
@@ -79,8 +80,11 @@ pub async fn start_indexer_writer_for_testing(
     JoinHandle<Result<(), IndexerError>>,
     CancellationToken,
 ) {
-    let token = cancel.unwrap_or_else(CancellationToken::new);
-    let snapshot_config = snapshot_config.unwrap_or_default();
+    let token = cancel.unwrap_or_default();
+    let snapshot_config = snapshot_config.unwrap_or(SnapshotLagConfig {
+        snapshot_min_lag: 5,
+        sleep_duration: 0,
+    });
     let pruning_options = pruning_options.unwrap_or_default();
 
     // Reduce the connection pool size to 10 for testing to prevent maxing out
