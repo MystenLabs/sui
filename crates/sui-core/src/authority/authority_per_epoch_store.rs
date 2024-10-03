@@ -483,9 +483,11 @@ pub struct AuthorityEpochTables {
     /// Because we don't want to create checkpoints with empty content(see CheckpointBuilder::write_checkpoint),
     /// the sequence number of checkpoint does not match height here.
     #[default_options_override_fn = "pending_checkpoints_table_default_config"]
-    pending_checkpoints: DBMap<CheckpointHeight, PendingCheckpoint>,
-    #[default_options_override_fn = "pending_checkpoints_table_default_config"]
     pending_checkpoints_v2: DBMap<CheckpointHeight, PendingCheckpointV2>,
+
+    /// Deprecated table for pre-random-beacon checkpoints.
+    #[allow(dead_code)]
+    pending_checkpoints: DBMap<CheckpointHeight, PendingCheckpoint>,
 
     /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
     builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
@@ -2987,25 +2989,14 @@ impl AuthorityPerEpochStore {
 
     #[cfg(any(test, feature = "test-utils"))]
     pub fn get_highest_pending_checkpoint_height(&self) -> CheckpointHeight {
-        if self.randomness_state_enabled() {
-            self.tables()
-                .expect("test should not cross epoch boundary")
-                .pending_checkpoints_v2
-                .unbounded_iter()
-                .skip_to_last()
-                .next()
-                .map(|(key, _)| key)
-                .unwrap_or_default()
-        } else {
-            self.tables()
-                .expect("test should not cross epoch boundary")
-                .pending_checkpoints
-                .unbounded_iter()
-                .skip_to_last()
-                .next()
-                .map(|(key, _)| key)
-                .unwrap_or_default()
-        }
+        self.tables()
+            .expect("test should not cross epoch boundary")
+            .pending_checkpoints_v2
+            .unbounded_iter()
+            .skip_to_last()
+            .next()
+            .map(|(key, _)| key)
+            .unwrap_or_default()
     }
 
     // Caller is not required to set ExecutionIndices with the right semantics in
@@ -3740,34 +3731,18 @@ impl AuthorityPerEpochStore {
         last: Option<CheckpointHeight>,
     ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
         let tables = self.tables()?;
-        if self.randomness_state_enabled() {
-            let mut iter = tables.pending_checkpoints_v2.unbounded_iter();
-            if let Some(last_processed_height) = last {
-                iter = iter.skip_to(&(last_processed_height + 1))?;
-            }
-            Ok(iter.collect())
-        } else {
-            let mut iter = tables.pending_checkpoints.unbounded_iter();
-            if let Some(last_processed_height) = last {
-                iter = iter.skip_to(&(last_processed_height + 1))?;
-            }
-            Ok(iter.map(|(height, cp)| (height, cp.into())).collect())
+        let mut iter = tables.pending_checkpoints_v2.unbounded_iter();
+        if let Some(last_processed_height) = last {
+            iter = iter.skip_to(&(last_processed_height + 1))?;
         }
+        Ok(iter.collect())
     }
 
     pub fn get_pending_checkpoint(
         &self,
         index: &CheckpointHeight,
     ) -> SuiResult<Option<PendingCheckpointV2>> {
-        if self.randomness_state_enabled() {
-            Ok(self.tables()?.pending_checkpoints_v2.get(index)?)
-        } else {
-            Ok(self
-                .tables()?
-                .pending_checkpoints
-                .get(index)?
-                .map(|c| c.into()))
-        }
+        Ok(self.tables()?.pending_checkpoints_v2.get(index)?)
     }
 
     pub fn process_pending_checkpoint(
@@ -3778,7 +3753,7 @@ impl AuthorityPerEpochStore {
         // All created checkpoints are inserted in builder_checkpoint_summary in a single batch.
         // This means that upon restart we can use BuilderCheckpointSummary::commit_height
         // from the last built summary to resume building checkpoints.
-        let mut batch = self.tables()?.pending_checkpoints.batch();
+        let mut batch = self.tables()?.pending_checkpoints_v2.batch();
         for (position_in_commit, (summary, transactions)) in content_info.into_iter().enumerate() {
             let sequence_number = summary.sequence_number;
             let summary = BuilderCheckpointSummary {
@@ -4204,21 +4179,12 @@ impl ConsensusCommitOutput {
             self.user_signatures_for_checkpoints,
         )?;
 
-        if epoch_store.randomness_state_enabled() {
-            batch.insert_batch(
-                &tables.pending_checkpoints_v2,
-                self.pending_checkpoints
-                    .into_iter()
-                    .map(|cp| (cp.height(), cp)),
-            )?;
-        } else {
-            batch.insert_batch(
-                &tables.pending_checkpoints,
-                self.pending_checkpoints
-                    .into_iter()
-                    .map(|cp| (cp.height(), cp.expect_v1())),
-            )?;
-        }
+        batch.insert_batch(
+            &tables.pending_checkpoints_v2,
+            self.pending_checkpoints
+                .into_iter()
+                .map(|cp| (cp.height(), cp)),
+        )?;
 
         if let Some((round, commit_timestamp)) = self.next_randomness_round {
             batch.insert_batch(&tables.randomness_next_round, [(SINGLETON_KEY, round)])?;
