@@ -217,8 +217,7 @@ where
 
         let highest_known_commit_at_startup = dag_state.read().last_commit_index();
 
-        let sync_last_known_own_block = boot_counter == 0
-            && dag_state.read().highest_accepted_round() == 0
+        let sync_last_known_own_block = dag_state.read().highest_accepted_round() == 0
             && !context
                 .parameters
                 .sync_last_known_own_block_timeout
