@@ -88,30 +88,12 @@ public(package) fun pairing<G1, G2, G3>(
     Element<G3> { bytes: internal_pairing(type_, &e1.bytes, &e2.bytes) }
 }
 
-/// Wrapper for a group element in uncompressed form.
-/// Currently, only BLS12-381 G1 is supported.
-public struct Uncompressed<phantom T> has store, copy, drop {
-    bytes: vector<u8>,
+public(package) fun from<From, To>(from_type_: u8, to_type_: u8, e: &Element<From>): Element<To> {
+    Element<To> { bytes: internal_from(from_type_, to_type_, &e.bytes) }
 }
 
-public fun as_bytes<G>(e: &Uncompressed<G>): &vector<u8> {
-    &e.bytes
-}
-
-public(package) fun to_uncompressed<G>(type_: u8, e: &Element<G>): Uncompressed<G> {
-    assert!(type_ == 1, ENotSupported);
-    Uncompressed<G> { bytes: internal_to_uncompressed(type_, &e.bytes) }
-}
-
-public(package) fun from_uncompressed<G>(type_: u8, e: &Uncompressed<G>): Element<G> {
-    assert!(type_ == 1, ENotSupported);
-    Element<G> { bytes: internal_from_uncompressed(type_, &e.bytes) }
-}
-
-public(package) fun sum_of_uncompressed<G>(type_: u8, e: &vector<Uncompressed<G>>): Element<G> {
-    assert!(type_ == 1, ENotSupported);
-    let bytes = internal_sum_of_uncompressed(type_, &(*e).map!(|x| x.bytes));
-    Element<G> { bytes }
+public(package) fun sum<G>(type_: u8, terms: &vector<Element<G>>): Element<G> {
+    Element<G> { bytes: internal_sum(type_, &(*terms).map!(|x| x.bytes)) }
 }
 
 //////////////////////////////
@@ -140,9 +122,8 @@ native fun internal_multi_scalar_mul(
 // 'type' represents the type of e1, and the rest are determined automatically from e1.
 native fun internal_pairing(type_: u8, e1: &vector<u8>, e2: &vector<u8>): vector<u8>;
 
-native fun internal_to_uncompressed(type_: u8, e: &vector<u8>): vector<u8>;
-native fun internal_from_uncompressed(type_: u8, e: &vector<u8>): vector<u8>;
-native fun internal_sum_of_uncompressed(type_: u8, e: &vector<vector<u8>>): vector<u8>;
+native fun internal_from(from_type_: u8, to_type_: u8, e: &vector<u8>): vector<u8>;
+public(package) native fun internal_sum(type_: u8, e: &vector<vector<u8>>): vector<u8>;
 
 // Helper function for encoding a given u64 number as bytes in a given buffer.
 public(package) fun set_as_prefix(x: u64, big_endian: bool, buffer: &mut vector<u8>) {

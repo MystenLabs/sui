@@ -904,18 +904,13 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ),
         (
             "group_ops",
-            "internal_to_uncompressed",
-            make_native!(group_ops::internal_to_uncompressed),
+            "internal_from",
+            make_native!(group_ops::internal_from),
         ),
         (
             "group_ops",
-            "internal_from_uncompressed",
-            make_native!(group_ops::internal_from_uncompressed),
-        ),
-        (
-            "group_ops",
-            "internal_sum_of_uncompressed",
-            make_native!(group_ops::internal_sum_of_uncompressed),
+            "internal_sum",
+            make_native!(group_ops::internal_sum),
         ),
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),
