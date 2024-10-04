@@ -69,8 +69,12 @@ export function SwapPage() {
 			})
 			.merge(maxSlippageFormSchema)
 			.superRefine(async ({ amount }, ctx) => {
-				if (!fromCoinType || !toCoinType) {
-					return;
+				if (!fromCoinType) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: 'Select a coin to swap from',
+					});
+					return z.NEVER;
 				}
 
 				const { totalBalance } = await client.getBalance({
@@ -81,25 +85,36 @@ export function SwapPage() {
 				const bnAmount = new BigNumber(amount);
 				const bnMaxBalance = new BigNumber(totalBalance || 0).shiftedBy(-1 * (data?.decimals ?? 0));
 
-				if (!bnAmount.gt(0)) {
+				if (bnAmount.isGreaterThan(bnMaxBalance)) {
 					ctx.addIssue({
 						path: ['amount'],
 						code: z.ZodIssueCode.custom,
-						message: 'Value must be greater than 0',
+						message: 'Insufficient balance',
 					});
+					return z.NEVER;
 				}
+
+				if (!toCoinType) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: 'Select a coin to swap to',
+					});
+					return z.NEVER;
+				}
+
 				if (!bnAmount.isFinite() || !bnAmount.isPositive()) {
 					ctx.addIssue({
 						path: ['amount'],
 						code: z.ZodIssueCode.custom,
 						message: 'Expected a valid number',
 					});
+					return z.NEVER;
 				}
-				if (bnAmount.isGreaterThan(bnMaxBalance)) {
+				if (!bnAmount.gt(0)) {
 					ctx.addIssue({
 						path: ['amount'],
 						code: z.ZodIssueCode.custom,
-						message: 'Insufficient balance',
+						message: 'Value must be greater than 0',
 					});
 					return z.NEVER;
 				}
@@ -141,7 +156,7 @@ export function SwapPage() {
 		const bnBalance = new BigNumber(balance?.totalBalance || 0).shiftedBy(
 			-1 * (fromCoinData?.decimals ?? 0),
 		);
-		return isSui
+		return isSui && bnBalance.gt(GAS_RESERVE)
 			? bnBalance
 					.minus(GAS_RESERVE)
 					.decimalPlaces(fromCoinData?.decimals ?? 0)
@@ -349,7 +364,16 @@ export function SwapPage() {
 									</div>
 									<MaxSlippageModal
 										isOpen={isSlippageModalOpen}
-										onClose={() => setSlippageModalOpen(false)}
+										onClose={() => {
+											navigate(
+												`/swap?${new URLSearchParams({
+													type: fromCoinType || '',
+													toType: toCoinType || '',
+													maxSlippage: allowedMaxSlippagePercentage.toString(),
+												}).toString()}`,
+											);
+											setSlippageModalOpen(false);
+										}}
 									/>
 
 									{error && (
@@ -394,7 +418,11 @@ export function SwapPage() {
 							variant="primary"
 							loading={isSubmitting || handleSwapPending}
 							disabled={
-								!isFormValid || isSubmitting || swapTransactionLoading || swapTransactionPending
+								!isFormValid ||
+								isSubmitting ||
+								swapTransactionLoading ||
+								swapTransactionPending ||
+								!!error
 							}
 							size="tall"
 							text={
