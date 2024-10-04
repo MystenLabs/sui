@@ -140,15 +140,18 @@ In this final part of the app example, you build a frontend (UI) that allows end
 
 To skip building the frontend and test out your newly deployed package, create this example using the following template and follow the instructions in the template's `README.md` file: 
 
+<Tabs groupId="packagemanager">
+  <TabItem label="PNPM" value="pnpm">
 ```bash
 pnpm create @mysten/dapp --template react-e2e-counter
 ```
-
-or
-
-```bash
-yarn create @mysten/dapp --template react-e2e-counter
-```
+  </TabItem>
+  <TabItem label="Yarn" value="yarn">
+    ```bash
+    yarn create @mysten/dapp --template react-e2e-counter
+    ```
+  </TabItem>
+</Tabs>
 
 :::
 
@@ -179,15 +182,18 @@ The UI design consists of two parts:
 
 The first step is to set up the client app. Run the following command to scaffold a new app.
 
-```bash
-pnpm create @mysten/dapp --template react-client-dapp
-```
-
-or
-
-```bash
-yarn create @mysten/dapp --template react-client-dapp
-```
+<Tabs groupId="packagemanager">
+  <TabItem label="PNPM" value="pnpm">
+    ```bash
+    pnpm create @mysten/dapp --template react-client-dapp
+    ```
+  </TabItem>
+  <TabItem label="Yarn" value="yarn">
+    ```bash
+    yarn create @mysten/dapp --template react-client-dapp
+    ```
+  </TabItem>
+</Tabs>
 
 ### Connecting your deployed package {#connecting-your-package}
 
