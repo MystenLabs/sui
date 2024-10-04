@@ -4,7 +4,7 @@
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { UsdcPromo } from '_pages/home/usdc-promo/UsdcPromo';
 import { SwapPage } from '_pages/swap';
-import { FromAssets } from '_pages/swap/FromAssets';
+import { CoinsSelectionPage } from '_pages/swap/CoinsSelectionPage';
 import { setNavVisibility } from '_redux/slices/app';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { persistableStorage } from '_src/shared/analytics/amplitude';
@@ -178,7 +178,7 @@ const App = () => {
 				<Route path="send/select" element={<CoinsSelectorPage />} />
 				<Route path="stake/*" element={<Staking />} />
 				<Route path="swap/*" element={<SwapPage />} />
-				<Route path="swap/from-assets" element={<FromAssets />} />
+				<Route path="swap/coins-select" element={<CoinsSelectionPage />} />
 				<Route path="tokens/*" element={<TokenDetailsPage />} />
 				<Route path="transactions/:status?" element={<TransactionBlocksPage />} />
 				<Route path="*" element={<Navigate to="/tokens" replace={true} />} />

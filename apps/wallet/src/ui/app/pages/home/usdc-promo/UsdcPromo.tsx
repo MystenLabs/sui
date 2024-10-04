@@ -14,7 +14,7 @@ export function UsdcPromo() {
 	const [searchParams] = useSearchParams();
 	const fromCoinType = searchParams.get('type');
 	const presetAmount = searchParams.get('presetAmount');
-	const { promoBannerSheetTitle, promoBannerSheetContent } = useUsdcPromo();
+	const { promoBannerSheetTitle, promoBannerSheetContent, ctaLabel } = useUsdcPromo();
 
 	return (
 		<div className="flex flex-col items-center gap-6">
@@ -33,7 +33,7 @@ export function UsdcPromo() {
 				</Text>
 			</div>
 			<Button
-				text="Swap wUSDC"
+				text={ctaLabel}
 				onClick={() => {
 					ampli.clickedSwapCoin({
 						sourceFlow: 'UsdcPromoBanner',
