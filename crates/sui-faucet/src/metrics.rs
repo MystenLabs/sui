@@ -91,7 +91,7 @@ impl FaucetMetrics {
         Self {
             balance: register_int_gauge_with_registry!(
                 "balance",
-                "Current balance of the faucet address",
+                "Current balance of the all the available coins",
                 registry,
             ).unwrap(),
             current_executions_in_flight: register_int_gauge_with_registry!(

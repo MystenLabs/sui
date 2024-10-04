@@ -117,6 +117,9 @@ impl SimpleFaucet {
             .filter(|coin| coin.0.balance.value() >= (config.amount * config.num_coins as u64))
             .collect::<Vec<GasCoin>>();
         let metrics = FaucetMetrics::new(prometheus_registry);
+        // set initial balance when faucet starts
+        let balance = coins.iter().map(|coin| coin.0.balance.value()).sum::<u64>();
+        metrics.balance.set(balance as i64);
 
         let wal = WriteAheadLog::open(wal_path);
         let mut pending = vec![];
@@ -482,6 +485,17 @@ impl SimpleFaucet {
                 } else {
                     self.recycle_gas_coin(coin_id, uuid).await;
                 }
+
+                if let Some(ref balances) = result.balance_changes {
+                    let sui_used = balances
+                        .iter()
+                        .find(|balance| balance.owner == self.active_address)
+                        .map(|b| b.amount)
+                        .unwrap_or_else(|| 0);
+                    info!("SUI used in this tx {}: {}", tx_digest, sui_used);
+                    self.metrics.balance.add(sui_used as i64);
+                }
+
                 Ok(result)
             }
         }
@@ -618,27 +632,14 @@ impl SimpleFaucet {
 
         let tx_digest = tx.digest();
         let client = self.wallet.get_client().await?;
-        let balance = client
-            .coin_read_api()
-            .get_balance(self.active_address, None)
-            .await;
-        if let Ok(balance) = balance {
-            let balance = balance.total_balance;
-            info!(
-                ?uuid,
-                ?recipient,
-                ?coin_id,
-                ?balance,
-                "Balance before transfer"
-            );
-            self.metrics.balance.set((balance as f64 / 9_f64) as i64);
-        }
 
         Ok(client
             .quorum_driver_api()
             .execute_transaction_block(
                 tx.clone(),
-                SuiTransactionBlockResponseOptions::new().with_effects(),
+                SuiTransactionBlockResponseOptions::new()
+                    .with_effects()
+                    .with_balance_changes(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
