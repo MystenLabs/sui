@@ -4,7 +4,7 @@
 /// Group operations of BLS12-381.
 module sui::bls12381;
 
-use sui::group_ops::{Self, Element, Uncompressed};
+use sui::group_ops::{Self, Element};
 
 /// @param signature: A 48-bytes signature that is a point on the G1 subgroup.
 /// @param public_key: A 96-bytes public key that is a point on the G2 subgroup.
@@ -37,6 +37,7 @@ public struct Scalar {}
 public struct G1 {}
 public struct G2 {}
 public struct GT {}
+public struct G1Uncompressed {}
 
 // Scalars are encoded using big-endian byte order.
 // G1 and G2 are encoded using big-endian byte order and points are compressed. See
@@ -68,6 +69,7 @@ const SCALAR_TYPE: u8 = 0;
 const G1_TYPE: u8 = 1;
 const G2_TYPE: u8 = 2;
 const GT_TYPE: u8 = 3;
+const G1_UNCOMPRESSED_TYPE: u8 = 4;
 
 ///////////////////////////////
 ////// Scalar operations //////
@@ -172,19 +174,19 @@ public fun g1_multi_scalar_multiplication(
 }
 
 /// Convert an `Element<G1>` to uncompressed form.
-public fun g1_to_uncompressed(e: &Element<G1>): Uncompressed<G1> {
-    group_ops::to_uncompressed(G1_TYPE, e)
+public fun g1_to_uncompressed(e: &Element<G1>): Element<G1Uncompressed> {
+    group_ops::from(G1_TYPE, G1_UNCOMPRESSED_TYPE, e)
 }
 
 /// Create a `Element<G1>` from its uncompressed form.
-public fun g1_from_uncompressed(e: &Uncompressed<G1>): Element<G1> {
-    group_ops::from_uncompressed(G1_TYPE, e)
+public fun g1_from_uncompressed(e: &Element<G1Uncompressed>): Element<G1> {
+    group_ops::from(G1_UNCOMPRESSED_TYPE, G1_TYPE, e)
 }
 
 /// Compute the sum of a list of uncompressed elements.
 /// This is significantly faster and cheaper than summing the elements.
-public fun g1_sum_of_uncompressed(terms: &vector<Uncompressed<G1>>): Element<G1> {
-    group_ops::sum_of_uncompressed(G1_TYPE, terms)
+public fun g1_sum_of_uncompressed(terms: &vector<Element<G1Uncompressed>>): Element<G1Uncompressed> {
+    group_ops::sum(G1_UNCOMPRESSED_TYPE, terms)
 }
 
 /////////////////////////////////
