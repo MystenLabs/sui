@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::types::BridgeCommittee;
+use crate::utils::get_committee_voting_power_by_name;
 use crate::{
     action_executor::BridgeActionExecutor,
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
@@ -24,7 +25,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui_types::crypto::KeypairTraits;
 use sui_types::{
     bridge::{
         BRIDGE_COMMITTEE_MODULE_NAME, BRIDGE_LIMITER_MODULE_NAME, BRIDGE_MODULE_NAME,
@@ -80,10 +80,19 @@ pub async fn run_bridge_node(
 
     // Update voting right metrics
     // Before reconfiguration happens we only set it once when the node starts
-    let name = server_config.key.public();
-    metrics
-        .current_bridge_voting_right
-        .set(committee.active_stake(&name.into()) as i64);
+    let sui_system = server_config
+        .sui_client
+        .sui_client()
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?;
+    let committee_name_mapping = get_committee_voting_power_by_name(&committee, sui_system).await;
+    for (name, voting_power) in committee_name_mapping.into_iter() {
+        metrics
+            .current_bridge_voting_rights
+            .with_label_values(&[name.as_str()])
+            .set(voting_power as i64);
+    }
 
     // Start Server
     let socket_address = SocketAddr::new(

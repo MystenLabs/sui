@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
+use sui_types::base_types::SuiAddress;
 use sui_types::bridge::{
     BridgeChainId, MoveTypeTokenTransferPayload, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM,
     APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER,
@@ -51,6 +52,7 @@ pub const BRIDGE_UNPAUSED: bool = false;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct BridgeAuthority {
+    pub sui_address: SuiAddress,
     pub pubkey: BridgeAuthorityPublicKey,
     pub voting_power: u64,
     pub base_url: String,
