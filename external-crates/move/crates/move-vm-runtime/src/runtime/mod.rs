@@ -8,6 +8,7 @@ use crate::{
     jit,
     natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
     shared::{
+        gas::GasMeter,
         linkage_context::LinkageContext,
         types::{PackageStorageId, RuntimePackageId},
     },
@@ -23,7 +24,6 @@ use move_core_types::{
     resolver::{MoveResolver, SerializedPackage},
 };
 use move_vm_config::runtime::VMConfig;
-use move_vm_types::gas::GasMeter;
 use std::{collections::HashMap, sync::Arc};
 use tracing::warn;
 

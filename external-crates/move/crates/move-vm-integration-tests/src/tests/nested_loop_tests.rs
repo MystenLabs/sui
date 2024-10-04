@@ -1,11 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compiler::{as_module, compile_units, serialize_module_at_max_version};
+use crate::compiler::{as_module, compile_units};
 use move_core_types::account_address::AccountAddress;
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
-use move_vm_runtime::{dev_utils::InMemoryStorage, execution::vm::VirtualMachine};
-use move_vm_types::gas::UnmeteredGasMeter;
+use move_vm_runtime::{
+    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
+    runtime::MoveRuntime,
+    shared::linkage_context::LinkageContext,
+};
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
 
@@ -31,13 +34,10 @@ fn test_publish_module_with_nested_loops() {
     let mut units = compile_units(&code).unwrap();
 
     let m = as_module(units.pop().unwrap());
-    let mut m_blob = vec![];
-    serialize_module_at_max_version(&m, &mut m_blob).unwrap();
 
     // Should succeed with max_loop_depth = 2
     {
-        let storage = InMemoryStorage::new();
-        let vm = VirtualMachine::new(
+        let runtime = MoveRuntime::new(
             move_vm_runtime::natives::move_stdlib::stdlib_native_functions(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
                 move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
@@ -51,23 +51,25 @@ fn test_publish_module_with_nested_loops() {
                 },
                 ..Default::default()
             },
-        )
-        .unwrap();
+        );
 
-        let mut sess = vm.new_session(&storage);
-        sess.publish_module(m_blob.clone(), TEST_ADDR, &mut UnmeteredGasMeter)
+        let mut adapter = InMemoryTestAdapter::new_with_runtime(runtime);
+        let linkage =
+            LinkageContext::new(TEST_ADDR, [(TEST_ADDR, TEST_ADDR)].into_iter().collect());
+        adapter
+            .publish_package(linkage, TEST_ADDR, vec![m.clone()])
             .unwrap();
     }
 
     // Should fail with max_loop_depth = 1
     {
-        let storage = InMemoryStorage::new();
-        let vm = MoveVM::new_with_config(
-            move_vm_runtime::natives::move_stdlib::stdlib_native_function_table(
+        let runtime = MoveRuntime::new(
+            move_vm_runtime::natives::move_stdlib::stdlib_native_functions(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
                 move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
                 /* silent debug */ true,
-            ),
+            )
+            .unwrap(),
             VMConfig {
                 verifier: VerifierConfig {
                     max_loop_depth: Some(1),
@@ -75,11 +77,13 @@ fn test_publish_module_with_nested_loops() {
                 },
                 ..Default::default()
             },
-        )
-        .unwrap();
+        );
 
-        let mut sess = vm.new_session(&storage);
-        sess.publish_module(m_blob, TEST_ADDR, &mut UnmeteredGasMeter)
-            .unwrap_err();
+        let mut adapter = InMemoryTestAdapter::new_with_runtime(runtime);
+        let linkage =
+            LinkageContext::new(TEST_ADDR, [(TEST_ADDR, TEST_ADDR)].into_iter().collect());
+        adapter
+            .publish_package(linkage, TEST_ADDR, vec![m])
+            .unwrap();
     }
 }

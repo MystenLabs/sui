@@ -26,7 +26,9 @@ pub trait ValueView {
     /// This version of abstract memory size is not well-defined and is only kept for backward
     /// compatibility.  New applications should avoid using this.
     fn legacy_abstract_memory_size(&self) -> AbstractMemorySize {
-        use crate::values::{LEGACY_CONST_SIZE, LEGACY_REFERENCE_SIZE, LEGACY_STRUCT_SIZE};
+        use crate::execution::values::{
+            LEGACY_CONST_SIZE, LEGACY_REFERENCE_SIZE, LEGACY_STRUCT_SIZE,
+        };
 
         struct Acc(AbstractMemorySize);
 
@@ -124,7 +126,9 @@ pub trait ValueView {
 
     /// Returns the abstract memory size of the value.
     fn abstract_memory_size(&self) -> AbstractMemorySize {
-        use crate::values::{LEGACY_CONST_SIZE, LEGACY_REFERENCE_SIZE, LEGACY_STRUCT_SIZE};
+        use crate::execution::values::{
+            LEGACY_CONST_SIZE, LEGACY_REFERENCE_SIZE, LEGACY_STRUCT_SIZE,
+        };
 
         struct Acc(AbstractMemorySize);
 

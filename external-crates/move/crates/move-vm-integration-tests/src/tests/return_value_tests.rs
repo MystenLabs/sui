@@ -11,9 +11,9 @@ use move_core_types::{
     runtime_value::{MoveTypeLayout, MoveValue},
 };
 use move_vm_runtime::{
-    dev_utils::InMemoryStorage, move_vm::MoveVM, session::SerializedReturnValues,
+    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
+    shared::{gas::UnmeteredGasMeter, serialization::SerializedReturnValues},
 };
-use move_vm_types::gas::UnmeteredGasMeter;
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
 
@@ -44,12 +44,11 @@ fn run(
     let mut blob = vec![];
     serialize_module_at_max_version(&m, &mut blob).unwrap();
 
-    let mut storage = InMemoryStorage::new();
+    let mut adapter = InMemoryTestAdapter::new();
+    adapter.insert_modules_into_storage(vec![m]).unwrap();
     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("M").unwrap());
-    storage.publish_or_overwrite_module(module_id.clone(), blob);
-
-    let vm = MoveVM::new(vec![]).unwrap();
-    let mut sess = vm.new_session(&storage);
+    let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
+    let mut sess = adapter.make_vm(linkage).unwrap();
 
     let fun_name = Identifier::new("foo").unwrap();
 

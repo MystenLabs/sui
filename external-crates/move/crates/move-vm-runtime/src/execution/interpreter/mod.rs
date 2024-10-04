@@ -3,15 +3,18 @@
 
 use crate::{
     cache::arena::ArenaPointer,
-    execution::dispatch_tables::VMDispatchTables,
-    execution::interpreter::state::{CallFrame, MachineState, ModuleDefinitionResolver},
-    jit::runtime::ast::Function,
+    execution::{
+        dispatch_tables::VMDispatchTables,
+        interpreter::state::{CallFrame, MachineState, ModuleDefinitionResolver},
+        values::Value,
+    },
+    jit::runtime::ast::{Function, Type},
     natives::extensions::NativeContextExtensions,
+    shared::gas::GasMeter,
 };
 use move_binary_format::errors::*;
 use move_vm_config::runtime::VMConfig;
 use move_vm_profiler::{profile_close_frame, profile_open_frame};
-use move_vm_types::{gas::GasMeter, loaded_data::runtime_types::Type, values::Value};
 use std::sync::Arc;
 
 mod eval;

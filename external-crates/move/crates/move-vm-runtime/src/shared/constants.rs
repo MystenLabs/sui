@@ -9,6 +9,9 @@
 pub const OPERAND_STACK_SIZE_LIMIT: usize = 1024;
 pub const CALL_STACK_SIZE_LIMIT: usize = 1024;
 
+/// Maximum type depth when applying a type substitution.
+pub const TYPE_DEPTH_MAX: usize = 256;
+
 /// Maximal depth of a value in terms of type depth.
 pub const VALUE_DEPTH_MAX: u64 = 128;
 

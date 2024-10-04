@@ -1,18 +1,19 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution::dispatch_tables::VMDispatchTables;
-
+use crate::{
+    execution::{
+        dispatch_tables::VMDispatchTables,
+        values::{Locals, Reference, VMValueCast, Value},
+    },
+    jit::runtime::ast::Type,
+};
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::LocalIndex,
 };
 use move_core_types::{runtime_value::MoveTypeLayout, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    values::{Locals, Reference, VMValueCast, Value},
-};
 
 use tracing::warn;
 

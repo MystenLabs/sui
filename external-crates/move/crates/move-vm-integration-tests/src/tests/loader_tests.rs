@@ -18,17 +18,23 @@ use move_core_types::{
     effects::ChangeSet,
     ident_str,
     identifier::{IdentStr, Identifier},
-    language_storage::{ModuleId, TypeTag},
-    resolver::{LinkageResolver, ModuleResolver},
+    language_storage::{ModuleId, StructTag, TypeTag},
+    resolver::{ModuleResolver, SerializedPackage},
     runtime_value::MoveValue,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
 use move_vm_runtime::{
-    dev_utils::InMemoryStorage, move_vm::MoveVM, session::SerializedReturnValues,
-};
-use move_vm_types::{
-    gas::UnmeteredGasMeter,
-    loaded_data::runtime_types::{CachedDatatype, DepthFormula, Type},
+    dev_utils::{
+        in_memory_test_adapter::InMemoryTestAdapter, storage::InMemoryStorage,
+        vm_test_adapter::VMTestAdapter,
+    },
+    jit::runtime::ast::{CachedDatatype, DepthFormula, IntraPackageKey, Type, VTableKey},
+    natives::functions::NativeFunctions,
+    runtime::MoveRuntime,
+    shared::{
+        gas::UnmeteredGasMeter, linkage_context::LinkageContext,
+        serialization::SerializedReturnValues,
+    },
 };
 
 use std::{
@@ -56,16 +62,15 @@ const UPGRADE_ACCOUNT_2: AccountAddress = {
 };
 
 struct Adapter {
+    vm: InMemoryTestAdapter,
     store: RelinkingStore,
-    vm: Arc<MoveVM>,
     functions: Vec<(ModuleId, Identifier)>,
 }
 
 #[derive(Clone)]
 struct RelinkingStore {
-    store: InMemoryStorage,
-    context: AccountAddress,
-    linkage: BTreeMap<ModuleId, ModuleId>,
+    linkage: LinkageContext,
+    // TODO: when we add type origin to `LinkageContext`, we should remove this field
     type_origin: BTreeMap<(ModuleId, Identifier), ModuleId>,
 }
 
@@ -100,9 +105,11 @@ impl Adapter {
             },
             ..Default::default()
         };
+        let runtime = MoveRuntime::new(NativeFunctions::empty_for_testing().unwrap(), config);
+        let vm = InMemoryTestAdapter::new_with_runtime(runtime);
         Self {
             store: RelinkingStore::new(store),
-            vm: Arc::new(MoveVM::new_with_config(vec![], config).unwrap()),
+            vm,
             functions,
         }
     }
@@ -115,9 +122,11 @@ impl Adapter {
             },
             ..Default::default()
         };
+        let runtime = MoveRuntime::new(NativeFunctions::empty_for_testing().unwrap(), config);
+        let vm = InMemoryTestAdapter::new_with_runtime(runtime);
         Self {
             store: self.store,
-            vm: Arc::new(MoveVM::new_with_config(vec![], config).unwrap()),
+            vm,
             functions: self.functions,
         }
     }
@@ -136,91 +145,47 @@ impl Adapter {
     }
 
     fn publish_modules(&mut self, modules: Vec<CompiledModule>) {
-        let mut session = self.vm.new_session(&self.store);
-
-        for module in modules {
-            let mut binary = vec![];
-            serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
-                panic!("failure in module serialization: {e:?}\n{:#?}", module)
-            });
-            session
-                .publish_module(binary, DEFAULT_ACCOUNT, &mut UnmeteredGasMeter)
-                .unwrap_or_else(|e| panic!("failure publishing module: {e:?}\n{:#?}", module));
-        }
-        let changeset = session.finish().0.expect("failure getting write set");
-        self.store
-            .apply(changeset)
-            .expect("failure applying write set");
+        self.vm
+            .publish_package(self.store.linkage.clone(), DEFAULT_ACCOUNT, modules)
+            .unwrap_or_else(|e| panic!("failure publishing modules: {e:?}"));
     }
 
     fn publish_modules_with_error(&mut self, modules: Vec<CompiledModule>) {
-        let mut session = self.vm.new_session(&self.store);
-
-        for module in modules {
-            let mut binary = vec![];
-            serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
-                panic!("failure in module serialization: {e:?}\n{:#?}", module)
-            });
-            session
-                .publish_module(binary, DEFAULT_ACCOUNT, &mut UnmeteredGasMeter)
-                .expect_err("publishing must fail");
-        }
+        self.vm
+            .publish_package(self.store.linkage.clone(), DEFAULT_ACCOUNT, modules)
+            .expect_err("publishing must fail");
     }
 
     fn publish_module_bundle(&mut self, modules: Vec<CompiledModule>) {
-        let mut session = self.vm.new_session(&self.store);
-        let binaries: Vec<_> = modules
-            .into_iter()
-            .map(|module| {
-                let mut binary = vec![];
-                serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
-                    panic!("failure in module serialization: {e:?}\n{:#?}", module)
-                });
-                binary
-            })
-            .collect();
-
-        session
-            .publish_module_bundle(binaries, DEFAULT_ACCOUNT, &mut UnmeteredGasMeter)
-            .unwrap_or_else(|e| panic!("failure publishing module bundle: {e:?}"));
-
-        let changeset = session.finish().0.expect("failure getting write set");
-        self.store
-            .apply(changeset)
-            .expect("failure applying write set");
+        self.vm
+            .publish_package(self.store.linkage.clone(), DEFAULT_ACCOUNT, modules)
+            .unwrap_or_else(|e| panic!("failure publishing modules: {e:?}"));
     }
 
     fn publish_module_bundle_with_error(&mut self, modules: Vec<CompiledModule>) {
-        let mut session = self.vm.new_session(&self.store);
-        let binaries: Vec<_> = modules
-            .into_iter()
-            .map(|module| {
-                let mut binary = vec![];
-                serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
-                    panic!("failure in module serialization: {e:?}\n{:#?}", module)
-                });
-                binary
-            })
-            .collect();
-
-        session
-            .publish_module_bundle(binaries, DEFAULT_ACCOUNT, &mut UnmeteredGasMeter)
+        self.vm
+            .publish_package(self.store.linkage.clone(), DEFAULT_ACCOUNT, modules)
             .expect_err("publishing bundle must fail");
     }
 
     fn load_type(&self, type_tag: &TypeTag) -> Type {
-        let session = self.vm.new_session(&self.store);
+        let session = self.vm.make_vm(self.store.linkage.clone()).unwrap();
         session
             .load_type(type_tag)
             .expect("Loading type should succeed")
     }
 
     fn load_datatype(&self, module_id: &ModuleId, struct_name: &IdentStr) -> Arc<CachedDatatype> {
-        let session = self.vm.new_session(&self.store);
+        let session = self.vm.make_vm(self.store.linkage.clone()).unwrap();
         session
-            .load_datatype(module_id, struct_name)
-            .expect("Loading struct should succeed")
-            .1
+            .resolve_type(&VTableKey {
+                package_key: *module_id.address(),
+                inner_pkg_key: IntraPackageKey {
+                    module_name: module_id.name().to_owned(),
+                    member_name: struct_name.to_owned(),
+                },
+            })
+            .expect("Loading datatype should succeed")
     }
 
     fn get_type_tag(&self, ty: &Type) -> TypeTag {
@@ -328,47 +293,6 @@ impl RelinkingStore {
 
     fn apply(&mut self, changeset: ChangeSet) -> anyhow::Result<()> {
         self.store.apply(changeset)
-    }
-}
-
-/// Implemented by referencing the store's built-in data structures
-impl LinkageResolver for RelinkingStore {
-    type Error = ();
-
-    fn link_context(&self) -> AccountAddress {
-        self.context
-    }
-
-    /// Remaps `module_id` if it exists in the current linkage table, or returns it unchanged
-    /// otherwise.
-    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-        Ok(self.linkage.get(module_id).unwrap_or(module_id).clone())
-    }
-
-    fn defining_module(
-        &self,
-        module_id: &ModuleId,
-        struct_: &IdentStr,
-    ) -> Result<ModuleId, Self::Error> {
-        Ok(self
-            .type_origin
-            .get(&(module_id.clone(), struct_.to_owned()))
-            .unwrap_or(module_id)
-            .clone())
-    }
-
-    fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error> {
-        let modules = self.store.get_package(&self.context)?.unwrap();
-        let mut all_deps = BTreeSet::new();
-        for module in &modules {
-            let module = CompiledModule::deserialize_with_defaults(module).unwrap();
-            let deps = module.immediate_dependencies();
-            for dep in deps {
-                all_deps.insert(*self.relocate(&dep).unwrap().address());
-            }
-        }
-
-        Ok(all_deps)
     }
 }
 

@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compiler::{as_module, compile_units, serialize_module_at_max_version};
+use crate::compiler::{as_module, compile_units};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
@@ -11,23 +11,23 @@ use move_core_types::{
     vm_status::StatusType,
 };
 use move_vm_runtime::{
-    dev_utils::{BlankStorage, InMemoryStorage},
-    move_vm::MoveVM,
+    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
+    shared::{gas::UnmeteredGasMeter, linkage_context::LinkageContext},
 };
-use move_vm_types::gas::UnmeteredGasMeter;
+use std::collections::HashMap;
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
 
 #[test]
 fn call_non_existent_module() {
-    let vm = MoveVM::new(vec![]).unwrap();
-    let storage = BlankStorage;
+    let adapter = InMemoryTestAdapter::new();
+    let linkage = LinkageContext::new(TEST_ADDR, HashMap::new());
+    let mut vm = adapter.make_vm(linkage).unwrap();
 
-    let mut sess = vm.new_session(&storage);
     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("M").unwrap());
     let fun_name = Identifier::new("foo").unwrap();
 
-    let err = sess
+    let err = vm
         .execute_function_bypass_visibility(
             &module_id,
             &fun_name,
@@ -49,15 +49,14 @@ fn call_non_existent_function() {
 
     let mut units = compile_units(&code).unwrap();
     let m = as_module(units.pop().unwrap());
-    let mut blob = vec![];
-    serialize_module_at_max_version(&m, &mut blob).unwrap();
 
-    let mut storage = InMemoryStorage::new();
+    let mut adapter = InMemoryTestAdapter::new();
+    adapter.insert_modules_into_storage(vec![m]).unwrap();
+
     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("M").unwrap());
-    storage.publish_or_overwrite_module(module_id.clone(), blob);
+    let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
 
-    let vm = MoveVM::new(vec![]).unwrap();
-    let mut sess = vm.new_session(&storage);
+    let mut sess = adapter.make_vm(linkage).unwrap();
 
     let fun_name = Identifier::new("foo").unwrap();
 

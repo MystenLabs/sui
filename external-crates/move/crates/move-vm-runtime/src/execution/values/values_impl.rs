@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    loaded_data::runtime_types::Type,
-    views::{ValueView, ValueVisitor},
+    jit::runtime::ast::Type,
+    shared::views::{ValueView, ValueVisitor},
 };
 use move_binary_format::{
     errors::*,
@@ -25,6 +25,24 @@ use std::{
     ops::Add,
     rc::Rc,
 };
+
+macro_rules! debug_write {
+    ($($toks: tt)*) => {
+        write!($($toks)*).map_err(|_|
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("failed to write to buffer".to_string())
+        )
+    };
+}
+
+macro_rules! debug_writeln {
+    ($($toks: tt)*) => {
+        writeln!($($toks)*).map_err(|_|
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("failed to write to buffer".to_string())
+        )
+    };
+}
 
 /***************************************************************************************
  *

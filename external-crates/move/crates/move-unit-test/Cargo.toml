@@ -28,7 +28,6 @@ move-core-types.workspace = true
 move-compiler.workspace = true
 move-ir-types.workspace = true
 move-symbol-pool.workspace = true
-move-vm-types.workspace = true
 move-vm-runtime = { workspace = true, features = ["testing"] }
 move-vm-profiler.workspace = true
 move-binary-format.workspace = true

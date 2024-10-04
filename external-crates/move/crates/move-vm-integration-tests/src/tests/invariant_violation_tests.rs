@@ -1,18 +1,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::compiler::serialize_module_at_max_version;
 use move_binary_format::file_format::{
     empty_module, Bytecode::*, CodeUnit, Constant, ConstantPoolIndex, FunctionDefinition,
     FunctionHandle, FunctionHandleIndex, IdentifierIndex, Signature, SignatureIndex,
     SignatureToken::*, Visibility,
 };
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
-use move_vm_runtime::{
-    dev_utils::{gas_schedule::GasStatus, InMemoryStorage},
-    move_vm::MoveVM,
+use move_vm_runtime::dev_utils::{
+    gas_schedule::GasStatus, in_memory_test_adapter::InMemoryTestAdapter,
+    vm_test_adapter::VMTestAdapter,
 };
-
-use crate::compiler::serialize_module_at_max_version;
 
 #[test]
 fn merge_borrow_states_infinite_loop() {
@@ -77,18 +76,18 @@ fn merge_borrow_states_infinite_loop() {
         }),
     }];
     move_bytecode_verifier::verify_module_unmetered(&m).expect("verify failed");
-    let vm = MoveVM::new(vec![]).unwrap();
+
     let module_id = m.self_id();
     let fname = m.identifiers[0].clone();
 
-    let storage: InMemoryStorage = InMemoryStorage::new();
-    let mut session = vm.new_session(&storage);
-    let mut module_bytes = vec![];
-    serialize_module_at_max_version(&m, &mut module_bytes).unwrap();
-    let meter = &mut GasStatus::new_unmetered();
-    session
-        .publish_module(module_bytes, AccountAddress::ZERO, meter)
+    let mut adapter = InMemoryTestAdapter::new();
+    let linkage = adapter
+        .generate_linkage_context(*module_id.address(), *module_id.address(), &[m])
         .unwrap();
+    adapter
+        .publish_package(linkage, *module_id.address(), vec![m])
+        .unwrap();
+    let mut session = adapter.make_vm(linkage).unwrap();
 
     let err = session
         .execute_entry_function(

@@ -12,16 +12,14 @@ use crate::{
     dbg_println, jit,
     natives::functions::NativeFunctions,
     shared::{
-        linkage_context::LinkageContext, logging::expect_no_verification_errors,
-        types::PackageStorageId,
+        data_store::DataStore, linkage_context::LinkageContext,
+        logging::expect_no_verification_errors, types::PackageStorageId,
     },
     validation::{validate_package, verification},
 };
-
 use move_binary_format::errors::{Location, PartialVMError, VMResult};
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::runtime::VMConfig;
-use move_vm_types::data_store::DataStore;
 use tracing::error;
 
 use std::{

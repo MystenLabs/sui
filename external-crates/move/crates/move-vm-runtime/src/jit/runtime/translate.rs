@@ -8,6 +8,7 @@ use crate::{
         type_cache::{self, CrossVersionPackageCache},
     },
     dbg_println,
+    execution::values::Value,
     jit::runtime::ast::*,
     natives::functions::NativeFunctions,
     shared::{
@@ -25,13 +26,6 @@ use move_binary_format::{
     },
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
-use move_vm_types::{
-    loaded_data::runtime_types::{
-        CachedDatatype, Datatype, EnumType, IntraPackageKey, StructType, Type, VTableKey,
-        VariantType,
-    },
-    values::Value,
-};
 use parking_lot::RwLock;
 use std::{
     collections::{btree_map, BTreeMap, BTreeSet, HashMap},
@@ -370,11 +364,13 @@ fn module(
     }
 
     for constant in module.constant_pool() {
-        let value = Value::deserialize_constant(constant).ok_or_else(|| {
-            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                "Verifier failed to verify the deserialization of constants".to_owned(),
-            )
-        })?.to_constant_value()?;
+        let value = Value::deserialize_constant(constant)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
+                    "Verifier failed to verify the deserialization of constants".to_owned(),
+                )
+            })?
+            .to_constant_value()?;
         let type_ = type_cache::make_type(context.module, &constant.type_)?;
         let size = constant.data.len() as u64;
         let const_ = Constant { value, type_, size };

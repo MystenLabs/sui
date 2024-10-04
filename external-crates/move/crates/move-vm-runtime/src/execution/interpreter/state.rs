@@ -3,10 +3,16 @@
 
 use crate::{
     cache::{arena::ArenaPointer, type_cache},
-    execution::dispatch_tables::VMDispatchTables,
-    jit::runtime::ast::{CallType, Constant, Function, Module},
-    shared::constants::{
-        CALL_STACK_SIZE_LIMIT, MAX_TYPE_INSTANTIATION_NODES, OPERAND_STACK_SIZE_LIMIT,
+    execution::{
+        dispatch_tables::VMDispatchTables,
+        values::{self, Locals, VMValueCast, Value},
+    },
+    jit::runtime::ast::{CallType, Constant, Function, Module, Type, VTableKey},
+    shared::{
+        constants::{
+            CALL_STACK_SIZE_LIMIT, MAX_TYPE_INSTANTIATION_NODES, OPERAND_STACK_SIZE_LIMIT,
+        },
+        views::TypeView,
     },
 };
 use move_binary_format::{
@@ -20,11 +26,6 @@ use move_binary_format::{
 use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     vm_status::{StatusCode, StatusType},
-};
-use move_vm_types::{
-    loaded_data::runtime_types::{Type, VTableKey},
-    values::{self, Locals, VMValueCast, Value},
-    views::TypeView,
 };
 
 use std::{cmp::min, fmt::Write, sync::Arc};
@@ -101,7 +102,7 @@ pub(super) struct CallFrame {
     pub(super) ty_args: Vec<Type>,
 }
 
-pub(super) struct TypeWithTypeCache<'a, 'b> {
+pub(super) struct ResolvableType<'a, 'b> {
     pub(super) ty: &'a Type,
     pub(super) vtables: &'b VMDispatchTables,
 }
@@ -663,7 +664,7 @@ impl ModuleDefinitionResolver {
 // Other impls
 // -------------------------------------------------------------------------------------------------
 
-impl<'a, 'b> TypeView for TypeWithTypeCache<'a, 'b> {
+impl<'a, 'b> TypeView for ResolvableType<'a, 'b> {
     fn to_type_tag(&self) -> TypeTag {
         self.vtables.type_to_type_tag(self.ty).unwrap()
     }

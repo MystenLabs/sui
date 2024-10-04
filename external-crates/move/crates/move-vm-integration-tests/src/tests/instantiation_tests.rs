@@ -28,10 +28,11 @@ use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{
     dev_utils::{
         gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
-        InMemoryStorage,
+        in_memory_test_adapter::InMemoryTestAdapter,
+        storage::InMemoryStorage,
+        vm_test_adapter::VMTestAdapter,
     },
-    move_vm::MoveVM,
-    session::{SerializedReturnValues, Session},
+    shared::{linkage_context::LinkageContext, serialization::SerializedReturnValues},
 };
 #[cfg(feature = "gas-profiler")]
 use move_vm_types::gas::GasMeter;
@@ -166,7 +167,7 @@ fn test_runner(
     test_name: &str,
     entry_spec: fn(
         AccountAddress,
-        &mut Session<&'_ InMemoryStorage>,
+        &mut InMemoryTestAdapter,
     ) -> (ModuleId, Identifier, Vec<TypeTag>),
     check_result: fn(u128, u128) -> bool,
 ) {
@@ -309,7 +310,7 @@ fn test_instantiation_deep_rec_gen_call() {
 //
 // Notice: this is not a particularly easy function to use. See example below on how to use it.
 fn make_module(
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
     addr: AccountAddress,
     func_type_params_count: usize,
     locals_sig: Option<Signature>,
@@ -517,14 +518,12 @@ fn make_module(
     // println!("Module: {:#?}", module);
     move_bytecode_verifier::verify_module_unmetered(&module).expect("verification failed");
 
-    let mut mod_bytes = vec![];
-    module
-        .serialize_with_version(module.version, &mut mod_bytes)
-        .expect("Module must serialize");
+    let module_id = module.self_id();
+    let linkage = session.generate_default_linkage(addr).unwrap();
     session
-        .publish_module(mod_bytes, addr, &mut GasStatus::new_unmetered())
-        .expect("Module must publish");
-    (module.self_id(), entry_point)
+        .publish_package(linkage, addr, vec![module])
+        .unwrap();
+    (module_id, entry_point)
 }
 
 // Generic function to run some code. Take the gas to use and a closure
@@ -536,24 +535,26 @@ fn run_with_module(
     gas: &mut GasStatus,
     entry_spec: fn(
         AccountAddress,
-        &mut Session<&'_ InMemoryStorage>,
+        &mut InMemoryTestAdapter,
     ) -> (ModuleId, Identifier, Vec<TypeTag>),
 ) -> (VMResult<SerializedReturnValues>, u128) {
     let addr = AccountAddress::from_hex_literal("0xcafe").unwrap();
 
     //
     // Start VM
-    let vm = MoveVM::new(vec![]).unwrap();
-    let storage: InMemoryStorage = InMemoryStorage::new();
-    let mut session = vm.new_session(&storage);
+    let mut adapter = InMemoryTestAdapter::new();
 
-    let (module_id, entry_name, type_arg_tags) = entry_spec(addr, &mut session);
+    let (module_id, entry_name, type_arg_tags) = entry_spec(addr, &mut adapter);
 
     let now = Instant::now();
 
+    let link_context = adapter
+        .generate_default_linkage(*module_id.address())
+        .unwrap();
+    let mut vm_session = adapter.make_vm(link_context).unwrap();
     let type_args = type_arg_tags
         .into_iter()
-        .map(|tag| session.load_type(&tag))
+        .map(|tag| vm_session.load_type(&tag))
         .collect::<VMResult<Vec<_>>>();
     move_vm_profiler::gas_profiler_feature_enabled! {
         gas.set_profiler(GasProfiler::init(
@@ -563,7 +564,7 @@ fn run_with_module(
         ));
     }
     let res = type_args.and_then(|type_args| {
-        session.execute_entry_function(
+        vm_session.execute_entry_function(
             &module_id,
             entry_name.as_ref(),
             type_args,
@@ -579,7 +580,7 @@ fn run_with_module(
 // Call a simple load u8 and pop loop
 fn load_pop(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     //
     // Module definition and publishing
@@ -620,7 +621,7 @@ fn get_load_pop() -> Vec<Bytecode> {
 // Call a vector<T> pack empty and pop with full instantiation
 fn vec_pack_instantiated(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     //
     // Module definition and publishing
@@ -656,7 +657,7 @@ fn vec_pack_instantiated(
 // Call a vector<T> pack empty and pop with simple generic instantiation
 fn vec_pack_gen_simple(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     //
     // Module definition and publishing
@@ -692,28 +693,28 @@ fn vec_pack_gen_simple(
 // Call a vector<T> pack empty and pop with deep generic instantiation
 fn vec_pack_gen_deep(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     vec_pack_gen_deep_it(addr, session, 1)
 }
 
 fn vec_pack_gen_deep_50(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     vec_pack_gen_deep_it(addr, session, 50)
 }
 
 fn vec_pack_gen_deep_500(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     vec_pack_gen_deep_it(addr, session, 500)
 }
 
 fn vec_pack_gen_deep_it(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
     snippet_rep: usize,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     const STRUCT_TY_PARAMS: usize = 3;
@@ -777,7 +778,7 @@ fn get_vec_pack(idx: u16) -> Vec<Bytecode> {
 // Call an instantiated generic function
 fn instantiated_gen_call(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     //
     // Module definition and publishing
@@ -813,7 +814,7 @@ fn instantiated_gen_call(
 // Call simple generic function
 fn simple_gen_call(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     //
     // Module definition and publishing
@@ -849,28 +850,28 @@ fn simple_gen_call(
 // Call deep instantiation generic function
 fn deep_gen_call(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     deep_gen_call_it(addr, session, 1)
 }
 
 fn deep_gen_call_50(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     deep_gen_call_it(addr, session, 50)
 }
 
 fn deep_gen_call_500(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     deep_gen_call_it(addr, session, 500)
 }
 
 fn deep_gen_call_it(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
     snippet_rep: usize,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     const STRUCT_TY_PARAMS: usize = 3;
@@ -934,7 +935,7 @@ fn get_generic_call_loop() -> Vec<Bytecode> {
 // Call an instantiated generic function
 fn instantiated_rec_gen_call(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     //
     // Module definition and publishing
@@ -970,7 +971,7 @@ fn instantiated_rec_gen_call(
 // Call simple generic function
 fn simple_rec_gen_call(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     //
     // Module definition and publishing
@@ -1006,7 +1007,7 @@ fn simple_rec_gen_call(
 // Call deep instantiation generic function
 fn deep_rec_gen_call(
     addr: AccountAddress,
-    session: &mut Session<&'_ InMemoryStorage>,
+    session: &mut InMemoryTestAdapter,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
     const STRUCT_TY_PARAMS: usize = 3;
     const STRUCT_TY_ARGS_DEPTH: usize = 2;

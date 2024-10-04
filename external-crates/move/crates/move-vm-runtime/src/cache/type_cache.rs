@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    jit::runtime::ast::DatatypeInfo,
+    jit::runtime::ast::{CachedDatatype, DatatypeInfo, IntraPackageKey, Type, VTableKey},
     shared::{
         binary_cache::BinaryCache, constants::MAX_TYPE_INSTANTIATION_NODES, types::RuntimePackageId,
     },
@@ -13,7 +13,6 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_core_types::vm_status::StatusCode;
-use move_vm_types::loaded_data::runtime_types::{CachedDatatype, IntraPackageKey, Type, VTableKey};
 use parking_lot::RwLock;
 use std::{
     collections::{BTreeMap, HashMap},

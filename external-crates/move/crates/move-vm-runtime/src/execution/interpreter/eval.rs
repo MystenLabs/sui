@@ -6,10 +6,15 @@ use crate::{
     dbg_println,
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::state::{CallFrame, MachineState, TypeWithTypeCache},
+        interpreter::state::{CallFrame, MachineState, ResolvableType},
+        values::{
+            IntegerValue, Reference, Struct, StructRef, VMValueCast, Value, Variant, VariantRef,
+            Vector, VectorRef,
+        },
     },
-    jit::runtime::ast::{Bytecode, CallType, Function},
+    jit::runtime::ast::{Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
+    shared::gas::{GasMeter, SimpleInstruction},
 };
 use fail::fail_point;
 use move_binary_format::{errors::*, file_format::JumpTableInner};
@@ -20,14 +25,6 @@ use move_core_types::{
 use move_vm_config::runtime::{VMConfig, VMRuntimeLimitsConfig};
 use move_vm_profiler::{
     profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr,
-};
-use move_vm_types::{
-    gas::{GasMeter, SimpleInstruction},
-    loaded_data::runtime_types::Type,
-    values::{
-        IntegerValue, Reference, Struct, StructRef, VMValueCast, Value, Variant, VariantRef,
-        Vector, VectorRef,
-    },
 };
 use smallvec::SmallVec;
 
@@ -298,7 +295,7 @@ fn op_step_impl(
 
     macro_rules! make_ty {
         ($ty: expr) => {
-            TypeWithTypeCache {
+            ResolvableType {
                 ty: $ty,
                 vtables: run_context.vtables,
             }
@@ -660,7 +657,7 @@ fn op_step_impl(
                 .current_frame
                 .resolver
                 .instantiate_single_type(*si, state.current_frame.ty_args())?;
-            gas_meter.charge_vec_len(TypeWithTypeCache {
+            gas_meter.charge_vec_len(ResolvableType {
                 ty,
                 vtables: run_context.vtables,
             })?;
@@ -862,7 +859,7 @@ fn call_function(
             .charge_call_generic(
                 module_id,
                 fun_ref.name(),
-                ty_args.iter().map(|ty| TypeWithTypeCache {
+                ty_args.iter().map(|ty| ResolvableType {
                     ty,
                     vtables: run_context.vtables,
                 }),
@@ -980,7 +977,7 @@ pub(super) fn call_native_with_args(
     let native_function = function.get_native()?;
 
     gas_meter.charge_native_function_before_execution(
-        ty_args.iter().map(|ty| TypeWithTypeCache { ty, vtables }),
+        ty_args.iter().map(|ty| ResolvableType { ty, vtables }),
         args.iter(),
     )?;
 

@@ -5,10 +5,11 @@ use crate::{
     cache::{arena::ArenaPointer, move_cache::MoveCache},
     dbg_println,
     execution::{dispatch_tables::VMDispatchTables, interpreter},
-    jit::runtime::ast::Function,
+    jit::runtime::ast::{Function, IntraPackageKey, Type, VTableKey},
     natives::extensions::NativeContextExtensions,
     runtime::data_cache::TransactionDataCache,
     shared::{
+        gas::GasMeter,
         linkage_context::LinkageContext,
         serialization::{SerializedReturnValues, *},
     },
@@ -24,10 +25,6 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-use move_vm_types::{
-    gas::GasMeter,
-    loaded_data::runtime_types::{IntraPackageKey, Type, VTableKey},
-};
 use std::{borrow::Borrow, sync::Arc};
 
 // -------------------------------------------------------------------------------------------------
@@ -211,7 +208,7 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
                 member_name,
             },
         };
-        let loaded_module = self
+        let _loaded_module = self
             .virtual_tables
             .resolve_loaded_module(runtime_id)
             .map_err(|err| err.finish(Location::Undefined))?;

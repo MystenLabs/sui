@@ -9,7 +9,10 @@
 
 use crate::{
     cache::{arena::ArenaPointer, type_cache},
-    jit::runtime::ast::{DatatypeTagType, Function, Module, Package},
+    jit::runtime::ast::{
+        CachedDatatype, Datatype, DatatypeTagType, DepthFormula, Function, Module, Package, Type,
+        VTableKey,
+    },
     shared::{
         constants::{MAX_TYPE_TO_LAYOUT_NODES, VALUE_DEPTH_MAX},
         types::RuntimePackageId,
@@ -24,9 +27,6 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag, TypeTag},
     runtime_value,
     vm_status::StatusCode,
-};
-use move_vm_types::loaded_data::runtime_types::{
-    CachedDatatype, Datatype, DepthFormula, Type, VTableKey,
 };
 use std::{
     collections::{BTreeMap, HashMap},

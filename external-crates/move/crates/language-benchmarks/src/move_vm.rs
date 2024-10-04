@@ -12,10 +12,10 @@ use move_core_types::{
 };
 
 use move_vm_runtime::{
-    dev_utils::InMemoryStorage, execution::vm::VirtualMachine,
+    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
     natives::move_stdlib::stdlib_native_functions,
 };
-use move_vm_types::gas::UnmeteredGasMeter;
+use move_vm_runtime::{runtime::MoveRuntime, shared::gas::UnmeteredGasMeter};
 use once_cell::sync::Lazy;
 use std::{path::PathBuf, sync::Arc};
 
@@ -76,55 +76,44 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
         .collect()
 }
 
-fn create_vm() -> VirtualMachine {
-    VirtualMachine::new_with_default_config(
+fn create_vm() -> InMemoryTestAdapter {
+    InMemoryTestAdapter::new_with_runtime(MoveRuntime::new_with_default_config(
         stdlib_native_functions(
             AccountAddress::from_hex_literal("0x1").unwrap(),
             move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
             /* silent debug */ true,
         )
         .unwrap(),
-    )
+    ))
 }
 
 // execute a given function in the Bench module
 fn execute<M: Measurement + 'static>(
     c: &mut Criterion<M>,
-    move_vm: &mut VirtualMachine,
+    adapter: &mut InMemoryTestAdapter,
     modules: Vec<CompiledModule>,
     file: &str,
 ) {
     // establish running context
-    let mut storage = InMemoryStorage::new();
-    storage.context = CORE_CODE_ADDRESS;
     let sender = CORE_CODE_ADDRESS;
 
-    let modules = modules
-        .into_iter()
-        .map(|module| {
-            let mut mod_blob = vec![];
-            module
-                .serialize_with_version(module.version, &mut mod_blob)
-                .expect("Module serialization error");
-            mod_blob
-        })
-        .collect::<Vec<_>>();
-
-    // TODO: we may want to use a real gas meter to make benchmarks more realistic.
-
-    let (changeset, mut storage) =
-        move_vm.publish_package(storage, sender, modules, &mut UnmeteredGasMeter);
-    storage.apply(changeset.unwrap()).unwrap();
+    let linkage = adapter
+        .generate_linkage_context(sender, sender, &modules)
+        .unwrap();
+    adapter
+        .publish_package(linkage.clone(), sender, modules)
+        .unwrap();
 
     // module and function to call
     let module_id = ModuleId::new(sender, Identifier::new("bench").unwrap());
     let fun_name = Identifier::new("bench").unwrap();
 
     // benchmark
+    // TODO: we may want to use a real gas meter to make benchmarks more realistic.
     c.bench_function(file, |b| {
         b.iter_with_large_drop(|| {
-            move_vm
-                .make_instance(&storage)
+            adapter
+                .make_vm(linkage.clone())
                 .unwrap()
                 .execute_function_bypass_visibility(
                     &module_id,

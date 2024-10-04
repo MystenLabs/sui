@@ -2,8 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::types::PackageStorageId;
-
+use crate::shared::{data_store::DataStore, types::PackageStorageId};
 use move_binary_format::errors::*;
 use move_core_types::{
     account_address::AccountAddress,
@@ -13,7 +12,6 @@ use move_core_types::{
     resolver::{MoveResolver, SerializedPackage},
     vm_status::StatusCode,
 };
-use move_vm_types::data_store::DataStore;
 use std::collections::{btree_map::BTreeMap, BTreeSet};
 
 pub struct AccountDataCache {

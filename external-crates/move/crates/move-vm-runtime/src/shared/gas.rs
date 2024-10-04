@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::views::{TypeView, ValueView};
+use crate::shared::views::{TypeView, ValueView};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
     gas_algebra::{InternalGas, NumArgs, NumBytes},

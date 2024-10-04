@@ -26,7 +26,7 @@ use std::collections::BTreeSet;
 
 pub struct InMemoryTestAdapter {
     runtime: MoveRuntime,
-    storage: InMemoryStorage,
+    pub storage: InMemoryStorage,
 }
 
 impl InMemoryTestAdapter {

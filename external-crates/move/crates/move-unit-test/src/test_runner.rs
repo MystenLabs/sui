@@ -28,6 +28,7 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
+use move_vm_runtime::shared::gas::GasMeter;
 use move_vm_runtime::{
     dev_utils::{
         gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
@@ -38,7 +39,6 @@ use move_vm_runtime::{
     natives::functions::{NativeFunctionTable, NativeFunctions},
     runtime::MoveRuntime,
 };
-use move_vm_types::gas::GasMeter;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use std::{

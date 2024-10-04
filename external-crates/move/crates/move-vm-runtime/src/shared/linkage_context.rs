@@ -12,7 +12,7 @@ use move_core_types::{
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
 /// table, allowing the same module in storage to be run against different dependencies.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LinkageContext {
     /// The root package address for linkage checking. For publication, this should be the address
     /// of publication. For loading, this should be the root address being loaded.

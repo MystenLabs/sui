@@ -27,18 +27,16 @@ use move_binary_format::{
 use move_bytecode_verifier::verify_module_unmetered;
 use move_compiler::Compiler;
 use move_core_types::{
-    account_address::AccountAddress,
-    effects::{ChangeSet, Op},
-    language_storage::TypeTag,
-    resolver::MoveResolver,
-    runtime_value::MoveValue,
+    account_address::AccountAddress, language_storage::TypeTag, runtime_value::MoveValue,
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
-    dev_utils::{DeltaStorage, InMemoryStorage},
-    execution::vm::VirtualMachine,
+    dev_utils::in_memory_test_adapter::InMemoryTestAdapter, runtime::MoveRuntime,
 };
-use move_vm_types::gas::UnmeteredGasMeter;
+use move_vm_runtime::{
+    dev_utils::{storage::InMemoryStorage, vm_test_adapter::VMTestAdapter},
+    shared::gas::UnmeteredGasMeter,
+};
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{fs, io::Write, panic, thread};
@@ -110,13 +108,7 @@ fn run_vm(module: CompiledModule) -> Result<(), VMError> {
         })
         .collect();
 
-    execute_function_in_module(
-        module,
-        entry_idx,
-        vec![],
-        main_args,
-        &*STORAGE_WITH_MOVE_STDLIB,
-    )
+    execute_function_in_module(module, entry_idx, vec![], main_args)
 }
 
 /// Execute the first function in a module
@@ -125,16 +117,15 @@ fn execute_function_in_module(
     idx: FunctionDefinitionIndex,
     ty_arg_tags: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
-    storage: &impl MoveResolver,
 ) -> Result<(), VMError> {
     let module_id = module.self_id();
     let entry_name = {
         let entry_func_idx = module.function_def_at(idx).function;
         let entry_name_idx = module.function_handle_at(entry_func_idx).name;
-        module.identifier_at(entry_name_idx)
+        module.identifier_at(entry_name_idx).to_owned()
     };
     {
-        let vm = VirtualMachine::new_with_default_config(
+        let move_runtime = MoveRuntime::new_with_default_config(
             move_vm_runtime::natives::move_stdlib::stdlib_native_functions(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
                 move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
@@ -143,14 +134,15 @@ fn execute_function_in_module(
             .unwrap(),
         );
 
-        let mut changeset = ChangeSet::new();
-        let mut blob = vec![];
-        module.serialize(&mut blob).unwrap();
-        changeset
-            .add_module_op(module_id.clone(), Op::New(blob))
-            .unwrap();
-        let delta_storage = DeltaStorage::new(storage, &changeset);
-        let mut sess = vm.new_session(&delta_storage);
+        let mut vm = InMemoryTestAdapter::new_with_runtime_and_storage(
+            move_runtime,
+            STORAGE_WITH_MOVE_STDLIB.clone(),
+        );
+
+        vm.insert_modules_into_storage(vec![module]).unwrap();
+
+        let linkage = vm.generate_default_linkage(*module_id.address()).unwrap();
+        let mut sess = vm.make_vm(linkage).unwrap();
 
         let ty_args = ty_arg_tags
             .into_iter()
@@ -159,7 +151,7 @@ fn execute_function_in_module(
 
         sess.execute_function_bypass_visibility(
             &module_id,
-            entry_name,
+            &entry_name,
             ty_args,
             args,
             &mut UnmeteredGasMeter,
