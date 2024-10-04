@@ -18,7 +18,7 @@ export type BalanceChange = {
 export type BalanceChangeByOwner = Record<string, BalanceChange[]>;
 export type BalanceChangeSummary = BalanceChangeByOwner | null;
 
-function getOwnerAddress(owner: ObjectOwner): string {
+export function getOwnerAddress(owner: ObjectOwner): string {
 	if (typeof owner === 'object') {
 		if ('AddressOwner' in owner) {
 			return owner.AddressOwner;

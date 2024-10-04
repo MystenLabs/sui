@@ -8,6 +8,7 @@ import {
 	CoinFormat,
 	formatBalance,
 	getBalanceChangeSummary,
+	getOwnerAddress,
 	roundFloat,
 	useCoinMetadata,
 	useFormatCoin,
@@ -142,19 +143,6 @@ export function useGetBalance({ coinType, owner }: { coinType?: string; owner?: 
 			enabled: !!owner && !!coinType,
 		},
 	);
-}
-
-export function getOwnerAddress(owner: ObjectOwner): string {
-	if (typeof owner === 'object') {
-		if ('AddressOwner' in owner) {
-			return owner.AddressOwner;
-		} else if ('ObjectOwner' in owner) {
-			return owner.ObjectOwner;
-		} else if ('Shared' in owner) {
-			return 'Shared';
-		}
-	}
-	return '';
 }
 
 export const getTotalGasCost = (effects: TransactionEffects) => {
