@@ -18,7 +18,6 @@ use crate::{
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{AbilitySet, TypeParameterIndex},
-    CompiledModule,
 };
 use move_core_types::{
     annotated_value,
@@ -64,25 +63,6 @@ impl VMDispatchTables {
             PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
                 .with_message(format!("Package {} not found", id))
         })
-    }
-
-    pub fn resolve_compiled_module(
-        &self,
-        runtime_id: &ModuleId,
-    ) -> PartialVMResult<Arc<CompiledModule>> {
-        let (package, module_id) = runtime_id.into();
-        let package = self.loaded_packages.get(package).ok_or_else(|| {
-            PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                .with_message(format!("Package {} not found", package))
-        })?;
-        package
-            .compiled_modules
-            .get(module_id)
-            .cloned()
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                    .with_message(format!("Module {} not found", module_id))
-            })
     }
 
     pub fn resolve_loaded_module(&self, runtime_id: &ModuleId) -> PartialVMResult<Arc<Module>> {

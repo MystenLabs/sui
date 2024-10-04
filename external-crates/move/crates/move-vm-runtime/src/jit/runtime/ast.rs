@@ -21,7 +21,6 @@ use move_binary_format::{
         StructDefinitionIndex, VariantHandle, VariantHandleIndex, VariantInstantiationHandle,
         VariantInstantiationHandleIndex, VariantJumpTable, VariantJumpTableIndex, VariantTag,
     },
-    CompiledModule,
 };
 use move_core_types::{
     annotated_value as A,
@@ -30,7 +29,10 @@ use move_core_types::{
     runtime_value as R,
     vm_status::StatusCode,
 };
-use move_vm_types::loaded_data::runtime_types::{IntraPackageKey, Type, VTableKey};
+use move_vm_types::{
+    loaded_data::runtime_types::{IntraPackageKey, Type, VTableKey},
+    values::ConstantValue,
+};
 use parking_lot::RwLock;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -57,11 +59,6 @@ pub struct Package {
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
     pub loaded_modules: BinaryCache<Identifier, Module>,
-
-    // NB: this is needed for the bytecode verifier. If we update the bytecode verifier we should
-    // be able to remove this.
-    // TODO: Remove this!
-    pub compiled_modules: BinaryCache<Identifier, CompiledModule>,
 
     // NB: All things except for types are allocated into this arena.
     pub package_arena: Arena,
@@ -124,6 +121,18 @@ pub struct Module {
 
     // a map from signatures in instantiations to the `Vec<Type>` that reperesent it.
     pub instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>>,
+
+    // constant references carry an index into a global vector of values.
+    pub constants: Vec<Constant>,
+}
+
+// A runtime constant
+#[derive(Debug)]
+pub struct Constant {
+    pub value: ConstantValue,
+    pub type_: Type,
+    // Size of constant -- used for gas charging.
+    pub size: u64,
 }
 
 // A runtime function
@@ -132,18 +141,17 @@ pub struct Module {
 pub struct Function {
     #[allow(unused)]
     pub file_format_version: u32,
+    pub is_entry: bool,
     pub index: FunctionDefinitionIndex,
     pub code: *const [Bytecode],
-    pub parameters: SignatureIndex,
-    pub return_: SignatureIndex,
+    pub parameters: Vec<Type>,
+    pub return_: Vec<Type>,
     pub type_parameters: Vec<AbilitySet>,
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub module: ModuleId,
     pub name: Identifier,
-    pub parameters_len: usize,
     pub locals_len: usize,
-    pub return_len: usize,
     pub jump_tables: Vec<VariantJumpTable>,
 }
 
@@ -853,6 +861,10 @@ impl Module {
             handle.variant,
         )
     }
+
+    pub fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
+        &self.constants[idx.0 as usize]
+    }
 }
 
 impl Function {
@@ -874,11 +886,11 @@ impl Function {
     }
 
     pub fn arg_count(&self) -> usize {
-        self.parameters_len
+        self.parameters.len()
     }
 
     pub fn return_type_count(&self) -> usize {
-        self.return_len
+        self.return_.len()
     }
 
     pub fn name(&self) -> &str {
@@ -1091,7 +1103,6 @@ impl std::fmt::Debug for Package {
             .field("storage_id", &self.storage_id)
             .field("runtime_id", &self.runtime_id)
             .field("loaded_modules", &self.loaded_modules)
-            .field("compiled_modules", &self.compiled_modules)
             .field("vtable", &self.vtable)
             .finish()
     }

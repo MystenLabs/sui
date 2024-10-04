@@ -374,16 +374,9 @@ fn op_step_impl(
         }
         Bytecode::LdConst(idx) => {
             let constant = state.current_frame.resolver.constant_at(*idx);
-            gas_meter.charge_ld_const(NumBytes::new(constant.data.len() as u64))?;
-
-            let val = Value::deserialize_constant(constant).ok_or_else(|| {
-                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                    "Verifier failed to verify the deserialization of constants".to_owned(),
-                )
-            })?;
-
+            gas_meter.charge_ld_const(NumBytes::new(constant.size))?;
+            let val = Value::from_constant_value(constant.value.clone());
             gas_meter.charge_ld_const_after_deserialization(&val)?;
-
             state.push_operand(val)?
         }
         Bytecode::LdTrue => {

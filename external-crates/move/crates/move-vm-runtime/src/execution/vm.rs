@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, move_cache::MoveCache, type_cache},
+    cache::{arena::ArenaPointer, move_cache::MoveCache},
     dbg_println,
     execution::{dispatch_tables::VMDispatchTables, interpreter},
     jit::runtime::ast::Function,
@@ -16,9 +16,7 @@ use crate::{
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::LocalIndex,
-    CompiledModule,
 };
-use move_bytecode_verifier::script_signature;
 use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
@@ -59,7 +57,6 @@ pub struct MoveVM<'extensions, S: MoveResolver> {
 }
 
 pub struct MoveVMFunction {
-    compiled_module: Arc<CompiledModule>,
     function: ArenaPointer<Function>,
     pub parameters: Vec<Type>,
     pub return_type: Vec<Type>,
@@ -170,43 +167,19 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
         gas_meter: &mut impl GasMeter,
         bypass_declared_entry_check: bool,
     ) -> VMResult<SerializedReturnValues> {
-        use move_binary_format::file_format::SignatureIndex;
-        fn check_is_entry(
-            _resolver: &CompiledModule,
-            is_entry: bool,
-            _parameters_idx: SignatureIndex,
-            _return_idx: Option<SignatureIndex>,
-        ) -> PartialVMResult<()> {
-            if is_entry {
-                Ok(())
-            } else {
-                Err(PartialVMError::new(
-                    StatusCode::EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION,
-                ))
-            }
-        }
-
-        // Dtermine additional signature checks
-        let additional_signature_checks = if bypass_declared_entry_check {
-            move_bytecode_verifier::no_additional_script_signature_checks
-        } else {
-            check_is_entry
-        };
-
         // Find the function definition
         let MoveVMFunction {
-            compiled_module,
             function,
             parameters,
             return_type,
         } = self.find_function(runtime_id, function_name, &type_arguments)?;
 
-        // TODO: We can likely eliminate some of this verification by doing it during translation.
-        script_signature::verify_module_function_signature_by_name(
-            compiled_module.as_ref(),
-            function_name,
-            additional_signature_checks,
-        )?;
+        if !bypass_declared_entry_check && !function.to_ref().is_entry {
+            return Err(PartialVMError::new(
+                StatusCode::EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION,
+            )
+            .finish(Location::Undefined));
+        }
 
         // execute the function
         self.execute_function_impl(
@@ -238,9 +211,9 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
                 member_name,
             },
         };
-        let compiled_module = self
+        let loaded_module = self
             .virtual_tables
-            .resolve_compiled_module(runtime_id)
+            .resolve_loaded_module(runtime_id)
             .map_err(|err| err.finish(Location::Undefined))?;
         let function = self
             .virtual_tables
@@ -250,21 +223,9 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
         let fun_ref = function.to_ref();
 
         // See TODO on LoadedModule to avoid this work
-        let parameters = compiled_module
-            .signature_at(fun_ref.parameters)
-            .0
-            .iter()
-            .map(|tok| type_cache::make_type(&compiled_module, tok))
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
+        let parameters = fun_ref.parameters.clone();
 
-        let return_ = compiled_module
-            .signature_at(fun_ref.return_)
-            .0
-            .iter()
-            .map(|tok| type_cache::make_type(&compiled_module, tok))
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
+        let return_ = fun_ref.return_.clone();
 
         // verify type arguments
         self.virtual_tables
@@ -272,7 +233,6 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
             .map_err(|e| e.finish(Location::Module(runtime_id.clone())))?;
 
         let function = MoveVMFunction {
-            compiled_module,
             function,
             parameters,
             return_type: return_,

@@ -25,8 +25,12 @@ use move_binary_format::{
     },
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
-use move_vm_types::loaded_data::runtime_types::{
-    CachedDatatype, Datatype, EnumType, IntraPackageKey, StructType, Type, VTableKey, VariantType,
+use move_vm_types::{
+    loaded_data::runtime_types::{
+        CachedDatatype, Datatype, EnumType, IntraPackageKey, StructType, Type, VTableKey,
+        VariantType,
+    },
+    values::Value,
 };
 use parking_lot::RwLock;
 use std::{
@@ -143,7 +147,7 @@ pub fn package(
         storage_id,
         runtime_id,
         loaded_modules,
-        compiled_modules,
+        compiled_modules: _,
         package_arena,
         vtable,
     } = package_context;
@@ -152,7 +156,6 @@ pub fn package(
         storage_id,
         runtime_id,
         loaded_modules,
-        compiled_modules,
         package_arena,
         vtable,
     })
@@ -205,6 +208,7 @@ fn module(
     let mut function_instantiations = vec![];
     let mut field_handles = vec![];
     let mut field_instantiations: Vec<FieldInstantiation> = vec![];
+    let mut constants = vec![];
 
     for datatype_handle in module.datatype_handles() {
         let struct_name = module.identifier_at(datatype_handle.name);
@@ -295,13 +299,18 @@ fn module(
     }
 
     dbg_println!(flag: function_list_sizes, "pushing {} functions", module.function_defs().len());
-    let loaded_functions =
-        package_context
-            .package_arena
-            .alloc_slice(module.function_defs().iter().enumerate().map(|(ndx, fun)| {
-                let findex = FunctionDefinitionIndex(ndx as TableIndex);
-                alloc_function(natives, findex, fun, module)
-            }));
+    let prealloc_functions: Vec<Function> = module
+        .function_defs()
+        .iter()
+        .enumerate()
+        .map(|(ndx, fun)| {
+            let findex = FunctionDefinitionIndex(ndx as TableIndex);
+            alloc_function(natives, findex, fun, module)
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    let loaded_functions = package_context
+        .package_arena
+        .alloc_slice(prealloc_functions.into_iter());
 
     package_context.insert_and_make_module_function_vtable(
         self_id.name().to_owned(),
@@ -360,6 +369,18 @@ fn module(
         field_instantiations.push(FieldInstantiation { offset, owner });
     }
 
+    for constant in module.constant_pool() {
+        let value = Value::deserialize_constant(constant).ok_or_else(|| {
+            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
+                "Verifier failed to verify the deserialization of constants".to_owned(),
+            )
+        })?.to_constant_value()?;
+        let type_ = type_cache::make_type(context.module, &constant.type_)?;
+        let size = constant.data.len() as u64;
+        let const_ = Constant { value, type_, size };
+        constants.push(const_);
+    }
+
     let ModuleContext {
         cache: _,
         module,
@@ -382,6 +403,7 @@ fn module(
         instantiation_signatures,
         variant_handles: module.variant_handles().to_vec(),
         variant_instantiation_handles: module.variant_instantiation_handles().to_vec(),
+        constants,
     })
 }
 
@@ -530,10 +552,11 @@ fn alloc_function(
     index: FunctionDefinitionIndex,
     def: &FunctionDefinition,
     module: &CompiledModule,
-) -> Function {
+) -> PartialVMResult<Function> {
     let handle = module.function_handle_at(def.function);
     let name = module.identifier_at(handle.name).to_owned();
     let module_id = module.self_id();
+    let is_entry = def.is_entry;
     let (native, def_is_native) = if def.is_native() {
         (
             natives.resolve(
@@ -546,22 +569,31 @@ fn alloc_function(
     } else {
         (None, false)
     };
-    let parameters = handle.parameters;
-    let parameters_len = module.signature_at(parameters).0.len();
+    let parameters = module
+        .signature_at(handle.parameters)
+        .0
+        .iter()
+        .map(|tok| type_cache::make_type(&module, tok))
+        .collect::<PartialVMResult<Vec<_>>>()?;
     // Native functions do not have a code unit
     let (locals_len, jump_tables) = match &def.code {
         Some(code) => (
-            parameters_len + module.signature_at(code.locals).0.len(),
+            parameters.len() + module.signature_at(code.locals).0.len(),
             code.jump_tables.clone(),
         ),
         None => (0, vec![]),
     };
-    let return_ = handle.return_;
-    let return_len = module.signature_at(return_).0.len();
+    let return_ = module
+        .signature_at(handle.return_)
+        .0
+        .iter()
+        .map(|tok| type_cache::make_type(&module, tok))
+        .collect::<PartialVMResult<Vec<_>>>()?;
     let type_parameters = handle.type_parameters.clone();
-    Function {
+    let fun = Function {
         file_format_version: module.version(),
         index,
+        is_entry,
         code: arena::null_ptr(),
         parameters,
         return_,
@@ -570,11 +602,10 @@ fn alloc_function(
         def_is_native,
         module: module_id,
         name,
-        parameters_len,
         locals_len,
-        return_len,
         jump_tables,
-    }
+    };
+    Ok(fun)
 }
 
 fn code(context: &mut ModuleContext, code: &[FF::Bytecode]) -> PartialVMResult<*const [Bytecode]> {

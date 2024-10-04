@@ -13,6 +13,7 @@ use move_binary_format::{
     file_format::{StructFieldInformation, TableIndex},
     CompiledModule, IndexKind,
 };
+use move_bytecode_verifier::script_signature;
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::runtime::VMConfig;
 
@@ -51,6 +52,16 @@ fn module(context: &Context, m: CompiledModule) -> VMResult<ast::Module> {
     // bytecode verifier checks that can be performed with the module itself
     // TODO: Charge gas?
     move_bytecode_verifier::verify_module_with_config_unmetered(&context.vm_config.verifier, &m)?;
+    // We do this here to avoid needing to do it during VM runs.
+    for function in m.function_defs() {
+        let handle = m.function_handle_at(function.function);
+        let name = m.identifier_at(handle.name);
+        script_signature::verify_module_function_signature_by_name(
+            &m,
+            name,
+            move_bytecode_verifier::no_additional_script_signature_checks,
+        )?;
+    }
     check_natives(context, &m)?;
     Ok(ast::Module { value: m })
 }

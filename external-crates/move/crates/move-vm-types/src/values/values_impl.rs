@@ -220,6 +220,38 @@ pub struct Variant {
 #[derive(Debug)]
 pub struct VariantRef(ContainerRef);
 
+/// Constant representation of a Move value.
+#[derive(Debug, Clone)]
+pub enum ConstantValue {
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u128),
+    U256(u256::U256),
+    Bool(bool),
+    Address(AccountAddress),
+
+    Container(ConstantContainer),
+}
+
+/// A container is a collection of constant values. It is used to represent data structures like a
+/// Move vector or struct.
+#[derive(Debug, Clone)]
+pub enum ConstantContainer {
+    Vec(Vec<ConstantValue>),
+    Struct(Vec<ConstantValue>),
+    VecU8(Vec<u8>),
+    VecU64(Vec<u64>),
+    VecU128(Vec<u128>),
+    VecBool(Vec<bool>),
+    VecAddress(Vec<AccountAddress>),
+    VecU16(Vec<u16>),
+    VecU32(Vec<u32>),
+    VecU256(Vec<u256::U256>),
+    Variant(VariantTag, Vec<ConstantValue>),
+}
+
 /***************************************************************************************
  *
  * Misc
@@ -374,6 +406,44 @@ impl ValueImpl {
             Container(c) => Container(c.copy_value()?),
         })
     }
+
+    pub fn to_constant_value(&self) -> PartialVMResult<ConstantValue> {
+        match self {
+            ValueImpl::Invalid => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message("invalid value in constant".to_string())),
+            ValueImpl::ContainerRef(_) | ValueImpl::IndexedRef(_) => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message("invalid reference in constant".to_string())),
+            ValueImpl::U8(value) => Ok(ConstantValue::U8(*value)),
+            ValueImpl::U16(value) => Ok(ConstantValue::U16(*value)),
+            ValueImpl::U32(value) => Ok(ConstantValue::U32(*value)),
+            ValueImpl::U64(value) => Ok(ConstantValue::U64(*value)),
+            ValueImpl::U128(value) => Ok(ConstantValue::U128(*value)),
+            ValueImpl::U256(value) => Ok(ConstantValue::U256(*value)),
+            ValueImpl::Bool(value) => Ok(ConstantValue::Bool(*value)),
+            ValueImpl::Address(value) => Ok(ConstantValue::Address(*value)),
+            ValueImpl::Container(container) => container.to_constant_value(),
+        }
+    }
+
+    pub fn from_constant_value(constant_value: ConstantValue) -> Self {
+        match constant_value {
+            ConstantValue::U8(value) => ValueImpl::U8(value),
+            ConstantValue::U16(value) => ValueImpl::U16(value),
+            ConstantValue::U32(value) => ValueImpl::U32(value),
+            ConstantValue::U64(value) => ValueImpl::U64(value),
+            ConstantValue::U128(value) => ValueImpl::U128(value),
+            ConstantValue::U256(value) => ValueImpl::U256(value),
+            ConstantValue::Bool(value) => ValueImpl::Bool(value),
+            ConstantValue::Address(value) => ValueImpl::Address(value),
+            ConstantValue::Container(container) => {
+                ValueImpl::Container(Container::from_constant_value(container))
+            }
+        }
+    }
 }
 
 impl Container {
@@ -433,6 +503,90 @@ impl Container {
             Self::Variant(r) => Self::Variant(Rc::clone(r)),
         }
     }
+
+    pub fn to_constant_value(&self) -> PartialVMResult<ConstantValue> {
+        let constant_container = match self {
+            Container::Locals(values) => {
+                let constants = values
+                    .borrow()
+                    .iter()
+                    .map(|v| v.to_constant_value())
+                    .collect::<Result<Vec<_>, _>>()?;
+                ConstantContainer::Struct(constants)
+            }
+            Container::Vec(values) => {
+                let constants = values
+                    .borrow()
+                    .iter()
+                    .map(|v| v.to_constant_value())
+                    .collect::<Result<Vec<_>, _>>()?;
+                ConstantContainer::Vec(constants)
+            }
+            Container::Struct(values) => {
+                let constants = values
+                    .borrow()
+                    .iter()
+                    .map(|v| v.to_constant_value())
+                    .collect::<Result<Vec<_>, _>>()?;
+                ConstantContainer::Struct(constants)
+            }
+            Container::VecU8(values) => ConstantContainer::VecU8(values.borrow().clone()),
+            Container::VecU64(values) => ConstantContainer::VecU64(values.borrow().clone()),
+            Container::VecU128(values) => ConstantContainer::VecU128(values.borrow().clone()),
+            Container::VecBool(values) => ConstantContainer::VecBool(values.borrow().clone()),
+            Container::VecAddress(values) => ConstantContainer::VecAddress(values.borrow().clone()),
+            Container::VecU16(values) => ConstantContainer::VecU16(values.borrow().clone()),
+            Container::VecU32(values) => ConstantContainer::VecU32(values.borrow().clone()),
+            Container::VecU256(values) => ConstantContainer::VecU256(values.borrow().clone()),
+            Container::Variant(variant) => {
+                let borrowed_variant = variant.borrow();
+                let tag = borrowed_variant.0;
+                let values = borrowed_variant
+                    .1
+                    .iter()
+                    .map(|v| v.to_constant_value())
+                    .collect::<Result<Vec<_>, _>>()?;
+                ConstantContainer::Variant(tag, values)
+            }
+        };
+        Ok(ConstantValue::Container(constant_container))
+    }
+
+    pub fn from_constant_value(constant_container: ConstantContainer) -> Self {
+        match constant_container {
+            ConstantContainer::Vec(values) => {
+                let container_values = values
+                    .into_iter()
+                    .map(ValueImpl::from_constant_value)
+                    .collect();
+                Container::Vec(Rc::new(RefCell::new(container_values)))
+            }
+            ConstantContainer::Struct(values) => {
+                let container_values = values
+                    .into_iter()
+                    .map(ValueImpl::from_constant_value)
+                    .collect();
+                Container::Struct(Rc::new(RefCell::new(container_values)))
+            }
+            ConstantContainer::VecU8(values) => Container::VecU8(Rc::new(RefCell::new(values))),
+            ConstantContainer::VecU64(values) => Container::VecU64(Rc::new(RefCell::new(values))),
+            ConstantContainer::VecU128(values) => Container::VecU128(Rc::new(RefCell::new(values))),
+            ConstantContainer::VecBool(values) => Container::VecBool(Rc::new(RefCell::new(values))),
+            ConstantContainer::VecAddress(values) => {
+                Container::VecAddress(Rc::new(RefCell::new(values)))
+            }
+            ConstantContainer::VecU16(values) => Container::VecU16(Rc::new(RefCell::new(values))),
+            ConstantContainer::VecU32(values) => Container::VecU32(Rc::new(RefCell::new(values))),
+            ConstantContainer::VecU256(values) => Container::VecU256(Rc::new(RefCell::new(values))),
+            ConstantContainer::Variant(tag, values) => {
+                let container_values = values
+                    .into_iter()
+                    .map(ValueImpl::from_constant_value)
+                    .collect();
+                Container::Variant(Rc::new(RefCell::new((tag, container_values))))
+            }
+        }
+    }
 }
 
 impl IndexedRef {
@@ -459,6 +613,15 @@ impl ContainerRef {
 impl Value {
     pub fn copy_value(&self) -> PartialVMResult<Self> {
         Ok(Self(self.0.copy_value()?))
+    }
+
+    pub fn to_constant_value(&self) -> PartialVMResult<ConstantValue> {
+        self.0.to_constant_value()
+    }
+
+    pub fn from_constant_value(constant_value: ConstantValue) -> Self {
+        let inner = ValueImpl::from_constant_value(constant_value);
+        Self(inner)
     }
 }
 

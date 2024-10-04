@@ -4,7 +4,7 @@
 use crate::{
     cache::{arena::ArenaPointer, type_cache},
     execution::dispatch_tables::VMDispatchTables,
-    jit::runtime::ast::{CallType, Function, Module},
+    jit::runtime::ast::{CallType, Constant, Function, Module},
     shared::constants::{
         CALL_STACK_SIZE_LIMIT, MAX_TYPE_INSTANTIATION_NODES, OPERAND_STACK_SIZE_LIMIT,
     },
@@ -12,11 +12,10 @@ use crate::{
 use move_binary_format::{
     errors::*,
     file_format::{
-        Constant, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
-        FunctionInstantiationIndex, SignatureIndex, StructDefInstantiationIndex,
-        StructDefinitionIndex, VariantHandleIndex, VariantInstantiationHandleIndex, VariantTag,
+        ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionInstantiationIndex,
+        SignatureIndex, StructDefInstantiationIndex, StructDefinitionIndex, VariantHandleIndex,
+        VariantInstantiationHandleIndex, VariantTag,
     },
-    CompiledModule,
 };
 use move_core_types::{
     language_storage::{ModuleId, TypeTag},
@@ -88,8 +87,7 @@ pub(super) struct CallStack(Vec<CallFrame>);
 // needs.
 #[derive(Debug)]
 pub(crate) struct ModuleDefinitionResolver {
-    compiled: Arc<CompiledModule>,
-    loaded: Arc<Module>,
+    module: Arc<Module>,
 }
 
 /// A `Frame` is the execution context for a function. It holds the locals of the function and
@@ -495,9 +493,8 @@ impl ModuleDefinitionResolver {
     //
 
     pub fn new(vtables: &VMDispatchTables, module_id: &ModuleId) -> PartialVMResult<Self> {
-        let compiled = vtables.resolve_compiled_module(module_id)?;
-        let loaded = vtables.resolve_loaded_module(module_id)?;
-        Ok(Self { compiled, loaded })
+        let module = vtables.resolve_loaded_module(module_id)?;
+        Ok(Self { module })
     }
 
     //
@@ -506,7 +503,7 @@ impl ModuleDefinitionResolver {
 
     pub(crate) fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
         // TODO: Carry these into `laoded` to avoid this.
-        self.compiled.constant_at(idx)
+        self.module.constant_at(idx)
     }
 
     //
@@ -514,7 +511,7 @@ impl ModuleDefinitionResolver {
     //
 
     pub(crate) fn function_from_instantiation(&self, idx: FunctionInstantiationIndex) -> &CallType {
-        &self.loaded.function_instantiation_at(idx.0).handle
+        &self.module.function_instantiation_at(idx.0).handle
     }
 
     pub(crate) fn instantiate_generic_function(
@@ -522,7 +519,7 @@ impl ModuleDefinitionResolver {
         idx: FunctionInstantiationIndex,
         type_params: &[Type],
     ) -> PartialVMResult<Vec<Type>> {
-        let loaded_module = &*self.loaded;
+        let loaded_module = &*self.module;
         let func_inst = loaded_module.function_instantiation_at(idx.0);
         let instantiation: Vec<_> = loaded_module
             .instantiation_signature_at(func_inst.instantiation_idx)?
@@ -547,13 +544,13 @@ impl ModuleDefinitionResolver {
     //
 
     pub(crate) fn get_struct_type(&self, idx: StructDefinitionIndex) -> Type {
-        let struct_def = self.loaded.struct_at(idx);
+        let struct_def = self.module.struct_at(idx);
         Type::Datatype(struct_def)
     }
 
     pub(crate) fn get_enum_type(&self, vidx: VariantHandleIndex) -> Type {
-        let variant_handle = self.loaded.variant_handle_at(vidx);
-        let enum_def = self.loaded.enum_at(variant_handle.enum_def);
+        let variant_handle = self.module.variant_handle_at(vidx);
+        let enum_def = self.module.enum_at(variant_handle.enum_def);
         Type::Datatype(enum_def)
     }
 
@@ -562,7 +559,7 @@ impl ModuleDefinitionResolver {
         idx: StructDefInstantiationIndex,
         ty_args: &[Type],
     ) -> PartialVMResult<Type> {
-        let loaded_module = &*self.loaded;
+        let loaded_module = &*self.module;
         let struct_inst = loaded_module.struct_instantiation_at(idx.0);
         let instantiation =
             loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
@@ -574,7 +571,7 @@ impl ModuleDefinitionResolver {
         vidx: VariantInstantiationHandleIndex,
         ty_args: &[Type],
     ) -> PartialVMResult<Type> {
-        let loaded_module = &*self.loaded;
+        let loaded_module = &*self.module;
         let handle = loaded_module.variant_instantiation_handle_at(vidx);
         let enum_inst = loaded_module.enum_instantiation_at(handle.enum_def);
         let instantiation =
@@ -610,7 +607,7 @@ impl ModuleDefinitionResolver {
     }
 
     fn single_type_at(&self, idx: SignatureIndex) -> &Type {
-        self.loaded.single_type_at(idx)
+        self.module.single_type_at(idx)
     }
 
     pub(crate) fn instantiate_single_type(
@@ -631,33 +628,33 @@ impl ModuleDefinitionResolver {
     //
 
     pub(crate) fn field_offset(&self, idx: FieldHandleIndex) -> usize {
-        self.loaded.field_offset(idx)
+        self.module.field_offset(idx)
     }
 
     pub(crate) fn field_instantiation_offset(&self, idx: FieldInstantiationIndex) -> usize {
-        self.loaded.field_instantiation_offset(idx)
+        self.module.field_instantiation_offset(idx)
     }
 
     pub(crate) fn field_count(&self, idx: StructDefinitionIndex) -> u16 {
-        self.loaded.field_count(idx.0)
+        self.module.field_count(idx.0)
     }
 
     pub(crate) fn variant_field_count_and_tag(
         &self,
         vidx: VariantHandleIndex,
     ) -> (u16, VariantTag) {
-        self.loaded.variant_field_count(vidx)
+        self.module.variant_field_count(vidx)
     }
 
     pub(crate) fn field_instantiation_count(&self, idx: StructDefInstantiationIndex) -> u16 {
-        self.loaded.field_instantiation_count(idx.0)
+        self.module.field_instantiation_count(idx.0)
     }
 
     pub(crate) fn variant_instantiantiation_field_count_and_tag(
         &self,
         vidx: VariantInstantiationHandleIndex,
     ) -> (u16, VariantTag) {
-        self.loaded
+        self.module
             .variant_instantiantiation_field_count_and_tag(vidx)
     }
 }
