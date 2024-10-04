@@ -166,7 +166,7 @@ export function SwapPage() {
 		fromType: fromCoinType || '',
 		toType: toCoinType || '',
 		amount: parsed.toString(),
-		slippage: allowedMaxSlippagePercentage,
+		slippage: Number(allowedMaxSlippagePercentage),
 		enabled: isFormValid && parsed > 0n && !!fromCoinType && !!toCoinType,
 	});
 

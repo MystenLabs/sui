@@ -91,7 +91,7 @@ export function useSwapTransaction({ enabled, ...params }: SwapRequest & { enabl
 
 			return queryClient.getQueryData<SwapResult>(getQueryKey(params)) ?? null;
 		},
-		staleTime: 5_000,
+		staleTime: 0,
 		enabled: enabled && !!params.amount && !!params.sender && !!params.fromType && !!params.toType,
 	});
 }
