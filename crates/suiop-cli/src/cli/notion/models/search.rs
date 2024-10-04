@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::ids::{PageId, UserId};
 use super::paging::{Pageable, Paging, PagingCursor};
 use super::Number;
@@ -7,6 +10,7 @@ use serde::{Serialize, Serializer};
 
 #[derive(Serialize, Debug, Eq, PartialEq, Hash, Copy, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum SortDirection {
     Ascending,
     Descending,
@@ -14,12 +18,14 @@ pub enum SortDirection {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Hash, Copy, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum SortTimestamp {
     LastEditedTime,
 }
 
 #[derive(Serialize, Debug, Eq, PartialEq, Hash, Copy, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum FilterValue {
     Page,
     Database,
@@ -27,6 +33,7 @@ pub enum FilterValue {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Hash, Copy, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum FilterProperty {
     Object,
 }
@@ -58,6 +65,7 @@ pub struct SearchRequest {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(unused)]
 pub enum TextCondition {
     Equals(String),
     DoesNotEqual(String),
@@ -88,6 +96,7 @@ where
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(unused)]
 pub enum NumberCondition {
     Equals(Number),
     DoesNotEqual(Number),
@@ -103,6 +112,8 @@ pub enum NumberCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(unused)]
+
 pub enum CheckboxCondition {
     Equals(bool),
     DoesNotEqual(bool),
@@ -110,6 +121,7 @@ pub enum CheckboxCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(unused)]
 pub enum SelectCondition {
     /// Only return pages where the page property value matches the provided value exactly.
     Equals(String),
@@ -125,6 +137,7 @@ pub enum SelectCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum MultiSelectCondition {
     /// Only return pages where the page property value contains the provided value.
     Contains(String),
@@ -140,6 +153,7 @@ pub enum MultiSelectCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum DateCondition {
     /// Only return pages where the page property value matches the provided date exactly.
     /// Note that the comparison is done against the date.
@@ -189,6 +203,7 @@ pub enum DateCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum PeopleCondition {
     Contains(UserId),
     /// Only return pages where the page property value does not contain the provided value.
@@ -203,6 +218,7 @@ pub enum PeopleCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum FilesCondition {
     /// Only return pages where the page property value is empty.
     #[serde(serialize_with = "serialize_to_true")]
@@ -214,6 +230,7 @@ pub enum FilesCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum RelationCondition {
     /// Only return pages where the page property value contains the provided value.
     Contains(PageId),
@@ -229,6 +246,7 @@ pub enum RelationCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(unused)]
 pub enum FormulaCondition {
     /// Only return pages where the result type of the page property formula is "text"
     /// and the provided text filter condition matches the formula's value.
@@ -246,6 +264,7 @@ pub enum FormulaCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(unused)]
 pub enum PropertyCondition {
     RichText(TextCondition),
     Number(NumberCondition),
@@ -261,6 +280,7 @@ pub enum PropertyCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(untagged)]
+#[allow(dead_code)]
 pub enum FilterCondition {
     Property {
         property: String,
@@ -275,6 +295,7 @@ pub enum FilterCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Hash, Copy, Clone)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum DatabaseSortTimestamp {
     CreatedTime,
     LastEditedTime,
@@ -316,6 +337,7 @@ impl Pageable for DatabaseQuery {
 }
 
 #[derive(Debug, Eq, PartialEq)]
+#[allow(dead_code)]
 pub enum NotionSearch {
     /// When supplied, limits which pages are returned by comparing the query to the page title.
     Query(String),
@@ -339,6 +361,7 @@ pub enum NotionSearch {
     },
 }
 
+#[allow(dead_code)]
 impl NotionSearch {
     pub fn filter_by_databases() -> Self {
         Self::Filter {

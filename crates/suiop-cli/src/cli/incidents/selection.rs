@@ -172,6 +172,7 @@ Please comment in the thread to request an adjustment to the list.",
         slack.send_message(slack_channel, &message).await?;
         debug!("Message sent to #{}", slack_channel);
     }
+    #[allow(clippy::unnecessary_to_owned)]
     let insert_into_db = Confirm::new(&format!(
         "Insert {} incidents into {:?} Notion database ({:?}) for review?",
         to_review.len(),

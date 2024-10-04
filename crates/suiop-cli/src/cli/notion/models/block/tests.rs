@@ -1,5 +1,8 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #[cfg(test)]
-mod tests {
+mod test {
     use std::str::FromStr;
 
     use chrono::DateTime;

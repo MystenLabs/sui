@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use chrono::NaiveDate;
 
 use crate::cli::notion::models::properties::{DateOrDateTime, RollupPropertyValue, RollupValue};
@@ -6,7 +9,7 @@ use super::PropertyValue;
 
 #[test]
 fn verify_date_parsing() {
-    let date = NaiveDate::from_ymd_opt(2021, 01, 02).unwrap();
+    let date = NaiveDate::from_ymd_opt(2021, 1, 2).unwrap();
     let result = serde_json::to_string(&DateOrDateTime::Date(date)).unwrap();
     let parsed: DateOrDateTime = serde_json::from_str(&result).unwrap();
     println!("{:?}", parsed);

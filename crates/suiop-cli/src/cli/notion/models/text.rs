@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::{Database, Page};
 use super::properties::DateValue;
 use super::users::User;
@@ -115,6 +118,7 @@ pub enum RichText {
     },
 }
 
+#[allow(dead_code)]
 impl RichText {
     pub fn plain_text(&self) -> &str {
         use RichText::*;

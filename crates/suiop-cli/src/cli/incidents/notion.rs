@@ -123,20 +123,6 @@ impl Notion {
     /// Get all incidents from the incident selection database
     #[allow(dead_code)]
     pub async fn get_incident_selection_incidents(&self) -> Result<ListResponse<Page>> {
-        // Use Notion API  with reqwest to query the database
-        let url = format!(
-            "https://api.notion.com/v1/databases/{}/query",
-            INCIDENT_DB_ID.to_string()
-        );
-        let client = reqwest::Client::new();
-        let response = client
-            .post(url)
-            .header("Authorization", format!("Bearer {}", self.token))
-            .header("Notion-Version", "2022-06-28")
-            .send()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to send request: {}", e))?;
-
         // Retrieve the db
         self.client
             .query_database(INCIDENT_DB_ID.clone(), DatabaseQuery::default())

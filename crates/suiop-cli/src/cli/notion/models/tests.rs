@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::ids::UserId;
 use super::properties::{DateOrDateTime, DateValue};
 use super::text::{Annotations, Link, MentionObject, RichText, RichTextCommon, Text, TextColor};

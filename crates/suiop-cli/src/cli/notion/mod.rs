@@ -1,3 +1,8 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+#![allow(dead_code)]
+#![allow(clippy::enum_variant_names)]
 use ids::{AsIdentifier, PageId};
 use ids::{BlockId, DatabaseId};
 use models::block::Block;
@@ -12,6 +17,7 @@ use tracing::Instrument;
 pub mod ids;
 pub mod models;
 
+#[allow(unused_imports)]
 pub use chrono;
 
 const NOTION_API_VERSION: &str = "2022-02-22";

@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
@@ -5,6 +8,7 @@ use std::fmt::{Display, Formatter};
 #[serde(transparent)]
 pub struct StatusCode(u16);
 
+#[allow(dead_code)]
 impl StatusCode {
     pub fn code(&self) -> u16 {
         self.0

@@ -1,3 +1,7 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+#![allow(dead_code)]
 pub mod block;
 pub mod error;
 pub mod paging;
@@ -12,7 +16,6 @@ use super::Error;
 use block::ExternalFileObject;
 use properties::{PropertyConfiguration, PropertyValue};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::HashMap;
 use text::RichText;
 
@@ -223,6 +226,7 @@ pub struct Page {
     pub parent: Parent,
 }
 
+#[allow(dead_code)]
 impl Page {
     pub fn title(&self) -> Option<String> {
         self.properties.title()

@@ -1,3 +1,7 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone)]
@@ -13,8 +17,5 @@ pub struct Paging {
 }
 
 pub trait Pageable {
-    fn start_from(
-        self,
-        starting_point: Option<PagingCursor>,
-    ) -> Self;
+    fn start_from(self, starting_point: Option<PagingCursor>) -> Self;
 }
