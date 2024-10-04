@@ -126,9 +126,6 @@ pub(crate) enum ConsensusError {
         block_timestamp_ms: u64,
     },
 
-    #[error("No available authority to fetch commits")]
-    NoAvailableAuthorityToFetchCommits,
-
     #[error("Received no commit from peer {peer}")]
     NoCommitReceived { peer: AuthorityIndex },
 
