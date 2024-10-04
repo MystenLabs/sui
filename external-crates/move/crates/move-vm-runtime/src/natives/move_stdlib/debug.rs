@@ -2,17 +2,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::natives::functions::{NativeContext, NativeFunction};
-use crate::natives::make_module_natives;
+#[allow(unused_imports)]
+use crate::{
+    execution::values::{Reference, Value},
+    jit::runtime::ast::Type,
+    natives::{
+        functions::{NativeContext, NativeFunction, NativeResult},
+        make_module_natives,
+    },
+};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
-#[allow(unused_imports)]
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
-    pop_arg,
-    values::{Reference, Value},
-};
 use smallvec::smallvec;
 use std::{collections::VecDeque, sync::Arc};
 
@@ -189,13 +189,14 @@ pub fn make_all(
 
 #[cfg(feature = "testing")]
 mod testing {
-    use crate::natives::functions::NativeContext;
+    use crate::{
+        execution::values::Value, jit::runtime::ast::Type, natives::functions::NativeContext,
+    };
     use move_binary_format::errors::{PartialVMError, PartialVMResult};
     use move_core_types::{
         account_address::AccountAddress, annotated_value as A, language_storage::TypeTag,
         runtime_value as R, vm_status::StatusCode,
     };
-    use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
     use std::{fmt, fmt::Write};
 
     const VECTOR_BEGIN: &str = "[";

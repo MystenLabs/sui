@@ -2,47 +2,54 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::{self, Arena, ArenaPointer},
+    cache::{
+        arena::{self, Arena, ArenaPointer},
+        type_cache::CrossVersionPackageCache,
+    },
+    execution::values::ConstantValue,
     natives::functions::{NativeFunction, UnboxedNativeFunction},
-    on_chain::ast::{PackageStorageId, RuntimePackageId},
-    shared::binary_cache::BinaryCache,
+    shared::{
+        binary_cache::BinaryCache,
+        constants::TYPE_DEPTH_MAX,
+        types::{PackageStorageId, RuntimePackageId},
+    },
 };
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        AbilitySet, CodeOffset, ConstantPoolIndex, EnumDefInstantiationIndex, EnumDefinitionIndex,
-        FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
-        FunctionInstantiationIndex, LocalIndex, SignatureIndex, StructDefInstantiationIndex,
-        StructDefinitionIndex, VariantHandle, VariantHandleIndex, VariantInstantiationHandle,
-        VariantInstantiationHandleIndex, VariantJumpTable, VariantJumpTableIndex, VariantTag,
+        AbilitySet, CodeOffset, ConstantPoolIndex, DatatypeTyParameter, EnumDefInstantiationIndex,
+        EnumDefinitionIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
+        FunctionInstantiationIndex, LocalIndex, SignatureIndex, SignatureToken,
+        StructDefInstantiationIndex, StructDefinitionIndex, TypeParameterIndex, VariantHandle,
+        VariantHandleIndex, VariantInstantiationHandle, VariantInstantiationHandleIndex,
+        VariantJumpTable, VariantJumpTableIndex, VariantTag,
     },
-    CompiledModule,
 };
 use move_core_types::{
     annotated_value as A,
+    gas_algebra::AbstractMemorySize,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag},
     runtime_value as R,
     vm_status::StatusCode,
 };
-use move_vm_types::loaded_data::runtime_types::{CachedTypeIndex, Type};
-use std::collections::{BTreeMap, HashMap};
+use parking_lot::RwLock;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
 
-/// runtime_address::module_name::function_name
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct VTableKey {
-    pub package_key: RuntimePackageId,
-    pub module_name: Identifier,
-    pub function_name: Identifier,
-}
-
 /// A `PackageVTable` is a collection of function pointers indexed by the module and function name
 /// within the package.
-pub type PackageVTable = BinaryCache<(Identifier, Identifier), ArenaPointer<Function>>;
+#[derive(Debug)]
+pub struct PackageVTable {
+    pub functions: BinaryCache<IntraPackageKey, ArenaPointer<Function>>,
+    pub types: Arc<RwLock<CrossVersionPackageCache>>,
+}
 
 /// Representation of a loaded package.
 pub struct Package {
@@ -52,10 +59,6 @@ pub struct Package {
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
     pub loaded_modules: BinaryCache<Identifier, Module>,
-
-    // NB: this is needed for the bytecode verifier. If we update the bytecode verifier we should
-    // be able to remove this.
-    pub compiled_modules: BinaryCache<Identifier, CompiledModule>,
 
     // NB: All things except for types are allocated into this arena.
     pub package_arena: Arena,
@@ -72,10 +75,10 @@ pub struct Module {
     pub id: ModuleId,
 
     //
-    // types as indexes into the Loader type list
+    // types as indexes into the package's vtable
     //
     #[allow(dead_code)]
-    pub type_refs: Vec<CachedTypeIndex>,
+    pub type_refs: Vec<IntraPackageKey>,
 
     // struct references carry the index into the global vector of types.
     // That is effectively an indirection over the ref table:
@@ -118,6 +121,18 @@ pub struct Module {
 
     // a map from signatures in instantiations to the `Vec<Type>` that reperesent it.
     pub instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>>,
+
+    // constant references carry an index into a global vector of values.
+    pub constants: Vec<Constant>,
+}
+
+// A runtime constant
+#[derive(Debug)]
+pub struct Constant {
+    pub value: ConstantValue,
+    pub type_: Type,
+    // Size of constant -- used for gas charging.
+    pub size: u64,
 }
 
 // A runtime function
@@ -126,18 +141,17 @@ pub struct Module {
 pub struct Function {
     #[allow(unused)]
     pub file_format_version: u32,
+    pub is_entry: bool,
     pub index: FunctionDefinitionIndex,
     pub code: *const [Bytecode],
-    pub parameters: SignatureIndex,
-    pub return_: SignatureIndex,
+    pub parameters: Vec<Type>,
+    pub return_: Vec<Type>,
     pub type_parameters: Vec<AbilitySet>,
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub module: ModuleId,
     pub name: Identifier,
-    pub parameters_len: usize,
     pub locals_len: usize,
-    pub return_len: usize,
     pub jump_tables: Vec<VariantJumpTable>,
 }
 
@@ -172,7 +186,7 @@ pub struct StructDef {
     // struct field count
     pub field_count: u16,
     // `ModuelCache::structs` global table index
-    pub idx: CachedTypeIndex,
+    pub idx: VTableKey,
 }
 
 #[derive(Debug)]
@@ -180,7 +194,7 @@ pub struct StructInstantiation {
     // struct field count
     pub field_count: u16,
     // `ModuleCache::structs` global table index. It is the generic type.
-    pub def: CachedTypeIndex,
+    pub def: VTableKey,
     pub instantiation_idx: SignatureIndex,
 }
 
@@ -189,7 +203,7 @@ pub struct StructInstantiation {
 pub struct FieldHandle {
     pub offset: usize,
     // `ModuelCache::structs` global table index. It is the generic type.
-    pub owner: CachedTypeIndex,
+    pub owner: VTableKey,
 }
 
 // A field instantiation. The offset is the only used information when operating on a field
@@ -198,7 +212,7 @@ pub struct FieldInstantiation {
     pub offset: usize,
     // `ModuleCache::structs` global table index. It is the generic type.
     #[allow(unused)]
-    pub owner: CachedTypeIndex,
+    pub owner: VTableKey,
 }
 
 #[derive(Debug)]
@@ -208,7 +222,7 @@ pub struct EnumDef {
     pub variant_count: u16,
     pub variants: Vec<VariantDef>,
     // `ModuelCache::types` global table index
-    pub idx: CachedTypeIndex,
+    pub idx: VTableKey,
 }
 
 #[derive(Debug)]
@@ -216,7 +230,7 @@ pub struct EnumInstantiation {
     // enum variant count
     pub variant_count_map: Vec<u16>,
     // `ModuelCache::types` global table index
-    pub def: CachedTypeIndex,
+    pub def: VTableKey,
     pub instantiation_idx: SignatureIndex,
 }
 
@@ -233,7 +247,7 @@ pub struct VariantDef {
 // Cache for data associated to a Struct, used for de/serialization and more
 //
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DatatypeInfo {
     pub runtime_tag: Option<StructTag>,
     pub defining_tag: Option<StructTag>,
@@ -247,6 +261,93 @@ pub struct DatatypeInfo {
 pub enum DatatypeTagType {
     Runtime,
     Defining,
+}
+
+// -------------------------------------------------------------------------------------------------
+// Runtime Type representation
+// -------------------------------------------------------------------------------------------------
+
+/// runtime_address::module_name::function_name
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct VTableKey {
+    pub package_key: RuntimePackageId,
+    pub inner_pkg_key: IntraPackageKey,
+}
+
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct IntraPackageKey {
+    pub module_name: Identifier,
+    pub member_name: Identifier,
+}
+
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Type {
+    Bool,
+    U8,
+    U64,
+    U128,
+    Address,
+    Signer,
+    Vector(Box<Type>),
+    Datatype(VTableKey),
+    DatatypeInstantiation(Box<(VTableKey, Vec<Type>)>),
+    Reference(Box<Type>),
+    MutableReference(Box<Type>),
+    TyParam(u16),
+    U16,
+    U32,
+    U256,
+}
+
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct CachedDatatype {
+    pub abilities: AbilitySet,
+    pub type_parameters: Vec<DatatypeTyParameter>,
+    pub name: Identifier,
+    pub defining_id: ModuleId,
+    pub runtime_id: ModuleId,
+    pub depth: Option<DepthFormula>,
+    pub datatype_info: Datatype,
+}
+
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Datatype {
+    Enum(EnumType),
+    Struct(StructType),
+}
+
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct EnumType {
+    pub variants: Vec<VariantType>,
+    pub enum_def: EnumDefinitionIndex,
+}
+
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct VariantType {
+    pub variant_name: Identifier,
+    pub fields: Vec<Type>,
+    pub field_names: Vec<Identifier>,
+    pub enum_def: EnumDefinitionIndex,
+    pub variant_tag: VariantTag,
+}
+
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct StructType {
+    pub fields: Vec<Type>,
+    pub field_names: Vec<Identifier>,
+    pub struct_def: StructDefinitionIndex,
+}
+
+/// A formula for the maximum depth of the value for a type
+/// max(Ti + Ci, ..., CBase)
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+pub struct DepthFormula {
+    /// The terms for each type parameter, if present.
+    /// Ti + Ci
+    pub terms: Vec<(TypeParameterIndex, u64)>,
+    /// The depth for any non type parameter term, if one exists.
+    /// CBase
+    pub constant: Option<u64>,
 }
 
 /// `Bytecode` is a VM instruction of variable size. The type of the bytecode (opcode) defines
@@ -754,9 +855,18 @@ pub enum Bytecode {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
+impl PackageVTable {
+    pub fn new(package_cache: Arc<RwLock<CrossVersionPackageCache>>) -> Self {
+        Self {
+            functions: BinaryCache::new(),
+            types: package_cache,
+        }
+    }
+}
+
 impl Module {
-    pub fn struct_at(&self, idx: StructDefinitionIndex) -> CachedTypeIndex {
-        self.structs[idx.0 as usize].idx
+    pub fn struct_at(&self, idx: StructDefinitionIndex) -> VTableKey {
+        self.structs[idx.0 as usize].idx.clone()
     }
 
     pub fn struct_instantiation_at(&self, idx: u16) -> &StructInstantiation {
@@ -797,8 +907,8 @@ impl Module {
         })
     }
 
-    pub fn enum_at(&self, idx: EnumDefinitionIndex) -> CachedTypeIndex {
-        self.enums[idx.0 as usize].idx
+    pub fn enum_at(&self, idx: EnumDefinitionIndex) -> VTableKey {
+        self.enums[idx.0 as usize].idx.clone()
     }
 
     pub fn enum_instantiation_at(&self, idx: EnumDefInstantiationIndex) -> &EnumInstantiation {
@@ -838,6 +948,10 @@ impl Module {
             handle.variant,
         )
     }
+
+    pub fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
+        &self.constants[idx.0 as usize]
+    }
 }
 
 impl Function {
@@ -859,11 +973,11 @@ impl Function {
     }
 
     pub fn arg_count(&self) -> usize {
-        self.parameters_len
+        self.parameters.len()
     }
 
     pub fn return_type_count(&self) -> usize {
-        self.return_len
+        self.return_.len()
     }
 
     pub fn name(&self) -> &str {
@@ -925,6 +1039,12 @@ impl Function {
     }
 }
 
+impl Default for DatatypeInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DatatypeInfo {
     pub fn new() -> Self {
         Self {
@@ -934,6 +1054,337 @@ impl DatatypeInfo {
             annotated_layout: None,
             node_count: None,
             annotated_node_count: None,
+        }
+    }
+}
+
+impl DepthFormula {
+    /// A value with no type parameters
+    pub fn constant(constant: u64) -> Self {
+        Self {
+            terms: vec![],
+            constant: Some(constant),
+        }
+    }
+
+    /// A stand alone type parameter value
+    pub fn type_parameter(tparam: TypeParameterIndex) -> Self {
+        Self {
+            terms: vec![(tparam, 0)],
+            constant: None,
+        }
+    }
+
+    /// We `max` over a list of formulas, and we normalize it to deal with duplicate terms, e.g.
+    /// `max(max(t1 + 1, t2 + 2, 2), max(t1 + 3, t2 + 1, 4))` becomes
+    /// `max(t1 + 3, t2 + 2, 4)`
+    pub fn normalize(formulas: Vec<Self>) -> Self {
+        let mut var_map = BTreeMap::new();
+        let mut constant_acc = None;
+        for formula in formulas {
+            let Self { terms, constant } = formula;
+            for (var, cur_factor) in terms {
+                var_map
+                    .entry(var)
+                    .and_modify(|prev_factor| {
+                        *prev_factor = std::cmp::max(cur_factor, *prev_factor)
+                    })
+                    .or_insert(cur_factor);
+            }
+            match (constant_acc, constant) {
+                (_, None) => (),
+                (None, Some(_)) => constant_acc = constant,
+                (Some(c1), Some(c2)) => constant_acc = Some(std::cmp::max(c1, c2)),
+            }
+        }
+        Self {
+            terms: var_map.into_iter().collect(),
+            constant: constant_acc,
+        }
+    }
+
+    /// Substitute in formulas for each type parameter and normalize the final formula
+    pub fn subst(
+        &self,
+        mut map: BTreeMap<TypeParameterIndex, DepthFormula>,
+    ) -> PartialVMResult<DepthFormula> {
+        let Self { terms, constant } = self;
+        let mut formulas = vec![];
+        if let Some(constant) = constant {
+            formulas.push(DepthFormula::constant(*constant))
+        }
+        for (t_i, c_i) in terms {
+            let Some(mut u_form) = map.remove(t_i) else {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!("{t_i:?} missing mapping")),
+                );
+            };
+            u_form.add(*c_i);
+            formulas.push(u_form)
+        }
+        Ok(DepthFormula::normalize(formulas))
+    }
+
+    /// Given depths for each type parameter, solve the formula giving the max depth for the type
+    pub fn solve(&self, tparam_depths: &[u64]) -> PartialVMResult<u64> {
+        let Self { terms, constant } = self;
+        let mut depth = constant.as_ref().copied().unwrap_or(0);
+        for (t_i, c_i) in terms {
+            match tparam_depths.get(*t_i as usize) {
+                None => {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!("{t_i:?} missing mapping")),
+                    )
+                }
+                Some(ty_depth) => depth = std::cmp::max(depth, ty_depth.saturating_add(*c_i)),
+            }
+        }
+        Ok(depth)
+    }
+
+    // `max(t_0 + c_0, ..., t_n + c_n, c_base) + c`. But our representation forces us to distribute
+    // the addition, so it becomes `max(t_0 + c_0 + c, ..., t_n + c_n + c, c_base + c)`
+    pub fn add(&mut self, c: u64) {
+        let Self { terms, constant } = self;
+        for (_t_i, c_i) in terms {
+            *c_i = (*c_i).saturating_add(c);
+        }
+        if let Some(cbase) = constant.as_mut() {
+            *cbase = (*cbase).saturating_add(c);
+        }
+    }
+}
+
+impl CachedDatatype {
+    pub fn get_struct(&self) -> PartialVMResult<&StructType> {
+        match &self.datatype_info {
+            Datatype::Struct(struct_type) => Ok(struct_type),
+            x @ Datatype::Enum(_) => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message(format!("Expected struct type but got {:?}", x))),
+        }
+    }
+
+    pub fn get_enum(&self) -> PartialVMResult<&EnumType> {
+        match &self.datatype_info {
+            Datatype::Enum(enum_type) => Ok(enum_type),
+            x @ Datatype::Struct(_) => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message(format!("Expected enum type but got {:?}", x))),
+        }
+    }
+
+    pub fn datatype_key(&self) -> VTableKey {
+        VTableKey {
+            package_key: *self.runtime_id.address(),
+            inner_pkg_key: IntraPackageKey {
+                module_name: self.runtime_id.name().to_owned(),
+                member_name: self.name.to_owned(),
+            },
+        }
+    }
+}
+
+impl CachedDatatype {
+    pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
+        self.type_parameters.iter().map(|param| &param.constraints)
+    }
+}
+
+impl VTableKey {
+    pub fn from_tag(tag: &StructTag) -> Self {
+        Self {
+            package_key: tag.address,
+            inner_pkg_key: IntraPackageKey {
+                module_name: tag.module.clone(),
+                member_name: tag.name.clone(),
+            },
+        }
+    }
+}
+
+impl From<(RuntimePackageId, Identifier, Identifier)> for VTableKey {
+    fn from(
+        (package_key, module_name, member_name): (RuntimePackageId, Identifier, Identifier),
+    ) -> Self {
+        Self {
+            package_key,
+            inner_pkg_key: IntraPackageKey {
+                module_name,
+                member_name,
+            },
+        }
+    }
+}
+
+impl Type {
+    fn clone_impl(&self, depth: usize) -> PartialVMResult<Type> {
+        self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), depth)
+    }
+
+    fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
+    where
+        F: Fn(u16, usize) -> PartialVMResult<Type> + Copy,
+    {
+        if depth > TYPE_DEPTH_MAX {
+            return Err(PartialVMError::new(StatusCode::VM_MAX_TYPE_DEPTH_REACHED));
+        }
+        let res = match self {
+            Type::TyParam(idx) => subst(*idx, depth)?,
+            Type::Bool => Type::Bool,
+            Type::U8 => Type::U8,
+            Type::U16 => Type::U16,
+            Type::U32 => Type::U32,
+            Type::U64 => Type::U64,
+            Type::U128 => Type::U128,
+            Type::U256 => Type::U256,
+            Type::Address => Type::Address,
+            Type::Signer => Type::Signer,
+            Type::Vector(ty) => Type::Vector(Box::new(ty.apply_subst(subst, depth + 1)?)),
+            Type::Reference(ty) => Type::Reference(Box::new(ty.apply_subst(subst, depth + 1)?)),
+            Type::MutableReference(ty) => {
+                Type::MutableReference(Box::new(ty.apply_subst(subst, depth + 1)?))
+            }
+            Type::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+            Type::DatatypeInstantiation(def_inst) => {
+                let (def_idx, instantiation) = &**def_inst;
+                let mut inst = vec![];
+                for ty in instantiation {
+                    inst.push(ty.apply_subst(subst, depth + 1)?)
+                }
+                Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+            }
+        };
+        Ok(res)
+    }
+
+    pub fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
+        self.apply_subst(
+            |idx, depth| match ty_args.get(idx as usize) {
+                Some(ty) => ty.clone_impl(depth),
+                None => Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!(
+                            "type substitution failed: index out of bounds -- len {} got {}",
+                            ty_args.len(),
+                            idx
+                        )),
+                ),
+            },
+            1,
+        )
+    }
+
+    #[allow(deprecated)]
+    const LEGACY_BASE_MEMORY_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
+
+    /// Returns the abstract memory size the data structure occupies.
+    ///
+    /// This kept only for legacy reasons.
+    /// New applications should not use this.
+    pub fn size(&self) -> AbstractMemorySize {
+        use Type::*;
+
+        match self {
+            TyParam(_) | Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer => {
+                Self::LEGACY_BASE_MEMORY_SIZE
+            }
+            Vector(ty) | Reference(ty) | MutableReference(ty) => {
+                Self::LEGACY_BASE_MEMORY_SIZE + ty.size()
+            }
+            Datatype(_) => Self::LEGACY_BASE_MEMORY_SIZE,
+            DatatypeInstantiation(inst) => {
+                let (_, tys) = &**inst;
+                tys.iter()
+                    .fold(Self::LEGACY_BASE_MEMORY_SIZE, |acc, ty| acc + ty.size())
+            }
+        }
+    }
+
+    pub fn from_const_signature(constant_signature: &SignatureToken) -> PartialVMResult<Self> {
+        use SignatureToken as S;
+        use Type as L;
+
+        Ok(match constant_signature {
+            S::Bool => L::Bool,
+            S::U8 => L::U8,
+            S::U16 => L::U16,
+            S::U32 => L::U32,
+            S::U64 => L::U64,
+            S::U128 => L::U128,
+            S::U256 => L::U256,
+            S::Address => L::Address,
+            S::Vector(inner) => L::Vector(Box::new(Self::from_const_signature(inner)?)),
+            // Not yet supported
+            S::Datatype(_) | S::DatatypeInstantiation(_) => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Unable to load const type signature".to_string()),
+                )
+            }
+            // Not allowed/Not meaningful
+            S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Unable to load const type signature".to_string()),
+                )
+            }
+        })
+    }
+
+    pub fn check_vec_ref(&self, inner_ty: &Type, is_mut: bool) -> PartialVMResult<Type> {
+        match self {
+            Type::MutableReference(inner) => match &**inner {
+                Type::Vector(inner) => {
+                    inner.check_eq(inner_ty)?;
+                    Ok(inner.as_ref().clone())
+                }
+                _ => Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("VecMutBorrow expects a vector reference".to_string()),
+                ),
+            },
+            Type::Reference(inner) if !is_mut => match &**inner {
+                Type::Vector(inner) => {
+                    inner.check_eq(inner_ty)?;
+                    Ok(inner.as_ref().clone())
+                }
+                _ => Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("VecMutBorrow expects a vector reference".to_string()),
+                ),
+            },
+            _ => Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("VecMutBorrow expects a vector reference".to_string()),
+            ),
+        }
+    }
+
+    pub fn check_eq(&self, other: &Self) -> PartialVMResult<()> {
+        if self != other {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Type mismatch: expected {:?}, got {:?}", self, other),
+                ),
+            );
+        }
+        Ok(())
+    }
+
+    pub fn check_ref_eq(&self, expected_inner: &Self) -> PartialVMResult<()> {
+        match self {
+            Type::MutableReference(inner) | Type::Reference(inner) => {
+                inner.check_eq(expected_inner)
+            }
+            _ => Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("VecMutBorrow expects a vector reference".to_string()),
+            ),
         }
     }
 }
@@ -978,7 +1429,7 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::VirtualCall(a) => write!(
                 f,
                 "Call(~{}::{}::{})",
-                a.package_key, a.module_name, a.function_name
+                a.package_key, a.inner_pkg_key.module_name, a.inner_pkg_key.member_name
             ),
             Bytecode::CallGeneric(ndx) => write!(f, "CallGeneric({})", ndx),
             Bytecode::Pack(a) => write!(f, "Pack({})", a),
@@ -1055,7 +1506,9 @@ impl std::fmt::Debug for CallType {
             CallType::Virtual(vtable) => write!(
                 f,
                 "Virtual({}::{}::{})",
-                vtable.package_key, vtable.module_name, vtable.function_name
+                vtable.package_key,
+                vtable.inner_pkg_key.module_name,
+                vtable.inner_pkg_key.member_name
             ),
         }
     }
@@ -1068,7 +1521,6 @@ impl std::fmt::Debug for Package {
             .field("storage_id", &self.storage_id)
             .field("runtime_id", &self.runtime_id)
             .field("loaded_modules", &self.loaded_modules)
-            .field("compiled_modules", &self.compiled_modules)
             .field("vtable", &self.vtable)
             .finish()
     }

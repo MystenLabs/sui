@@ -32,10 +32,8 @@ move-core-types.workspace = true
 move-ir-types.workspace = true
 move-compiler.workspace = true
 move-stdlib.workspace = true
-move-vm-types.workspace = true
 move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true
-move-vm-test-utils.workspace = true
 move-binary-format.workspace = true
 move-package.workspace = true
 move-prover.workspace = true
@@ -58,4 +56,4 @@ name = "build_testsuite"
 harness = false
 
 [features]
-tiered-gas = ["move-vm-test-utils/tiered-gas"]
+tiered-gas = ["move-vm-runtime/tiered-gas"]

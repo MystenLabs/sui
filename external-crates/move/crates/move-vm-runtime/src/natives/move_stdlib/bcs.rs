@@ -2,21 +2,20 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::natives::make_module_natives;
 use crate::{
+    execution::values::{values_impl::Reference, Value},
+    jit::runtime::ast::Type,
     native_charge_gas_early_exit,
-    natives::functions::{NativeContext, NativeFunction},
+    natives::{
+        functions::{NativeContext, NativeFunction, NativeResult},
+        make_module_natives,
+    },
+    pop_arg,
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
     vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE,
-};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
-    pop_arg,
-    values::{values_impl::Reference, Value},
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, sync::Arc};

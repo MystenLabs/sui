@@ -3,19 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    execution::values::Value,
+    jit::runtime::ast::Type,
     native_charge_gas_early_exit,
     natives::{
-        functions::{NativeContext, NativeFunction},
+        functions::{NativeContext, NativeFunction, NativeResult},
         make_module_natives,
     },
+    pop_arg,
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
     account_address::AccountAddress,
     gas_algebra::{InternalGas, InternalGasPerArg, NumArgs},
-};
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, sync::Arc};

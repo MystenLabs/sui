@@ -25,6 +25,12 @@ pub struct ArenaPointer<T>(*const T);
 // Impls
 // -----------------------------------------------
 
+impl Default for Arena {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Arena {
     pub fn new() -> Self {
         Arena(Bump::new())
@@ -68,21 +74,25 @@ pub fn null_ptr<T>() -> *const [T] {
     unsafe { MaybeUninit::<*const [T]>::zeroed().assume_init() }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[inline]
 pub fn ref_slice<'a, T>(value: *const [T]) -> &'a [T] {
     unsafe { &*value }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[inline]
 pub fn mut_to_ref_slice<'a, T>(value: *mut [T]) -> &'a [T] {
     unsafe { &*value }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[inline]
 pub fn to_mut_ref_slice<'a, T>(value: *mut [T]) -> &'a mut [T] {
     unsafe { &mut *value }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[inline]
 pub fn to_ref<'a, T>(value: *const T) -> &'a T {
     unsafe { &*value as &T }

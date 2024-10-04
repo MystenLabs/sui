@@ -14,6 +14,7 @@ use once_cell::sync::Lazy;
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeSet,
     fmt::{Display, Formatter},
     str::FromStr,
 };
@@ -125,6 +126,40 @@ impl TypeTag {
                 TypeTag::Vector(x) => x.abstract_size_for_gas_metering(),
                 TypeTag::Struct(y) => y.abstract_size_for_gas_metering(),
             }
+    }
+
+    /// Return all of the addresses used inside of the type.
+    pub fn all_addresses(&self) -> BTreeSet<AccountAddress> {
+        fn find_addresses_recur(account_addresses: &mut BTreeSet<AccountAddress>, tag: &TypeTag) {
+            match tag {
+                TypeTag::Bool
+                | TypeTag::U8
+                | TypeTag::U64
+                | TypeTag::U128
+                | TypeTag::U16
+                | TypeTag::U32
+                | TypeTag::U256
+                | TypeTag::Address
+                | TypeTag::Signer => (),
+                TypeTag::Vector(inner) => find_addresses_recur(account_addresses, &*inner),
+                TypeTag::Struct(tag) => {
+                    let StructTag {
+                        address,
+                        module: _,
+                        name: _,
+                        type_params,
+                    } = &**tag;
+                    account_addresses.insert(*address);
+                    for tag in type_params {
+                        find_addresses_recur(account_addresses, tag)
+                    }
+                }
+            }
+        }
+
+        let mut account_addresses = BTreeSet::new();
+        find_addresses_recur(&mut account_addresses, self);
+        account_addresses
     }
 }
 

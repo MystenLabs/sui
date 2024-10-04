@@ -380,7 +380,8 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
             .iter()
             .map(|(idx, bytes, layout)| {
                 let value =
-                    move_vm_types::values::Value::simple_deserialize(bytes, layout).unwrap();
+                    move_vm_runtime::execution::values::Value::simple_deserialize(bytes, layout)
+                        .unwrap();
                 (idx, value)
             })
             .collect::<Vec<_>>();
@@ -388,7 +389,7 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
             .iter()
             .map(|(idx, v)| {
                 let mut buf = String::new();
-                move_vm_types::values::debug::print_value(&mut buf, v).unwrap();
+                move_vm_runtime::execution::values::debug::print_value(&mut buf, v).unwrap();
                 format!("local#{}: {}", idx, buf)
             })
             .collect::<Vec<_>>()
@@ -399,14 +400,15 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
         let values = return_values
             .iter()
             .map(|(bytes, layout)| {
-                move_vm_types::values::Value::simple_deserialize(bytes, layout).unwrap()
+                move_vm_runtime::execution::values::Value::simple_deserialize(bytes, layout)
+                    .unwrap()
             })
             .collect::<Vec<_>>();
         let printed = values
             .iter()
             .map(|v| {
                 let mut buf = String::new();
-                move_vm_types::values::debug::print_value(&mut buf, v).unwrap();
+                move_vm_runtime::execution::values::debug::print_value(&mut buf, v).unwrap();
                 buf
             })
             .collect::<Vec<_>>()
