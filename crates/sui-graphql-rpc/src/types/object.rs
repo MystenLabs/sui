@@ -1265,6 +1265,10 @@ impl Loader<HistoricalKey> for Db {
     async fn load(&self, keys: &[HistoricalKey]) -> Result<HashMap<HistoricalKey, Object>, Error> {
         use objects_version::dsl as v;
 
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         let id_versions: BTreeSet<_> = keys
             .iter()
             .map(|key| (key.id.into_vec(), key.version as i64))
@@ -1280,6 +1284,9 @@ impl Loader<HistoricalKey> for Db {
                             .into_boxed();
 
                         for (id, version) in id_versions.iter().cloned() {
+                            // TODO: consider using something other than `or_filter` to avoid returning
+                            // all results when `id_versions` is empty. It is mitigated today by the
+                            // early return above.
                             query = query
                                 .or_filter(v::object_id.eq(id).and(v::object_version.eq(version)));
                         }
@@ -1538,6 +1545,10 @@ impl Loader<PointLookupKey> for Db {
     ) -> Result<HashMap<PointLookupKey, Option<Vec<u8>>>, Error> {
         use full_objects_history::dsl as f;
 
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         let id_versions: BTreeSet<_> = keys
             .iter()
             .map(|key| (key.id.into_vec(), key.version as i64))
@@ -1551,6 +1562,9 @@ impl Loader<PointLookupKey> for Db {
                             .into_boxed();
 
                         for (id, version) in id_versions.iter() {
+                            // TODO: consider using something other than `or_filter` to avoid returning
+                            // all results when `id_versions` is empty. It is mitigated today by the
+                            // early return above.
                             query = query.or_filter(
                                 f::object_id
                                     .eq(id.clone())
