@@ -4,6 +4,8 @@
 use futures::{future::join_all, StreamExt};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
+use sui_indexer::tempdb::TempDb;
+use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
@@ -60,6 +62,9 @@ use sui_types::transaction::{
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{error, info};
+use crate::indexer_utils::IndexerHandle;
+
+mod indexer_utils;
 
 const NUM_VALIDATOR: usize = 4;
 
@@ -90,15 +95,23 @@ pub struct TestCluster {
     pub swarm: Swarm,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
+
+    // The following clients might be different from those in fullnode_handle if
+    // the rpc is powered by indexer.
+    pub rpc_client: HttpClient,
+    pub sui_client: SuiClient,
+    pub rpc_url: String,
+
+    pub indexer_handle: Option<indexer_utils::IndexerHandle>,
 }
 
 impl TestCluster {
     pub fn rpc_client(&self) -> &HttpClient {
-        &self.fullnode_handle.rpc_client
+        &self.rpc_client
     }
 
     pub fn sui_client(&self) -> &SuiClient {
-        &self.fullnode_handle.sui_client
+        &self.sui_client
     }
 
     pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
@@ -106,7 +119,7 @@ impl TestCluster {
     }
 
     pub fn rpc_url(&self) -> &str {
-        &self.fullnode_handle.rpc_url
+        &self.rpc_url
     }
 
     pub fn wallet(&mut self) -> &WalletContext {
@@ -829,6 +842,8 @@ pub struct TestClusterBuilder {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     validator_state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig,
+
+    indexer_backed_rpc: bool,
 }
 
 impl TestClusterBuilder {
@@ -859,6 +874,7 @@ impl TestClusterBuilder {
             validator_state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig::Global(
                 true,
             ),
+            indexer_backed_rpc: false,
         }
     }
 
@@ -1057,6 +1073,11 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_indexer_backed_rpc(mut self) -> Self {
+        self.indexer_backed_rpc = true;
+        self
+    }
+
     pub async fn build(mut self) -> TestCluster {
         // All test clusters receive a continuous stream of random JWKs.
         // If we later use zklogin authenticated transactions in tests we will need to supply
@@ -1087,20 +1108,83 @@ impl TestClusterBuilder {
             }));
         }
 
+        let mut temp_data_ingestion_dir = None;
+        let mut data_ingestion_path = None;
+
+        if self.indexer_backed_rpc {
+            if self.data_ingestion_dir.is_none() {
+                temp_data_ingestion_dir = Some(tempfile::tempdir().unwrap());
+                self.data_ingestion_dir = Some(temp_data_ingestion_dir.as_ref().unwrap().path().to_path_buf());
+                assert!(self.data_ingestion_dir.is_some());
+            }
+            assert!(self.data_ingestion_dir.is_some());
+            data_ingestion_path = Some(self.data_ingestion_dir.as_ref().unwrap().to_path_buf());
+            // self.data_ingestion_dir.get_or_insert(temp_data_ingestion_dir.path().to_path_buf());
+        }
+
         let swarm = self.start_swarm().await.unwrap();
         let working_dir = swarm.dir();
-
-        let mut wallet_conf: SuiClientConfig =
-            PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
 
         let fullnode = swarm.fullnodes().next().unwrap();
         let json_rpc_address = fullnode.config().json_rpc_address;
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 
+        let (rpc_client, sui_client, rpc_url, indexer_handle) = if self.indexer_backed_rpc {
+            let mut cancellation_tokens = vec![];
+            let database = TempDb::new().unwrap();
+            let data_ingestion_path = data_ingestion_path.unwrap();
+            let pg_address = database.database().url().as_str().to_owned();
+            let indexer_jsonrpc_address = format!("127.0.0.1:{}", get_available_port("127.0.0.1"));
+            // let graphql_address = format!("127.0.0.1:{}", get_available_port("127.0.0.1"));
+            // let graphql_url = format!("http://{graphql_address}");
+
+            let fullnode_url = fullnode_handle.rpc_url.clone();
+            // Start indexer writer
+            let (_, _, writer_token) = start_test_indexer(
+                pg_address.clone(),
+                fullnode_url.clone(),
+                ReaderWriterConfig::writer_mode(None, None),
+                data_ingestion_path.clone(),
+            )
+            .await;
+            cancellation_tokens.push(writer_token.drop_guard());
+
+            // Start indexer jsonrpc service
+            let (_, _, reader_token) = start_test_indexer(
+                pg_address.clone(),
+                fullnode_url.clone(),
+                ReaderWriterConfig::reader_mode(indexer_jsonrpc_address.clone()),
+                data_ingestion_path.clone(),
+            )
+            .await;
+            cancellation_tokens.push(reader_token.drop_guard());
+
+            sleep(Duration::from_secs(5)).await;
+
+            let rpc_address = format!("http://{}", indexer_jsonrpc_address);
+
+            println!("Indexer jsonrpc address: {}", rpc_address);
+
+            let rpc_client = HttpClientBuilder::default().build(&rpc_address).unwrap();
+
+            let sui_client = SuiClientBuilder::default().build(&rpc_address).await.unwrap();
+
+            let indexer_handle = Some(IndexerHandle {
+                database,
+                data_ingestion_dir: temp_data_ingestion_dir,
+                cancellation_tokens,
+            });
+            (rpc_client, sui_client, rpc_address, indexer_handle)
+        } else {
+            (fullnode_handle.rpc_client.clone(), fullnode_handle.sui_client.clone(), fullnode_handle.rpc_url.clone(), None)
+        };
+
+        let mut wallet_conf: SuiClientConfig =
+            PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
         wallet_conf.envs.push(SuiEnv {
             alias: "localnet".to_string(),
-            rpc: fullnode_handle.rpc_url.clone(),
+            rpc: rpc_url.clone(),
             ws: None,
             basic_auth: None,
         });
@@ -1118,6 +1202,10 @@ impl TestClusterBuilder {
             swarm,
             wallet,
             fullnode_handle,
+            rpc_client,
+            sui_client,
+            rpc_url,
+            indexer_handle,
         }
     }
 

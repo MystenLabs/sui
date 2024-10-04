@@ -15862,6 +15862,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-framework",
+ "sui-indexer",
  "sui-json-rpc",
  "sui-json-rpc-api",
  "sui-json-rpc-types",
@@ -15875,7 +15876,9 @@ dependencies = [
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
+ "tempfile",
  "tokio",
+ "tokio-util 0.7.10",
  "tracing",
 ]
 
