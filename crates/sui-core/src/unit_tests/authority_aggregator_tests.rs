@@ -1428,6 +1428,30 @@ async fn test_handle_transaction_response() {
         |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
     )
     .await;
+
+    println!("Case 10 - Retryable Transaction (EpochEnded Error)");
+    let epoch_ended_error = SuiError::EpochEnded(0);
+
+    // 2 out 4 validators return epoch ended error
+    for (name, _) in authority_keys.iter().skip(2) {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(epoch_ended_error.clone());
+    }
+
+    // Some authorities return EpochEnded error while others return signed-tx
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
+    agg.committee_store
+        .insert_new_committee(&committee_1)
+        .unwrap();
+    assert_resp_err(
+        &agg,
+        tx.clone().into(), |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
+        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 0 && *actual_epoch == 1)
+    )
+    .await;
 }
 
 #[tokio::test]
