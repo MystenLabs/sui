@@ -15,6 +15,10 @@ const EBadTxHashLength: u64 = 0;
 /// Attempt to get the most recent created object ID when none has been created.
 const ENoIDsCreated: u64 = 1;
 
+#[test_only]
+/// Attempt to set the epoch number to a value less than the current epoch number.
+const EEpochCantGoBackward: u64 = 2;
+
 /// Information about the transaction currently being executed.
 /// This cannot be constructed by a transaction--it is a privileged object created by
 /// the VM and passed in to the entrypoint of the transaction as `&mut TxContext`.
@@ -138,4 +142,10 @@ public fun increment_epoch_number(self: &mut TxContext) {
 #[test_only]
 public fun increment_epoch_timestamp(self: &mut TxContext, delta_ms: u64) {
     self.epoch_timestamp_ms = self.epoch_timestamp_ms + delta_ms
+}
+
+#[test_only]
+public fun set_epoch(self: &mut TxContext, epoch: u64) {
+    assert!(epoch >= self.epoch, EEpochCantGoBackward);
+    self.epoch = epoch
 }

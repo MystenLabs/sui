@@ -148,6 +148,11 @@ public fun later_epoch(
     next_epoch(scenario, sender)
 }
 
+/// Advance the scenario to `epoch`
+public fun set_epoch(scenario: &mut Scenario, epoch: u64) {
+    scenario.ctx.set_epoch(epoch)
+}
+
 /// Ends the test scenario
 /// Returns the results from the final transaction
 /// Will abort if shared or immutable objects were deleted, transferred, or wrapped.

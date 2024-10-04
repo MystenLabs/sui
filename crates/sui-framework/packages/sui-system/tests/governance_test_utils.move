@@ -203,7 +203,7 @@ module sui_system::governance_test_utils {
             ctx
         );
         system_state.request_add_stake(coin::mint_for_testing<SUI>(init_stake_amount * MIST_PER_SUI, ctx), validator, ctx);
-        system_state.request_add_validator_for_testing(0, ctx);
+        system_state.request_add_validator_for_testing(ctx);
         test_scenario::return_shared(system_state);
     }
 
@@ -246,7 +246,7 @@ module sui_system::governance_test_utils {
         let mut system_state = scenario.take_shared<SuiSystemState>();
         let ctx = scenario.ctx();
 
-        system_state.request_add_validator_for_testing(0, ctx);
+        system_state.request_add_validator_for_testing(ctx);
         test_scenario::return_shared(system_state);
     }
 
