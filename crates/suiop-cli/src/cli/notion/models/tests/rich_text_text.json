@@ -1,0 +1,19 @@
+{
+  "type": "text",
+  "text": {
+    "content": "Rich",
+    "link": {
+      "url": "https://github.com/jakeswenson/notion"
+    }
+  },
+  "annotations": {
+    "bold": true,
+    "italic": true,
+    "strikethrough": true,
+    "underline": true,
+    "code": true,
+    "color": "default"
+  },
+  "plain_text": "Rich",
+  "href": "https://github.com/jakeswenson/notion"
+}

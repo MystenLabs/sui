@@ -1,0 +1,26 @@
+{
+  "type": "mention",
+  "mention": {
+    "type": "user",
+    "user": {
+      "object": "user",
+      "id": "1118608e-35e8-4fa3-aef7-a4ced85ce8e0",
+      "name": "John Doe",
+      "avatar_url": "https://secure.notion-static.com/e6a352a8-8381-44d0-a1dc-9ed80e62b53d.jpg",
+      "type": "person",
+      "person": {
+        "email": "john.doe@gmail.com"
+      }
+    }
+  },
+  "annotations": {
+    "bold": false,
+    "italic": false,
+    "strikethrough": false,
+    "underline": false,
+    "code": false,
+    "color": "default"
+  },
+  "plain_text": "@John Doe",
+  "href": null
+}

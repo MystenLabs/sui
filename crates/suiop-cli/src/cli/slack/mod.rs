@@ -19,7 +19,7 @@ pub use slack_api::*;
 pub struct Slack {
     client: Client,
     pub channels: Vec<Channel>,
-    pub users: Vec<User>,
+    pub users: Vec<SlackUser>,
 }
 
 fn get_serialize_filepath(subname: &str) -> PathBuf {
@@ -42,9 +42,12 @@ pub fn serialize_to_file<T: Serialize>(subname: &str, obj: &Vec<T>) -> Result<()
 ///
 /// Otherwise return None
 pub fn deserialize_from_file<T: DeserializeOwned>(subname: &str) -> Option<Vec<T>> {
+    let force_refresh = std::env::var("FORCE_REFRESH").is_ok();
     let mut result = None;
     let file_path = get_serialize_filepath(subname);
-    if let Ok(metadata) = file_path.metadata() {
+    if force_refresh {
+        result = None;
+    } else if let Ok(metadata) = file_path.metadata() {
         if let Ok(modified) = metadata.modified() {
             if let Ok(elapsed) = modified.elapsed() {
                 // 1 day

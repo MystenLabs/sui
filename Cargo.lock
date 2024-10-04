@@ -15307,6 +15307,7 @@ dependencies = [
  "strum 0.24.1",
  "tabled",
  "tempfile",
+ "thiserror",
  "tokio",
  "toml_edit 0.19.10",
  "tracing",

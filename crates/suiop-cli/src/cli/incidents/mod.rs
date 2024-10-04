@@ -3,8 +3,10 @@
 
 mod incident;
 mod jira;
+pub(crate) mod notion;
 mod pd;
 mod selection;
+mod user;
 
 use crate::cli::slack::Slack;
 use anyhow::Result;
