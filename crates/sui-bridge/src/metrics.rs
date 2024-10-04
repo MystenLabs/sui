@@ -319,7 +319,7 @@ impl BridgeMetrics {
             )
             .unwrap(),
             current_bridge_voting_rights: register_int_gauge_vec_with_registry!(
-                "current_bridge_voting_right",
+                "current_bridge_voting_rights",
                 "Current voting power in the bridge committee",
                 &["authority"],
                 registry
