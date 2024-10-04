@@ -123,7 +123,7 @@ native fun internal_multi_scalar_mul(
 native fun internal_pairing(type_: u8, e1: &vector<u8>, e2: &vector<u8>): vector<u8>;
 
 native fun internal_from(from_type_: u8, to_type_: u8, e: &vector<u8>): vector<u8>;
-public(package) native fun internal_sum(type_: u8, e: &vector<vector<u8>>): vector<u8>;
+native fun internal_sum(type_: u8, e: &vector<vector<u8>>): vector<u8>;
 
 // Helper function for encoding a given u64 number as bytes in a given buffer.
 public(package) fun set_as_prefix(x: u64, big_endian: bool, buffer: &mut vector<u8>) {
