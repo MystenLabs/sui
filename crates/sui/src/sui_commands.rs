@@ -33,7 +33,9 @@ use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
 use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, SimpleFaucet};
-use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
+use sui_indexer::test_utils::{
+    start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
+};
 
 use sui_graphql_rpc::{
     config::{ConnectionConfig, ServiceConfig},
@@ -704,20 +706,20 @@ async fn start(
             .map_err(|_| anyhow!("Invalid indexer host and port"))?;
         info!("Starting the indexer service at {indexer_address}");
         // Start in reader mode
-        start_test_indexer(
+        start_indexer_jsonrpc_for_testing(
             pg_address.clone(),
             fullnode_url.clone(),
-            ReaderWriterConfig::reader_mode(indexer_address.to_string()),
-            data_ingestion_path.clone(),
+            indexer_address.to_string(),
+            None,
         )
         .await;
         info!("Indexer started in reader mode");
-        // Start in writer mode
-        start_test_indexer(
+        start_indexer_writer_for_testing(
             pg_address.clone(),
-            fullnode_url.clone(),
-            ReaderWriterConfig::writer_mode(None, None),
-            data_ingestion_path.clone(),
+            None,
+            None,
+            Some(data_ingestion_path.clone()),
+            None,
         )
         .await;
         info!("Indexer started in writer mode");
