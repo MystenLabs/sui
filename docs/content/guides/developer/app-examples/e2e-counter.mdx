@@ -216,8 +216,12 @@ You need a way to create a new `Counter` object. Do this by creating a new `Crea
 
 ```tsx
 import { Button, Container } from '@radix-ui/themes';
+import { LoaderCircle } from '@radix-ui/react-loader';
+import { useState } from 'react';
 
 export function CreateCounter( { onCreated }: { onCreated: (id: string) => void; } ) {
+  
+  const [waitingForTxn, setWaitingForTxn] = useState(false);
 
   function create() {
     // TODO
@@ -231,7 +235,11 @@ export function CreateCounter( { onCreated }: { onCreated: (id: string) => void;
           create();
         }}
       >
-        Create Counter
+        {waitingForTxn ? (
+					<LoaderCircle className="animate-spin" />
+				) : (
+					"Create Counter"
+				)}
       </Button>
     </Container>
   );
@@ -256,19 +264,10 @@ Next, call the `useSignAndExecuteTransaction` hook in your component, which prov
 ```tsx
 export function CreateCounter( { onCreated }: { onCreated: (id: string) => void; } ) {
   const counterPackageId = useNetworkVariable("counterPackageId");
-  const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction({
-    execute: async ({ bytes, signature }) =>
-      await suiClient.executeTransactionBlock({
-        transactionBlock: bytes,
-        signature,
-        options: {
-          // Raw effects are required so the effects can be reported back to the wallet
-          showRawEffects: true,
-          showEffects: true,
-        },
-      }),
-  });	
+	const suiClient = useSuiClient();
+	const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+	const [waitingForTxn, setWaitingForTxn] = useState(false);
+
 
   function create() {
     // TODO
@@ -282,7 +281,11 @@ export function CreateCounter( { onCreated }: { onCreated: (id: string) => void;
           create();
         }}
       >
-        Create Counter
+        {waitingForTxn ? (
+					<LoaderCircle className="animate-spin" />
+				) : (
+					"Create Counter"
+				)}
       </Button>
     </Container>
   );
@@ -332,36 +335,54 @@ export function Counter({ id }: { id: string }) {
     },
   });
 
+  const [waitingForTxn, setWaitingForTxn] = useState("");
+
   const executeMoveCall = (method: "increment" | "reset") => {
     // TODO
   };
 
   if (isPending) return <Text>Loading...</Text>;
 
-  if (error) return <Text>Error: {error.message}</Text>;
+	if (error) return <Text>Error: {error.message}</Text>;
 
-  if (!data.data) return <Text>Not found</Text>;
+	if (!data.data) return <Text>Not found</Text>;
 
-  const ownedByCurrentAccount =
-    getCounterFields(data.data)?.owner === currentAccount?.address;
+	const ownedByCurrentAccount =
+		getCounterFields(data.data)?.owner === currentAccount?.address;
 
-  return (
-    <>
-      <Heading size="3">Counter {id}</Heading>
+	return (
+		<>
+			<Heading size="3">Counter {id}</Heading>
 
-      <Flex direction="column" gap="2">
-        <Text>Count: {getCounterFields(data.data)?.value}</Text>
-        <Flex direction="row" gap="2">
-          <Button onClick={() => executeMoveCall("increment")}>
-            Increment
-          </Button>
-          {ownedByCurrentAccount ? (
-            <Button onClick={() => executeMoveCall("reset")}>Reset</Button>
-          ) : null}
-        </Flex>
-      </Flex>
-    </>
-  );
+			<Flex direction="column" gap="2">
+				<Text>Count: {getCounterFields(data.data)?.value}</Text>
+				<Flex direction="row" gap="2">
+					<Button
+						onClick={() => executeMoveCall("increment")}
+						disabled={waitingForTxn !== ""}
+					>
+						{waitingForTxn === "increment" ? (
+							<LoaderCircle className="animate-spin" />
+						) : (
+							"Increment"
+						)}
+					</Button>
+					{ownedByCurrentAccount ? (
+						<Button
+							onClick={() => executeMoveCall("reset")}
+							disabled={waitingForTxn !== ""}
+						>
+							{waitingForTxn === "reset" ? (
+								<LoaderCircle className="animate-spin" />
+							) : (
+								"Reset"
+							)}
+						</Button>
+					) : null}
+				</Flex>
+			</Flex>
+		</>
+	);
 }
 function getCounterFields(data: SuiObjectData) {
   if (data.content?.dataType !== "moveObject") {
