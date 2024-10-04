@@ -663,7 +663,8 @@ pub struct ConstructionMetadata {
     pub sender: SuiAddress,
     pub coins: Vec<ObjectRef>,
     pub objects: Vec<ObjectRef>,
-    pub total_coin_value: u64,
+    #[serde(with = "str_format")]
+    pub total_coin_value: i128,
     pub gas_price: u64,
     pub budget: u64,
     pub currency: Option<Currency>,
@@ -987,7 +988,8 @@ impl InternalOperation {
                     let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
                     (validator, state, amount)
                 } else {
-                    let amount = builder.pure(metadata.total_coin_value - metadata.budget)?;
+                    let amount =
+                        builder.pure(metadata.total_coin_value as u64 - metadata.budget)?;
                     let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
                     let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
                     (validator, state, amount)
