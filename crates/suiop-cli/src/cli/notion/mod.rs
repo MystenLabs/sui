@@ -209,7 +209,7 @@ impl NotionApi {
         let result = self
             .make_json_request(
                 self.client
-                    .post(&format!(
+                    .post(format!(
                         "https://api.notion.com/v1/databases/{database_id}/query",
                         database_id = database.as_id()
                     ))
@@ -227,7 +227,7 @@ impl NotionApi {
         block_id: T,
     ) -> Result<ListResponse<Block>, Error> {
         let result = self
-            .make_json_request(self.client.get(&format!(
+            .make_json_request(self.client.get(format!(
                 "https://api.notion.com/v1/blocks/{block_id}/children",
                 block_id = block_id.as_id()
             )))
