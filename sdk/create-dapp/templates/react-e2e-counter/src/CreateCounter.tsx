@@ -2,6 +2,8 @@ import { Transaction } from "@mysten/sui/transactions";
 import { Button, Container } from "@radix-ui/themes";
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useNetworkVariable } from "./networkConfig";
+import { useState } from "react";
+import { LoaderCircle } from "lucide-react";
 
 export function CreateCounter({
   onCreated,
@@ -10,18 +12,8 @@ export function CreateCounter({
 }) {
   const counterPackageId = useNetworkVariable("counterPackageId");
   const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction({
-    execute: async ({ bytes, signature }) =>
-      await suiClient.executeTransactionBlock({
-        transactionBlock: bytes,
-        signature,
-        options: {
-          // Raw effects are required so the effects can be reported back to the wallet
-          showRawEffects: true,
-          showEffects: true,
-        },
-      }),
-  });
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const [waitingForTxn, setWaitingForTxn] = useState(false);
 
   return (
     <Container>
@@ -30,13 +22,20 @@ export function CreateCounter({
         onClick={() => {
           create();
         }}
+        disabled={waitingForTxn}
       >
-        Create Counter
+        {waitingForTxn ? (
+          <LoaderCircle className="animate-spin" />
+        ) : (
+          "Create Counter"
+        )}
       </Button>
     </Container>
   );
 
   function create() {
+    setWaitingForTxn(true);
+
     const tx = new Transaction();
 
     tx.moveCall({
@@ -49,11 +48,23 @@ export function CreateCounter({
         transaction: tx,
       },
       {
-        onSuccess: (result) => {
-          const objectId = result.effects?.created?.[0]?.reference?.objectId;
-          if (objectId) {
-            onCreated(objectId);
-          }
+        onSuccess: ({ digest }) => {
+          suiClient
+            .waitForTransaction({
+              digest: digest,
+              options: {
+                showEffects: true,
+              },
+            })
+            .then((tx) => {
+              const objectId = tx.effects?.created?.[0]?.reference?.objectId;
+
+              if (objectId) {
+                onCreated(objectId);
+              }
+
+              setWaitingForTxn(false);
+            });
         },
       },
     );
