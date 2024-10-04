@@ -83,8 +83,8 @@ module sui_system::staking_pool {
     }
 
     /// An alternative to `StakedSui` that holds the pool token amount instead of the SUI balance.
-    /// StakedSui objects can be converted to FungibleStakedSuis after the initial warmup period. 
-    /// The advantage of this is that you can now merge multiple StakedSui objects from different 
+    /// StakedSui objects can be converted to FungibleStakedSuis after the initial warmup period.
+    /// The advantage of this is that you can now merge multiple StakedSui objects from different
     /// activation epochs into a single FungibleStakedSui object.
     public struct FungibleStakedSui has key, store {
         id: UID,
@@ -177,7 +177,9 @@ module sui_system::staking_pool {
         pool.pending_pool_token_withdraw = pool.pending_pool_token_withdraw + pool_token_withdraw_amount;
 
         // If the pool is inactive, we immediately process the withdrawal.
-        if (is_inactive(pool)) process_pending_stake_withdraw(pool);
+        if (is_inactive(pool) || pool.is_preactive()) {
+            process_pending_stake_withdraw(pool);
+        };
 
         // TODO: implement withdraw bonding period here.
         principal_withdraw.join(rewards_withdraw);
@@ -196,7 +198,7 @@ module sui_system::staking_pool {
 
         let latest_exchange_rate = pool_token_exchange_rate_at_epoch(pool, tx_context::epoch(ctx));
         let fungible_staked_sui_data: &mut FungibleStakedSuiData = bag::borrow_mut(
-            &mut pool.extra_fields, 
+            &mut pool.extra_fields,
             FungibleStakedSuiDataKey {}
         );
 
@@ -267,7 +269,7 @@ module sui_system::staking_pool {
 
         assert!(pool_id == object::id(pool), EWrongPool);
         assert!(
-            tx_context::epoch(ctx) >= stake_activation_epoch, 
+            tx_context::epoch(ctx) >= stake_activation_epoch,
             ECannotMintFungibleStakedSuiYet
         );
 
@@ -275,29 +277,29 @@ module sui_system::staking_pool {
 
 
         let exchange_rate_at_staking_epoch = pool_token_exchange_rate_at_epoch(
-            pool, 
+            pool,
             stake_activation_epoch
         );
 
         let pool_token_amount = get_token_amount(
-            &exchange_rate_at_staking_epoch, 
+            &exchange_rate_at_staking_epoch,
             balance::value(&principal)
         );
 
         if (!bag::contains(&pool.extra_fields, FungibleStakedSuiDataKey {})) {
             bag::add(
-                &mut pool.extra_fields, 
-                FungibleStakedSuiDataKey {}, 
-                FungibleStakedSuiData { 
-                    id: object::new(ctx), 
-                    total_supply: pool_token_amount, 
+                &mut pool.extra_fields,
+                FungibleStakedSuiDataKey {},
+                FungibleStakedSuiData {
+                    id: object::new(ctx),
+                    total_supply: pool_token_amount,
                     principal
                 }
             );
-        } 
+        }
         else {
             let fungible_staked_sui_data: &mut FungibleStakedSuiData = bag::borrow_mut(
-                &mut pool.extra_fields, 
+                &mut pool.extra_fields,
                 FungibleStakedSuiDataKey {}
             );
             fungible_staked_sui_data.total_supply = fungible_staked_sui_data.total_supply + pool_token_amount;
@@ -473,8 +475,8 @@ module sui_system::staking_pool {
 
     public use fun split_fungible_staked_sui as FungibleStakedSui.split;
     public fun split_fungible_staked_sui(
-        fungible_staked_sui: &mut FungibleStakedSui, 
-        split_amount: u64, 
+        fungible_staked_sui: &mut FungibleStakedSui,
+        split_amount: u64,
         ctx: &mut TxContext
     ): FungibleStakedSui {
         assert!(split_amount <= fungible_staked_sui.value, EInsufficientPoolTokenBalance);
