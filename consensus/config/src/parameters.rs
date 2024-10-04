@@ -116,7 +116,7 @@ impl Parameters {
             // Exercise hitting blocks per fetch limit.
             10
         } else {
-            1000
+            200
         }
     }
 

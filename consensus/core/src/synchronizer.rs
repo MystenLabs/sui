@@ -41,9 +41,14 @@ use crate::{
 /// The number of concurrent fetch blocks requests per authority
 const FETCH_BLOCKS_CONCURRENCY: usize = 5;
 
+/// Timeouts when fetching blocks.
 const FETCH_REQUEST_TIMEOUT: Duration = Duration::from_millis(2_000);
-
 const FETCH_FROM_PEERS_TIMEOUT: Duration = Duration::from_millis(4_000);
+
+/// Max number of blocks to fetch per request.
+/// This value should be chosen to match the timeouts above,
+/// so Parameters::max_block_per_fetch is not used here.
+const MAX_BLOCKS_PER_FETCH: usize = 20;
 
 const MAX_AUTHORITIES_TO_FETCH_PER_BLOCK: usize = 2;
 
@@ -328,7 +333,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             // task will take care syncing whatever is leftover.
                             let missing_block_refs = missing_block_refs
                                 .into_iter()
-                                .take(self.context.parameters.max_blocks_per_fetch)
+                                .take(MAX_BLOCKS_PER_FETCH)
                                 .collect();
 
                             let blocks_guard = self.inflight_blocks_map.lock_blocks(missing_block_refs, peer_index);
@@ -910,7 +915,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         // Attempt to fetch only up to a max of blocks
         let missing_blocks = missing_blocks
             .into_iter()
-            .take(MAX_PEERS * context.parameters.max_blocks_per_fetch)
+            .take(MAX_PEERS * MAX_BLOCKS_PER_FETCH)
             .collect::<Vec<_>>();
         let mut missing_blocks_per_authority = vec![0; context.committee.size()];
         for block in &missing_blocks {
@@ -946,7 +951,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let highest_rounds = Self::get_highest_accepted_rounds(dag_state, &context);
 
         // Send the initial requests
-        for blocks in missing_blocks.chunks(context.parameters.max_blocks_per_fetch) {
+        for blocks in missing_blocks.chunks(MAX_BLOCKS_PER_FETCH) {
             let peer = peers
                 .next()
                 .expect("Possible misconfiguration as a peer should be found");
