@@ -691,7 +691,11 @@ module sui_system::sui_system_tests {
                 0,
                 ctx,
             );
-            system_state.request_add_validator_for_testing(0, ctx);
+            let staked_sui = system_state.request_add_stake_non_entry(
+              coin::mint_for_testing(100_000_000_000, ctx),new_validator_addr, ctx
+            );
+            transfer::public_transfer(staked_sui, @0x0);
+            system_state.request_add_validator_for_testing(ctx);
         };
 
         scenario.next_tx(new_validator_addr);
@@ -1095,8 +1099,8 @@ module sui_system::sui_system_tests {
         let mut system_state = scenario.take_shared<SuiSystemState>();
 
         let staked_sui = system_state.request_add_stake_non_entry(
-            coin::mint_for_testing(100_000_000_000, scenario.ctx()), 
-            @0x1, 
+            coin::mint_for_testing(100_000_000_000, scenario.ctx()),
+            @0x1,
             scenario.ctx()
         );
 
@@ -1107,14 +1111,14 @@ module sui_system::sui_system_tests {
 
         let mut system_state = scenario.take_shared<SuiSystemState>();
         let fungible_staked_sui = system_state.convert_to_fungible_staked_sui(
-            staked_sui, 
+            staked_sui,
             scenario.ctx()
         );
 
         assert!(fungible_staked_sui.value() == 100_000_000_000, 0);
 
         let sui = system_state.redeem_fungible_staked_sui(
-            fungible_staked_sui, 
+            fungible_staked_sui,
             scenario.ctx()
         );
 
