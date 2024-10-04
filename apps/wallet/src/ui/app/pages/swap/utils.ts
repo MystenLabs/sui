@@ -14,7 +14,7 @@ import {
 	useFormatCoin,
 } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
-import { type ObjectOwner, type TransactionEffects } from '@mysten/sui/client';
+import { type TransactionEffects } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { normalizeStructTag, SUI_DECIMALS, SUI_TYPE_ARG } from '@mysten/sui/utils';
 import BigNumber from 'bignumber.js';
