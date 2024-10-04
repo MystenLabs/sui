@@ -207,6 +207,10 @@ impl<C: NetworkClient> RoundProber<C> {
                 .round_prober_quorum_round_gaps
                 .with_label_values(&[&authority.hostname])
                 .set((high - low) as i64);
+            node_metrics
+                .round_prober_low_quorum_round
+                .with_label_values(&[&authority.hostname])
+                .set(*low as i64);
             // The gap can be negative if this validator is lagging behind the network.
             node_metrics
                 .round_prober_current_round_gaps
@@ -231,7 +235,7 @@ impl<C: NetworkClient> RoundProber<C> {
             .set(propagation_delay as i64);
         if let Err(e) = self
             .core_thread_dispatcher
-            .set_propagation_delay(propagation_delay)
+            .set_propagation_delay_and_quorum_rounds(propagation_delay, quorum_rounds.clone())
         {
             tracing::warn!(
                 "Failed to set propagation delay {propagation_delay} on Core: {:?}",
@@ -293,6 +297,7 @@ mod test {
     use consensus_config::AuthorityIndex;
     use parking_lot::{Mutex, RwLock};
 
+    use super::QuorumRound;
     use crate::{
         block::BlockRef,
         commit::CommitRange,
@@ -309,6 +314,7 @@ mod test {
     struct FakeThreadDispatcher {
         highest_received_rounds: Vec<Round>,
         propagation_delay: Mutex<Round>,
+        quorum_rounds: Mutex<Vec<QuorumRound>>,
     }
 
     impl FakeThreadDispatcher {
@@ -316,11 +322,16 @@ mod test {
             Self {
                 highest_received_rounds,
                 propagation_delay: Mutex::new(0),
+                quorum_rounds: Mutex::new(Vec::new()),
             }
         }
 
         fn propagation_delay(&self) -> Round {
             *self.propagation_delay.lock()
+        }
+
+        fn quorum_rounds(&self) -> Vec<QuorumRound> {
+            self.quorum_rounds.lock().clone()
         }
     }
 
@@ -345,7 +356,13 @@ mod test {
             unimplemented!()
         }
 
-        fn set_propagation_delay(&self, delay: Round) -> Result<(), CoreError> {
+        fn set_propagation_delay_and_quorum_rounds(
+            &self,
+            delay: Round,
+            quorum_rounds: Vec<QuorumRound>,
+        ) -> Result<(), CoreError> {
+            let mut quorum_round_per_authority = self.quorum_rounds.lock();
+            *quorum_round_per_authority = quorum_rounds;
             let mut propagation_delay = self.propagation_delay.lock();
             *propagation_delay = delay;
             Ok(())
@@ -492,6 +509,18 @@ mod test {
             ]
         );
 
+        assert_eq!(
+            core_thread_dispatcher.quorum_rounds(),
+            vec![
+                (100, 105),
+                (0, 115),
+                (103, 130),
+                (0, 0),
+                (105, 150),
+                (106, 160),
+                (107, 170)
+            ]
+        );
         // 110 - 100 = 10
         assert_eq!(propagation_delay, 10);
         assert_eq!(core_thread_dispatcher.propagation_delay(), 10);
