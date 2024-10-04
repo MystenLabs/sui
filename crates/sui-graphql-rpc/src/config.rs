@@ -219,6 +219,7 @@ pub struct InternalFeatureConfig {
 #[derive(clap::Args, Default)]
 pub struct TxExecFullNodeConfig {
     /// RPC URL for the fullnode to send transactions to execute and dry-run.
+    #[clap(long)]
     pub(crate) node_rpc_url: Option<String>,
 }
 
