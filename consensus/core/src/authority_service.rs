@@ -600,20 +600,21 @@ async fn make_recv_future<T: Clone>(
 
 #[cfg(test)]
 mod tests {
-    use crate::commit::CommitRange;
-    use crate::test_dag_builder::DagBuilder;
     use crate::{
         authority_service::AuthorityService,
         block::BlockAPI,
         block::{BlockRef, SignedBlock, TestBlock, VerifiedBlock},
+        commit::CommitRange,
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         dag_state::DagState,
         error::ConsensusResult,
         network::{BlockStream, NetworkClient, NetworkService},
+        round_prober::QuorumRound,
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
+        test_dag_builder::DagBuilder,
         Round,
     };
     use async_trait::async_trait;
@@ -665,7 +666,11 @@ mod tests {
             todo!()
         }
 
-        fn set_propagation_delay(&self, _delay: Round) -> Result<(), CoreError> {
+        fn set_propagation_delay_and_quorum_rounds(
+            &self,
+            _delay: Round,
+            _quorum_rounds: Vec<QuorumRound>,
+        ) -> Result<(), CoreError> {
             todo!()
         }
 
