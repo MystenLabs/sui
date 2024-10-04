@@ -1465,9 +1465,12 @@ impl AuthorityPerEpochStore {
         // don't need to worry about equivocating.
         batch.delete_batch(&tables.signed_effects_digests, digests)?;
 
+        // Note that this does not delete keys for random transactions. The worst case result
+        // of this is that we restart at the end of the epoch and load about 160k keys into
+        // memory.
         batch.delete_batch(
             &tables.assigned_shared_object_versions_v2,
-            digests.iter().map(|d| TransactionKey::from(*d)),
+            digests.iter().map(|d| TransactionKey::Digest(*d)),
         )?;
 
         batch.delete_batch(&tables.user_signatures_for_checkpoints, digests)?;
@@ -3780,17 +3783,17 @@ impl AuthorityPerEpochStore {
                     .iter()
                     .map(|tx| (tx.transaction, sequence_number)),
             )?;
-
-            // find all pending checkpoints <= commit_height and remove them
-            let iter = tables
-                .pending_checkpoints_v2
-                .safe_range_iter(0..=commit_height);
-            let keys = iter
-                .map(|c| c.map(|(h, _)| h))
-                .collect::<Result<Vec<_>, _>>()?;
-
-            batch.delete_batch(&tables.pending_checkpoints_v2, &keys)?;
         }
+
+        // find all pending checkpoints <= commit_height and remove them
+        let iter = tables
+            .pending_checkpoints_v2
+            .safe_range_iter(0..=commit_height);
+        let keys = iter
+            .map(|c| c.map(|(h, _)| h))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        batch.delete_batch(&tables.pending_checkpoints_v2, &keys)?;
 
         Ok(batch.write()?)
     }
