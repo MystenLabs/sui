@@ -873,12 +873,8 @@ pub fn internal_sum(
                         .map(bls::G1ElementUncompressed::from_trusted_byte_array)
                 })
                 .collect::<FastCryptoResult<Vec<_>>>()
-                .and_then(|terms| bls::G1ElementUncompressed::sum(&terms))
-                .map(|e| {
-                    bls::G1ElementUncompressed::from(&e)
-                        .into_byte_array()
-                        .to_vec()
-                })
+                .map(|e| bls::G1ElementUncompressed::from(&e))
+                .map(|e| e.into_byte_array().to_vec())
         }
         _ => Err(FastCryptoError::InvalidInput),
     };
