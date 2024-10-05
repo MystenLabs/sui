@@ -40,7 +40,7 @@ async fn run(
     duration: Option<Duration>,
 ) -> Result<ExecutorProgress> {
     let options = ReaderOptions {
-        tick_interal_ms: 10,
+        tick_interval_ms: 10,
         batch_size: 1,
         ..Default::default()
     };
