@@ -69,11 +69,13 @@ pub async fn run_bridge_node(
         Ok(vec![])
     }?;
 
+    let ip = server_config
+        .ip_addr
+        .map(|ip_addr| parse_ip(ip_addr))
+        .ok_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)));
+
     // Start Server
-    let socket_address = SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        server_config.server_listen_port,
-    );
+    let socket_address = SocketAddr::new(ip, server_config.server_listen_port);
     Ok(run_server(
         &socket_address,
         BridgeRequestHandler::new(
