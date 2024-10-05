@@ -10,6 +10,7 @@ use crate::config::{
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::server::APPLICATION_JSON;
+use crate::types::BridgeCommittee;
 use crate::types::{AddTokensOnSuiAction, BridgeAction};
 use anyhow::anyhow;
 use ethers::core::k256::ecdsa::SigningKey;
@@ -24,6 +25,7 @@ use fastcrypto::secp256k1::Secp256k1KeyPair;
 use fastcrypto::traits::EncodeDecodeBase64;
 use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -37,10 +39,12 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
 use sui_types::bridge::{BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME};
+use sui_types::committee::StakeUnit;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::ToFromBytes;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::BRIDGE_PACKAGE_ID;
 
@@ -379,4 +383,29 @@ pub async fn wait_for_server_to_be_up(server_url: String, timeout_sec: u64) -> a
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
     Ok(())
+}
+
+/// Return a mappping from validator name to their bridge voting power.
+/// If a validator is not in the Sui committee, we will use its base URL as the name.
+pub async fn get_committee_voting_power_by_name(
+    bridge_committee: &Arc<BridgeCommittee>,
+    system_state: SuiSystemStateSummary,
+) -> BTreeMap<String, StakeUnit> {
+    let mut sui_committee: BTreeMap<_, _> = system_state
+        .active_validators
+        .iter()
+        .map(|v| (v.sui_address, v.name.clone()))
+        .collect();
+    bridge_committee
+        .members()
+        .iter()
+        .map(|v| {
+            (
+                sui_committee
+                    .remove(&v.1.sui_address)
+                    .unwrap_or(v.1.base_url.clone()),
+                v.1.voting_power,
+            )
+        })
+        .collect()
 }

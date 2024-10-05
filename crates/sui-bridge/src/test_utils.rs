@@ -65,6 +65,7 @@ pub fn get_test_authority_and_key(
     let (_, kp): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
     let pubkey = kp.public().clone();
     let authority = BridgeAuthority {
+        sui_address: SuiAddress::random_for_testing_only(),
         pubkey: pubkey.clone(),
         voting_power,
         base_url: format!("http://127.0.0.1:{}", port),
