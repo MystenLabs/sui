@@ -428,6 +428,7 @@ async fn extract_bridge(
                     );
                     String::from(bridge_host)
                 });
+                let bridge_name = format!("bridge-{}", bridge_name);
 
                 let bridge_request_url = bridge_url.as_str();
 
