@@ -27,9 +27,8 @@ use sui_storage::object_store::util::put;
 use crate::config::UploadOptions;
 use crate::database::ConnectionPool;
 use crate::errors::{Context, IndexerError};
-use crate::handlers::pruner::PrunableTable;
-use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
+use crate::handlers::{CommitterWatermark, EpochToCommit};
 use crate::metrics::IndexerMetrics;
 use crate::models::checkpoints::StoredChainIdentifier;
 use crate::models::checkpoints::StoredCheckpoint;
@@ -297,10 +296,13 @@ impl PgIndexerStore {
 
         let mut connection = self.pool.get().await?;
 
-        objects_snapshot::table
-            .select(max(objects_snapshot::checkpoint_sequence_number))
-            .first::<Option<i64>>(&mut connection)
+        watermarks::table
+            .select(watermarks::checkpoint_hi)
+            .filter(watermarks::entity.eq("objects_snapshot"))
+            .first::<i64>(&mut connection)
             .await
+            // Handle case where the watermark is not set yet
+            .optional()
             .map_err(Into::into)
             .map(|v| v.map(|v| v as u64))
             .context(
@@ -1459,10 +1461,8 @@ impl PgIndexerStore {
 
     async fn update_watermarks_upper_bound(
         &self,
-        tables: Vec<PrunableTable>,
-        epoch: u64,
-        cp: u64,
-        tx: u64,
+        tables: Vec<String>,
+        watermark: CommitterWatermark,
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
@@ -1474,16 +1474,7 @@ impl PgIndexerStore {
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             let upper_bound_updates = tables
                 .into_iter()
-                .map(|table| {
-                    let reader_upper_bound = table.map_to_reader_unit(cp, tx);
-
-                    StoredWatermark::from_upper_bound_update(
-                        table.as_ref(),
-                        epoch,
-                        cp,
-                        reader_upper_bound,
-                    )
-                })
+                .map(|table| StoredWatermark::from_upper_bound_update(table.as_ref(), watermark))
                 .collect::<Vec<_>>();
             async {
                 diesel::insert_into(watermarks::table)
@@ -2172,13 +2163,10 @@ impl IndexerStore for PgIndexerStore {
 
     async fn update_watermarks_upper_bound(
         &self,
-        tables: Vec<PrunableTable>,
-        epoch: u64,
-        cp: u64,
-        tx: u64,
+        tables: Vec<String>,
+        watermark: CommitterWatermark,
     ) -> Result<(), IndexerError> {
-        self.update_watermarks_upper_bound(tables, epoch, cp, tx)
-            .await
+        self.update_watermarks_upper_bound(tables, watermark).await
     }
 }
 

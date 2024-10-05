@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::watermarks::{self};
+use crate::{
+    handlers::CommitterWatermark,
+    schema::watermarks::{self},
+};
 use diesel::prelude::*;
 
 /// Represents a row in the `watermarks` table.
@@ -39,17 +42,12 @@ pub struct StoredWatermark {
 }
 
 impl StoredWatermark {
-    pub fn from_upper_bound_update(
-        entity: &str,
-        epoch_hi: u64,
-        checkpoint_hi: u64,
-        reader_hi: u64,
-    ) -> Self {
+    pub fn from_upper_bound_update(entity: &str, watermark: CommitterWatermark) -> Self {
         StoredWatermark {
             entity: entity.to_string(),
-            epoch_hi: epoch_hi as i64,
-            checkpoint_hi: checkpoint_hi as i64,
-            reader_hi: reader_hi as i64,
+            epoch_hi: watermark.epoch as i64,
+            checkpoint_hi: watermark.cp as i64,
+            reader_hi: watermark.tx as i64,
             ..StoredWatermark::default()
         }
     }

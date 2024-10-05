@@ -16,7 +16,7 @@ use crate::store::IndexerStore;
 use crate::types::IndexerResult;
 use strum::IntoEnumIterator;
 
-use super::{CheckpointDataToCommit, EpochToCommit};
+use super::{CheckpointDataToCommit, CommitterWatermark, EpochToCommit};
 
 pub(crate) const CHECKPOINT_COMMIT_BATCH_SIZE: usize = 100;
 
@@ -138,14 +138,7 @@ async fn commit_checkpoints<S>(
     }
 
     let first_checkpoint_seq = checkpoint_batch.first().as_ref().unwrap().sequence_number;
-    let (epoch_id, last_checkpoint_seq, last_tx_seq) = {
-        let checkpoint = checkpoint_batch.last().unwrap();
-        (
-            checkpoint.epoch,
-            checkpoint.sequence_number,
-            checkpoint.max_tx_sequence_number,
-        )
-    };
+    let committer_watermark = CommitterWatermark::from(checkpoint_batch.last().unwrap());
 
     let guard = metrics.checkpoint_db_commit_latency.start_timer();
     let tx_batch = tx_batch.into_iter().flatten().collect::<Vec<_>>();
@@ -228,13 +221,10 @@ async fn commit_checkpoints<S>(
         })
         .expect("Persisting data into DB should not fail.");
 
+    let table_names: Vec<String> = PrunableTable::iter().map(|v| v.to_string()).collect();
+
     state
-        .update_watermarks_upper_bound(
-            PrunableTable::iter().collect(),
-            epoch_id,
-            last_checkpoint_seq,
-            last_tx_seq,
-        )
+        .update_watermarks_upper_bound(table_names, committer_watermark)
         .await
         .tap_err(|e| {
             error!(
@@ -262,19 +252,19 @@ async fn commit_checkpoints<S>(
         elapsed,
         "Checkpoint {}-{} committed with {} transactions.",
         first_checkpoint_seq,
-        last_checkpoint_seq,
+        committer_watermark.cp,
         tx_count,
     );
     metrics
         .latest_tx_checkpoint_sequence_number
-        .set(last_checkpoint_seq as i64);
+        .set(committer_watermark.cp as i64);
     metrics
         .total_tx_checkpoint_committed
         .inc_by(checkpoint_num as u64);
     metrics.total_transaction_committed.inc_by(tx_count as u64);
     metrics
         .transaction_per_checkpoint
-        .observe(tx_count as f64 / (last_checkpoint_seq - first_checkpoint_seq + 1) as f64);
+        .observe(tx_count as f64 / (committer_watermark.cp - first_checkpoint_seq + 1) as f64);
     // 1000.0 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
     // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
     metrics

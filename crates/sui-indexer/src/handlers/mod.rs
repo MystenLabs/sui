@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use futures::{FutureExt, StreamExt};
 
+use sui_rest_api::CheckpointData;
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -64,7 +65,7 @@ impl<T> CommonHandler<T> {
 
     async fn start_transform_and_load(
         &self,
-        cp_receiver: mysten_metrics::metered_channel::Receiver<(u64, T)>,
+        cp_receiver: mysten_metrics::metered_channel::Receiver<(CommitterWatermark, T)>,
         cancel: CancellationToken,
     ) -> IndexerResult<()> {
         let checkpoint_commit_batch_size = std::env::var("CHECKPOINT_COMMIT_BATCH_SIZE")
@@ -74,7 +75,9 @@ impl<T> CommonHandler<T> {
         let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(cp_receiver)
             .ready_chunks(checkpoint_commit_batch_size);
 
-        let mut unprocessed = BTreeMap::new();
+        // Mapping of ordered checkpoint data to ensure that we process them in order. The key is
+        // just the checkpoint sequence number, and the tuple is (CommitterWatermark, T).
+        let mut unprocessed: BTreeMap<u64, (CommitterWatermark, _)> = BTreeMap::new();
         let mut tuple_batch = vec![];
         let mut next_cp_to_process = self
             .handler
@@ -95,7 +98,7 @@ impl<T> CommonHandler<T> {
                         return Ok(());
                     }
                     for tuple in tuple_chunk {
-                        unprocessed.insert(tuple.0, tuple);
+                        unprocessed.insert(tuple.0.cp, tuple);
                     }
                 }
                 Some(None) => break, // Stream has ended
@@ -114,7 +117,7 @@ impl<T> CommonHandler<T> {
             }
 
             if !tuple_batch.is_empty() {
-                let last_checkpoint_seq = tuple_batch.last().unwrap().0;
+                let committer_watermark = tuple_batch.last().unwrap().0;
                 let batch = tuple_batch.into_iter().map(|t| t.1).collect();
                 self.handler.load(batch).await.map_err(|e| {
                     IndexerError::PostgresWriteError(format!(
@@ -123,7 +126,7 @@ impl<T> CommonHandler<T> {
                         e
                     ))
                 })?;
-                self.handler.set_watermark_hi(last_checkpoint_seq).await?;
+                self.handler.set_watermark_hi(committer_watermark).await?;
                 tuple_batch = vec![];
             }
         }
@@ -145,8 +148,9 @@ pub trait Handler<T>: Send + Sync {
     /// read high watermark of the table DB
     async fn get_watermark_hi(&self) -> IndexerResult<Option<u64>>;
 
-    /// set high watermark of the table DB, also update metrics.
-    async fn set_watermark_hi(&self, watermark_hi: u64) -> IndexerResult<()>;
+    /// Updates the relevant entries on the `watermarks` table with the full `CommitterWatermark`,
+    /// which tracks the latest epoch, cp, and tx sequence number of the committed batch.
+    async fn set_watermark_hi(&self, watermark: CommitterWatermark) -> IndexerResult<()>;
 
     /// By default, return u64::MAX, which means no extra waiting is needed before commiting;
     /// get max committable checkpoint, for handlers that want to wait for some condition before commiting,
@@ -154,5 +158,36 @@ pub trait Handler<T>: Send + Sync {
     /// which waits for the lag between snapshot and latest checkpoint to reach a certain threshold.
     async fn get_max_committable_checkpoint(&self) -> IndexerResult<u64> {
         Ok(u64::MAX)
+    }
+}
+
+/// Represents the latest epoch, checkpoint, and transaction of the batch that was just committed.
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub struct CommitterWatermark {
+    pub epoch: u64,
+    pub cp: u64,
+    pub tx: u64,
+}
+
+impl From<&IndexedCheckpoint> for CommitterWatermark {
+    fn from(checkpoint: &IndexedCheckpoint) -> Self {
+        Self {
+            epoch: checkpoint.epoch,
+            cp: checkpoint.sequence_number,
+            tx: checkpoint.network_total_transactions.saturating_sub(1),
+        }
+    }
+}
+
+impl From<&CheckpointData> for CommitterWatermark {
+    fn from(checkpoint: &CheckpointData) -> Self {
+        Self {
+            epoch: checkpoint.checkpoint_summary.epoch,
+            cp: checkpoint.checkpoint_summary.sequence_number,
+            tx: checkpoint
+                .checkpoint_summary
+                .network_total_transactions
+                .saturating_sub(1),
+        }
     }
 }
