@@ -1484,7 +1484,7 @@ impl PgIndexerStore {
                     .set((
                         watermarks::epoch_hi.eq(excluded(watermarks::epoch_hi)),
                         watermarks::checkpoint_hi.eq(excluded(watermarks::checkpoint_hi)),
-                        watermarks::reader_hi.eq(excluded(watermarks::reader_hi)),
+                        watermarks::tx_hi.eq(excluded(watermarks::tx_hi)),
                     ))
                     .execute(conn)
                     .await
