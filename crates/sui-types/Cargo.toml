@@ -95,7 +95,7 @@ passkey-client.workspace = true
 passkey-authenticator.workspace = true
 
 [[bench]]
-name = "accumulator_bench"
+name = "multisig_bench"
 harness = false
 
 [features]
