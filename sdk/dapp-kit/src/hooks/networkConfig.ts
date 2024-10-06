@@ -10,7 +10,7 @@ export type NetworkConfig<T extends object = object> = SuiClientOptions & {
 };
 
 export function createNetworkConfig<
-	const T extends Record<string, Config>,
+	T extends Record<string, Config>,
 	Config extends NetworkConfig<Variables> = T[keyof T],
 	Variables extends object = NonNullable<Config['variables']>,
 >(networkConfig: T) {
