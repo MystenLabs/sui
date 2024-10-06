@@ -13274,6 +13274,7 @@ dependencies = [
  "sui-bridge",
  "sui-config",
  "sui-data-ingestion-core",
+ "sui-indexer",
  "sui-indexer-builder",
  "sui-json-rpc-types",
  "sui-sdk",

@@ -33,8 +33,8 @@ use tracing::{info, instrument};
 pub mod governance_verifier;
 pub mod handler;
 
-#[cfg(test)]
-pub(crate) mod mock_handler;
+#[cfg(any(feature = "test-utils", test))]
+pub mod mock_handler;
 
 pub const APPLICATION_JSON: &str = "application/json";
 
