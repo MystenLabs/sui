@@ -121,6 +121,8 @@ struct ZkLoginParams {
     pub verify_legacy_zklogin_address: bool,
     // Flag to determine whether zkLogin inside multisig is accepted.
     pub accept_zklogin_in_multisig: bool,
+    // Flag to determine whether passkey inside multisig is accepted.
+    pub accept_passkey_in_multisig: bool,
     /// Value that sets the upper bound for max_epoch in zkLogin signature.
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
 }
@@ -134,6 +136,7 @@ impl SignatureVerifier {
         env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
+        accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
     ) -> Self {
         Self {
@@ -161,6 +164,7 @@ impl SignatureVerifier {
                 env,
                 verify_legacy_zklogin_address,
                 accept_zklogin_in_multisig,
+                accept_passkey_in_multisig,
                 zklogin_max_epoch_upper_bound_delta,
             },
         }
@@ -385,6 +389,7 @@ impl SignatureVerifier {
                     self.zk_login_params.env,
                     self.zk_login_params.verify_legacy_zklogin_address,
                     self.zk_login_params.accept_zklogin_in_multisig,
+                    self.zk_login_params.accept_passkey_in_multisig,
                     self.zk_login_params.zklogin_max_epoch_upper_bound_delta,
                 );
                 verify_sender_signed_data_message_signatures(
