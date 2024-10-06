@@ -28,6 +28,7 @@ tempfile.workspace = true
 tap.workspace = true
 sui-protocol-config.workspace = true
 sui-rest-api.workspace = true
+tokio-retry.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

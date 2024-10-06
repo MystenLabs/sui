@@ -76,7 +76,8 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                 remote_store_url,
                 remote_store_options,
                 reader_options,
-            );
+            )
+            .await;
         spawn_monitored_task!(checkpoint_reader.run());
 
         for pool in std::mem::take(&mut self.pools) {
