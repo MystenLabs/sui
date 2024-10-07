@@ -1,5 +1,12 @@
 # @mysten/sui.js
 
+## 1.12.0
+
+### Minor Changes
+
+- 5436a90: Update GraphQL schemas
+- 5436a90: add deriveDynamicFieldID util
+
 ## 1.11.0
 
 ### Minor Changes
