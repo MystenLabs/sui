@@ -1,0 +1,9 @@
+{
+  "id": "uX",
+  "type": "select",
+  "select": {
+    "id": "9c",
+    "name": "Reserved",
+    "color": "green"
+  }
+}

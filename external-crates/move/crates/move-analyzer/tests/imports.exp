@@ -7,8 +7,7 @@ TypeDef: no info
 On Hover:
 module Symbols::M9
 
-A module doc comment
-
+ A module doc comment
 
 -- test 1 -------------------
 use line: 8, use_ndx: 0
@@ -69,20 +68,20 @@ module Symbols::M2
 -- test 8 -------------------
 use line: 11, use_ndx: 1
 Use: 'SomeOtherStruct', start: 22, end: 37
-Def: 'SomeOtherStruct', line: 2, def char: 11
-TypeDef: 'SomeOtherStruct', line: 2, char: 11
+Def: 'SomeOtherStruct', line: 2, def char: 18
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M2::SomeOtherStruct has drop {
+public struct Symbols::M2::SomeOtherStruct has drop {
 	some_field: u64
 }
 
 -- test 9 -------------------
 use line: 11, use_ndx: 2
 Use: 'S', start: 41, end: 42
-Def: 'SomeOtherStruct', line: 2, def char: 11
-TypeDef: 'SomeOtherStruct', line: 2, char: 11
+Def: 'SomeOtherStruct', line: 2, def char: 18
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M2::SomeOtherStruct has drop {
+public struct Symbols::M2::SomeOtherStruct has drop {
 	some_field: u64
 }
 
@@ -105,10 +104,10 @@ module Symbols::M1
 -- test 12 -------------------
 use line: 38, use_ndx: 1
 Use: 'S', start: 27, end: 28
-Def: 'SomeOtherStruct', line: 2, def char: 11
-TypeDef: 'SomeOtherStruct', line: 2, char: 11
+Def: 'SomeOtherStruct', line: 2, def char: 18
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M2::SomeOtherStruct has drop {
+public struct Symbols::M2::SomeOtherStruct has drop {
 	some_field: u64
 }
 

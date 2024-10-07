@@ -30,6 +30,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     leader_schedule::LeaderSchedule,
+    round_prober::QuorumRound,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     threshold_clock::ThresholdClock,
     transaction::TransactionConsumer,
@@ -576,7 +577,7 @@ impl Core {
                 let Some(last_decided) = decided_leaders.last().cloned() else {
                     break;
                 };
-                tracing::info!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", decided_leaders.len());
+                tracing::debug!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", decided_leaders.len());
 
                 let mut sequenced_leaders = decided_leaders
                     .into_iter()
@@ -645,7 +646,12 @@ impl Core {
     }
 
     /// Sets the delay by round for propagating blocks to a quorum.
-    pub(crate) fn set_propagation_delay(&mut self, delay: Round) {
+    // TODO: Will set the quorum round per authority in ancestor state manager.
+    pub(crate) fn set_propagation_delay_and_quorum_rounds(
+        &mut self,
+        delay: Round,
+        _quorum_rounds: Vec<QuorumRound>,
+    ) {
         info!("Propagation round delay set to: {delay}");
         self.propagation_delay = delay;
     }
@@ -1726,7 +1732,7 @@ mod test {
         );
 
         // Use a large propagation delay to disable proposing.
-        core.set_propagation_delay(1000);
+        core.set_propagation_delay_and_quorum_rounds(1000, vec![]);
 
         // Make propagation delay the only reason for not proposing.
         core.set_subscriber_exists(true);
@@ -1735,7 +1741,7 @@ mod test {
         assert!(core.try_propose(true).unwrap().is_none());
 
         // Let Core know there is no propagation delay.
-        core.set_propagation_delay(0);
+        core.set_propagation_delay_and_quorum_rounds(0, vec![]);
 
         // Proposing now would succeed.
         assert!(core.try_propose(true).unwrap().is_some());

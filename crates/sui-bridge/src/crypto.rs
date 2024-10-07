@@ -281,6 +281,7 @@ mod tests {
                 .unwrap();
         let pubkey1 = BridgeAuthorityPublicKey::from_bytes(&public_key_bytes).unwrap();
         let authority1 = BridgeAuthority {
+            sui_address: SuiAddress::random_for_testing_only(),
             pubkey: pubkey1.clone(),
             voting_power: 2500,
             is_blocklisted: false,
@@ -292,6 +293,7 @@ mod tests {
                 .unwrap();
         let pubkey2 = BridgeAuthorityPublicKey::from_bytes(&public_key_bytes).unwrap();
         let authority2 = BridgeAuthority {
+            sui_address: SuiAddress::random_for_testing_only(),
             pubkey: pubkey2.clone(),
             voting_power: 2500,
             is_blocklisted: false,
@@ -303,6 +305,7 @@ mod tests {
                 .unwrap();
         let pubkey3 = BridgeAuthorityPublicKey::from_bytes(&public_key_bytes).unwrap();
         let authority3 = BridgeAuthority {
+            sui_address: SuiAddress::random_for_testing_only(),
             pubkey: pubkey3.clone(),
             voting_power: 2500,
             is_blocklisted: false,
@@ -314,6 +317,7 @@ mod tests {
                 .unwrap();
         let pubkey4 = BridgeAuthorityPublicKey::from_bytes(&public_key_bytes).unwrap();
         let authority4 = BridgeAuthority {
+            sui_address: SuiAddress::random_for_testing_only(),
             pubkey: pubkey4.clone(),
             voting_power: 2500,
             is_blocklisted: false,

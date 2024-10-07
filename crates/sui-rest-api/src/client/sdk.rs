@@ -4,23 +4,24 @@
 use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 use reqwest::Url;
-use sui_sdk2::types::Address;
-use sui_sdk2::types::CheckpointData;
-use sui_sdk2::types::CheckpointDigest;
-use sui_sdk2::types::CheckpointSequenceNumber;
-use sui_sdk2::types::EpochId;
-use sui_sdk2::types::Object;
-use sui_sdk2::types::ObjectId;
-use sui_sdk2::types::SignedCheckpointSummary;
-use sui_sdk2::types::SignedTransaction;
-use sui_sdk2::types::StructTag;
-use sui_sdk2::types::TransactionDigest;
-use sui_sdk2::types::ValidatorCommittee;
-use sui_sdk2::types::Version;
+use sui_sdk_types::types::Address;
+use sui_sdk_types::types::CheckpointData;
+use sui_sdk_types::types::CheckpointDigest;
+use sui_sdk_types::types::CheckpointSequenceNumber;
+use sui_sdk_types::types::EpochId;
+use sui_sdk_types::types::Object;
+use sui_sdk_types::types::ObjectId;
+use sui_sdk_types::types::SignedCheckpointSummary;
+use sui_sdk_types::types::SignedTransaction;
+use sui_sdk_types::types::StructTag;
+use sui_sdk_types::types::TransactionDigest;
+use sui_sdk_types::types::ValidatorCommittee;
+use sui_sdk_types::types::Version;
 use tap::Pipe;
 
 use crate::accounts::AccountOwnedObjectInfo;
 use crate::accounts::ListAccountOwnedObjectsQueryParameters;
+use crate::checkpoints::CheckpointResponse;
 use crate::checkpoints::ListCheckpointsQueryParameters;
 use crate::coins::CoinInfo;
 use crate::health::Threshold;
@@ -279,7 +280,7 @@ impl Client {
     pub async fn get_checkpoint(
         &self,
         checkpoint_sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Response<SignedCheckpointSummary>> {
+    ) -> Result<Response<CheckpointResponse>> {
         let url = self
             .url()
             .join(&format!("checkpoints/{checkpoint_sequence_number}"))?;
@@ -299,6 +300,7 @@ impl Client {
             limit: Some(1),
             start: None,
             direction: None,
+            contents: false,
         };
 
         let (mut page, parts) = self.list_checkpoints(&parameters).await?.into_parts();
@@ -306,6 +308,10 @@ impl Client {
         let checkpoint = page
             .pop()
             .ok_or_else(|| Error::new_message("server returned empty checkpoint list"))?;
+        let checkpoint = SignedCheckpointSummary {
+            checkpoint: checkpoint.checkpoint,
+            signature: checkpoint.signature,
+        };
 
         Ok(Response::new(checkpoint, parts))
     }
@@ -313,7 +319,7 @@ impl Client {
     pub async fn list_checkpoints(
         &self,
         parameters: &ListCheckpointsQueryParameters,
-    ) -> Result<Response<Vec<SignedCheckpointSummary>>> {
+    ) -> Result<Response<Vec<CheckpointResponse>>> {
         let url = self.url().join("checkpoints")?;
 
         let response = self
@@ -667,8 +673,8 @@ impl From<url::ParseError> for Error {
     }
 }
 
-impl From<sui_types::sui_sdk2_conversions::SdkTypeConversionError> for Error {
-    fn from(value: sui_types::sui_sdk2_conversions::SdkTypeConversionError) -> Self {
+impl From<sui_types::sui_sdk_types_conversions::SdkTypeConversionError> for Error {
+    fn from(value: sui_types::sui_sdk_types_conversions::SdkTypeConversionError) -> Self {
         Self::from_error(value)
     }
 }

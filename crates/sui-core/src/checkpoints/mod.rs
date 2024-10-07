@@ -2264,7 +2264,8 @@ impl CheckpointService {
             max_checkpoint_size_bytes,
         );
 
-        spawn_monitored_task!(builder.run());
+        let epoch_store_clone = epoch_store.clone();
+        spawn_monitored_task!(epoch_store_clone.within_alive_epoch(builder.run()));
 
         let aggregator = CheckpointAggregator::new(
             checkpoint_store.clone(),

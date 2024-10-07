@@ -23,7 +23,7 @@ use crate::config::{IngestionConfig, JsonRpcConfig, PruningOptions, SnapshotLagC
 use crate::database::ConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
-use crate::handlers::objects_snapshot_processor::start_objects_snapshot_processor;
+use crate::handlers::objects_snapshot_handler::start_objects_snapshot_handler;
 use crate::handlers::pruner::Pruner;
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
@@ -32,25 +32,7 @@ use crate::store::{IndexerStore, PgIndexerStore};
 pub struct Indexer;
 
 impl Indexer {
-    #[cfg(test)]
-    pub async fn start_writer_for_testing(
-        config: &IngestionConfig,
-        store: PgIndexerStore,
-        metrics: IndexerMetrics,
-    ) -> Result<(), IndexerError> {
-        let snapshot_config = SnapshotLagConfig::default();
-        Indexer::start_writer_with_config(
-            config,
-            store,
-            metrics,
-            snapshot_config,
-            PruningOptions::default(),
-            CancellationToken::new(),
-        )
-        .await
-    }
-
-    pub async fn start_writer_with_config(
+    pub async fn start_writer(
         config: &IngestionConfig,
         store: PgIndexerStore,
         metrics: IndexerMetrics,
@@ -62,7 +44,6 @@ impl Indexer {
             "Sui Indexer Writer (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
-
         info!("Sui Indexer Writer config: {config:?}",);
 
         let primary_watermark = store
@@ -80,7 +61,7 @@ impl Indexer {
         };
 
         // Start objects snapshot processor, which is a separate pipeline with its ingestion pipeline.
-        let (object_snapshot_worker, object_snapshot_watermark) = start_objects_snapshot_processor(
+        let (object_snapshot_worker, object_snapshot_watermark) = start_objects_snapshot_handler(
             store.clone(),
             metrics.clone(),
             snapshot_config,
@@ -95,7 +76,8 @@ impl Indexer {
             );
             assert!(epochs_to_keep > 0, "Epochs to keep must be positive");
             let pruner = Pruner::new(store.clone(), epochs_to_keep, metrics.clone())?;
-            spawn_monitored_task!(pruner.start(CancellationToken::new()));
+            let cancel_clone = cancel.clone();
+            spawn_monitored_task!(pruner.start(cancel_clone));
         }
 
         // If we already have chain identifier indexed (i.e. the first checkpoint has been indexed),
@@ -184,13 +166,14 @@ impl Indexer {
         config: &JsonRpcConfig,
         registry: &Registry,
         pool: ConnectionPool,
+        cancel: CancellationToken,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Reader (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
         let indexer_reader = IndexerReader::new(pool);
-        let handle = build_json_rpc_server(registry, indexer_reader, config)
+        let handle = build_json_rpc_server(registry, indexer_reader, config, cancel)
             .await
             .expect("Json rpc server should not run into errors upon start.");
         tokio::spawn(async move { handle.stopped().await })

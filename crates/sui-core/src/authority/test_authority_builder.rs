@@ -362,6 +362,12 @@ impl<'a> TestAuthorityBuilder<'a> {
             .await
             .unwrap();
 
+        state
+            .get_cache_commit()
+            .commit_transaction_outputs(epoch_store.epoch(), &[*genesis.transaction().digest()])
+            .await
+            .unwrap();
+
         // We want to insert these objects directly instead of relying on genesis because
         // genesis process would set the previous transaction field for these objects, which would
         // change their object digest. This makes it difficult to write tests that want to use

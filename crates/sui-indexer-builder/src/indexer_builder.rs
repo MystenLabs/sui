@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Error;
 use async_trait::async_trait;
 use futures::StreamExt;
-use prometheus::{IntCounterVec, IntGaugeVec};
+use prometheus::{IntCounterVec, IntGauge, IntGaugeVec};
 use tokio::task::JoinHandle;
 
 use crate::{Task, Tasks};
@@ -396,6 +396,14 @@ pub trait Datasource<T: Send>: Sync + Send {
                 .with_label_values(&[&format!("{}-{}", task_name_prefix, task_type_label)]),
         );
         let is_live_task = task.is_live_task;
+        let _live_tasks_tracker = if is_live_task {
+            Some(LiveTasksTracker::new(
+                self.get_inflight_live_tasks_metrics().clone(),
+                &task_name,
+            ))
+        } else {
+            None
+        };
         let join_handle = self.start_data_retrieval(task.clone(), data_sender).await?;
         let processed_checkpoints_metrics = self
             .get_tasks_processed_checkpoints_metric()
@@ -414,7 +422,13 @@ pub trait Datasource<T: Send>: Sync + Send {
         let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(data_rx)
             .ready_chunks(ingestion_batch_size);
         let mut last_saved_checkpoint = None;
-        while let Some(batch) = stream.next().await {
+        loop {
+            let batch_option = stream.next().await;
+            if batch_option.is_none() {
+                tracing::error!(task_name, "Data stream ended unexpectedly");
+                break;
+            }
+            let batch = batch_option.unwrap();
             let mut max_height = 0;
             let mut heights = vec![];
             let mut data = vec![];
@@ -513,7 +527,9 @@ pub trait Datasource<T: Send>: Sync + Send {
         if let Some(m) = &remaining_checkpoints_metric {
             m.set(0)
         }
-        join_handle.await?
+        join_handle.await?.tap_err(|err| {
+            tracing::error!(task_name, "Data retrieval task failed: {:?}", err);
+        })
     }
 
     async fn start_data_retrieval(
@@ -529,6 +545,8 @@ pub trait Datasource<T: Send>: Sync + Send {
     fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec;
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec;
+
+    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec;
 }
 
 pub enum BackfillStrategy {
@@ -539,4 +557,22 @@ pub enum BackfillStrategy {
 
 pub trait DataMapper<T, R>: Sync + Send + Clone {
     fn map(&self, data: T) -> Result<Vec<R>, anyhow::Error>;
+}
+
+struct LiveTasksTracker {
+    gauge: IntGauge,
+}
+
+impl LiveTasksTracker {
+    pub fn new(metrics: IntGaugeVec, task_name: &str) -> Self {
+        let gauge = metrics.with_label_values(&[task_name]);
+        gauge.inc();
+        Self { gauge }
+    }
+}
+
+impl Drop for LiveTasksTracker {
+    fn drop(&mut self) {
+        self.gauge.dec();
+    }
 }

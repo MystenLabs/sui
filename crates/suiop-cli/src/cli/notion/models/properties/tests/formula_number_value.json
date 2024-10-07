@@ -1,0 +1,8 @@
+{
+  "id": "abc",
+  "type": "formula",
+  "formula": {
+    "type": "number",
+    "number": 0
+  }
+}

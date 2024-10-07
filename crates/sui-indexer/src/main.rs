@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use clap::Parser;
-use tokio_util::sync::CancellationToken;
-use tracing::warn;
 
+use clap::Parser;
+use sui_indexer::backfill::backfill_runner::BackfillRunner;
 use sui_indexer::config::{Command, UploadOptions};
 use sui_indexer::database::ConnectionPool;
 use sui_indexer::db::{check_db_migration_consistency, reset_database, run_migrations};
@@ -12,8 +11,9 @@ use sui_indexer::metrics::{
     spawn_connection_pool_metric_collector, start_prometheus_server, IndexerMetrics,
 };
 use sui_indexer::restorer::formal_snapshot::IndexerFormalSnapshotRestorer;
-use sui_indexer::sql_backfill::run_sql_backfill;
 use sui_indexer::store::PgIndexerStore;
+use tokio_util::sync::CancellationToken;
+use tracing::warn;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
             run_migrations(pool.dedicated_connection().await?).await?;
             let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
 
-            Indexer::start_writer_with_config(
+            Indexer::start_writer(
                 &ingestion_config,
                 store,
                 indexer_metrics,
@@ -60,7 +60,8 @@ async fn main() -> anyhow::Result<()> {
         Command::JsonRpcService(json_rpc_config) => {
             check_db_migration_consistency(&mut pool.get().await?).await?;
 
-            Indexer::start_reader(&json_rpc_config, &registry, pool).await?;
+            Indexer::start_reader(&json_rpc_config, &registry, pool, CancellationToken::new())
+                .await?;
         }
         Command::ResetDatabase { force } => {
             if !force {
@@ -74,29 +75,18 @@ async fn main() -> anyhow::Result<()> {
         Command::RunMigrations => {
             run_migrations(pool.dedicated_connection().await?).await?;
         }
-        Command::SqlBackFill {
-            sql,
-            checkpoint_column_name,
-            first_checkpoint,
-            last_checkpoint,
+        Command::RunBackFill {
+            start,
+            end,
+            runner_kind,
             backfill_config,
         } => {
-            run_sql_backfill(
-                &sql,
-                &checkpoint_column_name,
-                first_checkpoint,
-                last_checkpoint,
-                pool,
-                backfill_config,
-            )
-            .await;
+            let total_range = start..=end;
+            BackfillRunner::run(runner_kind, pool, backfill_config, total_range).await;
         }
         Command::Restore(restore_config) => {
-            let upload_options = UploadOptions {
-                gcs_display_bucket: Some(restore_config.gcs_display_bucket.clone()),
-                gcs_cred_path: Some(restore_config.gcs_snapshot_bucket.clone()),
-            };
-            let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
+            let store =
+                PgIndexerStore::new(pool, UploadOptions::default(), indexer_metrics.clone());
             let mut formal_restorer =
                 IndexerFormalSnapshotRestorer::new(store, restore_config).await?;
             formal_restorer.restore().await?;

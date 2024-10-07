@@ -28,7 +28,7 @@ runs:
   steps:
   - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
   - name: Detect Changes
-    uses: dorny/paths-filter@v2.10.2
+    uses: dorny/paths-filter@v3
     id: diff
     with:
       filters: |

@@ -38,11 +38,10 @@ Use: 'n foo(', start: 12, end: 18
 Def: 'vector', line: 6, def char: 12
 TypeDef: no info
 On Hover:
-module std::vector
+module vector
 
-A variable-sized container that can hold any type. Indexing is 0-based, and
-vectors are growable. This module has many native functions.
-
+ A variable-sized container that can hold any type. Indexing is 0-based, and
+ vectors are growable. This module has many native functions.
 
 -- test 1 -------------------
 use line: 7, use_ndx: 1
@@ -50,7 +49,10 @@ Use: 'foo', start: 14, end: 17
 Def: 'foo', line: 6, def char: 14
 TypeDef: no info
 On Hover:
-macro fun Macros::macros::foo($i: u64, $body: |u64| -> u64): u64
+macro fun Macros::macros::foo(
+	$i: u64,
+	$body: |u64| -> u64
+): u64
 
 -- test 2 -------------------
 use line: 7, use_ndx: 2
@@ -74,7 +76,10 @@ Use: 'bar', start: 14, end: 17
 Def: 'bar', line: 14, def char: 14
 TypeDef: no info
 On Hover:
-macro fun Macros::macros::bar($i: Macros::macros::SomeStruct, $body: |Macros::macros::SomeStruct| -> Macros::macros::SomeStruct): Macros::macros::SomeStruct
+macro fun Macros::macros::bar(
+	$i: Macros::macros::SomeStruct,
+	$body: |Macros::macros::SomeStruct| -> Macros::macros::SomeStruct
+): Macros::macros::SomeStruct
 
 -- test 5 -------------------
 use line: 15, use_ndx: 1
@@ -138,7 +143,10 @@ Use: 'for_each', start: 14, end: 22
 Def: 'for_each', line: 18, def char: 14
 TypeDef: no info
 On Hover:
-macro fun Macros::macros::for_each<$T>($v: &vector<$T>, $body: |&$T| -> ())
+macro fun Macros::macros::for_each<$T>(
+	$v: &vector<$T>,
+	$body: |&$T| -> ()
+)
 
 -- test 12 -------------------
 use line: 19, use_ndx: 1
@@ -194,7 +202,10 @@ Use: 'foo', start: 24, end: 27
 Def: 'foo', line: 6, def char: 14
 TypeDef: no info
 On Hover:
-macro fun Macros::macros::foo($i: u64, $body: |u64| -> u64): u64
+macro fun Macros::macros::foo(
+	$i: u64,
+	$body: |u64| -> u64
+): u64
 
 -- test 19 -------------------
 use line: 33, use_ndx: 2
@@ -234,7 +245,10 @@ Use: 'foo', start: 68, end: 71
 Def: 'foo', line: 6, def char: 14
 TypeDef: no info
 On Hover:
-macro fun Macros::macros::foo($i: u64, $body: |u64| -> u64): u64
+macro fun Macros::macros::foo(
+	$i: u64,
+	$body: |u64| -> u64
+): u64
 
 -- test 24 -------------------
 use line: 38, use_ndx: 8
@@ -282,7 +296,10 @@ Use: 'feach', start: 11, end: 16
 Def: 'for_each', line: 18, def char: 14
 TypeDef: no info
 On Hover:
-macro fun Macros::macros::for_each<$T>($v: &vector<$T>, $body: |&$T| -> ())
+macro fun Macros::macros::for_each<$T>(
+	$v: &vector<$T>,
+	$body: |&$T| -> ()
+)
 
 -- test 30 -------------------
 use line: 52, use_ndx: 2

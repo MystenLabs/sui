@@ -11,7 +11,6 @@ use rand::{
     Rng,
 };
 use std::collections::{HashMap, HashSet};
-use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use tokio::time::{sleep, Duration, Instant};
 use tracing::{debug, trace};
@@ -126,15 +125,6 @@ async fn test_hash_collections() {
 // repeatable and deterministic.
 #[sim_test(check_determinism)]
 async fn test_net_determinism() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        // TODO: this test fails due to some non-determinism caused by submitting messages to
-        // consensus. It does not appear to be caused by this feature itself, so I'm disabling this
-        // until I have time to debug further.
-        config.set_enable_jwk_consensus_updates_for_testing(false);
-        config.set_random_beacon_for_testing(false);
-        config
-    });
-
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     let txn = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;

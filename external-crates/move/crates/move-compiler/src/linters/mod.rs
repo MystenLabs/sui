@@ -15,6 +15,7 @@ pub mod abort_constant;
 pub mod constant_naming;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
+pub mod self_assignment;
 pub mod unnecessary_conditional;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
@@ -138,7 +139,13 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "unnecessary_conditional",
         "'if' expression can be removed"
-    )
+    ),
+    (
+        SelfAssignment,
+        LinterDiagnosticCategory::Suspicious,
+        "self_assignment",
+        "assignment preserves the same value"
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -173,6 +180,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 abort_constant::AssertAbortNamedConstants.visitor(),
                 loop_without_exit::LoopWithoutExit.visitor(),
                 unnecessary_conditional::UnnecessaryConditional.visitor(),
+                self_assignment::SelfAssignmentVisitor.visitor(),
             ]
         }
     }

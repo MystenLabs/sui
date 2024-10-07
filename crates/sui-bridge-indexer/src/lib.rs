@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::{Display, Formatter};
+use strum_macros::Display;
 
 use sui_types::base_types::{SuiAddress, TransactionDigest};
 
+use crate::models::GovernanceAction as DBGovernanceAction;
 use crate::models::TokenTransferData as DBTokenTransferData;
 use crate::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 
@@ -25,6 +27,7 @@ pub mod sui_datasource;
 #[derive(Clone)]
 pub enum ProcessedTxnData {
     TokenTransfer(TokenTransfer),
+    GovernanceAction(GovernanceAction),
     Error(SuiTxnError),
 }
 
@@ -50,6 +53,17 @@ pub struct TokenTransfer {
     data_source: BridgeDataSource,
     data: Option<TokenTransferData>,
     is_finalized: bool,
+}
+
+#[derive(Clone)]
+pub struct GovernanceAction {
+    nonce: Option<u64>,
+    data_source: BridgeDataSource,
+    tx_digest: Vec<u8>,
+    sender: Vec<u8>,
+    timestamp_ms: u64,
+    action: GovernanceActionType,
+    data: serde_json::Value,
 }
 
 #[derive(Clone)]
@@ -107,6 +121,20 @@ impl SuiTxnError {
     }
 }
 
+impl GovernanceAction {
+    fn to_db(&self) -> DBGovernanceAction {
+        DBGovernanceAction {
+            nonce: self.nonce.map(|nonce| nonce as i64),
+            data_source: self.data_source.to_string(),
+            txn_digest: self.tx_digest.clone(),
+            sender_address: self.sender.to_vec(),
+            timestamp_ms: self.timestamp_ms as i64,
+            action: self.action.to_string(),
+            data: self.data.clone(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) enum TokenTransferStatus {
     Deposited,
@@ -123,6 +151,17 @@ impl Display for TokenTransferStatus {
         };
         write!(f, "{str}")
     }
+}
+
+#[derive(Clone, Display)]
+pub(crate) enum GovernanceActionType {
+    UpdateCommitteeBlocklist,
+    EmergencyOperation,
+    UpdateBridgeLimit,
+    UpdateTokenPrices,
+    UpgradeEVMContract,
+    AddSuiTokens,
+    AddEVMTokens,
 }
 
 #[derive(Clone)]

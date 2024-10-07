@@ -3,7 +3,7 @@
 import { useAppsBackend } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { type Transaction } from '@mysten/sui/transactions';
-import { toB64 } from '@mysten/sui/utils';
+import { toBase64 } from '@mysten/sui/utils';
 import { useQuery } from '@tanstack/react-query';
 
 import {
@@ -45,7 +45,7 @@ export function useDappPreflight({
 
 			if (requestType === RequestType.SIGN_TRANSACTION && transaction) {
 				const transactionBytes = await transaction.build({ client });
-				body.transactionBytes = toB64(transactionBytes);
+				body.transactionBytes = toBase64(transactionBytes);
 			}
 
 			return request<DappPreflightResponse>(

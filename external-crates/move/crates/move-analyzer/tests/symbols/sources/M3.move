@@ -1,6 +1,6 @@
 module Symbols::M3 {
 
-    struct ParamStruct<T> {
+    public struct ParamStruct<T> {
         some_field: T,
     }
 
@@ -20,7 +20,7 @@ module Symbols::M3 {
         param
     }
 
-    struct AnotherParamStruct<T: copy> {
+    public struct AnotherParamStruct<T: copy> {
         some_field: ParamStruct<T>,
     }
 

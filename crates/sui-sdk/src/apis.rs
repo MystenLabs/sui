@@ -1033,7 +1033,7 @@ impl EventApi {
     ///         .await?;
     ///     let mut subscribe_all = sui
     ///         .event_api()
-    ///         .subscribe_event(EventFilter::All(vec![]))
+    ///         .subscribe_event(EventFilter::All([]))
     ///         .await?;
     ///     loop {
     ///         println!("{:?}", subscribe_all.next().await);

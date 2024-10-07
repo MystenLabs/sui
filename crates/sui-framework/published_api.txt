@@ -25,6 +25,15 @@ PoolTokenExchangeRate
 StakedSui
 	public struct
 	0x3::staking_pool
+FungibleStakedSui
+	public struct
+	0x3::staking_pool
+FungibleStakedSuiData
+	public struct
+	0x3::staking_pool
+FungibleStakedSuiDataKey
+	public struct
+	0x3::staking_pool
 new
 	public(package) fun
 	0x3::staking_pool
@@ -32,6 +41,15 @@ request_add_stake
 	public(package) fun
 	0x3::staking_pool
 request_withdraw_stake
+	public(package) fun
+	0x3::staking_pool
+redeem_fungible_staked_sui
+	public(package) fun
+	0x3::staking_pool
+calculate_fungible_staked_sui_withdraw_amount
+	fun
+	0x3::staking_pool
+convert_to_fungible_staked_sui
 	public(package) fun
 	0x3::staking_pool
 withdraw_from_principal
@@ -67,6 +85,9 @@ sui_balance
 pool_id
 	public fun
 	0x3::staking_pool
+fungible_staked_sui_pool_id
+	public fun
+	0x3::staking_pool
 staked_sui_amount
 	public fun
 	0x3::staking_pool
@@ -77,6 +98,15 @@ is_preactive
 	public fun
 	0x3::staking_pool
 is_inactive
+	public fun
+	0x3::staking_pool
+fungible_staked_sui_value
+	public fun
+	0x3::staking_pool
+split_fungible_staked_sui
+	public fun
+	0x3::staking_pool
+join_fungible_staked_sui
 	public fun
 	0x3::staking_pool
 split
@@ -136,6 +166,12 @@ StakingRequestEvent
 UnstakingRequestEvent
 	public struct
 	0x3::validator
+ConvertingToFungibleStakedSuiEvent
+	public struct
+	0x3::validator
+RedeemingFungibleStakedSuiEvent
+	public struct
+	0x3::validator
 new_metadata
 	public(package) fun
 	0x3::validator
@@ -152,6 +188,12 @@ adjust_stake_and_gas_price
 	public(package) fun
 	0x3::validator
 request_add_stake
+	public(package) fun
+	0x3::validator
+convert_to_fungible_staked_sui
+	public(package) fun
+	0x3::validator
+redeem_fungible_staked_sui
 	public(package) fun
 	0x3::validator
 request_add_stake_at_genesis
@@ -457,6 +499,12 @@ request_add_stake
 request_withdraw_stake
 	public(package) fun
 	0x3::validator_set
+convert_to_fungible_staked_sui
+	public(package) fun
+	0x3::validator_set
+redeem_fungible_staked_sui
+	public(package) fun
+	0x3::validator_set
 request_set_commission_rate
 	public(package) fun
 	0x3::validator_set
@@ -700,6 +748,12 @@ request_add_stake_mul_coin
 request_withdraw_stake
 	public(package) fun
 	0x3::sui_system_state_inner
+convert_to_fungible_staked_sui
+	public(package) fun
+	0x3::sui_system_state_inner
+redeem_fungible_staked_sui
+	public(package) fun
+	0x3::sui_system_state_inner
 report_validator
 	public(package) fun
 	0x3::sui_system_state_inner
@@ -861,6 +915,12 @@ request_add_stake_mul_coin
 	0x3::sui_system
 request_withdraw_stake
 	public entry fun
+	0x3::sui_system
+convert_to_fungible_staked_sui
+	public fun
+	0x3::sui_system
+redeem_fungible_staked_sui
+	public fun
 	0x3::sui_system
 request_withdraw_stake_non_entry
 	public fun

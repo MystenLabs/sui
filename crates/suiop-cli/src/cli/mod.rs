@@ -6,6 +6,7 @@ pub mod docker;
 mod iam;
 mod incidents;
 pub mod lib;
+mod notion;
 pub mod pulumi;
 pub mod service;
 mod slack;

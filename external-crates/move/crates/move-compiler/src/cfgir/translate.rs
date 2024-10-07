@@ -7,7 +7,7 @@ use crate::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
-        visitor::{CFGIRVisitorConstructor, CFGIRVisitorContext},
+        visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
     diagnostics::Diagnostics,
@@ -970,8 +970,7 @@ fn visit_program(context: &mut Context, prog: &mut G::Program) {
 
     AbsintVisitor.visit(context.env, prog);
 
-    for visitor in &context.env.visitors().cfgir {
-        let mut v = visitor.borrow_mut();
+    for v in &context.env.visitors().cfgir {
         v.visit(context.env, prog)
     }
 }
@@ -1048,8 +1047,7 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
             infinite_loop_starts: &infinite_loop_starts,
         };
         let mut ds = Diagnostics::new();
-        for visitor in &self.env.visitors().abs_int {
-            let mut v = visitor.borrow_mut();
+        for v in &self.env.visitors().abs_int {
             ds.extend(v.verify(self.env, &function_context, &cfg));
         }
         self.env.add_diags(ds);

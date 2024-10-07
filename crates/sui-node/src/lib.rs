@@ -1141,7 +1141,8 @@ impl SuiNode {
             network
         };
 
-        let discovery_handle = discovery.start(p2p_network.clone());
+        let discovery_handle =
+            discovery.start(p2p_network.clone(), config.network_key_pair().copy());
         let state_sync_handle = state_sync.start(p2p_network.clone());
         let randomness_handle = randomness.start(p2p_network.clone());
 
@@ -2041,6 +2042,10 @@ pub async fn build_http_server(
             Arc::new(RestReadStore::new(state.clone(), store)),
             software_version,
         );
+
+        if let Some(config) = config.rest.clone() {
+            rest_service.with_config(config);
+        }
 
         rest_service.with_metrics(RestMetrics::new(prometheus_registry));
 

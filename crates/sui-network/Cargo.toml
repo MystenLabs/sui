@@ -14,6 +14,7 @@ serde.workspace = true
 tonic.workspace = true
 dashmap.workspace = true
 tower.workspace = true
+shared-crypto.workspace = true
 
 sui-archival.workspace = true
 sui-macros.workspace = true
@@ -27,6 +28,7 @@ bcs.workspace = true
 bytes.workspace = true
 fastcrypto.workspace = true
 fastcrypto-tbls.workspace = true
+mysten-common.workspace = true
 mysten-network.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true

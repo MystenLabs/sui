@@ -29,3 +29,22 @@ jobs:
       - name: Build
         run: pnpm build
         working-directory: ./docs/site
+      - name: Check for changes in the examples directory
+        id: check_changes
+        run: |
+          if git diff --name-only $GITHUB_EVENT_BEFORE $GITHUB_SHA | grep '^examples/'; then
+            echo "examplechanges=true" >> $GITHUB_ENV
+          else
+            echo "examplechanges=false" >> $GITHUB_ENV
+          fi
+      - name: Notify Slack if examples directory changed
+        if: env.examplechanges == 'true' && github.event.action == 'opened'
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "channel": "#tech-docs",
+              "text": "An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

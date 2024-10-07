@@ -14,13 +14,13 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { TransactionObjectArgument } from '@mysten/sui/transactions';
 import { Transaction } from '@mysten/sui/transactions';
 import {
-	fromB64,
+	fromBase64,
 	normalizeStructTag,
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 	parseStructTag,
 	SUI_TYPE_ARG,
-	toB64,
+	toBase64,
 } from '@mysten/sui/utils';
 
 import type { ZkSendLinkBuilderOptions } from './builder.js';
@@ -126,7 +126,7 @@ export class ZkSendLink {
 
 		let link: ZkSendLink;
 		if (isContractLink) {
-			const keypair = Ed25519Keypair.fromSecretKey(fromB64(parsed.hash.slice(2)));
+			const keypair = Ed25519Keypair.fromSecretKey(fromBase64(parsed.hash.slice(2)));
 			link = new ZkSendLink({
 				...options,
 				keypair,
@@ -137,7 +137,7 @@ export class ZkSendLink {
 			});
 		} else {
 			const keypair = Ed25519Keypair.fromSecretKey(
-				fromB64(isContractLink ? parsed.hash.slice(2) : parsed.hash.slice(1)),
+				fromBase64(isContractLink ? parsed.hash.slice(2) : parsed.hash.slice(1)),
 			);
 
 			link = new ZkSendLink({
@@ -233,7 +233,7 @@ export class ZkSendLink {
 			reclaim ? address : this.keypair!.toSuiAddress(),
 		);
 
-		const bytes = fromB64(sponsored.bytes);
+		const bytes = fromBase64(sponsored.bytes);
 		const signature = sign
 			? await sign(bytes)
 			: (await this.keypair!.signTransaction(bytes)).signature;
@@ -546,7 +546,7 @@ export class ZkSendLink {
 				network: this.#network,
 				sender,
 				claimer,
-				transactionBlockKindBytes: toB64(
+				transactionBlockKindBytes: toBase64(
 					await tx.build({
 						onlyTransactionKind: true,
 						client: this.#client,

@@ -11,7 +11,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "version": "0.0.0"
+    "version": "unknown"
   },
   "servers": [
     {
@@ -24,7 +24,8 @@
         "tags": [
           "General"
         ],
-        "operationId": "GetNodeInfo",
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nGet basic information about the state of a Node",
+        "operationId": "Get NodeInfo",
         "responses": {
           "200": {
             "description": "",
@@ -35,21 +36,27 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": ""
           }
         }
       }
     },
-    "/health": {
+    "/-/health": {
       "get": {
         "tags": [
           "General"
         ],
-        "operationId": "HealthCheck",
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nPerform a service health check\n\nBy default the health check only verifies that the latest checkpoint can be fetched from the\nnode's store before returning a 200. Optionally the `threshold_seconds` parameter can be\nprovided to test for how up to date the node needs to be to be considered healthy.",
+        "operationId": "Health Check",
         "parameters": [
           {
             "in": "query",
             "name": "threshold_seconds",
+            "description": "The threshold, or delta, between the server's system time and the timestamp in the most recently executed checkpoint for which the server is considered to be healthy.\n\nIf not provided, the server will be considered healthy if it can simply fetch the latest checkpoint from its store.",
             "schema": {
+              "description": "The threshold, or delta, between the server's system time and the timestamp in the most recently executed checkpoint for which the server is considered to be healthy.\n\nIf not provided, the server will be considered healthy if it can simply fetch the latest checkpoint from its store.",
               "type": "integer",
               "format": "uint32",
               "minimum": 0.0
@@ -63,6 +70,152 @@
             "content": {
               "text/plain; charset=utf-8": {}
             }
+          },
+          "500": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/checkpoints": {
+      "get": {
+        "tags": [
+          "Checkpoint"
+        ],
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nList Checkpoints\n\nRequest a page of checkpoints, and optionally their contents, ordered by\n`CheckpointSequenceNumber`.\n\nIf the requested page is below the Node's `lowest_available_checkpoint`, a 410 will be\nreturned.",
+        "operationId": "List Checkpoints",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "contents",
+            "description": "Request `CheckpointContents` be included in the response",
+            "schema": {
+              "description": "Request `CheckpointContents` be included in the response",
+              "default": false,
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "direction",
+            "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
+            "schema": {
+              "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Direction"
+                }
+              ]
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "description": "Page size limit for the response.\n\nDefaults to `50` if not provided with a maximum page size of `100`.",
+            "schema": {
+              "description": "Page size limit for the response.\n\nDefaults to `50` if not provided with a maximum page size of `100`.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "description": "The checkpoint to start listing from.\n\nDefaults to the latest checkpoint if not provided.",
+            "schema": {
+              "description": "The checkpoint to start listing from.\n\nDefaults to the latest checkpoint if not provided.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "headers": {
+              "x-sui-cursor": {
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CheckpointResponse"
+                  }
+                }
+              },
+              "application/bcs": {}
+            }
+          },
+          "410": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/checkpoints/{checkpoint}": {
+      "get": {
+        "tags": [
+          "Checkpoint"
+        ],
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nFetch a Checkpoint\n\nFetch a checkpoint either by `CheckpointSequenceNumber` (checkpoint height) or by\n`CheckpointDigest` and optionally request its contents.\n\nIf the checkpoint has been pruned and is not available, a 410 will be returned.",
+        "operationId": "Get Checkpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "checkpoint",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CheckpointId"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "contents",
+            "description": "Request `CheckpointContents` be included in the response",
+            "schema": {
+              "description": "Request `CheckpointContents` be included in the response",
+              "default": false,
+              "type": "boolean"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointResponse"
+                }
+              },
+              "application/bcs": {}
+            }
+          },
+          "404": {
+            "description": ""
+          },
+          "410": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
           }
         }
       }
@@ -72,6 +225,7 @@
         "tags": [
           "Account"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "ListAccountObjects",
         "parameters": [
           {
@@ -132,6 +286,7 @@
         "tags": [
           "Objects"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetObject",
         "parameters": [
           {
@@ -167,6 +322,7 @@
         "tags": [
           "Objects"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetObjectWithVersion",
         "parameters": [
           {
@@ -213,6 +369,7 @@
         "tags": [
           "Objects"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "ListDynamicFields",
         "parameters": [
           {
@@ -268,25 +425,71 @@
         }
       }
     },
-    "/checkpoints": {
+    "/checkpoints/{checkpoint}/full": {
       "get": {
         "tags": [
           "Checkpoint"
         ],
-        "operationId": "ListCheckpoints",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\nFetch a Full Checkpoint\n\nRequest a checkpoint and all data associated with it including:\n- CheckpointSummary\n- Validator Signature\n- CheckpointContents\n- Transactions, Effects, Events, as well as all input and output objects\n\nIf the requested checkpoint is below the Node's `lowest_available_checkpoint_objects`, a 410\nwill be returned.",
+        "operationId": "Get Full Checkpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "checkpoint",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CheckpointId"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/bcs": {}
+            }
+          },
+          "404": {
+            "description": ""
+          },
+          "410": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/checkpoints/full": {
+      "get": {
+        "tags": [
+          "Checkpoint"
+        ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\nList Full Checkpoints\n\nRequest a page of checkpoints and all data associated with them including:\n- CheckpointSummary\n- Validator Signature\n- CheckpointContents\n- Transactions, Effects, Events, as well as all input and output objects\n\nIf the requested page is below the Node's `lowest_available_checkpoint_objects`, a 410 will be\nreturned.",
+        "operationId": "List Full Checkpoints",
         "parameters": [
           {
             "in": "query",
             "name": "direction",
+            "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
             "schema": {
-              "$ref": "#/components/schemas/Direction"
+              "description": "The direction to paginate in.\n\nDefaults to `descending` if not provided.",
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Direction"
+                }
+              ]
             },
             "style": "form"
           },
           {
             "in": "query",
             "name": "limit",
+            "description": "Page size limit for the response.\n\nDefaults to `5` if not provided with a maximum page size of `10`.",
             "schema": {
+              "description": "Page size limit for the response.\n\nDefaults to `5` if not provided with a maximum page size of `10`.",
               "type": "integer",
               "format": "uint32",
               "minimum": 0.0
@@ -309,67 +512,14 @@
         "responses": {
           "200": {
             "description": "",
-            "headers": {
-              "x-sui-cursor": {
-                "style": "simple",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
             "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SignedCheckpointSummary"
-                  }
-                }
-              },
               "application/bcs": {}
             }
           },
           "410": {
             "description": ""
-          }
-        }
-      }
-    },
-    "/checkpoints/{checkpoint}": {
-      "get": {
-        "tags": [
-          "Checkpoint"
-        ],
-        "operationId": "GetCheckpoint",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "checkpoint",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SignedCheckpointSummary"
-                }
-              },
-              "application/bcs": {}
-            }
           },
-          "404": {
-            "description": ""
-          },
-          "410": {
+          "500": {
             "description": ""
           }
         }
@@ -380,6 +530,7 @@
         "tags": [
           "Transactions"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetTransaction",
         "parameters": [
           {
@@ -415,6 +566,7 @@
         "tags": [
           "Transactions"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "ListTransactions",
         "parameters": [
           {
@@ -476,6 +628,7 @@
         "tags": [
           "Transactions"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "ExecuteTransaction",
         "parameters": [
           {
@@ -548,6 +701,7 @@
         "tags": [
           "System"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetCommittee",
         "parameters": [
           {
@@ -585,6 +739,7 @@
         "tags": [
           "System"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetLatestCommittee",
         "responses": {
           "200": {
@@ -606,6 +761,7 @@
         "tags": [
           "System"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetSystemStateSummary",
         "responses": {
           "200": {
@@ -626,6 +782,7 @@
         "tags": [
           "System"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetCurrentProtocolConfig",
         "responses": {
           "200": {
@@ -660,6 +817,7 @@
         "tags": [
           "System"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetProtocolConfig",
         "parameters": [
           {
@@ -710,6 +868,7 @@
         "tags": [
           "System"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetGasInfo",
         "responses": {
           "200": {
@@ -730,6 +889,7 @@
         "tags": [
           "Coins"
         ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
         "operationId": "GetCoinInfo",
         "parameters": [
           {
@@ -762,9 +922,10 @@
     "/openapi": {
       "get": {
         "tags": [
-          "OpenApi"
+          "OpenAPI"
         ],
-        "operationId": "OpenApi Explorer",
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nProvides a web UI for exploring the OpenAPI v3.1.0 definition for this service",
+        "operationId": "OpenAPI Explorer",
         "responses": {
           "200": {
             "description": "",
@@ -778,8 +939,9 @@
     "/openapi.json": {
       "get": {
         "tags": [
-          "OpenApi"
+          "OpenAPI"
         ],
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nReturn the OpenAPI v3.1.0 definition for this service as a JSON document",
         "operationId": "openapi.json",
         "responses": {
           "200": {
@@ -794,8 +956,9 @@
     "/openapi.yaml": {
       "get": {
         "tags": [
-          "OpenApi"
+          "OpenAPI"
         ],
+        "description": "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\nReturn the OpenAPI v3.1.0 definition for this service as a YAML document",
         "operationId": "openapi.yaml",
         "responses": {
           "200": {
@@ -1056,11 +1219,60 @@
           }
         ]
       },
+      "CheckpointContents": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CheckpointTransactionInfo"
+        }
+      },
       "CheckpointContentsDigest": {
         "$ref": "#/components/schemas/Digest"
       },
       "CheckpointDigest": {
         "$ref": "#/components/schemas/Digest"
+      },
+      "CheckpointId": {
+        "anyOf": [
+          {
+            "title": "SequenceNumber",
+            "description": "Sequence number or height of a Checkpoint",
+            "examples": [
+              0
+            ],
+            "type": "string",
+            "format": "u64"
+          },
+          {
+            "title": "Digest",
+            "description": "Base58 encoded 32-byte digest of a Checkpoint",
+            "examples": [
+              "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S"
+            ],
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointDigest"
+              }
+            ]
+          }
+        ]
+      },
+      "CheckpointResponse": {
+        "type": "object",
+        "required": [
+          "checkpoint",
+          "signature"
+        ],
+        "properties": {
+          "checkpoint": {
+            "$ref": "#/components/schemas/CheckpointSummary"
+          },
+          "contents": {
+            "$ref": "#/components/schemas/CheckpointContents"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/ValidatorAggregatedSignature"
+          }
+        }
       },
       "CheckpointSummary": {
         "type": "object",
@@ -1126,6 +1338,28 @@
             "description": "CheckpointSummary is not an evolvable structure - it must be readable by any version of the code. Therefore, in order to allow extensions to be added to CheckpointSummary, we allow opaque data to be added to checkpoints which can be deserialized based on the current protocol version.",
             "type": "string",
             "format": "base64"
+          }
+        }
+      },
+      "CheckpointTransactionInfo": {
+        "type": "object",
+        "required": [
+          "effects",
+          "signatures",
+          "transaction"
+        ],
+        "properties": {
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffectsDigest"
+          },
+          "signatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSignature"
+            }
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/TransactionDigest"
           }
         }
       },
@@ -3307,41 +3541,46 @@
         ]
       },
       "NodeInfo": {
+        "description": "Basic information about the state of a Node",
         "type": "object",
         "required": [
           "chain",
           "chain_id",
           "checkpoint_height",
           "epoch",
-          "lowest_available_checkpoint",
-          "lowest_available_checkpoint_objects",
           "software_version",
           "timestamp_ms"
         ],
         "properties": {
           "chain": {
+            "description": "Human readable name of the chain that this Node is on",
             "type": "string"
           },
           "chain_id": {
-            "$ref": "#/components/schemas/CheckpointDigest"
+            "description": "The chain identifier of the chain that this Node is on",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointDigest"
+              }
+            ]
           },
           "checkpoint_height": {
-            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "description": "Checkpoint height of the most recently executed checkpoint",
             "type": "string",
             "format": "u64"
           },
           "epoch": {
-            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "description": "Current epoch of the Node based on its highest executed checkpoint",
             "type": "string",
             "format": "u64"
           },
           "lowest_available_checkpoint": {
-            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "description": "The lowest checkpoint for which checkpoints and transaction data is available",
             "type": "string",
             "format": "u64"
           },
           "lowest_available_checkpoint_objects": {
-            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "description": "The lowest checkpoint for which object data is available",
             "type": "string",
             "format": "u64"
           },
@@ -3349,7 +3588,7 @@
             "type": "string"
           },
           "timestamp_ms": {
-            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "description": "Unix timestamp of the most recently executed checkpoint",
             "type": "string",
             "format": "u64"
           }
@@ -3807,21 +4046,6 @@
         "description": "Base64 encoded data",
         "type": "string",
         "format": "base64"
-      },
-      "SignedCheckpointSummary": {
-        "type": "object",
-        "required": [
-          "checkpoint",
-          "signature"
-        ],
-        "properties": {
-          "checkpoint": {
-            "$ref": "#/components/schemas/CheckpointSummary"
-          },
-          "signature": {
-            "$ref": "#/components/schemas/ValidatorAggregatedSignature"
-          }
-        }
       },
       "SignedTransaction": {
         "type": "object",
@@ -4488,6 +4712,9 @@
             }
           }
         ]
+      },
+      "TransactionEffectsDigest": {
+        "$ref": "#/components/schemas/Digest"
       },
       "TransactionEvents": {
         "type": "array",
@@ -5648,7 +5875,7 @@
       "name": "Objects"
     },
     {
-      "name": "OpenApi"
+      "name": "OpenAPI"
     },
     {
       "name": "System"

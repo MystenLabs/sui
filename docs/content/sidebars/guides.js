@@ -192,6 +192,7 @@ const guides = [
 		items: [
 			'guides/operator/sui-full-node',
 			'guides/operator/validator-config',
+			'guides/operator/bridge-node-configuration',
 			'guides/operator/data-management',
 			'guides/operator/snapshots',
 			'guides/operator/archives',

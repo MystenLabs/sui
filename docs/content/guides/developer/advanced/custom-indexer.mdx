@@ -14,7 +14,7 @@ To use the framework, implement a basic interface:
 ```rust
 #[async_trait]
 trait Worker: Send + Sync {
-    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()>;
+    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()>;
 }
 ```
 
@@ -108,6 +108,7 @@ The concurrency parameter specifies how many threads the workflow uses. Having a
 ### Hybrid mode
 
 Specify both a local and remote store as a fallback to ensure constant data flow. The framework always prioritizes locally available checkpoint data over remote data. It's useful when you want to start utilizing your own Full node for data ingestion but need to partially backfill historical data or just have a failover. 
+
 ```rust
 executor.run(
     PathBuf::from("./chk".to_string()), // path to a local directory
@@ -129,9 +130,16 @@ Code for the cargo.toml manifest file for the custom indexer.
 
 Find the following source code in the [Sui repo](https://github.com/mystenlabs/sui/tree/main/examples/custom-indexer/rust). 
 
+{@inject: examples/custom-indexer/rust/Cargo.toml}
+
+{@inject: examples/custom-indexer/rust/local_reader.rs}
+
+{@inject: examples/custom-indexer/rust/remote_reader.rs}
+
 
 ## Related links
 
 - [Sui internal example](https://github.com/MystenLabs/sui/tree/main/crates/sui-data-ingestion/src/): Sui data ingestion daemon that runs internal pipelines.
 - [Production example](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer/src): Sui Name Service custom indexer.
+- [Using Events](../sui-101/using-events.mdx): Events in Sui enable you to monitor on-chain activity in near-real time when coupled with a custom indexer.
 

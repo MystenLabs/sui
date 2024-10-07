@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use axum::extract::{Query, State};
 use schemars::JsonSchema;
-use sui_sdk2::types::framework::Coin;
-use sui_sdk2::types::{
+use sui_sdk_types::types::framework::Coin;
+use sui_sdk_types::types::{
     Address, BalanceChange, CheckpointSequenceNumber, Object, Owner, SignedTransaction,
     TransactionEffects, TransactionEvents, ValidatorAggregatedSignature,
 };
@@ -328,14 +328,16 @@ fn derive_balance_changes(
     let balances = coins(input_objects).fold(
         std::collections::BTreeMap::<_, i128>::new(),
         |mut acc, (address, coin)| {
-            *acc.entry((address, coin.coin_type())).or_default() -= coin.balance() as i128;
+            *acc.entry((address, coin.coin_type().to_owned()))
+                .or_default() -= coin.balance() as i128;
             acc
         },
     );
 
     // 2. add all mutated coins
     let balances = coins(output_objects).fold(balances, |mut acc, (address, coin)| {
-        *acc.entry((address, coin.coin_type())).or_default() += coin.balance() as i128;
+        *acc.entry((address, coin.coin_type().to_owned()))
+            .or_default() += coin.balance() as i128;
         acc
     });
 
@@ -348,7 +350,7 @@ fn derive_balance_changes(
 
             Some(BalanceChange {
                 address: *address,
-                coin_type: coin_type.to_owned(),
+                coin_type,
                 amount,
             })
         })

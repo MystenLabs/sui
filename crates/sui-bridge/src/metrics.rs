@@ -78,6 +78,7 @@ pub fn start_metrics_push_task(
 pub struct BridgeMetrics {
     pub(crate) err_build_sui_transaction: IntCounter,
     pub(crate) err_signature_aggregation: IntCounter,
+    pub(crate) err_signature_aggregation_too_many_failures: IntCounter,
     pub(crate) err_sui_transaction_submission: IntCounter,
     pub(crate) err_sui_transaction_submission_too_many_failures: IntCounter,
     pub(crate) err_sui_transaction_execution: IntCounter,
@@ -112,6 +113,7 @@ pub struct BridgeMetrics {
 
     pub(crate) sui_rpc_errors: IntCounterVec,
     pub(crate) observed_governance_actions: IntCounterVec,
+    pub(crate) current_bridge_voting_rights: IntGaugeVec,
 }
 
 impl BridgeMetrics {
@@ -126,6 +128,12 @@ impl BridgeMetrics {
             err_signature_aggregation: register_int_counter_with_registry!(
                 "bridge_err_signature_aggregation",
                 "Total number of errors of aggregating validators signatures",
+                registry,
+            )
+            .unwrap(),
+            err_signature_aggregation_too_many_failures: register_int_counter_with_registry!(
+                "bridge_err_signature_aggregation_too_many_failures",
+                "Total number of continuous failures during validator signature aggregation",
                 registry,
             )
             .unwrap(),
@@ -308,6 +316,13 @@ impl BridgeMetrics {
                 "Total number of observed governance actions",
                 &["action_type", "chain_id"],
                 registry,
+            )
+            .unwrap(),
+            current_bridge_voting_rights: register_int_gauge_vec_with_registry!(
+                "current_bridge_voting_rights",
+                "Current voting power in the bridge committee",
+                &["authority"],
+                registry
             )
             .unwrap(),
         }

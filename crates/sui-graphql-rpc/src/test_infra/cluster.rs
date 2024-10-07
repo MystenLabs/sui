@@ -14,14 +14,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_graphql_rpc_client::simple_client::SimpleClient;
+use sui_indexer::config::PruningOptions;
 pub use sui_indexer::config::SnapshotLagConfig;
 use sui_indexer::errors::IndexerError;
-use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::tempdb::get_available_port;
 use sui_indexer::tempdb::TempDb;
-use sui_indexer::test_utils::start_test_indexer_impl;
-use sui_indexer::test_utils::ReaderWriterConfig;
+use sui_indexer::test_utils::start_indexer_writer_for_testing;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_types::storage::RestStateReader;
 use tempfile::tempdir;
@@ -115,8 +114,9 @@ pub async fn start_network_cluster() -> NetworkCluster {
         host: "127.0.0.1".to_owned(),
         db_url: database.database().url().as_str().to_owned(),
         db_pool_size: 5,
-        prom_url: "127.0.0.1".to_owned(),
+        prom_host: "127.0.0.1".to_owned(),
         prom_port: get_available_port(),
+        skip_migration_consistency_check: false,
     };
     let data_ingestion_path = tempfile::tempdir().unwrap();
     let db_url = graphql_connection_config.db_url.clone();
@@ -126,12 +126,12 @@ pub async fn start_network_cluster() -> NetworkCluster {
     let val_fn = start_validator_with_fullnode(data_ingestion_path.path().to_path_buf()).await;
 
     // Starts indexer
-    let (pg_store, pg_handle) = start_test_indexer_impl(
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
         db_url,
-        val_fn.rpc_url().to_string(),
-        ReaderWriterConfig::writer_mode(None, None),
+        None,
+        None,
         Some(data_ingestion_path.path().to_path_buf()),
-        cancellation_token.clone(),
+        Some(cancellation_token.clone()),
     )
     .await;
 
@@ -160,8 +160,9 @@ pub async fn serve_executor(
         host: "127.0.0.1".to_owned(),
         db_url: database.database().url().as_str().to_owned(),
         db_pool_size: 5,
-        prom_url: "127.0.0.1".to_owned(),
+        prom_host: "127.0.0.1".to_owned(),
         prom_port: get_available_port(),
+        skip_migration_consistency_check: false,
     };
     let db_url = graphql_connection_config.db_url.clone();
     // Creates a cancellation token and adds this to the ExecutorCluster, so that we can send a
@@ -178,12 +179,14 @@ pub async fn serve_executor(
             .await;
     });
 
-    let (pg_store, pg_handle) = start_test_indexer_impl(
+    let snapshot_config = snapshot_config.unwrap_or_default();
+
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
         db_url,
-        format!("http://{}", executor_server_url),
-        ReaderWriterConfig::writer_mode(snapshot_config.clone(), epochs_to_keep),
+        Some(snapshot_config.clone()),
+        Some(PruningOptions { epochs_to_keep }),
         Some(data_ingestion_path),
-        cancellation_token.clone(),
+        Some(cancellation_token.clone()),
     )
     .await;
 
@@ -210,7 +213,7 @@ pub async fn serve_executor(
         indexer_join_handle: pg_handle,
         graphql_server_join_handle: graphql_server_handle,
         graphql_client: client,
-        snapshot_config: snapshot_config.unwrap_or_default(),
+        snapshot_config,
         graphql_connection_config,
         cancellation_token,
         database,

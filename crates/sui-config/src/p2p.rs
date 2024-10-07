@@ -319,6 +319,12 @@ pub struct DiscoveryConfig {
     /// to this peer, nor advertise this peer's info to other peers in the network.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub allowlisted_peers: Vec<AllowlistedPeer>,
+
+    /// If true, Discovery will require all provided peer information to be signed
+    /// by the originating peer.
+    ///
+    /// If unspecified, this will default to false.
+    pub enable_node_info_signatures: Option<bool>,
 }
 
 impl DiscoveryConfig {
@@ -344,6 +350,10 @@ impl DiscoveryConfig {
     pub fn access_type(&self) -> AccessType {
         // defaults None to Public
         self.access_type.unwrap_or(AccessType::Public)
+    }
+
+    pub fn enable_node_info_signatures(&self) -> bool {
+        self.enable_node_info_signatures.unwrap_or(false)
     }
 }
 

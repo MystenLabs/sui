@@ -18,7 +18,7 @@ use crate::models::SuiErrorTransactions;
 use crate::models::TradeParamsUpdate as DBTradeParamsUpdate;
 use crate::models::Votes as DBVotes;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ProcessedTxnData {
     Flashloan(Flashloan),
     OrderUpdate(OrderUpdate),
@@ -33,11 +33,12 @@ pub enum ProcessedTxnData {
     Error(SuiTxnError),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum OrderUpdateStatus {
     Placed,
     Modified,
     Canceled,
+    Expired,
 }
 
 impl Display for OrderUpdateStatus {
@@ -46,12 +47,13 @@ impl Display for OrderUpdateStatus {
             OrderUpdateStatus::Placed => "Placed",
             OrderUpdateStatus::Modified => "Modified",
             OrderUpdateStatus::Canceled => "Canceled",
+            OrderUpdateStatus::Expired => "Expired",
         };
         write!(f, "{str}")
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OrderUpdate {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -65,6 +67,7 @@ pub struct OrderUpdate {
     pub(crate) is_bid: bool,
     pub(crate) original_quantity: u64,
     pub(crate) quantity: u64,
+    pub(crate) filled_quantity: u64,
     pub(crate) onchain_timestamp: u64,
     pub(crate) trader: String,
     pub(crate) balance_manager_id: String,
@@ -86,13 +89,14 @@ impl OrderUpdate {
             is_bid: self.is_bid,
             original_quantity: self.original_quantity as i64,
             quantity: self.quantity as i64,
+            filled_quantity: self.filled_quantity as i64,
             onchain_timestamp: self.onchain_timestamp as i64,
             balance_manager_id: self.balance_manager_id.clone(),
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OrderFill {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -106,7 +110,9 @@ pub struct OrderFill {
     pub(crate) price: u64,
     pub(crate) taker_is_bid: bool,
     pub(crate) taker_fee: u64,
+    pub(crate) taker_fee_is_deep: bool,
     pub(crate) maker_fee: u64,
+    pub(crate) maker_fee_is_deep: bool,
     pub(crate) base_quantity: u64,
     pub(crate) quote_quantity: u64,
     pub(crate) maker_balance_manager_id: String,
@@ -128,7 +134,9 @@ impl OrderFill {
             taker_client_order_id: self.taker_client_order_id as i64,
             price: self.price as i64,
             taker_fee: self.taker_fee as i64,
+            taker_fee_is_deep: self.taker_fee_is_deep,
             maker_fee: self.maker_fee as i64,
+            maker_fee_is_deep: self.maker_fee_is_deep,
             taker_is_bid: self.taker_is_bid,
             base_quantity: self.base_quantity as i64,
             quote_quantity: self.quote_quantity as i64,
@@ -139,7 +147,7 @@ impl OrderFill {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Flashloan {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -166,7 +174,7 @@ impl Flashloan {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PoolPrice {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -191,7 +199,7 @@ impl PoolPrice {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Balances {
     pub digest: String,
     pub sender: String,
@@ -218,7 +226,7 @@ impl Balances {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Proposals {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -247,7 +255,7 @@ impl Proposals {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Rebates {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -274,7 +282,7 @@ impl Rebates {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Stakes {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -303,7 +311,7 @@ impl Stakes {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TradeParamsUpdate {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -330,7 +338,7 @@ impl TradeParamsUpdate {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Votes {
     pub(crate) digest: String,
     pub(crate) sender: String,
@@ -361,7 +369,7 @@ impl Votes {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SuiTxnError {
     pub(crate) tx_digest: TransactionDigest,
     pub(crate) sender: SuiAddress,

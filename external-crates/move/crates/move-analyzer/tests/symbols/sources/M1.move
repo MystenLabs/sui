@@ -1,6 +1,6 @@
 module Symbols::M1 {
 
-    struct SomeStruct has key, drop, store {
+    public struct SomeStruct has drop, store {
         some_field: u64,
     }
 
@@ -52,8 +52,8 @@ module Symbols::M1 {
         value
     }
 
-    fun mut(): u64 {
-        let tmp = 7;
+    fun mutable(): u64 {
+        let mut tmp = 7;
         let r = &mut tmp;
         *r = SOME_CONST;
         tmp
@@ -85,7 +85,7 @@ module Symbols::M1 {
         *tmp
     }
 
-    struct OuterStruct has key, drop {
+    public struct OuterStruct has drop {
         some_struct: SomeStruct,
     }
 

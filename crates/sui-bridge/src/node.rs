@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::BridgeCommittee;
+use crate::utils::get_committee_voting_power_by_name;
 use crate::{
     action_executor::BridgeActionExecutor,
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
@@ -62,12 +64,35 @@ pub async fn run_bridge_node(
         ))
         .unwrap();
 
+    let committee = Arc::new(
+        server_config
+            .sui_client
+            .get_bridge_committee()
+            .await
+            .expect("Failed to get committee"),
+    );
     // Start Client
     let _handles = if let Some(client_config) = client_config {
-        start_client_components(client_config, metrics.clone()).await
+        start_client_components(client_config, committee.clone(), metrics.clone()).await
     } else {
         Ok(vec![])
     }?;
+
+    // Update voting right metrics
+    // Before reconfiguration happens we only set it once when the node starts
+    let sui_system = server_config
+        .sui_client
+        .sui_client()
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?;
+    let committee_name_mapping = get_committee_voting_power_by_name(&committee, sui_system).await;
+    for (name, voting_power) in committee_name_mapping.into_iter() {
+        metrics
+            .current_bridge_voting_rights
+            .with_label_values(&[name.as_str()])
+            .set(voting_power as i64);
+    }
 
     // Start Server
     let socket_address = SocketAddr::new(
@@ -91,6 +116,7 @@ pub async fn run_bridge_node(
 // TODO: is there a way to clean up the overrides after it's stored in DB?
 async fn start_client_components(
     client_config: BridgeClientConfig,
+    committee: Arc<BridgeCommittee>,
     metrics: Arc<BridgeMetrics>,
 ) -> anyhow::Result<Vec<JoinHandle<()>>> {
     let store: std::sync::Arc<BridgeOrchestratorTables> =
@@ -126,12 +152,6 @@ async fn start_client_components(
     .expect("Failed to start sui syncer");
     all_handles.extend(task_handles);
 
-    let committee = Arc::new(
-        sui_client
-            .get_bridge_committee()
-            .await
-            .expect("Failed to get committee"),
-    );
     let bridge_auth_agg = Arc::new(ArcSwap::from(Arc::new(BridgeAuthorityAggregator::new(
         committee,
     ))));

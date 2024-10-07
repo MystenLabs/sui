@@ -25,7 +25,8 @@ use sui_tls::{
 use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::{
-    trace::{DefaultOnResponse, TraceLayer},
+    timeout::TimeoutLayer,
+    trace::{DefaultOnFailure, DefaultOnResponse, TraceLayer},
     LatencyUnit,
 };
 use tracing::{info, Level};
@@ -112,16 +113,29 @@ pub fn app(
             .layer(Extension(Arc::new(allower)));
     }
     router
+        // Enforce on all routes.
+        // If the request does not complete within the specified timeout it will be aborted
+        // and a 408 Request Timeout response will be sent.
+        .layer(TimeoutLayer::new(Duration::from_secs(var!(
+            "NODE_CLIENT_TIMEOUT",
+            20
+        ))))
         .layer(Extension(relay))
         .layer(Extension(labels))
         .layer(Extension(client))
         .layer(
             ServiceBuilder::new().layer(
-                TraceLayer::new_for_http().on_response(
-                    DefaultOnResponse::new()
-                        .level(Level::INFO)
-                        .latency_unit(LatencyUnit::Seconds),
-                ),
+                TraceLayer::new_for_http()
+                    .on_response(
+                        DefaultOnResponse::new()
+                            .level(Level::INFO)
+                            .latency_unit(LatencyUnit::Seconds),
+                    )
+                    .on_failure(
+                        DefaultOnFailure::new()
+                            .level(Level::ERROR)
+                            .latency_unit(LatencyUnit::Seconds),
+                    ),
             ),
         )
 }

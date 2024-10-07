@@ -646,12 +646,10 @@ Aborts if <code>value &gt; <a href="../sui-framework/balance.md#0x2_balance">bal
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_take">take</a>&lt;T&gt;(
-    <a href="../sui-framework/balance.md#0x2_balance">balance</a>: &<b>mut</b> Balance&lt;T&gt;, value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> TxContext,
-): <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_take">take</a>&lt;T&gt;(<a href="../sui-framework/balance.md#0x2_balance">balance</a>: &<b>mut</b> Balance&lt;T&gt;, value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> TxContext): <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
     <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
-        <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance">balance</a>.<a href="../sui-framework/coin.md#0x2_coin_split">split</a>(value)
+        <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance">balance</a>.<a href="../sui-framework/coin.md#0x2_coin_split">split</a>(value),
     }
 }
 </code></pre>
@@ -730,9 +728,7 @@ and the remaining balance is left is <code>self</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_split">split</a>&lt;T&gt;(
-    self: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, split_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> TxContext
-): <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, split_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> TxContext): <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
     <a href="../sui-framework/coin.md#0x2_coin_take">take</a>(&<b>mut</b> self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>, split_amount, ctx)
 }
 </code></pre>
@@ -758,9 +754,7 @@ Split coin <code>self</code> into <code>n - 1</code> coins with equal balances. 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_divide_into_n">divide_into_n</a>&lt;T&gt;(
-    self: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, n: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> TxContext
-): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_divide_into_n">divide_into_n</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, n: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> TxContext): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt; {
     <b>assert</b>!(n &gt; 0, <a href="../sui-framework/coin.md#0x2_coin_EInvalidArg">EInvalidArg</a>);
     <b>assert</b>!(n &lt;= <a href="../sui-framework/coin.md#0x2_coin_value">value</a>(self), <a href="../sui-framework/coin.md#0x2_coin_ENotEnough">ENotEnough</a>);
 
@@ -857,7 +851,7 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
     name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     icon_url: Option&lt;Url&gt;,
-    ctx: &<b>mut</b> TxContext
+    ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     // Make sure there's only one instance of the type T
     <b>assert</b>!(sui::types::is_one_time_witness(&witness), <a href="../sui-framework/coin.md#0x2_coin_EBadWitness">EBadWitness</a>);
@@ -865,7 +859,7 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
     (
         <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a> {
             id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
-            total_supply: <a href="../sui-framework/balance.md#0x2_balance_create_supply">balance::create_supply</a>(witness)
+            total_supply: <a href="../sui-framework/balance.md#0x2_balance_create_supply">balance::create_supply</a>(witness),
         },
         <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a> {
             id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
@@ -873,8 +867,8 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
             name: <a href="../move-stdlib/string.md#0x1_string_utf8">string::utf8</a>(name),
             symbol: <a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(symbol),
             description: <a href="../move-stdlib/string.md#0x1_string_utf8">string::utf8</a>(description),
-            icon_url
-        }
+            icon_url,
+        },
     )
 }
 </code></pre>
@@ -923,7 +917,7 @@ will not change the result of the "contains" APIs.
         name,
         description,
         icon_url,
-        ctx
+        ctx,
     );
     <b>let</b> deny_cap = <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
@@ -998,12 +992,10 @@ in <code>cap</code> accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_mint">mint</a>&lt;T&gt;(
-    cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> TxContext,
-): <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_mint">mint</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> TxContext): <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
     <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
-        <a href="../sui-framework/balance.md#0x2_balance">balance</a>: cap.total_supply.increase_supply(value)
+        <a href="../sui-framework/balance.md#0x2_balance">balance</a>: cap.total_supply.increase_supply(value),
     }
 }
 </code></pre>
@@ -1030,9 +1022,7 @@ Aborts if <code>value</code> + <code>cap.total_supply</code> >= U64_MAX
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_mint_balance">mint_balance</a>&lt;T&gt;(
-    cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
-): Balance&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_mint_balance">mint_balance</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): Balance&lt;T&gt; {
     cap.total_supply.increase_supply(value)
 }
 </code></pre>
@@ -1184,10 +1174,7 @@ start of the next epoch, the address will be unable to receive objects of this c
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
-    addr: <b>address</b>,
-): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList, addr: <b>address</b>): bool {
     <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_contains_next_epoch(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr)
 }
@@ -1308,9 +1295,7 @@ Check if the global pause is enabled for the given coin type in the next epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
-): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList): bool {
     <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_is_global_pause_enabled_next_epoch(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty)
 }
@@ -1337,7 +1322,10 @@ Mint <code>amount</code> of <code><a href="../sui-framework/coin.md#0x2_coin_Coi
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_mint_and_transfer">mint_and_transfer</a>&lt;T&gt;(
-    c: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, recipient: <b>address</b>, ctx: &<b>mut</b> TxContext
+    c: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;,
+    amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    recipient: <b>address</b>,
+    ctx: &<b>mut</b> TxContext,
 ) {
     <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="../sui-framework/coin.md#0x2_coin_mint">mint</a>(c, amount, ctx), recipient)
 }
@@ -1364,7 +1352,9 @@ Update name of the coin in <code><a href="../sui-framework/coin.md#0x2_coin_Coin
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_update_name">update_name</a>&lt;T&gt;(
-    _treasury: &<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, name: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>
+    _treasury: &<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;,
+    metadata: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;,
+    name: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>,
 ) {
     metadata.name = name;
 }
@@ -1391,7 +1381,9 @@ Update the symbol of the coin in <code><a href="../sui-framework/coin.md#0x2_coi
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_update_symbol">update_symbol</a>&lt;T&gt;(
-    _treasury: &<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, symbol: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+    _treasury: &<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;,
+    metadata: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;,
+    symbol: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>,
 ) {
     metadata.symbol = symbol;
 }
@@ -1418,7 +1410,9 @@ Update the description of the coin in <code><a href="../sui-framework/coin.md#0x
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_update_description">update_description</a>&lt;T&gt;(
-    _treasury: &<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, description: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>
+    _treasury: &<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;,
+    metadata: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;,
+    description: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>,
 ) {
     metadata.description = description;
 }
@@ -1445,7 +1439,9 @@ Update the url of the coin in <code><a href="../sui-framework/coin.md#0x2_coin_C
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_update_icon_url">update_icon_url</a>&lt;T&gt;(
-    _treasury: &<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, <a href="../sui-framework/url.md#0x2_url">url</a>: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+    _treasury: &<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;,
+    metadata: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;,
+    <a href="../sui-framework/url.md#0x2_url">url</a>: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>,
 ) {
     metadata.icon_url = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="../sui-framework/url.md#0x2_url_new_unsafe">url::new_unsafe</a>(<a href="../sui-framework/url.md#0x2_url">url</a>));
 }
@@ -1624,7 +1620,7 @@ with the coin as input objects.
     name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     icon_url: Option&lt;Url&gt;,
-    ctx: &<b>mut</b> TxContext
+    ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     <b>let</b> (treasury_cap, metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency">create_currency</a>(
         witness,
@@ -1633,7 +1629,7 @@ with the coin as input objects.
         name,
         description,
         icon_url,
-        ctx
+        ctx,
     );
     <b>let</b> deny_cap = <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
@@ -1669,18 +1665,13 @@ from interacting with the specified coin type as an input to a transaction.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_add">deny_list_add</a>&lt;T&gt;(
-   <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
-   _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
-   addr: <b>address</b>,
-   _ctx: &<b>mut</b> TxContext
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
+    _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
+    addr: <b>address</b>,
+    _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> `type` =
-        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v1_add(
-        <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
-        `type`,
-        addr,
-    )
+    <b>let</b> `type` = <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v1_add(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, `type`, addr)
 }
 </code></pre>
 
@@ -1706,18 +1697,13 @@ Aborts with <code>ENotFrozen</code> if the address is not already in the list.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_remove">deny_list_remove</a>&lt;T&gt;(
-   <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
-   _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
-   addr: <b>address</b>,
-   _ctx: &<b>mut</b> TxContext
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
+    _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
+    addr: <b>address</b>,
+    _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> `type` =
-        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v1_remove(
-        <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
-        `type`,
-        addr,
-    )
+    <b>let</b> `type` = <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v1_remove(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, `type`, addr)
 }
 </code></pre>
 
@@ -1742,10 +1728,7 @@ return false if given a non-coin type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(
-   <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
-   addr: <b>address</b>,
-): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList, addr: <b>address</b>): bool {
     <b>let</b> name = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
     <b>if</b> (<a href="../move-stdlib/type_name.md#0x1_type_name_is_primitive">type_name::is_primitive</a>(&name)) <b>return</b> <b>false</b>;
 

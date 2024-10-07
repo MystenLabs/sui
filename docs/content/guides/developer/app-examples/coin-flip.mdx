@@ -23,7 +23,7 @@ Source code locations for the smart contracts and frontend:
 - **One-time witnesses:** The guide teaches you how to use [one-time witnesses](concepts/sui-move-concepts.mdx#one-time-witness) to ensure only a single instance of the `HouseData` object ever exists.
 - **Asserts:** The guide teaches you how to use [asserts](https://move-book.com/move-basics/assert-and-abort.html?highlight=asserts#assert) to abort functions due to certain conditions not being met.
 - **Address-owned objects:** The guide teaches you how to use [address-owned objects](concepts/object-ownership/address-owned.mdx) when necessary.
-- **Events:** The guide teaches you how to emit [events](concepts/events.mdx) in your contracts, which can be used to track off chain.
+- **Events:** The guide teaches you how to emit events in your contracts, which can be used to track on-chain activity. For more information on events, see [Using Events](../sui-101/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
 - **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics/storage-fund.mdx#incentives).
 - **MEV attack protection:** The guide introduces you to [MEV attacks](https://github.com/MystenLabs/satoshi-coin-flip?tab=readme-ov-file#mev-attack-resistant-single-player-satoshi-smart-contract-flow), how to make your contracts MEV-resistant, and the trade-offs between protection and user experience.
 
@@ -372,7 +372,7 @@ module satoshi_flip::single_player_satoshi {
 
 This code follows the same pattern as the others. First, you include the respective imports, although this time the imports are not only from the standard library but also include modules created previously in this example. You also create several constants (in upper case), as well as constants used for errors (Pascal case prefixed with `E`).
 
-Lastly in this section, you also create structs for two [events](concepts/events.mdx) to emit. Indexers consume emitted events, which enables you to track these events through API services, or your own indexer. In this case, the events are for when a new game begins (`NewGame`) and for the outcome of a game when it has finished (`Outcome`).
+Lastly in this section, you also create structs for two events to emit. Indexers consume emitted events, which enables you to track these events through API services, or your own indexer. In this case, the events are for when a new game begins (`NewGame`) and for the outcome of a game when it has finished (`Outcome`).
 
 Add a struct to the module:
 
@@ -1081,7 +1081,13 @@ execCreateGame(
 One final step remains: settle the game. There are a couple of ways you can use the UI to settle the game:
 
 1. Create a Settle Game button and pass all the necessary arguments to the `single_player_satoshi::finish_game()` Move call.
-1. Settle the game automatically through an events subscription. This example uses this path to teache good practices on events and how to subscribe to them.
+1. Settle the game automatically through an events subscription. This example uses this path to teach good practices on events and how to subscribe to them.
+
+:::info
+
+Event subscriptions are deprecated. To learn future-safe methods to work with events, see [Using Events](../sui-101/using-events.mdx).
+
+:::
 
 All of this logic is in `HouseFinishGame.tsx`:
 

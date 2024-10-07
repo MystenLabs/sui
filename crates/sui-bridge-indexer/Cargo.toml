@@ -23,6 +23,8 @@ clap.workspace = true
 mysten-metrics.workspace = true
 prometheus.workspace = true
 serde_yaml.workspace = true
+serde_json.workspace = true
+strum_macros.workspace = true
 sui-bridge.workspace = true
 sui-sdk.workspace = true
 sui-json-rpc-types.workspace = true
@@ -34,6 +36,7 @@ backoff.workspace = true
 sui-config.workspace = true
 tempfile.workspace = true
 sui-indexer-builder.workspace = true
+sui-bridge-watchdog.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }

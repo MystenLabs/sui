@@ -4,7 +4,6 @@
 use std::collections::{BTreeMap, HashMap};
 
 use tap::tap::TapFallible;
-use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 use tracing::{error, info};
@@ -23,7 +22,6 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     state: S,
     metrics: IndexerMetrics,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
-    commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
     mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
 ) -> IndexerResult<()>
@@ -60,7 +58,7 @@ where
             next_checkpoint_sequence_number += 1;
             let epoch_number_option = epoch.as_ref().map(|epoch| epoch.new_epoch.epoch);
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
-                commit_checkpoints(&state, batch, epoch, &metrics, &commit_notifier).await;
+                commit_checkpoints(&state, batch, epoch, &metrics).await;
                 batch = vec![];
             }
             if let Some(epoch_number) = epoch_number_option {
@@ -74,7 +72,7 @@ where
             }
         }
         if !batch.is_empty() && unprocessed.is_empty() {
-            commit_checkpoints(&state, batch, None, &metrics, &commit_notifier).await;
+            commit_checkpoints(&state, batch, None, &metrics).await;
             batch = vec![];
         }
     }
@@ -91,7 +89,6 @@ async fn commit_checkpoints<S>(
     indexed_checkpoint_batch: Vec<CheckpointDataToCommit>,
     epoch: Option<EpochToCommit>,
     metrics: &IndexerMetrics,
-    commit_notifier: &watch::Sender<Option<CheckpointSequenceNumber>>,
 ) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
@@ -228,10 +225,6 @@ async fn commit_checkpoints<S>(
     }
 
     let elapsed = guard.stop_and_record();
-
-    commit_notifier
-        .send(Some(last_checkpoint_seq))
-        .expect("Commit watcher should not be closed");
 
     info!(
         elapsed,

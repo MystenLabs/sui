@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::io::Cursor;
 use std::time::Duration;
@@ -14,15 +13,16 @@ use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::QueryDsl;
 use diesel_async::scoped_futures::ScopedFutureExt;
+use futures::future::Either;
 use itertools::Itertools;
 use object_store::path::Path;
+use sui_types::base_types::ObjectID;
 use tap::TapFallible;
 use tracing::{info, warn};
 
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_protocol_config::ProtocolConfig;
 use sui_storage::object_store::util::put;
-use sui_types::base_types::ObjectID;
 
 use crate::config::UploadOptions;
 use crate::database::ConnectionPool;
@@ -54,11 +54,11 @@ use crate::schema::{
     tx_recipients, tx_senders,
 };
 use crate::store::transaction_with_retry;
-use crate::types::EventIndex;
+use crate::types::{EventIndex, IndexedDeletedObject, IndexedObject};
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
-use super::{IndexerStore, ObjectsToCommit};
+use super::IndexerStore;
 
 use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use diesel::upsert::excluded;
@@ -179,7 +179,8 @@ impl PgIndexerStore {
             .context("Failed reading chain id from PostgresDB")
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
+    // `pub` is needed for wait_for_checkpoint in tests
+    pub async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         use diesel_async::RunQueryDsl;
 
         let mut connection = self.pool.get().await?;
@@ -287,7 +288,7 @@ impl PgIndexerStore {
             .context("Failed reading transaction range from PostgresDB")
     }
 
-    async fn get_latest_object_snapshot_checkpoint_sequence_number(
+    pub async fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
     ) -> Result<Option<u64>, IndexerError> {
         use diesel_async::RunQueryDsl;
@@ -1267,22 +1268,6 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_epochs_table(&self, epoch: u64) -> Result<(), IndexerError> {
-        use diesel_async::RunQueryDsl;
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::delete(epochs::table.filter(epochs::epoch.eq(epoch as i64)))
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed to prune epochs table")?;
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
-        .await
-    }
-
     async fn prune_event_indices_table(
         &self,
         min_tx: u64,
@@ -1507,21 +1492,15 @@ impl IndexerStore for PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects
             .start_timer();
-        let objects = make_objects_to_commit(object_changes);
-        let len = objects.len();
-
-        let mut object_mutations = vec![];
-        let mut object_deletions = vec![];
-        for object in objects {
-            match object {
-                ObjectsToCommit::MutatedObject(mutation) => {
-                    object_mutations.push(mutation);
-                }
-                ObjectsToCommit::DeletedObject(deletion) => {
-                    object_deletions.push(deletion);
-                }
-            }
-        }
+        let (indexed_mutations, indexed_deletions) = retain_latest_indexed_objects(object_changes);
+        let object_mutations = indexed_mutations
+            .into_iter()
+            .map(StoredObject::from)
+            .collect::<Vec<_>>();
+        let object_deletions = indexed_deletions
+            .into_iter()
+            .map(StoredDeletedObject::from)
+            .collect::<Vec<_>>();
         let mutation_len = object_mutations.len();
         let deletion_len = object_deletions.len();
 
@@ -1561,10 +1540,7 @@ impl IndexerStore for PgIndexerStore {
         let elapsed = guard.stop_and_record();
         info!(
             elapsed,
-            "Persisted {} objects with {} mutations and {} deletions ",
-            len,
-            mutation_len,
-            deletion_len,
+            "Persisted objects with {} mutations and {} deletions ", mutation_len, deletion_len,
         );
         Ok(())
     }
@@ -1580,7 +1556,16 @@ impl IndexerStore for PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects_snapshot
             .start_timer();
-        let objects_snapshot = make_objects_snapshot_to_commit(object_changes);
+        let (indexed_mutations, indexed_deletions) = retain_latest_indexed_objects(object_changes);
+        let objects_snapshot = indexed_mutations
+            .into_iter()
+            .map(StoredObjectSnapshot::from)
+            .chain(
+                indexed_deletions
+                    .into_iter()
+                    .map(StoredObjectSnapshot::from),
+            )
+            .collect::<Vec<_>>();
         let len = objects_snapshot.len();
         let chunks = chunk!(objects_snapshot, self.config.parallel_objects_chunk_size);
         let futures = chunks
@@ -1932,8 +1917,6 @@ impl IndexerStore for PgIndexerStore {
             self.metrics.last_pruned_checkpoint.set(cp as i64);
         }
 
-        // NOTE: prune epochs table last, otherwise get_checkpoint_range_for_epoch would fail.
-        self.prune_epochs_table(epoch).await?;
         Ok(())
     }
 
@@ -2129,47 +2112,6 @@ impl IndexerStore for PgIndexerStore {
     }
 }
 
-fn make_objects_to_commit(
-    tx_object_changes: Vec<TransactionObjectChangesToCommit>,
-) -> Vec<ObjectsToCommit> {
-    let deleted_objects = tx_object_changes
-        .clone()
-        .into_iter()
-        .flat_map(|changes| changes.deleted_objects)
-        .map(|o| (o.object_id, o.into()))
-        .collect::<HashMap<ObjectID, StoredDeletedObject>>();
-
-    let mutated_objects = tx_object_changes
-        .into_iter()
-        .flat_map(|changes| changes.changed_objects);
-    let mut latest_objects = HashMap::new();
-    for object in mutated_objects {
-        if deleted_objects.contains_key(&object.object.id()) {
-            continue;
-        }
-        match latest_objects.entry(object.object.id()) {
-            Entry::Vacant(e) => {
-                e.insert(object);
-            }
-            Entry::Occupied(mut e) => {
-                if object.object.version() > e.get().object.version() {
-                    e.insert(object);
-                }
-            }
-        }
-    }
-    deleted_objects
-        .into_values()
-        .map(ObjectsToCommit::DeletedObject)
-        .chain(
-            latest_objects
-                .into_values()
-                .map(StoredObject::from)
-                .map(ObjectsToCommit::MutatedObject),
-        )
-        .collect()
-}
-
 fn make_objects_history_to_commit(
     tx_object_changes: Vec<TransactionObjectChangesToCommit>,
 ) -> Vec<StoredHistoryObject> {
@@ -2187,38 +2129,86 @@ fn make_objects_history_to_commit(
     deleted_objects.into_iter().chain(mutated_objects).collect()
 }
 
-fn make_objects_snapshot_to_commit(
+// Partition object changes into deletions and mutations,
+// within partition of mutations or deletions, retain the latest with highest version;
+// For overlappings of mutations and deletions, only keep one with higher version.
+// This is necessary b/c after this step, DB commit will be done in parallel and not in order.
+fn retain_latest_indexed_objects(
     tx_object_changes: Vec<TransactionObjectChangesToCommit>,
-) -> Vec<StoredObjectSnapshot> {
-    let deleted_objects = tx_object_changes
-        .clone()
+) -> (Vec<IndexedObject>, Vec<IndexedDeletedObject>) {
+    // Only the last deleted / mutated object will be in the map,
+    // b/c tx_object_changes are in order and versions always increment,
+    let (mutations, deletions) = tx_object_changes
         .into_iter()
-        .flat_map(|changes| changes.deleted_objects)
-        .map(|o| (o.object_id, o.into()))
-        .collect::<HashMap<ObjectID, StoredObjectSnapshot>>();
-
-    let mutated_objects = tx_object_changes
-        .into_iter()
-        .flat_map(|changes| changes.changed_objects);
-    let mut latest_objects = HashMap::new();
-    for object in mutated_objects {
-        if deleted_objects.contains_key(&object.object.id()) {
-            continue;
-        }
-        match latest_objects.entry(object.object.id()) {
-            Entry::Vacant(e) => {
-                e.insert(object);
-            }
-            Entry::Occupied(mut e) => {
-                if object.object.version() > e.get().object.version() {
-                    e.insert(object);
+        .flat_map(|change| {
+            change
+                .changed_objects
+                .into_iter()
+                .map(Either::Left)
+                .chain(
+                    change
+                        .deleted_objects
+                        .into_iter()
+                        .map(Either::Right),
+                )
+        })
+        .fold(
+            (HashMap::<ObjectID, IndexedObject>::new(), HashMap::<ObjectID, IndexedDeletedObject>::new()),
+            |(mut mutations, mut deletions), either_change| {
+                match either_change {
+                    // Remove mutation / deletion with a following deletion / mutation,
+                    // b/c following deletion / mutation always has a higher version.
+                    // Technically, assertions below are not required, double check just in case.
+                    Either::Left(mutation) => {
+                        let id = mutation.object.id();
+                        let mutation_version = mutation.object.version();
+                        if let Some(existing) = deletions.remove(&id) {
+                            assert!(
+                                existing.object_version < mutation_version.value(),
+                                "Mutation version ({:?}) should be greater than existing deletion version ({:?}) for object {:?}",
+                                mutation_version,
+                                existing.object_version,
+                                id
+                            );
+                        }
+                        if let Some(existing) = mutations.insert(id, mutation) {
+                            assert!(
+                                existing.object.version() < mutation_version,
+                                "Mutation version ({:?}) should be greater than existing mutation version ({:?}) for object {:?}",
+                                mutation_version,
+                                existing.object.version(),
+                                id
+                            );
+                        }
+                    }
+                    Either::Right(deletion) => {
+                        let id = deletion.object_id;
+                        let deletion_version = deletion.object_version;
+                        if let Some(existing) = mutations.remove(&id) {
+                            assert!(
+                                existing.object.version().value() < deletion_version,
+                                "Deletion version ({:?}) should be greater than existing mutation version ({:?}) for object {:?}",
+                                deletion_version,
+                                existing.object.version(),
+                                id
+                            );
+                        }
+                        if let Some(existing) = deletions.insert(id, deletion) {
+                            assert!(
+                                existing.object_version < deletion_version,
+                                "Deletion version ({:?}) should be greater than existing deletion version ({:?}) for object {:?}",
+                                deletion_version,
+                                existing.object_version,
+                                id
+                            );
+                        }
+                    }
                 }
-            }
-        }
-    }
-
-    deleted_objects
-        .into_values()
-        .chain(latest_objects.into_values().map(StoredObjectSnapshot::from))
-        .collect()
+                (mutations, deletions)
+            },
+        );
+    (
+        mutations.into_values().collect(),
+        deletions.into_values().collect(),
+    )
 }

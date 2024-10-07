@@ -63,3 +63,125 @@ On Hover:
 Move2024::structs::Positional
 1: Move2024::structs::SomeStruct
 
+-- test 7 -------------------
+use line: 12, use_ndx: 0
+Use: 'some_field', start: 8, end: 18
+Def: 'some_field', line: 11, def char: 8
+TypeDef: no info
+On Hover:
+Move2024::structs::Named
+some_field: u64
+
+-- test 8 -------------------
+use line: 13, use_ndx: 0
+Use: 'another_field', start: 8, end: 21
+Def: 'another_field', line: 12, def char: 8
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+Move2024::structs::Named
+another_field: Move2024::structs::SomeStruct
+
+-- test 9 -------------------
+use line: 18, use_ndx: 0
+Use: 'some_field', start: 12, end: 22
+Def: 'some_field', line: 11, def char: 8
+TypeDef: no info
+On Hover:
+Move2024::structs::Named
+some_field: u64
+
+-- test 10 -------------------
+use line: 18, use_ndx: 1
+Use: 'val1', start: 24, end: 28
+Def: 'val1', line: 15, def char: 26
+TypeDef: no info
+On Hover:
+val1: u64
+
+-- test 11 -------------------
+use line: 19, use_ndx: 0
+Use: 'another_field', start: 12, end: 25
+Def: 'another_field', line: 12, def char: 8
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+Move2024::structs::Named
+another_field: Move2024::structs::SomeStruct
+
+-- test 12 -------------------
+use line: 24, use_ndx: 1
+Use: 'val1', start: 19, end: 23
+Def: 'val1', line: 22, def char: 31
+TypeDef: no info
+On Hover:
+val1: u64
+
+-- test 13 -------------------
+use line: 24, use_ndx: 2
+Use: 'val2', start: 25, end: 29
+Def: 'val2', line: 22, def char: 42
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+val2: Move2024::structs::SomeStruct
+
+-- test 14 -------------------
+use line: 29, use_ndx: 0
+Use: 'some_field', start: 12, end: 22
+Def: 'some_field', line: 11, def char: 8
+TypeDef: no info
+On Hover:
+Move2024::structs::Named
+some_field: u64
+
+-- test 15 -------------------
+use line: 29, use_ndx: 1
+Use: 'val1', start: 24, end: 28
+Def: 'val1', line: 28, def char: 24
+TypeDef: no info
+On Hover:
+val1: u64
+
+-- test 16 -------------------
+use line: 30, use_ndx: 0
+Use: 'another_field', start: 12, end: 25
+Def: 'another_field', line: 12, def char: 8
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+Move2024::structs::Named
+another_field: Move2024::structs::SomeStruct
+
+-- test 17 -------------------
+use line: 36, use_ndx: 1
+Use: 'v', start: 23, end: 24
+Def: 'u64', line: 4, def char: 29
+TypeDef: no info
+On Hover:
+Move2024::structs::Positional
+0: u64
+
+-- test 18 -------------------
+use line: 36, use_ndx: 2
+Use: 'v', start: 29, end: 30
+Def: 'SomeStruct', line: 4, def char: 34
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+Move2024::structs::Positional
+1: Move2024::structs::SomeStruct
+
+-- test 19 -------------------
+use line: 41, use_ndx: 1
+Use: 'INVALID USE IDENT', start: 14, end: 24
+Def: 'some_field', line: 11, def char: 8
+TypeDef: no info
+On Hover:
+Move2024::structs::Named
+some_field: u64
+
+-- test 20 -------------------
+use line: 45, use_ndx: 1
+Use: 'INVALID USE IDENT', start: 19, end: 20
+Def: 'u64', line: 4, def char: 29
+TypeDef: no info
+On Hover:
+Move2024::structs::Positional
+0: u64
+

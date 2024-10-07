@@ -134,7 +134,7 @@ This should be called only once during genesis creation.
         // TODO: add appropriate description and logo <a href="../sui-framework/url.md#0x2_url">url</a>
         b"",
         <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(),
-        ctx
+        ctx,
     );
     <a href="../sui-framework/transfer.md#0x2_transfer_public_freeze_object">transfer::public_freeze_object</a>(metadata);
     <b>let</b> <b>mut</b> supply = treasury.treasury_into_supply();

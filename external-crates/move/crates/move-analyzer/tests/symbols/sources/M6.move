@@ -2,7 +2,7 @@ module Symbols::M6 {
 
     /// This is a documented struct
     /// With a multi-line docstring
-    struct DocumentedStruct has key, drop, store {
+    public struct DocumentedStruct has drop, store {
         /// A documented field
         documented_field: u64,
     }
@@ -44,5 +44,48 @@ module Symbols::M6 {
     fun type_param_doc<T: copy + drop>(param: T): T {
         param
     }
+
+    /// A documented function with code block
+    /// (should preserve indentation in the code block)
+    ///
+    /// ```rust
+    /// fun foo() {
+    ///     42
+    /// }
+    /// ```
+    fun code_block_doc_slash() {}
+
+    /**
+       A documented function with code block
+       (should preserve indentation in the code block)
+
+       ```rust
+       fun foo() {
+           42
+       }
+       ```
+    */
+    fun code_block_doc_star() {}
+
+    /**
+      Misformatted docstring to have fewer whitespace in the body than
+      at the ending marker.
+
+
+  Beginning of this string should not disappear.
+
+Beginning of this string should not disappear either.
+
+    */
+    fun misformatted_docstring() {}
+
+
+    /// Docstring before attributes
+    #[test_only]
+    fun attributes_after_docstring() {}
+
+    #[test_only]
+    /// Docstring after attributes
+    fun attributes_before_docstring() {}
 
 }

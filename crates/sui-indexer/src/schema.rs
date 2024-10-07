@@ -144,6 +144,7 @@ diesel::table! {
         event_type -> Text,
         timestamp_ms -> Int8,
         bcs -> Bytea,
+        sender -> Nullable<Bytea>,
     }
 }
 

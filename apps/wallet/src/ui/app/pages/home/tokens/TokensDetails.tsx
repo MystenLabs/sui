@@ -10,12 +10,8 @@ import Alert from '_components/alert';
 import { CoinIcon } from '_components/coin-icon';
 import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
-import {
-	useAllowedSwapCoinsList,
-	useAppSelector,
-	useCoinsReFetchingConfig,
-	useSortedCoinsByCategories,
-} from '_hooks';
+import { useAppSelector, useCoinsReFetchingConfig, useSortedCoinsByCategories } from '_hooks';
+import { UsdcPromoBanner } from '_pages/home/usdc-promo/UsdcPromoBanner';
 import {
 	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
 	DELEGATED_STAKES_QUERY_STALE_TIME,
@@ -115,11 +111,8 @@ export function TokenRow({
 	const params = new URLSearchParams({
 		type: coinBalance.coinType,
 	});
-	const allowedSwapCoinsList = useAllowedSwapCoinsList();
 
 	const balanceInUsd = useBalanceInUSD(coinBalance.coinType, coinBalance.totalBalance);
-
-	const isRenderSwapButton = allowedSwapCoinsList.includes(coinType);
 
 	const coinMetadataOverrides = useCoinMetadataOverrides();
 	return (
@@ -160,24 +153,22 @@ export function TokenRow({
 							>
 								Send
 							</TokenRowButton>
-							{isRenderSwapButton && (
-								<TokenRowButton
-									coinBalance={coinBalance}
-									to={`/swap?${params.toString()}`}
-									onClick={() => {
-										ampli.clickedSwapCoin({
-											coinType: coinBalance.coinType,
-											totalBalance: Number(formatted),
-											sourceFlow: 'TokenRow',
-										});
-									}}
-								>
-									Swap
-								</TokenRowButton>
-							)}
+							<TokenRowButton
+								coinBalance={coinBalance}
+								to={`/swap?${params.toString()}`}
+								onClick={() => {
+									ampli.clickedSwapCoin({
+										coinType: coinBalance.coinType,
+										totalBalance: Number(formatted),
+										sourceFlow: 'TokenRow',
+									});
+								}}
+							>
+								Swap
+							</TokenRowButton>
 						</div>
 					) : (
-						<div className="flex gap-1 items-center">
+						<div className="flex flex-wrap gap-1 items-start">
 							<Text variant="subtitleSmall" weight="semibold" color="gray-90">
 								{symbol}
 							</Text>
@@ -191,19 +182,19 @@ export function TokenRow({
 
 			<div className="ml-auto flex flex-col items-end gap-1">
 				{balance > 0n && (
-					<Text variant="body" color="gray-90" weight="medium">
+					<Text variant="body" color="gray-90" weight="medium" className="text-end">
 						{formatted} {symbol}
 					</Text>
 				)}
 
-				{balanceInUsd && balanceInUsd > 0 && (
+				{balanceInUsd && balanceInUsd > 0 ? (
 					<Text variant="subtitle" color="steel-dark" weight="medium">
 						{Number(balanceInUsd).toLocaleString('en', {
 							style: 'currency',
 							currency: 'USD',
 						})}
 					</Text>
-				)}
+				) : null}
 			</div>
 		</Tag>
 	);
@@ -429,6 +420,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 				>
 					<AccountsList />
 					<BuyNLargeHomePanel />
+					<UsdcPromoBanner />
+
 					<div className="flex flex-col w-full">
 						<PortfolioName
 							name={activeAccount.nickname ?? domainName ?? formatAddress(activeAccountAddress)}
