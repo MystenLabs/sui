@@ -39,7 +39,7 @@ use tempfile::TempDir;
 use tracing::{debug, info};
 
 pub(crate) const CURRENT_COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
-const LEGACY_COMPILER_VERSION: &str = CURRENT_COMPILER_VERSION; // TODO: update this when Move 2024 is released
+const LEGACY_COMPILER_VERSION: &str = "1.31.1";
 const PRE_TOOLCHAIN_MOVE_LOCK_VERSION: u16 = 0; // Used to detect lockfiles pre-toolchain versioning support
 const CANONICAL_UNIX_BINARY_NAME: &str = "sui";
 const CANONICAL_WIN_BINARY_NAME: &str = "sui.exe";
@@ -95,8 +95,8 @@ pub(crate) fn units_for_toolchain(
         }
 
         let mut lock_file = File::open(lock_file)?;
-        let lock_version = Header::read(&mut lock_file)?.version;
-        if lock_version == PRE_TOOLCHAIN_MOVE_LOCK_VERSION {
+        let header = Header::read(&mut lock_file);
+        if !matches!(header, Ok(h) if h.version > PRE_TOOLCHAIN_MOVE_LOCK_VERSION) {
             // No need to attempt reading lock file toolchain
             debug!("{package} on legacy compiler",);
             package_version_map.insert(*package, (legacy_toolchain(), vec![local_unit.clone()]));
@@ -154,15 +154,18 @@ pub(crate) fn units_for_toolchain(
             &package,
         )?;
 
-        let compiled_unit_paths = vec![package_root.clone()];
-        let compiled_units = find_filenames(&compiled_unit_paths, |path| {
-            extension_equals(path, MOVE_COMPILED_EXTENSION)
-        })?;
         let build_path = install_dir
             .path()
             .join(CompiledPackageLayout::path(&CompiledPackageLayout::Root))
             .join(package.as_str());
+
         debug!("build path is {}", build_path.display());
+
+        let compiled_units = find_filenames(&[build_path.clone()], |path| {
+            extension_equals(path, MOVE_COMPILED_EXTENSION)
+        })?;
+
+        debug!("compiled units {compiled_units:?}");
 
         // Add all units compiled with the previous compiler.
         for bytecode_path in compiled_units {
@@ -186,8 +189,7 @@ fn download_and_compile(
 ) -> anyhow::Result<()> {
     let dest_dir = PathBuf::from_iter([&*MOVE_HOME, "binaries"]); // E.g., ~/.move/binaries
     let dest_version = dest_dir.join(compiler_version);
-    let mut dest_canonical_path = dest_version.clone();
-    dest_canonical_path.extend(["target", "release"]);
+    let dest_canonical_path = dest_version.clone();
     let mut dest_canonical_binary = dest_canonical_path.clone();
 
     let platform = detect_platform(&root, compiler_version, &dest_canonical_path)?;
@@ -247,11 +249,10 @@ fn download_and_compile(
             .map_err(|e| anyhow!("failed to untar compiler binary: {e}"))?;
 
         let mut dest_binary = dest_version.clone();
-        dest_binary.extend(["target", "release"]);
         if platform == "windows-x86_64" {
-            dest_binary.push(format!("sui-{platform}.exe"));
+            dest_binary.push("sui.exe".to_owned());
         } else {
-            dest_binary.push(format!("sui-{platform}"));
+            dest_binary.push("sui".to_owned());
         }
         let dest_binary_os = OsStr::new(dest_binary.as_path());
         set_executable_permission(dest_binary_os)?;
@@ -266,13 +267,15 @@ fn download_and_compile(
         root.display(),
         install_dir.path().display(),
     );
+
     info!(
         "{} {} (compiler @ {})",
         "BUILDING".bold().green(),
         dep_name.as_str(),
         compiler_version.yellow()
     );
-    Command::new(dest_canonical_binary)
+
+    let output = Command::new(dest_canonical_binary)
         .args([
             OsStr::new("move"),
             OsStr::new("build"),
@@ -280,6 +283,7 @@ fn download_and_compile(
             OsStr::new(edition.to_string().as_str()),
             OsStr::new("--default-move-flavor"),
             OsStr::new(flavor.to_string().as_str()),
+            OsStr::new("--silence-warnings"),
             OsStr::new("-p"),
             OsStr::new(root.as_path()),
             OsStr::new("--install-dir"),
@@ -289,6 +293,14 @@ fn download_and_compile(
         .map_err(|e| {
             anyhow!("failed to build package from compiler binary {compiler_version}: {e}",)
         })?;
+
+    ensure!(
+        output.status.success(),
+        "failed to build package from compiler binary {compiler_version}.\nSTDERR:\n{}\n\nSTDOUT:\n{}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout),
+    );
+
     Ok(())
 }
 
