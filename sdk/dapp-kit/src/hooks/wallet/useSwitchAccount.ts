@@ -6,11 +6,8 @@ import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-quer
 import { useMutation } from '@tanstack/react-query';
 
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
-import { getSwitchAccount } from '../../core/wallet/getSwitchAccount.js';
-import type {
-	WalletAccountNotFoundError,
-	WalletNotConnectedError,
-} from '../../errors/walletErrors.js';
+import { WalletAccountNotFoundError, WalletNotConnectedError } from '../../errors/walletErrors.js';
+import { useCurrentWallet } from './useCurrentWallet.js';
 import { useWalletStore } from './useWalletStore.js';
 
 type SwitchAccountArgs = {
@@ -37,12 +34,26 @@ export function useSwitchAccount({
 	UseSwitchAccountError,
 	SwitchAccountArgs
 > {
-	const switchAccount = useWalletStore(getSwitchAccount);
+	const { currentWallet } = useCurrentWallet();
+	const setAccountSwitched = useWalletStore((state) => state.setAccountSwitched);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.switchAccount(mutationKey),
-		mutationFn: async (args) => {
-			return switchAccount(args);
+		mutationFn: async ({ account }) => {
+			if (!currentWallet) {
+				throw new WalletNotConnectedError('No wallet is connected.');
+			}
+
+			const accountToSelect = currentWallet.accounts.find(
+				(walletAccount) => walletAccount.address === account.address,
+			);
+			if (!accountToSelect) {
+				throw new WalletAccountNotFoundError(
+					`No account with address ${account.address} is connected to ${currentWallet.name}.`,
+				);
+			}
+
+			setAccountSwitched(accountToSelect);
 		},
 		...mutationOptions,
 	});
