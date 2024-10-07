@@ -6,7 +6,7 @@
 'use client';
 
 import { SuiClientProvider, useSuiClient } from '@mysten/dapp-kit';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { ConnectButton, useWalletKit, WalletKitProvider } from '@mysten/wallet-kit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -61,7 +61,7 @@ function HomeContent() {
 			}
 			// Create a new transaction block
 			// TransactionBlock is used to construct and execute transactions on Sui
-			const tx = new TransactionBlock();
+			const tx = new Transaction();
 			// Convert amount to smallest unit (6 decimals)
 			const amountInSmallestUnit = BigInt(parseFloat(amount) * 1_000_000);
 			// Split the coin and get a new coin with the specified amount
