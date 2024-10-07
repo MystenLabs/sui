@@ -58,7 +58,7 @@ export function Counter({ id }: { id: string }) {
     );
   };
 
-  if (isPending) return <Text>Pending...</Text>;
+  if (isPending) return <Text>Loading...</Text>;
 
   if (error) return <Text>Error: {error.message}</Text>;
 
