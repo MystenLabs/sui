@@ -430,8 +430,10 @@ impl BlockManager {
     /// this action.
     pub(crate) fn try_unsuspend_blocks_for_latest_gc_round(&mut self) {
         let _s = monitored_scope("BlockManager::try_unsuspend_blocks_for_latest_gc_round");
-        let gc_enabled = self.dag_state.read().gc_enabled();
-        let gc_round = self.dag_state.read().gc_round();
+        let (gc_enabled, gc_round) = {
+            let dag_state = self.dag_state.read();
+            (dag_state.gc_enabled(), dag_state.gc_round())
+        };
         let mut blocks_unsuspended_below_gc_round = 0;
         let mut blocks_gc_ed = 0;
 
