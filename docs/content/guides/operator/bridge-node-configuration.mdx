@@ -57,7 +57,7 @@ Run the following command to execute it:
 $ sui client execute-signed-tx
 ```
 
-#### Update metadata
+#### Update metadata (before committee is finalized)
 
 Both key and URL are changeable **before the committee is finalized**. If you wish to update metadata, simply rerun `sui validator register-bridge-committee`.
 
@@ -68,6 +68,17 @@ To double check you registered the correct metadata on chain, run
 ```sh
 $ sui-bridge-cli view-bridge-registration --sui-rpc-url {SUI-FULLNODE-URL}
 ```
+
+## Update metadata (after committee is finalized)
+
+Use the following command to update bridge node URL:
+```sh
+$sui validator update-bridge-committee-node-url
+```
+Refer to offline signing section in this page for how to sign the transaction offline.
+
+Authoritiy key rotating is not supported yet.
+
 
 ## Bridge Node
 
