@@ -180,11 +180,13 @@ const addCodeInject = function (source) {
                 let varContent = [];
                 if (language === "ts") {
                   const varTsFunction = `^( *)?.*?(let|const) \\b${variableName}\\b.*=>`;
+                  const varTsVariable = `^( *)?.*?(let|const) \\b${variableName}\\b (?!.*=>)=.*;`;
                   const varTsRE = new RegExp(varTsFunction, "m");
+                  const varTsVarRE = new RegExp(varTsVariable, "m");
                   const varTsMatch = varTsRE.exec(injectFileContent);
+                  const varTsVarMatch = varTsVarRE.exec(injectFileContent);
                   if (varTsMatch) {
                     const start = injectFileContent.slice(varTsMatch.index);
-                    //console.log(varTsMatch[1]);
                     const endText = `^${varTsMatch[1] ? varTsMatch[1] : ""}\\)?\\};`;
                     const endRE = new RegExp(endText, "m");
                     const endMatch = endRE.exec(start);
@@ -197,6 +199,15 @@ const addCodeInject = function (source) {
                         start.slice(0, endMatch.index + endMatch[0].length),
                         preVarTs,
                       ),
+                    );
+                  }
+                  if (varTsVarMatch) {
+                    let preVarTs = utils.capturePrepend(
+                      varTsVarMatch,
+                      injectFileContent,
+                    );
+                    varContent.push(
+                      utils.removeLeadingSpaces(varTsVarMatch[0], preVarTs),
                     );
                   }
                 } else {
@@ -266,7 +277,7 @@ const addCodeInject = function (source) {
                     element = names[1];
                     ordinal = names[2] ? names[2] : "";
                   }
-                  const compStr = `^( *)(export (default )?)?function \\b${name}\\b.*?\\n\\1}\\n`;
+                  const compStr = `^( *)(export (default )?)?function \\b${name}\\b.*?\\n\\1\\}\\n`;
                   const compRE = new RegExp(compStr, "ms");
                   const compMatch = compRE.exec(injectFileContent);
                   if (compMatch) {
