@@ -203,7 +203,10 @@ impl<'a> Analyzer<'a> {
         for module in self.env.get_modules() {
             for fun in module.get_functions() {
                 for (variant, target) in self.targets.get_targets(&fun) {
-                    if self.targets.get_fun_by_opaque_spec(&fun.get_qualified_id()).is_none()
+                    if self
+                        .targets
+                        .get_fun_by_opaque_spec(&fun.get_qualified_id())
+                        .is_none()
                     {
                         continue;
                     }
@@ -304,7 +307,7 @@ impl<'a> Analyzer<'a> {
     }
 
     fn analyze_fun(&mut self, target: FunctionTarget<'_>) {
-        self.analyze_fun_types(&target);
+        self.analyze_fun_types(&target, self.inst_opt.clone());
         // Analyze code.
         if !target.func_env.is_native_or_intrinsic() {
             for bc in target.get_bytecode() {
@@ -363,14 +366,19 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn analyze_fun_types(&mut self, target: &FunctionTarget<'_>) {
+    fn analyze_fun_types(&mut self, target: &FunctionTarget<'_>, inst_opt: Option<Vec<Type>>) {
+        let old_inst = std::mem::replace(&mut self.inst_opt, inst_opt);
         // Analyze function locals and return value types.
-        for idx in 0..target.get_local_count() {
+        for ty in target.func_env.get_parameter_types() {
+            self.add_type_root(&ty);
+        }
+        for idx in target.get_non_parameter_locals() {
             self.add_type_root(target.get_local_type(idx));
         }
         for ty in target.get_return_types().iter() {
             self.add_type_root(ty);
         }
+        self.inst_opt = old_inst;
     }
 
     fn analyze_bytecode(&mut self, target: &FunctionTarget<'_>, bc: &Bytecode) {
@@ -426,6 +434,7 @@ impl<'a> Analyzer<'a> {
                             &self
                                 .targets
                                 .get_target(&callee_env, &FunctionVariant::Baseline),
+                            Some(actuals.clone()),
                         );
                     }
                 };
@@ -440,6 +449,7 @@ impl<'a> Analyzer<'a> {
                         &self
                             .targets
                             .get_target(&callee_env, &FunctionVariant::Baseline),
+                        Some(actuals.clone()),
                     );
                     // Mark the associated module to be instantiated with the given actuals.
                     // This will instantiate all functions in the module with matching number

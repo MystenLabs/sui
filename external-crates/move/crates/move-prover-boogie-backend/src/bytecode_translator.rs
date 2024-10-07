@@ -468,11 +468,6 @@ impl<'env> BoogieTranslator<'env> {
         }
         let spec_fun_target = self.targets.get_target(&fun_env, &variant);
 
-        println!(
-            "spec_fun_target function={}, variant={}",
-            spec_fun_target, spec_fun_target.data.variant
-        );
-
         let mut builder = FunctionDataBuilder::new_with_options(
             spec_fun_target.func_env,
             spec_fun_target.data.clone(),
@@ -884,10 +879,6 @@ impl<'env> FunctionTranslator<'env> {
 
     /// Translates the given function.
     fn translate(mut self) {
-        println!(
-            "translate function={}, variant={}",
-            self.fun_target, self.fun_target.data.variant
-        );
         let writer = self.parent.writer;
         let fun_target = self.fun_target;
         let env = fun_target.global_env();
@@ -1494,7 +1485,6 @@ impl<'env> FunctionTranslator<'env> {
                     && self.fun_target.data.variant
                         == FunctionVariant::Verification(VerificationFlavor::Regular)
                 {
-                    println!("has_aborts is true");
                     emitln!(
                         self.writer(),
                         "call {}({});",
