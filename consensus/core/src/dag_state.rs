@@ -852,7 +852,8 @@ impl DagState {
 
         // First we store the evicted rounds for each authority.
         for (authority_index, _) in self.context.committee.authorities() {
-            self.evicted_rounds[authority_index] = self.authority_eviction_round(authority_index);
+            self.evicted_rounds[authority_index] =
+                self.calculate_authority_eviction_round(authority_index);
         }
 
         // Then we clean up the blocks that are meant to be evicted
@@ -959,12 +960,17 @@ impl DagState {
         self.genesis.values().cloned().collect()
     }
 
-    /// The last round that got evicted after a cache clean up operation. After this round we are
+    /// The last round that should get evicted after a cache clean up operation. After this round we are
     /// guaranteed to have all the produced blocks from that authority. For any round that is
     /// <= `last_evicted_round` we don't have such guarantees as out of order blocks might exist.
-    fn authority_eviction_round(&self, authority_index: AuthorityIndex) -> Round {
+    fn calculate_authority_eviction_round(&self, authority_index: AuthorityIndex) -> Round {
         if self.gc_enabled() {
-            self.authority_gc_eviction_round(authority_index)
+            let last_round = self.recent_refs[authority_index]
+                .last()
+                .map(|block_ref| block_ref.round)
+                .unwrap_or(GENESIS_ROUND);
+
+            Self::gc_eviction_round(last_round, self.gc_round(), self.cached_rounds)
         } else {
             let commit_round = self.last_committed_rounds[authority_index];
             Self::eviction_round(commit_round, self.cached_rounds)
@@ -980,15 +986,6 @@ impl DagState {
     /// Returns the eviction round for the provided authority. The logic for it is computed as follows:
     /// * if `latest_block_round` - `gc_round` >= `CACHED_ROUNDS`, then we will evicted entries <= gc_round, as we have enough data to cover the CACHED_ROUNDS and also uncommitted blocks are kept in memory.
     /// * if `latest_block_round` - `gc_round` < `CACHED_ROUNDS`, then we will evict entries <= `latest_block_round` - `CACHED_ROUNDS`, as we don't have enough data to cover the CACHED_ROUNDS
-    fn authority_gc_eviction_round(&self, authority_index: AuthorityIndex) -> Round {
-        let last_round = self.recent_refs_by_authority[authority_index]
-            .last()
-            .map(|block_ref| block_ref.round)
-            .unwrap_or(GENESIS_ROUND);
-
-        Self::gc_eviction_round(last_round, self.gc_round(), self.cached_rounds)
-    }
-
     fn gc_eviction_round(last_round: Round, gc_round: Round, cached_rounds: u32) -> Round {
         if last_round.saturating_sub(gc_round) >= cached_rounds {
             gc_round
