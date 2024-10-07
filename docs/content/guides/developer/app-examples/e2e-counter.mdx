@@ -264,9 +264,11 @@ npx tailwindcss init -p
 
 ### Creating `Counter`
 
+You need a way to create a new `Counter` object. 
+
 <details>
   <summary>
-    You need a way to create a new `Counter` object. Do this by creating a new `CreateCounter` component in the new `src/CreateCounter.tsx` file:
+    Create `src/CreateCounter.tsx` and add the following code:
   </summary>
   ```tsx
     import { Button, Container } from '@radix-ui/themes';
@@ -505,9 +507,11 @@ The code also adds an `executeMoveCall` function that still needs implementing. 
 
 ### Updating the routing
 
+Now that you have a `Counter` component, you need to update your `App` component to render it when you have a counter ID.
+
 <details>
   <summary>
-    Now that you have a `Counter` component, you need to update your `App` component to render it when you have a counter ID.
+    Update the `src/App.tsx` file to render the `Counter` component when you have a counter ID:
   </summary>
   {@inject: sdk/create-dapp/templates/react-e2e-counter/src/App.tsx noComments}
 </details>
