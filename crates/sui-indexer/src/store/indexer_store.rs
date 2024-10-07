@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
+use strum::IntoEnumIterator;
 
 use crate::errors::IndexerError;
 use crate::handlers::{CommitterWatermark, EpochToCommit, TransactionObjectChangesToCommit};
@@ -116,9 +117,10 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
     ) -> Result<(), IndexerError>;
 
     /// Update the upper bound of the watermarks for the given tables.
-    async fn update_watermarks_upper_bound(
+    async fn update_watermarks_upper_bound<E: IntoEnumIterator>(
         &self,
-        table_names: Vec<String>,
         watermark: CommitterWatermark,
-    ) -> Result<(), IndexerError>;
+    ) -> Result<(), IndexerError>
+    where
+        E::Iterator: Iterator<Item: AsRef<str>>;
 }

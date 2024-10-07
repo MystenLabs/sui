@@ -10,13 +10,11 @@ use tracing::{error, info};
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-use crate::handlers::pruner::PrunableTable;
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
 use crate::types::IndexerResult;
-use strum::IntoEnumIterator;
 
-use super::{CheckpointDataToCommit, CommitterWatermark, EpochToCommit};
+use super::{CheckpointDataToCommit, CommitterTables, CommitterWatermark, EpochToCommit};
 
 pub(crate) const CHECKPOINT_COMMIT_BATCH_SIZE: usize = 100;
 
@@ -221,10 +219,8 @@ async fn commit_checkpoints<S>(
         })
         .expect("Persisting data into DB should not fail.");
 
-    let table_names: Vec<String> = PrunableTable::iter().map(|v| v.to_string()).collect();
-
     state
-        .update_watermarks_upper_bound(table_names, committer_watermark)
+        .update_watermarks_upper_bound::<CommitterTables>(committer_watermark)
         .await
         .tap_err(|e| {
             error!(

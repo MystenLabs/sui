@@ -16,6 +16,7 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use futures::future::Either;
 use itertools::Itertools;
 use object_store::path::Path;
+use strum::IntoEnumIterator;
 use sui_types::base_types::ObjectID;
 use tap::TapFallible;
 use tracing::{info, warn};
@@ -1459,11 +1460,13 @@ impl PgIndexerStore {
             .map(|v| v as u64)
     }
 
-    async fn update_watermarks_upper_bound(
+    async fn update_watermarks_upper_bound<E: IntoEnumIterator>(
         &self,
-        tables: Vec<String>,
         watermark: CommitterWatermark,
-    ) -> Result<(), IndexerError> {
+    ) -> Result<(), IndexerError>
+    where
+        E::Iterator: Iterator<Item: AsRef<str>>,
+    {
         use diesel_async::RunQueryDsl;
 
         let guard = self
@@ -1472,8 +1475,7 @@ impl PgIndexerStore {
             .start_timer();
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            let upper_bound_updates = tables
-                .into_iter()
+            let upper_bound_updates = E::iter()
                 .map(|table| StoredWatermark::from_upper_bound_update(table.as_ref(), watermark))
                 .collect::<Vec<_>>();
             async {
@@ -2161,12 +2163,14 @@ impl IndexerStore for PgIndexerStore {
         self.persist_raw_checkpoints_impl(&checkpoints).await
     }
 
-    async fn update_watermarks_upper_bound(
+    async fn update_watermarks_upper_bound<E: IntoEnumIterator>(
         &self,
-        tables: Vec<String>,
         watermark: CommitterWatermark,
-    ) -> Result<(), IndexerError> {
-        self.update_watermarks_upper_bound(tables, watermark).await
+    ) -> Result<(), IndexerError>
+    where
+        E::Iterator: Iterator<Item: AsRef<str>>,
+    {
+        self.update_watermarks_upper_bound::<E>(watermark).await
     }
 }
 

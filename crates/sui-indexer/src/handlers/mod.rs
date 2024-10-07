@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use futures::{FutureExt, StreamExt};
 
+use serde::{Deserialize, Serialize};
 use sui_rest_api::CheckpointData;
 use tokio_util::sync::CancellationToken;
 
@@ -161,7 +162,9 @@ pub trait Handler<T>: Send + Sync {
     }
 }
 
-/// Represents the latest epoch, checkpoint, and transaction of the batch that was just committed.
+/// The indexer writer operates on checkpoint data, which contains information on the current epoch,
+/// checkpoint, and transaction. These three numbers form the watermark upper bound for each
+/// committed table.
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct CommitterWatermark {
     pub epoch: u64,
@@ -190,4 +193,82 @@ impl From<&CheckpointData> for CommitterWatermark {
                 .saturating_sub(1),
         }
     }
+}
+
+/// Enum representing tables that a committer updates.
+#[derive(
+    Debug,
+    Eq,
+    PartialEq,
+    strum_macros::Display,
+    strum_macros::EnumString,
+    strum_macros::EnumIter,
+    strum_macros::AsRefStr,
+    Hash,
+    Serialize,
+    Deserialize,
+    Clone,
+)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum CommitterTables {
+    // Unpruned tables
+    ChainIdentifier,
+    Display,
+    Epochs,
+    FeatureFlags,
+    FullObjectsHistory,
+    Objects,
+    ObjectsVersion,
+    Packages,
+    ProtocolConfigs,
+    RawCheckpoints,
+
+    // Prunable tables
+    ObjectsHistory,
+    Transactions,
+    Events,
+
+    EventEmitPackage,
+    EventEmitModule,
+    EventSenders,
+    EventStructInstantiation,
+    EventStructModule,
+    EventStructName,
+    EventStructPackage,
+
+    TxAffectedAddresses,
+    TxAffectedObjects,
+    TxCallsPkg,
+    TxCallsMod,
+    TxCallsFun,
+    TxChangedObjects,
+    TxDigests,
+    TxInputObjects,
+    TxKinds,
+    TxRecipients,
+    TxSenders,
+
+    Checkpoints,
+    PrunerCpWatermark,
+}
+
+/// Enum representing tables that the objects snapshot processor updates.
+#[derive(
+    Debug,
+    Eq,
+    PartialEq,
+    strum_macros::Display,
+    strum_macros::EnumString,
+    strum_macros::EnumIter,
+    strum_macros::AsRefStr,
+    Hash,
+    Serialize,
+    Deserialize,
+    Clone,
+)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum ObjectsSnapshotHandlerTables {
+    ObjectsSnapshot,
 }

@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use mysten_metrics::get_metrics;
 use mysten_metrics::metered_channel::Sender;
 use mysten_metrics::spawn_monitored_task;
+use strum::IntoEnumIterator;
 use sui_data_ingestion_core::Worker;
 use sui_rest_api::CheckpointData;
 use tokio_util::sync::CancellationToken;
@@ -16,7 +17,7 @@ use crate::types::IndexerResult;
 use crate::{metrics::IndexerMetrics, store::IndexerStore};
 
 use super::checkpoint_handler::CheckpointHandler;
-use super::{CommitterWatermark, TransactionObjectChangesToCommit};
+use super::{CommitterWatermark, ObjectsSnapshotHandlerTables, TransactionObjectChangesToCommit};
 use super::{CommonHandler, Handler};
 
 #[derive(Clone)]
@@ -67,7 +68,7 @@ impl Handler<TransactionObjectChangesToCommit> for ObjectsSnapshotHandler {
 
     async fn set_watermark_hi(&self, watermark: CommitterWatermark) -> IndexerResult<()> {
         self.store
-            .update_watermarks_upper_bound(vec!["objects_snapshot".to_string()], watermark)
+            .update_watermarks_upper_bound::<ObjectsSnapshotHandlerTables>(watermark)
             .await?;
 
         self.metrics
