@@ -20,7 +20,7 @@ use sui_types::storage::WriteKind;
 use sui_types::transaction::InputObjectKind;
 use tracing::instrument;
 
-#[instrument(skip_all)]
+#[instrument(skip_all, fields(transaction_digest = %effects.transaction_digest()))]
 pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     effects: &TransactionEffects,

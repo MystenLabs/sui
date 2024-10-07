@@ -101,6 +101,24 @@ impl Key {
             Key::ObjectKey(_, _) => "ob",
         }
     }
+
+    pub fn encode(&self) -> String {
+        match self {
+            Key::Tx(digest) => encode_digest(digest),
+            Key::Fx(digest) => encode_digest(digest),
+            Key::Events(digest) => encode_digest(digest),
+            Key::CheckpointContents(seq) => encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq)),
+            Key::CheckpointSummary(seq) => encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq)),
+            Key::CheckpointContentsByDigest(digest) => encode_digest(digest),
+            Key::CheckpointSummaryByDigest(digest) => encode_digest(digest),
+            Key::TxToCheckpoint(digest) => encode_digest(digest),
+            Key::ObjectKey(object_id, version) => encode_object_key(object_id, version),
+        }
+    }
+
+    pub fn to_path_elements(&self) -> (String, &'static str) {
+        (self.encode(), self.ty())
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -111,26 +129,6 @@ enum Value {
     CheckpointContents(Box<CheckpointContents>),
     CheckpointSummary(Box<CertifiedCheckpointSummary>),
     TxToCheckpoint(CheckpointSequenceNumber),
-}
-
-pub fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
-    match key {
-        Key::Tx(digest) => Ok((encode_digest(digest), "tx")),
-        Key::Fx(digest) => Ok((encode_digest(digest), "fx")),
-        Key::Events(digest) => Ok((encode_digest(digest), "ev")),
-        Key::CheckpointContents(seq) => Ok((
-            encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq)),
-            "cc",
-        )),
-        Key::CheckpointSummary(seq) => Ok((
-            encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq)),
-            "cs",
-        )),
-        Key::CheckpointContentsByDigest(digest) => Ok((encode_digest(digest), "cc")),
-        Key::CheckpointSummaryByDigest(digest) => Ok((encode_digest(digest), "cs")),
-        Key::TxToCheckpoint(digest) => Ok((encode_digest(digest), "tx2c")),
-        Key::ObjectKey(object_id, version) => Ok((encode_object_key(object_id, version), "ob")),
-    }
 }
 
 pub fn path_elements_to_key(digest: &str, type_: &str) -> anyhow::Result<Key> {
@@ -219,7 +217,7 @@ impl HttpKVStore {
     }
 
     fn get_url(&self, key: &Key) -> SuiResult<Url> {
-        let (digest, item_type) = key_to_path_elements(key)?;
+        let (digest, item_type) = key.to_path_elements();
         let joined = self
             .base_url
             .join(&format!("{}/{}", digest, item_type))
