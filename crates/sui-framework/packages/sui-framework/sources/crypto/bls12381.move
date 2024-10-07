@@ -45,7 +45,7 @@ public struct G1Uncompressed {}
 // https://docs.rs/bls12_381/latest/bls12_381/notes/serialization/index.html for details.
 // GT is encoded using big-endian byte order and points are uncompressed and not intended
 // to be deserialized.
-// G1Uncompressed is G1 elements in uncompressed. They are faster to use since they do
+// G1Uncompressed is G1 elements in uncompressed. They are larger but faster to use since they do
 // not have to be uncompressed before use. They can not be constructed on their own but
 // have to be created from G1 elements.
 
