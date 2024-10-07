@@ -4222,6 +4222,51 @@ sha2_256
 sha3_256
 	public fun
 	0x1::hash
+UQ32_32
+	public struct
+	0x1::uq32_32
+from_rational
+	public fun
+	0x1::uq32_32
+from_integer
+	public fun
+	0x1::uq32_32
+add
+	public fun
+	0x1::uq32_32
+sub
+	public fun
+	0x1::uq32_32
+mul
+	public fun
+	0x1::uq32_32
+div
+	public fun
+	0x1::uq32_32
+int_mul
+	public fun
+	0x1::uq32_32
+int_div
+	public fun
+	0x1::uq32_32
+le
+	public fun
+	0x1::uq32_32
+lt
+	public fun
+	0x1::uq32_32
+ge
+	public fun
+	0x1::uq32_32
+gt
+	public fun
+	0x1::uq32_32
+to_raw
+	public fun
+	0x1::uq32_32
+from_raw
+	public fun
+	0x1::uq32_32
 empty
 	public fun
 	0x1::vector
