@@ -151,8 +151,10 @@ impl BlockManager {
         &mut self,
         unsuspended_blocks: impl IntoIterator<Item = VerifiedBlock>,
     ) -> Vec<VerifiedBlock> {
-        let gc_enabled = self.dag_state.read().gc_enabled();
-        let gc_round = self.dag_state.read().gc_round();
+        let (gc_enabled, gc_round) = {
+            let dag_state = self.dag_state.read();
+            (dag_state.gc_enabled(), dag_state.gc_round())
+        };
         // Try to verify the block and its children for timestamp, with ancestor blocks.
         let mut blocks_to_accept: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
         let mut blocks_to_reject: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
