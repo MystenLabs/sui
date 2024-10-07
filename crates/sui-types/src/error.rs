@@ -809,6 +809,7 @@ impl SuiError {
             SuiError::ValidatorHaltedAtEpochEnd => true,
             SuiError::MissingCommitteeAtEpoch(..) => true,
             SuiError::WrongEpoch { .. } => true,
+            SuiError::EpochEnded(..) => true,
 
             SuiError::UserInputError { error } => {
                 match error {
