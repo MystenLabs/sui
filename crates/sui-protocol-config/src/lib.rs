@@ -186,6 +186,7 @@ const MAX_PROTOCOL_VERSION: u64 = 65;
 // Version 62: Makes the event's sending module package upgrade-aware.
 // Version 63: Enable gas based congestion control in consensus commit.
 // Version 64: Switch to distributed vote scoring in consensus in mainnet
+//             Add G1Uncompressed to sui framework.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2841,15 +2842,6 @@ impl ProtocolConfig {
                 }
                 62 => {
                     cfg.feature_flags.relocate_event_module = true;
-
-                    cfg.group_ops_bls12381_g1_to_g1_uncompressed_cost = Some(26);
-                    cfg.group_ops_bls12381_g1_uncompressed_to_g1_cost = Some(52);
-                    cfg.group_ops_bls12381_g1_uncompressed_sum_base_cost = Some(26);
-                    cfg.group_ops_bls12381_g1_uncompressed_sum_cost_per_term = Some(13);
-
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.uncompressed_g1_group_elements = true;
-                    }
                 }
                 63 => {
                     cfg.feature_flags.per_object_congestion_control_mode =
@@ -2868,6 +2860,15 @@ impl ProtocolConfig {
                     // Enable distributed vote scoring for mainnet
                     cfg.feature_flags
                         .consensus_distributed_vote_scoring_strategy = true;
+
+                    cfg.group_ops_bls12381_g1_to_g1_uncompressed_cost = Some(26);
+                    cfg.group_ops_bls12381_g1_uncompressed_to_g1_cost = Some(52);
+                    cfg.group_ops_bls12381_g1_uncompressed_sum_base_cost = Some(26);
+                    cfg.group_ops_bls12381_g1_uncompressed_sum_cost_per_term = Some(13);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.uncompressed_g1_group_elements = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
