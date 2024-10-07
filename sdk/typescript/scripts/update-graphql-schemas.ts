@@ -29,7 +29,7 @@ const result = execSync(`git branch --remote --list "origin/releases/sui-graphql
 					minor,
 					patch,
 					branch,
-					schema: `https://raw.githubusercontent.com/MystenLabs/sui/${branch}/crates/sui-graphql-rpc/schema.graphql`,
+					schema: `https://raw.githubusercontent.com/MystenLabs/sui/${branch}/crates/sui-graphql-rpc/schema/current_progress_schema.graphql`,
 				}
 			: null;
 	})
@@ -46,6 +46,10 @@ for (const release of result) {
 
 for (const { minorVersion, schema } of releasesByVersion.values()) {
 	const res = await fetch(schema);
+
+	if (!res.ok) {
+		throw new Error(`Failed to fetch schema from ${schema}`);
+	}
 	const schemaContent = await res.text();
 
 	const filePath = resolve(
@@ -73,7 +77,9 @@ for (const { minorVersion, schema } of releasesByVersion.values()) {
 `.trimStart(),
 	);
 
-	execSync(`pnpm run generate-schema -c ${resolve(filePath, '..', 'tsconfig.tada.json')}`);
+	execSync(`pnpm run generate-schema -c ${resolve(filePath, '..', 'tsconfig.tada.json')}`, {
+		stdio: 'inherit',
+	});
 
 	await mkdir(resolve(filePath, '../../../schemas', minorVersion), { recursive: true });
 	await writeFile(
