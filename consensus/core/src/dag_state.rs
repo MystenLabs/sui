@@ -48,10 +48,8 @@ pub(crate) struct DagState {
     //
     // When GC is enabled, this map has a different semantic. It holds all the recent data for each authority making sure that it always have available
     // CACHED_ROUNDS worth of data. The entries are evicted based on the latest GC round, however the eviction process will respect the CACHED_ROUNDS.
-    // For each authority:
-    // * if `latest_block_round` - `gc_round` >= `CACHED_ROUNDS`, then we will evicted entries <= gc_round, as we have enough data to cover the CACHED_ROUNDS and also uncommitted blocks are kept in memory.
-    // * if `latest_block_round` - `gc_round` < `CACHED_ROUNDS`, then we will evict entries <= `latest_block_round` - `CACHED_ROUNDS`, as we don't have enough data to cover the CACHED_ROUNDS
-    // That way we ensure that we always respect the GC requirements (we never clean up anything above `gc_round`) and also we always try to have enough data to cover the CACHED_ROUNDS.
+    // For each authority, blocks are only evicted when their round is less than or equal to both `gc_round`, and `highest authority round - cached rounds`.
+    // This ensures that the GC requirements are respected (we never clean up any block above `gc_round`), and there are enough blocks cached.
     recent_blocks: BTreeMap<BlockRef, VerifiedBlock>,
 
     // Indexes recent block refs by their authorities.
@@ -60,6 +58,7 @@ pub(crate) struct DagState {
 
     // Keeps track of the highest round that has been evicted for each authority. Any blocks that are of round <= evict_round
     // should be considered evicted, and if any exist we should not consider the causauly complete in the order they appear.
+    // The `evicted_rounds` size should be the same as the committee size.
     evicted_rounds: Vec<Round>,
 
     // Highest round of blocks accepted.
@@ -193,7 +192,7 @@ impl DagState {
 
         for (i, round) in last_committed_rounds.into_iter().enumerate() {
             let authority_index = state.context.committee.to_authority_index(i).unwrap();
-            let blocks = if state.gc_enabled() {
+            let (blocks, eviction_round) = if state.gc_enabled() {
                 // Find the latest block for the authority to calculate the eviction round. Then we want to scan and load the blocks from the eviction round and onwards only.
                 // As reminder, the eviction round is taking into account the gc_round.
                 let last_block = state
@@ -205,25 +204,26 @@ impl DagState {
                     .map(|b| b.round())
                     .unwrap_or(GENESIS_ROUND);
 
-                let gc_eviction_round = Self::gc_eviction_round(
+                let eviction_round = Self::gc_eviction_round(
                     last_block_round,
                     state.gc_round(),
                     state.cached_rounds,
-                ) + 1;
-
-                state
+                );
+                let blocks = state
                     .store
-                    .scan_blocks_by_author(authority_index, gc_eviction_round)
-                    .expect("Database error")
+                    .scan_blocks_by_author(authority_index, eviction_round + 1)
+                    .expect("Database error");
+                (blocks, eviction_round)
             } else {
-                state
+                let eviction_round = Self::eviction_round(round, cached_rounds);
+                let blocks = state
                     .store
-                    .scan_blocks_by_author(
-                        authority_index,
-                        Self::eviction_round(round, cached_rounds) + 1,
-                    )
-                    .expect("Database error")
+                    .scan_blocks_by_author(authority_index, eviction_round + 1)
+                    .expect("Database error");
+                (blocks, eviction_round)
             };
+
+            state.evicted_rounds[authority_index] = eviction_round;
 
             // Update the block metadata for the authority.
             for block in &blocks {
@@ -238,12 +238,6 @@ impl DagState {
                     .map(|b| b.reference())
                     .collect::<Vec<BlockRef>>()
             );
-
-            // Update the evicted rounds for the authority now that all the blocks have been restored.
-            if state.gc_enabled() {
-                state.evicted_rounds[authority_index] =
-                    state.authority_gc_eviction_round(authority_index);
-            }
         }
 
         state
@@ -538,12 +532,7 @@ impl DagState {
                 .to_authority_index(authority_index)
                 .unwrap();
 
-            let last_evicted_round = if self.gc_enabled() {
-                self.authority_gc_eviction_round(authority_index)
-            } else {
-                self.authority_eviction_round(authority_index)
-            };
-
+            let last_evicted_round = self.evicted_rounds[authority_index];
             if end_round.saturating_sub(1) <= last_evicted_round {
                 panic!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}", );
             }
@@ -579,18 +568,9 @@ impl DagState {
             return true;
         }
 
-        if self.gc_enabled() {
-            if slot.round <= self.authority_gc_eviction_round(slot.authority) {
-                panic!(
-                    "Attempted to check for slot {slot} that is <= the last gc evicted round {}",
-                    self.authority_gc_eviction_round(slot.authority)
-                );
-            }
-        } else if slot.round <= self.authority_eviction_round(slot.authority) {
-            panic!(
-                "Attempted to check for slot {slot} that is <= the last evicted round {}",
-                self.authority_eviction_round(slot.authority)
-            );
+        let eviction_round = self.evicted_rounds[slot.authority];
+        if slot.round <= eviction_round {
+            panic!("{}", format!("Attempted to check for slot {slot} that is <= the last{}evicted round {eviction_round}", if self.gc_enabled() { " gc " } else { " " } ));
         }
 
         let mut result = self.recent_refs_by_authority[slot.authority].range((
@@ -870,41 +850,22 @@ impl DagState {
         // Clean up old cached data. After flushing, all cached blocks are guaranteed to be persisted.
         let mut total_recent_refs = 0;
 
-        if self.gc_enabled() {
-            for (authority_index, _) in self.context.committee.authorities() {
-                self.evicted_rounds[authority_index] =
-                    self.authority_gc_eviction_round(authority_index);
-            }
+        // First we store the evicted rounds for each authority.
+        for (authority_index, _) in self.context.committee.authorities() {
+            self.evicted_rounds[authority_index] = self.authority_eviction_round(authority_index);
+        }
 
-            for (authority_index, authority_refs) in self.recent_refs_by_authority.iter_mut().enumerate() {
-                while let Some(block_ref) = authority_refs.first() {
-                    if block_ref.round <= self.evicted_rounds[authority_index] {
-                        self.recent_blocks.remove(block_ref);
-                        authority_refs.pop_first();
-                    } else {
-                        break;
-                    }
+        // Then we clean up the blocks that are meant to be evicted
+        for (authority_index, authority_refs) in self.recent_refs_by_authority.iter_mut().enumerate() {
+            while let Some(block_ref) = authority_refs.first() {
+                if block_ref.round <= self.evicted_rounds[authority_index] {
+                    self.recent_blocks.remove(block_ref);
+                    authority_refs.pop_first();
+                } else {
+                    break;
                 }
-                total_recent_refs += authority_refs.len();
             }
-        } else {
-            for (authority_refs, last_committed_round) in self
-                .recent_refs_by_authority
-                .iter_mut()
-                .zip(self.last_committed_rounds.iter())
-            {
-                while let Some(block_ref) = authority_refs.first() {
-                    if block_ref.round
-                        <= Self::eviction_round(*last_committed_round, self.cached_rounds)
-                    {
-                        self.recent_blocks.remove(block_ref);
-                        authority_refs.pop_first();
-                    } else {
-                        break;
-                    }
-                }
-                total_recent_refs += authority_refs.len();
-            }
+            total_recent_refs += authority_refs.len();
         }
 
         let metrics = &self.context.metrics.node_metrics;
@@ -1002,8 +963,12 @@ impl DagState {
     /// guaranteed to have all the produced blocks from that authority. For any round that is
     /// <= `last_evicted_round` we don't have such guarantees as out of order blocks might exist.
     fn authority_eviction_round(&self, authority_index: AuthorityIndex) -> Round {
-        let commit_round = self.last_committed_rounds[authority_index];
-        Self::eviction_round(commit_round, self.cached_rounds)
+        if self.gc_enabled() {
+            self.authority_gc_eviction_round(authority_index)
+        } else {
+            let commit_round = self.last_committed_rounds[authority_index];
+            Self::eviction_round(commit_round, self.cached_rounds)
+        }
     }
 
     /// Calculates the last eviction round based on the provided `commit_round`. Any blocks with
@@ -1016,7 +981,7 @@ impl DagState {
     /// * if `latest_block_round` - `gc_round` >= `CACHED_ROUNDS`, then we will evicted entries <= gc_round, as we have enough data to cover the CACHED_ROUNDS and also uncommitted blocks are kept in memory.
     /// * if `latest_block_round` - `gc_round` < `CACHED_ROUNDS`, then we will evict entries <= `latest_block_round` - `CACHED_ROUNDS`, as we don't have enough data to cover the CACHED_ROUNDS
     fn authority_gc_eviction_round(&self, authority_index: AuthorityIndex) -> Round {
-        let last_round = self.recent_refs[authority_index]
+        let last_round = self.recent_refs_by_authority[authority_index]
             .last()
             .map(|block_ref| block_ref.round)
             .unwrap_or(GENESIS_ROUND);

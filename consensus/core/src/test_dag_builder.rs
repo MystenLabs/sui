@@ -20,7 +20,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
-    linearizer::{Linearizer, StorageAPI},
+    linearizer::{BlockStoreAPI, Linearizer},
     CommittedSubDag,
 };
 
@@ -167,7 +167,7 @@ impl DagBuilder {
                 context: Arc<Context>,
                 blocks: BTreeMap<BlockRef, VerifiedBlock>,
             }
-            impl StorageAPI for FooStorage {
+            impl BlockStoreAPI for FooStorage {
                 fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
                     refs.iter()
                         .map(|block_ref| self.blocks.get(block_ref).cloned())

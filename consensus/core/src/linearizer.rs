@@ -14,7 +14,9 @@ use crate::{
     Round, TransactionIndex,
 };
 
-pub(crate) trait StorageAPI {
+/// The `StorageAPI` trait provides an interface for the block store and has been
+/// mostly introduced for allowing to inject the test store in `DagBuilder`.
+pub(crate) trait BlockStoreAPI {
     fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>>;
 
     fn gc_round(&self) -> Round;
@@ -22,7 +24,9 @@ pub(crate) trait StorageAPI {
     fn gc_enabled(&self) -> bool;
 }
 
-impl StorageAPI for parking_lot::lock_api::RwLockReadGuard<'_, parking_lot::RawRwLock, DagState> {
+impl BlockStoreAPI
+    for parking_lot::lock_api::RwLockReadGuard<'_, parking_lot::RawRwLock, DagState>
+{
     fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
         DagState::get_blocks(self, refs)
     }
@@ -106,7 +110,7 @@ impl Linearizer {
     pub(crate) fn linearize_sub_dag(
         leader_block: VerifiedBlock,
         last_committed_rounds: Vec<u32>,
-        dag_state: impl StorageAPI,
+        dag_state: impl BlockStoreAPI,
     ) -> (Vec<VerifiedBlock>, Vec<Vec<TransactionIndex>>) {
         let gc_enabled = dag_state.gc_enabled();
         // The GC round here is calculated based on the last committed round of the leader block. The algorithm will attempt to
