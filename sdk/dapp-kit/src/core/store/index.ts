@@ -1,18 +1,51 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { computed, listenKeys, onMount } from 'nanostores';
+import type { SuiClient } from '@mysten/sui/client';
+import { getWallets } from '@mysten/wallet-standard';
+import { atom, computed, listenKeys, onMount } from 'nanostores';
 
-import { getCurrentWallet } from '../wallet/getCurrentWallet.js';
+import { getRegisteredWallets } from '../../utils/walletUtils.js';
 import { createMethods } from './methods.js';
 import type { DappKitStateOptions } from './state.js';
 import { createState } from './state.js';
 
 export type DappKitStore = ReturnType<typeof createDappKitStore>;
 
-export function createDappKitStore(options: DappKitStateOptions) {
+type CreateDappKitStoreOptions = DappKitStateOptions & {
+	client: SuiClient;
+};
+
+export function createDappKitStore(options: CreateDappKitStoreOptions) {
+	const $client = atom(options.client);
 	const { $state, actions } = createState(options);
 	const methods = createMethods({ $state, actions });
+
+	/**
+	 * Handle the addition and removal of new wallets.
+	 */
+	onMount($state, () => {
+		const { preferredWallets = [], walletFilter } = options;
+
+		const walletsApi = getWallets();
+		actions.setWalletRegistered(getRegisteredWallets(preferredWallets, walletFilter));
+
+		const unsubscribeFromRegister = walletsApi.on('register', () => {
+			actions.setWalletRegistered(getRegisteredWallets(preferredWallets, walletFilter));
+		});
+
+		const unsubscribeFromUnregister = walletsApi.on('unregister', (unregisteredWallet) => {
+			actions.setWalletUnregistered(
+				getRegisteredWallets(preferredWallets, walletFilter),
+				unregisteredWallet,
+			);
+		});
+
+		return () => {
+			unsubscribeFromRegister();
+			unsubscribeFromUnregister();
+		};
+	});
 
 	/**
 	 *  Handle various changes in properties for a wallet.
@@ -38,13 +71,47 @@ export function createDappKitStore(options: DappKitStateOptions) {
 	});
 
 	return {
+		...methods,
+
 		atoms: {
+			$client,
+
+			// Wallet state:
 			$wallets: computed($state, (state) => state.wallets),
 			$accounts: computed($state, (state) => state.accounts),
 			$currentAccount: computed($state, (state) => state.currentAccount),
-			$currentWallet: computed($state, (state) => getCurrentWallet(state)),
+			$currentWallet: computed($state, ({ currentWallet, connectionStatus, supportedIntents }) => {
+				switch (connectionStatus) {
+					case 'connecting':
+						return {
+							connectionStatus,
+							currentWallet: null,
+							isDisconnected: false,
+							isConnecting: true,
+							isConnected: false,
+							supportedIntents: [],
+						} as const;
+					case 'disconnected':
+						return {
+							connectionStatus,
+							currentWallet: null,
+							isDisconnected: true,
+							isConnecting: false,
+							isConnected: false,
+							supportedIntents: [],
+						} as const;
+					case 'connected': {
+						return {
+							connectionStatus,
+							currentWallet: currentWallet!,
+							isDisconnected: false,
+							isConnecting: false,
+							isConnected: true,
+							supportedIntents,
+						} as const;
+					}
+				}
+			}),
 		},
-
-		...methods,
 	} as const;
 }

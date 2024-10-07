@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { SuiClient } from '@mysten/sui/client';
 import type { Transaction } from '@mysten/sui/src/transactions';
 import { toB64 } from '@mysten/sui/utils';
 import { signTransaction } from '@mysten/wallet-standard';
@@ -17,6 +18,7 @@ import type {
 	WalletAccount,
 	WalletWithRequiredFeatures,
 } from '@mysten/wallet-standard';
+import type { ReadableAtom } from 'nanostores';
 import { task } from 'nanostores';
 
 import {
@@ -109,7 +111,11 @@ export type MethodTypes = {
 	};
 };
 
-export function createMethods({ $state, actions }: ReturnType<typeof createState>) {
+export function createMethods({
+	$state,
+	actions,
+	$client,
+}: ReturnType<typeof createState> & { $client: ReadableAtom<SuiClient> }) {
 	const methods = {
 		switchAccount({ account }) {
 			const { currentWallet } = $state.get();
@@ -205,6 +211,7 @@ export function createMethods({ $state, actions }: ReturnType<typeof createState
 		},
 		signTransaction({ transaction, ...signTransactionArgs }) {
 			return task(async () => {
+				const client = $client.get();
 				const { currentWallet, currentAccount } = $state.get();
 				if (!currentWallet) {
 					throw new WalletNotConnectedError('No wallet is connected.');
@@ -234,7 +241,6 @@ export function createMethods({ $state, actions }: ReturnType<typeof createState
 								? transaction
 								: await transaction.toJSON({
 										supportedIntents: [],
-										// TODO: Client:
 										client,
 									});
 						},
@@ -309,6 +315,7 @@ export function createMethods({ $state, actions }: ReturnType<typeof createState
 			execute?: ({ bytes, signature }: { bytes: string; signature: string }) => Promise<Result>;
 		}) => {
 			return task(async () => {
+				const client = $client.get();
 				const { currentWallet, currentAccount, supportedIntents } = $state.get();
 
 				const executeTransaction: ({
@@ -320,7 +327,6 @@ export function createMethods({ $state, actions }: ReturnType<typeof createState
 				}) => Promise<ExecuteTransactionResult> =
 					execute ??
 					(async ({ bytes, signature }) => {
-						// TODO: Client:
 						const { digest, rawEffects } = await client.executeTransactionBlock({
 							transactionBlock: bytes,
 							signature,
@@ -367,7 +373,6 @@ export function createMethods({ $state, actions }: ReturnType<typeof createState
 								? transaction
 								: await transaction.toJSON({
 										supportedIntents,
-										// TODO: Client
 										client,
 									});
 						},
