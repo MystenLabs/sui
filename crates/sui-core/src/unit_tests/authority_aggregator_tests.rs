@@ -1369,9 +1369,14 @@ async fn test_handle_transaction_response() {
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
     assert_resp_err(
         &agg,
-        tx.clone().into(), 
-        |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
-        |e| matches!(e, SuiError::EpochEnded(0))
+        tx.clone().into(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| matches!(e, SuiError::EpochEnded(0)),
     )
     .await;
 
