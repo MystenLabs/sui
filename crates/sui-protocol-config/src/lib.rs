@@ -1141,10 +1141,10 @@ pub struct ProtocolConfig {
     group_ops_bls12381_g2_msm_base_cost_per_input: Option<u64>,
     group_ops_bls12381_msm_max_len: Option<u32>,
     group_ops_bls12381_pairing_cost: Option<u64>,
-    group_ops_bls12381_g1_to_uncompressed_cost: Option<u64>,
-    group_ops_bls12381_g1_from_uncompressed_cost: Option<u64>,
-    group_ops_bls12381_g1_sum_of_uncompressed_base_cost: Option<u64>,
-    group_ops_bls12381_g1_sum_of_uncompressed_cost_per_term: Option<u64>,
+    group_ops_bls12381_g1_to_g1_uncompressed_cost: Option<u64>,
+    group_ops_bls12381_g1_uncompressed_to_g1_cost: Option<u64>,
+    group_ops_bls12381_g1_uncompressed_sum_base_cost: Option<u64>,
+    group_ops_bls12381_g1_uncompressed_sum_cost_per_term: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -1636,6 +1636,10 @@ impl ProtocolConfig {
     pub fn relocate_event_module(&self) -> bool {
         self.feature_flags.relocate_event_module
     }
+
+    pub fn uncompressed_g1_group_elements(&self) -> bool {
+        self.feature_flags.uncompressed_g1_group_elements
+    }
 }
 
 #[cfg(not(msim))]
@@ -2056,10 +2060,10 @@ impl ProtocolConfig {
             group_ops_bls12381_g2_msm_base_cost_per_input: None,
             group_ops_bls12381_msm_max_len: None,
             group_ops_bls12381_pairing_cost: None,
-            group_ops_bls12381_g1_to_uncompressed_cost: None,
-            group_ops_bls12381_g1_from_uncompressed_cost: None,
-            group_ops_bls12381_g1_sum_of_uncompressed_base_cost: None,
-            group_ops_bls12381_g1_sum_of_uncompressed_cost_per_term: None,
+            group_ops_bls12381_g1_to_g1_uncompressed_cost: None,
+            group_ops_bls12381_g1_uncompressed_to_g1_cost: None,
+            group_ops_bls12381_g1_uncompressed_sum_base_cost: None,
+            group_ops_bls12381_g1_uncompressed_sum_cost_per_term: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -2838,13 +2842,13 @@ impl ProtocolConfig {
                 62 => {
                     cfg.feature_flags.relocate_event_module = true;
 
+                    cfg.group_ops_bls12381_g1_to_g1_uncompressed_cost = Some(26);
+                    cfg.group_ops_bls12381_g1_uncompressed_to_g1_cost = Some(52);
+                    cfg.group_ops_bls12381_g1_uncompressed_sum_base_cost = Some(26);
+                    cfg.group_ops_bls12381_g1_uncompressed_sum_cost_per_term = Some(13);
+
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
-
-                        cfg.group_ops_bls12381_g1_to_uncompressed_cost = Some(26);
-                        cfg.group_ops_bls12381_g1_from_uncompressed_cost = Some(52);
-                        cfg.group_ops_bls12381_g1_sum_of_uncompressed_base_cost = Some(26);
-                        cfg.group_ops_bls12381_g1_sum_of_uncompressed_cost_per_term = Some(13);
                     }
                 }
                 63 => {

@@ -45,6 +45,9 @@ public struct G1Uncompressed {}
 // https://docs.rs/bls12_381/latest/bls12_381/notes/serialization/index.html for details.
 // GT is encoded using big-endian byte order and points are uncompressed and not intended
 // to be deserialized.
+// G1Uncompressed is G1 elements in uncompressed. They are faster to use since they do
+// not have to be uncompressed before use. They can not be constructed on their own but
+// have to be created from G1 elements.
 
 // Const elements.
 const SCALAR_ZERO_BYTES: vector<u8> =
@@ -174,19 +177,8 @@ public fun g1_multi_scalar_multiplication(
 }
 
 /// Convert an `Element<G1>` to uncompressed form.
-public fun g1_to_uncompressed(e: &Element<G1>): Element<G1Uncompressed> {
-    group_ops::from(G1_TYPE, G1_UNCOMPRESSED_TYPE, e)
-}
-
-/// Create a `Element<G1>` from its uncompressed form.
-public fun g1_from_uncompressed(e: &Element<G1Uncompressed>): Element<G1> {
-    group_ops::from(G1_UNCOMPRESSED_TYPE, G1_TYPE, e)
-}
-
-/// Compute the sum of a list of uncompressed elements.
-/// This is significantly faster and cheaper than summing the elements.
-public fun g1_sum_of_uncompressed(terms: &vector<Element<G1Uncompressed>>): Element<G1Uncompressed> {
-    group_ops::sum(G1_UNCOMPRESSED_TYPE, terms)
+public fun g1_to_g1_uncompressed(e: &Element<G1>): Element<G1Uncompressed> {
+    group_ops::convert(G1_TYPE, G1_UNCOMPRESSED_TYPE, e)
 }
 
 /////////////////////////////////
@@ -281,4 +273,18 @@ public fun gt_neg(e: &Element<GT>): Element<GT> {
 
 public fun pairing(e1: &Element<G1>, e2: &Element<G2>): Element<GT> {
     group_ops::pairing(G1_TYPE, e1, e2)
+}
+
+///////////////////////////////////////
+/// G1Uncompressed group operations ///
+
+/// Create a `Element<G1>` from its uncompressed form.
+public fun g1_uncompressed_to_g1(e: &Element<G1Uncompressed>): Element<G1> {
+    group_ops::convert(G1_UNCOMPRESSED_TYPE, G1_TYPE, e)
+}
+
+/// Compute the sum of a list of uncompressed elements.
+/// This is significantly faster and cheaper than summing the elements.
+public fun g1_uncompressed_sum(terms: &vector<Element<G1Uncompressed>>): Element<G1Uncompressed> {
+    group_ops::sum(G1_UNCOMPRESSED_TYPE, terms)
 }
