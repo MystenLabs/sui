@@ -87,6 +87,19 @@ impl Compatibility {
         }
     }
 
+    pub fn upgrade_check() -> Self {
+        Self {
+            check_datatype_and_pub_function_linking: true,
+            check_datatype_layout: true,
+            check_friend_linking: false,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::ALL,
+            disallow_change_datatype_type_params: true,
+            // We disallow adding new variants to enums for now
+            disallow_new_variants: true,
+        }
+    }
+
     pub fn need_check_compat(&self) -> bool {
         self != &Self::no_check()
     }
