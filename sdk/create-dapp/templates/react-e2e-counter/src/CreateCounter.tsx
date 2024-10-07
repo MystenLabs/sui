@@ -15,24 +15,6 @@ export function CreateCounter({
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [waitingForTxn, setWaitingForTxn] = useState(false);
 
-  return (
-    <Container>
-      <Button
-        size="3"
-        onClick={() => {
-          create();
-        }}
-        disabled={waitingForTxn}
-      >
-        {waitingForTxn ? (
-          <LoaderCircle className="animate-spin" />
-        ) : (
-          "Create Counter"
-        )}
-      </Button>
-    </Container>
-  );
-
   function create() {
     setWaitingForTxn(true);
 
@@ -69,4 +51,22 @@ export function CreateCounter({
       },
     );
   }
+
+  return (
+    <Container>
+      <Button
+        size="3"
+        onClick={() => {
+          create();
+        }}
+        disabled={waitingForTxn}
+      >
+        {waitingForTxn ? (
+          <LoaderCircle className="animate-spin" />
+        ) : (
+          "Create Counter"
+        )}
+      </Button>
+    </Container>
+  );
 }
