@@ -286,8 +286,8 @@
         "tags": [
           "Objects"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
-        "operationId": "GetObject",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\nGet a Live Object\n\nFetch the latest version of a live object by `ObjectId`. A live object is one that is still\navailable to be used as an input to a transaction.",
+        "operationId": "Get Live Object",
         "parameters": [
           {
             "in": "path",
@@ -313,6 +313,9 @@
           },
           "404": {
             "description": ""
+          },
+          "500": {
+            "description": ""
           }
         }
       }
@@ -322,8 +325,8 @@
         "tags": [
           "Objects"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
-        "operationId": "GetObjectWithVersion",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\nRequest a specific version of an Object\n\nRequest a specifc version of an Object by its `ObjectId` and `Version`. There are no gaurentees\nthat the returned object may be used in a transaction as it may be:\n- A historical version of a live object\n- A historical version of an object that has been deleted\n\nIf you want the latest version of a live object use the `GET /objects/{object_id}` endpoint\ninstead.",
+        "operationId": "Get Object with Version",
         "parameters": [
           {
             "in": "path",
@@ -359,6 +362,9 @@
             }
           },
           "404": {
+            "description": ""
+          },
+          "500": {
             "description": ""
           }
         }
@@ -530,8 +536,8 @@
         "tags": [
           "Transactions"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
-        "operationId": "GetTransaction",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\nFetch a Transaction\n\nFetch a transaction by `TransactionDigest`.",
+        "operationId": "Get Transaction",
         "parameters": [
           {
             "in": "path",
@@ -566,8 +572,8 @@
         "tags": [
           "Transactions"
         ],
-        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
-        "operationId": "ListTransactions",
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\nList Transactions\n\nRequest a page of transactions, ordered by their position in a checkpoint.\n\nIf the requested page is below the Node's `lowest_available_checkpoint`, a 410 will be\nreturned.\n\n## Cursor\n\nThe cursor returned by the `x-sui-cursor` header and supplied via the `start` query parameter\nhas the format of: `<checkpoint>[.<index>]` where `<checkpoint>` is the sequence number of a\ncheckpoint and `<index>` is the index of a transaction in the particular checkpoint.\n\n`index` is optional and if omitted iteration will start at the first or last transaction in a\ncheckpoint based on the provided `Direction`:\n- Direction::Ascending - first\n- Direction::Descending - last",
+        "operationId": "List Transactions",
         "parameters": [
           {
             "in": "query",

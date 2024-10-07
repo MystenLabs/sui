@@ -18,7 +18,13 @@ use sui_types::{
     sui_sdk_types_conversions::SdkTypeConversionError,
 };
 use tap::Pipe;
+use documented::Documented;
 
+/// Get a Live Object
+///
+/// Fetch the latest version of a live object by `ObjectId`. A live object is one that is still
+/// available to be used as an input to a transaction.
+#[derive(Documented)]
 pub struct GetObject;
 
 impl ApiEndpoint<RestService> for GetObject {
@@ -30,13 +36,20 @@ impl ApiEndpoint<RestService> for GetObject {
         "/objects/{object_id}"
     }
 
+    fn stable(&self) -> bool {
+        // TODO Right now the return format for objects does not include a way to return a JSON
+        // rendering of the object. Do we want to include this prior to stabalizing?
+        false
+    }
+
     fn operation(
         &self,
         generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
             .tag("Objects")
-            .operation_id("GetObject")
+            .operation_id("Get Live Object")
+            .description(Self::DOCS)
             .path_parameter::<ObjectId>("object_id", generator)
             .response(
                 200,
@@ -46,6 +59,7 @@ impl ApiEndpoint<RestService> for GetObject {
                     .build(),
             )
             .response(404, ResponseBuilder::new().build())
+            .response(500, ResponseBuilder::new().build())
             .build()
     }
 
@@ -70,6 +84,16 @@ pub async fn get_object(
     .pipe(Ok)
 }
 
+/// Request a specific version of an Object
+///
+/// Request a specifc version of an Object by its `ObjectId` and `Version`. There are no gaurentees
+/// that the returned object may be used in a transaction as it may be:
+///  - A historical version of a live object
+///  - A historical version of an object that has been deleted
+///
+/// If you want the latest version of a live object use the `GET /objects/{object_id}` endpoint
+/// instead.
+#[derive(Documented)]
 pub struct GetObjectWithVersion;
 
 impl ApiEndpoint<RestService> for GetObjectWithVersion {
@@ -81,13 +105,20 @@ impl ApiEndpoint<RestService> for GetObjectWithVersion {
         "/objects/{object_id}/version/{version}"
     }
 
+    fn stable(&self) -> bool {
+        // TODO Right now the return format for objects does not include a way to return a JSON
+        // rendering of the object. Do we want to include this prior to stabalizing?
+        false
+    }
+
     fn operation(
         &self,
         generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
             .tag("Objects")
-            .operation_id("GetObjectWithVersion")
+            .operation_id("Get Object with Version")
+            .description(Self::DOCS)
             .path_parameter::<ObjectId>("object_id", generator)
             .path_parameter::<Version>("version", generator)
             .response(
@@ -98,6 +129,7 @@ impl ApiEndpoint<RestService> for GetObjectWithVersion {
                     .build(),
             )
             .response(404, ResponseBuilder::new().build())
+            .response(500, ResponseBuilder::new().build())
             .build()
     }
 

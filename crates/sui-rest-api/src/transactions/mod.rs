@@ -35,7 +35,12 @@ use crate::RestError;
 use crate::RestService;
 use crate::Result;
 use crate::{accept::AcceptFormat, response::ResponseContent};
+use documented::Documented;
 
+/// Fetch a Transaction
+///
+/// Fetch a transaction by `TransactionDigest`.
+#[derive(Documented)]
 pub struct GetTransaction;
 
 impl ApiEndpoint<RestService> for GetTransaction {
@@ -53,7 +58,8 @@ impl ApiEndpoint<RestService> for GetTransaction {
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
             .tag("Transactions")
-            .operation_id("GetTransaction")
+            .operation_id("Get Transaction")
+            .description(Self::DOCS)
             .path_parameter::<TransactionDigest>("transaction", generator)
             .response(
                 200,
@@ -122,6 +128,24 @@ impl From<TransactionNotFoundError> for crate::RestError {
     }
 }
 
+/// List Transactions
+///
+/// Request a page of transactions, ordered by their position in a checkpoint.
+///
+/// If the requested page is below the Node's `lowest_available_checkpoint`, a 410 will be
+/// returned.
+///
+/// ## Cursor
+///
+/// The cursor returned by the `x-sui-cursor` header and supplied via the `start` query parameter
+/// has the format of: `<checkpoint>[.<index>]` where `<checkpoint>` is the sequence number of a
+/// checkpoint and `<index>` is the index of a transaction in the particular checkpoint.
+///
+/// `index` is optional and if omitted iteration will start at the first or last transaction in a
+/// checkpoint based on the provided `Direction`:
+///   - Direction::Ascending - first
+///   - Direction::Descending - last
+#[derive(Documented)]
 pub struct ListTransactions;
 
 impl ApiEndpoint<RestService> for ListTransactions {
@@ -139,7 +163,8 @@ impl ApiEndpoint<RestService> for ListTransactions {
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
             .tag("Transactions")
-            .operation_id("ListTransactions")
+            .operation_id("List Transactions")
+            .description(Self::DOCS)
             .query_parameters::<ListTransactionsQueryParameters>(generator)
             .response(
                 200,
@@ -186,7 +211,7 @@ async fn list_transactions(
             state
                 .get_transaction(digest.into())
                 .map(|(transaction, effects, events)| TransactionResponse {
-                    digest: transaction.transaction.digest(),
+                    digest: digest.into(),
                     transaction: transaction.transaction,
                     signatures: transaction.signatures,
                     effects,
