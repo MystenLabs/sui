@@ -53,7 +53,7 @@ pub fn lsp_diagnostics(
                                     Location::new(Url::from_file_path(fpath).unwrap(), range);
                                 DiagnosticRelatedInformation {
                                     location: fpos,
-                                    message: note.to_string(),
+                                    message: format!("Note: {note}"),
                                 }
                             }))
                             .collect(),
