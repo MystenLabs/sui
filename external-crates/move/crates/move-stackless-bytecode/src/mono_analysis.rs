@@ -98,7 +98,11 @@ impl FunctionTargetProcessor for MonoAnalysisProcessor {
                 .join(", ")
         };
         for param_idx in &info.type_params {
-            writeln!(f, "type parameter {}", Type::TypeParameter(*param_idx).display(&tctx))?;
+            writeln!(
+                f,
+                "type parameter {}",
+                Type::TypeParameter(*param_idx).display(&tctx)
+            )?;
         }
         for (sid, insts) in &info.structs {
             let sname = env.get_struct(*sid).get_full_name_str();
@@ -203,11 +207,7 @@ impl<'a> Analyzer<'a> {
         for module in self.env.get_modules() {
             for fun in module.get_functions() {
                 for (variant, target) in self.targets.get_targets(&fun) {
-                    if self
-                        .targets
-                        .get_fun_by_opaque_spec(&fun.get_qualified_id())
-                        .is_none()
-                    {
+                    if !self.targets.is_spec(&fun.get_qualified_id()) {
                         continue;
                     }
                     self.analyze_fun(target.clone());

@@ -261,12 +261,32 @@ impl<'env> BoogieTranslator<'env> {
                     continue;
                 }
 
-                if self
-                    .targets
-                    .get_fun_by_opaque_spec(&fun_env.get_qualified_id())
-                    .is_some()
-                {
+                if self.targets.is_spec(&fun_env.get_qualified_id()) {
                     verified_functions_count += 1;
+
+                    if self
+                        .targets
+                        .scenario_specs()
+                        .contains(&fun_env.get_qualified_id())
+                    {
+                        if self.targets.has_target(
+                            fun_env,
+                            &FunctionVariant::Verification(VerificationFlavor::Regular),
+                        ) {
+                            let fun_target = self.targets.get_target(
+                                fun_env,
+                                &FunctionVariant::Verification(VerificationFlavor::Regular),
+                            );
+                            FunctionTranslator {
+                                parent: self,
+                                fun_target: &fun_target,
+                                type_inst: &[],
+                                style: FunctionTranslationStyle::Default,
+                            }
+                            .translate();
+                        }
+                        continue;
+                    }
 
                     self.translate_function_style(fun_env, FunctionTranslationStyle::Default);
                     self.translate_function_style(fun_env, FunctionTranslationStyle::Asserts);
@@ -1484,6 +1504,11 @@ impl<'env> FunctionTranslator<'env> {
                 if FunctionTranslationStyle::Default == self.style
                     && self.fun_target.data.variant
                         == FunctionVariant::Verification(VerificationFlavor::Regular)
+                    && self
+                        .parent
+                        .targets
+                        .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
+                        .is_some()
                 {
                     emitln!(
                         self.writer(),
@@ -2872,6 +2897,11 @@ impl<'env> FunctionTranslator<'env> {
                 if FunctionTranslationStyle::Default == self.style
                     && self.fun_target.data.variant
                         == FunctionVariant::Verification(VerificationFlavor::Regular)
+                    && self
+                        .parent
+                        .targets
+                        .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
+                        .is_some()
                 {
                     emitln!(
                         self.writer(),

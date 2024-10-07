@@ -34,6 +34,7 @@ pub struct FunctionTargetsHolder {
     targets: BTreeMap<QualifiedId<FunId>, BTreeMap<FunctionVariant, FunctionData>>,
     opaque_specs: BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>>,
     no_verify_specs: BTreeSet<QualifiedId<FunId>>,
+    scenario_specs: BTreeSet<QualifiedId<FunId>>,
 }
 
 /// Describes a function verification flavor.
@@ -170,6 +171,7 @@ impl FunctionTargetsHolder {
             targets: BTreeMap::new(),
             opaque_specs: BiBTreeMap::new(),
             no_verify_specs: BTreeSet::new(),
+            scenario_specs: BTreeSet::new(),
         }
     }
 
@@ -203,8 +205,16 @@ impl FunctionTargetsHolder {
         &self.no_verify_specs
     }
 
+    pub fn scenario_specs(&self) -> &BTreeSet<QualifiedId<FunId>> {
+        &self.scenario_specs
+    }
+
+    pub fn is_spec(&self, id: &QualifiedId<FunId>) -> bool {
+        self.get_fun_by_opaque_spec(id).is_some() || self.scenario_specs.contains(id)
+    }
+
     pub fn is_verified_spec(&self, id: &QualifiedId<FunId>) -> bool {
-        self.get_fun_by_opaque_spec(id).is_some() && !self.no_verify_specs.contains(id)
+        self.is_spec(id) && !self.no_verify_specs.contains(id)
     }
 
     pub fn has_no_verify_spec(&self, id: &QualifiedId<FunId>) -> bool {
@@ -234,17 +244,20 @@ impl FunctionTargetsHolder {
                 None => name,
             })
             .map(|name| {
-                self.opaque_specs.insert(
-                    func_env.get_qualified_id(),
-                    func_env
-                        .module_env
-                        .find_function(func_env.symbol_pool().make(name))
-                        .unwrap_or_else(|| {
-                            // TODO: report error
-                            panic!("prover target function not found: function={}", name,)
-                        })
-                        .get_qualified_id(),
-                )
+                match func_env
+                    .module_env
+                    .find_function(func_env.symbol_pool().make(name))
+                {
+                    Some(target_func_env) => {
+                        self.opaque_specs.insert(
+                            func_env.get_qualified_id(),
+                            target_func_env.get_qualified_id(),
+                        );
+                    }
+                    None => {
+                        self.scenario_specs.insert(func_env.get_qualified_id());
+                    }
+                }
             });
     }
 
@@ -356,6 +369,54 @@ impl FunctionTargetsHolder {
                 self.insert_target_data(&id, variant, processed_data);
             }
         }
+    }
+
+    pub fn dump_spec_info(&self, env: &GlobalEnv, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "=== function target holder ===")?;
+        writeln!(f)?;
+        writeln!(f, "Verification specs:")?;
+        for spec in self
+            .opaque_specs
+            .left_values()
+            .chain(self.scenario_specs.iter())
+        {
+            let fun_env = env.get_function(*spec);
+            if self.has_target(
+                &fun_env,
+                &FunctionVariant::Verification(VerificationFlavor::Regular),
+            ) {
+                writeln!(f, "  {}", fun_env.get_full_name_str())?;
+            }
+        }
+        writeln!(f, "Opaque specs:")?;
+        for (spec, fun) in self.opaque_specs.iter() {
+            writeln!(
+                f,
+                "  {} -> {}",
+                env.get_function(*spec).get_full_name_str(),
+                env.get_function(*fun).get_full_name_str()
+            )?;
+        }
+        writeln!(f, "No verify specs:")?;
+        for spec in self.no_verify_specs.iter() {
+            writeln!(f, "  {}", env.get_function(*spec).get_full_name_str())?;
+        }
+        writeln!(f, "Scenario specs:")?;
+        for spec in self.scenario_specs.iter() {
+            writeln!(f, "  {}", env.get_function(*spec).get_full_name_str())?;
+        }
+        Ok(())
+    }
+}
+
+pub struct FunctionTargetsHolderDisplay<'a> {
+    pub targets: &'a FunctionTargetsHolder,
+    pub env: &'a GlobalEnv,
+}
+
+impl<'a> fmt::Display for FunctionTargetsHolderDisplay<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.targets.dump_spec_info(self.env, f)
     }
 }
 
