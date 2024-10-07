@@ -3,9 +3,9 @@
 
 import type { SuiClient } from '@mysten/sui/client';
 import { getWallets } from '@mysten/wallet-standard';
-import { atom, computed, listenKeys, onMount } from 'nanostores';
+import { atom, computed, listenKeys, onMount, task } from 'nanostores';
 
-import { getRegisteredWallets } from '../../utils/walletUtils.js';
+import { getRegisteredWallets, getWalletUniqueIdentifier } from '../../utils/walletUtils.js';
 import { createMethods } from './methods.js';
 import type { DappKitStateOptions } from './state.js';
 import { createState } from './state.js';
@@ -18,7 +18,7 @@ type CreateDappKitStoreOptions = DappKitStateOptions & {
 
 export function createDappKitStore(options: CreateDappKitStoreOptions) {
 	const $client = atom(options.client);
-	const { $state, actions } = createState(options);
+	const { $state, $recentConnection, actions } = createState(options);
 	const methods = createMethods({ $state, actions, $client });
 
 	/**
@@ -70,6 +70,34 @@ export function createDappKitStore(options: CreateDappKitStoreOptions) {
 		};
 	});
 
+	// Auto-connect wallet:
+	if (options.autoConnectEnabled) {
+		onMount($state, () => {
+			task(async () => {
+				const { wallets, connectionStatus } = $state.get();
+				const { walletName, accountAddress } = $recentConnection.get();
+				const wallet = wallets.find((wallet) => getWalletUniqueIdentifier(wallet) === walletName);
+
+				if (!walletName || !accountAddress || !wallet || connectionStatus === 'connected') {
+					$state.setKey('autoConnectStatus', 'attempted');
+					return;
+				}
+
+				try {
+					await methods.connectWallet({
+						wallet,
+						accountAddress,
+						silent: true,
+					});
+				} catch {
+					// Ignore errors:
+				} finally {
+					$state.setKey('autoConnectStatus', 'attempted');
+				}
+			});
+		});
+	}
+
 	return {
 		...methods,
 
@@ -77,6 +105,7 @@ export function createDappKitStore(options: CreateDappKitStoreOptions) {
 			$client,
 
 			// Wallet state:
+			$autoConnectStatus: computed($state, (state) => state.autoConnectStatus),
 			$wallets: computed($state, (state) => state.wallets),
 			$accounts: computed($state, (state) => state.accounts),
 			$currentAccount: computed($state, (state) => state.currentAccount),

@@ -20,9 +20,11 @@ export type DappKitStateOptions = {
 };
 
 export type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+export type AutoConnectStatus = 'disabled' | 'idle' | 'attempted';
 
 export type DappKitStoreState = {
 	autoConnectEnabled: boolean;
+	autoConnectStatus: AutoConnectStatus;
 	wallets: WalletWithRequiredFeatures[];
 	accounts: readonly WalletAccount[];
 	currentWallet: WalletWithRequiredFeatures | null;
@@ -44,6 +46,7 @@ export function createState({
 }: DappKitStateOptions) {
 	const $state = map<DappKitStoreState>({
 		autoConnectEnabled,
+		autoConnectStatus: autoConnectEnabled ? 'idle' : 'disabled',
 		wallets: getRegisteredWallets(preferredWallets, walletFilter),
 		accounts: [] as WalletAccount[],
 		currentWallet: null,
@@ -152,6 +155,7 @@ export function createState({
 
 	return {
 		$state,
+		$recentConnection,
 		actions,
 	};
 }

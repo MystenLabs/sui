@@ -115,7 +115,9 @@ export function createMethods({
 	$state,
 	actions,
 	$client,
-}: ReturnType<typeof createState> & { $client: ReadableAtom<SuiClient> }) {
+}: Pick<ReturnType<typeof createState>, '$state' | 'actions'> & {
+	$client: ReadableAtom<SuiClient>;
+}) {
 	const methods = {
 		switchAccount({ account }) {
 			const { currentWallet } = $state.get();
