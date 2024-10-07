@@ -65,7 +65,9 @@ const addCodeInject = function (source) {
           const isTs = language === "ts" || language === "js";
 
           if (fs.existsSync(fullPath)) {
-            let injectFileContent = fs.readFileSync(fullPath, "utf8");
+            let injectFileContent = fs
+              .readFileSync(fullPath, "utf8")
+              .replaceAll(`\t`, "  ");
             const marker =
               injectFileFull.indexOf("#") > 0
                 ? injectFileFull.substring(injectFileFull.indexOf("#"))
@@ -200,14 +202,13 @@ const addCodeInject = function (source) {
                         preVarTs,
                       ),
                     );
-                  }
-                  if (varTsVarMatch) {
-                    let preVarTs = utils.capturePrepend(
+                  } else if (varTsVarMatch) {
+                    let preVarTs2 = utils.capturePrepend(
                       varTsVarMatch,
                       injectFileContent,
                     );
                     varContent.push(
-                      utils.removeLeadingSpaces(varTsVarMatch[0], preVarTs),
+                      utils.removeLeadingSpaces(varTsVarMatch[0], preVarTs2),
                     );
                   }
                 } else {
