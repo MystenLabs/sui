@@ -20,6 +20,7 @@ use sui_data_ingestion_core::Worker;
 use sui_storage::http_key_value_store::TaggedKey;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::storage::ObjectKey;
+use tracing::error;
 
 const TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -85,6 +86,19 @@ impl KVStoreWorker {
         table: KVTable,
         values: impl IntoIterator<Item = (Vec<u8>, V)> + std::marker::Send,
     ) -> anyhow::Result<()> {
+        let result = self.multi_set_internal(table, values).await;
+        if let Err(ref err) = result {
+            error!("error is {:?}", err);
+            error!("table is {:?}", table);
+        }
+        result
+    }
+
+    async fn multi_set_internal<V: Serialize>(
+        &self,
+        table: KVTable,
+        values: impl IntoIterator<Item = (Vec<u8>, V)> + std::marker::Send,
+    ) -> anyhow::Result<()> {
         let instant = Instant::now();
         let mut items = vec![];
         let mut seen = HashSet::new();
@@ -93,15 +107,17 @@ impl KVStoreWorker {
                 continue;
             }
             seen.insert(digest.clone());
+            let bytes = bcs::to_bytes(value.borrow())?;
+            if bytes.len() > 390000 {
+                error!("large value for table {:?} and key {:?}", table, digest);
+                continue;
+            }
             let item = WriteRequest::builder()
                 .set_put_request(Some(
                     PutRequest::builder()
                         .item("digest", AttributeValue::B(Blob::new(digest)))
                         .item("type", AttributeValue::S(Self::type_name(table)))
-                        .item(
-                            "bcs",
-                            AttributeValue::B(Blob::new(bcs::to_bytes(value.borrow())?)),
-                        )
+                        .item("bcs", AttributeValue::B(Blob::new(bytes)))
                         .build(),
                 ))
                 .build();
