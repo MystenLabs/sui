@@ -1745,6 +1745,8 @@ impl AuthorityState {
         self.prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
     }
 
+    #[instrument(skip_all)]
+    #[allow(clippy::type_complexity)]
     pub async fn dry_exec_transaction(
         &self,
         transaction: TransactionData,
@@ -1961,6 +1963,7 @@ impl AuthorityState {
 
     /// The object ID for gas can be any object ID, even for an uncreated object
     #[allow(clippy::collapsible_else_if)]
+    #[instrument(skip_all)]
     pub async fn dev_inspect_transaction_block(
         &self,
         sender: SuiAddress,
@@ -5169,6 +5172,7 @@ impl RandomnessRoundReceiver {
 
 #[async_trait]
 impl TransactionKeyValueStoreTrait for AuthorityState {
+    #[instrument(skip(self))]
     async fn multi_get(
         &self,
         transactions: &[TransactionDigest],
@@ -5206,6 +5210,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         Ok((txns, fx, evts))
     }
 
+    #[instrument(skip(self))]
     async fn multi_get_checkpoints(
         &self,
         checkpoint_summaries: &[CheckpointSequenceNumber],
@@ -5258,6 +5263,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         Ok((summaries, contents, summaries_by_digest, contents_by_digest))
     }
 
+    #[instrument(skip(self))]
     async fn deprecated_get_transaction_checkpoint(
         &self,
         digest: TransactionDigest,
@@ -5267,6 +5273,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             .map(|res| res.map(|(_epoch, checkpoint)| checkpoint))
     }
 
+    #[instrument(skip(self))]
     async fn get_object(
         &self,
         object_id: ObjectID,
@@ -5277,6 +5284,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             .map_err(Into::into)
     }
 
+    #[instrument(skip(self))]
     async fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],

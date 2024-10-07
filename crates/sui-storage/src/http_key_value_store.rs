@@ -26,7 +26,7 @@ use sui_types::{
     },
     transaction::Transaction,
 };
-use tap::TapFallible;
+use tap::{TapFallible, TapOptional};
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
@@ -84,6 +84,23 @@ pub enum Key {
     CheckpointSummaryByDigest(CheckpointDigest),
     TxToCheckpoint(TransactionDigest),
     ObjectKey(ObjectID, VersionNumber),
+}
+
+impl Key {
+    /// Return a string representation of the key type
+    pub fn ty(&self) -> &'static str {
+        match self {
+            Key::Tx(_) => "tx",
+            Key::Fx(_) => "fx",
+            Key::Events(_) => "ev",
+            Key::CheckpointContents(_) => "cc",
+            Key::CheckpointSummary(_) => "cs",
+            Key::CheckpointContentsByDigest(_) => "cc",
+            Key::CheckpointSummaryByDigest(_) => "cs",
+            Key::TxToCheckpoint(_) => "tx2c",
+            Key::ObjectKey(_, _) => "ob",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -225,14 +242,14 @@ impl HttpKVStore {
             trace!("found cached data for url: {}, len: {:?}", url, res.len());
             self.metrics
                 .key_value_store_num_fetches_success
-                .with_label_values(&["http_cache", "url"])
+                .with_label_values(&["http_cache", key.ty()])
                 .inc();
             return Ok(Some(res));
         }
 
         self.metrics
             .key_value_store_num_fetches_not_found
-            .with_label_values(&["http_cache", "url"])
+            .with_label_values(&["http_cache", key.ty()])
             .inc();
 
         let resp = self
@@ -508,9 +525,22 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
         version: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
         let key = Key::ObjectKey(object_id, version);
-        self.fetch(key)
-            .await
-            .map(|maybe| maybe.and_then(|bytes| deser::<_, Object>(&key, bytes.as_ref())))
+        self.fetch(key).await.map(|maybe| {
+            maybe
+                .and_then(|bytes| deser::<_, Object>(&key, bytes.as_ref()))
+                .tap_some(|_| {
+                    self.metrics
+                        .key_value_store_num_fetches_success
+                        .with_label_values(&["http", key.ty()])
+                        .inc();
+                })
+                .tap_none(|| {
+                    self.metrics
+                        .key_value_store_num_fetches_not_found
+                        .with_label_values(&["http", key.ty()])
+                        .inc();
+                })
+        })
     }
 
     #[instrument(level = "trace", skip_all)]

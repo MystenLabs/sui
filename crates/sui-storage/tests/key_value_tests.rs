@@ -560,7 +560,7 @@ mod simtests {
         assert_eq!(
             metrics
                 .key_value_store_num_fetches_success
-                .get_metric_with_label_values(&["http_cache", "url"])
+                .get_metric_with_label_values(&["http_cache", "tx"])
                 .unwrap()
                 .get(),
             1
