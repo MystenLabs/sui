@@ -439,13 +439,12 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             .hostname
                             .clone();
                         warn!("Failed to fetch {commit_range:?} from {hostname}: {}", e);
-                        let error: &'static str = e.into();
                         inner
                             .context
                             .metrics
                             .node_metrics
                             .commit_sync_fetch_once_errors
-                            .with_label_values(&[&hostname, error])
+                            .with_label_values(&[&hostname, e.name()])
                             .inc();
                     }
                     Err(_) => {
@@ -466,6 +465,8 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     }
                 }
             }
+            // Avoid busy looping, by waiting for a while before retrying.
+            sleep(TIMEOUT).await;
         }
     }
 
