@@ -31,7 +31,7 @@ pub async fn query_last_checkpoint_of_epoch(graphql_url: &str, epoch_id: u64) ->
         // .json::<HashMap<String, String>>()
         .await
         .expect("Cannot parse response");
-
+    println!("Response: {}", resp);
     // Parse the JSON response to get the last checkpoint of the epoch
     let v: Value = serde_json::from_str(resp.as_str()).expect("Incorrect JSON response");
     let checkpoint_number = v["data"]["epoch"]["checkpoints"]["nodes"][0]["sequenceNumber"]
