@@ -42,6 +42,14 @@ fn is_msm_supported(context: &NativeContext) -> bool {
         .enable_group_ops_native_function_msm()
 }
 
+fn is_g1_uncompressed_supported(context: &NativeContext) -> bool {
+    context
+        .extensions()
+        .get::<ObjectRuntime>()
+        .protocol_config
+        .uncompressed_g1_group_elements()
+}
+
 // Gas related structs and functions.
 
 #[derive(Clone)]
@@ -86,11 +94,12 @@ pub struct GroupOpsCostParams {
     pub bls12381_msm_max_len: Option<u32>,
     // costs for decode, pairing, and encode output
     pub bls12381_pairing_cost: Option<InternalGas>,
-    // cost
-    pub bls12381_g1_to_uncompressed_cost: Option<InternalGas>,
-    pub bls12381_g1_from_uncompressed_cost: Option<InternalGas>,
-    pub bls12381_g1_sum_of_uncompressed_base_cost: Option<InternalGas>,
-    pub bls12381_g1_sum_of_uncompressed_cost_per_term: Option<InternalGas>,
+    // costs for conversion to and from uncompressed form
+    pub bls12381_g1_to_g1_uncompressed_cost: Option<InternalGas>,
+    pub bls12381_g1_uncompressed_to_g1_cost: Option<InternalGas>,
+    // costs for sum of elements uncompressed form
+    pub bls12381_g1_uncompressed_sum_base_cost: Option<InternalGas>,
+    pub bls12381_g1_uncompressed_sum_cost_per_term: Option<InternalGas>,
 }
 
 macro_rules! native_charge_gas_early_exit_option {
@@ -760,11 +769,11 @@ pub fn internal_pairing(
 }
 
 /***************************************************************************************************
- * native fun internal_from
- * Implementation of the Move native function `internal_from_uncompressed(from_type:u8, to_type: u8, e: &vector<u8>): vector<u8>`
+ * native fun internal_convert
+ * Implementation of the Move native function `internal_convert(from_type:u8, to_type: u8, e: &vector<u8>): vector<u8>`
  *   gas cost: group_ops_bls12381_g1_from_uncompressed_cost / group_ops_bls12381_g1_from_compressed_cost
  **************************************************************************************************/
-pub fn internal_from(
+pub fn internal_convert(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -773,6 +782,10 @@ pub fn internal_from(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
+
+    if !(is_g1_uncompressed_supported(context)) {
+        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
+    }
 
     let e_ref = pop_arg!(args, VectorRef);
     let e = e_ref.as_bytes_ref();
@@ -789,7 +802,7 @@ pub fn internal_from(
         (Some(Groups::BLS12381G1Uncompressed), Some(Groups::BLS12381G1)) => {
             native_charge_gas_early_exit_option!(
                 context,
-                cost_params.bls12381_g1_from_uncompressed_cost
+                cost_params.bls12381_g1_uncompressed_to_g1_cost
             );
             e.to_vec()
                 .try_into()
@@ -801,7 +814,7 @@ pub fn internal_from(
         (Some(Groups::BLS12381G1), Some(Groups::BLS12381G1Uncompressed)) => {
             native_charge_gas_early_exit_option!(
                 context,
-                cost_params.bls12381_g1_to_uncompressed_cost
+                cost_params.bls12381_g1_to_g1_uncompressed_cost
             );
             parse_trusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(&e)
                 .map(|e| bls::G1ElementUncompressed::from(&e))
@@ -832,6 +845,10 @@ pub fn internal_sum(
 
     let cost = context.gas_used();
 
+    if !(is_g1_uncompressed_supported(context)) {
+        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
+    }
+
     let cost_params = &context
         .extensions()
         .get::<NativesCostTable>()
@@ -851,9 +868,9 @@ pub fn internal_sum(
             native_charge_gas_early_exit_option!(
                 context,
                 cost_params
-                    .bls12381_g1_sum_of_uncompressed_base_cost
+                    .bls12381_g1_uncompressed_sum_base_cost
                     .and_then(|base| cost_params
-                        .bls12381_g1_sum_of_uncompressed_cost_per_term
+                        .bls12381_g1_uncompressed_sum_cost_per_term
                         .map(|per_term| base + per_term * length.into()))
             );
 
@@ -873,6 +890,7 @@ pub fn internal_sum(
                         .map(bls::G1ElementUncompressed::from_trusted_byte_array)
                 })
                 .collect::<FastCryptoResult<Vec<_>>>()
+                .and_then(|e| bls::G1ElementUncompressed::sum(&e))
                 .map(|e| bls::G1ElementUncompressed::from(&e))
                 .map(|e| e.into_byte_array().to_vec())
         }
