@@ -221,9 +221,15 @@ module sui::object {
 
     // helper for delete
     native fun delete_impl(id: address);
+    fun delete_impl_spec(id: address) {
+        delete_impl(id)
+    }
 
     // marks newly created UIDs from hash
     native fun record_new_uid(id: address);
+    fun record_new_uid_spec(id: address) {
+        record_new_uid(id)
+    }
 
     #[test_only]
     /// Return the most recent created object ID.

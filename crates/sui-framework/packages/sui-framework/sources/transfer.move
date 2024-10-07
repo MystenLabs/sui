@@ -126,12 +126,24 @@ module sui::transfer {
     }
 
     public(package) native fun freeze_object_impl<T: key>(obj: T);
+    fun freeze_object_impl_spec<T: key>(obj: T) {
+        freeze_object_impl(obj)
+    }
 
     public(package) native fun share_object_impl<T: key>(obj: T);
+    fun share_object_impl_spec<T: key>(obj: T) {
+        share_object_impl(obj)
+    }
 
     public(package) native fun transfer_impl<T: key>(obj: T, recipient: address);
+    fun transfer_impl_spec<T: key>(obj: T, recipient: address) {
+        transfer_impl(obj, recipient)
+    }
 
     native fun receive_impl<T: key>(parent: address, to_receive: ID, version: u64): T;
+    fun receive_impl_spec<T: key>(parent: address, to_receive: ID, version: u64): T {
+        receive_impl(parent, to_receive, version)
+    }
 
     #[test_only]
     public(package) fun make_receiver<T: key>(id: ID, version: u64): Receiving<T> {

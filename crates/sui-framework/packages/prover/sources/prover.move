@@ -1,5 +1,7 @@
 // #[test_only]
 module prover::prover {
+    use prover::ghost::Self;
+
     native public fun requires(p: bool);
     native public fun ensures(p: bool);
     native public fun asserts(p: bool);

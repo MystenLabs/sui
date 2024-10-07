@@ -72,6 +72,9 @@ module sui::tx_context {
 
     /// Native function for deriving an ID via hash(tx_hash || ids_created)
     native fun derive_id(tx_hash: vector<u8>, ids_created: u64): address;
+    fun derive_id_spec(tx_hash: vector<u8>, ids_created: u64): address {
+        derive_id(tx_hash, ids_created)
+    }
 
     // ==== test-only functions ====
 

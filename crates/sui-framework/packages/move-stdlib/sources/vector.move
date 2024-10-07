@@ -90,9 +90,10 @@ module std::vector {
     }
 
     /// Return `true` if the vector `v` has no elements and `false` otherwise.
-    public fun is_empty<Element>(v: &vector<Element>): bool {
-        v.length() == 0
-    }
+    native public fun is_empty<Element>(v: &vector<Element>): bool;
+    // public fun is_empty<Element>(v: &vector<Element>): bool {
+    //     v.length() == 0
+    // }
 
     /// Return true if `e` is in the vector `v`.
     /// Otherwise, returns false.
