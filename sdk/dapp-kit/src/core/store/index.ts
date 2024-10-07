@@ -19,7 +19,7 @@ type CreateDappKitStoreOptions = DappKitStateOptions & {
 export function createDappKitStore(options: CreateDappKitStoreOptions) {
 	const $client = atom(options.client);
 	const { $state, actions } = createState(options);
-	const methods = createMethods({ $state, actions });
+	const methods = createMethods({ $state, actions, $client });
 
 	/**
 	 * Handle the addition and removal of new wallets.
