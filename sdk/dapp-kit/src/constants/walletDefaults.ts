@@ -12,6 +12,7 @@ export const DEFAULT_STORAGE =
 	typeof window !== 'undefined' && window.localStorage ? localStorage : createInMemoryStore();
 
 export const DEFAULT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
+export const DEFAULT_STORAGE_KEY_V2 = 'sui-dapp-kit-v2:wallet-connection-info';
 
 const SIGN_FEATURES = [
 	'sui:signTransaction',

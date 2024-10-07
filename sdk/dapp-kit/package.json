@@ -80,6 +80,7 @@
 		"@mysten/sui": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
 		"@mysten/zksend": "workspace:*",
+		"@nanostores/persistent": "^0.10.2",
 		"@radix-ui/react-dialog": "^1.1.1",
 		"@radix-ui/react-dropdown-menu": "^2.1.1",
 		"@radix-ui/react-slot": "^1.1.0",
@@ -87,6 +88,7 @@
 		"@vanilla-extract/dynamic": "^2.1.1",
 		"@vanilla-extract/recipes": "^0.5.3",
 		"clsx": "^2.1.1",
+		"nanostores": "^0.10.3",
 		"zustand": "^4.5.4"
 	},
 	"peerDependencies": {
