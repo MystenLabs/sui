@@ -172,10 +172,11 @@ pub(crate) fn build_objects_query(
         }
         View::Historical => {
             // The cursor pagination logic refers to the table with the `candidates` alias
-            query!(
+            let query = query!(
                 "SELECT candidates.* FROM ({}) candidates",
                 history_objs_inner
-            )
+            );
+            filter!(query, "object_status = 0")
         }
     };
 
