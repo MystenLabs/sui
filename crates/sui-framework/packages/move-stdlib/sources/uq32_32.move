@@ -26,8 +26,8 @@ const EOverflow: vector<u8> = b"Overflow from an arithmetic operation";
 #[error]
 const EDivisionByZero: vector<u8> = b"Division by zero";
 
-/// A fixed-point numeric type with 32 integer bits nd 32 fractional bits, represented by an
-/// underlying 64 value. This is a binary representation, so decimal values may not be exactly
+/// A fixed-point numeric type with 32 integer bits and 32 fractional bits, represented by an
+/// underlying 64 bit value. This is a binary representation, so decimal values may not be exactly
 /// representable, but it provides more than 9 decimal digits of precision both before and after the
 /// decimal point (18 digits total).
 public struct UQ32_32(u64) has copy, drop, store;
@@ -39,14 +39,16 @@ public struct UQ32_32(u64) has copy, drop, store;
 /// very small imprecision in the binary representation could change the rounding. For example,
 /// `0.0125` will round down to `0.012` instead of up to `0.013`.
 /// Aborts if the denominator is zero.
-/// Aborts if the numerator is non-zero and the ratio is not in the range 2^-32 .. 2^32-1.
+/// Aborts if a non-zero fraction is too small to be represented as a non-zero value.
+/// Aborts if the input is too large, e.g. larger than 2^32.
 public fun from_rational(numerator: u64, denominator: u64): UQ32_32 {
+    assert!(denominator != 0, EDenominator);
+
     // If the denominator is zero, this will abort.
     // Scale the numerator to have 64 fractional bits and the denominator to have 32 fractional
     // bits, so that the quotient will have 32 fractional bits.
     let scaled_numerator = numerator as u128 << 64;
     let scaled_denominator = denominator as u128 << 32;
-    assert!(scaled_denominator != 0, EDenominator);
     let quotient = scaled_numerator / scaled_denominator;
     assert!(quotient != 0 || numerator == 0, ERatioTooSmall);
     // Return the quotient as a fixed-point number. We first need to check whether the cast
