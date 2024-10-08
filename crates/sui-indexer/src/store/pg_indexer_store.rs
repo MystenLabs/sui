@@ -926,48 +926,73 @@ impl PgIndexerStore {
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
-                diesel::insert_into(event_emit_package::table)
-                    .values(&event_emit_packages)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for event_emit_packages_chunk in
+                    event_emit_packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(event_emit_package::table)
+                        .values(event_emit_packages_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(event_emit_module::table)
-                    .values(&event_emit_modules)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for event_emit_modules_chunk in
+                    event_emit_modules.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(event_emit_module::table)
+                        .values(event_emit_modules_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(event_senders::table)
-                    .values(&event_senders)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for event_senders_chunk in event_senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(event_senders::table)
+                        .values(event_senders_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(event_struct_package::table)
-                    .values(&event_struct_packages)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for event_struct_packages_chunk in
+                    event_struct_packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(event_struct_package::table)
+                        .values(event_struct_packages_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(event_struct_module::table)
-                    .values(&event_struct_modules)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for event_struct_modules_chunk in
+                    event_struct_modules.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(event_struct_module::table)
+                        .values(event_struct_modules_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(event_struct_name::table)
-                    .values(&event_struct_names)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for event_struct_names_chunk in
+                    event_struct_names.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(event_struct_name::table)
+                        .values(event_struct_names_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(event_struct_instantiation::table)
-                    .values(&event_struct_instantiations)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
-
+                for event_struct_instantiations_chunk in
+                    event_struct_instantiations.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(event_struct_instantiation::table)
+                        .values(event_struct_instantiations_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
                 Ok(())
             }
             .scope_boxed()
@@ -1056,71 +1081,99 @@ impl PgIndexerStore {
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
-                diesel::insert_into(tx_affected_addresses::table)
-                    .values(&affected_addresses)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for affected_addresses_chunk in
+                    affected_addresses.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(tx_affected_addresses::table)
+                        .values(affected_addresses_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(tx_affected_objects::table)
-                    .values(&affected_objects)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for affected_objects_chunk in
+                    affected_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(tx_affected_objects::table)
+                        .values(affected_objects_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(tx_senders::table)
-                    .values(&senders)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for senders_chunk in senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(tx_senders::table)
+                        .values(senders_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(tx_recipients::table)
-                    .values(&recipients)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(tx_recipients::table)
+                        .values(recipients_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(tx_input_objects::table)
-                    .values(&input_objects)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for input_objects_chunk in input_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(tx_input_objects::table)
+                        .values(input_objects_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(tx_changed_objects::table)
-                    .values(&changed_objects)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for changed_objects_chunk in
+                    changed_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(tx_changed_objects::table)
+                        .values(changed_objects_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(tx_calls_pkg::table)
-                    .values(&pkgs)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for pkgs_chunk in pkgs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(tx_calls_pkg::table)
+                        .values(pkgs_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(tx_calls_mod::table)
-                    .values(&mods)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for mods_chunk in mods.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(tx_calls_mod::table)
+                        .values(mods_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(tx_calls_fun::table)
-                    .values(&funs)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for funs_chunk in funs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(tx_calls_fun::table)
+                        .values(funs_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(tx_digests::table)
-                    .values(&digests)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for digests_chunk in digests.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(tx_digests::table)
+                        .values(digests_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
-                diesel::insert_into(tx_kinds::table)
-                    .values(&kinds)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                for kinds_chunk in kinds.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(tx_kinds::table)
+                        .values(kinds_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await?;
+                }
 
                 Ok(())
             }
@@ -1902,9 +1955,12 @@ impl IndexerStore for PgIndexerStore {
                     "Failed to persist all event_indices chunks: {:?}",
                     e
                 ))
-            })?;
-        let elapsed = guard.stop_and_record();
-        info!(elapsed, "Persisted {} event_indices chunks", len);
+            })
+            .tap_ok(|_| {
+                let elapsed = guard.stop_and_record();
+                info!(elapsed, "Persisted {} event_indices chunks", len);
+            })
+            .tap_err(|e| tracing::error!("Failed to persist all event_indices chunks: {:?}", e))?;
         Ok(())
     }
 
@@ -1932,9 +1988,12 @@ impl IndexerStore for PgIndexerStore {
                     "Failed to persist all tx_indices chunks: {:?}",
                     e
                 ))
-            })?;
-        let elapsed = guard.stop_and_record();
-        info!(elapsed, "Persisted {} tx_indices chunks", len);
+            })
+            .tap_ok(|_| {
+                let elapsed = guard.stop_and_record();
+                info!(elapsed, "Persisted {} tx_indices chunks", len);
+            })
+            .tap_err(|e| tracing::error!("Failed to persist all tx_indices chunks: {:?}", e))?;
         Ok(())
     }
 
