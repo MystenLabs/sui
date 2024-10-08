@@ -1473,8 +1473,6 @@ impl AuthorityPerEpochStore {
             digests.iter().map(|d| TransactionKey::Digest(*d)),
         )?;
 
-        batch.delete_batch(&tables.user_signatures_for_checkpoints, digests)?;
-
         batch.write()?;
         Ok(())
     }
@@ -3782,6 +3780,11 @@ impl AuthorityPerEpochStore {
                 transactions
                     .iter()
                     .map(|tx| (tx.transaction, sequence_number)),
+            )?;
+
+            batch.delete_batch(
+                &tables.user_signatures_for_checkpoints,
+                transactions.iter().map(|tx| tx.transaction),
             )?;
         }
 
