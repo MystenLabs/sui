@@ -3,6 +3,8 @@
 
 use anyhow::anyhow;
 use anyhow::Result;
+use diesel::query_builder::BoxedSqlQuery;
+use diesel::BoolExpressionMethods;
 use diesel::{
     dsl::sql, sql_types::Bool, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
     OptionalExtension, QueryDsl, SelectableHelper, TextExpressionMethods,
@@ -42,8 +44,6 @@ use sui_types::{coin::CoinMetadata, event::EventID};
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
 use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
-use crate::schema::pruner_cp_watermark;
-use crate::schema::tx_digests;
 use crate::{
     errors::IndexerError,
     models::{
@@ -55,10 +55,58 @@ use crate::{
         transactions::{tx_events_to_sui_tx_events, StoredTransaction},
         tx_indices::TxSequenceNumber,
     },
-    schema::{checkpoints, display, epochs, events, objects, transactions},
+    schema::{
+        checkpoints, display, epochs, event_emit_module, event_senders, event_struct_instantiation,
+        event_struct_module, events, objects, pruner_cp_watermark, transactions, tx_digests,
+    },
     store::package_resolver::IndexerStorePackageResolver,
     types::{IndexerResult, OwnerType},
 };
+
+macro_rules! apply_event_query_clauses {
+    ($query:expr, $table:ident, $cursor_seq_num:expr, $descending_order:expr, $limit:expr) => {{
+        let mut query = $query
+            .select(($table::tx_sequence_number, $table::event_sequence_number))
+            .into_boxed();
+
+        if $descending_order {
+            query = query.order((
+                $table::tx_sequence_number.desc(),
+                $table::event_sequence_number.desc(),
+            ));
+        } else {
+            query = query.order((
+                $table::tx_sequence_number.asc(),
+                $table::event_sequence_number.asc(),
+            ));
+        }
+
+        if let Some((tx_seq, event_seq)) = $cursor_seq_num {
+            let tx_seq = tx_seq as i64;
+            let event_seq = event_seq as i64;
+
+            if $descending_order {
+                query = query.filter(
+                    $table::tx_sequence_number
+                        .lt(tx_seq)
+                        .or($table::tx_sequence_number
+                            .eq(tx_seq)
+                            .and($table::event_sequence_number.lt(event_seq))),
+                );
+            } else {
+                query = query.filter(
+                    $table::tx_sequence_number
+                        .gt(tx_seq)
+                        .or($table::tx_sequence_number
+                            .eq(tx_seq)
+                            .and($table::event_sequence_number.gt(event_seq))),
+                );
+            }
+        }
+
+        query.limit($limit as i64)
+    }};
+}
 
 pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
 pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
@@ -957,7 +1005,7 @@ impl IndexerReader {
 
         let mut connection = self.pool.get().await?;
 
-        let (tx_seq, event_seq) = if let Some(cursor) = cursor {
+        let cursor_seq_num = if let Some(cursor) = cursor {
             let EventID {
                 tx_digest,
                 event_seq,
@@ -974,64 +1022,78 @@ impl IndexerReader {
                 )
                 .first::<i64>(&mut connection)
                 .await?;
-            (tx_seq, event_seq)
-        } else if descending_order {
-            let max_tx_seq = u64::MAX as i64;
-            (max_tx_seq + 1, 0)
+            Some((tx_seq, event_seq))
         } else {
-            (-1, 0)
+            None
         };
 
-        let query = if let EventFilter::Sender(sender) = &filter {
-            // Need to remove ambiguities for tx_sequence_number column
-            let cursor_clause = if descending_order {
-                format!("(e.{TX_SEQUENCE_NUMBER_STR} < {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} < {}))", tx_seq, tx_seq, event_seq)
-            } else {
-                format!("(e.{TX_SEQUENCE_NUMBER_STR} > {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} > {}))", tx_seq, tx_seq, event_seq)
-            };
-            let order_clause = if descending_order {
-                format!("e.{TX_SEQUENCE_NUMBER_STR} DESC, e.{EVENT_SEQUENCE_NUMBER_STR} DESC")
-            } else {
-                format!("e.{TX_SEQUENCE_NUMBER_STR} ASC, e.{EVENT_SEQUENCE_NUMBER_STR} ASC")
-            };
-            format!(
-                "( \
-                    SELECT *
-                    FROM event_senders s
-                    JOIN events e
-                    USING (tx_sequence_number, event_sequence_number)
-                    WHERE s.sender = '\\x{}'::bytea AND {} \
-                    ORDER BY {} \
-                    LIMIT {}
-                )",
-                Hex::encode(sender.to_vec()),
-                cursor_clause,
-                order_clause,
-                limit,
-            )
+        if let EventFilter::Sender(sender) = &filter {
+            let lookup = apply_event_query_clauses!(
+                event_senders::table.filter(event_senders::sender.eq(sender.to_vec())),
+                event_senders,
+                cursor_seq_num,
+                descending_order,
+                limit
+            );
         } else if let EventFilter::Transaction(tx_digest) = filter {
+            // TODO: (wlmyng)
             return self
-                .query_events_by_tx_digest(tx_digest, cursor, tx_seq, limit, descending_order)
+                .query_events_by_tx_digest(tx_digest, cursor, 0, limit, descending_order)
                 .await;
         } else {
             let main_where_clause = match filter {
                 EventFilter::All([]) => {
                     // No filter
-                    "1 = 1".to_string()
+                    let a = "1 = 1".to_string();
                 }
                 EventFilter::MoveModule { package, module } => {
-                    format!(
-                        "package = '\\x{}'::bytea AND module = '{}'",
-                        package.to_hex(),
-                        module,
-                    )
-                }
-                EventFilter::MoveEventType(struct_tag) => {
-                    format!("event_type = '{}'", struct_tag)
+                    let lookup = apply_event_query_clauses!(
+                        event_emit_module::table
+                            .filter(event_emit_module::package.eq(package.to_vec()))
+                            .filter(event_emit_module::module.eq(module.to_string())),
+                        event_emit_module,
+                        cursor_seq_num,
+                        descending_order,
+                        limit
+                    );
                 }
                 EventFilter::MoveEventModule { package, module } => {
-                    let package_module_prefix = format!("{}::{}", package.to_hex_literal(), module);
-                    format!("event_type LIKE '{package_module_prefix}::%'")
+                    let lookup = apply_event_query_clauses!(
+                        event_struct_module::table.filter(
+                            event_struct_module::package
+                                .eq(package.to_vec())
+                                .and(event_struct_module::module.eq(module.to_string()))
+                        ),
+                        event_struct_module,
+                        cursor_seq_num,
+                        descending_order,
+                        limit
+                    );
+                }
+                EventFilter::MoveEventType(struct_tag) => {
+                    let package = struct_tag.address;
+                    let module = struct_tag.module.to_string();
+                    let type_instantiation = struct_tag
+                        .to_canonical_string(/* with_prefix */ true)
+                        .splitn(3, "::")
+                        .collect::<Vec<_>>()[2]
+                        .to_string();
+
+                    let lookup = apply_event_query_clauses!(
+                        event_struct_instantiation::table.filter(
+                            event_struct_instantiation::package
+                                .eq(package.to_vec())
+                                .and(event_struct_instantiation::module.eq(module))
+                                .and(
+                                    event_struct_instantiation::type_instantiation
+                                        .eq(type_instantiation)
+                                )
+                        ),
+                        event_struct_instantiation,
+                        cursor_seq_num,
+                        descending_order,
+                        limit
+                    );
                 }
                 EventFilter::Sender(_) => {
                     // Processed above
@@ -1047,28 +1109,8 @@ impl IndexerReader {
                     ));
                 }
             };
-
-            let cursor_clause = if descending_order {
-                format!("AND ({TX_SEQUENCE_NUMBER_STR} < {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} < {}))", tx_seq, tx_seq, event_seq)
-            } else {
-                format!("AND ({TX_SEQUENCE_NUMBER_STR} > {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} > {}))", tx_seq, tx_seq, event_seq)
-            };
-            let order_clause = if descending_order {
-                format!("{TX_SEQUENCE_NUMBER_STR} DESC, {EVENT_SEQUENCE_NUMBER_STR} DESC")
-            } else {
-                format!("{TX_SEQUENCE_NUMBER_STR} ASC, {EVENT_SEQUENCE_NUMBER_STR} ASC")
-            };
-
-            format!(
-                "
-                    SELECT * FROM events \
-                    WHERE {} {} \
-                    ORDER BY {} \
-                    LIMIT {}
-                ",
-                main_where_clause, cursor_clause, order_clause, limit,
-            )
         };
+
         debug!("query events: {}", query);
         let stored_events = diesel::sql_query(query)
             .load::<StoredEvent>(&mut connection)
