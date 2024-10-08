@@ -173,7 +173,7 @@ public fun locked_balance<BaseAsset, QuoteAsset>(
 
 ### Retrieve pool parameters
 
-Returns the trade parameters for the pool ('taker_fee', 'maker_fee', 'stake_required').
+Returns the trade parameters for the pool (`taker_fee`, `maker_fee`, `stake_required`).
 
 ```move
 public fun pool_trade_params<BaseAsset, QuoteAsset>(
@@ -181,7 +181,7 @@ public fun pool_trade_params<BaseAsset, QuoteAsset>(
 ): (u64, u64, u64)
 ```
 
-Returns the book parameters for the pool ('tick_size', 'lot_size', 'min_size').
+Returns the book parameters for the pool (`tick_size`, `lot_size`, `min_size`).
 
 ```move
 public fun pool_book_params<BaseAsset, QuoteAsset>(
@@ -189,7 +189,7 @@ public fun pool_book_params<BaseAsset, QuoteAsset>(
 ): (u64, u64, u64)
 ```
 
-Returns the 'OrderDeepPrice' struct for the pool, which determines the conversion for DEEP fees.
+Returns the `OrderDeepPrice` struct for the pool, which determines the conversion for DEEP fees.
 
 ```move
 public fun get_order_deep_price<BaseAsset, QuoteAsset>(
