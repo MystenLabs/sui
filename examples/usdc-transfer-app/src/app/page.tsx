@@ -6,7 +6,6 @@
 'use client';
 
 import { SuiClientProvider, useSuiClient } from '@mysten/dapp-kit';
-import { bcs } from '@mysten/sui/bcs';
 import { Transaction } from '@mysten/sui/transactions';
 import { ConnectButton, useWalletKit, WalletKitProvider } from '@mysten/wallet-kit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
