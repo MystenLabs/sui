@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use arc_swap::{ArcSwap, ArcSwapOption};
-use bytes::Bytes;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{select, Either};
@@ -10,7 +9,6 @@ use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
-use narwhal_types::{TransactionProto, TransactionsClient};
 use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -34,8 +32,7 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 
-use tap::prelude::*;
-use tokio::sync::{Semaphore, SemaphorePermit};
+use tokio::sync::{oneshot, Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
 use tokio::time::{self};
 
@@ -53,7 +50,7 @@ use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
 use tokio::time::Duration;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -73,6 +70,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_attempt: IntCounterVec,
     pub sequencing_certificate_success: IntCounterVec,
     pub sequencing_certificate_failures: IntCounterVec,
+    pub sequencing_certificate_status: IntCounterVec,
     pub sequencing_certificate_inflight: IntGaugeVec,
     pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
@@ -107,6 +105,13 @@ impl ConsensusAdapterMetrics {
                 "sequencing_certificate_failures",
                 "Counts the number of sequenced certificates that failed other than by timeout.",
                 &["tx_type"],
+                registry,
+            )
+                .unwrap(),
+                sequencing_certificate_status: register_int_counter_vec_with_registry!(
+                "sequencing_certificate_status",
+                "The status of the certificate sequencing as reported by consensus. The status can be either sequenced or garbage collected.",
+                &["tx_type", "status"],
                 registry,
             )
                 .unwrap(),
@@ -187,6 +192,33 @@ impl ConsensusAdapterMetrics {
     }
 }
 
+pub enum BlockStatus {
+    Sequenced,
+    GarbageCollected,
+}
+
+pub enum SubmitResponse {
+    NoStatusWaiter(BlockStatus),
+    WithStatusWaiter(oneshot::Receiver<consensus_core::BlockStatus>),
+}
+
+impl SubmitResponse {
+    pub async fn wait_for_status(self) -> SuiResult<BlockStatus> {
+        match self {
+            SubmitResponse::NoStatusWaiter(status) => Ok(status),
+            SubmitResponse::WithStatusWaiter(receiver) => match receiver.await {
+                Ok(status) => match status {
+                    consensus_core::BlockStatus::Sequenced(_) => Ok(BlockStatus::Sequenced),
+                    consensus_core::BlockStatus::GarbageCollected(_) => {
+                        Ok(BlockStatus::GarbageCollected)
+                    }
+                },
+                Err(e) => Err(SuiError::ConsensusConnectionBroken(format!("{:?}", e))),
+            },
+        }
+    }
+}
+
 #[mockall::automock]
 #[async_trait::async_trait]
 pub trait SubmitToConsensus: Sync + Send + 'static {
@@ -197,39 +229,20 @@ pub trait SubmitToConsensus: Sync + Send + 'static {
     ) -> SuiResult;
 }
 
+#[mockall::automock]
 #[async_trait::async_trait]
-impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Channel> {
-    async fn submit_to_consensus(
+pub trait ConsensusClient: Sync + Send + 'static {
+    async fn submit(
         &self,
         transactions: &[ConsensusTransaction],
-        _epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
-        let transactions_bytes = transactions
-            .iter()
-            .map(|t| {
-                let serialized =
-                    bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail");
-                Bytes::from(serialized)
-            })
-            .collect::<Vec<_>>();
-        self.clone()
-            .submit_transaction(TransactionProto {
-                transactions: transactions_bytes,
-            })
-            .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
-            .tap_err(|r| {
-                // Will be logged by caller as well.
-                warn!("Submit transaction failed with: {:?}", r);
-            })?;
-        Ok(())
-    }
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<SubmitResponse>;
 }
 
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
-    consensus_client: Arc<dyn SubmitToConsensus>,
+    consensus_client: Arc<dyn ConsensusClient>,
     /// Authority pubkey.
     authority: AuthorityName,
     /// The limit to number of inflight transactions at this node.
@@ -277,7 +290,7 @@ pub struct ConnectionMonitorStatusForTests {}
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
-        consensus_client: Arc<dyn SubmitToConsensus>,
+        consensus_client: Arc<dyn ConsensusClient>,
         authority: AuthorityName,
         connection_monitor_status: Arc<dyn CheckConnection>,
         max_pending_transactions: usize,
@@ -770,52 +783,55 @@ impl ConsensusAdapter {
             // We enter this branch when in select above await_submit completed and processed_waiter is pending
             // This means it is time for us to submit transaction to consensus
             let submit_inner = async {
-                let ack_start = Instant::now();
-                let mut retries: u32 = 0;
-                while let Err(e) = self
-                    .consensus_client
-                    .submit_to_consensus(&transactions[..], epoch_store)
-                    .await
-                {
-                    // This can happen during reconfig, or when consensus has full internal buffers
-                    // and needs to back pressure, so retry a few times before logging warnings.
-                    if retries > 30
-                        || (retries > 3 && (is_soft_bundle || !transactions[0].kind.is_dkg()))
-                    {
-                        warn!(
-                            "Failed to submit transactions {transaction_keys:?} to consensus: {e:?}. Retry #{retries}"
-                        );
+                const RETRY_DELAY_STEP: Duration = Duration::from_secs(1);
+
+                loop {
+                    // Submit the transaction to consensus and return the submit result with a status waiter
+                    let submit_result = self
+                        .submit_inner(
+                            &transactions,
+                            epoch_store,
+                            &transaction_keys,
+                            tx_type,
+                            is_soft_bundle,
+                        )
+                        .await;
+
+                    match submit_result.wait_for_status().await {
+                        Ok(BlockStatus::Sequenced) => {
+                            self.metrics
+                                .sequencing_certificate_status
+                                .with_label_values(&[tx_type, "sequenced"])
+                                .inc();
+                            // Block has been sequenced. Nothing more to do, we do have guarantees that the transaction will appear in consensus output.
+                            trace!(
+                                "Transaction {transaction_keys:?} has been sequenced by consensus."
+                            );
+                            break;
+                        }
+                        Ok(BlockStatus::GarbageCollected) => {
+                            self.metrics
+                                .sequencing_certificate_status
+                                .with_label_values(&[tx_type, "garbage_collected"])
+                                .inc();
+                            // Block has been garbage collected and we have no guarantees that the transaction will appear in consensus output. We'll
+                            // resubmit the transaction to consensus. If the transaction has been already "processed", then probably someone else has submitted
+                            // the transaction and managed to get sequenced. Then this future will have been cancelled anyways so no need to check here on the processed output.
+                            debug!(
+                                "Transaction {transaction_keys:?} was garbage collected before being sequenced. Will be retried."
+                            );
+                            time::sleep(RETRY_DELAY_STEP).await;
+                            continue;
+                        }
+                        Err(_err) => {
+                            warn!(
+                                "Error while waiting for status from consensus for transactions {transaction_keys:?}. Will be retried."
+                            );
+                            time::sleep(RETRY_DELAY_STEP).await;
+                            continue;
+                        }
                     }
-                    self.metrics
-                        .sequencing_certificate_failures
-                        .with_label_values(&[tx_type])
-                        .inc();
-                    retries += 1;
-
-                    if !is_soft_bundle && transactions[0].kind.is_dkg() {
-                        // Shorter delay for DKG messages, which are time-sensitive and happen at
-                        // start-of-epoch when submit errors due to active reconfig are likely.
-                        time::sleep(Duration::from_millis(100)).await;
-                    } else {
-                        time::sleep(Duration::from_secs(10)).await;
-                    };
                 }
-
-                // we want to record the num of retries when reporting latency but to avoid label
-                // cardinality we do some simple bucketing to give us a good enough idea of how
-                // many retries happened associated with the latency.
-                let bucket = match retries {
-                    0..=10 => retries.to_string(), // just report the retry count as is
-                    11..=20 => "between_10_and_20".to_string(),
-                    21..=50 => "between_20_and_50".to_string(),
-                    51..=100 => "between_50_and_100".to_string(),
-                    _ => "over_100".to_string(),
-                };
-
-                self.metrics
-                    .sequencing_acknowledge_latency
-                    .with_label_values(&[&bucket, tx_type])
-                    .observe(ack_start.elapsed().as_secs_f64());
             };
             match select(processed_waiter, submit_inner.boxed()).await {
                 Either::Left((processed, _submit_inner)) => processed,
@@ -873,6 +889,72 @@ impl ConsensusAdapter {
             .sequencing_certificate_success
             .with_label_values(&[tx_type])
             .inc();
+    }
+
+    async fn submit_inner(
+        self: &Arc<Self>,
+        transactions: &[ConsensusTransaction],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction_keys: &[SequencedConsensusTransactionKey],
+        tx_type: &str,
+        is_soft_bundle: bool,
+    ) -> SubmitResponse {
+        let ack_start = Instant::now();
+        let mut retries: u32 = 0;
+
+        let submit_response = loop {
+            match self
+                .consensus_client
+                .submit(transactions, epoch_store)
+                .await
+            {
+                Err(err) => {
+                    // This can happen during reconfig, or when consensus has full internal buffers
+                    // and needs to back pressure, so retry a few times before logging warnings.
+                    if retries > 30
+                        || (retries > 3 && (is_soft_bundle || !transactions[0].kind.is_dkg()))
+                    {
+                        warn!(
+                            "Failed to submit transactions {transaction_keys:?} to consensus: {err:?}. Retry #{retries}"
+                        );
+                    }
+                    self.metrics
+                        .sequencing_certificate_failures
+                        .with_label_values(&[tx_type])
+                        .inc();
+                    retries += 1;
+
+                    if !is_soft_bundle && transactions[0].kind.is_dkg() {
+                        // Shorter delay for DKG messages, which are time-sensitive and happen at
+                        // start-of-epoch when submit errors due to active reconfig are likely.
+                        time::sleep(Duration::from_millis(100)).await;
+                    } else {
+                        time::sleep(Duration::from_secs(10)).await;
+                    };
+                }
+                Ok(status_waiter) => {
+                    break status_waiter;
+                }
+            }
+        };
+
+        // we want to record the num of retries when reporting latency but to avoid label
+        // cardinality we do some simple bucketing to give us a good enough idea of how
+        // many retries happened associated with the latency.
+        let bucket = match retries {
+            0..=10 => retries.to_string(), // just report the retry count as is
+            11..=20 => "between_10_and_20".to_string(),
+            21..=50 => "between_20_and_50".to_string(),
+            51..=100 => "between_50_and_100".to_string(),
+            _ => "over_100".to_string(),
+        };
+
+        self.metrics
+            .sequencing_acknowledge_latency
+            .with_label_values(&[&bucket, tx_type])
+            .observe(ack_start.elapsed().as_secs_f64());
+
+        submit_response
     }
 
     /// Waits for transactions to appear either to consensus output or been executed via a checkpoint (state sync).

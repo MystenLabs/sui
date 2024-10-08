@@ -4,7 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
-use crate::consensus_adapter::SubmitToConsensus;
+use crate::consensus_adapter::{BlockStatus, ConsensusClient, SubmitResponse, SubmitToConsensus};
 use crate::consensus_handler::SequencedConsensusTransaction;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
@@ -90,14 +90,28 @@ impl SubmitToConsensus for MockConsensusClient {
     async fn submit_to_consensus(
         &self,
         transactions: &[ConsensusTransaction],
-        _epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        self.submit(transactions, epoch_store)
+            .await
+            .map(|_response| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl ConsensusClient for MockConsensusClient {
+    async fn submit(
+        &self,
+        transactions: &[ConsensusTransaction],
+        _epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<SubmitResponse> {
         // TODO: maybe support multi-transactions and remove this check
         assert!(transactions.len() == 1);
         let transaction = &transactions[0];
         self.tx_sender
             .send(transaction.clone())
             .await
-            .map_err(|e| SuiError::Unknown(e.to_string()))
+            .map_err(|e| SuiError::Unknown(e.to_string()))?;
+        Ok(SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced))
     }
 }
