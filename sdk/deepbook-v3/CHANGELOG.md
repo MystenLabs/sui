@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.8.5
+
+### Patch Changes
+
+- c0fb6d6: Patch ID and bug fix
+
 ## 0.8.4
 
 ### Patch Changes
