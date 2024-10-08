@@ -1,10 +1,10 @@
 -- Drop the new partial indices
-DROP INDEX IF EXISTS objects_history_owner;
-DROP INDEX IF EXISTS objects_history_coin_owner;
-DROP INDEX IF EXISTS objects_history_coin_only;
-DROP INDEX IF EXISTS objects_history_type;
-DROP INDEX IF EXISTS objects_history_package_module_name_full_type;
-DROP INDEX IF EXISTS objects_history_owner_package_module_name_full_type;
+DROP INDEX IF EXISTS objects_history_owner_partial;
+DROP INDEX IF EXISTS objects_history_coin_owner_partial;
+DROP INDEX IF EXISTS objects_history_coin_only_partial;
+DROP INDEX IF EXISTS objects_history_type_partial;
+DROP INDEX IF EXISTS objects_history_package_module_name_full_type_partial;
+DROP INDEX IF EXISTS objects_history_owner_package_module_name_full_type_partial;
 
 -- Recreate the original indices without the object_status condition
 CREATE INDEX IF NOT EXISTS objects_history_owner ON objects_history (checkpoint_sequence_number, owner_type, owner_id) 
