@@ -32,7 +32,7 @@ See the [docs](https://docs.sui.io/guides/developer/getting-started/local-networ
 
 Start a local network using the `sui` binary:
 ```sh
-cargo run --bin sui -- start --with-faucet --force-regenesis 
+cargo run --bin sui -- start --with-faucet --force-regenesis
 ```
 
 If you want to run a local network with the indexer enabled (note that `libpq` is required), you can run the following command after following the steps in the next section to set up an indexer DB:
@@ -65,11 +65,12 @@ cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https
 ```
 cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443" --rpc-server-worker
 ```
-More flags info can be found in this [file](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer/src/lib.rs#L83-L123).
+More flags info can be found in this [file](src/main.rs#L41).
+
 ### DB reset
-Run this command under `sui/crates/sui-indexer`, which will wipe DB; In case of schema changes in `.sql` files, this will also update corresponding `schema.rs` file.
+When making db-related changes, you may find yourself having to run migrations and reset dbs often. The commands below are how you can invoke these actions.
 ```sh
-diesel database reset --database-url="<DATABASE_URL>"
+cargo run --bin sui-indexer -- --database-url "<DATABASE_URL>" reset-database --force
 ```
 
 ## Steps to run locally (TiDB)

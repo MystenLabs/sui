@@ -13683,6 +13683,8 @@ dependencies = [
  "serde_json",
  "serde_with 3.9.0",
  "simulacrum",
+ "strum 0.24.1",
+ "strum_macros 0.24.3",
  "sui-archival",
  "sui-config",
  "sui-core",
@@ -13711,6 +13713,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.10",
+ "toml 0.7.4",
  "tracing",
  "url",
 ]
