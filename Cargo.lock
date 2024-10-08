@@ -13632,6 +13632,7 @@ dependencies = [
  "ntest",
  "object_store",
  "prometheus",
+ "rand 0.8.5",
  "rayon",
  "regex",
  "serde",
