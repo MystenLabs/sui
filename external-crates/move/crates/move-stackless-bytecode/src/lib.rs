@@ -39,6 +39,7 @@ pub mod options;
 pub mod packed_types_analysis;
 pub mod pipeline_factory;
 pub mod reaching_def_analysis;
+pub mod spec_global_variable_analysis;
 pub mod spec_instrumentation;
 pub mod stackless_bytecode;
 pub mod stackless_bytecode_generator;

@@ -21,6 +21,7 @@ use crate::{
     number_operation_analysis::NumberOperationProcessor,
     options::ProverOptions,
     reaching_def_analysis::ReachingDefProcessor,
+    spec_global_variable_analysis::SpecGlobalVariableAnalysisProcessor,
     spec_instrumentation::SpecInstrumentationProcessor,
     usage_analysis::UsageProcessor,
     verification_analysis::VerificationAnalysisProcessor,
@@ -40,6 +41,7 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
         MemoryInstrumentationProcessor::new(),
         CleanAndOptimizeProcessor::new(),
         UsageProcessor::new(),
+        SpecGlobalVariableAnalysisProcessor::new(),
         VerificationAnalysisProcessor::new(),
     ];
 

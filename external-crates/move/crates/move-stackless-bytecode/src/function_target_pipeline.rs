@@ -217,6 +217,12 @@ impl FunctionTargetsHolder {
         self.is_spec(id) && !self.no_verify_specs.contains(id)
     }
 
+    pub fn specs(&self) -> impl Iterator<Item = &QualifiedId<FunId>> {
+        self.opaque_specs
+            .left_values()
+            .chain(self.scenario_specs.iter())
+    }
+
     pub fn has_no_verify_spec(&self, id: &QualifiedId<FunId>) -> bool {
         match self.get_opaque_spec_by_fun(id) {
             Some(spec_id) => self.no_verify_specs.contains(spec_id),
@@ -375,11 +381,7 @@ impl FunctionTargetsHolder {
         writeln!(f, "=== function target holder ===")?;
         writeln!(f)?;
         writeln!(f, "Verification specs:")?;
-        for spec in self
-            .opaque_specs
-            .left_values()
-            .chain(self.scenario_specs.iter())
-        {
+        for spec in self.specs() {
             let fun_env = env.get_function(*spec);
             if self.has_target(
                 &fun_env,

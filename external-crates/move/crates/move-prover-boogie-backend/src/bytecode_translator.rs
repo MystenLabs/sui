@@ -43,6 +43,7 @@ use move_stackless_bytecode::{
     },
     options::ProverOptions,
     reaching_def_analysis::{Def, ReachingDefProcessor},
+    spec_global_variable_analysis::{self},
     stackless_bytecode::{
         AbortAction, BorrowEdge, BorrowNode, Bytecode, Constant, HavocKind, IndexEdgeKind,
         Operation, PropKind,
@@ -611,32 +612,6 @@ impl<'env> BoogieTranslator<'env> {
             .get_fun_by_opaque_spec(spec_fun_qid)
             .map(|qid| self.env.get_function(*qid))
     }
-}
-
-fn get_ghost_global_instances(fun_target: &FunctionTarget) -> BTreeSet<Vec<Type>> {
-    let ghost_module_id = fun_target
-        .func_env
-        .module_env
-        .env
-        .find_module_by_name(fun_target.func_env.symbol_pool().make("ghost"))
-        .unwrap()
-        .get_id();
-    let global_function_id = FunId::new(fun_target.func_env.symbol_pool().make("global"));
-
-    fun_target
-        .data
-        .code
-        .iter()
-        .filter_map(|bc| match bc {
-            Bytecode::Call(_, _, Operation::Function(module_id, fun_id, type_inst), _, _)
-                if module_id.qualified(fun_id)
-                    == ghost_module_id.qualified(&global_function_id) =>
-            {
-                Some(type_inst.clone())
-            }
-            _ => None,
-        })
-        .collect()
 }
 
 // =================================================================================================
@@ -2026,7 +2001,10 @@ impl<'env> FunctionTranslator<'env> {
                             let global_function_id =
                                 FunId::new(self.fun_target.func_env.symbol_pool().make("global"));
 
-                            for type_inst in get_ghost_global_instances(self.fun_target) {
+                            for type_inst in
+                                spec_global_variable_analysis::get_info(&self.fun_target.data)
+                                    .get_mut_vars()
+                            {
                                 let global_name = format!(
                                     "$global_var__{}",
                                     boogie_function_name(

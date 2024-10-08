@@ -10,6 +10,7 @@ fun inc(x: u64): u64 {
 public struct GhostStruct {}
 
 fun inc_no_verify_spec(x: u64): u64 {
+    ghost::declare_global_mut<GhostStruct, bool>();
     requires(ghost::global<GhostStruct, _>() == false);
 
     asserts((x as u128) + 1 <= max_u64() as u128);
@@ -31,6 +32,7 @@ fun inc_saturated(x: u64): u64 {
 }
 
 fun inc_saturated_spec(x: u64): u64 {
+    ghost::declare_global_mut<GhostStruct, bool>();
     requires(ghost::global<GhostStruct, _>() == false);
 
     let result = inc_saturated(x);
