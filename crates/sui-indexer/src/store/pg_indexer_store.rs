@@ -563,11 +563,16 @@ impl PgIndexerStore {
         })
     }
 
-    async fn persist_object_version_chunk(
+    async fn persist_objects_version_chunk(
         &self,
         object_versions: Vec<StoredObjectVersion>,
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
+
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_version_chunks
+            .start_timer();
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
@@ -586,6 +591,17 @@ impl PgIndexerStore {
             .scope_boxed()
         })
         .await
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(
+                elapsed,
+                "Persisted {} chunked object versions",
+                object_versions.len(),
+            );
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist object versions with error: {}", e);
+        })
     }
 
     async fn persist_raw_checkpoints_impl(
@@ -1740,18 +1756,24 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    async fn persist_object_versions(
+    async fn persist_objects_version(
         &self,
         object_versions: Vec<StoredObjectVersion>,
     ) -> Result<(), IndexerError> {
         if object_versions.is_empty() {
             return Ok(());
         }
-        let object_versions_count = object_versions.len();
+
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_version
+            .start_timer();
+
+        let len = object_versions.len();
         let chunks = chunk!(object_versions, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
-            .map(|c| self.persist_object_version_chunk(c))
+            .map(|c| self.persist_objects_version_chunk(c))
             .collect::<Vec<_>>();
 
         futures::future::join_all(futures)
@@ -1760,11 +1782,13 @@ impl IndexerStore for PgIndexerStore {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed to persist all object version chunks: {:?}",
+                    "Failed to persist all objects version chunks: {:?}",
                     e
                 ))
             })?;
-        info!("Persisted {} object versions", object_versions_count);
+
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} object versions", len);
         Ok(())
     }
 

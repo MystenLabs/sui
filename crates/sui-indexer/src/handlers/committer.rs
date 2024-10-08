@@ -174,7 +174,7 @@ async fn commit_checkpoints<S>(
             state.persist_objects(object_changes_batch.clone()),
             state.persist_object_history(object_history_changes_batch.clone()),
             state.persist_full_objects_history(object_history_changes_batch.clone()),
-            state.persist_object_versions(object_versions_batch.clone()),
+            state.persist_objects_version(object_versions_batch.clone()),
             state.persist_raw_checkpoints(raw_checkpoints_batch),
         ];
         if let Some(epoch_data) = epoch.clone() {
