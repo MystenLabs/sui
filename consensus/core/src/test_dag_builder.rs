@@ -161,6 +161,8 @@ impl DagBuilder {
 
         sort_sub_dag_blocks(&mut to_commit);
 
+        let rejected_transactions = vec![vec![]; to_commit.len()];
+
         let commit = TrustedCommit::new_for_test(
             commit_index,
             CommitDigest::MIN,
@@ -175,6 +177,7 @@ impl DagBuilder {
         let sub_dag = CommittedSubDag::new(
             leader_block_ref,
             to_commit,
+            rejected_transactions,
             timestamp_ms,
             commit.reference(),
             vec![],

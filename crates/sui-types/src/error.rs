@@ -443,8 +443,8 @@ pub enum SuiError {
     #[error("Invalid DKG message size")]
     InvalidDkgMessageSize,
 
-    #[error("Unexpected message.")]
-    UnexpectedMessage,
+    #[error("Unexpected message: {0}")]
+    UnexpectedMessage(String),
 
     // Move module publishing related errors
     #[error("Failed to verify the Move module, reason: {error:?}.")]

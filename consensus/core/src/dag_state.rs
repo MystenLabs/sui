@@ -46,9 +46,9 @@ pub(crate) struct DagState {
     // Note: all uncommitted blocks are kept in memory.
     recent_blocks: BTreeMap<BlockRef, VerifiedBlock>,
 
-    // Contains block refs of recent_blocks.
-    // Each element in the Vec corresponds to the authority with the index.
-    recent_refs: Vec<BTreeSet<BlockRef>>,
+    // Indexes recent block refs by their authorities.
+    // Vec position corresponds to the authority index.
+    recent_refs_by_authority: Vec<BTreeSet<BlockRef>>,
 
     // Highest round of blocks accepted.
     highest_accepted_round: Round,
@@ -163,7 +163,7 @@ impl DagState {
             context,
             genesis,
             recent_blocks: BTreeMap::new(),
-            recent_refs: vec![BTreeSet::new(); num_authorities],
+            recent_refs_by_authority: vec![BTreeSet::new(); num_authorities],
             highest_accepted_round: 0,
             last_commit,
             last_commit_round_advancement_time: None,
@@ -245,7 +245,7 @@ impl DagState {
     fn update_block_metadata(&mut self, block: &VerifiedBlock) {
         let block_ref = block.reference();
         self.recent_blocks.insert(block_ref, block.clone());
-        self.recent_refs[block_ref.author].insert(block_ref);
+        self.recent_refs_by_authority[block_ref.author].insert(block_ref);
         self.highest_accepted_round = max(self.highest_accepted_round, block.round());
         self.context
             .metrics
@@ -253,7 +253,7 @@ impl DagState {
             .highest_accepted_round
             .set(self.highest_accepted_round as i64);
 
-        let highest_accepted_round_for_author = self.recent_refs[block_ref.author]
+        let highest_accepted_round_for_author = self.recent_refs_by_authority[block_ref.author]
             .last()
             .map(|block_ref| block_ref.round)
             .expect("There should be by now at least one block ref");
@@ -414,7 +414,7 @@ impl DagState {
     /// Retrieves the last block proposed for the specified `authority`. If no block is found in cache
     /// then the genesis block is returned as no other block has been received from that authority.
     pub(crate) fn get_last_block_for_authority(&self, authority: AuthorityIndex) -> VerifiedBlock {
-        if let Some(last) = self.recent_refs[authority].last() {
+        if let Some(last) = self.recent_refs_by_authority[authority].last() {
             return self
                 .recent_blocks
                 .get(last)
@@ -442,7 +442,7 @@ impl DagState {
         start: Round,
     ) -> Vec<VerifiedBlock> {
         let mut blocks = vec![];
-        for block_ref in self.recent_refs[authority].range((
+        for block_ref in self.recent_refs_by_authority[authority].range((
             Included(BlockRef::new(start, authority, BlockDigest::MIN)),
             Unbounded,
         )) {
@@ -477,7 +477,7 @@ impl DagState {
             return blocks;
         }
 
-        for (authority_index, block_refs) in self.recent_refs.iter().enumerate() {
+        for (authority_index, block_refs) in self.recent_refs_by_authority.iter().enumerate() {
             let authority_index = self
                 .context
                 .committee
@@ -527,7 +527,7 @@ impl DagState {
             );
         }
 
-        let mut result = self.recent_refs[slot.authority].range((
+        let mut result = self.recent_refs_by_authority[slot.authority].range((
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
         ));
@@ -541,7 +541,7 @@ impl DagState {
         let mut missing = Vec::new();
 
         for (index, block_ref) in block_refs.into_iter().enumerate() {
-            let recent_refs = &self.recent_refs[block_ref.author];
+            let recent_refs = &self.recent_refs_by_authority[block_ref.author];
             if recent_refs.contains(&block_ref) || self.genesis.contains_key(&block_ref) {
                 exist[index] = true;
             } else if recent_refs.is_empty() || recent_refs.last().unwrap().round < block_ref.round
@@ -804,7 +804,7 @@ impl DagState {
         // Clean up old cached data. After flushing, all cached blocks are guaranteed to be persisted.
         let mut total_recent_refs = 0;
         for (authority_refs, last_committed_round) in self
-            .recent_refs
+            .recent_refs_by_authority
             .iter_mut()
             .zip(self.last_committed_rounds.iter())
         {

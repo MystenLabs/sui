@@ -692,6 +692,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             blocks,
+            vec![],
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
             vec![],
