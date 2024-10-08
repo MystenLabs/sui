@@ -296,7 +296,7 @@ pub struct CommittedSubDag {
     /// All the committed blocks that are part of this sub-dag
     pub blocks: Vec<VerifiedBlock>,
     /// Indices of rejected transactions in each block.
-    pub rejected_transactions: Vec<Vec<TransactionIndex>>,
+    pub rejected_transactions_by_block: Vec<Vec<TransactionIndex>>,
     /// The timestamp of the commit, obtained from the timestamp of the leader block.
     pub timestamp_ms: BlockTimestampMs,
     /// The reference of the commit.
@@ -313,16 +313,16 @@ impl CommittedSubDag {
     pub fn new(
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
-        rejected_transactions: Vec<Vec<TransactionIndex>>,
+        rejected_transactions_by_block: Vec<Vec<TransactionIndex>>,
         timestamp_ms: BlockTimestampMs,
         commit_ref: CommitRef,
         reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> Self {
-        assert_eq!(blocks.len(), rejected_transactions.len());
+        assert_eq!(blocks.len(), rejected_transactions_by_block.len());
         Self {
             leader,
             blocks,
-            rejected_transactions,
+            rejected_transactions_by_block,
             timestamp_ms,
             commit_ref,
             reputation_scores_desc,

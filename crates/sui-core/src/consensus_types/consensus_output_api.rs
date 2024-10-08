@@ -76,7 +76,7 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
     fn transactions(&self) -> Vec<(AuthorityIndex, Vec<ParsedTransaction>)> {
         self.blocks
             .iter()
-            .zip(self.rejected_transactions.iter())
+            .zip(self.rejected_transactions_by_block.iter())
             .map(|(block, rejected_transactions)| {
                 (
                     block.author().value() as AuthorityIndex,
@@ -105,7 +105,7 @@ pub(crate) fn parse_block_transactions(
     let round = block.round();
     let authority = block.author().value() as AuthorityIndex;
 
-    let mut rejected_i = 0;
+    let mut rejected_idx = 0;
     block
         .transactions()
         .iter().enumerate()
@@ -116,17 +116,17 @@ pub(crate) fn parse_block_transactions(
                     panic!("Failed to deserialize sequenced consensus transaction(this should not happen) {err} from {authority} at {round}");
                 },
             };
-            let rejected = if rejected_i < rejected_transactions.len() {
-                match rejected_transactions[rejected_i].cmp(&(index as TransactionIndex)) {
+            let rejected = if rejected_idx < rejected_transactions.len() {
+                match (index as TransactionIndex).cmp(&rejected_transactions[rejected_idx]) {
                     Ordering::Less => {
-                        panic!("Rejected transaction indices are not in order. Block {block:?}, rejected transactions: {rejected_transactions:?}");
+                        false
                     },
                     Ordering::Equal => {
-                        rejected_i += 1;
+                        rejected_idx += 1;
                         true
                     },
                     Ordering::Greater => {
-                        false
+                        panic!("Rejected transaction indices are not in order. Block {block:?}, rejected transactions: {rejected_transactions:?}");
                     },
                 }
             } else {

@@ -3685,7 +3685,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::UserTransaction(_tx),
                 ..
             }) => {
-                // TODO(fastpath): implement handling of consensus finalized user transactions.
+                // TODO(fastpath): implement handling of user transactions from consensus commits.
                 Ok(ConsensusCertificateResult::Ignored)
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
