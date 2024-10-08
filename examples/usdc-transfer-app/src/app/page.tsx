@@ -65,8 +65,8 @@ function HomeContent() {
 			const tx = new Transaction();
 			// Convert amount to smallest unit (6 decimals)
 			const amountInSmallestUnit = BigInt(parseFloat(amount) * 1_000_000);
-      // Convert amount to serialized BCS
-      const serializedAmount = bcs.u64().serialize(amountInSmallestUnit).toBytes();
+			// Convert amount to serialized BCS
+			const serializedAmount = bcs.u64().serialize(amountInSmallestUnit).toBytes();
 			// Split the coin and get a new coin with the specified amount
 			// This creates a new coin object with the desired amount to be transferred
 			const [coin] = tx.splitCoins(coins[0].coinObjectId, [tx.pure(serializedAmount)]);
