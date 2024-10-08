@@ -10,7 +10,7 @@
 module std::uq32_32;
 
 #[error]
-const EDenominator: vector<u8> = b"`from_rational` called with a denominator of zero";
+const EDenominator: vector<u8> = b"`from_rational` called with a zero denominator";
 
 #[error]
 const ERatioTooSmall: vector<u8> =
@@ -34,23 +34,22 @@ public struct UQ32_32(u64) has copy, drop, store;
 
 /// Create a fixed-point value from a rational number specified by its numerator and denominator.
 /// `from_rational` and `from_integer` should be preferred over using `from_raw`.
-/// When specifying decimal fractions, be careful about rounding errors. If you round to display
-/// N digits after the decimal point, you can use a denominator of 10^N to avoid numbers where the
-/// very small imprecision in the binary representation could change the rounding. For example,
-/// `0.0125` will round down to `0.012` instead of up to `0.013`.
+/// When specifying decimal fractions, be careful about rounding errors.
 /// Aborts if the denominator is zero.
-/// Aborts if a non-zero fraction is too small to be represented as a non-zero value.
+/// Aborts if a non-zero rational is so small that it will be represented as zero.
 /// Aborts if the input is too large, e.g. larger than 2^32.
 public fun from_rational(numerator: u64, denominator: u64): UQ32_32 {
     assert!(denominator != 0, EDenominator);
 
-    // If the denominator is zero, this will abort.
     // Scale the numerator to have 64 fractional bits and the denominator to have 32 fractional
     // bits, so that the quotient will have 32 fractional bits.
     let scaled_numerator = numerator as u128 << 64;
     let scaled_denominator = denominator as u128 << 32;
     let quotient = scaled_numerator / scaled_denominator;
+
+    // The quotient can only be zero if the numerator is also zero.
     assert!(quotient != 0 || numerator == 0, ERatioTooSmall);
+    
     // Return the quotient as a fixed-point number. We first need to check whether the cast
     // can succeed.
     assert!(quotient <= std::u64::max_value!() as u128, ERatioTooLarge);
@@ -118,8 +117,6 @@ public fun int_div(val: u64, divisor: UQ32_32): u64 {
     let quotient = scaled_value / (divisor.0 as u128);
     // Check whether the value is too large.
     assert!(quotient <= std::u64::max_value!() as u128, EOverflow);
-    // the value may be too large, which will cause the cast to fail
-    // with an arithmetic error.
     quotient as u64
 }
 
