@@ -701,7 +701,7 @@ enum C<'p> {
 }
 
 /// Generate a list of paths as a cartesian product of the provided components.
-fn enumerate_paths<'p>(components: Vec<C<'p>>) -> Vec<Vec<E<'p>>> {
+fn enumerate_paths(components: Vec<C<'_>>) -> Vec<Vec<E<'_>>> {
     let mut paths = vec![vec![]];
 
     for component in components {
@@ -731,7 +731,7 @@ fn enumerate_paths<'p>(components: Vec<C<'p>>) -> Vec<Vec<E<'p>>> {
     paths
 }
 
-fn assert_path<'p>((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'p>>, expect: &str) {
+fn assert_path((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'_>>, expect: &str) {
     let bytes = serialize(value);
     let mut printer = PrintVisitor::default();
 
@@ -749,7 +749,7 @@ fn assert_path<'p>((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'p>
     );
 }
 
-fn assert_no_path<'p>((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'p>>) {
+fn assert_no_path((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'_>>) {
     let bytes = serialize(value);
     let mut printer = PrintVisitor::default();
 

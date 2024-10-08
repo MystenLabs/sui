@@ -205,12 +205,12 @@ impl<'p, 'v, 'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'
 
         // Skip all the elements before the index, and then recurse.
         while driver.off() < *i && driver.skip_element()? {}
-        return Ok(driver
+        Ok(driver
             .next_element(&mut Extractor {
                 inner: self.inner,
                 path,
             })?
-            .flatten());
+            .flatten())
     }
 
     fn visit_struct(
