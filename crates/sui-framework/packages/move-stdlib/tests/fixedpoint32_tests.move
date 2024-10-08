@@ -3,17 +3,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[test_only]
+#[test_only, allow(deprecated_usage)]
 module std::fixed_point32_tests;
 
 use std::fixed_point32;
-use std::fixed_point32::{add, sub, mul, div, divide_u64, multiply_u64, from_integer, from_rational, from_raw, to_raw, one, zero};
 
 #[test]
 #[expected_failure(abort_code = fixed_point32::EDENOMINATOR)]
 fun create_div_zero() {
     // A denominator of zero should cause an arithmetic error.
-    from_rational(2, 0);
+    fixed_point32::create_from_rational(2, 0);
 }
 
 #[test]
@@ -21,7 +20,7 @@ fun create_div_zero() {
 fun create_overflow() {
     // The maximum value is 2^32 - 1. Check that anything larger aborts
     // with an overflow.
-    from_rational(4294967296, 1); // 2^32
+    fixed_point32::create_from_rational(4294967296, 1); // 2^32
 }
 
 #[test]
@@ -29,12 +28,12 @@ fun create_overflow() {
 fun create_underflow() {
     // The minimum non-zero value is 2^-32. Check that anything smaller
     // aborts.
-    from_rational(1, 8589934592); // 2^-33
+    fixed_point32::create_from_rational(1, 8589934592); // 2^-33
 }
 
 #[test]
 fun create_zero() {
-    let x = from_rational(0, 1);
+    let x = fixed_point32::create_from_rational(0, 1);
     assert!(x.is_zero());
 }
 
@@ -42,175 +41,74 @@ fun create_zero() {
 #[expected_failure(abort_code = fixed_point32::EDIVISION_BY_ZERO)]
 fun divide_by_zero() {
     // Dividing by zero should cause an arithmetic error.
-    let f = from_raw(0);
-    divide_u64(1, f);
+    let f = fixed_point32::create_from_raw_value(0);
+    fixed_point32::divide_u64(1, f);
 }
 
 #[test]
 #[expected_failure(abort_code = fixed_point32::EDIVISION)]
 fun divide_overflow_small_divisore() {
-    let f = from_raw(1); // 0x0.00000001
+    let f = fixed_point32::create_from_raw_value(1); // 0x0.00000001
     // Divide 2^32 by the minimum fractional value. This should overflow.
-    divide_u64(4294967296, f);
+    fixed_point32::divide_u64(4294967296, f);
 }
 
 #[test]
 #[expected_failure(abort_code = fixed_point32::EDIVISION)]
 fun divide_overflow_large_numerator() {
-    let f = from_rational(1, 2); // 0.5
+    let f = fixed_point32::create_from_rational(1, 2); // 0.5
     // Divide the maximum u64 value by 0.5. This should overflow.
-    divide_u64(18446744073709551615, f);
+    fixed_point32::divide_u64(18446744073709551615, f);
 }
 
 #[test]
 #[expected_failure(abort_code = fixed_point32::EMULTIPLICATION)]
 fun multiply_overflow_small_multiplier() {
-    let f = from_rational(3, 2); // 1.5
+    let f = fixed_point32::create_from_rational(3, 2); // 1.5
     // Multiply the maximum u64 value by 1.5. This should overflow.
-    multiply_u64(18446744073709551615, f);
+    fixed_point32::multiply_u64(18446744073709551615, f);
 }
 
 #[test]
 #[expected_failure(abort_code = fixed_point32::EMULTIPLICATION)]
 fun multiply_overflow_large_multiplier() {
-    let f = from_raw(18446744073709551615);
+    let f = fixed_point32::create_from_raw_value(18446744073709551615);
     // Multiply 2^33 by the maximum fixed-point value. This should overflow.
-    multiply_u64(8589934592, f);
+    fixed_point32::multiply_u64(8589934592, f);
 }
 
 #[test]
 fun exact_multiply() {
-    let f = from_rational(3, 4); // 0.75
-    let nine = multiply_u64(12, f); // 12 * 0.75
+    let f = fixed_point32::create_from_rational(3, 4); // 0.75
+    let nine = fixed_point32::multiply_u64(12, f); // 12 * 0.75
     assert!(nine == 9);
 }
 
 #[test]
 fun exact_divide() {
-    let f = from_rational(3, 4); // 0.75
-    let twelve = divide_u64(9, f); // 9 / 0.75
+    let f = fixed_point32::create_from_rational(3, 4); // 0.75
+    let twelve = fixed_point32::divide_u64(9, f); // 9 / 0.75
     assert!(twelve == 12);
 }
 
 #[test]
 fun multiply_truncates() {
-    let f = from_rational(1, 3); // 0.333...
-    let not_three = multiply_u64(9, copy f); // 9 * 0.333...
+    let f = fixed_point32::create_from_rational(1, 3); // 0.333...
+    let not_three = fixed_point32::multiply_u64(9, copy f); // 9 * 0.333...
     // multiply_u64 does NOT round -- it truncates -- so values that
     // are not perfectly representable in binary may be off by one.
     assert!(not_three == 2);
 
     // Try again with a fraction slightly larger than 1/3.
-    let f = from_raw(f.to_raw() + 1);
-    let three = multiply_u64(9, f);
+    let f = fixed_point32::create_from_raw_value(f.get_raw_value() + 1);
+    let three = fixed_point32::multiply_u64(9, f);
     assert!(three == 3);
 }
 
 #[test]
 fun create_from_rational_max_numerator_denominator() {
     // Test creating a 1.0 fraction from the maximum u64 value.
-    let f = from_rational(18446744073709551615, 18446744073709551615);
-    let one = f.to_raw();
+    let f = fixed_point32::create_from_rational(18446744073709551615, 18446744073709551615);
+    let one = f.get_raw_value();
     assert!(one == 4294967296); // 0x1.00000000
-}
-
-#[test]
-#[expected_failure(abort_code = fixed_point32::ESUBTRACTION)]
-fun test_subtraction_underflow() {
-    let a = from_integer(3);
-    let b = from_integer(5);
-    let _ = a.sub(b);
-}
-
-#[test]
-fun test_subtraction() {
-    let a = from_integer(5);
-    assert!(a.sub(zero()) == a);
-
-    let b = from_integer(4);
-    let c = a.sub(b);
-    assert!(one() == c);
-}
-
-#[test]
-#[expected_failure(abort_code = fixed_point32::EADDITION)]
-fun test_addition_overflow() {
-    let a = from_integer(1 << 31);
-    let b = from_integer(1 << 31);
-    let _ = a.add(b);
-}
-
-#[test]
-fun test_addition() {
-    let a = from_rational(3, 4);
-    assert!(a.add(zero()) == a);
-
-    let c = a.add(one());
-    assert!(from_rational(7, 4) == c);
-
-    let b = from_rational(1, 4);
-    let c = a.add(b);
-    assert!(one() == c);
-}
-
-#[test]
-#[expected_failure(abort_code = fixed_point32::EMULTIPLICATION)]
-fun test_multiplication_overflow() {
-    let a = from_integer(1 << 16);
-    let b = from_integer(1 << 16);
-    let _ = a.mul(b);
-}
-
-#[test]
-fun test_multiplication() {
-    let a = from_rational(3, 4);
-    assert!(a.mul(zero()) == zero());
-    assert!(a.mul(one()) == a);
-
-    let b = from_rational(3, 2);
-    let c = a.mul(b);
-    let expected = from_rational(9, 8);
-    assert!(c.eq(expected));
-}
-
-#[test]
-#[expected_failure(abort_code = fixed_point32::EDIVISION_BY_ZERO)]
-fun test_division_by_zero() {
-    let a = from_integer(7);
-    let b = zero();
-    let _ = a.div(b);
-}
-
-#[test]
-fun test_division() {
-    let a = from_rational(3, 4);
-    assert!(a.div(one()) == a);
-
-    let b = from_integer(8);
-    let c = a.div(b);
-    let expected = from_rational(3, 32);
-    assert!(c.eq(expected));
-}
-
-#[test]
-#[expected_failure(abort_code = fixed_point32::EDIVISION)]
-fun test_division_overflow() {
-    let a = from_integer(1 << 31);
-    let b = from_rational(1, 2);
-    let _ = a.div(b);
-}
-
-#[test]
-fun test_comparison() {
-    let a = from_rational(5, 2);
-    let b = from_rational(5, 3);
-    let c = from_rational(5, 2);
-
-    assert!(b.le(a));
-    assert!(b.lt(a));
-    assert!(c.le(a));
-    assert!(c.eq(a));
-    assert!(a.ge(b));
-    assert!(a.gt(b));
-    assert!(zero().le(a));
 }
