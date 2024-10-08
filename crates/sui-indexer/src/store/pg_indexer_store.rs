@@ -7,6 +7,7 @@ use std::io::Cursor;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use tracing::field::debug;
 use core::result::Result::Ok;
 use csv::{ReaderBuilder, Writer};
 use diesel::dsl::{max, min};
@@ -620,9 +621,12 @@ impl PgIndexerStore {
             async {
                 for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    diesel::insert_into(objects_version::table)
+                    let query = diesel::insert_into(objects_version::table)
                         .values(object_version_chunk)
-                        .on_conflict_do_nothing()
+                        .on_conflict_do_nothing();
+                    let debug_query = diesel::debug_query::<diesel::pg::Pg, _>(&query);
+                    tracing::error!("objects version insert query: {:?}", debug_query);
+                    query
                         .execute(conn)
                         .await
                         .map_err(IndexerError::from)
