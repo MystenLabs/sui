@@ -46,8 +46,10 @@ module Test::M1 {
               sendingModule {
                 name
               }
-              json
-              bcs
+              contents {
+                json
+                bcs
+              }
             }
           }
         }
@@ -63,8 +65,10 @@ module Test::M1 {
       sendingModule {
         name
       }
-      json
-      bcs
+      contents {
+        json
+        bcs
+      }
     }
   }
 }
@@ -80,8 +84,10 @@ module Test::M1 {
               sendingModule {
                 name
               }
-              json
-              bcs
+              contents {
+                json
+                bcs
+              }
             }
           }
         }
@@ -101,8 +107,10 @@ module Test::M1 {
               sendingModule {
                 name
               }
-              json
-              bcs
+              contents {
+                json
+                bcs
+              }
             }
           }
         }

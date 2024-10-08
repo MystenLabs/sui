@@ -71,7 +71,7 @@ jobs:
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui test:e2e'
 
       - name: Run RPC/GrpahQL comaptability e2e tests
-        if: ${{ needs.diff.outputs.isGraphQlTransport == 'true' || needs.diff.outputs.isRust == 'true'}}
+        if: ${{ needs.diff.outputs.isGraphQlTransport == 'true' || needs.diff.outputs.isRust == 'true' }}
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/graphql-transport test:e2e'
 
       # - name: Run Local net

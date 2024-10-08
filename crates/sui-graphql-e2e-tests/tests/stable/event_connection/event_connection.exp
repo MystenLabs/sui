@@ -49,7 +49,7 @@ task 8, line 95:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 9, lines 97-117:
+task 9, lines 97-119:
 //# run-graphql
 Response: {
   "data": {
@@ -61,16 +61,18 @@ Response: {
             "sendingModule": {
               "name": "M1"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "0"
-            },
-            "bcs": "AAAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
+              },
+              "json": {
+                "new_value": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            }
           }
         },
         {
@@ -79,16 +81,18 @@ Response: {
             "sendingModule": {
               "name": "M1"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "1"
-            },
-            "bcs": "AQAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
           }
         },
         {
@@ -97,16 +101,18 @@ Response: {
             "sendingModule": {
               "name": "M2"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventA"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "2"
-            },
-            "bcs": "AgAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventA"
+              },
+              "json": {
+                "new_value": "2"
+              },
+              "bcs": "AgAAAAAAAAA="
+            }
           }
         },
         {
@@ -115,16 +121,18 @@ Response: {
             "sendingModule": {
               "name": "M2"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::Object>"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "3"
-            },
-            "bcs": "AwAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::Object>"
+              },
+              "json": {
+                "new_value": "3"
+              },
+              "bcs": "AwAAAAAAAAA="
+            }
           }
         }
       ]
@@ -132,7 +140,7 @@ Response: {
   }
 }
 
-task 10, lines 119-139:
+task 10, lines 121-143:
 //# run-graphql
 Response: {
   "data": {
@@ -144,16 +152,18 @@ Response: {
             "sendingModule": {
               "name": "M1"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "0"
-            },
-            "bcs": "AAAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
+              },
+              "json": {
+                "new_value": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            }
           }
         },
         {
@@ -162,16 +172,18 @@ Response: {
             "sendingModule": {
               "name": "M1"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "1"
-            },
-            "bcs": "AQAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
           }
         },
         {
@@ -180,16 +192,18 @@ Response: {
             "sendingModule": {
               "name": "M2"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventA"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "2"
-            },
-            "bcs": "AgAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventA"
+              },
+              "json": {
+                "new_value": "2"
+              },
+              "bcs": "AgAAAAAAAAA="
+            }
           }
         },
         {
@@ -198,16 +212,18 @@ Response: {
             "sendingModule": {
               "name": "M2"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::Object>"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "3"
-            },
-            "bcs": "AwAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::Object>"
+              },
+              "json": {
+                "new_value": "3"
+              },
+              "bcs": "AwAAAAAAAAA="
+            }
           }
         }
       ]
@@ -215,7 +231,7 @@ Response: {
   }
 }
 
-task 11, lines 141-161:
+task 11, lines 145-168:
 //# run-graphql
 Response: {
   "data": {
@@ -227,16 +243,18 @@ Response: {
             "sendingModule": {
               "name": "M1"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "0"
-            },
-            "bcs": "AAAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
+              },
+              "json": {
+                "new_value": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            }
           }
         },
         {
@@ -245,16 +263,18 @@ Response: {
             "sendingModule": {
               "name": "M1"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "1"
-            },
-            "bcs": "AQAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
           }
         }
       ]
@@ -262,7 +282,7 @@ Response: {
   }
 }
 
-task 12, lines 163-183:
+task 12, lines 170-193:
 //# run-graphql
 Response: {
   "data": {
@@ -274,16 +294,18 @@ Response: {
             "sendingModule": {
               "name": "M1"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "0"
-            },
-            "bcs": "AAAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
+              },
+              "json": {
+                "new_value": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            }
           }
         }
       ]
@@ -291,7 +313,7 @@ Response: {
   }
 }
 
-task 13, lines 185-205:
+task 13, lines 195-218:
 //# run-graphql
 Response: {
   "data": {
@@ -303,16 +325,18 @@ Response: {
             "sendingModule": {
               "name": "M1"
             },
-            "type": {
-              "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
-            },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
-            "json": {
-              "new_value": "1"
-            },
-            "bcs": "AQAAAAAAAAA="
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
           }
         }
       ]
@@ -320,7 +344,7 @@ Response: {
   }
 }
 
-task 14, lines 207-227:
+task 14, lines 220-243:
 //# run-graphql
 Response: {
   "data": null,
@@ -340,7 +364,7 @@ Response: {
   ]
 }
 
-task 15, lines 229-249:
+task 15, lines 245-267:
 //# run-graphql
 Response: {
   "data": null,
@@ -360,7 +384,7 @@ Response: {
   ]
 }
 
-task 16, lines 251-271:
+task 16, lines 269-291:
 //# run-graphql
 Response: {
   "data": null,

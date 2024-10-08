@@ -61,5 +61,10 @@ runs:
       shell: bash
 
     - name: Run TS SDK e2e tests
-      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui --filter @mysten/graphql-transport test:e2e'
+      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui'
+      shell: bash
+
+    - name: Run TS SDK GraphQL compatibility e2e tests
+      if: ${{ inputs.ref != "testnet" && inputs.ref != "devnet" }}
+      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/graphql-transport test:e2e'
       shell: bash

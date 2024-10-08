@@ -1218,32 +1218,13 @@ type Event {
 	"""
 	timestamp: DateTime
 	"""
-	The value's Move type.
+	The event's contents as a Move value.
 	"""
-	type: MoveType!
+	contents: MoveValue!
 	"""
-	The BCS representation of this value, Base64 encoded.
+	The Base64 encoded BCS serialized bytes of the event.
 	"""
 	bcs: Base64!
-	"""
-	Structured contents of a Move value.
-	"""
-	data: MoveData!
-	"""
-	Representation of a Move value in JSON, where:
-	
-	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
-	- Bools are represented by JSON boolean literals.
-	- u8, u16, and u32 are represented as JSON numbers.
-	- u64, u128, and u256 are represented as JSON strings.
-	- Vectors are represented by JSON arrays.
-	- Structs are represented by JSON objects.
-	- Empty optional values are represented by `null`.
-	
-	This form is offered as a less verbose convenience in cases where the layout of the type is
-	known by the client.
-	"""
-	json: JSON!
 }
 
 type EventConnection {

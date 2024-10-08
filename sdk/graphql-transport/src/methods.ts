@@ -888,17 +888,17 @@ export const RPC_METHODS: {
 			hasNextPage: pagination.last ? pageInfo.hasPreviousPage : pageInfo.hasNextPage,
 			nextCursor: (pagination.last ? pageInfo.startCursor : pageInfo.endCursor) as never,
 			data: events.map((event) => ({
-				bcs: event.bcs,
+				bcs: event.contents.bcs,
 				id: {
 					eventSeq: '', // TODO
 					txDigest: '', // TODO
 				},
 				packageId: event.sendingModule?.package.address!,
-				parsedJson: event.json ? JSON.parse(event.json) : undefined,
+				parsedJson: event.contents.json ? JSON.parse(event.contents.json) : undefined,
 				sender: event.sender?.address,
 				timestampMs: new Date(event.timestamp).getTime().toString(),
 				transactionModule: `${event.sendingModule?.package.address}::${event.sendingModule?.name}`,
-				type: toShortTypeString(event.type?.repr)!,
+				type: toShortTypeString(event.contents.type?.repr)!,
 			})),
 		};
 	},
