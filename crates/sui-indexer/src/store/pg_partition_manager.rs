@@ -61,6 +61,7 @@ pub struct EpochPartitionData {
 }
 
 impl EpochPartitionData {
+    /// Determine the starting checkpoint and tx sequence number for the current and next epoch.
     pub fn compose_data(epoch: EpochToCommit, last_db_epoch: StoredEpochInfo) -> Self {
         let last_epoch = last_db_epoch.epoch as u64;
         let last_epoch_start_cp = last_db_epoch.first_checkpoint_id as u64;
@@ -151,6 +152,9 @@ impl PgPartitionManager {
         }
     }
 
+    /// Detaches the latest partition and reattach it with an updated constraint by setting its
+    /// upper-bound from some max value to the latest upper bound, and then attaches a new partition
+    /// to handle the next epoch's worth of data.
     pub async fn advance_epoch(
         &self,
         table: String,

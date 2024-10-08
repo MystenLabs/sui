@@ -125,6 +125,7 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency_tx_indices_chunks: Histogram,
     pub checkpoint_db_commit_latency_checkpoints: Histogram,
     pub checkpoint_db_commit_latency_epoch: Histogram,
+    pub checkpoint_db_commit_latency_watermarks: Histogram,
     pub thousand_transaction_avg_db_commit_latency: Histogram,
     pub object_db_commit_latency: Histogram,
     pub object_mutation_db_commit_latency: Histogram,
@@ -532,6 +533,13 @@ impl IndexerMetrics {
             checkpoint_db_commit_latency_epoch: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_epochs",
                 "Time spent committing epochs",
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_watermarks: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_watermarks",
+                "Time spent committing watermarks",
                 DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )

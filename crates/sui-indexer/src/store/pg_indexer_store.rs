@@ -8,7 +8,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use core::result::Result::Ok;
 use csv::{ReaderBuilder, Writer};
-use diesel::dsl::{max, min};
+use diesel::dsl::{max, min, sql};
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::QueryDsl;
@@ -44,6 +44,9 @@ use crate::models::objects::{
 };
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
+use crate::models::watermarks::{
+    StoredWatermark, Watermark, WatermarkEntity, WatermarkRead, WatermarkUpdateType,
+};
 use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
@@ -51,9 +54,9 @@ use crate::schema::{
     objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
     raw_checkpoints, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
     tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
-    tx_recipients, tx_senders,
+    tx_recipients, tx_senders, watermarks,
 };
-use crate::store::transaction_with_retry;
+use crate::store::{read_with_retry, transaction_with_retry};
 use crate::types::{EventIndex, IndexedDeletedObject, IndexedObject};
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 
@@ -235,6 +238,35 @@ impl PgIndexerStore {
             .context("Failed reading min and max epoch numbers from PostgresDB")
     }
 
+    async fn get_watermarks(
+        &self,
+    ) -> Result<BTreeMap<WatermarkEntity, WatermarkRead>, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        // read_only transaction, otherwise this will block and get blocked by write transactions to
+        // the same table.
+        read_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                watermarks::table
+                    .load::<StoredWatermark>(conn)
+                    .await
+                    .map_err(|e| IndexerError::from(e))
+                    .context("Failed reading watermarks from PostgresDB")
+                    .and_then(|watermarks: Vec<StoredWatermark>| {
+                        watermarks
+                            .into_iter()
+                            .map(|w| {
+                                let watermark_read = WatermarkRead::from(w);
+                                Ok((watermark_read.entity, watermark_read))
+                            })
+                            .collect::<Result<BTreeMap<_, _>, IndexerError>>()
+                    })
+            }
+            .scope_boxed()
+        })
+        .await
+    }
+
     async fn get_min_prunable_checkpoint(&self) -> Result<u64, IndexerError> {
         use diesel_async::RunQueryDsl;
 
@@ -304,6 +336,45 @@ impl PgIndexerStore {
             .context(
                 "Failed reading latest object snapshot checkpoint sequence number from PostgresDB",
             )
+    }
+
+    async fn get_min_cp_and_tx_for_epoch(&self, epoch: u64) -> Result<(u64, u64), IndexerError> {
+        use diesel_async::RunQueryDsl;
+        let mut connection = self.pool.get().await?;
+
+        epochs::table
+            .select((
+                epochs::first_checkpoint_id,
+                epochs::first_tx_sequence_number,
+            ))
+            .filter(epochs::epoch.eq(epoch as i64))
+            .first::<(i64, Option<i64>)>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .and_then(|(cp, tx)| {
+                tx.map(|tx| (cp as u64, tx as u64)).ok_or_else(|| {
+                    IndexerError::PersistentStorageDataCorruptionError(format!(
+                        "Missing tx sequence number for epoch {}",
+                        epoch
+                    ))
+                })
+            })
+            .context("Failed reading min cp and tx for epoch from PostgresDB")
+    }
+
+    async fn get_latest_epoch(&self) -> Result<u64, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        epochs::table
+            .select(epochs::epoch)
+            .order_by(epochs::epoch.desc())
+            .first::<i64>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .map(|v| v as u64)
+            .context("Failed to read latest epoch from PostgresDB")
     }
 
     async fn persist_display_updates(
@@ -618,10 +689,12 @@ impl PgIndexerStore {
         // If the first checkpoint has sequence number 0, we need to persist the digest as
         // chain identifier.
         if first_checkpoint.sequence_number == 0 {
+            println!("first checkpoint, should persist chain identifier");
             let checkpoint_digest = first_checkpoint.checkpoint_digest.into_inner().to_vec();
             self.persist_protocol_configs_and_feature_flags(checkpoint_digest.clone())
                 .await?;
             self.persist_chain_identifier(checkpoint_digest).await?;
+            println!("persisted chain identifier");
         }
         let guard = self
             .metrics
@@ -1112,6 +1185,7 @@ impl PgIndexerStore {
         Ok(())
     }
 
+    /// Updates the current epoch with end-of-epoch data and persists the new epoch to db.
     async fn persist_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         let guard = self
@@ -1201,6 +1275,7 @@ impl PgIndexerStore {
         })
     }
 
+    /// Checks that the current epoch exists, and then advances all epoch-partitioned tables.
     async fn advance_epoch(&self, epoch_to_commit: EpochToCommit) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
@@ -1249,12 +1324,112 @@ impl PgIndexerStore {
         Ok(())
     }
 
-    async fn prune_checkpoints_table(&self, cp: u64) -> Result<(), IndexerError> {
+    async fn update_watermarks(&self, watermarks: Vec<Watermark>) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_watermarks
+            .start_timer();
+
+        let updates_count = watermarks.len();
+
+        // UpperBound, LowerBound, and Tail updates require different `ON CONFLICT DO UPDATE`
+        // clauses, so split them into their own vectors and process each in bulk. TODO: two
+        // optimizations
+        // 1. multiple updates of the same type for one `entity` can be reduced to the latest one
+        // 2. multiple updates of different kinds for one `entity` can be merged into a single
+        //    update
+        let mut map: HashMap<WatermarkUpdateType, Vec<StoredWatermark>> = HashMap::new();
+        for watermark in watermarks {
+            map.entry(watermark.update_type())
+                .or_default()
+                .push(StoredWatermark::from(watermark));
+        }
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                if let Some(upper_bound_updates) = map.get(&WatermarkUpdateType::UpperBound) {
+                    diesel::insert_into(watermarks::table)
+                        .values(upper_bound_updates)
+                        .on_conflict(watermarks::entity)
+                        .do_update()
+                        .set((
+                            watermarks::hi.eq(excluded(watermarks::hi)),
+                            watermarks::epoch_hi.eq(excluded(watermarks::epoch_hi)),
+                        ))
+                        .execute(conn)
+                        .await?;
+                }
+
+                if let Some(lower_bound_updates) = map.get(&WatermarkUpdateType::LowerBound) {
+                    println!(
+                        "writing lower bound updates on epoch boundary, new epoch is: {}",
+                        lower_bound_updates[0].epoch_lo
+                    );
+                    use diesel::query_dsl::methods::FilterDsl;
+
+                    diesel::insert_into(watermarks::table)
+                        .values(lower_bound_updates)
+                        .on_conflict(watermarks::entity)
+                        .do_update()
+                        .set((
+                            watermarks::lo.eq(excluded(watermarks::lo)),
+                            watermarks::epoch_lo.eq(excluded(watermarks::epoch_lo)),
+                            watermarks::timestamp_ms.eq(sql::<diesel::sql_types::BigInt>(
+                                "(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint",
+                            )),
+                        ))
+                        .filter(excluded(watermarks::lo).gt(watermarks::lo))
+                        .filter(excluded(watermarks::epoch_lo).gt(watermarks::epoch_lo))
+                        .filter(
+                            diesel::dsl::sql::<diesel::sql_types::BigInt>(
+                                "(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint",
+                            )
+                            .gt(watermarks::timestamp_ms),
+                        )
+                        .execute(conn)
+                        .await?;
+                }
+
+                if let Some(lower_bound_tail_updates) =
+                    map.get(&WatermarkUpdateType::LowerBoundTail)
+                {
+                    diesel::insert_into(watermarks::table)
+                        .values(lower_bound_tail_updates)
+                        .on_conflict(watermarks::entity)
+                        .do_update()
+                        .set((watermarks::pruned_lo.eq(excluded(watermarks::pruned_lo)),))
+                        .execute(conn)
+                        .await?;
+                }
+
+                Ok::<(), IndexerError>(())
+            }
+            .scope_boxed()
+        })
+        .await
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted {} watermarks", updates_count);
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist watermarks with error: {}", e);
+        })
+    }
+
+    pub async fn prune_checkpoints_table(
+        &self,
+        start_cp: u64,
+        end_cp: u64,
+    ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::delete(
-                    checkpoints::table.filter(checkpoints::sequence_number.eq(cp as i64)),
+                    checkpoints::table.filter(
+                        checkpoints::sequence_number.between(start_cp as i64, end_cp as i64),
+                    ),
                 )
                 .execute(conn)
                 .await
@@ -1268,7 +1443,7 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_event_indices_table(
+    pub async fn prune_event_indices_table(
         &self,
         min_tx: u64,
         max_tx: u64,
@@ -1333,7 +1508,11 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_tx_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
+    pub async fn prune_tx_indices_table(
+        &self,
+        min_tx: u64,
+        max_tx: u64,
+    ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
@@ -1416,7 +1595,7 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
+    pub async fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
@@ -1466,6 +1645,12 @@ impl IndexerStore for PgIndexerStore {
         self.get_prunable_epoch_range().await
     }
 
+    async fn get_watermarks(
+        &self,
+    ) -> Result<BTreeMap<WatermarkEntity, WatermarkRead>, IndexerError> {
+        self.get_watermarks().await
+    }
+
     async fn get_available_checkpoint_range(&self) -> Result<(u64, u64), IndexerError> {
         self.get_available_checkpoint_range().await
     }
@@ -1479,6 +1664,14 @@ impl IndexerStore for PgIndexerStore {
     ) -> Result<Option<u64>, IndexerError> {
         self.get_latest_object_snapshot_checkpoint_sequence_number()
             .await
+    }
+
+    async fn get_min_cp_and_tx_for_epoch(&self, epoch: u64) -> Result<(u64, u64), IndexerError> {
+        self.get_min_cp_and_tx_for_epoch(epoch).await
+    }
+
+    async fn get_latest_epoch(&self) -> Result<u64, IndexerError> {
+        self.get_latest_epoch().await
     }
 
     async fn persist_objects(
@@ -1897,7 +2090,7 @@ impl IndexerStore for PgIndexerStore {
                 "Pruning checkpoint {} of epoch {} (min_prunable_cp: {})",
                 cp, epoch, min_prunable_cp
             );
-            self.prune_checkpoints_table(cp).await?;
+            self.prune_checkpoints_table(cp, cp).await?;
 
             let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp).await?;
             self.prune_tx_indices_table(min_tx, max_tx).await?;
@@ -1915,6 +2108,13 @@ impl IndexerStore for PgIndexerStore {
             self.prune_cp_tx_table(cp).await?;
             info!("Pruned checkpoint {} of epoch {}", cp, epoch);
             self.metrics.last_pruned_checkpoint.set(cp as i64);
+
+            self.update_watermarks(vec![
+                Watermark::new_lower_bound_tail(WatermarkEntity::Checkpoints, cp),
+                Watermark::new_lower_bound_tail(WatermarkEntity::TxLookup, max_tx),
+                Watermark::new_lower_bound_tail(WatermarkEntity::EvLookup, max_tx),
+            ])
+            .await?;
         }
 
         Ok(())
@@ -2109,6 +2309,10 @@ impl IndexerStore for PgIndexerStore {
         checkpoints: Vec<StoredRawCheckpoint>,
     ) -> Result<(), IndexerError> {
         self.persist_raw_checkpoints_impl(&checkpoints).await
+    }
+
+    async fn update_watermarks(&self, watermarks: Vec<Watermark>) -> Result<(), IndexerError> {
+        self.update_watermarks(watermarks).await
     }
 }
 
