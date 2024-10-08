@@ -2443,7 +2443,7 @@ impl DBOptions {
     // Optimize tables with a mix of lookup and scan workloads.
     pub fn optimize_for_read(mut self, block_cache_size_mb: usize) -> DBOptions {
         self.options
-            .set_block_based_table_factory(&get_block_options(block_cache_size_mb));
+            .set_block_based_table_factory(&get_block_options(block_cache_size_mb, 16 << 10));
         self
     }
 
@@ -2500,6 +2500,20 @@ impl DBOptions {
         self
     }
 
+    // Overrides the block options with different block cache size and block size.
+    pub fn set_block_options(
+        mut self,
+        block_cache_size_mb: usize,
+        block_size_bytes: usize,
+    ) -> DBOptions {
+        self.options
+            .set_block_based_table_factory(&get_block_options(
+                block_cache_size_mb,
+                block_size_bytes,
+            ));
+        self
+    }
+
     // Disables write stalling and stopping based on pending compaction bytes.
     pub fn disable_write_throttling(mut self) -> DBOptions {
         self.options.set_soft_pending_compaction_bytes_limit(0);
@@ -2552,7 +2566,9 @@ pub fn default_db_options() -> DBOptions {
 
     opt.set_enable_pipelined_write(true);
 
-    opt.set_block_based_table_factory(&get_block_options(128));
+    // Increase block size to 16KiB.
+    // https://github.com/EighteenZi/rocksdb_wiki/blob/master/Memory-usage-in-RocksDB.md#indexes-and-filter-blocks
+    opt.set_block_based_table_factory(&get_block_options(128, 16 << 10));
 
     // Set memtable bloomfilter.
     opt.set_memtable_prefix_bloom_ratio(0.02);
@@ -2563,15 +2579,14 @@ pub fn default_db_options() -> DBOptions {
     }
 }
 
-fn get_block_options(block_cache_size_mb: usize) -> BlockBasedOptions {
+fn get_block_options(block_cache_size_mb: usize, block_size_bytes: usize) -> BlockBasedOptions {
     // Set options mostly similar to those used in optimize_for_point_lookup(),
     // except non-default binary and hash index, to hopefully reduce lookup latencies
     // without causing any regression for scanning, with slightly more memory usages.
     // https://github.com/facebook/rocksdb/blob/11cb6af6e5009c51794641905ca40ce5beec7fee/options/options.cc#L611-L621
     let mut block_options = BlockBasedOptions::default();
-    // Increase block size to 16KiB.
-    // https://github.com/EighteenZi/rocksdb_wiki/blob/master/Memory-usage-in-RocksDB.md#indexes-and-filter-blocks
-    block_options.set_block_size(16 * 1024);
+    // Overrides block size.
+    block_options.set_block_size(block_size_bytes);
     // Configure a block cache.
     block_options.set_block_cache(&Cache::new_lru_cache(block_cache_size_mb << 20));
     // Set a bloomfilter with 1% false positive rate.
