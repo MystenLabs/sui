@@ -6,6 +6,7 @@
 'use client';
 
 import { SuiClientProvider, useSuiClient } from '@mysten/dapp-kit';
+import { bcs } from '@mysten/sui/bcs';
 import { Transaction } from '@mysten/sui/transactions';
 import { ConnectButton, useWalletKit, WalletKitProvider } from '@mysten/wallet-kit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -45,7 +46,7 @@ function HomeContent() {
 
 	const handleSendTokens = async () => {
 		if (!currentAccount || !amount || !recipientAddress) {
-			setTxStatus('Please connect wallet and fill all fields');
+			setTxStatus('Please connect wallet and fill in all fields');
 			return;
 		}
 		try {
@@ -60,16 +61,18 @@ function HomeContent() {
 				return;
 			}
 			// Create a new transaction block
-			// TransactionBlock is used to construct and execute transactions on Sui
+			// Transaction is used to construct and execute transactions on Sui
 			const tx = new Transaction();
 			// Convert amount to smallest unit (6 decimals)
 			const amountInSmallestUnit = BigInt(parseFloat(amount) * 1_000_000);
+      // Convert amount to serialized BCS
+      const serializedAmount = bcs.u64().serialize(amountInSmallestUnit).toBytes();
 			// Split the coin and get a new coin with the specified amount
 			// This creates a new coin object with the desired amount to be transferred
-			const [coin] = tx.splitCoins(coins[0].coinObjectId, [tx.pure(amountInSmallestUnit)]);
+			const [coin] = tx.splitCoins(coins[0].coinObjectId, [tx.pure(serializedAmount)]);
 			// Transfer the split coin to the recipient
 			// This adds a transfer operation to the transaction block
-			tx.transferObjects([coin], tx.pure(recipientAddress));
+			tx.transferObjects([coin], recipientAddress);
 			// Sign and execute the transaction block
 			// This sends the transaction to the network and waits for it to be executed
 			const result = await signAndExecuteTransactionBlock({

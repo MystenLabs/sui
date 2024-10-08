@@ -1,7 +1,9 @@
 {
 	"name": "usdc-transfer-app",
 	"version": "0.1.0",
+	"type": "module",
 	"private": true,
+	"license": "Apache-2.0",
 	"scripts": {
 		"dev": "next dev",
 		"build": "next build",
@@ -10,7 +12,7 @@
 	},
 	"dependencies": {
 		"@mysten/dapp-kit": "workspace:*",
-		"@mysten/sui": "workspace:*",
+		"@mysten/sui": "^1.11.0",
 		"@mysten/wallet-kit": "^0.8.6",
 		"@tanstack/react-query": "^5.50.1",
 		"next": "^14.2.10",
