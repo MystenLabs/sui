@@ -6,13 +6,17 @@ use std::collections::BTreeMap;
 use sui_json_rpc_types::ObjectChange;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::effects::ObjectRemoveKind;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::object::Owner;
 use sui_types::storage::WriteKind;
+use tracing::instrument;
 
 use crate::ObjectProvider;
 
+#[instrument(skip_all, fields(transaction_digest = %effects.transaction_digest()))]
 pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
+    effects: &TransactionEffects,
     sender: SuiAddress,
     modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
     all_changed_objects: Vec<(ObjectRef, Owner, WriteKind)>,
