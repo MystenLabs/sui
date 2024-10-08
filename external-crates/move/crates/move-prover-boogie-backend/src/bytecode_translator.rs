@@ -220,6 +220,38 @@ impl<'env> BoogieTranslator<'env> {
             .get_id();
         let global_function_id = FunId::new(self.env.symbol_pool().make("global"));
 
+        // let singleton_function_id = FunId::new(self.env.symbol_pool().make("singleton"));
+        let reverse_function_id = FunId::new(self.env.symbol_pool().make("reverse"));
+        let append_function_id = FunId::new(self.env.symbol_pool().make("append"));
+        let is_empty_function_id = FunId::new(self.env.symbol_pool().make("is_empty"));
+        let contains_function_id = FunId::new(self.env.symbol_pool().make("contains"));
+        let index_of_function_id = FunId::new(self.env.symbol_pool().make("index_of"));
+        let remove_function_id = FunId::new(self.env.symbol_pool().make("remove"));
+        let insert_function_id = FunId::new(self.env.symbol_pool().make("insert"));
+        let swap_remove_function_id = FunId::new(self.env.symbol_pool().make("swap_remove"));
+        let intrinsic_fun_ids: BTreeSet<_> = match self
+            .env
+            .find_module_by_name(self.env.symbol_pool().make("vector"))
+        {
+            Some(vector_module) => {
+                vec![
+                    // singleton_function_id,
+                    reverse_function_id,
+                    append_function_id,
+                    is_empty_function_id,
+                    contains_function_id,
+                    index_of_function_id,
+                    remove_function_id,
+                    insert_function_id,
+                    swap_remove_function_id,
+                ]
+                .into_iter()
+                .map(|id| vector_module.get_id().qualified(id))
+                .collect()
+            }
+            None => BTreeSet::new(),
+        };
+
         let mut translated_types = BTreeSet::new();
         // let mut translated_funs = BTreeSet::new();
         let mut verified_functions_count = 0;
@@ -256,7 +288,8 @@ impl<'env> BoogieTranslator<'env> {
             }
 
             for ref fun_env in module_env.get_functions() {
-                if fun_env.is_native_or_intrinsic()
+                if (fun_env.is_native_or_intrinsic()
+                    || intrinsic_fun_ids.contains(&fun_env.get_qualified_id()))
                     && fun_env.get_qualified_id() != ghost_module_id.qualified(global_function_id)
                 {
                     continue;
