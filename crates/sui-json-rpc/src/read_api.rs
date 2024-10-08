@@ -475,7 +475,7 @@ impl ReadApi {
 
                 results.push(get_object_changes(
                     &object_cache,
-                    &effects,
+                    effects,
                     resp.transaction
                         .as_ref()
                         .ok_or_else(|| {
@@ -893,7 +893,7 @@ impl ReadApiServer for ReadApi {
                     let sender = input.data().intent_message().value.sender();
                     let object_changes = get_object_changes(
                         &object_cache,
-                        &effects,
+                        effects,
                         sender,
                         effects.modified_at_versions(),
                         effects.all_changed_objects(),

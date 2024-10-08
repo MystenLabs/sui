@@ -107,8 +107,12 @@ impl Key {
             Key::Tx(digest) => encode_digest(digest),
             Key::Fx(digest) => encode_digest(digest),
             Key::Events(digest) => encode_digest(digest),
-            Key::CheckpointContents(seq) => encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq)),
-            Key::CheckpointSummary(seq) => encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq)),
+            Key::CheckpointContents(seq) => {
+                encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq))
+            }
+            Key::CheckpointSummary(seq) => {
+                encoded_tagged_key(&TaggedKey::CheckpointSequenceNumber(*seq))
+            }
             Key::CheckpointContentsByDigest(digest) => encode_digest(digest),
             Key::CheckpointSummaryByDigest(digest) => encode_digest(digest),
             Key::TxToCheckpoint(digest) => encode_digest(digest),
