@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
-use crate::models::obj_indices::StoredObjectVersion;
+use crate::models::obj_indices::{StoredObjectVersion, StoredObjectVersionUnpartitioned};
 use crate::models::objects::{StoredDeletedObject, StoredObject};
 use crate::types::{
     EventIndex, IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
@@ -57,6 +57,11 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
     async fn persist_objects_version(
         &self,
         object_versions: Vec<StoredObjectVersion>,
+    ) -> Result<(), IndexerError>;
+
+    async fn persist_objects_version_unpartitioned(
+        &self,
+        object_versions: Vec<StoredObjectVersionUnpartitioned>,
     ) -> Result<(), IndexerError>;
 
     async fn persist_objects_snapshot(
