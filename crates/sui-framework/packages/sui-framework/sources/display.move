@@ -74,7 +74,7 @@ public struct VersionUpdated<phantom T: key> has copy, drop {
 // === Initializer Methods ===
 
 /// Create an empty Display object. It can either be shared empty or filled
-/// with data right away via cheaper `set_owned` method.
+/// with data right away via `add` or `add_multiple` methods.
 public fun new<T: key>(pub: &Publisher, ctx: &mut TxContext): Display<T> {
     assert!(is_authorized<T>(pub), ENotOwner);
     create_internal(ctx)
