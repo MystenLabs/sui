@@ -20,7 +20,7 @@ export const testnetPackageIds = {
 export const mainnetPackageIds = {
 	DEEPBOOK_PACKAGE_ID: '0xbd1d25f49cc9b65f1e41d6c264ad0e065923de7ce6fd8b86d87d25c0a58742b9',
 	REGISTRY_ID: '0x87f0e925e7ae938dc344bfe3ab58253511be2906f2435f5b7562b1c7430fe4a5',
-	DEEP_TREASURY_ID: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270',
+	DEEP_TREASURY_ID: '0x032abf8948dda67a271bcc18e776dbbcfb0d58c8d288a700ff0d5521e57a1ffe',
 };
 
 export const testnetCoins: CoinMap = {
