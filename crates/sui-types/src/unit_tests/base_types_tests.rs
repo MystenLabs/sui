@@ -25,12 +25,19 @@ use super::*;
 
 #[test]
 fn test_signatures() {
+    use shared_crypto::intent::PersonalMessage;
     let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _sec2): (_, AccountKeyPair) = get_key_pair();
 
     let foo = IntentMessage::new(Intent::sui_transaction(), Foo("hello".into()));
     let foox = IntentMessage::new(Intent::sui_transaction(), Foo("hellox".into()));
     let bar = IntentMessage::new(Intent::sui_transaction(), Bar("hello".into()));
+
+    let personal = IntentMessage::new(Intent::personal_message(), PersonalMessage {message: "hello".as_bytes().to_vec() });
+    let personal_sig = Signature::new_secure(&personal, &sec1);
+    assert!(personal_sig
+        .verify_secure(&personal, addr1, SignatureScheme::ED25519)
+        .is_ok());
 
     let s = Signature::new_secure(&foo, &sec1);
     assert!(s
