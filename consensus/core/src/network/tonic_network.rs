@@ -829,7 +829,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                         match result {
                             Ok(Ok(())) => {},
                             Ok(Err(e)) => {
-                                warn!("Error serving connection: {e:?}");
+                                debug!("Error serving connection: {e:?}");
                             },
                             Err(e) => {
                                 debug!("Connection task error, likely shutting down: {e:?}");
