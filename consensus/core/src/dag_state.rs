@@ -848,32 +848,26 @@ impl DagState {
             .inc();
 
         // Clean up old cached data. After flushing, all cached blocks are guaranteed to be persisted.
-        let mut total_recent_refs = 0;
-
-        // First we store the evicted rounds for each authority.
         for (authority_index, _) in self.context.committee.authorities() {
-            self.evicted_rounds[authority_index] =
-                self.calculate_authority_eviction_round(authority_index);
-        }
-
-        // Then we clean up the blocks that are meant to be evicted
-        for (authority_index, authority_refs) in self.recent_refs_by_authority.iter_mut().enumerate() {
-            while let Some(block_ref) = authority_refs.first() {
-                if block_ref.round <= self.evicted_rounds[authority_index] {
+            let eviction_round = self.calculate_authority_eviction_round(authority_index);
+            while let Some(block_ref) = self.recent_refs_by_authority[authority_index].first() {
+                if block_ref.round <= eviction_round {
                     self.recent_blocks.remove(block_ref);
-                    authority_refs.pop_first();
+                    self.recent_refs_by_authority[authority_index].pop_first();
                 } else {
                     break;
                 }
             }
-            total_recent_refs += authority_refs.len();
+            self.evicted_rounds[authority_index] = eviction_round;
         }
 
         let metrics = &self.context.metrics.node_metrics;
         metrics
             .dag_state_recent_blocks
             .set(self.recent_blocks.len() as i64);
-        metrics.dag_state_recent_refs.set(total_recent_refs as i64);
+        metrics
+            .dag_state_recent_refs
+            .set(self.recent_refs_by_authority.iter().map(BTreeSet::len).sum::<usize>() as i64);
     }
 
     /// Detects and returns the blocks of the round that forms the last quorum. The method will return
@@ -965,7 +959,7 @@ impl DagState {
     /// <= `last_evicted_round` we don't have such guarantees as out of order blocks might exist.
     fn calculate_authority_eviction_round(&self, authority_index: AuthorityIndex) -> Round {
         if self.gc_enabled() {
-            let last_round = self.recent_refs[authority_index]
+            let last_round = self.recent_refs_by_authority[authority_index]
                 .last()
                 .map(|block_ref| block_ref.round)
                 .unwrap_or(GENESIS_ROUND);
@@ -983,9 +977,8 @@ impl DagState {
         commit_round.saturating_sub(cached_rounds)
     }
 
-    /// Returns the eviction round for the provided authority. The logic for it is computed as follows:
-    /// * if `latest_block_round` - `gc_round` >= `CACHED_ROUNDS`, then we will evicted entries <= gc_round, as we have enough data to cover the CACHED_ROUNDS and also uncommitted blocks are kept in memory.
-    /// * if `latest_block_round` - `gc_round` < `CACHED_ROUNDS`, then we will evict entries <= `latest_block_round` - `CACHED_ROUNDS`, as we don't have enough data to cover the CACHED_ROUNDS
+    /// Calculates the eviction round for the given authority. The goal is to keep at least `cached_rounds`
+    /// of the latest blocks in the cache (if enough data is available), while evicting blocks with rounds < `gc_round` when possible.
     fn gc_eviction_round(last_round: Round, gc_round: Round, cached_rounds: u32) -> Round {
         if last_round.saturating_sub(gc_round) >= cached_rounds {
             gc_round
