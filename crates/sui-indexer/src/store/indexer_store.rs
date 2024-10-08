@@ -4,9 +4,10 @@
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
+use strum::IntoEnumIterator;
 
 use crate::errors::IndexerError;
-use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
+use crate::handlers::{CommitterWatermark, EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
 use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
@@ -114,4 +115,12 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
         &self,
         checkpoints: Vec<StoredRawCheckpoint>,
     ) -> Result<(), IndexerError>;
+
+    /// Update the upper bound of the watermarks for the given tables.
+    async fn update_watermarks_upper_bound<E: IntoEnumIterator>(
+        &self,
+        watermark: CommitterWatermark,
+    ) -> Result<(), IndexerError>
+    where
+        E::Iterator: Iterator<Item: AsRef<str>>;
 }

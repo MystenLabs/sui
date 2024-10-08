@@ -125,3 +125,9 @@ Note that you need an existing database for this to work. Using the DATABASE_URL
 # Change the RPC_CLIENT_URL to http://0.0.0.0:9000 to run indexer against local validator & fullnode
 cargo run --bin sui-indexer --features mysql-feature --no-default-features -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443" --fullnode-sync-worker --reset-db
 ```
+
+### Extending the indexer
+
+To add a new table, run `diesel migration generate your_table_name`, and modify the newly created `up.sql` and `down.sql` files.
+
+You would apply the migration with `diesel migration run`, and run the script in `./scripts/generate_indexer_schema.sh` to update the `schema.rs` file.

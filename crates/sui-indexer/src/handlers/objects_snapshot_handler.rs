@@ -16,13 +16,13 @@ use crate::types::IndexerResult;
 use crate::{metrics::IndexerMetrics, store::IndexerStore};
 
 use super::checkpoint_handler::CheckpointHandler;
-use super::TransactionObjectChangesToCommit;
+use super::{CommitterWatermark, ObjectsSnapshotHandlerTables, TransactionObjectChangesToCommit};
 use super::{CommonHandler, Handler};
 
 #[derive(Clone)]
 pub struct ObjectsSnapshotHandler {
     pub store: PgIndexerStore,
-    pub sender: Sender<(u64, TransactionObjectChangesToCommit)>,
+    pub sender: Sender<(CommitterWatermark, TransactionObjectChangesToCommit)>,
     snapshot_config: SnapshotLagConfig,
     metrics: IndexerMetrics,
 }
@@ -37,10 +37,7 @@ impl Worker for ObjectsSnapshotHandler {
     async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
         let transformed_data = CheckpointHandler::index_objects(checkpoint, &self.metrics).await?;
         self.sender
-            .send((
-                checkpoint.checkpoint_summary.sequence_number,
-                transformed_data,
-            ))
+            .send((CommitterWatermark::from(checkpoint), transformed_data))
             .await?;
         Ok(())
     }
@@ -62,18 +59,20 @@ impl Handler<TransactionObjectChangesToCommit> for ObjectsSnapshotHandler {
         Ok(())
     }
 
-    // TODO: read watermark table when it's ready.
     async fn get_watermark_hi(&self) -> IndexerResult<Option<u64>> {
         self.store
             .get_latest_object_snapshot_checkpoint_sequence_number()
             .await
     }
 
-    // TODO: update watermark table when it's ready.
-    async fn set_watermark_hi(&self, watermark_hi: u64) -> IndexerResult<()> {
+    async fn set_watermark_hi(&self, watermark: CommitterWatermark) -> IndexerResult<()> {
+        self.store
+            .update_watermarks_upper_bound::<ObjectsSnapshotHandlerTables>(watermark)
+            .await?;
+
         self.metrics
             .latest_object_snapshot_sequence_number
-            .set(watermark_hi as i64);
+            .set(watermark.cp as i64);
         Ok(())
     }
 
@@ -113,7 +112,7 @@ pub async fn start_objects_snapshot_handler(
 impl ObjectsSnapshotHandler {
     pub fn new(
         store: PgIndexerStore,
-        sender: Sender<(u64, TransactionObjectChangesToCommit)>,
+        sender: Sender<(CommitterWatermark, TransactionObjectChangesToCommit)>,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
     ) -> ObjectsSnapshotHandler {

@@ -16,6 +16,7 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use futures::future::Either;
 use itertools::Itertools;
 use object_store::path::Path;
+use strum::IntoEnumIterator;
 use sui_types::base_types::ObjectID;
 use tap::TapFallible;
 use tracing::{info, warn};
@@ -27,8 +28,8 @@ use sui_storage::object_store::util::put;
 use crate::config::UploadOptions;
 use crate::database::ConnectionPool;
 use crate::errors::{Context, IndexerError};
-use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
+use crate::handlers::{CommitterWatermark, EpochToCommit};
 use crate::metrics::IndexerMetrics;
 use crate::models::checkpoints::StoredChainIdentifier;
 use crate::models::checkpoints::StoredCheckpoint;
@@ -44,6 +45,7 @@ use crate::models::objects::{
 };
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
+use crate::models::watermarks::StoredWatermark;
 use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
@@ -51,7 +53,7 @@ use crate::schema::{
     objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
     raw_checkpoints, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
     tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
-    tx_recipients, tx_senders,
+    tx_recipients, tx_senders, watermarks,
 };
 use crate::store::transaction_with_retry;
 use crate::types::{EventIndex, IndexedDeletedObject, IndexedObject};
@@ -295,10 +297,13 @@ impl PgIndexerStore {
 
         let mut connection = self.pool.get().await?;
 
-        objects_snapshot::table
-            .select(max(objects_snapshot::checkpoint_sequence_number))
-            .first::<Option<i64>>(&mut connection)
+        watermarks::table
+            .select(watermarks::checkpoint_hi)
+            .filter(watermarks::entity.eq("objects_snapshot"))
+            .first::<i64>(&mut connection)
             .await
+            // Handle case where the watermark is not set yet
+            .optional()
             .map_err(Into::into)
             .map(|v| v.map(|v| v as u64))
             .context(
@@ -1454,6 +1459,53 @@ impl PgIndexerStore {
             .context("Failed to get network total transactions in epoch")
             .map(|v| v as u64)
     }
+
+    async fn update_watermarks_upper_bound<E: IntoEnumIterator>(
+        &self,
+        watermark: CommitterWatermark,
+    ) -> Result<(), IndexerError>
+    where
+        E::Iterator: Iterator<Item: AsRef<str>>,
+    {
+        use diesel_async::RunQueryDsl;
+
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_watermarks
+            .start_timer();
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            let upper_bound_updates = E::iter()
+                .map(|table| StoredWatermark::from_upper_bound_update(table.as_ref(), watermark))
+                .collect::<Vec<_>>();
+            async {
+                diesel::insert_into(watermarks::table)
+                    .values(upper_bound_updates)
+                    .on_conflict(watermarks::entity)
+                    .do_update()
+                    .set((
+                        watermarks::epoch_hi.eq(excluded(watermarks::epoch_hi)),
+                        watermarks::checkpoint_hi.eq(excluded(watermarks::checkpoint_hi)),
+                        watermarks::tx_hi.eq(excluded(watermarks::tx_hi)),
+                    ))
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed to update watermarks upper bound")?;
+
+                Ok::<(), IndexerError>(())
+            }
+            .scope_boxed()
+        })
+        .await
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted watermarks");
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist watermarks with error: {}", e);
+        })
+    }
 }
 
 #[async_trait]
@@ -2109,6 +2161,16 @@ impl IndexerStore for PgIndexerStore {
         checkpoints: Vec<StoredRawCheckpoint>,
     ) -> Result<(), IndexerError> {
         self.persist_raw_checkpoints_impl(&checkpoints).await
+    }
+
+    async fn update_watermarks_upper_bound<E: IntoEnumIterator>(
+        &self,
+        watermark: CommitterWatermark,
+    ) -> Result<(), IndexerError>
+    where
+        E::Iterator: Iterator<Item: AsRef<str>>,
+    {
+        self.update_watermarks_upper_bound::<E>(watermark).await
     }
 }
 
