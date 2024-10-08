@@ -81,12 +81,13 @@ impl FunctionTargetProcessor for LoopAnalysisProcessor {
             return data;
         }
         let loop_annotation = Self::build_loop_annotation(func_env, &data);
-        println!("before {}:", self.name());
-        println!("{}", FunctionTarget::new(func_env, &data));
-        let result = Self::transform(func_env, data, &loop_annotation);
-        println!("after {}:", self.name());
-        println!("{}", FunctionTarget::new(func_env, &result));
-        result
+        // println!("before {}:", self.name());
+        // println!("{}", FunctionTarget::new(func_env, &data));
+        // let result = Self::transform(func_env, data, &loop_annotation);
+        // println!("after {}:", self.name());
+        // println!("{}", FunctionTarget::new(func_env, &result));
+        // result
+        Self::transform(func_env, data, &loop_annotation)
     }
 
     fn name(&self) -> String {

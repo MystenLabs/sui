@@ -112,6 +112,14 @@ impl<'env> BoogieTranslator<'env> {
         let mono_info = mono_analysis::get_info(self.env);
         let empty = &BTreeSet::new();
 
+        println!(
+            "{}",
+            FunctionTargetsHolderDisplay {
+                targets: self.targets,
+                env: self.env
+            }
+        );
+
         emitln!(
             writer,
             "\n\n//==================================\n// Begin Translation\n"
