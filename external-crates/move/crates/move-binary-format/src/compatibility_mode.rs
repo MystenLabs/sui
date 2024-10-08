@@ -3,8 +3,6 @@ use crate::file_format::Visibility;
 use crate::normalized::{Enum, Function, Struct};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::{IdentStr, Identifier};
-use move_core_types::language_storage::ModuleId;
-use std::collections::BTreeSet;
 
 /// A trait which will allow accumulating the information necessary for checking upgrade compatibility between two modules,
 /// while allowing flexibility in the error type that is returned.
@@ -79,9 +77,6 @@ pub trait CompatibilityMode: Default {
     /// Function missing public error occurs when a public function is present in the old module but not in the new module.
     fn function_missing_public(&mut self, name: &Identifier, old_func: &Function);
 
-    /// Function missing friend error occurs when a friend function is present in the old module but not in the new module.
-    fn function_missing_friend(&mut self, name: &Identifier, old_funcs: &Function);
-
     /// Function missing entry error occurs when an entry function is present in the old module but not in the new module.
     fn function_missing_entry(&mut self, name: &Identifier, old_func: &Function);
 
@@ -96,23 +91,12 @@ pub trait CompatibilityMode: Default {
     /// Function lost public visibility error occurs when a function loses its public visibility.
     fn function_lost_public_visibility(&mut self, name: &Identifier, old_func: &Function);
 
-    /// Function lost friend visibility error occurs when a function loses its friend visibility.
-    fn function_lost_friend_visibility(&mut self, name: &Identifier, old_func: &Function);
-
     /// Function entry compatibility error occurs when an entry function is not compatible.
     fn function_entry_compatibility(
         &mut self,
         name: &Identifier,
         old_func: &Function,
         new_func: &Function,
-    );
-
-    /// Friend module missing error occurs when a friend module is present in the old module but not in the new module.
-    /// This is a check that is done for `module.friends` old and new id lists.
-    fn friend_module_missing(
-        &mut self,
-        old_friend_module_ids: BTreeSet<ModuleId>,
-        new_friend_module_ids: BTreeSet<ModuleId>,
     );
 
     /// Finish the compatibility check and return the error if one has been accumulated from individual errors.
@@ -122,9 +106,10 @@ pub trait CompatibilityMode: Default {
 /// Compatibility mode impl for execution compatibility checks.
 /// These flags are set when a type safety check is violated. see [`Compatibility`] for more information.
 pub struct ExecutionCompatibilityMode {
+    /// This can never be overridden with a flag, and thus has no associated [`Compatibility`] flag.
+    /// In other words public linking can never be broken. all other flags
     datatype_and_function_linking: bool,
     datatype_layout: bool,
-    friend_linking: bool,
     entry_linking: bool,
     no_new_variants: bool,
 }
@@ -134,7 +119,6 @@ impl Default for ExecutionCompatibilityMode {
         Self {
             datatype_and_function_linking: true,
             datatype_layout: true,
-            friend_linking: true,
             entry_linking: true,
             no_new_variants: true,
         }
@@ -223,10 +207,6 @@ impl CompatibilityMode for ExecutionCompatibilityMode {
         self.datatype_and_function_linking = false;
     }
 
-    fn function_missing_friend(&mut self, _name: &Identifier, _old_func: &Function) {
-        self.friend_linking = false;
-    }
-
     fn function_missing_entry(&mut self, _name: &Identifier, _old_func: &Function) {
         self.entry_linking = false;
     }
@@ -237,14 +217,8 @@ impl CompatibilityMode for ExecutionCompatibilityMode {
         old_func: &Function,
         _new_func: &Function,
     ) {
-        match old_func.visibility {
-            Visibility::Friend => {
-                self.friend_linking = false;
-            }
-            Visibility::Public => {
-                self.datatype_and_function_linking = false;
-            }
-            Visibility::Private => (),
+        if old_func.visibility == Visibility::Public {
+            self.datatype_and_function_linking = false;
         }
 
         if old_func.is_entry {
@@ -256,10 +230,6 @@ impl CompatibilityMode for ExecutionCompatibilityMode {
         self.datatype_and_function_linking = false;
     }
 
-    fn function_lost_friend_visibility(&mut self, _name: &Identifier, _old_func: &Function) {
-        self.friend_linking = false;
-    }
-
     fn function_entry_compatibility(
         &mut self,
         _name: &Identifier,
@@ -269,31 +239,18 @@ impl CompatibilityMode for ExecutionCompatibilityMode {
         self.entry_linking = false;
     }
 
-    fn friend_module_missing(
-        &mut self,
-        _old_friend_module_ids: BTreeSet<ModuleId>,
-        _new_friend_module_ids: BTreeSet<ModuleId>,
-    ) {
-        self.friend_linking = false;
-    }
-
     /// Finish by comparing against the compatibility flags.
     fn finish(&self, compatability: &Compatibility) -> Result<(), ()> {
-        if compatability.check_datatype_and_pub_function_linking
-            && !self.datatype_and_function_linking
-        {
+        if !self.datatype_and_function_linking {
             return Err(());
         }
         if compatability.check_datatype_layout && !self.datatype_layout {
             return Err(());
         }
-        if compatability.check_friend_linking && !self.friend_linking {
-            return Err(());
-        }
         if compatability.check_private_entry_linking && !self.entry_linking {
             return Err(());
         }
-        if compatability.disallow_new_variants && !self.no_new_variants {
+        if compatability.check_datatype_layout && !self.no_new_variants {
             return Err(());
         }
 

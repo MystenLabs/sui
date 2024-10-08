@@ -623,26 +623,18 @@ fn private_entry_signature_change_allowed() {
 
     // allow updating signatures of private entry functions
     assert!(Compatibility {
-        check_datatype_and_pub_function_linking: true,
         check_datatype_layout: true,
-        check_friend_linking: true,
         check_private_entry_linking: false,
         disallowed_new_abilities: AbilitySet::EMPTY,
-        disallow_change_datatype_type_params: false,
-        disallow_new_variants: false,
     }
     .check(&module, &updated_module)
     .is_ok());
 
     // allow updating signatures of private entry functions
     assert!(Compatibility {
-        check_datatype_and_pub_function_linking: true,
         check_datatype_layout: true,
-        check_friend_linking: true,
         check_private_entry_linking: false,
         disallowed_new_abilities: AbilitySet::EMPTY,
-        disallow_change_datatype_type_params: false,
-        disallow_new_variants: false,
     }
     .check(&updated_module, &module)
     .is_ok());
@@ -698,9 +690,6 @@ fn entry_fun_compat_tests() {
         (&public_entry_fun, &friend_entry_fun),
         (&public_entry_fun, &friend_fun),
         (&public_entry_fun, &no_fun),
-        (&friend_entry_fun, &no_fun),
-        (&friend_entry_fun, &private_fun),
-        (&friend_entry_fun, &entry_fun),
     ];
 
     let invalid_private_entry_breakages = vec![
@@ -725,13 +714,9 @@ fn entry_fun_compat_tests() {
     // Every valid combo is valid under `check_private_entry_linking = false`
     for (prev, new) in valid_combos.into_iter() {
         assert!(Compatibility {
-            check_datatype_and_pub_function_linking: true,
             check_datatype_layout: true,
-            check_friend_linking: true,
             check_private_entry_linking: false,
             disallowed_new_abilities: AbilitySet::EMPTY,
-            disallow_change_datatype_type_params: false,
-            disallow_new_variants: false,
         }
         .check(prev, new)
         .is_ok());
@@ -745,39 +730,19 @@ fn entry_fun_compat_tests() {
     // Every valid combo is valid under `check_private_entry_linking = false`
     for (prev, new) in valid_entry_fun_changes_with_friend_api_breakage.into_iter() {
         assert!(Compatibility {
-            check_datatype_and_pub_function_linking: true,
             check_datatype_layout: true,
-            check_friend_linking: false,
             check_private_entry_linking: false,
             disallowed_new_abilities: AbilitySet::EMPTY,
-            disallow_change_datatype_type_params: false,
-            disallow_new_variants: false,
         }
         .check(prev, new)
         .is_ok());
-
-        assert!(Compatibility {
-            check_datatype_and_pub_function_linking: true,
-            check_datatype_layout: true,
-            check_friend_linking: true,
-            check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::EMPTY,
-            disallow_change_datatype_type_params: false,
-            disallow_new_variants: false,
-        }
-        .check(prev, new)
-        .is_err());
     }
 
     for (prev, new) in invalid_combos.into_iter() {
         assert!(Compatibility {
-            check_datatype_and_pub_function_linking: true,
             check_datatype_layout: true,
-            check_friend_linking: true,
             check_private_entry_linking: false,
             disallowed_new_abilities: AbilitySet::EMPTY,
-            disallow_change_datatype_type_params: false,
-            disallow_new_variants: false,
         }
         .check(prev, new)
         .is_err());
@@ -797,37 +762,25 @@ fn public_entry_signature_change_disallowed() {
         .parameters = vec![Type::U64];
 
     assert!(Compatibility {
-        check_datatype_and_pub_function_linking: true,
         check_datatype_layout: true,
-        check_friend_linking: true,
         check_private_entry_linking: false,
         disallowed_new_abilities: AbilitySet::EMPTY,
-        disallow_change_datatype_type_params: false,
-        disallow_new_variants: false,
     }
     .check(&module, &updated_module)
     .is_err());
 
     assert!(Compatibility {
-        check_datatype_and_pub_function_linking: true,
         check_datatype_layout: true,
-        check_friend_linking: true,
         check_private_entry_linking: false,
         disallowed_new_abilities: AbilitySet::EMPTY,
-        disallow_change_datatype_type_params: false,
-        disallow_new_variants: false,
     }
     .check(&updated_module, &module)
     .is_err());
 
     assert!(Compatibility {
-        check_datatype_and_pub_function_linking: true,
         check_datatype_layout: true,
-        check_friend_linking: true,
         check_private_entry_linking: true,
         disallowed_new_abilities: AbilitySet::EMPTY,
-        disallow_change_datatype_type_params: false,
-        disallow_new_variants: false,
     }
     .check(&module, &updated_module)
     .is_err());
@@ -845,49 +798,17 @@ fn friend_entry_signature_change_allowed() {
         .parameters = vec![Type::U64];
 
     assert!(Compatibility {
-        check_datatype_and_pub_function_linking: true,
         check_datatype_layout: true,
-        check_friend_linking: false,
         check_private_entry_linking: false,
         disallowed_new_abilities: AbilitySet::EMPTY,
-        disallow_change_datatype_type_params: false,
-        disallow_new_variants: false,
     }
     .check(&module, &updated_module)
     .is_ok());
 
     assert!(Compatibility {
-        check_datatype_and_pub_function_linking: true,
         check_datatype_layout: true,
-        check_friend_linking: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-        disallow_change_datatype_type_params: false,
-        disallow_new_variants: false,
-    }
-    .check(&module, &updated_module)
-    .is_err());
-
-    assert!(Compatibility {
-        check_datatype_and_pub_function_linking: true,
-        check_datatype_layout: true,
-        check_friend_linking: false,
         check_private_entry_linking: true,
         disallowed_new_abilities: AbilitySet::EMPTY,
-        disallow_change_datatype_type_params: false,
-        disallow_new_variants: false,
-    }
-    .check(&module, &updated_module)
-    .is_err());
-
-    assert!(Compatibility {
-        check_datatype_and_pub_function_linking: true,
-        check_datatype_layout: true,
-        check_friend_linking: true,
-        check_private_entry_linking: true,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-        disallow_change_datatype_type_params: false,
-        disallow_new_variants: false,
     }
     .check(&module, &updated_module)
     .is_err());
