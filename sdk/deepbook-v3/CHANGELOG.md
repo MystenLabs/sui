@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.8.4
+
+### Patch Changes
+
+- 5df4e5e: Test Mainnet Packages
+
 ## 0.8.3
 
 ### Patch Changes
