@@ -45,6 +45,13 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_sync_last_known_own_block_timeout")]
     pub sync_last_known_own_block_timeout: Duration,
 
+    /// The number of rounds above the highest accepted round that still willing to fetch missing blocks via the periodic
+    /// synchronizer. Any missing blocks of higher rounds are considered too far in the future to fetch. This property is taken into
+    /// account only when it's detected that the node has fallen behind on its commit compared to the rest of the network, otherwise
+    /// scheduler will attempt to fetch any missing block.
+    #[serde(default = "Parameters::default_sync_missing_blocks_round_threshold")]
+    pub sync_missing_blocks_round_threshold: u32,
+
     /// Interval in milliseconds to probe highest received rounds of peers.
     #[serde(default = "Parameters::default_round_prober_interval_ms")]
     pub round_prober_interval_ms: u64,
@@ -134,6 +141,14 @@ impl Parameters {
         }
     }
 
+    pub(crate) fn default_sync_missing_blocks_round_threshold() -> u32 {
+        if cfg!(msim) {
+            2
+        } else {
+            50
+        }
+    }
+
     pub(crate) fn default_round_prober_interval_ms() -> u64 {
         5000
     }
@@ -186,6 +201,7 @@ impl Default for Parameters {
             max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
             sync_last_known_own_block_timeout:
                 Parameters::default_sync_last_known_own_block_timeout(),
+            sync_missing_blocks_round_threshold: Parameters::default_sync_missing_blocks_round_threshold(),
             round_prober_interval_ms: Parameters::default_round_prober_interval_ms(),
             round_prober_request_timeout_ms: Parameters::default_round_prober_request_timeout_ms(),
             propagation_delay_stop_proposal_threshold:
