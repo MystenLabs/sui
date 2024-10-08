@@ -231,7 +231,7 @@ impl DagState {
             }
 
             info!(
-                "Recoved blocks {}: {:?}",
+                "Recovered blocks {}: {:?}",
                 authority_index,
                 blocks
                     .iter()
