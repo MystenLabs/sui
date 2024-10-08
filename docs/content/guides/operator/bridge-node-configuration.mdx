@@ -47,7 +47,7 @@ After you have both authority key file and REST API URL ready, you can register 
 $ sui validator register-bridge-committee --bridge-authority-key-path <BRIDGE-AUTHORITY-KEY-PATH> --bridge-authority-url <BRIDGE-AUTHORITY-URL>
 ```
 
-#### Offline signing
+#### Offline signing {#offline-signing}
 
 If you keep your validator account key in cold storage or you want to perform offline signing, use flags `--print-only` and `--validator-address` (with the value for the validator address). This prints serialized unsigned transaction bytes, then you can use your preferred signing process to produce signed bytes. 
 
@@ -75,9 +75,9 @@ Use the following command to update bridge node URL:
 ```sh
 $ sui validator update-bridge-committee-node-url
 ```
-Refer to offline signing section in this page for how to sign the transaction offline.
+Refer to [offline signing section](#offline-signing) in this page for how to sign the transaction offline.
 
-Authoritiy key rotating is not supported yet.
+Authoritiy key rotation is not supported yet.
 
 
 ## Bridge Node
