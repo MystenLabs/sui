@@ -98,7 +98,6 @@ where
                     }
                     ReduceOutput::Success(result) => {
                         // The reducer tells us that we have the result needed. Just return it.
-                        tracing::info!("TESTING -- bridge certificate successfully created using {} signatures", responses.len());
                         return Ok((result, responses));
                     }
                 };
