@@ -30,11 +30,11 @@ fun from_rational_max_numerator_denominator() {
     // Test creating a 1.0 fraction from the maximum u64 value.
     let f = from_rational(std::u64::max_value!(), std::u64::max_value!());
     let one = f.to_raw();
-    assert_eq!(one, 0x1_0000_0000); // 0x1.00000000
+    assert_eq!(one, 1 << 32); // 0x1.00000000
 }
 
 #[test]
-#[expected_failure(abort_code = uq32_32::EDivisionByZero)]
+#[expected_failure(abort_code = uq32_32::EDenominator)]
 fun from_rational_div_zero() {
     // A denominator of zero should cause an arithmetic error.
     from_rational(2, 0);
@@ -45,7 +45,7 @@ fun from_rational_div_zero() {
 fun from_rational_ratio_too_large() {
     // The maximum value is 2^32 - 1. Check that anything larger aborts
     // with an overflow.
-    from_rational(0xFFFF_FFFF, 1); // 2^32
+    from_rational(1 << 32, 1); // 2^32
 }
 
 #[test]
@@ -53,7 +53,7 @@ fun from_rational_ratio_too_large() {
 fun from_rational_ratio_too_small() {
     // The minimum non-zero value is 2^-32. Check that anything smaller
     // aborts.
-    from_rational(1, 0x1_FFFF_FFFF); // 2^-33
+    from_rational(1, (1 << 32) + 1); // 1/(2^32 + 1)
 }
 
 #[test]
@@ -166,10 +166,10 @@ fun int_div_by_zero() {
 
 #[test]
 #[expected_failure(abort_code = uq32_32::EOverflow)]
-fun int_div_overflow_small_divisore() {
+fun int_div_overflow_small_divisor() {
     let f = from_raw(1); // 0x0.00000001
     // Divide 2^32 by the minimum fractional value. This should overflow.
-    int_div(0xFFFF_FFFF, f);
+    int_div(1 << 32, f);
 }
 
 #[test]
@@ -213,8 +213,8 @@ fun int_mul_overflow_small_multiplier() {
 #[expected_failure(abort_code = uq32_32::EOverflow)]
 fun int_mul_overflow_large_multiplier() {
     let f = from_raw(std::u64::max_value!());
-    // Multiply 2^33 by the maximum fixed-point value. This should overflow.
-    int_mul(0x1_FFFF_FFFF, f);
+    // Multiply 2^32 + 1 by the maximum fixed-point value. This should overflow.
+    int_mul((1 << 32) + 1, f);
 }
 
 #[test]

@@ -34,10 +34,11 @@ public struct UQ32_32(u64) has copy, drop, store;
 
 /// Create a fixed-point value from a rational number specified by its numerator and denominator.
 /// `from_rational` and `from_integer` should be preferred over using `from_raw`.
-/// When specifying decimal fractions, be careful about rounding errors.
+/// Unless the denominator is a power of two, fractions can not be represented accurately,
+/// so be careful about rounding errors.
 /// Aborts if the denominator is zero.
-/// Aborts if a non-zero rational is so small that it will be represented as zero.
-/// Aborts if the input is too large, e.g. larger than 2^32.
+/// Aborts if the input is non-zero but so small that it will be represented as zero, e.g. smaller than 2^{-32}.
+/// Aborts if the input is too large, e.g. larger than or equal to 2^32.
 public fun from_rational(numerator: u64, denominator: u64): UQ32_32 {
     assert!(denominator != 0, EDenominator);
 
