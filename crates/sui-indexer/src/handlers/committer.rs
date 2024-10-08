@@ -150,6 +150,10 @@ async fn commit_checkpoints<S>(
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
+    let object_versions_unpartitioned_batch = object_versions_batch
+        .iter()
+        .map(|object_version| object_version.clone().into())
+        .collect::<Vec<_>>();
     let packages_batch = packages_batch.into_iter().flatten().collect::<Vec<_>>();
     let checkpoint_num = checkpoint_batch.len();
     let tx_count = tx_batch.len();
@@ -175,6 +179,8 @@ async fn commit_checkpoints<S>(
             state.persist_object_history(object_history_changes_batch.clone()),
             state.persist_full_objects_history(object_history_changes_batch.clone()),
             state.persist_objects_version(object_versions_batch.clone()),
+            state
+                .persist_objects_version_unpartitioned(object_versions_unpartitioned_batch.clone()),
             state.persist_raw_checkpoints(raw_checkpoints_batch),
         ];
         if let Some(epoch_data) = epoch.clone() {

@@ -38,7 +38,7 @@ use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
 use crate::models::epoch::{StoredFeatureFlag, StoredProtocolConfig};
 use crate::models::events::StoredEvent;
-use crate::models::obj_indices::StoredObjectVersion;
+use crate::models::obj_indices::{StoredObjectVersion, StoredObjectVersionUnpartitioned};
 use crate::models::objects::{
     StoredDeletedObject, StoredFullHistoryObject, StoredHistoryObject, StoredObject,
     StoredObjectSnapshot,
@@ -50,10 +50,10 @@ use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
     event_struct_package, events, feature_flags, full_objects_history, objects, objects_history,
-    objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
-    raw_checkpoints, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
-    tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
-    tx_recipients, tx_senders, watermarks,
+    objects_snapshot, objects_version, objects_version_unpartitioned, packages, protocol_configs,
+    pruner_cp_watermark, raw_checkpoints, transactions, tx_affected_addresses, tx_affected_objects,
+    tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects,
+    tx_kinds, tx_recipients, tx_senders, watermarks,
 };
 use crate::store::transaction_with_retry;
 use crate::types::{EventIndex, IndexedDeletedObject, IndexedObject};
@@ -601,6 +601,50 @@ impl PgIndexerStore {
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object versions with error: {}", e);
+        })
+    }
+
+    async fn persist_objects_version_unpartitioned_chunk(
+        &self,
+        object_versions: Vec<StoredObjectVersionUnpartitioned>,
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_version_unpartitioned_chunks
+            .start_timer();
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(objects_version_unpartitioned::table)
+                        .values(object_version_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context("Failed to write to objects_version_unpartitioned table")?;
+                }
+                Ok::<(), IndexerError>(())
+            }
+            .scope_boxed()
+        })
+        .await
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(
+                elapsed,
+                "Persisted {} chunked object versions (unpartitioned)",
+                object_versions.len(),
+            );
+        })
+        .tap_err(|e| {
+            tracing::error!(
+                "Failed to persist object versions (unpartitioned) with error: {}",
+                e
+            );
         })
     }
 
@@ -1842,6 +1886,42 @@ impl IndexerStore for PgIndexerStore {
 
         let elapsed = guard.stop_and_record();
         info!(elapsed, "Persisted {} object versions", len);
+        Ok(())
+    }
+
+    async fn persist_objects_version_unpartitioned(
+        &self,
+        object_versions: Vec<StoredObjectVersionUnpartitioned>,
+    ) -> Result<(), IndexerError> {
+        if object_versions.is_empty() {
+            return Ok(());
+        }
+
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_version_unpartitioned
+            .start_timer();
+
+        let len = object_versions.len();
+        let chunks = chunk!(object_versions, self.config.parallel_objects_chunk_size);
+        let futures = chunks
+            .into_iter()
+            .map(|c| self.persist_objects_version_unpartitioned_chunk(c))
+            .collect::<Vec<_>>();
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all objects version (unpartitioned) chunks: {:?}",
+                    e
+                ))
+            })?;
+
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} object versions (unpartitioned)", len);
         Ok(())
     }
 
