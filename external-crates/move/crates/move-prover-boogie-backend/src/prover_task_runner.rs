@@ -168,12 +168,12 @@ pub struct RunBoogieWithSeeds {
 impl RunBoogieWithSeeds {
     pub fn run_sync(&mut self, seed: usize) -> std::io::Result<Output> {
         let args = self
-        .get_boogie_command(0)
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+            .get_boogie_command(0)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
         debug!("running Boogie command with seed {}", 0);
         std::process::Command::new(&args[0])
-        .args(&args[1..])
-        .output()
+            .args(&args[1..])
+            .output()
     }
 }
 
