@@ -200,47 +200,20 @@ The first step is to set up the client app. Run the following command to scaffol
 
 ### Install new dependencies
 
-This app will use the `lucide-react` package for icons and `tailwindcss` for styling. Install them by running the following command:
+This app will use the `react-spinners` package for icons. Install it by running the following command:
 
 <Tabs groupId="packagemanager">
   <TabItem label="PNPM" value="pnpm">
     ```bash
-    pnpm add lucide-react tailwindcss@latest postcss@latest autoprefixer@latest
+    pnpm add react-spinners
     ```
   </TabItem>
   <TabItem label="Yarn" value="yarn">
     ```bash
-    yarn add lucide-react tailwindcss@latest postcss@latest autoprefixer@latest
+    yarn add react-spinners
     ```
   </TabItem>
 </Tabs>
-
-Next, generate the Tailwind CSS configuration file by running the following:
-
-```bash
-npx tailwindcss init -p
-```
-
-<details>
-  <summary>
-    Replace the content of `tailwind.config.js` with the following:
-  </summary>
-  {@inject: sdk/create-dapp/templates/react-e2e-counter/tailwind.config.js}
-</details>
-
-<details>
-  <summary>
-    Add the `src/styles/` directory and add `base.css`: 
-  </summary>
-  {@inject: sdk/create-dapp/templates/react-e2e-counter/src/styles/base.css}
-</details>
-
-<details>
-  <summary>
-    Import the `base.css` file in your `src/main.tsx` file:
-  </summary>
-  {@inject: sdk/create-dapp/templates/react-e2e-counter/src/main.tsx}
-</details>
 
 ### Connecting your deployed package {#connecting-your-package}
 
@@ -271,12 +244,15 @@ You need a way to create a new `Counter` object.
     Create `src/CreateCounter.tsx` and add the following code:
   </summary>
   ```tsx
-    import { Button, Container } from '@radix-ui/themes';
-    import { LoaderCircle } from '@radix-ui/react-loader';
-    import { useState } from 'react';
+    import { Button, Container } from "@radix-ui/themes";
+    import { useState } from "react";
+    import ClipLoader from "react-spinners/ClipLoader";
 
-    export function CreateCounter( { onCreated }: { onCreated: (id: string) => void; } ) {
-      
+    export function CreateCounter({
+      onCreated,
+    }: {
+      onCreated: (id: string) => void;
+    }) {
       const [waitingForTxn, setWaitingForTxn] = useState(false);
 
       function create() {
@@ -290,12 +266,9 @@ You need a way to create a new `Counter` object.
             onClick={() => {
               create();
             }}
+            disabled={waitingForTxn}
           >
-            {waitingForTxn ? (
-              <LoaderCircle className="animate-spin" />
-            ) : (
-              "Create Counter"
-            )}
+            {waitingForTxn ? <ClipLoader size={20} /> : "Create Counter"}
           </Button>
         </Container>
       );
@@ -327,7 +300,7 @@ Now that your users can create counters, you need a way to route to them. Routin
     import { isValidSuiObjectId } from "@mysten/sui/utils";
     import { Box, Container, Flex, Heading } from "@radix-ui/themes";
     import { useState } from "react";
-    import { CreateCounter } from "./createCounter";
+    import { CreateCounter } from "./CreateCounter";
 
     function App() {
       const currentAccount = useCurrentAccount();
@@ -422,7 +395,10 @@ For your counter, you want to display three elements:
       useCurrentAccount,
       useSuiClientQuery,
     } from "@mysten/dapp-kit";
+    import { SuiObjectData } from "@mysten/sui/client";
     import { Button, Flex, Heading, Text } from "@radix-ui/themes";
+    import { useState } from "react";
+    import ClipLoader from "react-spinners/ClipLoader";
 
 
     export function Counter({ id }: { id: string }) {
@@ -462,7 +438,7 @@ For your counter, you want to display three elements:
                 disabled={waitingForTxn !== ""}
               >
                 {waitingForTxn === "increment" ? (
-                  <LoaderCircle className="animate-spin" />
+                  <ClipLoader size={20} />
                 ) : (
                   "Increment"
                 )}
@@ -473,7 +449,7 @@ For your counter, you want to display three elements:
                   disabled={waitingForTxn !== ""}
                 >
                   {waitingForTxn === "reset" ? (
-                    <LoaderCircle className="animate-spin" />
+                    <ClipLoader size={20} />
                   ) : (
                     "Reset"
                   )}
