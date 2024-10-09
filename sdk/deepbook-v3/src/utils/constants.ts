@@ -18,9 +18,9 @@ export const testnetPackageIds = {
 } satisfies DeepbookPackageIds;
 
 export const mainnetPackageIds = {
-	DEEPBOOK_PACKAGE_ID: '',
-	REGISTRY_ID: '',
-	DEEP_TREASURY_ID: '',
+	DEEPBOOK_PACKAGE_ID: '0x6f2abaa15ea8f1935968310a196807272b37150878dc4072f2e0cbaa9eca894a',
+	REGISTRY_ID: '0x87f0e925e7ae938dc344bfe3ab58253511be2906f2435f5b7562b1c7430fe4a5',
+	DEEP_TREASURY_ID: '0x032abf8948dda67a271bcc18e776dbbcfb0d58c8d288a700ff0d5521e57a1ffe',
 };
 
 export const testnetCoins: CoinMap = {
@@ -60,7 +60,7 @@ export const mainnetCoins: CoinMap = {
 	USDC: {
 		address: `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7`,
 		type: `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC`,
-		scalar: 6,
+		scalar: 1000000,
 	},
 	WUSDC: {
 		address: `0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf`,

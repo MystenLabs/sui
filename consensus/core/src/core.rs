@@ -8,7 +8,7 @@ use consensus_config::{local_committee_and_keys, Stake};
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
 use itertools::Itertools as _;
 #[cfg(test)]
-use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
+use mysten_metrics::monitored_mpsc::UnboundedReceiver;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_macros::fail_point;
@@ -627,6 +627,11 @@ impl Core {
                         .write()
                         .add_unscored_committed_subdags(subdags.clone());
                 }
+
+                // Try to unsuspend blocks if gc_round has advanced.
+                self.block_manager
+                    .try_unsuspend_blocks_for_latest_gc_round();
+
                 committed_subdags.extend(subdags);
             }
 
@@ -720,10 +725,15 @@ impl Core {
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
     fn ancestors_to_propose(&mut self, clock_round: Round) -> Vec<VerifiedBlock> {
         // Now take the ancestors before the clock_round (excluded) for each authority.
-        let ancestors = self
-            .dag_state
-            .read()
-            .get_last_cached_block_per_authority(clock_round);
+        let (ancestors, gc_enabled, gc_round) = {
+            let dag_state = self.dag_state.read();
+            (
+                dag_state.get_last_cached_block_per_authority(clock_round),
+                dag_state.gc_enabled(),
+                dag_state.gc_round(),
+            )
+        };
+
         assert_eq!(
             ancestors.len(),
             self.context.committee.size(),
@@ -737,6 +747,12 @@ impl Core {
                 ancestors
                     .into_iter()
                     .filter(|block| block.author() != self.context.own_index)
+                    .filter(|block| {
+                        if gc_enabled && gc_round > GENESIS_ROUND {
+                            return block.round() > gc_round;
+                        }
+                        true
+                    })
                     .flat_map(|block| {
                         if let Some(last_block_ref) = self.last_included_ancestors[block.author()] {
                             return (last_block_ref.round < block.round()).then_some(block);
@@ -940,10 +956,10 @@ impl CoreTextFixture {
         // Need at least one subscriber to the block broadcast channel.
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(commit_sender.clone(), 0),
+            commit_consumer,
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -979,7 +995,6 @@ mod test {
     use std::{collections::BTreeSet, time::Duration};
 
     use consensus_config::{AuthorityIndex, Parameters};
-    use mysten_metrics::monitored_mpsc::unbounded_channel;
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::sleep;
 
@@ -1039,10 +1054,10 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0),
+            commit_consumer,
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1157,10 +1172,10 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0),
+            commit_consumer,
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1254,10 +1269,10 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0),
+            commit_consumer,
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1359,10 +1374,10 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0),
+            commit_consumer,
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1448,10 +1463,10 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0),
+            commit_consumer,
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1636,10 +1651,10 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0),
+            commit_consumer,
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1701,10 +1716,10 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0),
+            commit_consumer,
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),

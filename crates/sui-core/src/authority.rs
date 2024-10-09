@@ -278,7 +278,7 @@ pub struct AuthorityMetrics {
     post_processing_total_tx_had_event_processed: IntCounter,
     post_processing_total_failures: IntCounter,
 
-    /// Consensus handler metrics
+    /// Consensus commit and transaction handler metrics
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_transaction_sizes: HistogramVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
@@ -292,6 +292,8 @@ pub struct AuthorityMetrics {
     pub consensus_committed_user_transactions: IntGaugeVec,
     pub consensus_calculated_throughput: IntGauge,
     pub consensus_calculated_throughput_profile: IntGauge,
+    pub consensus_transaction_handler_processed: IntCounterVec,
+    pub consensus_transaction_handler_fastpath_executions: IntCounter,
 
     pub limits_metrics: Arc<LimitsMetrics>,
 
@@ -759,6 +761,17 @@ impl AuthorityMetrics {
                 "The current active calculated throughput profile",
                 registry
             ).unwrap(),
+            consensus_transaction_handler_processed: register_int_counter_vec_with_registry!(
+                "consensus_transaction_handler_processed",
+                "Number of transactions processed by consensus transaction handler, by whether they are certified or rejected.",
+                &["outcome"],
+                registry
+            ).unwrap(),
+            consensus_transaction_handler_fastpath_executions: register_int_counter_with_registry!(
+                "consensus_transaction_handler_fastpath_executions",
+                "Number of fastpath transactions sent for execution by consensus transaction handler",
+                registry,
+            ).unwrap(),
             execution_queueing_latency: LatencyObserver::new(),
             txn_ready_rate_tracker: Arc::new(Mutex::new(RateTracker::new(Duration::from_secs(10)))),
             execution_rate_tracker: Arc::new(Mutex::new(RateTracker::new(Duration::from_secs(10)))),
@@ -1196,6 +1209,7 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
+        // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
         if !certificate.contains_shared_object() {
             // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
@@ -1745,6 +1759,8 @@ impl AuthorityState {
         self.prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
     }
 
+    #[instrument(skip_all)]
+    #[allow(clippy::type_complexity)]
     pub async fn dry_exec_transaction(
         &self,
         transaction: TransactionData,
@@ -1961,6 +1977,7 @@ impl AuthorityState {
 
     /// The object ID for gas can be any object ID, even for an uncreated object
     #[allow(clippy::collapsible_else_if)]
+    #[instrument(skip_all)]
     pub async fn dev_inspect_transaction_block(
         &self,
         sender: SuiAddress,
@@ -5169,6 +5186,7 @@ impl RandomnessRoundReceiver {
 
 #[async_trait]
 impl TransactionKeyValueStoreTrait for AuthorityState {
+    #[instrument(skip(self))]
     async fn multi_get(
         &self,
         transactions: &[TransactionDigest],
@@ -5206,6 +5224,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         Ok((txns, fx, evts))
     }
 
+    #[instrument(skip(self))]
     async fn multi_get_checkpoints(
         &self,
         checkpoint_summaries: &[CheckpointSequenceNumber],
@@ -5258,6 +5277,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         Ok((summaries, contents, summaries_by_digest, contents_by_digest))
     }
 
+    #[instrument(skip(self))]
     async fn deprecated_get_transaction_checkpoint(
         &self,
         digest: TransactionDigest,
@@ -5267,6 +5287,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             .map(|res| res.map(|(_epoch, checkpoint)| checkpoint))
     }
 
+    #[instrument(skip(self))]
     async fn get_object(
         &self,
         object_id: ObjectID,
@@ -5277,6 +5298,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             .map_err(Into::into)
     }
 
+    #[instrument(skip(self))]
     async fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],

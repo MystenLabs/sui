@@ -1,5 +1,25 @@
 # @mysten/deepbook-v3
 
+## 0.8.5
+
+### Patch Changes
+
+- c0fb6d6: Patch ID and bug fix
+
+## 0.8.4
+
+### Patch Changes
+
+- 5df4e5e: Test Mainnet Packages
+
+## 0.8.3
+
+### Patch Changes
+
+- Updated dependencies [5436a90]
+- Updated dependencies [5436a90]
+  - @mysten/sui@1.12.0
+
 ## 0.8.2
 
 ### Patch Changes

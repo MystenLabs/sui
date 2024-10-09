@@ -24,6 +24,7 @@ pub struct RequestMetrics {
 /// Metrics relevant to the running of the service
 #[derive(Clone, Debug)]
 pub struct FaucetMetrics {
+    pub(crate) balance: IntGauge,
     pub(crate) current_executions_in_flight: IntGauge,
     pub(crate) total_available_coins: IntGauge,
     pub(crate) total_discarded_coins: IntGauge,
@@ -88,6 +89,11 @@ impl RequestMetrics {
 impl FaucetMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
+            balance: register_int_gauge_with_registry!(
+                "balance",
+                "Current balance of the all the available coins",
+                registry,
+            ).unwrap(),
             current_executions_in_flight: register_int_gauge_with_registry!(
                 "current_executions_in_flight",
                 "Current number of transactions being executed in Faucet",

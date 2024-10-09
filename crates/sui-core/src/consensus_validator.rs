@@ -91,7 +91,13 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
 
                 ConsensusTransactionKind::UserTransaction(_tx) => {
-                    // TODO: implement verification for uncertified user transactions if needed
+                    if !self.epoch_store.protocol_config().mysticeti_fastpath() {
+                        return Err(SuiError::UnexpectedMessage(
+                            "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
+                        )
+                        .into());
+                    }
+                    // TODO(fastpath): implement verification for uncertified user transactions.
                 }
             }
         }

@@ -1,19 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::fmt::Display;
+use std::{cmp::Ordering, fmt::Display};
 
-use consensus_core::{BlockAPI, CommitDigest};
+use consensus_core::{BlockAPI, CommitDigest, TransactionIndex, VerifiedBlock};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::{digests::ConsensusCommitDigest, messages_consensus::ConsensusTransaction};
+use sui_types::{
+    digests::ConsensusCommitDigest,
+    messages_consensus::{AuthorityIndex, ConsensusTransaction, Round},
+};
 
-use crate::consensus_types::AuthorityIndex;
+pub(crate) struct ParsedTransaction {
+    // Transaction from consensus output.
+    pub(crate) transaction: ConsensusTransaction,
+    // Whether the transaction was rejected in voting.
+    pub(crate) rejected: bool,
+    // Bytes length of the serialized transaction
+    pub(crate) serialized_len: usize,
+    // Consensus round of the block containing the transaction.
+    pub(crate) round: Round,
+    // Authority index of the block containing the transaction.
+    pub(crate) authority: AuthorityIndex,
+    // Transaction index in the block.
+    pub(crate) transaction_index: TransactionIndex,
+}
 
-/// A list of tuples of:
-/// (block origin authority index, all transactions contained in the block).
-/// For each transaction, returns deserialized transaction and its serialized size.
-type ConsensusOutputTransactions = Vec<(AuthorityIndex, Vec<(ConsensusTransaction, usize)>)>;
-
-pub(crate) trait ConsensusOutputAPI: Display {
+pub(crate) trait ConsensusCommitAPI: Display {
     fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>>;
     fn leader_round(&self) -> u64;
     fn leader_author_index(&self) -> AuthorityIndex;
@@ -24,14 +35,14 @@ pub(crate) trait ConsensusOutputAPI: Display {
     /// Returns a unique global index for each committed sub-dag.
     fn commit_sub_dag_index(&self) -> u64;
 
-    /// Returns all transactions in the commit.
-    fn transactions(&self) -> ConsensusOutputTransactions;
+    /// Returns all accepted and rejected transactions per block in the commit in deterministic order.
+    fn transactions(&self) -> Vec<(AuthorityIndex, Vec<ParsedTransaction>)>;
 
     /// Returns the digest of consensus output.
     fn consensus_digest(&self, protocol_config: &ProtocolConfig) -> ConsensusCommitDigest;
 }
 
-impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
+impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
     fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
         if !self.reputation_scores_desc.is_empty() {
             Some(
@@ -62,30 +73,15 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
         self.commit_ref.index.into()
     }
 
-    fn transactions(&self) -> ConsensusOutputTransactions {
+    fn transactions(&self) -> Vec<(AuthorityIndex, Vec<ParsedTransaction>)> {
         self.blocks
             .iter()
-            .map(|block| {
-                let round = block.round();
-                let author = block.author().value() as AuthorityIndex;
-                let transactions: Vec<_> = block
-                    .transactions()
-                    .iter()
-                    .flat_map(|tx| {
-                        let transaction = bcs::from_bytes::<ConsensusTransaction>(tx.data());
-                        match transaction {
-                            Ok(transaction) => Some((
-                                transaction,
-                                tx.data().len(),
-                            )),
-                            Err(err) => {
-                                tracing::error!("Failed to deserialize sequenced consensus transaction(this should not happen) {} from {author} at {round}", err);
-                                None
-                            },
-                        }
-                    })
-                    .collect();
-                (author, transactions)
+            .zip(self.rejected_transactions_by_block.iter())
+            .map(|(block, rejected_transactions)| {
+                (
+                    block.author().value() as AuthorityIndex,
+                    parse_block_transactions(block, rejected_transactions),
+                )
             })
             .collect()
     }
@@ -100,4 +96,50 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
             ConsensusCommitDigest::default()
         }
     }
+}
+
+pub(crate) fn parse_block_transactions(
+    block: &VerifiedBlock,
+    rejected_transactions: &[TransactionIndex],
+) -> Vec<ParsedTransaction> {
+    let round = block.round();
+    let authority = block.author().value() as AuthorityIndex;
+
+    let mut rejected_idx = 0;
+    block
+        .transactions()
+        .iter().enumerate()
+        .map(|(index, tx)| {
+            let transaction = match bcs::from_bytes::<ConsensusTransaction>(tx.data()) {
+                Ok(transaction) => transaction,
+                Err(err) => {
+                    panic!("Failed to deserialize sequenced consensus transaction(this should not happen) {err} from {authority} at {round}");
+                },
+            };
+            let rejected = if rejected_idx < rejected_transactions.len() {
+                match (index as TransactionIndex).cmp(&rejected_transactions[rejected_idx]) {
+                    Ordering::Less => {
+                        false
+                    },
+                    Ordering::Equal => {
+                        rejected_idx += 1;
+                        true
+                    },
+                    Ordering::Greater => {
+                        panic!("Rejected transaction indices are not in order. Block {block:?}, rejected transactions: {rejected_transactions:?}");
+                    },
+                }
+            } else {
+                false
+            };
+            ParsedTransaction {
+                transaction,
+                rejected,
+                serialized_len: tx.data().len(),
+                round,
+                authority,
+                transaction_index: index as TransactionIndex,
+            }
+        })
+        .collect()
 }

@@ -20,8 +20,10 @@ use sui_data_ingestion_core::Worker;
 use sui_storage::http_key_value_store::TaggedKey;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::storage::ObjectKey;
+use tracing::error;
 
 const TIMEOUT: Duration = Duration::from_secs(60);
+const DDB_SIZE_LIMIT: usize = 399000;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KVStoreTaskConfig {
@@ -93,15 +95,17 @@ impl KVStoreWorker {
                 continue;
             }
             seen.insert(digest.clone());
+            let bytes = bcs::to_bytes(value.borrow())?;
+            if bytes.len() > DDB_SIZE_LIMIT {
+                error!("large value for table {:?} and key {:?}", table, digest);
+                continue;
+            }
             let item = WriteRequest::builder()
                 .set_put_request(Some(
                     PutRequest::builder()
                         .item("digest", AttributeValue::B(Blob::new(digest)))
                         .item("type", AttributeValue::S(Self::type_name(table)))
-                        .item(
-                            "bcs",
-                            AttributeValue::B(Blob::new(bcs::to_bytes(value.borrow())?)),
-                        )
+                        .item("bcs", AttributeValue::B(Blob::new(bytes)))
                         .build(),
                 ))
                 .build();
@@ -172,6 +176,8 @@ impl KVStoreWorker {
 
 #[async_trait]
 impl Worker for KVStoreWorker {
+    type Result = ();
+
     async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()> {
         let mut transactions = vec![];
         let mut effects = vec![];

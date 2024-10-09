@@ -426,7 +426,7 @@ mod tests {
     use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
     use consensus_config::{local_committee_and_keys, Parameters};
-    use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
+    use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use prometheus::Registry;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
@@ -457,8 +457,7 @@ mod tests {
         let protocol_keypair = keypairs[own_index].1.clone();
         let network_keypair = keypairs[own_index].0.clone();
 
-        let (sender, _receiver) = unbounded_channel("consensus_output");
-        let commit_consumer = CommitConsumer::new(sender, 0);
+        let (commit_consumer, _, _) = CommitConsumer::new(0);
 
         let authority = ConsensusAuthority::start(
             network_type,
@@ -487,12 +486,16 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee(
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(0, 5, 10)] gc_depth: u32,
     ) {
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
 
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
+
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
             .map(|_| TempDir::new().unwrap())
             .collect::<Vec<_>>();
@@ -509,6 +512,7 @@ mod tests {
                 keypairs.clone(),
                 network_type,
                 boot_counters[index],
+                protocol_config.clone(),
             )
             .await;
             boot_counters[index] += 1;
@@ -565,6 +569,7 @@ mod tests {
             keypairs.clone(),
             network_type,
             boot_counters[index],
+            protocol_config.clone(),
         )
         .await;
         boot_counters[index] += 1;
@@ -582,6 +587,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn test_amnesia_recovery_success(
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(0, 5, 10)] gc_depth: u32,
     ) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
@@ -594,6 +600,9 @@ mod tests {
         let mut temp_dirs = BTreeMap::new();
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
+
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
             let (authority, receiver) = make_authority(
@@ -603,6 +612,7 @@ mod tests {
                 keypairs.clone(),
                 network_type,
                 boot_counters[index],
+                protocol_config.clone(),
             )
             .await;
             assert!(authority.sync_last_known_own_block_enabled(), "Expected syncing of last known own block to be enabled as all authorities are of empty db and boot for first time.");
@@ -651,6 +661,7 @@ mod tests {
             keypairs.clone(),
             network_type,
             boot_counters[index_1],
+            protocol_config.clone(),
         )
         .await;
         assert!(
@@ -671,6 +682,7 @@ mod tests {
             keypairs,
             network_type,
             boot_counters[index_2],
+            protocol_config.clone(),
         )
         .await;
         assert!(
@@ -704,6 +716,7 @@ mod tests {
         keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
         network_type: ConsensusNetwork,
         boot_counter: u64,
+        protocol_config: ProtocolConfig,
     ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
         let registry = Registry::new();
 
@@ -721,15 +734,14 @@ mod tests {
         let protocol_keypair = keypairs[index].1.clone();
         let network_keypair = keypairs[index].0.clone();
 
-        let (sender, receiver) = unbounded_channel("consensus_output");
-        let commit_consumer = CommitConsumer::new(sender, 0);
+        let (commit_consumer, commit_receiver, _) = CommitConsumer::new(0);
 
         let authority = ConsensusAuthority::start(
             network_type,
             index,
             committee,
             parameters,
-            ProtocolConfig::get_for_max_version_UNSAFE(),
+            protocol_config,
             protocol_keypair,
             network_keypair,
             Arc::new(txn_verifier),
@@ -739,6 +751,6 @@ mod tests {
         )
         .await;
 
-        (authority, receiver)
+        (authority, commit_receiver)
     }
 }

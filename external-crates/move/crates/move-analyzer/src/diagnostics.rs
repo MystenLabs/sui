@@ -22,12 +22,12 @@ pub fn lsp_diagnostics(
     files: &MappedFiles,
 ) -> BTreeMap<PathBuf, Vec<Diagnostic>> {
     let mut lsp_diagnostics = BTreeMap::new();
-    for (s, _, (loc, msg), labels, _) in diagnostics {
+    for (s, _, (loc, msg), labels, notes) in diagnostics {
         let fpath = files.file_path(&loc.file_hash());
         if let Some(start) = loc_start_to_lsp_position_opt(files, loc) {
             if let Some(end) = loc_end_to_lsp_position_opt(files, loc) {
                 let range = Range::new(start, end);
-                let related_info_opt = if labels.is_empty() {
+                let related_info_opt = if labels.is_empty() && notes.is_empty() {
                     None
                 } else {
                     Some(
@@ -46,6 +46,16 @@ pub fn lsp_diagnostics(
                                     message: lmsg.to_string(),
                                 })
                             })
+                            .chain(notes.iter().map(|note| {
+                                // for notes use the same location as for the main message
+                                let fpath = files.file_path(&loc.file_hash());
+                                let fpos =
+                                    Location::new(Url::from_file_path(fpath).unwrap(), range);
+                                DiagnosticRelatedInformation {
+                                    location: fpos,
+                                    message: format!("Note: {note}"),
+                                }
+                            }))
                             .collect(),
                     )
                 };

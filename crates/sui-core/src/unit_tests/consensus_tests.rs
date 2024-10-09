@@ -12,9 +12,10 @@ use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
-use sui_types::crypto::deterministic_random_account_key;
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::multiaddr::Multiaddr;
-use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
+use sui_types::transaction::{VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
@@ -103,6 +104,70 @@ pub async fn test_certificates(
         certificates.push(certificate);
     }
     certificates
+}
+
+/// Fixture: creates a transaction using the specified gas and input objects.
+pub async fn test_user_transaction(
+    authority: &AuthorityState,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+    gas_object: Object,
+    input_objects: Vec<Object>,
+) -> VerifiedTransaction {
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let rgp = epoch_store.reference_gas_price();
+
+    // Object digest may be different in genesis than originally generated.
+    let gas_object = authority
+        .get_object(&gas_object.id())
+        .await
+        .unwrap()
+        .unwrap();
+    let mut input_objs = vec![];
+    for obj in input_objects {
+        input_objs.push(authority.get_object(&obj.id()).await.unwrap().unwrap());
+    }
+
+    let mut object_args: Vec<_> = input_objs
+        .into_iter()
+        .map(|obj| {
+            if obj.is_shared() {
+                ObjectArg::SharedObject {
+                    id: obj.id(),
+                    initial_shared_version: obj.version(),
+                    mutable: true,
+                }
+            } else {
+                ObjectArg::ImmOrOwnedObject(obj.compute_object_reference())
+            }
+        })
+        .map(CallArg::Object)
+        .collect();
+    object_args.extend(vec![
+        CallArg::Pure(16u64.to_le_bytes().to_vec()),
+        CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
+    ]);
+
+    // Make a sample transaction.
+    let module = "object_basics";
+    let function = "create";
+
+    let data = TransactionData::new_move_call(
+        sender,
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!(module).to_owned(),
+        ident_str!(function).to_owned(),
+        /* type_args */ vec![],
+        gas_object.compute_object_reference(),
+        object_args,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+        rgp,
+    )
+    .unwrap();
+
+    epoch_store
+        .verify_transaction(to_sender_signed_transaction(data, keypair))
+        .unwrap()
 }
 
 pub fn make_consensus_adapter_for_test(

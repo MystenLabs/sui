@@ -6,8 +6,7 @@
 mod upgrade_compatibility_tests;
 
 use anyhow::{anyhow, Context, Error};
-use std::collections::{BTreeSet, HashMap};
-use thiserror::Error;
+use std::collections::HashMap;
 
 use move_binary_format::{
     compatibility::Compatibility,
@@ -19,7 +18,6 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
-    language_storage::ModuleId,
 };
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_protocol_config::ProtocolConfig;
@@ -83,10 +81,6 @@ pub(crate) enum UpgradeCompatibilityModeError {
         name: Identifier,
         old_function: Function,
     },
-    FunctionMissingFriend {
-        name: Identifier,
-        old_function: Function,
-    },
     FunctionMissingEntry {
         name: Identifier,
         old_function: Function,
@@ -100,16 +94,11 @@ pub(crate) enum UpgradeCompatibilityModeError {
         name: Identifier,
         old_function: Function,
     },
-    FunctionLostFriendVisibility {
-        name: Identifier,
-        old_function: Function,
-    },
     FunctionEntryCompatibility {
         name: Identifier,
         old_function: Function,
         new_function: Function,
     },
-    FriendModuleMissing(BTreeSet<ModuleId>, BTreeSet<ModuleId>),
 }
 
 impl UpgradeCompatibilityModeError {
@@ -120,9 +109,7 @@ impl UpgradeCompatibilityModeError {
             | UpgradeCompatibilityModeError::EnumAbilityMismatch { .. }
             | UpgradeCompatibilityModeError::EnumTypeParamMismatch { .. }
             | UpgradeCompatibilityModeError::FunctionMissingPublic { .. }
-            | UpgradeCompatibilityModeError::FunctionLostPublicVisibility { .. } => {
-                compatability.check_datatype_and_pub_function_linking
-            }
+            | UpgradeCompatibilityModeError::FunctionLostPublicVisibility { .. } => true,
 
             UpgradeCompatibilityModeError::StructFieldMismatch { .. }
             | UpgradeCompatibilityModeError::EnumVariantMissing { .. }
@@ -131,16 +118,11 @@ impl UpgradeCompatibilityModeError {
             }
 
             UpgradeCompatibilityModeError::StructMissing { .. }
-            | UpgradeCompatibilityModeError::EnumMissing { .. } => {
-                compatability.check_datatype_and_pub_function_linking
-                    || compatability.check_datatype_layout
-            }
+            | UpgradeCompatibilityModeError::EnumMissing { .. } => true,
 
             UpgradeCompatibilityModeError::FunctionSignatureMismatch { old_function, .. } => {
                 if old_function.visibility == Visibility::Public {
-                    return compatability.check_datatype_and_pub_function_linking;
-                } else if old_function.visibility == Visibility::Friend {
-                    return compatability.check_friend_linking;
+                    return true;
                 }
                 if old_function.is_entry {
                     compatability.check_private_entry_linking
@@ -149,18 +131,12 @@ impl UpgradeCompatibilityModeError {
                 }
             }
 
-            UpgradeCompatibilityModeError::FunctionMissingFriend { .. }
-            | UpgradeCompatibilityModeError::FunctionLostFriendVisibility { .. }
-            | UpgradeCompatibilityModeError::FriendModuleMissing(_, _) => {
-                compatability.check_friend_linking
-            }
-
             UpgradeCompatibilityModeError::FunctionMissingEntry { .. }
             | UpgradeCompatibilityModeError::FunctionEntryCompatibility { .. } => {
                 compatability.check_private_entry_linking
             }
             UpgradeCompatibilityModeError::EnumNewVariant { .. } => {
-                compatability.disallow_new_variants
+                compatability.check_datatype_layout
             }
         }
     }
@@ -302,14 +278,6 @@ impl CompatibilityMode for CliCompatibilityMode {
             });
     }
 
-    fn function_missing_friend(&mut self, name: &Identifier, old_function: &Function) {
-        self.errors
-            .push(UpgradeCompatibilityModeError::FunctionMissingFriend {
-                name: name.clone(),
-                old_function: old_function.clone(),
-            });
-    }
-
     fn function_missing_entry(&mut self, name: &Identifier, old_function: &Function) {
         self.errors
             .push(UpgradeCompatibilityModeError::FunctionMissingEntry {
@@ -341,15 +309,6 @@ impl CompatibilityMode for CliCompatibilityMode {
         );
     }
 
-    fn function_lost_friend_visibility(&mut self, name: &Identifier, old_function: &Function) {
-        self.errors.push(
-            UpgradeCompatibilityModeError::FunctionLostFriendVisibility {
-                name: name.clone(),
-                old_function: old_function.clone(),
-            },
-        );
-    }
-
     fn function_entry_compatibility(
         &mut self,
         name: &Identifier,
@@ -362,18 +321,6 @@ impl CompatibilityMode for CliCompatibilityMode {
                 old_function: old_function.clone(),
                 new_function: new_function.clone(),
             });
-    }
-
-    fn friend_module_missing(
-        &mut self,
-        old_modules: BTreeSet<ModuleId>,
-        new_modules: BTreeSet<ModuleId>,
-    ) {
-        self.errors
-            .push(UpgradeCompatibilityModeError::FriendModuleMissing(
-                old_modules.clone(),
-                new_modules.clone(),
-            ));
     }
 
     fn finish(&self, compatability: &Compatibility) -> Result<(), Self::Error> {

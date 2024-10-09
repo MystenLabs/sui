@@ -18,7 +18,9 @@ use sui_types::gas_coin::GAS;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
 use sui_types::transaction::InputObjectKind;
+use tracing::instrument;
 
+#[instrument(skip_all, fields(transaction_digest = %effects.transaction_digest()))]
 pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     effects: &TransactionEffects,
@@ -80,6 +82,7 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     .await
 }
 
+#[instrument(skip_all)]
 pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     modified_at_version: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
@@ -120,6 +123,7 @@ pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
         .collect())
 }
 
+#[instrument(skip_all)]
 async fn fetch_coins<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     objects: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],

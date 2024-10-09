@@ -1200,6 +1200,35 @@ type Epoch {
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
+type EpochConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EpochEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Epoch!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EpochEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Epoch!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type Event {
 	"""
 	The Move module containing some function that when called by
@@ -1218,32 +1247,13 @@ type Event {
 	"""
 	timestamp: DateTime
 	"""
-	The value's Move type.
+	The event's contents as a Move value.
 	"""
-	type: MoveType!
+	contents: MoveValue!
 	"""
-	The BCS representation of this value, Base64 encoded.
+	The Base64 encoded BCS serialized bytes of the event.
 	"""
 	bcs: Base64!
-	"""
-	Structured contents of a Move value.
-	"""
-	data: MoveData!
-	"""
-	Representation of a Move value in JSON, where:
-	
-	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
-	- Bools are represented by JSON boolean literals.
-	- u8, u16, and u32 are represented as JSON numbers.
-	- u64, u128, and u256 are represented as JSON strings.
-	- Vectors are represented by JSON arrays.
-	- Structs are represented by JSON objects.
-	- Empty optional values are represented by `null`.
-	
-	This form is offered as a less verbose convenience in cases where the layout of the type is
-	known by the client.
-	"""
-	json: JSON!
 }
 
 type EventConnection {
@@ -3306,6 +3316,7 @@ type Query {
 	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
+	epochs(first: Int, after: String, last: Int, before: String): EpochConnection!
 	"""
 	The checkpoints that exist in the network.
 	"""

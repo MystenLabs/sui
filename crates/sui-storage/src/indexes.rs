@@ -32,7 +32,7 @@ use sui_types::inner_temporary_store::TxCoins;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 use tokio::task::spawn_blocking;
-use tracing::{debug, trace};
+use tracing::{debug, instrument, trace};
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf,
 };
@@ -316,6 +316,7 @@ impl IndexStore {
         &self.tables
     }
 
+    #[instrument(skip_all)]
     pub async fn index_coin(
         &self,
         digest: &TransactionDigest,
@@ -455,6 +456,7 @@ impl IndexStore {
         Ok(cache_updates)
     }
 
+    #[instrument(skip_all)]
     pub async fn index_tx(
         &self,
         sender: SuiAddress,
@@ -644,6 +646,7 @@ impl IndexStore {
         self.next_sequence_number.load(Ordering::SeqCst) + 1
     }
 
+    #[instrument(skip(self))]
     pub fn get_transactions(
         &self,
         filter: Option<TransactionFilter>,
@@ -714,6 +717,7 @@ impl IndexStore {
         }
     }
 
+    #[instrument(skip_all)]
     fn get_transactions_from_index<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
         index: &DBMap<(KeyT, TxSequenceNumber), TransactionDigest>,
         key: KeyT,
@@ -751,6 +755,7 @@ impl IndexStore {
         })
     }
 
+    #[instrument(skip(self))]
     pub fn get_transactions_by_input_object(
         &self,
         input_object: ObjectID,
@@ -771,6 +776,7 @@ impl IndexStore {
         )
     }
 
+    #[instrument(skip(self))]
     pub fn get_transactions_by_mutated_object(
         &self,
         mutated_object: ObjectID,
@@ -791,6 +797,7 @@ impl IndexStore {
         )
     }
 
+    #[instrument(skip(self))]
     pub fn get_transactions_from_addr(
         &self,
         addr: SuiAddress,
@@ -807,6 +814,7 @@ impl IndexStore {
         )
     }
 
+    #[instrument(skip(self))]
     pub fn get_transactions_by_move_function(
         &self,
         package: ObjectID,
@@ -890,6 +898,7 @@ impl IndexStore {
         })
     }
 
+    #[instrument(skip(self))]
     pub fn get_transactions_to_addr(
         &self,
         addr: SuiAddress,
@@ -906,6 +915,7 @@ impl IndexStore {
         )
     }
 
+    #[instrument(skip(self))]
     pub fn get_transaction_seq(
         &self,
         digest: &TransactionDigest,
@@ -913,6 +923,7 @@ impl IndexStore {
         Ok(self.tables.transactions_seq.get(digest)?)
     }
 
+    #[instrument(skip(self))]
     pub fn all_events(
         &self,
         tx_seq: TxSequenceNumber,
@@ -944,6 +955,7 @@ impl IndexStore {
         })
     }
 
+    #[instrument(skip(self))]
     pub fn events_by_transaction(
         &self,
         digest: &TransactionDigest,
@@ -981,6 +993,7 @@ impl IndexStore {
         })
     }
 
+    #[instrument(skip_all)]
     fn get_event_from_index<KeyT: Clone + PartialEq + Serialize + DeserializeOwned>(
         index: &DBMap<(KeyT, EventId), (TransactionEventsDigest, TransactionDigest, u64)>,
         key: &KeyT,
@@ -1013,6 +1026,7 @@ impl IndexStore {
         })
     }
 
+    #[instrument(skip(self))]
     pub fn events_by_module_id(
         &self,
         module: &ModuleId,
@@ -1031,6 +1045,7 @@ impl IndexStore {
         )
     }
 
+    #[instrument(skip(self))]
     pub fn events_by_move_event_struct_name(
         &self,
         struct_name: &StructTag,
@@ -1049,6 +1064,7 @@ impl IndexStore {
         )
     }
 
+    #[instrument(skip(self))]
     pub fn events_by_move_event_module(
         &self,
         module_id: &ModuleId,
@@ -1067,6 +1083,7 @@ impl IndexStore {
         )
     }
 
+    #[instrument(skip(self))]
     pub fn events_by_sender(
         &self,
         sender: &SuiAddress,
@@ -1085,6 +1102,7 @@ impl IndexStore {
         )
     }
 
+    #[instrument(skip(self))]
     pub fn event_iterator(
         &self,
         start_time: u64,
@@ -1141,6 +1159,7 @@ impl IndexStore {
             .map_ok(|((_, c), object_info)| (c, object_info)))
     }
 
+    #[instrument(skip(self))]
     pub fn get_dynamic_field_object_id(
         &self,
         object: ObjectID,
@@ -1193,6 +1212,7 @@ impl IndexStore {
         Ok(None)
     }
 
+    #[instrument(skip(self))]
     pub fn get_owner_objects(
         &self,
         owner: SuiAddress,
@@ -1319,6 +1339,7 @@ impl IndexStore {
     /// gets the balance for passed in `coin_type` from the `all_balance` cache. Only on the second
     /// cache miss, we go to the database (expensive) and update the cache. Notice that db read is
     /// done with `spawn_blocking` as that is expected to block
+    #[instrument(skip(self))]
     pub async fn get_balance(
         &self,
         owner: SuiAddress,
@@ -1389,6 +1410,7 @@ impl IndexStore {
     /// sense that it not only serves `get_AllBalance()` calls but is also used for serving
     /// `get_Balance()` queries. Notice that db read is performed with `spawn_blocking` as that is
     /// expected to block
+    #[instrument(skip(self))]
     pub async fn get_all_balance(
         &self,
         owner: SuiAddress,
@@ -1426,6 +1448,7 @@ impl IndexStore {
     }
 
     /// Read balance for a `SuiAddress` and `CoinType` from the backend database
+    #[instrument(skip_all)]
     pub fn get_balance_from_db(
         metrics: Arc<IndexStoreMetrics>,
         coin_index: DBMap<CoinIndexKey, CoinInfo>,
@@ -1448,6 +1471,7 @@ impl IndexStore {
     }
 
     /// Read all balances for a `SuiAddress` from the backend database
+    #[instrument(skip_all)]
     pub fn get_all_balances_from_db(
         metrics: Arc<IndexStoreMetrics>,
         coin_index: DBMap<CoinIndexKey, CoinInfo>,

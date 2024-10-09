@@ -198,6 +198,7 @@ impl ReadApi {
         Ok(checkpoints)
     }
 
+    #[instrument(skip_all)]
     async fn multi_get_transaction_blocks_internal(
         &self,
         digests: Vec<TransactionDigest>,
@@ -474,6 +475,7 @@ impl ReadApi {
 
                 results.push(get_object_changes(
                     &object_cache,
+                    effects,
                     resp.transaction
                         .as_ref()
                         .ok_or_else(|| {
@@ -891,6 +893,7 @@ impl ReadApiServer for ReadApi {
                     let sender = input.data().intent_message().value.sender();
                     let object_changes = get_object_changes(
                         &object_cache,
+                        effects,
                         sender,
                         effects.modified_at_versions(),
                         effects.all_changed_objects(),
@@ -1106,6 +1109,7 @@ impl SuiRpcModule for ReadApi {
     }
 }
 
+#[instrument(skip_all)]
 fn to_sui_transaction_events(
     fullnode_api: &ReadApi,
     tx_digest: TransactionDigest,
@@ -1145,6 +1149,7 @@ pub enum ObjectDisplayError {
     StateReadError(#[from] StateReadError),
 }
 
+#[instrument(skip(fullnode_api, kv_store))]
 async fn get_display_fields(
     fullnode_api: &ReadApi,
     kv_store: &Arc<TransactionKeyValueStore>,
@@ -1169,6 +1174,7 @@ async fn get_display_fields(
     })
 }
 
+#[instrument(skip(kv_store, fullnode_api))]
 async fn get_display_object_by_type(
     kv_store: &Arc<TransactionKeyValueStore>,
     fullnode_api: &ReadApi,
@@ -1362,6 +1368,7 @@ fn get_value_from_move_struct(
     }
 }
 
+#[instrument(skip_all)]
 fn convert_to_response(
     cache: IntermediateTransactionResponse,
     opts: &SuiTransactionBlockResponseOptions,

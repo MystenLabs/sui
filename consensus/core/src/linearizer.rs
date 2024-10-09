@@ -107,6 +107,10 @@ impl Linearizer {
         // Sort the blocks of the sub-dag blocks
         sort_sub_dag_blocks(&mut to_commit);
 
+        // TODO(fastpath): determine rejected transactions from voting.
+        // Get rejected transactions.
+        let rejected_transactions = vec![vec![]; to_commit.len()];
+
         // Create the Commit.
         let commit = Commit::new(
             last_commit_index + 1,
@@ -127,6 +131,7 @@ impl Linearizer {
         let sub_dag = CommittedSubDag::new(
             leader_block_ref,
             to_commit,
+            rejected_transactions,
             timestamp_ms,
             commit.reference(),
             reputation_scores_desc,

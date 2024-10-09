@@ -199,10 +199,7 @@ fn test_enum_upgrade_add_variant_at_front() {
         }
         ",
     );
-    let mut compat = Compatibility::default();
-    assert!(compat.disallow_new_variants);
-    assert!(compat.check(&old, &new).is_err());
-    compat.disallow_new_variants = false;
+    let compat = Compatibility::default();
     assert!(compat.check(&old, &new).is_err());
     assert!(InclusionCheck::Equal.check(&old, &new).is_err());
     assert!(InclusionCheck::Subset.check(&old, &new).is_err());
@@ -226,12 +223,9 @@ fn test_enum_upgrade_add_variant_at_end() {
         }
         ",
     );
-    let mut compat = Compatibility::default();
-    assert!(compat.disallow_new_variants);
+    let compat = Compatibility::default();
     assert!(compat.check(&old, &new).is_err());
     // Allow adding new variants at the end of the enum
-    compat.disallow_new_variants = false;
-    assert!(compat.check(&old, &new).is_ok());
     assert!(InclusionCheck::Equal.check(&old, &new).is_err());
     // NOTE: We currently restrict all enums (even in subset mode) so that new enum variants are not
     // allowed. This assertion will fail when we allow new enum variants in subset mode and should

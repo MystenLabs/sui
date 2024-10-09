@@ -48,7 +48,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -61,7 +63,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -76,7 +80,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -89,7 +95,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -101,7 +109,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -114,7 +124,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -127,7 +139,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -142,7 +156,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -155,7 +171,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -167,6 +185,9 @@ module Test::M1 {
         edges {
             cursor
             node {
+                contents {
+                    json
+                }
                 json
             }
         }
@@ -180,7 +201,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -193,7 +216,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -206,7 +231,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }
@@ -219,7 +246,9 @@ module Test::M1 {
         edges {
             cursor
             node {
-                json
+                contents {
+                    json
+                }
             }
         }
     }

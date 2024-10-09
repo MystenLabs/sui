@@ -44,7 +44,7 @@ query getObject(
 
 query tryGetPastObject(
 	$id: SuiAddress!
-	$version: Int
+	$version: UInt53
 	$showBcs: Boolean = false
 	$showOwner: Boolean = false
 	$showPreviousTransaction: Boolean = false
