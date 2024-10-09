@@ -17,7 +17,6 @@ pub type AsyncResult<'a, T, E> = BoxFuture<'a, Result<T, E>>;
 
 pub enum ReduceOutput<R, S> {
     Continue(S),
-    ContinueWithTimeout(S, Duration),
     Failed(S),
     Success(R),
 }
@@ -66,7 +65,7 @@ where
         })
         .collect();
 
-    let mut current_timeout = initial_timeout;
+    let current_timeout = initial_timeout;
     let mut accumulated_state = initial_state;
     // Then, as results become available fold them into the state using FReduce.
     while let Ok(Some((authority_name, result))) = timeout(current_timeout, responses.next()).await
@@ -76,11 +75,6 @@ where
             match reduce_result(accumulated_state, authority_name, authority_weight, result).await {
                 // In the first two cases we are told to continue the iteration.
                 ReduceOutput::Continue(state) => state,
-                ReduceOutput::ContinueWithTimeout(state, duration) => {
-                    // Adjust the waiting timeout.
-                    current_timeout = duration;
-                    state
-                }
                 ReduceOutput::Failed(state) => {
                     return Err(state);
                 }
@@ -104,8 +98,7 @@ where
 ///
 /// FReduce returns a result to a ReduceOutput. If the result is Err the function
 /// shortcuts and the Err is returned. An Ok ReduceOutput result can be used to shortcut and return
-/// the resulting state (ReduceOutput::End), continue the folding as new states arrive (ReduceOutput::Continue),
-/// or continue with a timeout maximum waiting time (ReduceOutput::ContinueWithTimeout).
+/// the resulting state (ReduceOutput::End), continue the folding as new states arrive (ReduceOutput::Continue).
 ///
 /// This function provides a flexible way to communicate with a quorum of authorities, processing and
 /// processing their results into a safe overall result, and also safely allowing operations to continue
