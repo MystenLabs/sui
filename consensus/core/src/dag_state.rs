@@ -865,9 +865,12 @@ impl DagState {
         metrics
             .dag_state_recent_blocks
             .set(self.recent_blocks.len() as i64);
-        metrics
-            .dag_state_recent_refs
-            .set(self.recent_refs_by_authority.iter().map(BTreeSet::len).sum::<usize>() as i64);
+        metrics.dag_state_recent_refs.set(
+            self.recent_refs_by_authority
+                .iter()
+                .map(BTreeSet::len)
+                .sum::<usize>() as i64,
+        );
     }
 
     /// Detects and returns the blocks of the round that forms the last quorum. The method will return
