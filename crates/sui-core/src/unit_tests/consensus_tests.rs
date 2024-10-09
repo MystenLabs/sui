@@ -7,21 +7,27 @@ use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
+use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use sui_network::tonic;
-use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
+use sui_types::gas::GasCostSummary;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
+};
 use sui_types::multiaddr::Multiaddr;
-use sui_types::transaction::{VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS};
-use sui_types::utils::to_sender_signed_transaction;
+use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
+use sui_types::utils::{make_committee_key, to_sender_signed_transaction};
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ExecutionDigests, ObjectID, SuiAddress},
     object::Object,
-    transaction::{CallArg, CertifiedTransaction, ObjectArg, TransactionData},
+    transaction::{CallArg, CertifiedTransaction, ObjectArg, TransactionData, VerifiedTransaction},
 };
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -220,6 +226,11 @@ pub fn make_consensus_adapter_for_test(
                                 .await?,
                         );
                     }
+                } else if let SequencedConsensusTransactionKey::External(
+                    ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number),
+                ) = tx.transaction.key()
+                {
+                    epoch_store.notify_synced_checkpoint(checkpoint_sequence_number);
                 } else {
                     transactions.extend(
                         epoch_store
@@ -329,6 +340,58 @@ async fn submit_multiple_transactions_to_consensus_adapter() {
         .into_iter()
         .map(|certificate| ConsensusTransaction::new_certificate_message(&state.name, certificate))
         .collect::<Vec<_>>();
+
+    let waiter = adapter
+        .submit_batch(
+            &transactions,
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
+        )
+        .unwrap();
+    waiter.await.unwrap();
+}
+
+#[tokio::test]
+async fn submit_checkpoint_signature_to_consensus_adapter() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut rng = StdRng::seed_from_u64(1_100);
+    let (keys, committee) = make_committee_key(&mut rng);
+
+    // Initialize an authority
+    let state = init_state_with_objects(vec![]).await;
+    let epoch_store = state.epoch_store_for_testing();
+
+    // Make a new consensus adapter instance.
+    let adapter = make_consensus_adapter_for_test(state, HashSet::new(), false);
+
+    let checkpoint_summary = CheckpointSummary::new(
+        &ProtocolConfig::get_for_max_version_UNSAFE(),
+        1,
+        2,
+        10,
+        &CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]),
+        None,
+        GasCostSummary::default(),
+        None,
+        100,
+        Vec::new(),
+    );
+
+    let authority_key = &keys[0];
+    let authority = authority_key.public().into();
+    let signed_checkpoint_summary = SignedCheckpointSummary::new(
+        committee.epoch,
+        checkpoint_summary,
+        authority_key,
+        authority,
+    );
+
+    let transactions = vec![ConsensusTransaction::new_checkpoint_signature_message(
+        CheckpointSignatureMessage {
+            summary: signed_checkpoint_summary,
+        },
+    )];
     let waiter = adapter
         .submit_batch(
             &transactions,
