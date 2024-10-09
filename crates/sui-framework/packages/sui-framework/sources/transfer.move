@@ -125,6 +125,11 @@ module sui::transfer {
         receiving.id
     }
 
+    use std::type_name;
+    use std::ascii;
+    use prover::prover::{requires, ensures};
+    use prover::ghost;
+
     public(package) native fun freeze_object_impl<T: key>(obj: T);
     fun freeze_object_impl_spec<T: key>(obj: T) {
         freeze_object_impl(obj)
@@ -136,8 +141,17 @@ module sui::transfer {
     }
 
     public(package) native fun transfer_impl<T: key>(obj: T, recipient: address);
+    public struct SpecTransferAddress {}
+    public struct SpecTransferAddressExists {}
     fun transfer_impl_spec<T: key>(obj: T, recipient: address) {
-        transfer_impl(obj, recipient)
+        ghost::declare_global_mut<SpecTransferAddress, address>();
+        ghost::declare_global_mut<SpecTransferAddressExists, bool>();
+        // requires(ghost::global<SpecTransferAddressExists, bool>() == false);
+        let coin_type_prefix = ascii::string(b"sui::Coin");
+        requires(type_name::get<T>().borrow_string().substring(0, coin_type_prefix.length()) != coin_type_prefix);
+        transfer_impl(obj, recipient);
+        ensures(ghost::global<SpecTransferAddressExists, bool>() == true);
+        ensures(ghost::global<SpecTransferAddress, address>() == recipient);
     }
 
     native fun receive_impl<T: key>(parent: address, to_receive: ID, version: u64): T;
