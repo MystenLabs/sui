@@ -3,6 +3,7 @@
 
 pub mod ingestion_backfill_task;
 pub mod raw_checkpoints;
+pub(crate) mod tx_affected_objects;
 
 use crate::database::ConnectionPool;
 use sui_types::full_checkpoint_content::CheckpointData;
