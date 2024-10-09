@@ -1632,36 +1632,27 @@ impl IndexerStore for PgIndexerStore {
         let mutation_futures = object_mutation_chunks
             .into_iter()
             .map(|c| self.persist_object_mutation_chunk(c))
-            .collect::<Vec<_>>();
-        futures::future::join_all(mutation_futures)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                IndexerError::PostgresWriteError(format!(
-                    "Failed to persist all object mutation chunks: {:?}",
-                    e
-                ))
-            })?;
+            .map(Either::Left);
         let deletion_futures = object_deletion_chunks
             .into_iter()
             .map(|c| self.persist_object_deletion_chunk(c))
-            .collect::<Vec<_>>();
-        futures::future::join_all(deletion_futures)
+            .map(Either::Right);
+        let all_futures = mutation_futures.chain(deletion_futures).collect::<Vec<_>>();
+
+        futures::future::join_all(all_futures)
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed to persist all object deletion chunks: {:?}",
+                    "Failed to persist all object mutation or deletion chunks: {:?}",
                     e
                 ))
             })?;
-
         let elapsed = guard.stop_and_record();
         info!(
             elapsed,
-            "Persisted objects with {} mutations and {} deletions ", mutation_len, deletion_len,
+            "Persisted {} objects mutations and {} deletions", mutation_len, deletion_len
         );
         Ok(())
     }
