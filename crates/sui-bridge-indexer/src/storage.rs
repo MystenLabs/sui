@@ -4,15 +4,16 @@
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use diesel::dsl::now;
-use diesel::query_dsl::methods::FilterDsl;
 use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, TextExpressionMethods};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
+use std::ops::Range;
 
-use crate::postgres_manager::PgPool;
+use crate::models::TokenTransferData;
+use crate::postgres_manager::{get_connection_pool, PgPool};
 use crate::schema::progress_store::{columns, dsl};
 use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
 use crate::{models, schema, ProcessedTxnData};
@@ -20,6 +21,7 @@ use sui_indexer_builder::indexer_builder::{IndexerProgressStore, Persistent};
 use sui_indexer_builder::{
     progress::ProgressSavingPolicy, Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT,
 };
+use sui_types::bridge::BridgeChainId;
 
 /// Persistent layer impl
 #[derive(Clone)]
@@ -40,6 +42,7 @@ impl PgBridgePersistent {
 #[async_trait]
 impl Persistent<ProcessedTxnData> for PgBridgePersistent {
     async fn write(&self, data: Vec<ProcessedTxnData>) -> Result<(), Error> {
+        use diesel::query_dsl::methods::FilterDsl;
         if data.is_empty() {
             return Ok(());
         }
@@ -202,7 +205,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         let cp: Vec<models::ProgressStore> =
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
             QueryDsl::filter(
-                QueryDsl::filter(dsl::progress_store, columns::task_name.like(format!("{prefix} - %"))), 
+                QueryDsl::filter(dsl::progress_store, columns::task_name.like(format!("{prefix} - %"))),
                 columns::checkpoint.lt(columns::target_checkpoint))
             .order_by(columns::target_checkpoint.desc())
             .load(&mut conn)
@@ -219,7 +222,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         let cp: Option<i64> =
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
             QueryDsl::filter(QueryDsl::filter(dsl::progress_store
-                .select(columns::target_checkpoint), columns::task_name.like(format!("{prefix} - %"))), 
+                .select(columns::target_checkpoint), columns::task_name.like(format!("{prefix} - %"))),
                 columns::target_checkpoint.ne(i64::MAX))
             .order_by(columns::target_checkpoint.desc())
             .first::<i64>(&mut conn)
@@ -285,4 +288,68 @@ impl IndexerProgressStore for PgBridgePersistent {
         .await?;
         Ok(())
     }
+}
+
+#[derive(Clone)]
+pub struct PgBridgeReader {
+    pool: PgPool,
+}
+
+impl PgBridgeReader {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    pub async fn get_token_transfer(
+        &self,
+        bridge_chain: BridgeChainId,
+        transfer_nonce: u64,
+    ) -> Result<TokenTransferData, anyhow::Error> {
+        use schema::token_transfer_data::columns::*;
+        use schema::token_transfer_data::dsl;
+        let mut conn = self.pool.get().await?;
+        // get all unfinished tasks
+        Ok(dsl::token_transfer_data
+            .filter(chain_id.eq(bridge_chain as i32))
+            .filter(nonce.eq(transfer_nonce as i64))
+            .first(&mut conn)
+            .await?)
+    }
+
+    pub async fn get_token_transfers(
+        &self,
+        chain: BridgeChainId,
+        range: Range<i64>,
+    ) -> Result<Vec<TokenTransferData>, anyhow::Error> {
+        use schema::token_transfer_data::columns::*;
+        use schema::token_transfer_data::dsl;
+        let mut conn = self.pool.get().await?;
+        // get all unfinished tasks
+        Ok(dsl::token_transfer_data
+            .filter(chain_id.eq(chain as i32))
+            .filter(block_height.between(range.start, range.end))
+            .load(&mut conn)
+            .await?)
+    }
+}
+
+#[tokio::test]
+async fn reader_test() {
+    let db_url = "postgres://postgres:postgrespw@localhost:5432";
+    let pool = get_connection_pool(db_url.to_string()).await;
+    let reader = PgBridgeReader::new(pool);
+
+    let r = reader
+        .get_token_transfers(BridgeChainId::SuiMainnet, 61957462..61957464)
+        .await
+        .unwrap();
+
+    println!("{r:?}");
+
+    let r = reader
+        .get_token_transfer(BridgeChainId::EthMainnet, 1)
+        .await
+        .unwrap();
+
+    println!("{r:?}");
 }
