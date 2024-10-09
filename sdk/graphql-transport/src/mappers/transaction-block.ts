@@ -55,17 +55,17 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 		...(errors ? { errors: errors } : {}),
 		events:
 			transactionBlock.effects?.events?.nodes.map((event) => ({
-				bcs: event.bcs,
+				bcs: event.contents.bcs,
 				id: {
 					eventSeq: '', // TODO
 					txDigest: '', // TODO
 				},
 				packageId: event.sendingModule?.package.address!,
-				parsedJson: event.json ? JSON.parse(event.json) : undefined,
+				parsedJson: event.contents.json ? JSON.parse(event.contents.json) : undefined,
 				sender: event.sender?.address,
 				timestampMs: new Date(event.timestamp).getTime().toString(),
 				transactionModule: `${event.sendingModule?.package.address}::${event.sendingModule?.name}`,
-				type: toShortTypeString(event.type?.repr)!,
+				type: toShortTypeString(event.contents.type?.repr)!,
 			})) ?? [],
 		rawTransaction: options?.showRawInput ? transactionBlock.rawTransaction : undefined,
 		...(options?.showInput
