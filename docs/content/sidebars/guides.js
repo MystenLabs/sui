@@ -85,6 +85,7 @@ const guides = [
 					'guides/developer/coin/loyalty',
 				],
 			},
+			'guides/developer/stablecoins',
 			{
 				type: 'category',
 				label: 'NFTs',
