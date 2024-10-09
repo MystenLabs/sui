@@ -240,6 +240,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    objects_version_unpartitioned (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     packages (package_id, original_id, package_version) {
         package_id -> Bytea,
         original_id -> Bytea,
@@ -388,6 +396,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     objects_history,
     objects_snapshot,
     objects_version,
+    objects_version_unpartitioned,
     packages,
     protocol_configs,
     pruner_cp_watermark,
