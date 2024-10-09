@@ -29,7 +29,7 @@ use super::{
     cursor::Page,
     digest::Digest,
     dry_run_result::DryRunResult,
-    epoch::Epoch,
+    epoch::{self, Epoch},
     event::{self, Event, EventFilter},
     move_type::MoveType,
     object::{self, Object, ObjectFilter},
@@ -354,6 +354,23 @@ impl Query {
         )
         .await
         .extend()
+    }
+
+    // The epochs of the network
+    async fn epochs(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<epoch::Cursor>,
+        last: Option<u64>,
+        before: Option<epoch::Cursor>,
+    ) -> Result<Connection<String, Epoch>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        Epoch::paginate(ctx.data_unchecked(), page, checkpoint)
+            .await
+            .extend()
     }
 
     /// The checkpoints that exist in the network.
