@@ -87,9 +87,9 @@ impl PrunableWatermark {
 
     /// Check if unpartitioned table is prunable
     pub fn is_prunable(&self) -> bool {
-        match self.pruned_lo {
+        match self.pruner_lo {
             None => self.reader_lo > 0,
-            Some(pruned_lo) => self.reader_lo > pruned_lo + 1,
+            Some(pruner_lo) => self.reader_lo > pruner_lo + 1,
         }
     }
 }

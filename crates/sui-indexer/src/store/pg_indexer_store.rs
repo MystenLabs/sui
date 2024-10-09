@@ -1706,7 +1706,7 @@ impl PgIndexerStore {
             async {
                 diesel::update(watermarks::table)
                     .filter(watermarks::entity.eq(table.as_ref()))
-                    .set((watermarks::pruned_lo.eq(latest_pruned as i64),))
+                    .set((watermarks::pruner_lo.eq(latest_pruned as i64),))
                     .execute(conn)
                     .await?;
 
