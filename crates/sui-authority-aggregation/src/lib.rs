@@ -5,10 +5,9 @@ use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::monitored_future;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::hash::Hash;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sui_types::base_types::ConciseableName;
 use sui_types::committee::{CommitteeTrait, StakeUnit};
 
@@ -50,12 +49,14 @@ pub async fn quorum_map_then_reduce_with_timeout_and_prefs<
     S,
 >
 where
-    K: Ord + ConciseableName<'a> + Clone + 'a + Hash,
+    K: Ord + ConciseableName<'a> + Clone + 'a,
     C: CommitteeTrait<K>,
     FMap: FnOnce(K, Arc<Client>) -> AsyncResult<'a, V, E> + Clone + 'a,
     FReduce: Fn(S, K, StakeUnit, Result<V, E>) -> BoxFuture<'a, ReduceOutput<R, S>>,
 {
     let authorities_shuffled = committee.shuffle_by_stake(authority_preferences, None);
+    let mut accumulated_state = initial_state;
+    let mut max_timeout = max_timeout;
 
     // First, execute in parallel for each authority FMap.
     let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
@@ -68,19 +69,34 @@ where
         })
         .collect();
 
-    match min_timeout {
-        Some(min_timeout) => {
-            let mut accumulated_state = initial_state;
-            let mut authority_to_result: HashMap<K, Result<V, E>> = HashMap::new();
-
-            while let Ok(Some((authority_name, result))) =
-                timeout(min_timeout, responses.next()).await
-            {
-                authority_to_result.insert(authority_name.clone(), result);
+    if let Some(min_timeout) = min_timeout {
+        let elapsed = Instant::now();
+        let min_sleep = tokio::time::sleep(min_timeout);
+        let mut authority_to_result: BTreeMap<K, Result<V, E>> = BTreeMap::new();
+        tokio::pin!(min_sleep);
+        // get all the sigs we can within min_timeout
+        loop {
+            tokio::select! {
+                resp = responses.next() => {
+                    match resp {
+                        Some((authority_name, result)) => {
+                            authority_to_result.insert(authority_name, result);
+                        }
+                        None => {
+                            // we have processed responses from the full committee so can stop early
+                            break;
+                        }
+                    }
+                }
+                _ = &mut min_sleep => {
+                    break;
+                }
             }
-            for authority_name in authorities_shuffled {
-                let authority_weight = committee.weight(&authority_name);
-                let result = authority_to_result.remove(&authority_name).unwrap();
+        }
+        // process what we have up to this point
+        for authority_name in authorities_shuffled {
+            let authority_weight = committee.weight(&authority_name);
+            if let Some(result) = authority_to_result.remove(&authority_name) {
                 accumulated_state = match reduce_result(
                     accumulated_state,
                     authority_name,
@@ -100,38 +116,31 @@ where
                     }
                 };
             }
-            // If we have exhausted all authorities and still have not returned a result, return
-            // error with the accumulated state.
-            Err(accumulated_state)
         }
-        None => {
-            // As results become available fold them into the state using FReduce.
-            let mut accumulated_state = initial_state;
-
-            while let Ok(Some((authority_name, result))) =
-                timeout(max_timeout, responses.next()).await
-            {
-                let authority_weight = committee.weight(&authority_name);
-                accumulated_state =
-                    match reduce_result(accumulated_state, authority_name, authority_weight, result)
-                        .await
-                    {
-                        // In the first two cases we are told to continue the iteration.
-                        ReduceOutput::Continue(state) => state,
-                        ReduceOutput::Failed(state) => {
-                            return Err(state);
-                        }
-                        ReduceOutput::Success(result) => {
-                            // The reducer tells us that we have the result needed. Just return it.
-                            return Ok((result, responses));
-                        }
-                    }
-            }
-            // If we have exhausted all authorities and still have not returned a result, return
-            // error with the accumulated state.
-            Err(accumulated_state)
-        }
+        // if we got here, fallback through the if statement to continue in arrival order on
+        // the remaining validators
+        max_timeout = max_timeout.saturating_sub(elapsed.elapsed());
     }
+
+    // As results become available fold them into the state using FReduce.
+    while let Ok(Some((authority_name, result))) = timeout(max_timeout, responses.next()).await {
+        let authority_weight = committee.weight(&authority_name);
+        accumulated_state =
+            match reduce_result(accumulated_state, authority_name, authority_weight, result).await {
+                // In the first two cases we are told to continue the iteration.
+                ReduceOutput::Continue(state) => state,
+                ReduceOutput::Failed(state) => {
+                    return Err(state);
+                }
+                ReduceOutput::Success(result) => {
+                    // The reducer tells us that we have the result needed. Just return it.
+                    return Ok((result, responses));
+                }
+            }
+    }
+    // If we have exhausted all authorities and still have not returned a result, return
+    // error with the accumulated state.
+    Err(accumulated_state)
 }
 
 /// This function takes an initial state, than executes an asynchronous function (FMap) for each
@@ -180,7 +189,7 @@ pub async fn quorum_map_then_reduce_with_timeout<
     S,
 >
 where
-    K: Ord + ConciseableName<'a> + Clone + 'a + Hash,
+    K: Ord + ConciseableName<'a> + Clone + 'a,
     C: CommitteeTrait<K>,
     FMap: FnOnce(K, Arc<Client>) -> AsyncResult<'a, V, E> + Clone + 'a,
     FReduce: Fn(S, K, StakeUnit, Result<V, E>) -> BoxFuture<'a, ReduceOutput<R, S>> + 'a,
