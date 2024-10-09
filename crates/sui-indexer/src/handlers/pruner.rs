@@ -11,7 +11,7 @@ use tracing::{error, info};
 
 use crate::config::RetentionConfig;
 use crate::errors::IndexerError;
-use crate::models::watermarks::{PrunableWatermark, StoredWatermark};
+use crate::models::watermarks::PrunableWatermark;
 use crate::store::pg_partition_manager::PgPartitionManager;
 use crate::store::PgIndexerStore;
 use crate::{metrics::IndexerMetrics, store::IndexerStore, types::IndexerResult};
@@ -25,8 +25,10 @@ pub struct Pruner {
     pub metrics: IndexerMetrics,
 }
 
-/// Enum representing tables that the pruner is allowed to prune. The pruner will ignore any table
-/// that is not listed here.
+/// Enum representing tables that the pruner is allowed to prune. This corresponds to table names in
+/// the database, and should be used in lieu of string literals. This enum is also meant to
+/// facilitate the process of determining which unit (epoch, cp, or tx) should be used for the
+/// table's range. Pruner will ignore any table that is not listed here.
 #[derive(
     Debug,
     Eq,
@@ -243,8 +245,8 @@ async fn update_watermarks_lower_bounds_task(
     }
 }
 
-/// Fetches all entries from the `watermarks` table, and updates the lower bounds for all watermarks
-/// if the entry's epoch range exceeds the respective retention policy.
+/// Fetches all entries from the `watermarks` table, and updates the `reader_lo` for each entry if
+/// its epoch range exceeds the respective retention policy.
 async fn update_watermarks_lower_bounds(
     store: &PgIndexerStore,
     retention_policies: &HashMap<PrunableTable, u64>,
@@ -267,22 +269,12 @@ async fn update_watermarks_lower_bounds(
             continue;
         };
 
-        if watermark.epoch_lo + epochs_to_keep <= watermark.epoch_hi {
-            let new_inclusive_epoch_lower_bound =
-                watermark.epoch_hi.saturating_sub(epochs_to_keep - 1);
+        if watermark.epoch_lo + epochs_to_keep <= watermark.epoch_hi_inclusive {
+            let new_epoch_lower_bound = watermark
+                .epoch_hi_inclusive
+                .saturating_sub(epochs_to_keep - 1);
 
-            // TODO: (wlmyng) now that epochs table is not pruned, we can add `first_tx_seq_num` or
-            // something and use it as a lookup table.
-            let (min_cp, _) = store
-                .get_checkpoint_range_for_epoch(new_inclusive_epoch_lower_bound)
-                .await?;
-            let (min_tx, _) = store.get_transaction_range_for_checkpoint(min_cp).await?;
-
-            lower_bound_updates.push(StoredWatermark::from_lower_bound_update(
-                watermark.entity.as_ref(),
-                new_inclusive_epoch_lower_bound,
-                watermark.entity.select_lower_bound(min_cp, min_tx),
-            ))
+            lower_bound_updates.push((watermark.entity, new_epoch_lower_bound));
         }
     }
 

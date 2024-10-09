@@ -164,7 +164,8 @@ pub trait Handler<T>: Send + Sync {
 
 /// The indexer writer operates on checkpoint data, which contains information on the current epoch,
 /// checkpoint, and transaction. These three numbers form the watermark upper bound for each
-/// committed table.
+/// committed table. The reader and pruner are responsible for determining which of the three units
+/// will be used for a particular table.
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct CommitterWatermark {
     pub epoch: u64,
@@ -195,7 +196,7 @@ impl From<&CheckpointData> for CommitterWatermark {
     }
 }
 
-/// Enum representing tables that a committer updates.
+/// Enum representing tables that the committer handler writes to.
 #[derive(
     Debug,
     Eq,
@@ -253,7 +254,7 @@ pub enum CommitterTables {
     PrunerCpWatermark,
 }
 
-/// Enum representing tables that the objects snapshot processor updates.
+/// Enum representing tables that the objects snapshot handler writes to.
 #[derive(
     Debug,
     Eq,
