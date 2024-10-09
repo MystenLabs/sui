@@ -80,6 +80,18 @@ impl PrunableWatermark {
     pub fn pruner_lo(&self) -> u64 {
         self.pruner_lo.map_or(0, |lo| lo.saturating_add(1))
     }
+
+    pub fn prune_delay(&self, delay: u64) -> u64 {
+        (self.timestamp_ms + delay as i64 - self.current_timestamp_ms).max(0) as u64
+    }
+
+    /// Check if unpartitioned table is prunable
+    pub fn is_prunable(&self) -> bool {
+        match self.pruner_lo {
+            None => self.reader_lo > 0,
+            Some(pruner_lo) => self.reader_lo > pruner_lo + 1,
+        }
+    }
 }
 
 impl StoredWatermark {

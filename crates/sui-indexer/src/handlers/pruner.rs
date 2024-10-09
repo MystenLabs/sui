@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use strum_macros;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::config::RetentionConfig;
 use crate::errors::IndexerError;
@@ -127,16 +127,6 @@ impl Pruner {
         })
     }
 
-    /// Given a table name, return the number of epochs to keep for that table. Return `None` if the
-    /// table is not prunable.
-    fn table_retention(&self, table_name: &str) -> Option<u64> {
-        if let Ok(variant) = table_name.parse::<PrunableTable>() {
-            self.retention_policies.get(&variant).copied()
-        } else {
-            None
-        }
-    }
-
     pub async fn start(&self, cancel: CancellationToken) -> IndexerResult<()> {
         let store_clone = self.store.clone();
         let retention_policies = self.retention_policies.clone();
@@ -147,17 +137,8 @@ impl Pruner {
             cancel_clone
         ));
 
-        let mut last_seen_max_epoch = 0;
-        // The first epoch that has not yet been pruned.
-        let mut next_prune_epoch = None;
         while !cancel.is_cancelled() {
-            let (min_epoch, max_epoch) = self.store.get_available_epoch_range().await?;
-            if max_epoch == last_seen_max_epoch {
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                continue;
-            }
-            last_seen_max_epoch = max_epoch;
-
+            let (watermarks, latest_db_timestamp) = self.store.get_watermarks().await?;
             // Not all partitioned tables are epoch-partitioned, so we need to filter them out.
             let table_partitions: HashMap<_, _> = self
                 .partition_manager
@@ -171,52 +152,104 @@ impl Pruner {
                 })
                 .collect();
 
-            for (table_name, (min_partition, max_partition)) in &table_partitions {
-                if let Some(epochs_to_keep) = self.table_retention(table_name) {
-                    if last_seen_max_epoch != *max_partition {
-                        error!(
-                            "Epochs are out of sync for table {}: max_epoch={}, max_partition={}",
-                            table_name, last_seen_max_epoch, max_partition
-                        );
-                    }
+            for watermark in watermarks.iter() {
+                let Some(watermark) =
+                    PrunableWatermark::new(watermark.clone(), latest_db_timestamp)
+                else {
+                    continue;
+                };
 
-                    for epoch in
-                        *min_partition..last_seen_max_epoch.saturating_sub(epochs_to_keep - 1)
-                    {
+                tokio::time::sleep(Duration::from_millis(watermark.prune_delay(1000))).await;
+
+                // Prune as an epoch-partitioned table
+                if table_partitions.get(watermark.entity.as_ref()).is_some() {
+                    let mut prune_start = watermark.pruner_lo();
+                    while prune_start < watermark.epoch_lo {
                         if cancel.is_cancelled() {
                             info!("Pruner task cancelled.");
                             return Ok(());
                         }
                         self.partition_manager
-                            .drop_table_partition(table_name.clone(), epoch)
+                            .drop_table_partition(
+                                watermark.entity.as_ref().to_string(),
+                                prune_start,
+                            )
                             .await?;
                         info!(
                             "Batch dropped table partition {} epoch {}",
-                            table_name, epoch
+                            watermark.entity, prune_start
                         );
+                        prune_start += 1;
+
+                        // Then need to update the `pruned_lo`
+                        self.store
+                            .update_watermark_latest_pruned(watermark.entity.clone(), prune_start)
+                            .await?;
+                    }
+                } else {
+                    // Dealing with an unpartitioned table
+                    if watermark.is_prunable() {
+                        match watermark.entity {
+                            PrunableTable::ObjectsHistory
+                            | PrunableTable::Transactions
+                            | PrunableTable::Events => {}
+                            PrunableTable::EventEmitPackage
+                            | PrunableTable::EventEmitModule
+                            | PrunableTable::EventSenders
+                            | PrunableTable::EventStructInstantiation
+                            | PrunableTable::EventStructModule
+                            | PrunableTable::EventStructName
+                            | PrunableTable::EventStructPackage => {
+                                self.store
+                                    .prune_event_indices_table(
+                                        watermark.pruner_lo(),
+                                        watermark.reader_lo - 1,
+                                    )
+                                    .await?;
+                            }
+                            PrunableTable::TxAffectedAddresses
+                            | PrunableTable::TxAffectedObjects
+                            | PrunableTable::TxCallsPkg
+                            | PrunableTable::TxCallsMod
+                            | PrunableTable::TxCallsFun
+                            | PrunableTable::TxChangedObjects
+                            | PrunableTable::TxDigests
+                            | PrunableTable::TxInputObjects
+                            | PrunableTable::TxKinds
+                            | PrunableTable::TxRecipients
+                            | PrunableTable::TxSenders => {
+                                self.store
+                                    .prune_tx_indices_table(
+                                        watermark.pruner_lo(),
+                                        watermark.reader_lo - 1,
+                                    )
+                                    .await?;
+                            }
+                            PrunableTable::Checkpoints => {
+                                self.store
+                                    .prune_cp_tx_table(
+                                        watermark.pruner_lo(),
+                                        watermark.reader_lo - 1,
+                                    )
+                                    .await?;
+                            }
+                            PrunableTable::PrunerCpWatermark => {
+                                self.store
+                                    .prune_cp_tx_table(
+                                        watermark.pruner_lo(),
+                                        watermark.reader_lo - 1,
+                                    )
+                                    .await?;
+                            }
+                        }
+                        self.store
+                            .update_watermark_latest_pruned(
+                                watermark.entity.clone(),
+                                watermark.reader_lo - 1,
+                            )
+                            .await?;
                     }
                 }
-            }
-
-            // TODO: (wlmyng) Once we have the watermarks table, we can iterate through each row
-            // returned from `watermarks`, look it up against `retention_policies`, and process them
-            // independently. This also means that pruning overrides will only apply for
-            // epoch-partitioned tables right now.
-            let prune_to_epoch = last_seen_max_epoch.saturating_sub(self.epochs_to_keep - 1);
-            let prune_start_epoch = next_prune_epoch.unwrap_or(min_epoch);
-            for epoch in prune_start_epoch..prune_to_epoch {
-                if cancel.is_cancelled() {
-                    info!("Pruner task cancelled.");
-                    return Ok(());
-                }
-                info!("Pruning epoch {}", epoch);
-                if let Err(err) = self.store.prune_epoch(epoch).await {
-                    error!("Failed to prune epoch {}: {}", epoch, err);
-                    break;
-                };
-                self.metrics.last_pruned_epoch.set(epoch as i64);
-                info!("Pruned epoch {}", epoch);
-                next_prune_epoch = Some(epoch + 1);
             }
         }
         info!("Pruner task cancelled.");

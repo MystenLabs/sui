@@ -1325,12 +1325,13 @@ impl PgIndexerStore {
         Ok(())
     }
 
-    async fn prune_checkpoints_table(&self, cp: u64) -> Result<(), IndexerError> {
+    pub async fn prune_checkpoints_table(&self, start: u64, end: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::delete(
-                    checkpoints::table.filter(checkpoints::sequence_number.eq(cp as i64)),
+                    checkpoints::table
+                        .filter(checkpoints::sequence_number.between(start as i64, end as i64)),
                 )
                 .execute(conn)
                 .await
@@ -1344,7 +1345,7 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_event_indices_table(
+    pub async fn prune_event_indices_table(
         &self,
         min_tx: u64,
         max_tx: u64,
@@ -1409,7 +1410,11 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_tx_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
+    pub async fn prune_tx_indices_table(
+        &self,
+        min_tx: u64,
+        max_tx: u64,
+    ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
@@ -1492,14 +1497,16 @@ impl PgIndexerStore {
         .await
     }
 
-    async fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
+    pub async fn prune_cp_tx_table(&self, start: u64, end: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::delete(
-                    pruner_cp_watermark::table
-                        .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(cp as i64)),
+                    pruner_cp_watermark::table.filter(
+                        pruner_cp_watermark::checkpoint_sequence_number
+                            .between(start as i64, end as i64),
+                    ),
                 )
                 .execute(conn)
                 .await
@@ -1666,6 +1673,40 @@ impl PgIndexerStore {
                         )
                         .gt(watermarks::timestamp_ms),
                     )
+                    .execute(conn)
+                    .await?;
+
+                Ok::<(), IndexerError>(())
+            }
+            .scope_boxed()
+        })
+        .await
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted watermarks");
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist watermarks with error: {}", e);
+        })
+    }
+
+    async fn update_watermark_latest_pruned(
+        &self,
+        table: PrunableTable,
+        latest_pruned: u64,
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_watermarks
+            .start_timer();
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::update(watermarks::table)
+                    .filter(watermarks::entity.eq(table.as_ref()))
+                    .set((watermarks::pruner_lo.eq(latest_pruned as i64),))
                     .execute(conn)
                     .await?;
 
@@ -2158,7 +2199,7 @@ impl IndexerStore for PgIndexerStore {
                 "Pruning checkpoint {} of epoch {} (min_prunable_cp: {})",
                 cp, epoch, min_prunable_cp
             );
-            self.prune_checkpoints_table(cp).await?;
+            self.prune_checkpoints_table(cp, cp).await?;
 
             let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp).await?;
             self.prune_tx_indices_table(min_tx, max_tx).await?;
@@ -2173,7 +2214,7 @@ impl IndexerStore for PgIndexerStore {
             );
             self.metrics.last_pruned_transaction.set(max_tx as i64);
 
-            self.prune_cp_tx_table(cp).await?;
+            self.prune_cp_tx_table(cp, cp).await?;
             info!("Pruned checkpoint {} of epoch {}", cp, epoch);
             self.metrics.last_pruned_checkpoint.set(cp as i64);
         }
@@ -2387,6 +2428,15 @@ impl IndexerStore for PgIndexerStore {
         watermarks: Vec<(PrunableTable, u64)>,
     ) -> Result<(), IndexerError> {
         self.update_watermarks_lower_bound(watermarks).await
+    }
+
+    async fn update_watermark_latest_pruned(
+        &self,
+        table: PrunableTable,
+        latest_pruned: u64,
+    ) -> Result<(), IndexerError> {
+        self.update_watermark_latest_pruned(table, latest_pruned)
+            .await
     }
 
     async fn get_watermarks(&self) -> Result<(Vec<StoredWatermark>, i64), IndexerError> {
