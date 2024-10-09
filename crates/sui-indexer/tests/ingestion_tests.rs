@@ -7,6 +7,7 @@ use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use simulacrum::Simulacrum;
 use sui_indexer::errors::IndexerError;
+use sui_indexer::handlers::TransactionObjectChangesToCommit;
 use sui_indexer::models::{
     checkpoints::StoredCheckpoint, objects::StoredObject, objects::StoredObjectSnapshot,
     transactions::StoredTransaction,
@@ -15,6 +16,8 @@ use sui_indexer::schema::{checkpoints, objects, objects_snapshot, transactions};
 use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::test_utils::{set_up, wait_for_checkpoint, wait_for_objects_snapshot};
 use sui_indexer::types::EventIndex;
+use sui_indexer::types::IndexedDeletedObject;
+use sui_indexer::types::IndexedObject;
 use sui_indexer::types::TxIndex;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
@@ -176,6 +179,26 @@ pub async fn test_objects_snapshot() -> Result<(), IndexerError> {
     );
     assert_eq!(snapshot_object.owner_type, Some(1));
     assert_eq!(snapshot_object.owner_id, Some(gas_owner_id.to_vec()));
+    Ok(())
+}
+
+#[tokio::test]
+pub async fn test_objects_ingestion() -> Result<(), IndexerError> {
+    let tempdir = tempdir().unwrap();
+    let mut sim = Simulacrum::new();
+    let data_ingestion_path = tempdir.path().to_path_buf();
+    sim.set_data_ingestion_path(data_ingestion_path.clone());
+
+    let (_, pg_store, _, _database) = set_up(Arc::new(sim), data_ingestion_path).await;
+
+    let mut objects = Vec::new();
+    for _ in 0..1000 {
+        objects.push(TransactionObjectChangesToCommit {
+            changed_objects: vec![IndexedObject::random()],
+            deleted_objects: vec![IndexedDeletedObject::random()],
+        });
+    }
+    pg_store.persist_objects(objects).await?;
     Ok(())
 }
 
