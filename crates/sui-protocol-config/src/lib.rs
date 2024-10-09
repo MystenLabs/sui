@@ -184,6 +184,8 @@ const MAX_PROTOCOL_VERSION: u64 = 62;
 //             Further reduce minimum number of random beacon shares.
 //             Add feature flag for Mysticeti fastpath.
 // Version 62: Makes the event's sending module package upgrade-aware.
+//             Framework natives for transaction context and protocol config
+//             feature flag to turn it on/off
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -546,6 +548,10 @@ struct FeatureFlags {
     // Makes the event's sending module version-aware.
     #[serde(skip_serializing_if = "is_false")]
     relocate_event_module: bool,
+
+    // Make transaction context native and zero out the Move struct
+    #[serde(skip_serializing_if = "is_false")]
+    transaction_context_native: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1623,6 +1629,10 @@ impl ProtocolConfig {
 
     pub fn relocate_event_module(&self) -> bool {
         self.feature_flags.relocate_event_module
+    }
+
+    pub fn transaction_context_native(&self) -> bool {
+        self.feature_flags.transaction_context_native
     }
 }
 
@@ -2819,6 +2829,7 @@ impl ProtocolConfig {
                 }
                 62 => {
                     cfg.feature_flags.relocate_event_module = true;
+                    cfg.feature_flags.transaction_context_native = false;
                 }
                 // Use this template when making changes:
                 //

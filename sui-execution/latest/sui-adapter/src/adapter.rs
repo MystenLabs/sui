@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub use checked::*;
+
 #[sui_macros::with_checked_arithmetic]
 mod checked {
     #[cfg(feature = "gas-profiler")]
@@ -23,11 +24,13 @@ mod checked {
         native_functions::NativeFunctionTable,
     };
     use sui_move_natives::object_runtime;
-    use sui_types::metrics::BytecodeVerifierMetrics;
+    use sui_types::{base_types::TxContext, metrics::BytecodeVerifierMetrics};
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
 
-    use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
+    use sui_move_natives::{
+        native_tx_context::NativeTxContext, object_runtime::ObjectRuntime, NativesCostTable,
+    };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         base_types::*,
@@ -84,8 +87,9 @@ mod checked {
         is_metered: bool,
         protocol_config: &'r ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        current_epoch_id: EpochId,
+        tx_context: &TxContext,
     ) -> NativeContextExtensions<'r> {
+        let current_epoch_id = tx_context.epoch();
         let mut extensions = NativeContextExtensions::default();
         extensions.add(ObjectRuntime::new(
             child_resolver,
@@ -96,6 +100,9 @@ mod checked {
             current_epoch_id,
         ));
         extensions.add(NativesCostTable::from_protocol_config(protocol_config));
+        if protocol_config.transaction_context_native() {
+            extensions.add(NativeTxContext::from(tx_context));
+        }
         extensions
     }
 
