@@ -1,27 +1,60 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { GetPublicKeyCommand, KMSClient, SignCommand } from '@aws-sdk/client-kms';
-import type {
-	SerializedSignature,
-	SignatureFlag,
-	SignatureScheme,
-} from '@mysten/sui.js/cryptography';
-import {
-	SIGNATURE_FLAG_TO_SCHEME,
-	Signer,
-	toSerializedSignature,
-} from '@mysten/sui.js/cryptography';
-import { Secp256k1PublicKey } from '@mysten/sui.js/keypairs/secp256k1';
-import { fromB64 } from '@mysten/sui.js/utils';
-import { secp256k1 } from '@noble/curves/secp256k1';
-import * as asn1ts from 'asn1-ts';
+import { Signer, toSerializedSignature } from '@mysten/sui/cryptography';
+import { Secp256k1PublicKey } from '@mysten/sui/keypairs/secp256k1';
+import { fromBase64 } from '@mysten/sui/utils';
+import { ASN1Construction, ASN1TagClass, DERElement } from 'asn1-ts';
+
+import { compressPublicKeyClamped } from './utils.js';
+
+/**
+ * TODO: Add comments :)
+ */
+export interface AWSKMSSignerOptions {
+	accessKeyId: string;
+	secretAccessKey: string;
+	region: string;
+	kmsKeyId: string;
+}
 
 export class AWSKMSSigner extends Signer {
-	#pk: Secp256k1PublicKey;
+	#pubKey?: Secp256k1PublicKey;
+	#client: KMSClient;
+	#kmsKeyId: string;
 
-	constructor(publicKey: Uint8Array) {
+	constructor({ accessKeyId, secretAccessKey, region, kmsKeyId }: AWSKMSSignerOptions) {
 		super();
-		this.#pk = new Secp256k1PublicKey(publicKey);
+		if (!kmsKeyId) throw new Error('KMS Key ID is required');
+
+		this.#kmsKeyId = kmsKeyId;
+
+		const config = {
+			region,
+			credentials: {
+				accessKeyId,
+				secretAccessKey,
+			},
+		};
+
+		if (!config.credentials.accessKeyId || !config.credentials.secretAccessKey) {
+			throw new Error(
+				'AWS credentials are not set. Please supply the `accessKeyId` and `secretAccessKey`',
+			);
+		}
+
+		if (!config.region) {
+			throw new Error('AWS region is not set');
+		}
+		// this.#pk = new Secp256k1PublicKey(publicKey);
+		this.#client = new KMSClient(config);
+	}
+
+	/// This method is called by the `Signer` class to prepare the signer for signing.
+	/// This method should be called before any other method.
+	/// This method is async because it needs to fetch the public key from AWS.
+	async prepare() {
+		this.#pubKey = await this.#getAWSPublicKey();
 	}
 
 	getKeyScheme() {
@@ -29,190 +62,82 @@ export class AWSKMSSigner extends Signer {
 	}
 
 	getPublicKey() {
-		return this.#pk;
-	}
-
-	async setPublicKeyWithAWS(keyId: string) {
-		this.#pk = (await this.getAWSPublicKey(keyId)) || new Secp256k1PublicKey(''); // hack way to deal with undefined return from getAWSPublicKey
-	}
-
-	setPublicKey(publicKey: Uint8Array) {
-		this.#pk = new Secp256k1PublicKey(publicKey);
-	}
-
-	// https://datatracker.ietf.org/doc/html/rfc5480#section-2.2
-	// https://www.secg.org/sec1-v2.pdf
-	bitsToBytes(bitsArray: Uint8ClampedArray) {
-		const bytes = new Uint8Array(65);
-		for (let i = 0; i < 520; i++) {
-			if (bitsArray[i] === 1) {
-				bytes[Math.floor(i / 8)] |= 1 << (7 - (i % 8));
-			}
+		if (!this.#pubKey) {
+			throw new Error('Public key not initialized. Call `prepare` method first.');
 		}
-		return bytes;
-	}
-
-	compressPublicKeyClamped(uncompressedKey: Uint8ClampedArray): Uint8Array {
-		if (uncompressedKey.length !== 520) {
-			throw new Error('Unexpected length for an uncompressed public key');
-		}
-
-		// Convert bits to bytes
-		const uncompressedBytes = this.bitsToBytes(uncompressedKey);
-		//console.log("Uncompressed Bytes:", uncompressedBytes);
-
-		// Check if the first byte is 0x04
-		if (uncompressedBytes[0] !== 0x04) {
-			throw new Error('Public key does not start with 0x04');
-		}
-
-		// Extract X-Coordinate (skip the first byte, which should be 0x04)
-		const xCoord = uncompressedBytes.slice(1, 33);
-
-		// Determine parity byte for y coordinate
-		const yCoordLastByte = uncompressedBytes[64];
-		const parityByte = yCoordLastByte % 2 === 0 ? 0x02 : 0x03;
-
-		return new Uint8Array([parityByte, ...xCoord]);
-	}
-
-	createAWSKMSClient() {
-		const client = new KMSClient({
-			region: process.env.AWS_REGION || '',
-			credentials: {
-				accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-				secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-			},
-		});
-		return client;
-	}
-
-	async getAWSPublicKey(keyId: string) {
-		// gets AWS KMS Public Key in DER format
-		// returns Sui Public Key
-
-		// AWS KMS client configuration
-		const client = this.createAWSKMSClient();
-
-		try {
-			const getPublicKeyCommand = new GetPublicKeyCommand({
-				KeyId: keyId,
-			});
-			const publicKeyResponse = await client.send(getPublicKeyCommand);
-			const publicKey = publicKeyResponse.PublicKey || new Uint8Array();
-
-			let encodedData: Uint8Array = publicKey;
-			let derElement: asn1ts.DERElement = new asn1ts.DERElement();
-			derElement.fromBytes(encodedData);
-
-			// https://datatracker.ietf.org/doc/html/rfc5480#section-2.2
-			// parse ANS1 DER response and get raw public key bytes
-			// actual result is a BIT_STRING of length 520-bits (65 bytes)
-			if (
-				derElement.tagClass === asn1ts.ASN1TagClass.universal &&
-				derElement.construction === asn1ts.ASN1Construction.constructed
-			) {
-				let components = derElement.components;
-				let publicKeyElement = components[1];
-
-				let rawPublicKey = publicKeyElement.bitString; // bitString creates a Uint8ClampedArray;
-
-				const compressedKey = this.compressPublicKeyClamped(rawPublicKey);
-
-				const sui_public_key = rawPublicKey ? new Secp256k1PublicKey(compressedKey) : '';
-				if (sui_public_key instanceof Secp256k1PublicKey) {
-					console.log('Sui Public Key:', sui_public_key.toSuiAddress());
-				}
-				return sui_public_key;
-			} else {
-				throw new Error('Unexpected ASN.1 structure');
-			}
-		} catch (error) {
-			console.error('Error during get public key:', error);
-			return;
-		}
-	}
-
-	getConcatenatedSignature(signature: Uint8Array): Uint8Array {
-		// creates signature consumable by Sui 'toSerializedSignature' call
-
-		// start processing signature
-		// populate concatenatedSignature with [r,s] from DER signature
-
-		let encodedData: Uint8Array = signature || new Uint8Array();
-		let derElement: asn1ts.DERElement = new asn1ts.DERElement();
-		derElement.fromBytes(encodedData);
-		let der_json_data: { value: string }[] = derElement.toJSON() as {
-			value: any;
-		}[];
-
-		const new_r = der_json_data[0];
-		const new_s = der_json_data[1];
-		//console.log(String(new_r));
-
-		const new_r_string = String(new_r);
-		const new_s_string = String(new_s);
-
-		const secp256k1_sig = new secp256k1.Signature(BigInt(new_r_string), BigInt(new_s_string));
-		const secp256k1_normalize_s_compact = secp256k1_sig.normalizeS().toCompactRawBytes();
-
-		return secp256k1_normalize_s_compact;
-	}
-
-	async getSerializedSignature(
-		signature: Uint8Array,
-		sui_pubkey: Secp256k1PublicKey,
-	): Promise<SerializedSignature> {
-		// create serialized signature from [r,s] and public key
-		// Sui Serialized Signature format: `flag || sig || pk`.
-		const flag = sui_pubkey ? sui_pubkey.flag() : 1;
-
-		// Check if flag is one of the allowed values and cast to SignatureFlag
-		const allowedFlags: SignatureFlag[] = [0, 1, 2, 3, 5];
-		const isAllowedFlag = allowedFlags.includes(flag as SignatureFlag);
-
-		const signature_scheme: SignatureScheme = isAllowedFlag
-			? SIGNATURE_FLAG_TO_SCHEME[flag as SignatureFlag]
-			: 'Secp256k1';
-
-		const publicKeyToUse = sui_pubkey instanceof Secp256k1PublicKey ? sui_pubkey : undefined;
-
-		// Call toSerializedSignature
-		const serializedSignature: SerializedSignature = toSerializedSignature({
-			signatureScheme: signature_scheme,
-			signature: signature,
-			publicKey: publicKeyToUse,
-		});
-		return serializedSignature;
+		return this.#pubKey;
 	}
 
 	async sign(bytes: Uint8Array): Promise<Uint8Array> {
-		const keyId = process.env.AWS_KMS_KEY_ID || '';
-		const client = this.createAWSKMSClient();
+		if (!this.#pubKey) {
+			throw new Error('Public key not initialized. Call `prepare` method first.');
+		}
 
 		const signCommand = new SignCommand({
-			KeyId: keyId,
+			KeyId: this.#kmsKeyId,
 			Message: bytes,
 			MessageType: 'RAW',
 			SigningAlgorithm: 'ECDSA_SHA_256', // Adjust the algorithm based on your key spec
 		});
-		const signResponse = await client.send(signCommand);
-		const signature = signResponse.Signature || new Uint8Array();
 
-		const original_pubkey = await this.getAWSPublicKey(keyId);
-		const publicKeyToUse =
-			original_pubkey instanceof Secp256k1PublicKey ? original_pubkey : undefined;
+		const signResponse = await this.#client.send(signCommand);
 
-		const concatenatedSignature = this.getConcatenatedSignature(signature);
-		const serializedSignature = await this.getSerializedSignature(
-			concatenatedSignature,
-			publicKeyToUse as Secp256k1PublicKey,
-		);
+		if (!signResponse.Signature) {
+			throw new Error('Signature not found in the response. Execution failed.');
+		}
 
-		return fromB64(serializedSignature);
+		const serializedSignature = await toSerializedSignature({
+			signatureScheme: this.getKeyScheme(),
+			signature: signResponse.Signature,
+			publicKey: this.#pubKey,
+		});
+
+		return fromBase64(serializedSignature);
 	}
 
 	signData(): never {
 		throw new Error('KMS Signer does not support sync signing');
+	}
+
+	/// Gets the AWS pub key from the AWS KMS service
+	/// and converts it to Sui public key format (Secp256k1PublicKey).
+	async #getAWSPublicKey() {
+		// gets AWS KMS Public Key in DER format
+		// returns Sui Public Key
+
+		const getPublicKeyCommand = new GetPublicKeyCommand({
+			KeyId: this.#kmsKeyId,
+		});
+
+		const publicKeyResponse = await this.#client.send(getPublicKeyCommand);
+
+		if (!publicKeyResponse.PublicKey) {
+			throw new Error('Public Key not found for the supplied `keyId`');
+		}
+
+		const publicKey = publicKeyResponse.PublicKey;
+		const derElement = new DERElement();
+		derElement.fromBytes(publicKey);
+
+		if (
+			!(
+				derElement.tagClass === ASN1TagClass.universal &&
+				derElement.construction === ASN1Construction.constructed
+			)
+		) {
+			throw new Error('Unexpected ASN.1 structure');
+		}
+		const components = derElement.components;
+		const publicKeyElement = components[1];
+
+		if (!publicKeyElement) {
+			throw new Error('Public Key not found in the DER structure');
+		}
+
+		// bitString creates a Uint8ClampedArray
+		const rawPublicKey = publicKeyElement.bitString;
+		const compressedKey = compressPublicKeyClamped(rawPublicKey);
+
+		return new Secp256k1PublicKey(compressedKey);
 	}
 }
