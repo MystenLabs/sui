@@ -9,7 +9,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { Button, Flex, Heading, Text } from "@radix-ui/themes";
 import { useNetworkVariable } from "./networkConfig";
 import { useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import ClipLoader from "react-spinners/ClipLoader";
 
 export function Counter({ id }: { id: string }) {
   const counterPackageId = useNetworkVariable("counterPackageId");
@@ -79,7 +79,7 @@ export function Counter({ id }: { id: string }) {
             disabled={waitingForTxn !== ""}
           >
             {waitingForTxn === "increment" ? (
-              <LoaderCircle className="animate-spin" />
+              <ClipLoader size={20} />
             ) : (
               "Increment"
             )}
@@ -89,11 +89,7 @@ export function Counter({ id }: { id: string }) {
               onClick={() => executeMoveCall("reset")}
               disabled={waitingForTxn !== ""}
             >
-              {waitingForTxn === "reset" ? (
-                <LoaderCircle className="animate-spin" />
-              ) : (
-                "Reset"
-              )}
+              {waitingForTxn === "reset" ? <ClipLoader size={20} /> : "Reset"}
             </Button>
           ) : null}
         </Flex>

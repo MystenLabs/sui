@@ -3,7 +3,7 @@ import { Button, Container } from "@radix-ui/themes";
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useNetworkVariable } from "./networkConfig";
 import { useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import ClipLoader from "react-spinners/ClipLoader";
 
 export function CreateCounter({
   onCreated,
@@ -61,11 +61,7 @@ export function CreateCounter({
         }}
         disabled={waitingForTxn}
       >
-        {waitingForTxn ? (
-          <LoaderCircle className="animate-spin" />
-        ) : (
-          "Create Counter"
-        )}
+        {waitingForTxn ? <ClipLoader size={20} /> : "Create Counter"}
       </Button>
     </Container>
   );
