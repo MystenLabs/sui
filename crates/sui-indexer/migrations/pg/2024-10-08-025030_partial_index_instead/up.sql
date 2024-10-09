@@ -1,11 +1,3 @@
--- Drop existing indices if they exist
-DROP INDEX IF EXISTS objects_history_owner;
-DROP INDEX IF EXISTS objects_history_coin_owner;
-DROP INDEX IF EXISTS objects_history_coin_only;
-DROP INDEX IF EXISTS objects_history_type;
-DROP INDEX IF EXISTS objects_history_package_module_name_full_type;
-DROP INDEX IF EXISTS objects_history_owner_package_module_name_full_type;
-
 -- Create new partial indices with object_status = 0 condition
 CREATE INDEX IF NOT EXISTS objects_history_owner_partial ON objects_history (checkpoint_sequence_number, owner_type, owner_id) 
 WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL AND object_status = 0;
