@@ -348,6 +348,14 @@ impl<S> Resolver<S> {
 }
 
 impl<S: PackageStore> Resolver<S> {
+    /// The canonical form of a type refers to each type in terms of its defining package ID. This
+    /// function takes a non-canonical type and updates all its package IDs to the appropriate
+    /// defining ID.
+    ///
+    /// For every `package::module::datatype` in the input `tag`, `package` must be an object
+    /// on-chain, containing a move package that includes `module`, and that module must define the
+    /// `datatype`. In practice this means the input type `tag` can refer to types at or after
+    /// their defining IDs.
     pub async fn canonical_type(&self, mut tag: TypeTag) -> Result<TypeTag> {
         let mut context = ResolutionContext::new(self.limits.as_ref());
 
@@ -1368,7 +1376,9 @@ impl<'l> ResolutionContext<'l> {
         Ok(())
     }
 
-    /// TODO: Docs
+    /// Translate runtime IDs in a type `tag` into defining IDs using only the information
+    /// contained in this context. Requires that the necessary information was added to the context
+    /// through calls to `add_type_tag`.
     fn canonicalize_type(&self, tag: &mut TypeTag) -> Result<()> {
         use TypeTag as T;
 
