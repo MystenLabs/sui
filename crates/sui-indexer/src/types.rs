@@ -14,7 +14,6 @@ use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
-use sui_types::event::SystemEpochInfoEvent;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointCommitment, CheckpointContents, CheckpointDigest,
     CheckpointSequenceNumber, EndOfEpochData,
@@ -22,7 +21,6 @@ use sui_types::messages_checkpoint::{
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
 use sui_types::sui_serde::SuiStructTag;
-use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::SenderSignedData;
 
 use crate::errors::IndexerError;
@@ -94,104 +92,6 @@ impl IndexedCheckpoint {
             max_tx_sequence_number,
             certified_checkpoint: Some(checkpoint.clone()),
             checkpoint_contents: Some(contents.clone()),
-        }
-    }
-}
-
-/// Represents system state and summary info at the start and end of an epoch. Optional fields are
-/// populated at epoch boundary, since they cannot be determined at the start of the epoch.
-#[derive(Clone, Debug)]
-pub struct IndexedEpochInfo {
-    pub epoch: u64,
-    pub first_checkpoint_id: u64,
-    pub epoch_start_timestamp: u64,
-    pub reference_gas_price: u64,
-    pub protocol_version: u64,
-    pub total_stake: u64,
-    pub storage_fund_balance: u64,
-    pub system_state_summary: SuiSystemStateSummary,
-    pub epoch_total_transactions: Option<u64>,
-    pub last_checkpoint_id: Option<u64>,
-    pub epoch_end_timestamp: Option<u64>,
-    pub storage_fund_reinvestment: Option<u64>,
-    pub storage_charge: Option<u64>,
-    pub storage_rebate: Option<u64>,
-    pub stake_subsidy_amount: Option<u64>,
-    pub total_gas_fees: Option<u64>,
-    pub total_stake_rewards_distributed: Option<u64>,
-    pub leftover_storage_fund_inflow: Option<u64>,
-    pub epoch_commitments: Option<Vec<CheckpointCommitment>>,
-}
-
-impl IndexedEpochInfo {
-    pub fn from_new_system_state_summary(
-        new_system_state_summary: SuiSystemStateSummary,
-        first_checkpoint_id: u64,
-        event: Option<&SystemEpochInfoEvent>,
-    ) -> IndexedEpochInfo {
-        Self {
-            epoch: new_system_state_summary.epoch,
-            first_checkpoint_id,
-            epoch_start_timestamp: new_system_state_summary.epoch_start_timestamp_ms,
-            reference_gas_price: new_system_state_summary.reference_gas_price,
-            protocol_version: new_system_state_summary.protocol_version,
-            // NOTE: total_stake and storage_fund_balance are about new epoch,
-            // although the event is generated at the end of the previous epoch,
-            // the event is optional b/c no such event for the first epoch.
-            total_stake: event.map(|e| e.total_stake).unwrap_or(0),
-            storage_fund_balance: event.map(|e| e.storage_fund_balance).unwrap_or(0),
-            system_state_summary: new_system_state_summary,
-            epoch_total_transactions: None,
-            last_checkpoint_id: None,
-            epoch_end_timestamp: None,
-            storage_fund_reinvestment: None,
-            storage_charge: None,
-            storage_rebate: None,
-            stake_subsidy_amount: None,
-            total_gas_fees: None,
-            total_stake_rewards_distributed: None,
-            leftover_storage_fund_inflow: None,
-            epoch_commitments: None,
-        }
-    }
-
-    /// Creates `IndexedEpochInfo` for epoch X-1 at the boundary of epoch X-1 to X.
-    /// `network_total_tx_num_at_last_epoch_end` is needed to determine the number of transactions
-    /// that occurred in the epoch X-1.
-    pub fn from_end_of_epoch_data(
-        system_state_summary: SuiSystemStateSummary,
-        last_checkpoint_summary: &CertifiedCheckpointSummary,
-        event: &SystemEpochInfoEvent,
-        network_total_tx_num_at_last_epoch_end: u64,
-    ) -> IndexedEpochInfo {
-        Self {
-            epoch: last_checkpoint_summary.epoch,
-            epoch_total_transactions: Some(
-                last_checkpoint_summary.network_total_transactions
-                    - network_total_tx_num_at_last_epoch_end,
-            ),
-            last_checkpoint_id: Some(*last_checkpoint_summary.sequence_number()),
-            epoch_end_timestamp: Some(last_checkpoint_summary.timestamp_ms),
-            storage_fund_reinvestment: Some(event.storage_fund_reinvestment),
-            storage_charge: Some(event.storage_charge),
-            storage_rebate: Some(event.storage_rebate),
-            leftover_storage_fund_inflow: Some(event.leftover_storage_fund_inflow),
-            stake_subsidy_amount: Some(event.stake_subsidy_amount),
-            total_gas_fees: Some(event.total_gas_fees),
-            total_stake_rewards_distributed: Some(event.total_stake_rewards_distributed),
-            epoch_commitments: last_checkpoint_summary
-                .end_of_epoch_data
-                .as_ref()
-                .map(|e| e.epoch_commitments.clone()),
-            system_state_summary,
-            // The following felds will not and shall not be upserted
-            // into DB. We have them below to make compiler and diesel happy
-            first_checkpoint_id: 0,
-            epoch_start_timestamp: 0,
-            reference_gas_price: 0,
-            protocol_version: 0,
-            total_stake: 0,
-            storage_fund_balance: 0,
         }
     }
 }
