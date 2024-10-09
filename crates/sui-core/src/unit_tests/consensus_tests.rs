@@ -25,9 +25,9 @@ use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::utils::{make_committee_key, to_sender_signed_transaction};
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
-    base_types::{SuiAddress, ObjectID, ExecutionDigests},
+    base_types::{ExecutionDigests, ObjectID, SuiAddress},
     object::Object,
-    transaction::{CallArg, CertifiedTransaction, VerifiedTransaction, ObjectArg, TransactionData},
+    transaction::{CallArg, CertifiedTransaction, ObjectArg, TransactionData, VerifiedTransaction},
 };
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::{Receiver, Sender};
