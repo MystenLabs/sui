@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use prometheus::Registry;
 use serde::{Deserialize, Serialize};
-use sui_data_ingestion::{ArchivalConfig, ArchivalWorker};
-use sui_data_ingestion_core::setup_single_workflow;
+use sui_data_ingestion::{ArchivalConfig, ArchivalReducer, ArchivalWorker};
+use sui_data_ingestion_core::{
+    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimProgressStore, WorkerPool,
+};
+use tokio::sync::oneshot;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Config {
@@ -37,17 +41,25 @@ async fn main() -> Result<()> {
         commit_file_size: config.commit_file_size,
         commit_duration_seconds: config.commit_duration_seconds,
     };
-    let worker = ArchivalWorker::new(archival_config).await?;
-    let initial_checkpoint_number = worker.initial_checkpoint_number().await;
-
-    let (executor, _exit_sender) = setup_single_workflow(
-        worker,
-        config.remote_store_url,
-        initial_checkpoint_number,
+    let (_exit_sender, exit_receiver) = oneshot::channel();
+    let reducer = ArchivalReducer::new(archival_config).await?;
+    let progress_store = ShimProgressStore(reducer.get_watermark().await?);
+    let mut executor = IndexerExecutor::new(
+        progress_store,
         1,
-        None,
-    )
-    .await?;
-    executor.await?;
+        DataIngestionMetrics::new(&Registry::new()),
+    );
+    let worker_pool =
+        WorkerPool::new_with_reducer(ArchivalWorker, "archival".to_string(), 1, Box::new(reducer));
+    executor.register(worker_pool).await?;
+    executor
+        .run(
+            tempfile::tempdir()?.into_path(),
+            Some(config.remote_store_url),
+            vec![],
+            ReaderOptions::default(),
+            exit_receiver,
+        )
+        .await?;
     Ok(())
 }
