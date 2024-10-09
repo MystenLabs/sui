@@ -107,16 +107,30 @@ async fn test_mysticeti_manager() {
         // THEN
         assert!(manager.is_running().await);
 
+        let boot_counter = *manager.boot_counter.lock().await;
+        if i == 1 || i == 2 {
+            assert_eq!(boot_counter, 0);
+        } else {
+            assert_eq!(boot_counter, 1);
+        }
+
         // Now try to shut it down
         sleep(Duration::from_secs(1)).await;
+
+        // Simulate a commit by bumping the handled commit index so we can ensure that boot counter increments only after the first run.
+        // Practically we want to simulate a case where consensus engine restarts when no commits have happened before for first run.
+        if i > 1 {
+            let monitor = manager
+                .consumer_monitor
+                .load_full()
+                .expect("A consumer monitor should have been initialised");
+            monitor.set_highest_handled_commit(100);
+        }
 
         // WHEN
         manager.shutdown().await;
 
         // THEN
         assert!(!manager.is_running().await);
-
-        let boot_counter = *manager.boot_counter.lock().await;
-        assert_eq!(boot_counter, i);
     }
 }
