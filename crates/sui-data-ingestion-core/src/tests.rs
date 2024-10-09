@@ -115,8 +115,8 @@ fn temp_dir() -> std::path::PathBuf {
 fn create_executor_bundle() -> ExecutorBundle {
     let progress_file = NamedTempFile::new().unwrap();
     let path = progress_file.path().to_path_buf();
-    std::fs::write(path.clone(), "{}").unwrap();
     let progress_store = FileProgressStore::new(path);
+
     let executor = IndexerExecutor::new(
         progress_store,
         1,
