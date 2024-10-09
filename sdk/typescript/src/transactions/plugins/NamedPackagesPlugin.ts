@@ -94,16 +94,14 @@ export const namedPackagesPlugin = ({
 
 		// Create multiple queries for each name / type we need to resolve
 		// TODO: Replace with bulk APIs when available.
-		const gqlQuery = `{
-        ${requests.map((req) => {
-					const request = req.type === 'package' ? 'packageByName' : 'typeByName';
-					const fields = req.type === 'package' ? 'address' : 'repr';
+		const gqlQuery = `{${requests.map((req) => {
+			const request = req.type === 'package' ? 'packageByName' : 'typeByName';
+			const fields = req.type === 'package' ? 'address' : 'layout';
 
-					return `${gqlQueryKey(req.id)}: ${request}(name:"${req.name}") {
+			return `${gqlQueryKey(req.id)}: ${request}(name:"${req.name}") {
                     ${fields}
                 }`;
-				})}
-    }`;
+		})}}`;
 
 		const result = await client.query({
 			query: gqlQuery,
@@ -112,14 +110,21 @@ export const namedPackagesPlugin = ({
 
 		if (result.errors) throw new Error(JSON.stringify({ query: gqlQuery, errors: result.errors }));
 
-		// Parse the results and create a map of `<name|type> -> <address|repr>`
+		// Parse the results and create a map of `<name|type> -> <address|layout>`
 		for (const req of requests) {
 			const key = gqlQueryKey(req.id);
 			if (!result.data || !result.data[key]) throw new Error(`No result found for: ${req.name}`);
-			const data = result.data[key] as { address?: string; repr?: string };
+			const data = result.data[key] as {
+				address?: string;
+				layout?: {
+					struct: {
+						type: string;
+					};
+				};
+			};
 
 			if (req.type === 'package') results.packages[req.name] = data.address!;
-			if (req.type === 'moveType') results.types[req.name] = data.repr!;
+			if (req.type === 'moveType') results.types[req.name] = data.layout!.struct.type!;
 		}
 
 		return results;
