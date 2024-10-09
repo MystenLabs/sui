@@ -72,7 +72,7 @@ impl CommitConsumerMonitor {
         }
     }
 
-    pub(crate) fn highest_handled_commit(&self) -> CommitIndex {
+    pub fn highest_handled_commit(&self) -> CommitIndex {
         *self.highest_handled_commit.borrow()
     }
 
