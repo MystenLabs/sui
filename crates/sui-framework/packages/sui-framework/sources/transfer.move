@@ -147,8 +147,8 @@ module sui::transfer {
         ghost::declare_global_mut<SpecTransferAddress, address>();
         ghost::declare_global_mut<SpecTransferAddressExists, bool>();
         // requires(ghost::global<SpecTransferAddressExists, bool>() == false);
-        let coin_type_prefix = ascii::string(b"sui::Coin");
-        requires(type_name::get<T>().borrow_string().substring(0, coin_type_prefix.length()) != coin_type_prefix);
+        // let coin_type_prefix = ascii::string(b"sui::Coin");
+        // requires(type_name::get<T>().borrow_string().substring(0, coin_type_prefix.length()) != coin_type_prefix);
         transfer_impl(obj, recipient);
         ensures(ghost::global<SpecTransferAddressExists, bool>() == true);
         ensures(ghost::global<SpecTransferAddress, address>() == recipient);
