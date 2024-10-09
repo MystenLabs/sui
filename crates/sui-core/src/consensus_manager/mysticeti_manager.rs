@@ -170,6 +170,11 @@ impl ConsensusManagerTrait for MysticetiManager {
         let mut boot_counter = self.boot_counter.lock().await;
         if participated_on_previous_run {
             *boot_counter += 1;
+        } else {
+            info!(
+                "Node has not participated in previous run. Boot counter will not increment {}",
+                *boot_counter
+            );
         }
 
         let authority = ConsensusAuthority::start(
