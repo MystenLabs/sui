@@ -19,7 +19,7 @@ task 3, line 41:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 43-62:
+task 4, lines 43-60:
 //# run-graphql
 Response: {
   "data": {
@@ -29,25 +29,23 @@ Response: {
           "sendingModule": {
             "name": "M3"
           },
+          "type": {
+            "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
+          },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
-          "contents": {
-            "type": {
-              "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
-            },
-            "bcs": "AgAAAAAAAAA=",
-            "json": {
-              "new_value": "2"
-            }
-          }
+          "json": {
+            "new_value": "2"
+          },
+          "bcs": "AgAAAAAAAAA="
         }
       ]
     }
   }
 }
 
-task 5, lines 64-83:
+task 5, lines 62-79:
 //# run-graphql
 Response: {
   "data": {
@@ -57,25 +55,23 @@ Response: {
           "sendingModule": {
             "name": "M3"
           },
+          "type": {
+            "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
+          },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
-          "contents": {
-            "type": {
-              "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
-            },
-            "bcs": "AgAAAAAAAAA=",
-            "json": {
-              "new_value": "2"
-            }
-          }
+          "json": {
+            "new_value": "2"
+          },
+          "bcs": "AgAAAAAAAAA="
         }
       ]
     }
   }
 }
 
-task 6, lines 85-104:
+task 6, lines 81-98:
 //# run-graphql
 Response: {
   "data": {
@@ -85,7 +81,7 @@ Response: {
   }
 }
 
-task 7, lines 106-125:
+task 7, lines 100-117:
 //# run-graphql
 Response: {
   "data": {
@@ -95,7 +91,7 @@ Response: {
   }
 }
 
-task 8, lines 127-146:
+task 8, lines 119-136:
 //# run-graphql
 Response: {
   "data": {
@@ -105,18 +101,16 @@ Response: {
           "sendingModule": {
             "name": "M3"
           },
+          "type": {
+            "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
+          },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
-          "contents": {
-            "type": {
-              "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
-            },
-            "bcs": "AgAAAAAAAAA=",
-            "json": {
-              "new_value": "2"
-            }
-          }
+          "json": {
+            "new_value": "2"
+          },
+          "bcs": "AgAAAAAAAAA="
         }
       ]
     }

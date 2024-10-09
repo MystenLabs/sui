@@ -31,7 +31,7 @@ task 5, line 36:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 6, lines 38-59:
+task 6, lines 38-57:
 //# run-graphql
 Response: {
   "data": {
@@ -46,12 +46,10 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "contents": {
-                      "json": {
-                        "new_value": "1"
-                      },
-                      "bcs": "AQAAAAAAAAA="
-                    }
+                    "json": {
+                      "new_value": "1"
+                    },
+                    "bcs": "AQAAAAAAAAA="
                   }
                 }
               ]
@@ -67,12 +65,10 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "contents": {
-                      "json": {
-                        "new_value": "10"
-                      },
-                      "bcs": "CgAAAAAAAAA="
-                    }
+                    "json": {
+                      "new_value": "10"
+                    },
+                    "bcs": "CgAAAAAAAAA="
                   }
                 },
                 {
@@ -80,12 +76,10 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "contents": {
-                      "json": {
-                        "new_value": "11"
-                      },
-                      "bcs": "CwAAAAAAAAA="
-                    }
+                    "json": {
+                      "new_value": "11"
+                    },
+                    "bcs": "CwAAAAAAAAA="
                   }
                 }
               ]
@@ -101,12 +95,10 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "contents": {
-                      "json": {
-                        "new_value": "100"
-                      },
-                      "bcs": "ZAAAAAAAAAA="
-                    }
+                    "json": {
+                      "new_value": "100"
+                    },
+                    "bcs": "ZAAAAAAAAAA="
                   }
                 },
                 {
@@ -114,12 +106,10 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "contents": {
-                      "json": {
-                        "new_value": "101"
-                      },
-                      "bcs": "ZQAAAAAAAAA="
-                    }
+                    "json": {
+                      "new_value": "101"
+                    },
+                    "bcs": "ZQAAAAAAAAA="
                   }
                 },
                 {
@@ -127,12 +117,10 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "contents": {
-                      "json": {
-                        "new_value": "102"
-                      },
-                      "bcs": "ZgAAAAAAAAA="
-                    }
+                    "json": {
+                      "new_value": "102"
+                    },
+                    "bcs": "ZgAAAAAAAAA="
                   }
                 }
               ]
@@ -144,7 +132,7 @@ Response: {
   }
 }
 
-task 7, lines 61-74:
+task 7, lines 59-70:
 //# run-graphql
 Response: {
   "data": {
@@ -154,74 +142,62 @@ Response: {
           "sendingModule": {
             "name": "M1"
           },
-          "contents": {
-            "json": {
-              "new_value": "1"
-            },
-            "bcs": "AQAAAAAAAAA="
-          }
+          "json": {
+            "new_value": "1"
+          },
+          "bcs": "AQAAAAAAAAA="
         },
         {
           "sendingModule": {
             "name": "M1"
           },
-          "contents": {
-            "json": {
-              "new_value": "10"
-            },
-            "bcs": "CgAAAAAAAAA="
-          }
+          "json": {
+            "new_value": "10"
+          },
+          "bcs": "CgAAAAAAAAA="
         },
         {
           "sendingModule": {
             "name": "M1"
           },
-          "contents": {
-            "json": {
-              "new_value": "11"
-            },
-            "bcs": "CwAAAAAAAAA="
-          }
+          "json": {
+            "new_value": "11"
+          },
+          "bcs": "CwAAAAAAAAA="
         },
         {
           "sendingModule": {
             "name": "M1"
           },
-          "contents": {
-            "json": {
-              "new_value": "100"
-            },
-            "bcs": "ZAAAAAAAAAA="
-          }
+          "json": {
+            "new_value": "100"
+          },
+          "bcs": "ZAAAAAAAAAA="
         },
         {
           "sendingModule": {
             "name": "M1"
           },
-          "contents": {
-            "json": {
-              "new_value": "101"
-            },
-            "bcs": "ZQAAAAAAAAA="
-          }
+          "json": {
+            "new_value": "101"
+          },
+          "bcs": "ZQAAAAAAAAA="
         },
         {
           "sendingModule": {
             "name": "M1"
           },
-          "contents": {
-            "json": {
-              "new_value": "102"
-            },
-            "bcs": "ZgAAAAAAAAA="
-          }
+          "json": {
+            "new_value": "102"
+          },
+          "bcs": "ZgAAAAAAAAA="
         }
       ]
     }
   }
 }
 
-task 8, lines 76-97:
+task 8, lines 72-91:
 //# run-graphql
 Response: {
   "data": {
@@ -236,12 +212,10 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "contents": {
-                      "json": {
-                        "new_value": "1"
-                      },
-                      "bcs": "AQAAAAAAAAA="
-                    }
+                    "json": {
+                      "new_value": "1"
+                    },
+                    "bcs": "AQAAAAAAAAA="
                   }
                 }
               ]
@@ -253,7 +227,7 @@ Response: {
   }
 }
 
-task 9, lines 99-120:
+task 9, lines 93-112:
 //# run-graphql --cursors {"i":0,"c":1}
 Response: {
   "data": {
@@ -268,12 +242,10 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "contents": {
-                      "json": {
-                        "new_value": "101"
-                      },
-                      "bcs": "ZQAAAAAAAAA="
-                    }
+                    "json": {
+                      "new_value": "101"
+                    },
+                    "bcs": "ZQAAAAAAAAA="
                   }
                 },
                 {
@@ -281,12 +253,10 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "contents": {
-                      "json": {
-                        "new_value": "102"
-                      },
-                      "bcs": "ZgAAAAAAAAA="
-                    }
+                    "json": {
+                      "new_value": "102"
+                    },
+                    "bcs": "ZgAAAAAAAAA="
                   }
                 }
               ]

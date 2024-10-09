@@ -87,18 +87,11 @@ impl Event {
         }
     }
 
-    /// The event's contents as a Move value.
-    async fn contents(&self) -> Result<MoveValue> {
+    #[graphql(flatten)]
+    async fn move_value(&self) -> Result<MoveValue> {
         Ok(MoveValue::new(
             self.native.type_.clone().into(),
             Base64::from(self.native.contents.clone()),
-        ))
-    }
-
-    /// The Base64 encoded BCS serialized bytes of the event.
-    async fn bcs(&self) -> Result<Base64> {
-        Ok(Base64::from(
-            bcs::to_bytes(&self.native).map_err(|e| Error::Internal(e.to_string()))?,
         ))
     }
 }

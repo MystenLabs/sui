@@ -103,16 +103,14 @@ module Test::M2 {
         sendingModule {
           name
         }
+        type {
+          repr
+        }
         sender {
           address
         }
-        contents {
-          type {
-            repr
-          }
-          json
-          bcs
-        }
+        json
+        bcs
       }
     }
   }
@@ -127,16 +125,14 @@ module Test::M2 {
         sendingModule {
           name
         }
+        type {
+          repr
+        }
         sender {
           address
         }
-        contents {
-          type {
-            repr
-          }
-          json
-          bcs
-        }
+        json
+        bcs
       }
     }
   }
@@ -151,17 +147,14 @@ module Test::M2 {
         sendingModule {
           name
         }
+        type {
+          repr
+        }
         sender {
           address
         }
-        contents {
-          type {
-            repr
-          }
-          json
-          bcs
-        }
-
+        json
+        bcs
       }
     }
   }
@@ -176,17 +169,14 @@ module Test::M2 {
         sendingModule {
           name
         }
+        type {
+          repr
+        }
         sender {
           address
         }
-        contents {
-          type {
-            repr
-          }
-          json
-          bcs
-        }
-
+        json
+        bcs
       }
     }
   }
@@ -201,17 +191,14 @@ module Test::M2 {
         sendingModule {
           name
         }
+        type {
+          repr
+        }
         sender {
           address
         }
-        contents {
-          type {
-            repr
-          }
-          json
-          bcs
-        }
-
+        json
+        bcs
       }
     }
   }
@@ -226,17 +213,14 @@ module Test::M2 {
         sendingModule {
           name
         }
+        type {
+          repr
+        }
         sender {
           address
         }
-        contents {
-          type {
-            repr
-          }
-          json
-          bcs
-        }
-
+        json
+        bcs
       }
     }
   }
@@ -251,16 +235,14 @@ module Test::M2 {
         sendingModule {
           name
         }
+        type {
+          repr
+        }
         sender {
           address
         }
-        contents {
-          type {
-            repr
-          }
-          json
-          bcs
-        }
+        json
+        bcs
       }
     }
   }
@@ -275,16 +257,14 @@ module Test::M2 {
         sendingModule {
           name
         }
+        type {
+          repr
+        }
         sender {
           address
         }
-        contents {
-          type {
-            repr
-          }
-          json
-          bcs
-        }
+        json
+        bcs
       }
     }
   }

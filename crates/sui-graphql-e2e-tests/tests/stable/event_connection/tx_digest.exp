@@ -56,7 +56,7 @@ Response: {
   }
 }
 
-task 7, lines 45-57:
+task 7, lines 45-55:
 //# run-graphql
 Response: {
   "data": {
@@ -65,20 +65,16 @@ Response: {
         {
           "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "2"
-              }
+            "json": {
+              "new_value": "2"
             }
           }
         },
         {
           "cursor": "eyJ0eCI6MywiZSI6MSwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "3"
-              }
+            "json": {
+              "new_value": "3"
             }
           }
         }
@@ -87,7 +83,7 @@ Response: {
   }
 }
 
-task 8, lines 59-72:
+task 8, lines 57-68:
 //# run-graphql --cursors {"tx":3,"e":1,"c":1}
 Response: {
   "data": {
@@ -97,7 +93,7 @@ Response: {
   }
 }
 
-task 9, lines 74-89:
+task 9, lines 70-83:
 //# run-graphql --cursors {"tx":1,"e":1,"c":1}
 Response: {
   "data": {
@@ -107,7 +103,7 @@ Response: {
   }
 }
 
-task 10, lines 92-104:
+task 10, lines 86-96:
 //# run-graphql
 Response: {
   "data": {
@@ -116,20 +112,16 @@ Response: {
         {
           "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "4"
-              }
+            "json": {
+              "new_value": "4"
             }
           }
         },
         {
           "cursor": "eyJ0eCI6NCwiZSI6MSwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "5"
-              }
+            "json": {
+              "new_value": "5"
             }
           }
         }
@@ -138,7 +130,7 @@ Response: {
   }
 }
 
-task 11, lines 106-118:
+task 11, lines 98-108:
 //# run-graphql --cursors {"tx":4,"e":0,"c":1}
 Response: {
   "data": {
@@ -147,10 +139,8 @@ Response: {
         {
           "cursor": "eyJ0eCI6NCwiZSI6MSwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "5"
-              }
+            "json": {
+              "new_value": "5"
             }
           }
         }
@@ -159,7 +149,7 @@ Response: {
   }
 }
 
-task 12, lines 121-133:
+task 12, lines 111-121:
 //# run-graphql
 Response: {
   "data": {
@@ -168,20 +158,16 @@ Response: {
         {
           "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "2"
-              }
+            "json": {
+              "new_value": "2"
             }
           }
         },
         {
           "cursor": "eyJ0eCI6MywiZSI6MSwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "3"
-              }
+            "json": {
+              "new_value": "3"
             }
           }
         }
@@ -190,7 +176,7 @@ Response: {
   }
 }
 
-task 13, lines 135-148:
+task 13, lines 123-134:
 //# run-graphql --cursors {"tx":3,"e":1,"c":1}
 Response: {
   "data": {
@@ -199,10 +185,8 @@ Response: {
         {
           "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "2"
-              }
+            "json": {
+              "new_value": "2"
             }
           }
         }
@@ -211,7 +195,7 @@ Response: {
   }
 }
 
-task 14, lines 150-165:
+task 14, lines 136-149:
 //# run-graphql --cursors {"tx":4,"e":1,"c":1}
 Response: {
   "data": {
@@ -221,7 +205,7 @@ Response: {
   }
 }
 
-task 15, lines 168-180:
+task 15, lines 152-162:
 //# run-graphql
 Response: {
   "data": {
@@ -230,20 +214,16 @@ Response: {
         {
           "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "4"
-              }
+            "json": {
+              "new_value": "4"
             }
           }
         },
         {
           "cursor": "eyJ0eCI6NCwiZSI6MSwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "5"
-              }
+            "json": {
+              "new_value": "5"
             }
           }
         }
@@ -252,24 +232,26 @@ Response: {
   }
 }
 
-task 16, lines 182-195:
+task 16, lines 164-174:
 //# run-graphql --cursors {"tx":4,"e":1,"c":1}
 Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "Unknown field \"json\" on type \"Event\".",
-      "locations": [
+  "data": {
+    "events": {
+      "edges": [
         {
-          "line": 9,
-          "column": 17
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "4"
+            }
+          }
         }
       ]
     }
-  ]
+  }
 }
 
-task 17, lines 197-210:
+task 17, lines 176-187:
 //# run-graphql
 Response: {
   "data": {
@@ -278,20 +260,16 @@ Response: {
         {
           "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "2"
-              }
+            "json": {
+              "new_value": "2"
             }
           }
         },
         {
           "cursor": "eyJ0eCI6MywiZSI6MSwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "3"
-              }
+            "json": {
+              "new_value": "3"
             }
           }
         }
@@ -300,7 +278,7 @@ Response: {
   }
 }
 
-task 18, lines 212-225:
+task 18, lines 189-200:
 //# run-graphql
 Response: {
   "data": {
@@ -309,20 +287,16 @@ Response: {
         {
           "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "4"
-              }
+            "json": {
+              "new_value": "4"
             }
           }
         },
         {
           "cursor": "eyJ0eCI6NCwiZSI6MSwiYyI6MX0",
           "node": {
-            "contents": {
-              "json": {
-                "new_value": "5"
-              }
+            "json": {
+              "new_value": "5"
             }
           }
         }
@@ -331,7 +305,7 @@ Response: {
   }
 }
 
-task 19, lines 227-240:
+task 19, lines 202-213:
 //# run-graphql
 Response: {
   "data": {
@@ -341,7 +315,7 @@ Response: {
   }
 }
 
-task 20, lines 242-255:
+task 20, lines 215-226:
 //# run-graphql
 Response: {
   "data": {

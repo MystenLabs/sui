@@ -38,9 +38,7 @@ module Test::M1 {
             endCursor
         }
         nodes {
-          contents {
             json
-          }
         }
     }
 }
@@ -55,9 +53,7 @@ module Test::M1 {
             endCursor
         }
         nodes {
-            contents {
-                json
-            }
+            json
         }
     }
 }
