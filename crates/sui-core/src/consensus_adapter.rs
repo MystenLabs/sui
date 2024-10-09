@@ -784,17 +784,14 @@ impl ConsensusAdapter {
                     .with_label_values(&[&bucket, tx_type])
                     .observe(ack_start.elapsed().as_secs_f64());
             };
-            let observed_via_consensus = match select(processed_waiter, submit_inner.boxed()).await
-            {
+
+            guard.processed_method = match select(processed_waiter, submit_inner.boxed()).await {
                 Either::Left((observed_via_consensus, _submit_inner)) => observed_via_consensus,
                 Either::Right(((), processed_waiter)) => {
                     debug!("Submitted {transaction_keys:?} to consensus");
                     processed_waiter.await
                 }
             };
-
-            // if tx has been processed by checkpoint state sync, then exclude from the latency calculations as this can introduce to misleading results.
-            guard.exclude_from_latency_observe = !observed_via_consensus;
         }
         debug!("{transaction_keys:?} processed by consensus");
 
@@ -847,12 +844,12 @@ impl ConsensusAdapter {
     }
 
     /// Waits for transactions to appear either to consensus output or been executed via a checkpoint (state sync).
-    /// Returns true if all transactions have been processed via consensus, false otherwise (if have been synced via checkpoint)
+    /// Returns the processed method, whether the transactions have been processed via consensus, or have been synced via checkpoint.
     async fn await_consensus_or_checkpoint(
         self: &Arc<Self>,
         transaction_keys: Vec<SequencedConsensusTransactionKey>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> bool {
+    ) -> ProcessedMethod {
         let notifications = FuturesUnordered::new();
         for transaction_key in transaction_keys {
             let transaction_digests = if let SequencedConsensusTransactionKey::External(
@@ -883,7 +880,7 @@ impl ConsensusAdapter {
                     processed = epoch_store.consensus_messages_processed_notify(vec![transaction_key]) => {
                         processed.expect("Storage error when waiting for consensus message processed");
                         self.metrics.sequencing_certificate_processed.with_label_values(&["consensus"]).inc();
-                        return true;
+                        return ProcessedMethod::Consensus;
                     },
                     processed = epoch_store.transactions_executed_in_checkpoint_notify(transaction_digests), if !transaction_digests.is_empty() => {
                         processed.expect("Storage error when waiting for transaction executed in checkpoint");
@@ -894,12 +891,17 @@ impl ConsensusAdapter {
                         self.metrics.sequencing_certificate_processed.with_label_values(&["synced_checkpoint"]).inc();
                     }
                 }
-                false
+                ProcessedMethod::Checkpoint
             });
         }
 
-        let synced_via_consensus = notifications.collect::<Vec<bool>>().await;
-        synced_via_consensus.into_iter().all(|x| x)
+        let processed_methods = notifications.collect::<Vec<ProcessedMethod>>().await;
+        for method in processed_methods {
+            if method == ProcessedMethod::Checkpoint {
+                return ProcessedMethod::Checkpoint;
+            }
+        }
+        ProcessedMethod::Consensus
     }
 }
 
@@ -1025,7 +1027,13 @@ struct InflightDropGuard<'a> {
     positions_moved: Option<usize>,
     preceding_disconnected: Option<usize>,
     tx_type: &'static str,
-    exclude_from_latency_observe: bool,
+    processed_method: ProcessedMethod,
+}
+
+#[derive(PartialEq, Eq)]
+enum ProcessedMethod {
+    Consensus,
+    Checkpoint,
 }
 
 impl<'a> InflightDropGuard<'a> {
@@ -1050,7 +1058,7 @@ impl<'a> InflightDropGuard<'a> {
             positions_moved: None,
             preceding_disconnected: None,
             tx_type,
-            exclude_from_latency_observe: false,
+            processed_method: ProcessedMethod::Consensus,
         }
     }
 }
@@ -1091,10 +1099,14 @@ impl<'a> Drop for InflightDropGuard<'a> {
         };
 
         let latency = self.start.elapsed();
+        let processed_method = match self.processed_method {
+            ProcessedMethod::Consensus => "processed_via_consensus",
+            ProcessedMethod::Checkpoint => "processed_via_checkpoint",
+        };
         self.adapter
             .metrics
             .sequencing_certificate_latency
-            .with_label_values(&[&position, self.tx_type])
+            .with_label_values(&[&position, self.tx_type, processed_method])
             .observe(latency.as_secs_f64());
 
         // Only sample latency after consensus quorum is up. Otherwise, the wait for consensus
@@ -1108,7 +1120,8 @@ impl<'a> Drop for InflightDropGuard<'a> {
                 self.tx_type,
                 "shared_certificate" | "owned_certificate" | "checkpoint_signature" | "soft_bundle"
             );
-            if sampled && !self.exclude_from_latency_observe {
+            // if tx has been processed by checkpoint state sync, then exclude from the latency calculations as this can introduce to misleading results.
+            if sampled && self.processed_method == ProcessedMethod::Consensus {
                 self.adapter.latency_observer.report(latency);
             }
         }
