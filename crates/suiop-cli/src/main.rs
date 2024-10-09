@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
             incidents_cmd(&args).await?;
         }
         Resource::Pulumi(args) => {
-            pulumi_cmd(&args).await?;
+            pulumi_cmd(&args)?;
         }
         Resource::Service(args) => {
             service_cmd(&args).await?;
