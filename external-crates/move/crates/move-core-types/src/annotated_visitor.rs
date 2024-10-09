@@ -333,7 +333,7 @@ pub struct VecDriver<'c, 'b, 'l> {
 pub struct StructDriver<'c, 'b, 'l> {
     inner: ValueDriver<'c, 'b, 'l>,
     layout: &'l MoveStructLayout,
-    off: usize,
+    off: u64,
 }
 
 /// Exposes information about a variant being visited (its layout, details about the next field to
@@ -345,7 +345,7 @@ pub struct VariantDriver<'c, 'b, 'l> {
     tag: u16,
     variant_name: &'l IdentStr,
     variant_layout: &'l [MoveFieldLayout],
-    off: usize,
+    off: u64,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -461,7 +461,12 @@ impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
         self.layout
     }
 
-    /// The number of elements in this vector
+    /// The number of elements in this vector that have been visited so far.
+    pub fn off(&self) -> u64 {
+        self.off
+    }
+
+    /// The number of elements in this vector.
     pub fn len(&self) -> u64 {
         self.len
     }
@@ -532,9 +537,14 @@ impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
         self.layout
     }
 
+    /// The number of fields in this struct that have been visited so far.
+    pub fn off(&self) -> u64 {
+        self.off
+    }
+
     /// The layout of the next field to be visited (if there is one), or `None` otherwise.
     pub fn peek_field(&self) -> Option<&'l MoveFieldLayout> {
-        self.layout.fields.get(self.off)
+        self.layout.fields.get(self.off as usize)
     }
 
     /// Visit the next field in the struct. The driver accepts a visitor to use for this field,
@@ -624,9 +634,14 @@ impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
         self.variant_name
     }
 
+    /// The number of elements in this vector that have been visited so far.
+    pub fn off(&self) -> u64 {
+        self.off
+    }
+
     /// The layout of the next field to be visited (if there is one), or `None` otherwise.
     pub fn peek_field(&self) -> Option<&'l MoveFieldLayout> {
-        self.variant_layout.get(self.off)
+        self.variant_layout.get(self.off as usize)
     }
 
     /// Visit the next field in the variant. The driver accepts a visitor to use for this field,
