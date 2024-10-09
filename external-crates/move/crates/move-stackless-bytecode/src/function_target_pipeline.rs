@@ -383,10 +383,12 @@ impl FunctionTargetsHolder {
         writeln!(f, "Verification specs:")?;
         for spec in self.specs() {
             let fun_env = env.get_function(*spec);
-            if self.has_target(
-                &fun_env,
-                &FunctionVariant::Verification(VerificationFlavor::Regular),
-            ) {
+            if self.is_verified_spec(spec)
+                && self.has_target(
+                    &fun_env,
+                    &FunctionVariant::Verification(VerificationFlavor::Regular),
+                )
+            {
                 writeln!(f, "  {}", fun_env.get_full_name_str())?;
             }
         }

@@ -50,6 +50,105 @@ pub struct MonoInfo {
     pub axioms: Vec<(Condition, Vec<Vec<Type>>)>,
 }
 
+impl MonoInfo {
+    pub fn dump(&self, env: &GlobalEnv, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "\n\n==== mono-analysis result ====\n")?;
+        let tctx = TypeDisplayContext::WithEnv {
+            env,
+            type_param_names: None,
+        };
+        let display_inst = |tys: &[Type]| {
+            tys.iter()
+                .map(|ty| ty.display(&tctx).to_string())
+                .join(", ")
+        };
+        for param_idx in &self.type_params {
+            writeln!(
+                f,
+                "type parameter {}",
+                Type::TypeParameter(*param_idx).display(&tctx)
+            )?;
+        }
+        for (sid, insts) in &self.structs {
+            let sname = env.get_struct(*sid).get_full_name_str();
+            writeln!(f, "struct {} = {{", sname)?;
+            for inst in insts {
+                writeln!(f, "  <{}>", display_inst(inst))?;
+            }
+            writeln!(f, "}}")?;
+        }
+        for ((fid, variant), insts) in &self.funs {
+            let fname = env.get_function(*fid).get_full_name_str();
+            writeln!(f, "fun {} [{}] = {{", fname, variant)?;
+            for inst in insts {
+                writeln!(f, "  <{}>", display_inst(inst))?;
+            }
+            writeln!(f, "}}")?;
+        }
+        for (fid, insts) in &self.spec_funs {
+            let module_env = env.get_module(fid.module_id);
+            let decl = module_env.get_spec_fun(fid.id);
+            let mname = module_env.get_full_name_str();
+            let fname = decl.name.display(env.symbol_pool());
+            writeln!(f, "spec fun {}::{} = {{", mname, fname)?;
+            for inst in insts {
+                writeln!(f, "  <{}>", display_inst(inst))?;
+            }
+            writeln!(f, "}}")?;
+        }
+        for (module, insts) in &self.native_inst {
+            writeln!(
+                f,
+                "module {} = {{",
+                env.get_module(*module).get_full_name_str()
+            )?;
+            for inst in insts {
+                writeln!(f, "  <{}>", display_inst(inst))?;
+            }
+            writeln!(f, "}}")?;
+        }
+        for (cond, insts) in &self.axioms {
+            writeln!(f, "axiom {} = {{", cond.loc.display(env))?;
+            for inst in insts {
+                writeln!(f, "  <{}>", display_inst(inst))?;
+            }
+            writeln!(f, "}}")?;
+        }
+
+        Ok(())
+    }
+
+    pub fn dump_cfg(&self, env: &GlobalEnv, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "=== verification call graph ===")?;
+        for (func_id, variant) in self.funs.keys() {
+            let func_env = env.get_function(*func_id);
+            writeln!(
+                f,
+                "fun {} [{}] -> {{",
+                func_env.get_full_name_str(),
+                variant
+            )?;
+            for callee_id in func_env.get_called_functions() {
+                let callee_env = env.get_function(callee_id);
+                writeln!(f, "  {}", callee_env.get_full_name_str())?;
+            }
+            writeln!(f, "}}")?;
+        }
+        Ok(())
+    }
+}
+
+pub struct MonoInfoCFGDisplay<'a> {
+    pub info: &'a MonoInfo,
+    pub env: &'a GlobalEnv,
+}
+
+impl<'a> fmt::Display for MonoInfoCFGDisplay<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.info.dump_cfg(self.env, f)
+    }
+}
+
 /// Get the information computed by this analysis.
 pub fn get_info(env: &GlobalEnv) -> Rc<MonoInfo> {
     env.get_extension::<MonoInfo>().unwrap()
@@ -84,73 +183,10 @@ impl FunctionTargetProcessor for MonoAnalysisProcessor {
         env: &GlobalEnv,
         _targets: &FunctionTargetsHolder,
     ) -> fmt::Result {
-        writeln!(f, "\n\n==== mono-analysis result ====\n")?;
         let info = env
             .get_extension::<MonoInfo>()
             .expect("monomorphization analysis not run");
-        let tctx = TypeDisplayContext::WithEnv {
-            env,
-            type_param_names: None,
-        };
-        let display_inst = |tys: &[Type]| {
-            tys.iter()
-                .map(|ty| ty.display(&tctx).to_string())
-                .join(", ")
-        };
-        for param_idx in &info.type_params {
-            writeln!(
-                f,
-                "type parameter {}",
-                Type::TypeParameter(*param_idx).display(&tctx)
-            )?;
-        }
-        for (sid, insts) in &info.structs {
-            let sname = env.get_struct(*sid).get_full_name_str();
-            writeln!(f, "struct {} = {{", sname)?;
-            for inst in insts {
-                writeln!(f, "  <{}>", display_inst(inst))?;
-            }
-            writeln!(f, "}}")?;
-        }
-        for ((fid, variant), insts) in &info.funs {
-            let fname = env.get_function(*fid).get_full_name_str();
-            writeln!(f, "fun {} [{}] = {{", fname, variant)?;
-            for inst in insts {
-                writeln!(f, "  <{}>", display_inst(inst))?;
-            }
-            writeln!(f, "}}")?;
-        }
-        for (fid, insts) in &info.spec_funs {
-            let module_env = env.get_module(fid.module_id);
-            let decl = module_env.get_spec_fun(fid.id);
-            let mname = module_env.get_full_name_str();
-            let fname = decl.name.display(env.symbol_pool());
-            writeln!(f, "spec fun {}::{} = {{", mname, fname)?;
-            for inst in insts {
-                writeln!(f, "  <{}>", display_inst(inst))?;
-            }
-            writeln!(f, "}}")?;
-        }
-        for (module, insts) in &info.native_inst {
-            writeln!(
-                f,
-                "module {} = {{",
-                env.get_module(*module).get_full_name_str()
-            )?;
-            for inst in insts {
-                writeln!(f, "  <{}>", display_inst(inst))?;
-            }
-            writeln!(f, "}}")?;
-        }
-        for (cond, insts) in &info.axioms {
-            writeln!(f, "axiom {} = {{", cond.loc.display(env))?;
-            for inst in insts {
-                writeln!(f, "  <{}>", display_inst(inst))?;
-            }
-            writeln!(f, "}}")?;
-        }
-
-        Ok(())
+        info.dump(env, f)
     }
 }
 

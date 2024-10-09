@@ -33,7 +33,8 @@ use move_stackless_bytecode::{
     function_data_builder::{FunctionDataBuilder, FunctionDataBuilderOptions},
     function_target::FunctionTarget,
     function_target_pipeline::{
-        FunctionTargetProcessor, FunctionTargetsHolder, FunctionVariant, VerificationFlavor,
+        FunctionTargetProcessor, FunctionTargetsHolder, FunctionTargetsHolderDisplay,
+        FunctionVariant, VerificationFlavor,
     },
     livevar_analysis::LiveVarAnalysisProcessor,
     mono_analysis::{self, MonoInfo},
@@ -116,6 +117,13 @@ impl<'env> BoogieTranslator<'env> {
             "{}",
             FunctionTargetsHolderDisplay {
                 targets: self.targets,
+                env: self.env
+            }
+        );
+        println!(
+            "{}",
+            mono_analysis::MonoInfoCFGDisplay {
+                info: &mono_info,
                 env: self.env
             }
         );
