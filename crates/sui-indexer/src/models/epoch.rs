@@ -34,6 +34,8 @@ pub struct StoredEpochInfo {
     pub epoch_commitments: Option<Vec<u8>>,
     /// This is the system state summary at the beginning of the epoch, serialized as JSON.
     pub system_state_summary_json: Option<serde_json::Value>,
+    /// Total number of transactions that have occurred at the end of this epoch, populated at the
+    /// end of the epoch.
     pub network_total_transactions: Option<i64>,
 }
 

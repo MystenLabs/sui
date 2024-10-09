@@ -1268,7 +1268,7 @@ impl PgIndexerStore {
         // partition_0 has been created, so no need to advance it.
         if let Some(last_epoch_id) = last_epoch_id {
             let last_db_epoch: Option<StoredEpochInfo> = epochs::table
-                .filter(epochs::epoch.eq(last_epoch_id as i64))
+                .filter(epochs::epoch.eq(last_epoch_id))
                 .first::<StoredEpochInfo>(&mut connection)
                 .await
                 .optional()
@@ -1488,14 +1488,19 @@ impl PgIndexerStore {
 
         let mut connection = self.pool.get().await?;
 
-        epochs::table
-            .filter(epochs::epoch.eq(epoch as i64))
-            .select(epochs::network_total_transactions)
-            .first::<Option<i64>>(&mut connection)
-            .await
-            .map_err(Into::into)
-            .context("Failed to get network total transactions in epoch")
-            .map(|v| v.map(|v| v as u64))
+        // TODO: (wlmyng) update to read from epochs::network_total_transactions
+
+        Ok(Some(
+            checkpoints::table
+                .filter(checkpoints::epoch.eq(epoch as i64))
+                .select(checkpoints::network_total_transactions)
+                .order_by(checkpoints::sequence_number.desc())
+                .first::<i64>(&mut connection)
+                .await
+                .map_err(Into::into)
+                .context("Failed to get network total transactions in epoch")
+                .map(|v| v as u64)?,
+        ))
     }
 
     async fn update_watermarks_upper_bound<E: IntoEnumIterator>(

@@ -70,9 +70,11 @@ impl EpochPartitionData {
         // Determining the tx_sequence_number range for the epoch partition differs from the
         // checkpoint_sequence_number range, because the former is a sum of total transactions -
         // this sum already addresses the off-by-one.
-        let next_epoch_start_tx = epoch.network_total_transactions;
+        let last_epoch_network_total_transactions =
+            epoch.last_epoch_network_total_transactions().unwrap();
+        let next_epoch_start_tx = last_epoch_network_total_transactions;
         let last_epoch_start_tx =
-            next_epoch_start_tx - last_db_epoch.epoch_total_transactions.unwrap() as u64;
+            next_epoch_start_tx - epoch.last_epoch_total_transactions().unwrap();
 
         Self {
             last_epoch,

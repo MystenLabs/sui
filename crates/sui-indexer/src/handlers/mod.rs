@@ -56,8 +56,6 @@ pub struct TransactionObjectChangesToCommit {
 pub struct EpochToCommit {
     pub last_epoch: Option<EndOfEpochUpdate>,
     pub new_epoch: StartOfEpochUpdate,
-    /// Network total transactions of the `last_epoch`.
-    pub network_total_transactions: u64,
 }
 
 impl EpochToCommit {
@@ -67,6 +65,18 @@ impl EpochToCommit {
 
     pub fn new_epoch_first_checkpoint_id(&self) -> u64 {
         self.new_epoch.first_checkpoint_id as u64
+    }
+
+    pub fn last_epoch_total_transactions(&self) -> Option<u64> {
+        self.last_epoch
+            .as_ref()
+            .map(|e| e.epoch_total_transactions as u64)
+    }
+
+    pub fn last_epoch_network_total_transactions(&self) -> Option<u64> {
+        self.last_epoch
+            .as_ref()
+            .map(|e| e.network_total_transactions as u64)
     }
 }
 
