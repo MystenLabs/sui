@@ -40,7 +40,7 @@ pub struct SuiTxnError {
     cmd_idx: Option<u64>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TokenTransfer {
     chain_id: u8,
     nonce: u64,
@@ -66,7 +66,7 @@ pub struct GovernanceAction {
     data: serde_json::Value,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TokenTransferData {
     sender_address: Vec<u8>,
     destination_chain: u8,
@@ -135,7 +135,7 @@ impl GovernanceAction {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum TokenTransferStatus {
     Deposited,
     Approved,
@@ -164,7 +164,7 @@ pub(crate) enum GovernanceActionType {
     AddEVMTokens,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum BridgeDataSource {
     Sui,
     Eth,
