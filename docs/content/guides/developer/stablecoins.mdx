@@ -65,77 +65,115 @@ Before you start building the sample app to perform a USDC transfer, ensure you 
 
 ### Installation
 
-To begin, create a new project directory and initialize it with npm:
+To begin, create a new project directory (`usdc-transfer-app`, for example) and initialize it with pnpm:
 
-   ```bash
-   npx create-next-app@latest usdc-transfer-app
-   ```
-When prompted, choose the following options:
-   | Option | Value |
-   | --- | --- |
-   | `Would you like to use TypeScript?` | `Yes` |
-   | `Would you like to use ESLint?` | `Yes` |
-   | `Would you like to use Tailwind CSS?` | `Yes` |
-   | `Would you like to use src/ directory?` | `Yes` |
-   | `Would you like to use App Router?` | `Yes` |
-   | `Would you like to use customize the default import alias (@/*)?` | `No` |
+```bash
+pnpm init
+```
 
-Navigate to the project directory the previous `npx` command creates:
+To keep a small footprint, the instruction uses [Parcel](https://parceljs.org/) to render the example React-based app. You can use a more robust framework, like Next.js, or a different package manager, but you must modify the steps appropriately. 
 
-   ```bash
-   cd usdc-transfer-app
-   ```
+```bash
+pnpm add react react-dom parcel
+```
 
-Install additional dependencies:
+Install Sui dependencies next:
 
-   ```bash
-   npm install @mysten/dapp-kit @mysten/sui @mysten/wallet-kit @tanstack/react-query
-   ```
+```bash
+pnpm add @mysten/dapp-kit @mysten/sui @tanstack/react-query
+```
+
+Finally, update your `package.json` to include the following script:
+
+```json
+"scripts": {
+    "start": "parcel index.html"
+  },
+```
+
+### Create site structure
+
+At the root of your project directory, create an `index.html` file and save the following content to it:
+
+<details>
+<summary>
+`index.html` file
+</summary>
+{@inject: examples/usdc-transfer-app/index.html}
+</details>
+
+Next, create and save an `index.js` file in the same location with the following code: 
+
+<details>
+<summary>
+`index.js` file
+</summary>
+{@inject: examples/usdc-transfer-app/index.js}
+</details>
+
+To style the output for the site, create a `global.css` file in the root of your project. Copy and paste the following minimal styling into the file and save:
+
+<details>
+<summary>
+`global.css` file
+</summary>
+{@inject: examples/usdc-transfer-app/global.css}
+</details>
+
+Finally, create an `App.js` file at the project root. When complete, this file will hold the logic for the USDC transfer. For now, just create the file to display some basic text. This example does not use TypeScript to keep the instruction focused, but you can certainly use it in your own projects.
+
+<details>
+<summary>
+`App.js` file
+</summary>
+{@inject: examples/usdc-transfer-app/lib/App-stub.js noComments noTitle}
+</details>
 
 Start the development server to make sure the default app runs using the following command in the root of your project:
 
 ```bash
-npm run dev
+pnpm start
 ```
 
-Open a browser to `localhost:3000` to make sure the default Next.js screen appears.
+Open a browser to `localhost:1234` to make sure the Hello World text appears.
 
 ### Import code and setup
 
-Open the `src/app/page.tsx` file and make the changes that follow. 
+Open the `App.js` file and make the changes that follow. 
 
 First, import necessary libraries and set up the network configuration.
-{@inject: examples/usdc-transfer-app/src/app/page.tsx#setup}
+
+{@inject: examples/usdc-transfer-app/App.js#setup}
 
 This component handles the main functionality of the application, including wallet connection, defining token, and token transfer.
 
-#### Define USDC testnet token contract
+#### Define USDC Testnet token contract
 
-{@inject: examples/usdc-transfer-app/src/app/page.tsx#variable=USDC_TYPE}
+{@inject: examples/usdc-transfer-app/App.js#variable=USDC_TYPE}
 
 #### State management
 
 Create a `HomeContent()` function that is going to be responsible for setting up and displaying the UI. At the top of this function, define state variables to manage the connection status, amount, recipient address, and transaction status.
 
-{@inject: examples/usdc-transfer-app/src/app/page.tsx#state}
+{@inject: examples/usdc-transfer-app/App.js#state}
 
 **Effect Hook for Connection Status** 
 
 Use useEffect to update the connection status whenever the currentAccount changes.
 
-{@inject: examples/usdc-transfer-app/src/app/page.tsx#useeffect}
+{@inject: examples/usdc-transfer-app/App.js#useeffect}
 
 #### Token sending logic
 
 Define the function to handle sending tokens, including validation and transaction execution.
 
-{@inject: examples/usdc-transfer-app/src/app/page.tsx#variable=handleSendTokens}
+{@inject: examples/usdc-transfer-app/App.js#variable=handleSendTokens}
 
 #### Rendering the UI
 
 Render the main UI components, including input fields for amount and recipient address, and a button to send tokens.
 
-{@inject: examples/usdc-transfer-app/src/app/page.tsx#ui}
+{@inject: examples/usdc-transfer-app/App.js#ui}
 
 #### Complete HomeContent function
 
@@ -145,18 +183,18 @@ After adding the UI components, your `HomeContent()` function is complete. Conti
 <summary>
 Complete `HomeContent()` function
 </summary>
-{@inject: examples/usdc-transfer-app/src/app/page.tsx#component=HomeContent}
+{@inject: examples/usdc-transfer-app/App.js#component=HomeContent}
 </details>
 
 ### Main application component
 
 This component wraps the `HomeContent()` with necessary providers for state management and wallet connection.
 
-{@inject: examples/usdc-transfer-app/src/app/page.tsx#component=Home}
+{@inject: examples/usdc-transfer-app/App.js#component=App}
 
-Save your `page.tsx` file and run `npm run dev` from your project root to start the development server (if not already running). 
+Save your `App.js` file and run `pnpm start` from your project root to start the development server (if not already running). 
 
-Open [http://localhost:3000](http://localhost:3000) in your browser. Your UI should display and look similar to the following:
+Open [http://localhost:1234](http://localhost:1234) in your browser. Your UI should display and look similar to the following:
 
 ![Stablecoin UI](./images/stablecoinui.png)
 
@@ -180,9 +218,10 @@ Follow these steps to perform a USDC transfer:
 1. Your wallet prompts you to approve the transaction. Review the details and confirm.
 1. Wait for the transaction to be processed. The app displays the transaction status. A successful transaction looks like the following:
   <div class="pt-2">![Successful transaction](./images/stablecoinsuccess.png)</div>
+  
 
-### Source code
+## Related links
 
-The complete source code for the USDC example is available on GitHub from Circle's representative: [USDC Transfer App](https://github.com/circle-ccooper/SUI-USDC-Transfer).
-
-This original source code was copied to the Sui repo to ensure availability and for integration into the docs.  
+- [Regulated Coin and Deny List](./coin/regulated.mdx): Create a regulated coin and add or remove names from the deny list.
+- [Loyalty Token](./coin/loyalty.mdx): Create a token to reward user loyalty.
+- [In-Game Token](./coin/in-game-token.mdx): Create tokens that can be used only within a mobile game.

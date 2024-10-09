@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-"use client";
+// docs::#setup
 import React, { useState, useEffect } from "react";
 import {
   createNetworkConfig,
@@ -17,6 +17,7 @@ import { getFullnodeUrl } from "@mysten/sui/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import "@mysten/dapp-kit/dist/index.css";
+// docs::/#setup
 
 const { networkConfig } = createNetworkConfig({
   testnet: {
@@ -32,10 +33,10 @@ const queryClient = new QueryClient();
 
 // Define the USDC token type on Sui Testnet
 // This is the unique identifier for the USDC token on Sui
-const USDC_TYPE =
-  "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
+const USDC_TYPE = '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
 
 function HomeContent() {
+  // docs::#state
   // Use the wallet kit to get the current account and transaction signing function
   const currentAccount = useCurrentAccount();
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
@@ -46,10 +47,13 @@ function HomeContent() {
   const [amount, setAmount] = useState("");
   const [recipientAddress, setRecipientAddress] = useState("");
   const [txStatus, setTxStatus] = useState("");
+  // docs::/#state
 
+  // docs::#useeffect
   useEffect(() => {
     setConnected(!!currentAccount);
   }, [currentAccount]);
+  // docs::/#useeffect
 
   const handleSendTokens = async () => {
     if (!currentAccount || !amount || !recipientAddress) {
@@ -101,45 +105,47 @@ function HomeContent() {
     }
   };
 
+  // docs::#ui
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm">
-        <h1 className="text-4xl font-bold mb-8">Sui USDC Sender (Testnet)</h1>
+    <main className="mainwrapper">
+      <div className="outerwrapper">
+        <h1 className="h1">Sui USDC Sender (Testnet)</h1>
         <ConnectButton />
         {connected && currentAccount && (
-          <p className="mt-4">Connected: {currentAccount.address}</p>
+          <p className="status">Connected: {currentAccount.address}</p>
         )}
-        <div className="mt-8">
+        <div className="form">
           <input
             type="text"
             placeholder="Amount (in USDC)"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="p-2 border rounded mr-2 text-black"
+            className="input"
           />
           <input
             type="text"
             placeholder="Recipient Address"
             value={recipientAddress}
             onChange={(e) => setRecipientAddress(e.target.value)}
-            className="p-2 border rounded mr-2 text-black"
+            className="input"
           />
           <button
             onClick={handleSendTokens}
             disabled={!connected}
-            className={`p-2 rounded ${
+            className={`${
               connected && amount && recipientAddress
-                ? "bg-blue-200 text-black hover:bg-blue-300"
-                : "bg-gray-300 text-gray-500"
-            } transition-colors duration-200`}
+                ? "connected"
+                : "notconnected"
+            } transition`}
           >
             Send USDC
           </button>
         </div>
-        {txStatus && <p className="mt-4">{txStatus}</p>}
+        {txStatus && <p className="status">{txStatus}</p>}
       </div>
     </main>
   );
+  // docs::/#ui
 }
 
 function App() {

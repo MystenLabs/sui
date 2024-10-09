@@ -180,7 +180,7 @@ const addCodeInject = function (source) {
                   }
                 });
                 let varContent = [];
-                if (language === "ts") {
+                if (language === "ts" || language === "js") {
                   const varTsFunction = `^( *)?.*?(let|const) \\b${variableName}\\b.*=>`;
                   const varTsVariable = `^( *)?.*?(let|const) \\b${variableName}\\b (?!.*=>)=.*;`;
                   const varTsRE = new RegExp(varTsFunction, "m");
@@ -518,6 +518,7 @@ const addCodeInject = function (source) {
                 language,
                 injectFile,
                 processed,
+                options,
               );
               // Temporarily replace double spaces with tabs. Replaced back downstream.
               // Prevents unexpected whitespace removal from util functions.

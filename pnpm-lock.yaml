@@ -77,6 +77,9 @@ importers:
       prettier-plugin-tailwindcss:
         specifier: ^0.6.5
         version: 0.6.5(@ianvs/prettier-plugin-sort-imports@4.3.0(prettier@3.3.2))(prettier@3.3.2)
+      process:
+        specifier: ^0.11.10
+        version: 0.11.10
       tsx:
         specifier: ^4.16.2
         version: 4.16.2
