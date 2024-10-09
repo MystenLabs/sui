@@ -20,12 +20,16 @@ pub struct SpecGlobalVariableInfo {
 }
 
 impl SpecGlobalVariableInfo {
-    pub fn get_imm_vars(&self) -> &BTreeSet<Vec<Type>> {
+    pub fn imm_vars(&self) -> &BTreeSet<Vec<Type>> {
         &self.imm_vars
     }
 
-    pub fn get_mut_vars(&self) -> &BTreeSet<Vec<Type>> {
+    pub fn mut_vars(&self) -> &BTreeSet<Vec<Type>> {
         &self.mut_vars
+    }
+
+    pub fn all_vars(&self) -> impl Iterator<Item = Vec<Type>> + '_ {
+        self.imm_vars.union(&self.mut_vars).cloned()
     }
 }
 
@@ -144,11 +148,11 @@ pub fn collect_spec_global_variable_info(
                         .unwrap(),
                 );
                 Some((
-                    info.get_imm_vars()
+                    info.imm_vars()
                         .iter()
                         .map(|tys| tys.iter().map(|ty| ty.instantiate(type_inst)).collect_vec())
                         .collect_vec(),
-                    info.get_mut_vars()
+                    info.mut_vars()
                         .iter()
                         .map(|tys| tys.iter().map(|ty| ty.instantiate(type_inst)).collect_vec())
                         .collect_vec(),
@@ -195,15 +199,11 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
         let info = collect_spec_global_variable_info(targets, func_env, &data.code);
         if targets.is_spec(&func_env.get_qualified_id()) {
             let spec_info = get_info(&data);
-            let all_vars = spec_info
-                .get_imm_vars()
-                .union(spec_info.get_mut_vars())
-                .cloned()
-                .collect();
-            let undeclared_imm_vars = info.get_imm_vars().difference(&all_vars).collect_vec();
+            let all_vars = spec_info.all_vars().collect();
+            let undeclared_imm_vars = info.imm_vars().difference(&all_vars).collect_vec();
             let undeclared_mut_vars = info
-                .get_mut_vars()
-                .difference(&spec_info.get_mut_vars())
+                .mut_vars()
+                .difference(&spec_info.mut_vars())
                 .collect_vec();
 
             assert!(
@@ -267,7 +267,7 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
 
             for tys in get_spec_global_instances(&FunctionTarget::new(&spec_env, spec_data)) {
                 assert!(
-                    info.get_imm_vars().contains(&tys) || info.get_mut_vars().contains(&tys),
+                    info.imm_vars().contains(&tys) || info.mut_vars().contains(&tys),
                     "undeclared spec global variable: function={}, tys=({})",
                     spec_env.get_full_name_str(),
                     tys.iter()

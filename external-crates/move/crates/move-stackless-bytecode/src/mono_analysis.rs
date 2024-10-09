@@ -31,6 +31,7 @@ use move_model::{
 use crate::{
     function_target::FunctionTarget,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder, FunctionVariant},
+    spec_global_variable_analysis,
     stackless_bytecode::{BorrowEdge, Bytecode, Operation},
     usage_analysis::UsageProcessor,
 };
@@ -247,6 +248,13 @@ impl<'a> Analyzer<'a> {
                         continue;
                     }
                     self.analyze_fun(target.clone());
+
+                    let info = spec_global_variable_analysis::get_info(&target.data);
+                    for tys in info.all_vars() {
+                        for ty in &tys {
+                            self.add_type_root(ty)
+                        }
+                    }
 
                     // We also need to analyze all modify targets because they are not
                     // included in the bytecode.

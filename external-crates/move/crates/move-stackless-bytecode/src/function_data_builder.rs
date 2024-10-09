@@ -252,7 +252,6 @@ impl<'env> FunctionDataBuilder<'env> {
             })
             .collect();
 
-
         code.iter()
             .map(|bc| bc.substitute_labels(&label_subst))
             .collect()

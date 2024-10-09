@@ -108,7 +108,6 @@ impl<'env> BoogieTranslator<'env> {
     pub fn translate(&mut self) {
         let writer = self.writer;
         let env = self.env;
-        let spec_translator = &self.spec_translator;
 
         let mono_info = mono_analysis::get_info(self.env);
         let empty = &BTreeSet::new();
@@ -229,12 +228,7 @@ impl<'env> BoogieTranslator<'env> {
         self.spec_translator
             .translate_axioms(env, mono_info.as_ref());
 
-        let ghost_module_id = self
-            .env
-            .find_module_by_name(self.env.symbol_pool().make("ghost"))
-            .unwrap()
-            .get_id();
-        let global_function_id = FunId::new(self.env.symbol_pool().make("global"));
+        self.translate_ghost_global(&mono_info);
 
         // let singleton_function_id = FunId::new(self.env.symbol_pool().make("singleton"));
         let reverse_function_id = FunId::new(self.env.symbol_pool().make("reverse"));
@@ -278,8 +272,10 @@ impl<'env> BoogieTranslator<'env> {
         for module_env in self.env.get_modules() {
             self.writer.set_location(&module_env.env.internal_loc());
 
-            spec_translator.translate_spec_vars(&module_env, mono_info.as_ref());
-            spec_translator.translate_spec_funs(&module_env, mono_info.as_ref());
+            self.spec_translator
+                .translate_spec_vars(&module_env, mono_info.as_ref());
+            self.spec_translator
+                .translate_spec_funs(&module_env, mono_info.as_ref());
 
             for ref struct_env in module_env.get_structs() {
                 if struct_env.is_native_or_intrinsic() {
@@ -304,9 +300,8 @@ impl<'env> BoogieTranslator<'env> {
             }
 
             for ref fun_env in module_env.get_functions() {
-                if (fun_env.is_native_or_intrinsic()
-                    || intrinsic_fun_ids.contains(&fun_env.get_qualified_id()))
-                    && fun_env.get_qualified_id() != ghost_module_id.qualified(global_function_id)
+                if fun_env.is_native_or_intrinsic()
+                    || intrinsic_fun_ids.contains(&fun_env.get_qualified_id())
                 {
                     continue;
                 }
@@ -653,6 +648,68 @@ impl<'env> BoogieTranslator<'env> {
         }
     }
 
+    fn translate_ghost_global(&mut self, mono_info: &std::rc::Rc<MonoInfo>) {
+        let ghost_module_id = self
+            .env
+            .find_module_by_name(self.env.symbol_pool().make("ghost"))
+            .unwrap()
+            .get_id();
+        let global_function_id = FunId::new(self.env.symbol_pool().make("global"));
+        let ghost_global_fun_env = self
+            .env
+            .get_function(ghost_module_id.qualified(global_function_id));
+        let ghost_global_fun_target = self
+            .targets
+            .get_target(&ghost_global_fun_env, &FunctionVariant::Baseline);
+
+        let ghost_declare_global_type_instances = self
+            .targets
+            .specs()
+            .map(|id| {
+                spec_global_variable_analysis::get_info(
+                    self.targets
+                        .get_data(id, &FunctionVariant::Baseline)
+                        .unwrap(),
+                )
+                .all_vars()
+            })
+            .flatten()
+            .collect::<BTreeSet<_>>();
+        let ghost_global_type_instances = mono_info
+            .funs
+            .get(&(
+                ghost_global_fun_env.get_qualified_id(),
+                FunctionVariant::Baseline,
+            ))
+            .unwrap();
+
+        assert!(
+            ghost_global_type_instances.is_subset(&ghost_declare_global_type_instances),
+            "missing type instances for function {}",
+            ghost_global_fun_env.get_full_name_str(),
+        );
+
+        for type_inst in &ghost_declare_global_type_instances {
+            FunctionTranslator {
+                parent: self,
+                fun_target: &ghost_global_fun_target,
+                type_inst,
+                style: FunctionTranslationStyle::Default,
+            }
+            .generate_ghost_global_var_declaration();
+        }
+
+        for type_inst in ghost_global_type_instances {
+            FunctionTranslator {
+                parent: self,
+                fun_target: &ghost_global_fun_target,
+                type_inst,
+                style: FunctionTranslationStyle::Default,
+            }
+            .translate();
+        }
+    }
+
     fn get_verification_target_fun_env(
         &self,
         spec_fun_qid: &QualifiedId<FunId>,
@@ -966,17 +1023,26 @@ impl<'env> FunctionTranslator<'env> {
                 && self.fun_target.get_return_count() == 1
         );
         let global_var_name = format!("$global_var__{}", self.function_variant_name(self.style));
-        let global_var_type = self.boogie_type_for_fun(
-            self.parent.env,
-            &self.inst(self.fun_target.get_return_type(0)),
-            &Bottom,
-        );
         emitln!(self.writer(), "{");
         self.writer().indent();
         emitln!(self.writer(), "$ret0 := {};", global_var_name);
         self.writer().unindent();
         emitln!(self.writer(), "}");
-        emitln!(self.writer());
+    }
+
+    fn generate_ghost_global_var_declaration(&self) {
+        assert!(
+            self.fun_target.func_env.is_native()
+                && self.fun_target.get_type_parameter_count() == 2
+                && self.fun_target.get_parameter_count() == 0
+                && self.fun_target.get_return_count() == 1
+        );
+        let global_var_name = format!("$global_var__{}", self.function_variant_name(self.style));
+        let global_var_type = self.boogie_type_for_fun(
+            self.parent.env,
+            &self.inst(self.fun_target.get_return_type(0)),
+            &Bottom,
+        );
         emitln!(
             self.writer(),
             "var {}: {};",
@@ -2052,7 +2118,7 @@ impl<'env> FunctionTranslator<'env> {
 
                             for type_inst in
                                 spec_global_variable_analysis::get_info(&self.fun_target.data)
-                                    .get_mut_vars()
+                                    .mut_vars()
                             {
                                 let global_name = format!(
                                     "$global_var__{}",
