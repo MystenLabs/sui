@@ -37,7 +37,7 @@ USDY is a fully collateralized US dollar stablecoin issued by Ondo Finance, allo
 
 **Site:** [Ondo Finance](https://ondo.finance/)
 
-## USDC guide {#usdc-guide}
+## How to transfer USDC on Sui {#usdc-guide}
 
 USDC provides the ability to transfer dollars over public blockchains using smart contracts. The smart contract allows users to send, receive, and store dollars on chain with a wallet.
 
@@ -159,7 +159,7 @@ Create a `HomeContent()` function that is going to be responsible for setting up
 
 **Effect Hook for Connection Status** 
 
-Use useEffect to update the connection status whenever the currentAccount changes.
+Use `useEffect` to update the connection status whenever the `currentAccount` value changes.
 
 {@inject: examples/usdc-transfer-app/App.js#useeffect}
 
@@ -197,6 +197,13 @@ Save your `App.js` file and run `pnpm start` from your project root to start the
 Open [http://localhost:1234](http://localhost:1234) in your browser. Your UI should display and look similar to the following:
 
 ![Stablecoin UI](./images/stablecoinui.png)
+
+<details>
+<summary>
+Complete code for `App.js`
+</summary>
+{@inject: examples/usdc-transfer-app/App.js noComments}
+</details> 
 
 ### Connecting your wallet
 
