@@ -54,8 +54,8 @@ impl RocksDBStore {
             (
                 Self::BLOCKS_CF,
                 default_db_options()
-                    .optimize_for_write_throughput()
-                    // Use larger block size to improve compression ratio.
+                    .optimize_for_write_throughput_and_storage()
+                    // Using larger block is ok since there is not much point reads on the cf.
                     .set_block_options(512, 128 << 10)
                     .options,
             ),
