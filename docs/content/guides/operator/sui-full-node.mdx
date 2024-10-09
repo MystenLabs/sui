@@ -84,14 +84,14 @@ cmake
 Instructions for building, installing, or downloading the `sui-node` binary are available at [Sui Install](../developer/getting-started/sui-install.mdx). 
 These install instructions are specific to the `sui` cli, but apply to the `sui-node` binary as well.
 
-There are many ways to run a Sui Full node (bare metal, virtual machine, Kubernetes statefulset, etc.), and the solution that you choose depends on your specific needs as well as the infrastructure that you have available.
+There are many ways to run a Sui Full node (bare metal, virtual machine, Kubernetes statefulset, and so on), and the solution that you choose depends on your specific needs as well as the infrastructure that you have available.
 
-There are some specific considerations to keep in mind when running a Sui Full node which apply to all environments:
+There are some specific considerations to keep in mind when running a Sui Full node that apply to all environments:
 
 * [Genesis](./genesis.mdx): You must download the genesis blob for the network that you want to connect to, and make it available to the `sui-node`.
 * [Data Storage](./data-management.mdx): Sui Full nodes _can_ require a significant amount of disk space to store the blockchain history. If you plan to use your Full node to serve RPC requests, you must also plan for the storage of index files, which requires a significant amount of disk space.
 * [Monitoring](./monitoring.mdx): Sui Full nodes expose metrics about the node's health and the state of the Sui network.
-* [Updates](./updating-fullnode.mdx): Sui Full nodes must be updated to the latest version to remain in sync with the network.
+* [Updates](./updates.mdx): Sui Full nodes must be updated to the latest version to remain in sync with the network.
 * [Archival Fallback](./archives.mdx): The archival fallback allows you to sync checkpoints from any point in the chain's history. The network `seed-peers` below only keep a few epochs of history.
 
 
@@ -104,7 +104,7 @@ Refer to [Running a Full node](#running-a-full-node) for instructions relevant t
 
 ### Setting up a Full node
 
-Once you are ready to run `sui-node` in your production environment, you can set up your Full node by completing the following steps:
+When you are ready to run `sui-node` in your production environment, you can set up your Full node by completing the following steps:
 
 1. Make a copy of the [Full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
     `cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml`
