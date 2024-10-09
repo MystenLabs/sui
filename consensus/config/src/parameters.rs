@@ -201,7 +201,8 @@ impl Default for Parameters {
             max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
             sync_last_known_own_block_timeout:
                 Parameters::default_sync_last_known_own_block_timeout(),
-            sync_missing_blocks_round_threshold: Parameters::default_sync_missing_blocks_round_threshold(),
+            sync_missing_blocks_round_threshold:
+                Parameters::default_sync_missing_blocks_round_threshold(),
             round_prober_interval_ms: Parameters::default_round_prober_interval_ms(),
             round_prober_request_timeout_ms: Parameters::default_round_prober_request_timeout_ms(),
             propagation_delay_stop_proposal_threshold:
