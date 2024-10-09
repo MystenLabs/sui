@@ -25,7 +25,10 @@ use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
     TypeArgumentError,
 };
-use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::full_checkpoint_content::{
+    CheckpointData, CheckpointDataV2, CheckpointTransaction, CheckpointTransactionV2,
+    FullCheckpointData,
+};
 use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
 use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::move_package::TypeOrigin;
@@ -275,6 +278,13 @@ fn get_registry() -> Result<Registry> {
         .unwrap();
 
     tracer.trace_type::<CheckpointData>(&samples).unwrap();
+
+    tracer
+        .trace_type::<CheckpointTransactionV2>(&samples)
+        .unwrap();
+
+    tracer.trace_type::<CheckpointDataV2>(&samples).unwrap();
+    tracer.trace_type::<FullCheckpointData>(&samples).unwrap();
 
     tracer.registry()
 }

@@ -382,9 +382,6 @@ impl ApiEndpoint<RestService> for GetFullCheckpoint {
     }
 
     fn stable(&self) -> bool {
-        // TODO transactions are serialized with an intent message, do we want to change this
-        // format to remove it (and remove user signature duplication) prior to stabalizing the
-        // format?
         false
     }
 
@@ -413,7 +410,7 @@ async fn get_full_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
     accept: AcceptFormat,
     State(state): State<StateReader>,
-) -> Result<Bcs<sui_types::full_checkpoint_content::CheckpointData>> {
+) -> Result<Bcs<sui_types::full_checkpoint_content::FullCheckpointData>> {
     match accept {
         AcceptFormat::Bcs => {}
         _ => {
@@ -449,7 +446,8 @@ async fn get_full_checkpoint(
 
     let checkpoint_data = state
         .inner()
-        .get_checkpoint_data(verified_summary, checkpoint_contents)?;
+        .get_checkpoint_data(verified_summary, checkpoint_contents)?
+        .into();
 
     Ok(Bcs(checkpoint_data))
 }
@@ -476,13 +474,6 @@ impl ApiEndpoint<RestService> for ListFullCheckpoints {
         "/checkpoints/full"
     }
 
-    fn stable(&self) -> bool {
-        // TODO transactions are serialized with an intent message, do we want to change this
-        // format to remove it (and remove user signature duplication) prior to stabalizing the
-        // format?
-        false
-    }
-
     fn operation(
         &self,
         generator: &mut schemars::gen::SchemaGenerator,
@@ -507,7 +498,8 @@ async fn list_full_checkpoints(
     Query(parameters): Query<ListFullCheckpointsQueryParameters>,
     accept: AcceptFormat,
     State(state): State<StateReader>,
-) -> Result<Page<sui_types::full_checkpoint_content::CheckpointData, CheckpointSequenceNumber>> {
+) -> Result<Page<sui_types::full_checkpoint_content::FullCheckpointData, CheckpointSequenceNumber>>
+{
     match accept {
         AcceptFormat::Bcs => {}
         _ => {
@@ -554,14 +546,23 @@ async fn list_full_checkpoints(
                             contents,
                         )
                         .map_err(Into::into)
+                        .map(sui_types::full_checkpoint_content::FullCheckpointData::from)
                 })
         })
         .collect::<Result<Vec<_>>>()?;
 
     let cursor = checkpoints.last().and_then(|checkpoint| match direction {
-        Direction::Ascending => checkpoint.checkpoint_summary.sequence_number.checked_add(1),
+        Direction::Ascending => checkpoint
+            .as_v2()
+            .checkpoint_summary
+            .sequence_number
+            .checked_add(1),
         Direction::Descending => {
-            let cursor = checkpoint.checkpoint_summary.sequence_number.checked_sub(1);
+            let cursor = checkpoint
+                .as_v2()
+                .checkpoint_summary
+                .sequence_number
+                .checked_sub(1);
             // If we've exhausted our available object range then there are no more pages left
             if cursor < Some(oldest_checkpoint) {
                 None

@@ -10,6 +10,7 @@ use crate::{
 };
 use axum::extract::Query;
 use axum::extract::{Path, State};
+use documented::Documented;
 use serde::{Deserialize, Serialize};
 use sui_sdk_types::types::{Object, ObjectId, TypeTag, Version};
 use sui_types::sui_sdk_types_conversions::type_tag_core_to_sdk;
@@ -18,7 +19,6 @@ use sui_types::{
     sui_sdk_types_conversions::SdkTypeConversionError,
 };
 use tap::Pipe;
-use documented::Documented;
 
 /// Get a Live Object
 ///

@@ -10,7 +10,7 @@ use crate::effects::{
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
 use crate::storage::BackingPackageStore;
-use crate::transaction::Transaction;
+use crate::transaction::{Transaction, TransactionData};
 use itertools::Either;
 use serde::{Deserialize, Serialize};
 use tap::Pipe;
@@ -270,5 +270,131 @@ impl BackingPackageStore for CheckpointData {
             .cloned()
             .map(crate::storage::PackageObject::new)
             .pipe(Ok)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FullCheckpointData {
+    V2(CheckpointDataV2),
+}
+
+impl FullCheckpointData {
+    pub fn as_v2(&self) -> &CheckpointDataV2 {
+        match self {
+            Self::V2(v2) => v2,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointDataV2 {
+    pub checkpoint_summary: CertifiedCheckpointSummary,
+    pub checkpoint_contents: CheckpointContents,
+    pub transactions: Vec<CheckpointTransactionV2>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointTransactionV2 {
+    /// The input Transaction
+    pub transaction: TransactionData,
+    /// The effects produced by executing this transaction
+    pub effects: TransactionEffects,
+    /// The events, if any, emitted by this transaciton during execution
+    pub events: Option<TransactionEvents>,
+    /// The state of all inputs to this transaction as they were prior to execution.
+    pub input_objects: Vec<Object>,
+    /// The state of all output objects created or mutated or unwrapped by this transaction.
+    pub output_objects: Vec<Object>,
+}
+
+impl From<CheckpointData> for CheckpointDataV2 {
+    fn from(checkpoint: CheckpointData) -> Self {
+        let CheckpointData {
+            checkpoint_summary,
+            checkpoint_contents,
+            transactions,
+        } = checkpoint;
+
+        Self {
+            checkpoint_summary,
+            checkpoint_contents,
+            transactions: transactions.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<CheckpointTransaction> for CheckpointTransactionV2 {
+    fn from(value: CheckpointTransaction) -> Self {
+        let CheckpointTransaction {
+            transaction,
+            effects,
+            events,
+            input_objects,
+            output_objects,
+        } = value;
+
+        Self {
+            transaction: transaction.into_data().into_inner().intent_message.value,
+            effects,
+            events,
+            input_objects,
+            output_objects,
+        }
+    }
+}
+
+impl From<CheckpointDataV2> for CheckpointData {
+    fn from(checkpoint: CheckpointDataV2) -> Self {
+        let CheckpointDataV2 {
+            checkpoint_summary,
+            checkpoint_contents,
+            transactions,
+        } = checkpoint;
+
+        let transactions = checkpoint_contents
+            .clone()
+            .into_iter_with_signatures()
+            .zip(transactions)
+            .map(
+                |(
+                    (_digets, signatures),
+                    CheckpointTransactionV2 {
+                        transaction,
+                        effects,
+                        events,
+                        input_objects,
+                        output_objects,
+                    },
+                )| {
+                    CheckpointTransaction {
+                        transaction: Transaction::from_generic_sig_data(transaction, signatures),
+                        effects,
+                        events,
+                        input_objects,
+                        output_objects,
+                    }
+                },
+            )
+            .collect();
+
+        Self {
+            checkpoint_summary,
+            checkpoint_contents,
+            transactions,
+        }
+    }
+}
+
+impl From<CheckpointData> for FullCheckpointData {
+    fn from(checkpoint: CheckpointData) -> Self {
+        Self::V2(checkpoint.into())
+    }
+}
+
+impl From<FullCheckpointData> for CheckpointData {
+    fn from(value: FullCheckpointData) -> Self {
+        match value {
+            FullCheckpointData::V2(v2) => v2.into(),
+        }
     }
 }
