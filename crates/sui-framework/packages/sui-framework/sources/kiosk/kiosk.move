@@ -500,6 +500,12 @@ module sui::kiosk {
         dof::exists_with_type<Item, T>(&self.id, Item { id })
     }
 
+    public fun has_item_with_type_no_verify_spec<T: key + store>(
+        self: &Kiosk, id: ID
+    ): bool {
+        has_item_with_type<T>(self, id)
+    }
+
     /// Check whether an item with the `id` is locked in the `Kiosk`. Meaning
     /// that the only two actions that can be performed on it are `list` and
     /// `list_with_purchase_cap`, it cannot be `take`n out of the `Kiosk`.
@@ -521,6 +527,10 @@ module sui::kiosk {
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
     public fun has_access(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
         object::id(self) == cap.`for`
+    }
+
+    public fun has_access_no_verify_spec(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
+        has_access(self, cap)
     }
 
     /// Access the `UID` using the `KioskOwnerCap`.
