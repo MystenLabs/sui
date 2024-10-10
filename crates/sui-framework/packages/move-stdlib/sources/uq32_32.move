@@ -1,24 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Defines an unisnged, fixed-point numeric type with a 32-bit integer part and a 32-bit fractional
+/// Defines an unsigned, fixed-point numeric type with a 32-bit integer part and a 32-bit fractional
 /// part. The notation `uq32_32` and `UQ32_32` is based on
-/// [Q notation](https://en.wikipedia.org/wiki/Q_(number_format)).`q` indicates it a
-/// fixed-point number number. The `u` prefix indicates it is unsigned. The `32_32` suffix indicates
-/// number of bits, where the first number indicates the number of bits in the integer part,
-/// and the second the number of bits in the fractional part--in this case 32 bits for each.
+/// [Q notation](https://en.wikipedia.org/wiki/Q_(number_format)). `q` indicates it a fixed-point
+/// number. The `u` prefix indicates it is unsigned. The `32_32` suffix indicates the number of
+/// bits, where the first number indicates the number of bits in the integer part, and the second
+/// the number of bits in the fractional part--in this case 32 bits for each.
 module std::uq32_32;
 
 #[error]
-const EDenominator: vector<u8> = b"`from_rational` called with a zero denominator";
+const EDenominator: vector<u8> = b"Quotient specified with a zero denominator";
 
 #[error]
-const ERatioTooSmall: vector<u8> =
-    b"`from_rational` called with a ratio that is too small, and is outside of the supported range";
+const EQuotientTooSmall: vector<u8> =
+    b"Quotient specified is too small, and is outside of the supported range";
 
 #[error]
-const ERatioTooLarge: vector<u8> =
-    b"`from_rational` called with a ratio that is too large, and is outside of the supported range";
+const EQuotientTooLarge: vector<u8> =
+    b"Quotient specified is too large, and is outside of the supported range";
 
 #[error]
 const EOverflow: vector<u8> = b"Overflow from an arithmetic operation";
@@ -32,14 +32,15 @@ const EDivisionByZero: vector<u8> = b"Division by zero";
 /// decimal point (18 digits total).
 public struct UQ32_32(u64) has copy, drop, store;
 
-/// Create a fixed-point value from a rational number specified by its numerator and denominator.
-/// `from_rational` and `from_integer` should be preferred over using `from_raw`.
+/// Create a fixed-point value from a quotient specified by its numerator and denominator.
+/// `from_quotient` and `from_int` should be preferred over using `from_raw`.
 /// Unless the denominator is a power of two, fractions can not be represented accurately,
 /// so be careful about rounding errors.
 /// Aborts if the denominator is zero.
-/// Aborts if the input is non-zero but so small that it will be represented as zero, e.g. smaller than 2^{-32}.
+/// Aborts if the input is non-zero but so small that it will be represented as zero, e.g. smaller
+/// than 2^{-32}.
 /// Aborts if the input is too large, e.g. larger than or equal to 2^32.
-public fun from_rational(numerator: u64, denominator: u64): UQ32_32 {
+public fun from_quotient(numerator: u64, denominator: u64): UQ32_32 {
     assert!(denominator != 0, EDenominator);
 
     // Scale the numerator to have 64 fractional bits and the denominator to have 32 fractional
@@ -49,17 +50,17 @@ public fun from_rational(numerator: u64, denominator: u64): UQ32_32 {
     let quotient = scaled_numerator / scaled_denominator;
 
     // The quotient can only be zero if the numerator is also zero.
-    assert!(quotient != 0 || numerator == 0, ERatioTooSmall);
-    
+    assert!(quotient != 0 || numerator == 0, EQuotientTooSmall);
+
     // Return the quotient as a fixed-point number. We first need to check whether the cast
     // can succeed.
-    assert!(quotient <= std::u64::max_value!() as u128, ERatioTooLarge);
+    assert!(quotient <= std::u64::max_value!() as u128, EQuotientTooLarge);
     UQ32_32(quotient as u64)
 }
 
 /// Create a fixed-point value from an integer.
-/// `from_integer` and `from_rational` should be preferred over using `from_raw`.
-public fun from_integer(integer: u32): UQ32_32 {
+/// `from_int` and `from_quotient` should be preferred over using `from_raw`.
+public fun from_int(integer: u32): UQ32_32 {
     UQ32_32((integer as u64) << 32)
 }
 
@@ -78,7 +79,7 @@ public fun sub(a: UQ32_32, b: UQ32_32): UQ32_32 {
     UQ32_32(a.0 - b.0)
 }
 
-// Multiply two fixed-point numbers, truncating any fractional part of the product.
+/// Multiply two fixed-point numbers, truncating any fractional part of the product.
 /// Aborts if the product overflows.
 public fun mul(a: UQ32_32, b: UQ32_32): UQ32_32 {
     UQ32_32(int_mul(a.0, b))
@@ -89,6 +90,11 @@ public fun mul(a: UQ32_32, b: UQ32_32): UQ32_32 {
 /// Aborts if the quotient overflows.
 public fun div(a: UQ32_32, b: UQ32_32): UQ32_32 {
     UQ32_32(int_div(a.0, b))
+}
+
+/// Convert a fixed-point number to an integer, truncating any fractional part.
+public fun to_int(a: UQ32_32): u32 {
+    (a.0 >> 32) as u32
 }
 
 /// Multiply a `u64` integer by a fixed-point number, truncating any fractional part of the product.
