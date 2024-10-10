@@ -16,7 +16,7 @@ use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sui_authority_aggregation::quorum_map_then_reduce_with_timeout_and_prefs;
 use sui_authority_aggregation::ReduceOutput;
 use sui_types::base_types::ConciseableName;
@@ -66,7 +66,25 @@ impl BridgeAuthorityAggregator {
         &self,
         action: BridgeAction,
     ) -> BridgeResult<VerifiedCertifiedBridgeAction> {
-        let state = GetSigsState::new(action.approval_threshold(), self.committee.clone());
+        // Decide whether we want to optimize for sigs
+        let should_optimize = match action {
+            BridgeAction::SuiToEthBridgeAction(_) => true,
+            BridgeAction::EthToSuiBridgeAction(_) => false,
+            _ => !action.chain_id().is_sui_chain(),
+        };
+        let state = if should_optimize {
+            // We want to optimize for getting the minimal valid subset
+            // We are willing to wait for ast most 2 seconds after getting enough signatures,
+            // or the number of signatures is less than 3 + the minimal valid subset
+            GetSigsState::new_with_best_effort(
+                action.approval_threshold(),
+                self.committee.clone(),
+                Duration::from_secs(2),
+                3,
+            )
+        } else {
+            GetSigsState::new(action.approval_threshold(), self.committee.clone())
+        };
         request_sign_bridge_action_into_certification(
             action,
             self.committee.clone(),
@@ -84,17 +102,75 @@ struct GetSigsState {
     sigs: BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthoritySignInfo>,
     validity_threshold: StakeUnit,
     committee: Arc<BridgeCommittee>,
+    start_time: Instant,
+    best_effort_config: Option<BestEffortConfig>,
+    known_best_sigs: BTreeSet<BridgeAuthorityPublicKeyBytes>,
+}
+
+#[derive(Debug)]
+struct BestEffortConfig {
+    /// The instant when we get enough signatures and start best effort mode, used along with `best_effort_timeout`
+    best_effort_start_time: Option<Instant>,
+    /// Once we get enough signatures, how long are we willing to wait for the best effort validators
+    best_effort_timeout: Duration,
+    /// Once we get enough signatures, how many extra sigs can we tolerate for
+    acceptable_extra_sigs: usize,
 }
 
 impl GetSigsState {
     fn new(validity_threshold: StakeUnit, committee: Arc<BridgeCommittee>) -> Self {
         Self {
+            start_time: Instant::now(),
             committee,
             total_bad_stake: 0,
             total_ok_stake: 0,
             sigs: BTreeMap::new(),
             validity_threshold,
+            best_effort_config: None,
+            known_best_sigs: BTreeSet::new(),
         }
+    }
+
+    /// Create a new state with best effort mode enabled
+    fn new_with_best_effort(
+        validity_threshold: StakeUnit,
+        committee: Arc<BridgeCommittee>,
+        best_effort_timeout: Duration,
+        acceptable_extra_sigs: usize,
+    ) -> Self {
+        Self {
+            start_time: Instant::now(),
+            committee,
+            total_bad_stake: 0,
+            total_ok_stake: 0,
+            sigs: BTreeMap::new(),
+            validity_threshold,
+            best_effort_config: Some(BestEffortConfig {
+                best_effort_start_time: None,
+                best_effort_timeout,
+                acceptable_extra_sigs,
+            }),
+            known_best_sigs: BTreeSet::new(),
+        }
+    }
+
+    fn get_best_sigs(&self, action: BridgeAction) -> Option<VerifiedCertifiedBridgeAction> {
+        if self.known_best_sigs.is_empty() {
+            return None;
+        }
+        let signatures = self
+            .known_best_sigs
+            .iter()
+            .map(|name| (name.clone(), self.sigs.get(name).unwrap().signature.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let sig_info = BridgeCommitteeValiditySignInfo { signatures };
+        let certified_action: sui_types::message_envelope::Envelope<
+            BridgeAction,
+            BridgeCommitteeValiditySignInfo,
+        > = CertifiedBridgeAction::new_from_data_and_sig(action, sig_info);
+        Some(VerifiedCertifiedBridgeAction::new_from_verified(
+            certified_action,
+        ))
     }
 
     fn handle_verified_signed_action(
@@ -124,17 +200,107 @@ impl GetSigsState {
                 )));
             }
         }
+
         if self.total_ok_stake >= self.validity_threshold {
-            info!(
-                "Got enough signatures from {} validators with total_ok_stake {}",
-                self.sigs.len(),
-                self.total_ok_stake
-            );
-            let signatures = self
-                .sigs
-                .iter()
-                .map(|(k, v)| (k.clone(), v.signature.clone()))
-                .collect::<BTreeMap<_, _>>();
+            let signatures = if let Some(best_effort_config) = &mut self.best_effort_config {
+                let mut should_update_best_sigs_and_try_harder = false;
+                // Decide whether we are happy or we continue with best effort
+                let minimal_validity_subset_size = self
+                    .committee
+                    .minimal_validity_subset_size(self.validity_threshold);
+                if self.sigs.len() == *minimal_validity_subset_size {
+                    info!(
+                        "Got enough signatures from minimal validity subset from {} validators with total_ok_stake {} within {}ms",
+                        self.sigs.len(),
+                        self.total_ok_stake,
+                        self.start_time.elapsed().as_millis()
+                    );
+                } else if let Some(best_effort_start_time) =
+                    best_effort_config.best_effort_start_time
+                {
+                    if best_effort_start_time.elapsed() > best_effort_config.best_effort_timeout {
+                        info!(
+                            "Got enough signatures from {} validators with total_ok_stake {} within {}ms (best effort timeout {}ms reached)",
+                            self.sigs.len(),
+                            self.total_ok_stake,
+                            self.start_time.elapsed().as_millis(),
+                            best_effort_config.best_effort_timeout.as_millis()
+                        );
+                    } else {
+                        // We have enough signatures, but we can do a bit better. Keep grinding.
+                        should_update_best_sigs_and_try_harder = true;
+                    }
+                } else if self.sigs.len()
+                    <= *minimal_validity_subset_size + best_effort_config.acceptable_extra_sigs
+                {
+                    info!(
+                        "Got enough signatures from {} validators with total_ok_stake {} within {}ms (with {} extra signatures)",
+                        self.sigs.len(),
+                        self.total_ok_stake,
+                        self.start_time.elapsed().as_millis(),
+                        self.sigs.len() - *minimal_validity_subset_size,
+                    );
+                } else {
+                    // We have enough signatures, but we can do a bit better. Keep grinding.
+                    // From now on we are in best effort mode
+                    if best_effort_config.best_effort_start_time.is_none() {
+                        info!(
+                            "Starting best effort {}ms: got enough signatures from {} validators with total_ok_stake {} within {}ms",
+                            best_effort_config.best_effort_timeout.as_millis(),
+                            self.sigs.len(),
+                            self.total_ok_stake,
+                            self.start_time.elapsed().as_millis(),
+                        );
+                        best_effort_config.best_effort_start_time = Some(Instant::now());
+                    }
+                    should_update_best_sigs_and_try_harder = true;
+                }
+                // Sort by voting power descending, get the top ones
+                let mut sigs = self
+                    .sigs
+                    .iter()
+                    .map(
+                        // Unwrap safe: the key must below to the committee
+                        |(name, sig_info)| {
+                            (
+                                name.clone(),
+                                sig_info.clone(),
+                                self.committee.member(name).unwrap().voting_power,
+                            )
+                        },
+                    )
+                    .collect::<Vec<_>>();
+                sigs.sort_by_key(|k| std::cmp::Reverse(k.2));
+
+                let mut total_power = 0;
+                let sig = sigs
+                    .into_iter()
+                    .take_while(|(_, _, voting_power)| {
+                        let should_take = total_power < self.validity_threshold;
+                        total_power += voting_power;
+                        should_take
+                    })
+                    .map(|(key, v, _)| (key.clone(), v.signature.clone()))
+                    .collect::<BTreeMap<_, _>>();
+                if should_update_best_sigs_and_try_harder {
+                    self.known_best_sigs = sig.keys().cloned().collect();
+                    return Ok(None);
+                }
+                sig
+            } else {
+                info!(
+                    "Got enough signatures from {} validators with total_ok_stake {} within {}ms",
+                    self.sigs.len(),
+                    self.total_ok_stake,
+                    self.start_time.elapsed().as_millis()
+                );
+                self.sigs
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.signature.clone()))
+                    .collect()
+            };
+
+            // When we reach here, we have enough signatures and we are happy with them.
             let sig_info = BridgeCommitteeValiditySignInfo { signatures };
             let certified_action: sui_types::message_envelope::Envelope<
                 BridgeAction,
@@ -174,18 +340,13 @@ async fn request_sign_bridge_action_into_certification(
     // Because ethereum gas price is not negligible, when the signatures are to be verified on ethereum,
     // we pass in `Some` to make sure the validators with higher voting power are requested first
     // to save gas cost.
-    let preference = match action {
-        BridgeAction::SuiToEthBridgeAction(_) => Some(BTreeSet::new()),
-        BridgeAction::EthToSuiBridgeAction(_) => None,
-        _ => {
-            if action.chain_id().is_sui_chain() {
-                None
-            } else {
-                Some(BTreeSet::new())
-            }
-        }
+    let preference = if state.best_effort_config.is_some() {
+        Some(BTreeSet::new())
+    } else {
+        None
     };
-    let (result, _) = quorum_map_then_reduce_with_timeout_and_prefs(
+    let action_clone = action.clone();
+    let result = quorum_map_then_reduce_with_timeout_and_prefs(
         committee,
         clients,
         preference.as_ref(),
@@ -237,8 +398,18 @@ async fn request_sign_bridge_action_into_certification(
         // A herustic timeout, we expect the signing to finish within 5 seconds
         Duration::from_secs(5),
     )
-    .await
-    .map_err(|state| {
+    .await;
+    if result.is_err() {
+        let state = result.unwrap_err();
+        if let Some(certified_action) = state.get_best_sigs(action_clone) {
+            info!(
+                "Got enough signatures (best known sigs) from {} validators with total_ok_stake {} within {}ms",
+                state.known_best_sigs.len(),
+                state.total_ok_stake,
+                state.start_time.elapsed().as_millis(),
+            );
+            return Ok(certified_action);
+        }
         error!(
             "Failed to get enough signatures, bad stake: {}, blocklisted stake: {}, good stake: {}, validity threshold: {}",
             state.total_bad_stake,
@@ -246,15 +417,15 @@ async fn request_sign_bridge_action_into_certification(
             state.total_ok_stake,
             state.validity_threshold,
         );
-        BridgeError::AuthoritySignatureAggregationTooManyError(format!(
+        return Err(BridgeError::AuthoritySignatureAggregationTooManyError(format!(
             "Failed to get enough signatures, bad stake: {}, blocklisted stake: {}, good stake: {}, validity threshold: {}",
             state.total_bad_stake,
             state.committee.total_blocklisted_stake(),
             state.total_ok_stake,
             state.validity_threshold,
-        ))
-    })?;
-    Ok(result)
+        )));
+    };
+    Ok(result.unwrap().0)
 }
 
 #[cfg(test)]
@@ -362,21 +533,25 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[0])),
+            None,
         );
         mock1.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[1])),
+            None,
         );
         mock2.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[2])),
+            None,
         );
         mock3.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[3])),
+            None,
         );
         agg.request_committee_signatures(action.clone())
             .await
@@ -387,6 +562,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Err(BridgeError::RestAPIError("".into())),
+            None,
         );
         agg.request_committee_signatures(action.clone())
             .await
@@ -397,6 +573,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Err(BridgeError::RestAPIError("".into())),
+            None,
         );
         agg.request_committee_signatures(action.clone())
             .await
@@ -407,6 +584,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Err(BridgeError::RestAPIError("".into())),
+            None,
         );
         let err = agg
             .request_committee_signatures(action.clone())
@@ -460,11 +638,13 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[2])),
+            None,
         );
         mock3.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[3])),
+            None,
         );
         let certified = agg
             .request_committee_signatures(action.clone())
@@ -489,6 +669,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Err(BridgeError::RestAPIError("".into())),
+            None,
         );
         let err = agg
             .request_committee_signatures(action.clone())
@@ -504,6 +685,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[2])),
+            None,
         );
         let err = agg
             .request_committee_signatures(action.clone())
@@ -690,5 +872,339 @@ mod tests {
             };
             assert!(sign_info.verify(&action, &committee).is_ok());
         }
+    }
+
+    #[tokio::test]
+    async fn test_bridge_auth_agg_with_best_effort_config() {
+        telemetry_subscribers::init_for_testing();
+
+        let mock0 = BridgeRequestMockHandler::new();
+        let mock1 = BridgeRequestMockHandler::new();
+        let mock2 = BridgeRequestMockHandler::new();
+        let mock3 = BridgeRequestMockHandler::new();
+        let mock4 = BridgeRequestMockHandler::new();
+        let mock5 = BridgeRequestMockHandler::new();
+        let mock6 = BridgeRequestMockHandler::new();
+        let mock7 = BridgeRequestMockHandler::new();
+        let mock8 = BridgeRequestMockHandler::new();
+        let mock9 = BridgeRequestMockHandler::new();
+
+        // start servers - there is only one permutation of size 2 (1112, 2222) that will achieve quorum
+        let (_handles, authorities, secrets) = get_test_authorities_and_run_mock_bridge_server(
+            vec![333, 666, 666, 999, 1000, 1000, 1000, 1002, 1112, 2222],
+            vec![
+                mock0.clone(),
+                mock1.clone(),
+                mock2.clone(),
+                mock3.clone(),
+                mock4.clone(),
+                mock5.clone(),
+                mock6.clone(),
+                mock7.clone(),
+                mock8.clone(),
+                mock9.clone(),
+            ],
+        );
+
+        let committee = Arc::new(BridgeCommittee::new(authorities.clone()).unwrap());
+
+        let agg = BridgeAuthorityAggregator::new(committee.clone());
+
+        let sui_tx_digest = TransactionDigest::random();
+        let sui_tx_event_index = 0;
+        let nonce = 0;
+        let amount = 1000;
+        let action = get_test_sui_to_eth_bridge_action(
+            Some(sui_tx_digest),
+            Some(sui_tx_event_index),
+            Some(nonce),
+            Some(amount),
+            None,
+            None,
+            None,
+        );
+
+        // All authorities return signatures
+        mock0.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[0])),
+            Some(Duration::from_millis(300)),
+        );
+        mock1.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[1])),
+            Some(Duration::from_millis(100)),
+        );
+        mock2.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[2])),
+            Some(Duration::from_millis(100)),
+        );
+        mock3.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[3])),
+            Some(Duration::from_millis(100)),
+        );
+        mock4.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[4])),
+            Some(Duration::from_millis(100)),
+        );
+        mock5.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[5])),
+            Some(Duration::from_millis(100)),
+        );
+        mock6.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[6])),
+            Some(Duration::from_millis(100)),
+        );
+        mock7.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[7])),
+            Some(Duration::from_millis(100)),
+        );
+        mock8.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[8])),
+            Some(Duration::from_millis(1000)), // <- delay
+        );
+        mock9.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[9])),
+            Some(Duration::from_millis(1000)), // <- delay
+        );
+
+        // Unoptimized case: 8 and 9 are delayed, they should not be included in the certificate
+        let state = GetSigsState::new(action.approval_threshold(), committee.clone());
+        let resp = request_sign_bridge_action_into_certification(
+            action.clone(),
+            agg.committee.clone(),
+            agg.clients.clone(),
+            state,
+        )
+        .await
+        .unwrap();
+
+        let sig_keys = resp.auth_sig().signatures.keys().collect::<BTreeSet<_>>();
+        assert!(!sig_keys.contains(&authorities[8].pubkey_bytes()));
+        assert!(!sig_keys.contains(&authorities[9].pubkey_bytes()));
+        let total_stake = resp
+            .auth_sig()
+            .signatures
+            .keys()
+            .map(|k| committee.active_stake(k))
+            .sum::<StakeUnit>();
+        assert!(total_stake >= action.approval_threshold());
+
+        // optimized case: 8 and 9 timeout, but we can use 4 (2+2) sigs
+        let state = GetSigsState::new_with_best_effort(
+            action.approval_threshold(),
+            committee.clone(),
+            Duration::from_millis(10),
+            2,
+        );
+        let resp = request_sign_bridge_action_into_certification(
+            action.clone(),
+            agg.committee.clone(),
+            agg.clients.clone(),
+            state,
+        )
+        .await
+        .unwrap();
+
+        let sig_keys = resp.auth_sig().signatures.keys().collect::<BTreeSet<_>>();
+        assert_eq!(sig_keys.len(), 4);
+        assert!(!sig_keys.contains(&authorities[8].pubkey_bytes()));
+        assert!(!sig_keys.contains(&authorities[9].pubkey_bytes()));
+
+        // optimized case: 8 and 9 are delayed but we wait for longer
+        let state = GetSigsState::new_with_best_effort(
+            action.approval_threshold(),
+            committee.clone(),
+            Duration::from_millis(2000),
+            0,
+        );
+        let resp = request_sign_bridge_action_into_certification(
+            action.clone(),
+            agg.committee.clone(),
+            agg.clients.clone(),
+            state,
+        )
+        .await
+        .unwrap();
+
+        let sig_keys = resp.auth_sig().signatures.keys().collect::<BTreeSet<_>>();
+        assert_eq!(sig_keys.len(), 2);
+        let total_stake = resp
+            .auth_sig()
+            .signatures
+            .keys()
+            .map(|k| committee.active_stake(k))
+            .sum::<StakeUnit>();
+        assert_eq!(total_stake, 3334);
+
+        // optimized case: we are willing to wait for 10ms to get the perfect 2 sig set, otherwise we are ok with any set
+        let state = GetSigsState::new_with_best_effort(
+            action.approval_threshold(),
+            committee.clone(),
+            Duration::from_millis(10),
+            0,
+        );
+        let resp = request_sign_bridge_action_into_certification(
+            action.clone(),
+            agg.committee.clone(),
+            agg.clients.clone(),
+            state,
+        )
+        .await
+        .unwrap();
+
+        // At this point we should have collected all signatuers other than 8 and 9
+        // Verify that we only take the minimal set which is 7, 6, 5, 4
+        let sig_keys = resp.auth_sig().signatures.keys().collect::<BTreeSet<_>>();
+        assert_eq!(sig_keys.len(), 4);
+
+        // optimzied case but does not pan out, the ideal case won't ever happen. In this case
+        // default to best knwown sigs set.
+        mock8.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[8])),
+            Some(Duration::from_millis(10000)), // <- timeout in mapper, we don't get this sig
+        );
+        mock9.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[9])),
+            Some(Duration::from_millis(10000)), // <- timeout in mapper, we don't get this sig
+        );
+        let state = GetSigsState::new_with_best_effort(
+            action.approval_threshold(),
+            committee.clone(),
+            Duration::from_millis(10000), // mapper times out before this
+            0,
+        );
+        let resp = request_sign_bridge_action_into_certification(
+            action.clone(),
+            agg.committee.clone(),
+            agg.clients.clone(),
+            state,
+        )
+        .await
+        .unwrap();
+        // At this point we should have collected all signatuers other than 8 and 9
+        // Verify that we only take the minimal set which is 7, 6, 5, 4
+        let sig_keys = resp.auth_sig().signatures.keys().collect::<BTreeSet<_>>();
+        assert_eq!(sig_keys.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn test_bridge_auth_agg_with_best_effort_config_use_best_known_sigs() {
+        telemetry_subscribers::init_for_testing();
+
+        let mock0 = BridgeRequestMockHandler::new();
+        let mock1 = BridgeRequestMockHandler::new();
+        let mock2 = BridgeRequestMockHandler::new();
+        let mock3 = BridgeRequestMockHandler::new();
+        let mock4 = BridgeRequestMockHandler::new();
+
+        let (_handles, authorities, secrets) = get_test_authorities_and_run_mock_bridge_server(
+            vec![1, 1, 3332, 3333, 3333],
+            vec![
+                mock0.clone(),
+                mock1.clone(),
+                mock2.clone(),
+                mock3.clone(),
+                mock4.clone(),
+            ],
+        );
+
+        let committee = Arc::new(BridgeCommittee::new(authorities.clone()).unwrap());
+
+        let agg = BridgeAuthorityAggregator::new(committee.clone());
+
+        let sui_tx_digest = TransactionDigest::random();
+        let sui_tx_event_index = 0;
+        let nonce = 0;
+        let amount = 1000;
+        let action = get_test_sui_to_eth_bridge_action(
+            Some(sui_tx_digest),
+            Some(sui_tx_event_index),
+            Some(nonce),
+            Some(amount),
+            None,
+            None,
+            None,
+        );
+
+        // All authorities return signatures
+        mock0.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[0])),
+            None,
+        );
+        mock1.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[1])),
+            None,
+        );
+        mock2.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Ok(sign_action_with_key(&action, &secrets[2])),
+            None,
+        );
+        mock3.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Err(BridgeError::Generic("sowhat".into())),
+            None,
+        );
+        mock4.add_sui_event_response(
+            sui_tx_digest,
+            sui_tx_event_index,
+            Err(BridgeError::Generic("sowhat".into())),
+            None,
+        );
+
+        let state = GetSigsState::new_with_best_effort(
+            action.approval_threshold(),
+            committee.clone(),
+            Duration::from_millis(10000),
+            0,
+        );
+        let resp = request_sign_bridge_action_into_certification(
+            action.clone(),
+            agg.committee.clone(),
+            agg.clients.clone(),
+            state,
+        )
+        .await
+        .unwrap();
+
+        // It has to be  {1, 1, 3331}
+        let sig_keys = resp.auth_sig().signatures.keys().collect::<BTreeSet<_>>();
+        assert_eq!(sig_keys.len(), 3);
+        let total_stake = resp
+            .auth_sig()
+            .signatures
+            .keys()
+            .map(|k| committee.active_stake(k))
+            .sum::<u64>();
+        assert_eq!(total_stake, 3334);
     }
 }

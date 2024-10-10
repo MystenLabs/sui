@@ -17,6 +17,7 @@ pub use ethers::types::H256 as EthTransactionHash;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Keccak256};
 use num_enum::TryFromPrimitive;
+use once_cell::sync::OnceCell;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -69,6 +70,7 @@ impl BridgeAuthority {
 pub struct BridgeCommittee {
     members: BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthority>,
     total_blocklisted_stake: StakeUnit,
+    minimal_validity_subset_size: OnceCell<usize>,
 }
 
 impl BridgeCommittee {
@@ -103,6 +105,7 @@ impl BridgeCommittee {
         Ok(Self {
             members: members_map,
             total_blocklisted_stake,
+            minimal_validity_subset_size: OnceCell::new(),
         })
     }
 
@@ -127,6 +130,23 @@ impl BridgeCommittee {
             .get(member)
             .map(|a| if a.is_blocklisted { 0 } else { a.voting_power })
             .unwrap_or(0)
+    }
+
+    pub fn minimal_validity_subset_size(&self, threshold: StakeUnit) -> &usize {
+        self.minimal_validity_subset_size.get_or_init(|| {
+            let mut sorted_members: Vec<_> = self.members.iter().collect();
+            sorted_members.sort_by(|a, b| b.1.voting_power.cmp(&a.1.voting_power));
+
+            let mut total_stake = 0;
+            sorted_members
+                .into_iter()
+                .take_while(|(_, authority)| {
+                    let should_take = total_stake < threshold;
+                    total_stake += authority.voting_power;
+                    should_take
+                })
+                .count()
+        })
     }
 }
 
