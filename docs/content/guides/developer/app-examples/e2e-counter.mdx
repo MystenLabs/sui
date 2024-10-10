@@ -359,7 +359,7 @@ Now that your users can create counters, you need a way to route to them. Routin
   ```
 </details>
 
-This sets up your app to read the hash from the URL, and get the counter's ID if the hash is a valid object ID. Then, it either renders a `Counter` (which you define in the next step) if you have a counter ID, or the `CreateCounter` button from the previous step. When a counter is created, you update the URL, and set the counter ID.
+This sets up your app to read the hash from the URL, and get the counter's ID if the hash is a valid object ID. Then, if you have a counter ID, it renders a `Counter` (which you define in the next step). If you don't have a counter ID, then it renders the `CreateCounter` button from the previous step. When a counter is created, you update the URL, and set the counter ID.
 
 Currently, the `Counter` component doesn't exist, so the app will just display an empty page if you navigate to a counter ID.
 
