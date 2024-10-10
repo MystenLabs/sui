@@ -93,6 +93,18 @@ pub(crate) enum TransactionBlockKindInput {
     ProgrammableTx = 1,
 }
 
+/// Filter for a point query of a TransactionBlock.
+pub(crate) enum TransactionBlockLookup {
+    ByDigest {
+        digest: Digest,
+        checkpoint_viewed_at: u64,
+    },
+    BySeq {
+        tx_sequence_number: u64,
+        checkpoint_viewed_at: u64,
+    },
+}
+
 type Query<ST, GB> = data::Query<ST, transactions::table, GB>;
 
 /// The cursor returned for each `TransactionBlock` in a connection's page of results. The
@@ -110,11 +122,19 @@ pub(crate) struct TransactionBlockCursor {
     pub tx_checkpoint_number: u64,
 }
 
-/// `DataLoader` key for fetching a `TransactionBlock` by its digest, optionally constrained by a
-/// consistency cursor.
+/// `DataLoader` key for fetching a `TransactionBlock` by its digest, constrained by a consistency
+/// cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct DigestKey {
     pub digest: Digest,
+    pub checkpoint_viewed_at: u64,
+}
+
+/// `DataLoader` key for fetching a `TransactionBlock` by its sequence number, constrained by a
+/// consistency cursor.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+struct SeqKey {
+    pub tx_sequence_number: u64,
     pub checkpoint_viewed_at: u64,
 }
 
@@ -230,21 +250,60 @@ impl TransactionBlock {
         }
     }
 
+    /// Look-up the transaction block by its transaction digest.
+    pub(crate) fn by_digest(digest: Digest, checkpoint_viewed_at: u64) -> TransactionBlockLookup {
+        TransactionBlockLookup::ByDigest {
+            digest,
+            checkpoint_viewed_at,
+        }
+    }
+
+    /// Look-up the transaction block by its sequence number (this is not usually exposed through
+    /// the GraphQL schema, but internally, othe entities in the DB will refer to transactions at
+    /// their sequence number).
+    pub(crate) fn by_seq(
+        tx_sequence_number: u64,
+        checkpoint_viewed_at: u64,
+    ) -> TransactionBlockLookup {
+        TransactionBlockLookup::BySeq {
+            tx_sequence_number,
+            checkpoint_viewed_at,
+        }
+    }
+
     /// Look up a `TransactionBlock` in the database, by its transaction digest. Treats it as if it
     /// is being viewed at the `checkpoint_viewed_at` (e.g. the state of all relevant addresses will
     /// be at that checkpoint).
     pub(crate) async fn query(
         ctx: &Context<'_>,
-        digest: Digest,
-        checkpoint_viewed_at: u64,
+        lookup: TransactionBlockLookup,
     ) -> Result<Option<Self>, Error> {
         let DataLoader(loader) = ctx.data_unchecked();
-        loader
-            .load_one(DigestKey {
+
+        match lookup {
+            TransactionBlockLookup::ByDigest {
                 digest,
                 checkpoint_viewed_at,
-            })
-            .await
+            } => {
+                loader
+                    .load_one(DigestKey {
+                        digest,
+                        checkpoint_viewed_at,
+                    })
+                    .await
+            }
+            TransactionBlockLookup::BySeq {
+                tx_sequence_number,
+                checkpoint_viewed_at,
+            } => {
+                loader
+                    .load_one(SeqKey {
+                        tx_sequence_number,
+                        checkpoint_viewed_at,
+                    })
+                    .await
+            }
+        }
     }
 
     /// Look up multiple `TransactionBlock`s by their digests. Returns a map from those digests to
@@ -473,6 +532,63 @@ impl Loader<DigestKey> for Db {
                 .get(key.digest.as_slice())
                 .cloned()
             else {
+                continue;
+            };
+
+            // Filter by key's checkpoint viewed at here. Doing this in memory because it should be
+            // quite rare that this query actually filters something, but encoding it in SQL is
+            // complicated.
+            if key.checkpoint_viewed_at < stored.checkpoint_sequence_number as u64 {
+                continue;
+            }
+
+            let inner = TransactionBlockInner::try_from(stored)?;
+            results.insert(
+                *key,
+                TransactionBlock {
+                    inner,
+                    checkpoint_viewed_at: key.checkpoint_viewed_at,
+                },
+            );
+        }
+
+        Ok(results)
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<SeqKey> for Db {
+    type Value = TransactionBlock;
+    type Error = Error;
+
+    async fn load(&self, keys: &[SeqKey]) -> Result<HashMap<SeqKey, TransactionBlock>, Error> {
+        use transactions::dsl as tx;
+
+        let seqs: Vec<_> = keys.iter().map(|k| k.tx_sequence_number as i64).collect();
+
+        let transactions: Vec<StoredTransaction> = self
+            .execute(move |conn| {
+                async move {
+                    conn.results(move || {
+                        tx::transactions
+                            .select(StoredTransaction::as_select())
+                            .filter(tx::tx_sequence_number.eq_any(seqs.clone()))
+                    })
+                    .await
+                }
+                .scope_boxed()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch transactions: {e}")))?;
+
+        let seq_to_stored: BTreeMap<_, _> = transactions
+            .into_iter()
+            .map(|tx| (tx.tx_sequence_number as u64, tx))
+            .collect();
+
+        let mut results = HashMap::new();
+        for key in keys {
+            let Some(stored) = seq_to_stored.get(&key.tx_sequence_number).cloned() else {
                 continue;
             };
 
