@@ -20,6 +20,7 @@ bin-version.workspace = true
 bip32.workspace = true
 camino.workspace = true
 clap.workspace = true
+codespan-reporting.workspace = true
 datatest-stable.workspace = true
 futures.workspace = true
 http.workspace = true
@@ -74,6 +75,7 @@ shared-crypto.workspace = true
 sui-replay.workspace = true
 sui-transaction-builder.workspace = true
 move-binary-format.workspace = true
+move-bytecode-source-map.workspace = true
 test-cluster.workspace = true
 
 fastcrypto.workspace = true
