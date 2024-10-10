@@ -195,7 +195,7 @@ impl From<&CheckpointData> for CommitterWatermark {
     }
 }
 
-/// Enum representing tables that a committer updates.
+/// Enum representing tables that the committer handler writes to.
 #[derive(
     Debug,
     Eq,
@@ -253,7 +253,7 @@ pub enum CommitterTables {
     PrunerCpWatermark,
 }
 
-/// Enum representing tables that the objects snapshot processor updates.
+/// Enum representing tables that the objects snapshot handler writes to.
 #[derive(
     Debug,
     Eq,
