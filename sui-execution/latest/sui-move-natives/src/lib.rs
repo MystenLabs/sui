@@ -627,17 +627,17 @@ impl NativesCostTable {
                 bls12381_pairing_cost: protocol_config
                     .group_ops_bls12381_pairing_cost_as_option()
                     .map(Into::into),
-                bls12381_g1_to_g1_uncompressed_cost: protocol_config
-                    .group_ops_bls12381_g1_to_g1_uncompressed_cost_as_option()
+                bls12381_g1_to_uncompressed_g1_cost: protocol_config
+                    .group_ops_bls12381_g1_to_uncompressed_g1_cost_as_option()
                     .map(Into::into),
-                bls12381_g1_uncompressed_to_g1_cost: protocol_config
-                    .group_ops_bls12381_g1_uncompressed_to_g1_cost_as_option()
+                bls12381_uncompressed_g1_to_g1_cost: protocol_config
+                    .group_ops_bls12381_uncompressed_g1_to_g1_cost_as_option()
                     .map(Into::into),
-                bls12381_g1_uncompressed_sum_base_cost: protocol_config
-                    .group_ops_bls12381_g1_uncompressed_sum_base_cost_as_option()
+                bls12381_uncompressed_g1_sum_base_cost: protocol_config
+                    .group_ops_bls12381_uncompressed_g1_sum_base_cost_as_option()
                     .map(Into::into),
-                bls12381_g1_uncompressed_sum_cost_per_term: protocol_config
-                    .group_ops_bls12381_g1_uncompressed_sum_cost_per_term_as_option()
+                bls12381_uncompressed_g1_sum_cost_per_term: protocol_config
+                    .group_ops_bls12381_uncompressed_g1_sum_cost_per_term_as_option()
                     .map(Into::into),
             },
             vdf_cost_params: VDFCostParams {

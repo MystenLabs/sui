@@ -42,7 +42,7 @@ fn is_msm_supported(context: &NativeContext) -> bool {
         .enable_group_ops_native_function_msm()
 }
 
-fn is_g1_uncompressed_supported(context: &NativeContext) -> bool {
+fn is_uncompressed_g1_supported(context: &NativeContext) -> bool {
     context
         .extensions()
         .get::<ObjectRuntime>()
@@ -95,11 +95,11 @@ pub struct GroupOpsCostParams {
     // costs for decode, pairing, and encode output
     pub bls12381_pairing_cost: Option<InternalGas>,
     // costs for conversion to and from uncompressed form
-    pub bls12381_g1_to_g1_uncompressed_cost: Option<InternalGas>,
-    pub bls12381_g1_uncompressed_to_g1_cost: Option<InternalGas>,
+    pub bls12381_g1_to_uncompressed_g1_cost: Option<InternalGas>,
+    pub bls12381_uncompressed_g1_to_g1_cost: Option<InternalGas>,
     // costs for sum of elements uncompressed form
-    pub bls12381_g1_uncompressed_sum_base_cost: Option<InternalGas>,
-    pub bls12381_g1_uncompressed_sum_cost_per_term: Option<InternalGas>,
+    pub bls12381_uncompressed_g1_sum_base_cost: Option<InternalGas>,
+    pub bls12381_uncompressed_g1_sum_cost_per_term: Option<InternalGas>,
 }
 
 macro_rules! native_charge_gas_early_exit_option {
@@ -783,7 +783,7 @@ pub fn internal_convert(
 
     let cost = context.gas_used();
 
-    if !(is_g1_uncompressed_supported(context)) {
+    if !(is_uncompressed_g1_supported(context)) {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -802,7 +802,7 @@ pub fn internal_convert(
         (Some(Groups::BLS12381G1Uncompressed), Some(Groups::BLS12381G1)) => {
             native_charge_gas_early_exit_option!(
                 context,
-                cost_params.bls12381_g1_uncompressed_to_g1_cost
+                cost_params.bls12381_uncompressed_g1_to_g1_cost
             );
             e.to_vec()
                 .try_into()
@@ -814,7 +814,7 @@ pub fn internal_convert(
         (Some(Groups::BLS12381G1), Some(Groups::BLS12381G1Uncompressed)) => {
             native_charge_gas_early_exit_option!(
                 context,
-                cost_params.bls12381_g1_to_g1_uncompressed_cost
+                cost_params.bls12381_g1_to_uncompressed_g1_cost
             );
             parse_trusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(&e)
                 .map(|e| bls::G1ElementUncompressed::from(&e))
@@ -845,7 +845,7 @@ pub fn internal_sum(
 
     let cost = context.gas_used();
 
-    if !(is_g1_uncompressed_supported(context)) {
+    if !(is_uncompressed_g1_supported(context)) {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -868,9 +868,9 @@ pub fn internal_sum(
             native_charge_gas_early_exit_option!(
                 context,
                 cost_params
-                    .bls12381_g1_uncompressed_sum_base_cost
+                    .bls12381_uncompressed_g1_sum_base_cost
                     .and_then(|base| cost_params
-                        .bls12381_g1_uncompressed_sum_cost_per_term
+                        .bls12381_uncompressed_g1_sum_cost_per_term
                         .map(|per_term| base + per_term * length.into()))
             );
 
