@@ -26,6 +26,7 @@ static SUPPORTED_ALGORITHMS: WebPkiSupportedAlgorithms = WebPkiSupportedAlgorith
 /// it only acts as a gatekeeper to decide if we should even try.  For example, we may want
 /// to filter our actions to well known public keys.
 pub trait Allower: std::fmt::Debug + Send + Sync {
+    // TODO: change allower interface to use raw key bytes.
     fn allowed(&self, key: &Ed25519PublicKey) -> bool;
 }
 
