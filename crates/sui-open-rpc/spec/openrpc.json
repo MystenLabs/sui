@@ -6121,6 +6121,22 @@
             "additionalProperties": false
           },
           {
+            "description": "Return events that match any of the given filters. Only supported on event subscriptions.",
+            "type": "object",
+            "required": [
+              "Any"
+            ],
+            "properties": {
+              "Any": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by sender address.",
             "type": "object",
             "required": [
