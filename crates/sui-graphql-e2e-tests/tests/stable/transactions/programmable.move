@@ -831,7 +831,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
 //# run-graphql
 { # Conflicting filter and context
     address(address: "@{A}") {
-        transactionBlocks(last: 10, filter: { signAddress: "0x0" }) {
+        transactionBlocks(last: 10, filter: { sentAddress: "0x0" }) {
             nodes { kind { __typename } }
         }
     }
