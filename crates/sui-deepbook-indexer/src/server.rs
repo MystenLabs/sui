@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
     error::DeepBookError, models::Pools, schema, sui_deepbook_indexer::PgDeepbookPersistent,
 };
