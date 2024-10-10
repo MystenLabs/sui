@@ -1146,6 +1146,7 @@ pub struct ProtocolConfig {
     group_ops_bls12381_uncompressed_g1_to_g1_cost: Option<u64>,
     group_ops_bls12381_uncompressed_g1_sum_base_cost: Option<u64>,
     group_ops_bls12381_uncompressed_g1_sum_cost_per_term: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_sum_max_terms: Option<u32>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -2065,6 +2066,7 @@ impl ProtocolConfig {
             group_ops_bls12381_uncompressed_g1_to_g1_cost: None,
             group_ops_bls12381_uncompressed_g1_sum_base_cost: None,
             group_ops_bls12381_uncompressed_g1_sum_cost_per_term: None,
+            group_ops_bls12381_uncompressed_g1_sum_max_terms: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -2480,6 +2482,7 @@ impl ProtocolConfig {
                         cfg.group_ops_bls12381_g2_msm_base_cost_per_input = Some(52);
                         cfg.group_ops_bls12381_msm_max_len = Some(32);
                         cfg.group_ops_bls12381_pairing_cost = Some(52);
+                        cfg.group_ops_bls12381_uncompressed_g1_sum_max_terms = Some(2000);
                     }
                     // Enable shared object deletion on all networks.
                     cfg.feature_flags.shared_object_deletion = true;

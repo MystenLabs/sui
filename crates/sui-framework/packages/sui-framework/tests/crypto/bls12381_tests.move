@@ -383,7 +383,7 @@ module sui::bls12381_tests {
     }
 
     #[random_test]
-    fun test_to_from_uncompressed(scalar: u64) {
+    fun test_to_from_uncompressed_g1(scalar: u64) {
         // Generator
         let a = bls12381::g1_generator();
         let a_uncompressed = bls12381::g1_to_uncompressed_g1(&a);
@@ -407,7 +407,7 @@ module sui::bls12381_tests {
     }
 
     #[test]
-    fun test_uncompressed_sum() {
+    fun test_uncompressed_g1_sum() {
         // Empty sum
         let sum = bls12381::uncompressed_g1_sum(&vector[]);
         assert!(group_ops::equal(&bls12381::g1_to_uncompressed_g1(&bls12381::g1_identity()), &sum));
@@ -415,7 +415,7 @@ module sui::bls12381_tests {
         // Sum with random terms
         let mut gen = random::new_generator_for_testing();
         let mut elements = vector[];
-        let mut i = 64;
+        let mut i = 100;
         let mut expected_result = bls12381::g1_identity();
         while (i > 0) {
             let scalar = bls12381::scalar_from_u64(gen.generate_u64());
@@ -427,6 +427,23 @@ module sui::bls12381_tests {
             assert!(group_ops::equal(&bls12381::g1_to_uncompressed_g1(&expected_result), &actual_result));
             i = i - 1;
         };
+    }
+
+    #[test]
+    #[expected_failure(abort_code = group_ops::EInputTooLong)]
+    fun test_uncompressed_g1_sum_too_long() {
+        // Sum with random terms
+        let mut gen = random::new_generator_for_testing();
+        let mut elements = vector[];
+        let mut i = 2001;
+        while (i > 0) {
+            let scalar = bls12381::scalar_from_u64(gen.generate_u64());
+            let element = bls12381::g1_mul(&scalar, &bls12381::g1_generator());
+            let uncompressed_element = bls12381::g1_to_uncompressed_g1(&element);
+            elements.push_back(uncompressed_element);
+            i = i - 1;
+        };
+        let _ = bls12381::uncompressed_g1_sum(&elements);
     }
 
     #[test]
