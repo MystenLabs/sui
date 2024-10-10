@@ -5,8 +5,13 @@
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
-use anyhow::{anyhow, Context, Error};
 use std::collections::HashMap;
+use std::fs;
+
+use anyhow::{anyhow, Context, Error};
+use codespan_reporting::diagnostic::{Diagnostic, Label};
+use codespan_reporting::files::SimpleFiles;
+use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 
 use move_binary_format::{
     compatibility::Compatibility,
@@ -19,14 +24,17 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
 };
+use move_package::compilation::compiled_package::CompiledUnitWithSource;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
+use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::SuiClient;
 use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 
 /// Errors that can occur during upgrade compatibility checks.
 /// one-to-one related to the underlying trait functions see: [`CompatibilityMode`]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub(crate) enum UpgradeCompatibilityModeError {
     StructMissing {
         name: Identifier,
@@ -101,7 +109,127 @@ pub(crate) enum UpgradeCompatibilityModeError {
     },
 }
 
+/// A list of errors that can occur during upgrade compatibility checks.
+#[derive(Debug, Clone, Default)]
+pub struct UpgradeErrorList {
+    errors: Vec<UpgradeCompatibilityModeError>,
+    source: Option<String>,
+}
+
+impl UpgradeErrorList {
+    fn push(&mut self, err: UpgradeCompatibilityModeError) {
+        self.errors.push(err);
+    }
+
+    /// Only keep the errors that break compatibility with the given [`Compatibility`]
+    fn retain_incompatible(&mut self, compatibility: &Compatibility) {
+        self.errors
+            .retain(|e| e.breaks_compatibility(compatibility));
+    }
+
+    /// Print the errors to the console with the relevant source code.
+    fn print_errors(
+        &mut self,
+        compiled_unit_with_source: &CompiledUnitWithSource,
+    ) -> Result<(), Error> {
+        for err in self.errors.clone() {
+            match err {
+                UpgradeCompatibilityModeError::StructMissing { name, .. } => {
+                    self.print_missing_definition(
+                        "Struct",
+                        name.to_string(),
+                        compiled_unit_with_source,
+                    )?;
+                }
+                UpgradeCompatibilityModeError::EnumMissing { name, .. } => {
+                    self.print_missing_definition(
+                        "Enum",
+                        name.to_string(),
+                        compiled_unit_with_source,
+                    )?;
+                }
+                UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
+                    self.print_missing_definition(
+                        "Function",
+                        name.to_string(),
+                        compiled_unit_with_source,
+                    )?;
+                }
+                UpgradeCompatibilityModeError::FunctionMissingEntry { name, .. } => {
+                    self.print_missing_definition(
+                        "Function",
+                        name.to_string(),
+                        compiled_unit_with_source,
+                    )?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// retrieve the source, caches the source after the first read
+    fn source(
+        &mut self,
+        compiled_unit_with_source: &CompiledUnitWithSource,
+    ) -> Result<&String, Error> {
+        if self.source.is_none() {
+            let source_path = compiled_unit_with_source.source_path.clone();
+            let source_content = fs::read_to_string(&source_path)?;
+            self.source = Some(source_content);
+        }
+        Ok(self.source.as_ref().unwrap())
+    }
+
+    /// Print missing definition errors, e.g. struct, enum, function
+    fn print_missing_definition(
+        &mut self,
+        declaration_kind: &str,
+        identifier_name: String,
+        compiled_unit_with_source: &CompiledUnitWithSource,
+    ) -> Result<(), Error> {
+        let module_name = compiled_unit_with_source.unit.name;
+        let source_path = compiled_unit_with_source.source_path.to_string_lossy();
+        let source = self.source(compiled_unit_with_source)?;
+
+        let start = compiled_unit_with_source
+            .unit
+            .source_map
+            .definition_location
+            .start() as usize;
+
+        let end = compiled_unit_with_source
+            .unit
+            .source_map
+            .definition_location
+            .end() as usize;
+
+        let mut files = SimpleFiles::new();
+        let file_id = files.add(source_path, &source);
+
+        let diag = Diagnostic::error()
+            .with_message(format!("{} is missing", declaration_kind))
+            .with_labels(vec![Label::primary(file_id, start..end).with_message(
+                format!(
+                    "Module '{}' expected {} '{}', but found none",
+                    declaration_kind, module_name, identifier_name
+                ),
+            )])
+            .with_notes(vec![format!(
+                "The {} is missing in the new module, add the previously defined: '{}'",
+                declaration_kind, identifier_name
+            )]);
+
+        let mut writer = StandardStream::stderr(ColorChoice::Always);
+        let config = codespan_reporting::term::Config::default();
+
+        codespan_reporting::term::emit(&mut writer, &config, &files, &diag)
+            .context("Unable to print error")
+    }
+}
+
 impl UpgradeCompatibilityModeError {
+    /// check if the error breaks compatibility for a given [`Compatibility`]
     fn breaks_compatibility(&self, compatability: &Compatibility) -> bool {
         match self {
             UpgradeCompatibilityModeError::StructAbilityMismatch { .. }
@@ -145,11 +273,11 @@ impl UpgradeCompatibilityModeError {
 /// A compatibility mode that collects errors as a vector of enums which describe the error causes
 #[derive(Default)]
 pub(crate) struct CliCompatibilityMode {
-    errors: Vec<UpgradeCompatibilityModeError>,
+    errors: UpgradeErrorList,
 }
 
 impl CompatibilityMode for CliCompatibilityMode {
-    type Error = anyhow::Error;
+    type Error = UpgradeErrorList;
     // ignored, address is not populated pre-tx
     fn module_id_mismatch(
         &mut self,
@@ -323,20 +451,13 @@ impl CompatibilityMode for CliCompatibilityMode {
             });
     }
 
-    fn finish(&self, compatability: &Compatibility) -> Result<(), Self::Error> {
-        let errors: Vec<String> = self
-            .errors
-            .iter()
-            .filter(|e| e.breaks_compatibility(compatability))
-            .map(|e| format!("- {:?}", e))
-            .collect();
+    fn finish(&mut self, compatability: &Compatibility) -> Result<(), Self::Error> {
+        self.errors.retain_incompatible(compatability);
 
-        if !errors.is_empty() {
-            return Err(anyhow!(
-                "Upgrade compatibility check failed with the following errors:\n{}",
-                errors.join("\n")
-            ));
+        if !self.errors.errors.is_empty() {
+            return Err(self.errors.clone());
         }
+
         Ok(())
     }
 }
@@ -346,6 +467,7 @@ pub(crate) async fn check_compatibility(
     client: &SuiClient,
     package_id: ObjectID,
     compiled_modules: &[Vec<u8>],
+    upgrade_package: CompiledPackage,
     protocol_config: ProtocolConfig,
 ) -> Result<(), Error> {
     let new_modules = compiled_modules
@@ -378,11 +500,13 @@ pub(crate) async fn check_compatibility(
         .collect::<Result<Vec<_>, _>>()
         .context("Unable to get existing package")?;
 
-    compare_packages(existing_modules, new_modules)
+    compare_packages(existing_modules, upgrade_package, new_modules)
 }
 
+/// Collect all the errors into a single error message.
 fn compare_packages(
     existing_modules: Vec<CompiledModule>,
+    upgrade_package: CompiledPackage,
     new_modules: Vec<CompiledModule>,
 ) -> Result<(), Error> {
     // create a map from the new modules
@@ -391,22 +515,52 @@ fn compare_packages(
         .map(|m| (m.self_id().name().to_owned(), m.clone()))
         .collect();
 
-    // for each existing find the new one run compatibility check
-    for existing_module in existing_modules {
-        let name = existing_module.self_id().name().to_owned();
+    let errors: Vec<String> = existing_modules
+        .iter()
+        .map(|existing_module| {
+            let name = existing_module.self_id().name().to_owned();
 
-        // find the new module with the same name
-        match new_modules_map.get(&name) {
-            Some(new_module) => {
-                Compatibility::upgrade_check().check_with_mode::<CliCompatibilityMode>(
-                    &Module::new(&existing_module),
-                    &Module::new(new_module),
-                )?;
+            let compiled_unit_with_source = upgrade_package
+                .package
+                .get_module_by_name_from_root(&name.to_string())
+                .context("Unable to get module")?;
+
+            // find the new module with the same name
+            match new_modules_map.get(&name) {
+                Some(new_module) => Compatibility::upgrade_check()
+                    .check_with_mode::<CliCompatibilityMode>(
+                        &Module::new(&existing_module),
+                        &Module::new(new_module),
+                    )
+                    .map_err(|mut error_list| {
+                        if let Err(print_errors) =
+                            error_list.print_errors(&compiled_unit_with_source)
+                        {
+                            print_errors
+                        } else {
+                            anyhow!("Compatibility check failed for module '{}'", name)
+                        }
+                    }),
+                None => Err(anyhow!("Module '{}' is missing from the package", name)),
             }
-            None => {
-                Err(anyhow!("Module {} is missing from the package", name))?;
-            }
-        }
+        })
+        // filter to errors
+        .filter(|r| r.is_err())
+        // collect the errors
+        .map(|r| r.unwrap_err().to_string())
+        .collect();
+
+    if errors.len() == 1 {
+        return Err(anyhow!(errors[0].clone()));
+    } else if !errors.is_empty() {
+        return Err(anyhow!(
+            "Upgrade compatibility check failed with the following errors:\n{}",
+            errors
+                .iter()
+                .map(|e| format!("- {}", e))
+                .collect::<Vec<String>>()
+                .join("\n")
+        ));
     }
 
     Ok(())
