@@ -117,8 +117,9 @@ impl Checkpoint {
     }
 
     /// The total number of transaction blocks in the network by the end of this checkpoint.
-    async fn network_total_transactions(&self) -> Option<UInt53> {
-        Some(self.network_total_transactions_impl().into())
+    async fn network_total_transactions(&self) -> Result<Option<UInt53>> {
+        let total_tx = self.network_total_transactions_impl()?;
+        Ok(Some(total_tx.into()))
     }
 
     /// The computation cost, storage cost, storage rebate, and non-refundable storage fee
@@ -204,8 +205,11 @@ impl Checkpoint {
         self.stored.sequence_number as u64
     }
 
-    pub(crate) fn network_total_transactions_impl(&self) -> u64 {
-        self.stored.network_total_transactions as u64
+    pub(crate) fn network_total_transactions_impl(&self) -> Result<u64, Error> {
+        let total_tx = self.stored.max_tx_sequence_number.ok_or(Error::Internal(
+            "Checkpoint max_tx_sequence_number should not be null".to_string(),
+        ))?;
+        Ok(total_tx as u64)
     }
 
     pub(crate) fn digest_impl(&self) -> Result<CheckpointDigest, Error> {
