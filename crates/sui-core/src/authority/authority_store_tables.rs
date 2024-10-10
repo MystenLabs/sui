@@ -23,6 +23,7 @@ use crate::authority::authority_store_types::{
     StoreMoveObjectWrapper, StoreObject, StoreObjectPair, StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use typed_store::tidehunter::th_db_map::{open_thdb, ThDbBatch, ThDbMap};
 use typed_store::DBMapUtils;
 
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
@@ -49,7 +50,7 @@ impl AuthorityPerpetualTablesOptions {
 }
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
-#[derive(DBMapUtils)]
+// #[derive(DBMapUtils)]
 pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.
@@ -64,21 +65,20 @@ pub struct AuthorityPerpetualTables {
     /// This is because there can be partially executed transactions whose effects have not yet
     /// been written out, and which must be retried. But, they cannot be retried unless their input
     /// objects are still accessible!
-    pub(crate) objects: DBMap<ObjectKey, StoreObjectWrapper>,
+    pub(crate) objects: ThDbMap<ObjectKey, StoreObjectWrapper>,
 
-    pub(crate) indirect_move_objects: DBMap<ObjectContentDigest, StoreMoveObjectWrapper>,
+    pub(crate) indirect_move_objects: ThDbMap<ObjectContentDigest, StoreMoveObjectWrapper>,
 
     /// This is a map between object references of currently active objects that can be mutated.
     ///
     /// For old epochs, it may also contain the transaction that they are lock on for use by this
     /// specific validator. The transaction locks themselves are now in AuthorityPerEpochStore.
-    #[rename = "owned_object_transaction_locks"]
-    pub(crate) live_owned_object_markers: DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
+    pub(crate) live_owned_object_markers: ThDbMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
 
     /// This is a map between the transaction digest and the corresponding transaction that's known to be
     /// executable. This means that it may have been executed locally, or it may have been synced through
     /// state-sync but hasn't been executed yet.
-    pub(crate) transactions: DBMap<TransactionDigest, TrustedTransaction>,
+    pub(crate) transactions: ThDbMap<TransactionDigest, TrustedTransaction>,
 
     /// A map between the transaction digest of a certificate to the effects of its execution.
     /// We store effects into this table in two different cases:
@@ -88,54 +88,55 @@ pub struct AuthorityPerpetualTables {
     ///     it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
     ///
     /// It's also possible for the effects to be reverted if the transaction didn't make it into the epoch.
-    pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
+    pub(crate) effects: ThDbMap<TransactionEffectsDigest, TransactionEffects>,
 
     /// Transactions that have been executed locally on this node. We need this table since the `effects` table
     /// doesn't say anything about the execution status of the transaction on this node. When we wait for transactions
     /// to be executed, we wait for them to appear in this table. When we revert transactions, we remove them from both
     /// tables.
-    pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
+    pub(crate) executed_effects: ThDbMap<TransactionDigest, TransactionEffectsDigest>,
 
     // Currently this is needed in the validator for returning events during process certificates.
     // We could potentially remove this if we decided not to provide events in the execution path.
     // TODO: Figure out what to do with this table in the long run.
     // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
-    pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
+    pub(crate) events: ThDbMap<(TransactionEventsDigest, usize), Event>,
 
     /// DEPRECATED in favor of the table of the same name in authority_per_epoch_store.
     /// Please do not add new accessors/callsites.
     /// When transaction is executed via checkpoint executor, we store association here
     pub(crate) executed_transactions_to_checkpoint:
-        DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
+        ThDbMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
 
     // Finalized root state accumulator for epoch, to be included in CheckpointSummary
     // of last checkpoint of epoch. These values should only ever be written once
     // and never changed
-    pub(crate) root_state_hash_by_epoch: DBMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
+    pub(crate) root_state_hash_by_epoch: ThDbMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
     /// Parameters of the system fixed at the epoch start
-    pub(crate) epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
+    pub(crate) epoch_start_configuration: ThDbMap<(), EpochStartConfiguration>,
 
     /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
-    pub(crate) pruned_checkpoint: DBMap<(), CheckpointSequenceNumber>,
+    pub pruned_checkpoint: ThDbMap<(), CheckpointSequenceNumber>,
 
     /// Expected total amount of SUI in the network. This is expected to remain constant
     /// throughout the lifetime of the network. We check it at the end of each epoch if
     /// expensive checks are enabled. We cannot use 10B today because in tests we often
     /// inject extra gas objects into genesis.
-    pub(crate) expected_network_sui_amount: DBMap<(), u64>,
+    pub(crate) expected_network_sui_amount: ThDbMap<(), u64>,
 
     /// Expected imbalance between storage fund balance and the sum of storage rebate of all live objects.
     /// This could be non-zero due to bugs in earlier protocol versions.
     /// This number is the result of storage_fund_balance - sum(storage_rebate).
-    pub(crate) expected_storage_fund_imbalance: DBMap<(), i64>,
+    pub(crate) expected_storage_fund_imbalance: ThDbMap<(), i64>,
 
+    // todo rework this table for ThDbMap - all keys will go to the same bucket currently
     /// Table that stores the set of received objects and deleted objects and the version at
     /// which they were received. This is used to prevent possible race conditions around receiving
     /// objects (since they are not locked by the transaction manager) and for tracking shared
     /// objects that have been deleted. This table is meant to be pruned per-epoch, and all
     /// previous epochs other than the current epoch may be pruned safely.
-    pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
+    pub(crate) object_per_epoch_marker_table: ThDbMap<(EpochId, ObjectKey), MarkerValue>,
 }
 
 impl AuthorityPerpetualTables {
@@ -146,6 +147,14 @@ impl AuthorityPerpetualTables {
     pub fn open(
         parent_path: &Path,
         db_options_override: Option<AuthorityPerpetualTablesOptions>,
+    ) -> Self {
+        Self::open_with_registry(parent_path, db_options_override, &Registry::default())
+    }
+
+    pub fn open_with_registry(
+        parent_path: &Path,
+        db_options_override: Option<AuthorityPerpetualTablesOptions>,
+        registry: &Registry,
     ) -> Self {
         let db_options_override = db_options_override.unwrap_or_default();
         let db_options =
@@ -176,22 +185,29 @@ impl AuthorityPerpetualTables {
                 events_table_config(db_options.clone()),
             ),
         ]));
-        Self::open_tables_read_write(
-            Self::path(parent_path),
-            MetricConf::new("perpetual")
-                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
-            Some(db_options.options),
-            Some(table_options),
-        )
+        let path = Self::path(parent_path);
+        let thdb = open_thdb(&path, registry);
+        let kfs = 4;
+        Self {
+            objects: ThDbMap::new(&thdb, (0, kfs, 0)),
+            indirect_move_objects: ThDbMap::new(&thdb, (1, kfs, 0)), // todo chop off too?
+            live_owned_object_markers: ThDbMap::new(&thdb, (2, kfs, 0)),
+            transactions: ThDbMap::new(&thdb, (3, kfs, 8)),
+            effects: ThDbMap::new(&thdb, (4, kfs, 8)),
+            executed_effects: ThDbMap::new(&thdb, (5, kfs, 8)),
+            events: ThDbMap::new(&thdb, (6, kfs, 8)),
+            executed_transactions_to_checkpoint: ThDbMap::new(&thdb, (7, kfs, 8)),
+            root_state_hash_by_epoch: ThDbMap::new(&thdb, (8, kfs, 0)),
+            epoch_start_configuration: ThDbMap::new(&thdb, (9, kfs, 0)),
+            pruned_checkpoint: ThDbMap::new(&thdb, (10, kfs, 0)),
+            expected_network_sui_amount: ThDbMap::new(&thdb, (11, kfs, 0)),
+            expected_storage_fund_imbalance: ThDbMap::new(&thdb, (12, kfs, 0)),
+            object_per_epoch_marker_table: ThDbMap::new(&thdb, (13, kfs, 0)),
+        }
     }
 
-    pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
-        Self::get_read_only_handle(
-            Self::path(parent_path),
-            None,
-            None,
-            MetricConf::new("perpetual_readonly"),
-        )
+    pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTables {
+        unimplemented!()
     }
 
     // This is used by indexer to find the correct version of dynamic field child object.
@@ -202,13 +218,12 @@ impl AuthorityPerpetualTables {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        let iter = self
-            .objects
-            .safe_range_iter(ObjectKey::min_for_id(&object_id)..=ObjectKey::max_for_id(&object_id))
-            .skip_prior_to(&ObjectKey(object_id, version))?;
-        match iter.reverse().next() {
-            Some(Ok((key, o))) => self.object(&key, o),
-            Some(Err(e)) => Err(e.into()),
+        let last = self.objects.last_in_range(
+            &ObjectKey::min_for_id(&object_id),
+            &ObjectKey(object_id, version),
+        );
+        match last {
+            Some((key, o)) => self.object(&key, o),
             None => Ok(None),
         }
     }
@@ -289,15 +304,14 @@ impl AuthorityPerpetualTables {
         &self,
         object_id: ObjectID,
     ) -> Result<Option<ObjectRef>, SuiError> {
-        let mut iterator = self
-            .objects
-            .unbounded_iter()
-            .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
+        let last = self.objects.last_in_range(
+            &ObjectKey::min_for_id(&object_id),
+            &ObjectKey::max_for_id(&object_id),
+        );
 
-        if let Some((object_key, value)) = iterator.next() {
-            if object_key.0 == object_id {
-                return Ok(Some(self.object_reference(&object_key, value)?));
-            }
+        if let Some((object_key, value)) = last {
+            debug_assert_eq!(object_key.0, object_id);
+            return Ok(Some(self.object_reference(&object_key, value)?));
         }
         Ok(None)
     }
@@ -306,15 +320,14 @@ impl AuthorityPerpetualTables {
         &self,
         object_id: ObjectID,
     ) -> Result<Option<(ObjectKey, StoreObjectWrapper)>, SuiError> {
-        let mut iterator = self
-            .objects
-            .unbounded_iter()
-            .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
+        let last = self.objects.last_in_range(
+            &ObjectKey::min_for_id(&object_id),
+            &ObjectKey::max_for_id(&object_id),
+        );
 
-        if let Some((object_key, value)) = iterator.next() {
-            if object_key.0 == object_id {
-                return Ok(Some((object_key, value)));
-            }
+        if let Some((object_key, value)) = last {
+            debug_assert_eq!(object_key.0, object_id);
+            return Ok(Some((object_key, value)));
         }
         Ok(None)
     }
@@ -347,7 +360,7 @@ impl AuthorityPerpetualTables {
 
     pub fn set_highest_pruned_checkpoint(
         &self,
-        wb: &mut DBBatch,
+        wb: &mut ThDbBatch,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> SuiResult {
         wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?;
@@ -406,12 +419,7 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
-        Ok(self
-            .objects
-            .unbounded_iter()
-            .skip_to(&ObjectKey::ZERO)?
-            .next()
-            .is_none())
+        Ok(self.objects.unbounded_iter().next().is_none())
     }
 
     pub fn iter_live_object_set(&self, include_wrapped_object: bool) -> LiveSetIter<'_> {
@@ -425,42 +433,45 @@ impl AuthorityPerpetualTables {
 
     pub fn range_iter_live_object_set(
         &self,
-        lower_bound: Option<ObjectID>,
-        upper_bound: Option<ObjectID>,
+        // lower_bound: Option<ObjectID>,
+        // upper_bound: Option<ObjectID>,
         include_wrapped_object: bool,
     ) -> LiveSetIter<'_> {
-        let lower_bound = lower_bound.as_ref().map(ObjectKey::min_for_id);
-        let upper_bound = upper_bound.as_ref().map(ObjectKey::max_for_id);
-
-        LiveSetIter {
-            iter: self.objects.iter_with_bounds(lower_bound, upper_bound),
-            tables: self,
-            prev: None,
-            include_wrapped_object,
-        }
+        unimplemented!("range_iter_live_object_set"); // todo
+                                                      // let lower_bound = lower_bound.as_ref().map(ObjectKey::min_for_id);
+                                                      // let upper_bound = upper_bound.as_ref().map(ObjectKey::max_for_id);
+                                                      //
+                                                      // LiveSetIter {
+                                                      //     iter: self.objects.iter_with_bounds(lower_bound, upper_bound),
+                                                      //     tables: self,
+                                                      //     prev: None,
+                                                      //     include_wrapped_object,
+                                                      // }
     }
 
     pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
         // This checkpoints the entire db and not just objects table
-        self.objects.checkpoint_db(path).map_err(Into::into)
+        unimplemented!("checkpoint_db")
+        // self.objects.checkpoint_db(path).map_err(Into::into)
     }
 
     pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
-        // TODO: Add new tables that get added to the db automatically
-        self.objects.unsafe_clear()?;
-        self.indirect_move_objects.unsafe_clear()?;
-        self.live_owned_object_markers.unsafe_clear()?;
-        self.executed_effects.unsafe_clear()?;
-        self.events.unsafe_clear()?;
-        self.executed_transactions_to_checkpoint.unsafe_clear()?;
-        self.root_state_hash_by_epoch.unsafe_clear()?;
-        self.epoch_start_configuration.unsafe_clear()?;
-        self.pruned_checkpoint.unsafe_clear()?;
-        self.expected_network_sui_amount.unsafe_clear()?;
-        self.expected_storage_fund_imbalance.unsafe_clear()?;
-        self.object_per_epoch_marker_table.unsafe_clear()?;
-        self.objects.rocksdb.flush()?;
-        Ok(())
+        unimplemented!()
+        // // TODO: Add new tables that get added to the db automatically
+        // self.objects.unsafe_clear()?;
+        // self.indirect_move_objects.unsafe_clear()?;
+        // self.live_owned_object_markers.unsafe_clear()?;
+        // self.executed_effects.unsafe_clear()?;
+        // self.events.unsafe_clear()?;
+        // self.executed_transactions_to_checkpoint.unsafe_clear()?;
+        // self.root_state_hash_by_epoch.unsafe_clear()?;
+        // self.epoch_start_configuration.unsafe_clear()?;
+        // self.pruned_checkpoint.unsafe_clear()?;
+        // self.expected_network_sui_amount.unsafe_clear()?;
+        // self.expected_storage_fund_imbalance.unsafe_clear()?;
+        // self.object_per_epoch_marker_table.unsafe_clear()?;
+        // self.objects.rocksdb.flush()?;
+        // Ok(())
     }
 
     pub fn get_root_state_hash(
@@ -500,12 +511,10 @@ impl ObjectStore for AuthorityPerpetualTables {
         &self,
         object_id: &ObjectID,
     ) -> Result<Option<Object>, sui_types::storage::error::Error> {
-        let obj_entry = self
-            .objects
-            .unbounded_iter()
-            .skip_prior_to(&ObjectKey::max_for_id(object_id))
-            .map_err(sui_types::storage::error::Error::custom)?
-            .next();
+        let obj_entry = self.objects.last_in_range(
+            &ObjectKey::min_for_id(object_id),
+            &ObjectKey::max_for_id(object_id),
+        );
 
         match obj_entry {
             Some((ObjectKey(obj_id, version), obj)) if obj_id == *object_id => Ok(self
@@ -533,7 +542,7 @@ impl ObjectStore for AuthorityPerpetualTables {
 
 pub struct LiveSetIter<'a> {
     iter:
-        <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::Iterator,
+        <ThDbMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::Iterator,
     tables: &'a AuthorityPerpetualTables,
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
     /// Whether a wrapped object is considered as a live object.
