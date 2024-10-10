@@ -14,9 +14,9 @@ use sui_sdk_types::types::Command;
 use sui_sdk_types::types::TransactionExpiration;
 use sui_sdk_types::types::UnresolvedGasPayment;
 use sui_sdk_types::types::UnresolvedInputArgument;
-use sui_sdk_types::types::UnresolvedObjectReference;
 use sui_sdk_types::types::UnresolvedProgrammableTransaction;
 use sui_sdk_types::types::UnresolvedTransaction;
+use sui_sdk_types::types::UnresolvedValue;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
@@ -80,13 +80,13 @@ async fn resolve_transaction_simple_transfer() {
     let unresolved_transaction = UnresolvedTransaction {
         ptb: UnresolvedProgrammableTransaction {
             inputs: vec![
-                UnresolvedInputArgument::ImmutableOrOwned(UnresolvedObjectReference {
-                    object_id: obj_to_send.into(),
-                    version: None,
-                    digest: None,
-                }),
-                UnresolvedInputArgument::Pure {
-                    value: bcs::to_bytes(&recipient).unwrap(),
+                UnresolvedInputArgument {
+                    object_id: Some(obj_to_send.into()),
+                    ..Default::default()
+                },
+                UnresolvedInputArgument {
+                    value: Some(UnresolvedValue::String(recipient.to_string())),
+                    ..Default::default()
                 },
             ],
             commands: vec![Command::TransferObjects(
@@ -147,13 +147,13 @@ async fn resolve_transaction_transfer_with_sponsor() {
     let unresolved_transaction = UnresolvedTransaction {
         ptb: UnresolvedProgrammableTransaction {
             inputs: vec![
-                UnresolvedInputArgument::ImmutableOrOwned(UnresolvedObjectReference {
-                    object_id: obj_to_send.into(),
-                    version: None,
-                    digest: None,
-                }),
-                UnresolvedInputArgument::Pure {
-                    value: bcs::to_bytes(&recipient).unwrap(),
+                UnresolvedInputArgument {
+                    object_id: Some(obj_to_send.into()),
+                    ..Default::default()
+                },
+                UnresolvedInputArgument {
+                    value: Some(UnresolvedValue::String(recipient.to_string())),
+                    ..Default::default()
                 },
             ],
             commands: vec![Command::TransferObjects(
@@ -230,10 +230,9 @@ async fn resolve_transaction_borrowed_shared_object() {
 
     let unresolved_transaction = UnresolvedTransaction {
         ptb: UnresolvedProgrammableTransaction {
-            inputs: vec![UnresolvedInputArgument::Shared {
-                object_id: "0x6".parse().unwrap(),
-                initial_shared_version: None,
-                mutable: None,
+            inputs: vec![UnresolvedInputArgument {
+                object_id: Some("0x6".parse().unwrap()),
+                ..Default::default()
             }],
             commands: vec![Command::MoveCall(sui_sdk_types::types::MoveCall {
                 package: "0x2".parse().unwrap(),
@@ -299,18 +298,17 @@ async fn resolve_transaction_mutable_shared_object() {
     let unresolved_transaction = UnresolvedTransaction {
         ptb: UnresolvedProgrammableTransaction {
             inputs: vec![
-                UnresolvedInputArgument::Shared {
-                    object_id: "0x5".parse().unwrap(),
-                    initial_shared_version: None,
-                    mutable: None,
+                UnresolvedInputArgument {
+                    object_id: Some("0x5".parse().unwrap()),
+                    ..Default::default()
                 },
-                UnresolvedInputArgument::ImmutableOrOwned(UnresolvedObjectReference {
-                    object_id: obj_to_stake.into(),
-                    version: None,
-                    digest: None,
-                }),
-                UnresolvedInputArgument::Pure {
-                    value: bcs::to_bytes(&validator_address).unwrap(),
+                UnresolvedInputArgument {
+                    object_id: Some(obj_to_stake.into()),
+                    ..Default::default()
+                },
+                UnresolvedInputArgument {
+                    value: Some(UnresolvedValue::String(validator_address.to_string())),
+                    ..Default::default()
                 },
             ],
             commands: vec![Command::MoveCall(sui_sdk_types::types::MoveCall {
@@ -366,10 +364,9 @@ async fn resolve_transaction_insufficient_gas() {
     // Test the case where we don't have enough coins/gas for the required budget
     let unresolved_transaction = UnresolvedTransaction {
         ptb: UnresolvedProgrammableTransaction {
-            inputs: vec![UnresolvedInputArgument::Shared {
-                object_id: "0x6".parse().unwrap(),
-                initial_shared_version: None,
-                mutable: None,
+            inputs: vec![UnresolvedInputArgument {
+                object_id: Some("0x6".parse().unwrap()),
+                ..Default::default()
             }],
             commands: vec![Command::MoveCall(sui_sdk_types::types::MoveCall {
                 package: "0x2".parse().unwrap(),
@@ -401,4 +398,86 @@ fn assert_contains(haystack: &str, needle: &str) {
     if !haystack.contains(needle) {
         panic!("{haystack:?} does not contain {needle:?}");
     }
+}
+
+#[sim_test]
+async fn resolve_transaction_with_raw_json() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+
+    let client = Client::new(test_cluster.rpc_url());
+    let recipient = SuiAddress::random_for_testing_only();
+
+    let (sender, mut gas) = test_cluster.wallet.get_one_account().await.unwrap();
+    gas.sort_by_key(|object_ref| object_ref.0);
+    let obj_to_send = gas.first().unwrap().0;
+
+    let unresolved_transaction = serde_json::json!({
+        "inputs": [
+            {
+                "object_id": obj_to_send
+            },
+            {
+                "value": 1
+            },
+            {
+                "value": recipient
+            }
+        ],
+
+        "commands": [
+            {
+                "command": "split_coins",
+                "coin": { "input": 0 },
+                "amounts": [
+                    {
+                        "input": 1,
+                    },
+                    {
+                        "input": 1,
+                    }
+                ]
+            },
+            {
+                "command": "transfer_objects",
+                "objects": [
+                    { "result": [0, 1] },
+                    { "result": [0, 0] }
+                ],
+                "address": { "input": 2 }
+            }
+        ],
+
+        "sender": sender
+    });
+
+    let resolved = client
+        .inner()
+        .resolve_transaction_with_parameters(
+            &serde_json::from_value(unresolved_transaction).unwrap(),
+            &ResolveTransactionQueryParameters {
+                simulate: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    let signed_transaction = test_cluster
+        .wallet
+        .sign_transaction(&resolved.transaction.try_into().unwrap());
+    let effects = client
+        .execute_transaction(
+            &ExecuteTransactionQueryParameters::default(),
+            &signed_transaction,
+        )
+        .await
+        .unwrap()
+        .effects;
+
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    assert_eq!(
+        resolved.simulation.unwrap().effects,
+        effects.try_into().unwrap()
+    );
 }
