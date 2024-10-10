@@ -45,7 +45,7 @@ public struct UncompressedG1 {}
 // https://docs.rs/bls12_381/latest/bls12_381/notes/serialization/index.html for details.
 // GT is encoded using big-endian byte order and points are uncompressed and not intended
 // to be deserialized.
-// G1Uncompressed is G1 elements in uncompressed. They are larger but faster to use since they do
+// UncompressedG1 is G1 elements in uncompressed. They are larger but faster to use since they do
 // not have to be uncompressed before use. They can not be constructed on their own but
 // have to be created from G1 elements.
 
@@ -276,7 +276,7 @@ public fun pairing(e1: &Element<G1>, e2: &Element<G2>): Element<GT> {
 }
 
 ///////////////////////////////////////
-/// G1Uncompressed group operations ///
+/// UncompressedG1 group operations ///
 
 /// Create a `Element<G1>` from its uncompressed form.
 public fun uncompressed_g1_to_g1(e: &Element<UncompressedG1>): Element<G1> {
