@@ -78,7 +78,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -107,7 +107,7 @@ module Test::M1 {
 # this is so we don't end up skipping any other matches in the scan range
 # but beyond the scope of the `limit`
 {
-  transactionBlocks(first: 1 scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(first: 1 scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -133,7 +133,7 @@ module Test::M1 {
 # endCursor ends at 7, not 3, because we've exhausted all the matches
 # within the window of scanning range, and will overwrite the endCursor to 7.
 {
-  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -158,7 +158,7 @@ module Test::M1 {
 # startCursor: 8, endCursor: 12, both are scan-limited
 # expect an empty set
 {
-  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -183,7 +183,7 @@ module Test::M1 {
 # startCursor: 13, endCursor: 17, both are scan-limited
 # single element returned, coincidentally also the last scanned transaction
 {
-  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -210,7 +210,7 @@ module Test::M1 {
 # but due to the `first` limit, we return a subset.
 # we don't want to skip over other matches, so we don't push the endCursor out
 {
-  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -236,7 +236,7 @@ module Test::M1 {
 # single element returned, coincidentally also the last scanned transaction
 # note that the startCursor is 19, not 18 or 21, since we can use the scan-limited behavior
 {
-  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage

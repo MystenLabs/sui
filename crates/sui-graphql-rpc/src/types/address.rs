@@ -30,12 +30,6 @@ pub(crate) struct Address {
 pub(crate) enum AddressTransactionBlockRelationship {
     /// Transactions this address has sent.
     Sent,
-    /// Transactions that sent objects to this address. NOTE: this input filter has been deprecated
-    /// in favor of `AFFECTED`, which offers an easier to understand behavior.
-    ///
-    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-    /// `AFFECTED` is introduced, whichever is later.
-    Recv,
     /// Transactions that this address was involved in, either as the sender, sponsor, or as the
     /// owner of some object that was created, modified or transfered.
     Affected,
@@ -181,11 +175,6 @@ impl Address {
             // Relationship defaults to "sent" if none is supplied.
             Some(R::Sent) | None => TransactionBlockFilter {
                 sent_address: Some(self.address),
-                ..Default::default()
-            },
-
-            Some(R::Recv) => TransactionBlockFilter {
-                recv_address: Some(self.address),
                 ..Default::default()
             },
 

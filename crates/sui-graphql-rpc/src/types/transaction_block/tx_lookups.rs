@@ -343,10 +343,6 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
         ));
     }
 
-    if let Some(recv) = &filter.recv_address {
-        subqueries.push(("tx_recipients", select_recipient(recv, sender, tx_bounds)));
-    }
-
     if let Some(input) = &filter.input_object {
         subqueries.push(("tx_input_objects", select_input(input, sender, tx_bounds)));
     }
@@ -487,13 +483,6 @@ fn select_affected_object(
     filter!(
         select_tx(sender, bound, "tx_affected_objects"),
         format!("affected = {}", bytea_literal(affected.as_slice()))
-    )
-}
-
-fn select_recipient(recv: &SuiAddress, sender: Option<SuiAddress>, bound: TxBounds) -> RawQuery {
-    filter!(
-        select_tx(sender, bound, "tx_recipients"),
-        format!("recipient = {}", bytea_literal(recv.as_slice()))
     )
 }
 
