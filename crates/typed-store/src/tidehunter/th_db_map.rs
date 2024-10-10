@@ -299,7 +299,7 @@ pub fn open_thdb(path: &Path, registry: &Registry) -> Arc<Db> {
     fs::create_dir_all(path).unwrap();
     let metrics = Metrics::new_in(registry);
     let mut config = Config::default();
-    config.large_table_size = 32 * 1024 * 1024;
+    modify_large_table_size(&mut config);
     // run snapshot every 64 Gb written to wal
     config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
     let config = Arc::new(config);
@@ -307,4 +307,14 @@ pub fn open_thdb(path: &Path, registry: &Registry) -> Arc<Db> {
     let db = Arc::new(db);
     db.start_periodic_snapshot();
     db
+}
+
+#[cfg(not(test))]
+fn modify_large_table_size(config: &mut Config) {
+    config.large_table_size = 32 * 1024 * 1024;
+}
+
+#[cfg(test)]
+fn modify_large_table_size(config: &mut Config) {
+    config.large_table_size = 2 * 1024;
 }
