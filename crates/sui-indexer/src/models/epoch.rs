@@ -163,7 +163,11 @@ impl EndOfEpochUpdate {
             total_gas_fees: event.total_gas_fees as i64,
             total_stake_rewards_distributed: event.total_stake_rewards_distributed as i64,
             epoch_commitments: bcs::to_bytes(
-                &last_checkpoint_summary.end_of_epoch_data.clone().unwrap(),
+                &last_checkpoint_summary
+                    .end_of_epoch_data
+                    .clone()
+                    .unwrap()
+                    .epoch_commitments,
             )
             .unwrap(),
         }
