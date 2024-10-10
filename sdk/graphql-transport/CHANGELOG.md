@@ -1,5 +1,11 @@
 # @mysten/graphql-transport
 
+## 0.2.22
+
+### Patch Changes
+
+- 4d63e50: Update GraphQL transport layer to accommodate change in schema
+
 ## 0.2.21
 
 ### Patch Changes
