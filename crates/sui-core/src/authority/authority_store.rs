@@ -1889,7 +1889,8 @@ impl AccumulatorStore for AuthorityStore {
     fn get_root_state_accumulator_for_highest_epoch(
         &self,
     ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, Accumulator))>> {
-        unimplemented!("get_root_state_accumulator_for_highest_epoch");
+        // todo fix
+        Ok(self.perpetual_tables.root_state_hash_by_epoch.unbounded_iter().max_by_key(|(k, _)|*k))
         // Ok(self
         //     .perpetual_tables
         //     .root_state_hash_by_epoch
