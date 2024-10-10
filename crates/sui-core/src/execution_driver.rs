@@ -107,7 +107,8 @@ pub async fn execution_process(
         authority.metrics.execution_rate_tracker.lock().record();
 
         // Certificate execution can take significant time, so run it in a separate task.
-        spawn_monitored_task!(async move {
+        let epoch_store_clone = epoch_store.clone();
+        spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
             let _guard = permit;
             if let Ok(true) = authority.is_tx_already_executed(&digest) {
@@ -118,7 +119,7 @@ pub async fn execution_process(
                 fail_point_async!("transaction_execution_delay");
                 attempts += 1;
                 let res = authority
-                    .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store)
+                    .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store_clone)
                     .await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
@@ -136,6 +137,6 @@ pub async fn execution_process(
                 .metrics
                 .execution_driver_executed_transactions
                 .inc();
-        }.instrument(error_span!("execution_driver", tx_digest = ?digest)));
+        }.instrument(error_span!("execution_driver", tx_digest = ?digest))));
     }
 }
