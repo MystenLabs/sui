@@ -100,6 +100,8 @@ pub struct GroupOpsCostParams {
     // costs for sum of elements uncompressed form
     pub bls12381_uncompressed_g1_sum_base_cost: Option<InternalGas>,
     pub bls12381_uncompressed_g1_sum_cost_per_term: Option<InternalGas>,
+    // limit the number of terms in a sum
+    pub bls12381_uncompressed_g1_sum_max_terms: Option<u32>,
 }
 
 macro_rules! native_charge_gas_early_exit_option {
@@ -831,8 +833,8 @@ pub fn internal_convert(
 }
 
 /***************************************************************************************************
- * native fun internal_sum_of_uncompressed
- * Implementation of the Move native function `internal_sum_of_uncompressed(type:u8, terms: &vector<vector<u8>>): vector<u8>`
+ * native fun internal_sum
+ * Implementation of the Move native function `internal_sum(type:u8, terms: &vector<vector<u8>>): vector<u8>`
  *   gas cost: group_ops_bls12381_g1_sum_of_uncompressed_base_cost + len(terms) * group_ops_bls12381_g1_sum_of_uncompressed_cost_per_term
  **************************************************************************************************/
 pub fn internal_sum(
@@ -865,6 +867,17 @@ pub fn internal_sum(
 
     let result = match Groups::from_u8(group_type) {
         Some(Groups::BLS12381G1Uncompressed) => {
+            let max_terms = cost_params
+                .bls12381_uncompressed_g1_sum_max_terms
+                .ok_or_else(|| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Max number of terms is not set".to_string())
+                })?;
+
+            if length > max_terms as u64 {
+                return Ok(NativeResult::err(cost, INPUT_TOO_LONG_ERROR));
+            }
+
             native_charge_gas_early_exit_option!(
                 context,
                 cost_params
