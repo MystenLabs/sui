@@ -15,6 +15,7 @@ max_blocks_per_fetch: 1000
 sync_last_known_own_block_timeout:
   secs: 5
   nanos: 0
+sync_missing_blocks_round_threshold: 50
 round_prober_interval_ms: 5000
 round_prober_request_timeout_ms: 2000
 propagation_delay_stop_proposal_threshold: 20
@@ -31,3 +32,4 @@ tonic:
   connection_buffer_size: 33554432
   excessive_message_size: 16777216
   message_size_limit: 67108864
+
