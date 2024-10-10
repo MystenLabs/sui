@@ -145,13 +145,30 @@ interface JSONTraceRootObject {
 // Runtime data types.
 
 /**
+ * Kind of instruction in the trace. Enum member names correspond to instruction names.
+ * (other than UNKNOWN which is used for instructions whose kind does not matter).
+ */
+export enum TraceInstructionKind {
+    /**
+     * Call instruction.
+     */
+    CALL,
+    /**
+     * Generic call instruction.
+     */
+    CALL_GENERIC,
+    // for now we don't care about other kinds of instructions
+    UNKNOWN
+}
+
+/**
  * Kind of a trace event.
  */
 export enum TraceEventKind {
-    OpenFrame = 'OpenFrame',
-    CloseFrame = 'CloseFrame',
-    Instruction = 'Instruction',
-    Effect = 'Effect'
+    OpenFrame,
+    CloseFrame,
+    Instruction,
+    Effect
 }
 
 /**
@@ -167,7 +184,7 @@ export type TraceEvent =
         paramValues: TraceValue[]
     }
     | { type: TraceEventKind.CloseFrame, id: number }
-    | { type: TraceEventKind.Instruction, pc: number }
+    | { type: TraceEventKind.Instruction, pc: number, kind: TraceInstructionKind }
     | { type: TraceEventKind.Effect, effect: EventEffect };
 
 /**
@@ -299,9 +316,13 @@ export function readTrace(traceFilePath: string): ITrace {
             });
             frameIDs.pop();
         } else if (event.Instruction) {
+            const name = event.Instruction.instruction;
             events.push({
                 type: TraceEventKind.Instruction,
-                pc: event.Instruction.pc
+                pc: event.Instruction.pc,
+                kind: name in TraceInstructionKind
+                    ? TraceInstructionKind[name as keyof typeof TraceInstructionKind]
+                    : TraceInstructionKind.UNKNOWN
             });
             // Set end of lifetime for all locals to the max instruction PC ever seen
             // for a given local (if they are live after this instructions, they will
