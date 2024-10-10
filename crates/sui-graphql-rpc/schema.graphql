@@ -2901,11 +2901,6 @@ enum ObjectKind {
 	The object is fetched from the index.
 	"""
 	INDEXED
-	"""
-	The object is deleted or wrapped and only partial information can be loaded from the
-	indexer.
-	"""
-	WRAPPED_OR_DELETED
 }
 
 """

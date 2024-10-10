@@ -85,9 +85,6 @@ pub(crate) enum ObjectKind {
     Indexed(NativeObject, StoredHistoryObject),
     /// An object in the bcs serialized form.
     Serialized(Vec<u8>),
-    /// The object is wrapped or deleted and only partial information can be loaded from the
-    /// indexer.
-    WrappedOrDeleted,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
@@ -98,9 +95,6 @@ pub enum ObjectStatus {
     NotIndexed,
     /// The object is fetched from the index.
     Indexed,
-    /// The object is deleted or wrapped and only partial information can be loaded from the
-    /// indexer.
-    WrappedOrDeleted,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, InputObject)]
@@ -676,12 +670,7 @@ impl ObjectImpl<'_> {
     pub(crate) async fn bcs(&self) -> Result<Option<Base64>> {
         use ObjectKind as K;
         Ok(match &self.0.kind {
-            K::WrappedOrDeleted => None,
-            // WrappedOrDeleted objects are also read from the historical objects table, and they do
-            // not have a serialized object, so the column is also nullable for stored historical
-            // objects.
             K::Indexed(_, stored) => stored.serialized_object.as_ref().map(Base64::from),
-
             K::NotIndexed(native) => {
                 let bytes = bcs::to_bytes(native)
                     .map_err(|e| {
@@ -764,24 +753,14 @@ impl Object {
         serialized: Option<Vec<u8>>,
         checkpoint_viewed_at: u64,
         root_version: u64,
-    ) -> Self {
-        if let Some(bytes) = serialized {
-            Self {
-                address: object_id,
-                version,
-                kind: ObjectKind::Serialized(bytes),
-                checkpoint_viewed_at,
-                root_version,
-            }
-        } else {
-            Self {
-                address: object_id,
-                version,
-                kind: ObjectKind::WrappedOrDeleted,
-                checkpoint_viewed_at,
-                root_version: version,
-            }
-        }
+    ) -> Option<Self> {
+        serialized.map(|bytes| Self {
+            address: object_id,
+            version,
+            kind: ObjectKind::Serialized(bytes),
+            checkpoint_viewed_at,
+            root_version,
+        })
     }
 
     pub(crate) fn native_impl(&self) -> Option<NativeObject> {
@@ -790,7 +769,6 @@ impl Object {
         match &self.kind {
             K::NotIndexed(native) | K::Indexed(native, _) => Some(native.clone()),
             K::Serialized(bytes) => bcs::from_bytes(bytes).ok(),
-            K::WrappedOrDeleted => None,
         }
     }
 
@@ -1016,13 +994,9 @@ impl Object {
                     root_version,
                 })
             }
-            NativeObjectStatus::WrappedOrDeleted => Ok(Self {
-                address,
-                version: history_object.object_version as u64,
-                kind: ObjectKind::WrappedOrDeleted,
-                checkpoint_viewed_at,
-                root_version: history_object.object_version as u64,
-            }),
+            NativeObjectStatus::WrappedOrDeleted => Err(Error::Internal(
+                "Wrapped or deleted objects should not be loaded from DB.".to_string(),
+            )),
         }
     }
 }
@@ -1325,16 +1299,14 @@ impl Loader<HistoricalKey> for Db {
             .zip(point_lookup_keys)
             .filter_map(|(hist_key, lookup_key)| {
                 let object = objects.get(&lookup_key)?;
-                Some((
-                    *hist_key,
-                    Object::new_serialized(
-                        lookup_key.id,
-                        lookup_key.version,
-                        object.clone(),
-                        hist_key.checkpoint_viewed_at,
-                        lookup_key.version,
-                    ),
-                ))
+                let hist_obj = Object::new_serialized(
+                    lookup_key.id,
+                    lookup_key.version,
+                    object.clone(),
+                    hist_key.checkpoint_viewed_at,
+                    lookup_key.version,
+                );
+                hist_obj.map(|obj| (*hist_key, obj))
             })
             .collect();
         Ok(results)
@@ -1435,18 +1407,16 @@ impl Loader<ParentVersionKey> for Db {
             .zip(point_lookup_keys)
             .filter_map(|(parent_key, lookup_key)| {
                 let object = objects.get(&lookup_key)?;
-                Some((
-                    parent_key,
-                    Object::new_serialized(
-                        parent_key.id,
-                        lookup_key.version,
-                        object.clone(),
-                        parent_key.checkpoint_viewed_at,
-                        // If `ParentVersionKey::parent_version` is set, it must have been correctly
-                        // propagated from the `Object::root_version` of some object.
-                        parent_key.parent_version,
-                    ),
-                ))
+                let hist_obj = Object::new_serialized(
+                    parent_key.id,
+                    lookup_key.version,
+                    object.clone(),
+                    parent_key.checkpoint_viewed_at,
+                    // If `ParentVersionKey::parent_version` is set, it must have been correctly
+                    // propagated from the `Object::root_version` of some object.
+                    parent_key.parent_version,
+                );
+                hist_obj.map(|obj| (parent_key, obj))
             })
             .collect();
 
@@ -1608,7 +1578,6 @@ impl From<&ObjectKind> for ObjectStatus {
         match kind {
             ObjectKind::NotIndexed(_) => ObjectStatus::NotIndexed,
             ObjectKind::Indexed(_, _) | ObjectKind::Serialized(_) => ObjectStatus::Indexed,
-            ObjectKind::WrappedOrDeleted => ObjectStatus::WrappedOrDeleted,
         }
     }
 }

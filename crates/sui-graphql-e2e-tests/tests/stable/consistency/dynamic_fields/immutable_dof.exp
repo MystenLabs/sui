@@ -144,9 +144,7 @@ Response: {
   "data": {
     "object": {
       "owner": {
-        "parent": {
-          "address": "0x9958869e2da5c5af828a334520a81de2bec0861e171b575db12fb4987cb27a78"
-        }
+        "parent": null
       },
       "dynamicFields": {
         "nodes": []
