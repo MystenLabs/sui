@@ -328,7 +328,6 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
         subqueries.push(("tx_kinds", select_kind(*kind, sender, tx_bounds)));
     }
 
-    #[cfg(feature = "staging")]
     if let Some(affected) = &filter.affected_address {
         subqueries.push((
             "tx_affected_addresses",
@@ -463,7 +462,6 @@ fn select_kind(
     }
 }
 
-#[cfg(feature = "staging")]
 fn select_affected_address(
     affected: &SuiAddress,
     sender: Option<SuiAddress>,
