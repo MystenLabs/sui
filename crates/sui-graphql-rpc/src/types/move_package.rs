@@ -308,8 +308,8 @@ impl MovePackage {
 
     /// The owner type of this object: Immutable, Shared, Parent, Address
     /// Packages are always Immutable.
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
-        ObjectImpl(&self.super_).owner(ctx).await
+    pub(crate) async fn owner(&self) -> Option<ObjectOwner> {
+        ObjectImpl(&self.super_).owner().await
     }
 
     /// The transaction block that published or upgraded this package.

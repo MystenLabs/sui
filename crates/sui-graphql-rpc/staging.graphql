@@ -3087,11 +3087,13 @@ type PageInfo {
 
 """
 If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
-the dynamic field, or the intermediate Field object itself). Also note that if the owner
-is a parent, then it's guaranteed to be an object.
+the dynamic field, or the intermediate Field object itself), and it is owned by another object.
+
+Although its owner is guaranteed to be an object, it is exposed as an Owner, as the parent
+object could be wrapped and therefore not directly accessible.
 """
 type Parent {
-	parent: Object
+	parent: Owner
 }
 
 """
