@@ -372,16 +372,13 @@ impl Package {
         resolving_table: &mut ResolvingTable,
         chain_id: &Option<String>,
     ) -> Result<()> {
-        let pkg_id = custom_resolve_pkg_id(
-            &self.source_package,
-            self.lockfile.as_ref().map(|s| s.as_str()),
-        )
-        .with_context(|| {
-            format!(
-                "Resolving package name for '{}'",
-                &self.source_package.package.name
-            )
-        })?;
+        let pkg_id = custom_resolve_pkg_id(&self.source_package, self.lockfile.as_deref())
+            .with_context(|| {
+                format!(
+                    "Resolving package name for '{}'",
+                    &self.source_package.package.name
+                )
+            })?;
         for (name, addr) in self.source_package.addresses.iter().flatten() {
             if *addr == Some(AccountAddress::ZERO) {
                 // The address in the manifest is set to 0x0, meaning `name` is associated with 'this'
@@ -417,16 +414,13 @@ impl Package {
         resolving_table: &mut ResolvingTable,
     ) -> Result<()> {
         let pkg_name = self.source_package.package.name;
-        let pkg_id = custom_resolve_pkg_id(
-            &self.source_package,
-            self.lockfile.as_ref().map(|s| s.as_str()),
-        )
-        .with_context(|| {
-            format!(
-                "Resolving package name for '{}'",
-                &self.source_package.package.name
-            )
-        })?;
+        let pkg_id = custom_resolve_pkg_id(&self.source_package, self.lockfile.as_deref())
+            .with_context(|| {
+                format!(
+                    "Resolving package name for '{}'",
+                    &self.source_package.package.name
+                )
+            })?;
         let dep_name = dep.dep_name;
 
         let mut dep_renaming = BTreeMap::new();
@@ -493,16 +487,13 @@ impl Package {
 
     fn finalize_address_resolution(&mut self, resolving_table: &ResolvingTable) -> Result<()> {
         let pkg_name = self.source_package.package.name;
-        let pkg_id = custom_resolve_pkg_id(
-            &self.source_package,
-            self.lockfile.as_ref().map(|s| s.as_str()),
-        )
-        .with_context(|| {
-            format!(
-                "Resolving package name for '{}'",
-                &self.source_package.package.name
-            )
-        })?;
+        let pkg_id = custom_resolve_pkg_id(&self.source_package, self.lockfile.as_deref())
+            .with_context(|| {
+                format!(
+                    "Resolving package name for '{}'",
+                    &self.source_package.package.name
+                )
+            })?;
         let mut unresolved_addresses = Vec::new();
 
         for (name, addr) in resolving_table.bindings(pkg_id) {
@@ -528,17 +519,14 @@ impl Package {
     }
 
     pub fn immediate_dependencies(&self, graph: &ResolvedGraph) -> BTreeSet<PackageName> {
-        let pkg_id = custom_resolve_pkg_id(
-            &self.source_package,
-            self.lockfile.as_ref().map(|s| s.as_str()),
-        )
-        .with_context(|| {
-            format!(
-                "Resolving package name for '{}'",
-                &self.source_package.package.name
-            )
-        })
-        .unwrap();
+        let pkg_id = custom_resolve_pkg_id(&self.source_package, self.lockfile.as_deref())
+            .with_context(|| {
+                format!(
+                    "Resolving package name for '{}'",
+                    &self.source_package.package.name
+                )
+            })
+            .unwrap();
 
         graph
             .graph
