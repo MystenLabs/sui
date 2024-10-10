@@ -589,7 +589,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				showEvents: true,
 				showInput: true,
 				showObjectChanges: true,
-				showRawInput: true,
+				showRawInput: false,
 			},
 		});
 
@@ -604,7 +604,7 @@ describe('GraphQL SuiClient compatibility', () => {
 					showEvents: true,
 					showInput: true,
 					showObjectChanges: true,
-					showRawInput: true,
+					showRawInput: false,
 				},
 			})) as SuiTransactionBlockResponse & { rawEffects: unknown };
 
