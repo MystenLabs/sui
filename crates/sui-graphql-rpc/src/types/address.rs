@@ -44,7 +44,6 @@ pub(crate) enum AddressTransactionBlockRelationship {
     Recv,
     /// Transactions that this address was involved in, either as the sender, sponsor, or as the
     /// owner of some object that was created, modified or transfered.
-    #[cfg(feature = "staging")]
     Affected,
 }
 
@@ -196,7 +195,6 @@ impl Address {
                 ..Default::default()
             },
 
-            #[cfg(feature = "staging")]
             Some(R::Affected) => TransactionBlockFilter {
                 affected_address: Some(self.address),
                 ..Default::default()
