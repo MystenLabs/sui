@@ -652,7 +652,7 @@ async fn health_check(
         .unwrap_or_else(|| DEFAULT_MAX_CHECKPOINT_LAG);
 
     let checkpoint_timestamp =
-        Duration::from_millis(watermark_lock.read().await.checkpoint_timestamp_ms);
+        Duration::from_millis(watermark_lock.read().await.hi_cp_timestamp_ms);
 
     let now_millis = Utc::now().timestamp_millis();
 
@@ -731,9 +731,11 @@ pub mod tests {
         let pg_conn_pool = PgManager::new(reader);
         let cancellation_token = CancellationToken::new();
         let watermark = Watermark {
-            checkpoint: 1,
-            checkpoint_timestamp_ms: 1,
+            hi_cp: 1,
+            hi_cp_timestamp_ms: 1,
             epoch: 0,
+            lo_cp: 0,
+            lo_tx: 0,
         };
         let state = AppState::new(
             connection_config.clone(),
