@@ -285,7 +285,7 @@ This component renders a button that enables the user to create a counter. Now, 
   {@inject: sdk/create-dapp/templates/react-e2e-counter/src/CreateCounter.tsx noComments}
 </details>
 
-The `create` function now creates a new Sui `Transaction` and calls the `create` function from your Move module. The Programmable Transaction Block (PTB) is then signed and executed via the `useSignAndExecuteTransaction` hook. The `onCreated` callback is called with the new counter's ID when the transaction is successful.
+The `create` function now creates a new Sui `Transaction` and calls the `create` function from your Move module. The PTB is then signed and executed via the `useSignAndExecuteTransaction` hook. The `onCreated` callback is called with the new counter's ID when the transaction is successful.
 
 ### Set up routing
 
