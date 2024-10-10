@@ -364,7 +364,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				// TODO inputs missing valueType
 				showInput: false,
 				showObjectChanges: true,
-				showRawInput: false,
+				showRawInput: true,
 			},
 		});
 
@@ -380,7 +380,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				// TODO inputs missing valueType
 				showInput: false,
 				showObjectChanges: true,
-				showRawInput: false,
+				showRawInput: true,
 			},
 		});
 
@@ -397,7 +397,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				// TODO inputs missing valueType
 				showInput: false,
 				showObjectChanges: true,
-				showRawInput: false,
+				showRawInput: true,
 			},
 		})) as SuiTransactionBlockResponse & { rawEffects: unknown };
 		const graphQLTransactionBlock = await graphQLClient!.getTransactionBlock({
@@ -408,7 +408,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				// TODO inputs missing valueType
 				showInput: false,
 				showObjectChanges: true,
-				showRawInput: false,
+				showRawInput: true,
 			},
 		});
 
@@ -426,7 +426,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				// TODO inputs missing valueType
 				showInput: false,
 				showObjectChanges: true,
-				showRawInput: false,
+				showRawInput: true,
 			},
 		});
 		const [graphQLTransactionBlock] = await graphQLClient!.multiGetTransactionBlocks({
@@ -439,7 +439,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				// TODO inputs missing valueType
 				showInput: false,
 				showObjectChanges: true,
-				showRawInput: false,
+				showRawInput: true,
 			},
 		});
 
@@ -589,7 +589,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				showEvents: true,
 				showInput: true,
 				showObjectChanges: true,
-				showRawInput: false,
+				showRawInput: true,
 			},
 		});
 
@@ -604,7 +604,7 @@ describe('GraphQL SuiClient compatibility', () => {
 					showEvents: true,
 					showInput: true,
 					showObjectChanges: true,
-					showRawInput: false,
+					showRawInput: true,
 				},
 			})) as SuiTransactionBlockResponse & { rawEffects: unknown };
 
