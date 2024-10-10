@@ -208,7 +208,7 @@ don't match in their lengths.
 ## Function `new`
 
 Create an empty Display object. It can either be shared empty or filled
-with data right away via cheaper <code>set_owned</code> method.
+with data right away via <code>add</code> or <code>add_multiple</code> methods.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new">new</a>&lt;T: key&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
