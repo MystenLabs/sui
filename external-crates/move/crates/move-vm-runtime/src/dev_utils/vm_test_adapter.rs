@@ -31,7 +31,7 @@ pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
     fn make_vm<'extensions>(
         &self,
         linkage_context: LinkageContext,
-    ) -> VMResult<MoveVM<'extensions, &Storage>>;
+    ) -> VMResult<MoveVM<'extensions>>;
 
     /// Generate a VM instance which holds the relevant virtual tables for the provided linkage
     /// context, and set that instance's native extensions to those provided.
@@ -39,7 +39,7 @@ pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
         &self,
         linkage_context: LinkageContext,
         native_extensions: NativeContextExtensions<'extensions>,
-    ) -> VMResult<MoveVM<'extensions, &Storage>>;
+    ) -> VMResult<MoveVM<'extensions>>;
 
     /// Generate a linkage context for a given runtime ID, storage ID, and list of compiled modules.
     /// This must include all of the transitive dependencies of the provided modules in the linkage

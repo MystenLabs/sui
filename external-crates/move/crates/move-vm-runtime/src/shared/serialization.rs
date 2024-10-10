@@ -6,7 +6,7 @@ use crate::{
         dispatch_tables::VMDispatchTables,
         values::{Locals, Reference, VMValueCast, Value},
     },
-    jit::runtime::ast::Type,
+    jit::execution::ast::Type,
 };
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    jit::runtime::ast::Type,
+    jit::execution::ast::Type,
     shared::views::{ValueView, ValueVisitor},
 };
 use move_binary_format::{

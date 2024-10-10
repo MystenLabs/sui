@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    jit::runtime::ast::{CachedDatatype, DatatypeInfo, IntraPackageKey, Type, VTableKey},
+    cache::identifier_interner::IdentifierInterner,
+    jit::execution::ast::{CachedDatatype, DatatypeInfo, IntraPackageKey, Type, VTableKey},
     shared::{
         binary_cache::BinaryCache, constants::MAX_TYPE_INSTANTIATION_NODES, types::RuntimePackageId,
     },
+    string_interner,
 };
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
@@ -57,16 +59,19 @@ impl CrossVersionPackageCache {
 
     pub fn instantiate_type(
         &mut self,
+        string_interner: Arc<IdentifierInterner>,
         key: &IntraPackageKey,
         type_args: Vec<Type>,
         datatype: DatatypeInfo,
     ) -> PartialVMResult<&DatatypeInfo> {
         if self.cached_types.contains(&key) {
+            let module_name = string_interner.resolve_string(&key.module_name, "module name")?;
+            let member_name = string_interner.resolve_string(&key.module_name, "member name")?;
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                     format!(
                         "Type {}::{}::{} not found in type cache",
-                        self.package_uid, key.module_name, key.member_name,
+                        self.package_uid, module_name, member_name,
                     ),
                 ),
             );
@@ -93,12 +98,18 @@ impl CrossVersionPackageCache {
     ) -> PartialVMResult<(VTableKey, Arc<CachedDatatype>)> {
         match self.cached_types.get(type_key) {
             Some(datatype) => Ok((self.to_vtable_key(type_key), Arc::clone(datatype))),
-            None => Err(
-                PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE).with_message(format!(
-                    "Cannot find {}::{}::{} in cache",
-                    self.package_uid, type_key.module_name, type_key.member_name,
-                )),
-            ),
+            None => {
+                let module_name =
+                    string_interner().resolve_string(&type_key.module_name, "module name")?;
+                let member_name =
+                    string_interner().resolve_string(&type_key.module_name, "member name")?;
+                Err(
+                    PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE).with_message(format!(
+                        "Cannot find {}::{}::{} in cache",
+                        self.package_uid, module_name, member_name,
+                    )),
+                )
+            }
         }
     }
 
@@ -149,10 +160,12 @@ pub fn make_type(module: &CompiledModule, tok: &SignatureToken) -> PartialVMResu
         }
         SignatureToken::Datatype(sh_idx) => {
             let datatype_handle = module.datatype_handle_at(*sh_idx);
-            let datatype_name = module.identifier_at(datatype_handle.name);
+            let datatype_name = string_interner()
+                .get_or_intern_ident_str(module.identifier_at(datatype_handle.name))?;
             let module_handle = module.module_handle_at(datatype_handle.module);
             let runtime_address = module.address_identifier_at(module_handle.address);
-            let module_name = module.identifier_at(module_handle.name).to_owned();
+            let module_name = string_interner()
+                .get_or_intern_ident_str(module.identifier_at(module_handle.name))?;
             let cache_idx = VTableKey {
                 package_key: *runtime_address,
                 inner_pkg_key: IntraPackageKey {
@@ -169,10 +182,12 @@ pub fn make_type(module: &CompiledModule, tok: &SignatureToken) -> PartialVMResu
                 .map(|tok| make_type(module, tok))
                 .collect::<PartialVMResult<_>>()?;
             let datatype_handle = module.datatype_handle_at(*sh_idx);
-            let datatype_name = module.identifier_at(datatype_handle.name);
+            let datatype_name = string_interner()
+                .get_or_intern_ident_str(module.identifier_at(datatype_handle.name))?;
             let module_handle = module.module_handle_at(datatype_handle.module);
             let runtime_address = module.address_identifier_at(module_handle.address);
-            let module_name = module.identifier_at(module_handle.name).to_owned();
+            let module_name = string_interner()
+                .get_or_intern_ident_str(module.identifier_at(module_handle.name))?;
             let cache_idx = VTableKey {
                 package_key: *runtime_address,
                 inner_pkg_key: IntraPackageKey {

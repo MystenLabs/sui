@@ -5,7 +5,7 @@
 #[allow(unused_imports)]
 use crate::{
     execution::values::{Reference, Value},
-    jit::runtime::ast::Type,
+    jit::execution::ast::Type,
     natives::{
         functions::{NativeContext, NativeFunction, NativeResult},
         make_module_natives,
@@ -190,7 +190,7 @@ pub fn make_all(
 #[cfg(feature = "testing")]
 mod testing {
     use crate::{
-        execution::values::Value, jit::runtime::ast::Type, natives::functions::NativeContext,
+        execution::values::Value, jit::execution::ast::Type, natives::functions::NativeContext,
     };
     use move_binary_format::errors::{PartialVMError, PartialVMResult};
     use move_core_types::{

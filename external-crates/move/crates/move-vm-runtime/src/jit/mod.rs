@@ -1,11 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod runtime;
+pub mod execution;
 
 use crate::{
     cache::type_cache::CrossVersionPackageCache,
-    jit::runtime::ast::Package,
+    jit::execution::ast::Package,
     natives::functions::NativeFunctions,
     shared::{linkage_context::LinkageContext, types::PackageStorageId},
     validation::verification,
@@ -28,7 +28,7 @@ pub fn translate_package(
         .map(|module| module.value)
         .collect();
     // FIXME: change this signature to be against a verified module, too.
-    runtime::translate::package(
+    execution::translate::package(
         package_cache,
         natives,
         link_context,

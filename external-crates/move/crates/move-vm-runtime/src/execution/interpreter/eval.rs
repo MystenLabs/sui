@@ -12,7 +12,7 @@ use crate::{
             Vector, VectorRef,
         },
     },
-    jit::runtime::ast::{Bytecode, CallType, Function, Type},
+    jit::execution::ast::{Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     shared::gas::{GasMeter, SimpleInstruction},
 };

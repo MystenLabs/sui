@@ -6,8 +6,11 @@
 // and publishing packages to the VM.
 
 use crate::{
-    cache::type_cache::TypeCache, jit, natives::functions::NativeFunctions,
-    shared::types::PackageStorageId, validation::verification,
+    cache::{identifier_interner::IdentifierInterner, type_cache::TypeCache},
+    jit,
+    natives::functions::NativeFunctions,
+    shared::types::PackageStorageId,
+    validation::verification,
 };
 use move_vm_config::runtime::VMConfig;
 use parking_lot::RwLock;
@@ -20,7 +23,7 @@ use std::{collections::HashMap, sync::Arc};
 #[derive(Debug)]
 pub struct Package {
     pub verified: Arc<verification::ast::Package>,
-    pub runtime: Arc<jit::runtime::ast::Package>,
+    pub runtime: Arc<jit::execution::ast::Package>,
 }
 
 type PackageCache = HashMap<PackageStorageId, Arc<Package>>;
@@ -45,6 +48,7 @@ pub struct MoveCache {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) type_cache: Arc<RwLock<TypeCache>>,
     pub(crate) package_cache: Arc<RwLock<PackageCache>>,
+    pub(crate) string_cache: Arc<IdentifierInterner>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -58,6 +62,7 @@ impl MoveCache {
             vm_config,
             package_cache: Arc::new(RwLock::new(HashMap::new())),
             type_cache: Arc::new(RwLock::new(TypeCache::new())),
+            string_cache: Arc::new(IdentifierInterner::default()),
         }
     }
 
@@ -70,7 +75,7 @@ impl MoveCache {
         &self,
         package_key: PackageStorageId,
         verified: verification::ast::Package,
-        runtime: jit::runtime::ast::Package,
+        runtime: jit::execution::ast::Package,
     ) {
         assert!(!self.package_cache.read().contains_key(&package_key));
         let verified = Arc::new(verified);
@@ -96,6 +101,10 @@ impl MoveCache {
     pub fn package_cache(&self) -> &RwLock<PackageCache> {
         &self.package_cache
     }
+
+    pub fn string_interner(&self) -> &IdentifierInterner {
+        &self.string_cache
+    }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -110,12 +119,14 @@ impl Clone for MoveCache {
             vm_config,
             type_cache,
             package_cache,
+            string_cache,
         } = self;
         Self {
             natives: natives.clone(),
             vm_config: vm_config.clone(),
             type_cache: type_cache.clone(),
             package_cache: package_cache.clone(),
+            string_cache: string_cache.clone(),
         }
     }
 }

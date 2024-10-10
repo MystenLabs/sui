@@ -8,7 +8,7 @@ use crate::{
         interpreter::state::{CallFrame, MachineState, ModuleDefinitionResolver},
         values::Value,
     },
-    jit::runtime::ast::{Function, Type},
+    jit::execution::ast::{Function, Type},
     natives::extensions::NativeContextExtensions,
     shared::gas::GasMeter,
 };

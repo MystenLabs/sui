@@ -9,14 +9,15 @@
 
 use crate::{
     cache::{arena::ArenaPointer, type_cache},
-    jit::runtime::ast::{
-        CachedDatatype, Datatype, DatatypeTagType, DepthFormula, Function, Module, Package, Type,
-        VTableKey,
+    jit::execution::ast::{
+        CachedDatatype, Datatype, DatatypeTagType, DepthFormula, Function, IntraPackageKey, Module,
+        Package, Type, VTableKey,
     },
     shared::{
         constants::{MAX_TYPE_TO_LAYOUT_NODES, VALUE_DEPTH_MAX},
         types::RuntimePackageId,
     },
+    string_interner,
 };
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
@@ -85,19 +86,26 @@ impl VMDispatchTables {
         &self,
         vtable_key: &VTableKey,
     ) -> PartialVMResult<ArenaPointer<Function>> {
-        self.loaded_packages
+        let Some(result) = self
+            .loaded_packages
             .get(&vtable_key.package_key)
             .map(|pkg| &pkg.vtable)
             .and_then(|vtable| vtable.functions.get(&vtable_key.inner_pkg_key))
             .map(|f| *f.as_ref())
-            .ok_or_else(|| {
+        else {
+            let string_interner = string_interner();
+            let module_name = string_interner
+                .resolve_string(&vtable_key.inner_pkg_key.module_name, "module name")?;
+            let member_name = string_interner
+                .resolve_string(&vtable_key.inner_pkg_key.member_name, "member name")?;
+            return Err(
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY).with_message(format!(
-                    "Function {}::{} not found in package {}",
-                    vtable_key.inner_pkg_key.module_name,
-                    vtable_key.inner_pkg_key.member_name,
+                    "Function {module_name}::{member_name} not found in package {}",
                     vtable_key.package_key
-                ))
-            })
+                )),
+            );
+        };
+        Ok(result)
     }
 
     pub fn resolve_type(
@@ -277,7 +285,21 @@ impl VMDispatchTables {
             TypeTag::Signer => Type::Signer,
             TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt)?)),
             TypeTag::Struct(struct_tag) => {
-                let key = VTableKey::from_tag(struct_tag);
+                let package_key = struct_tag.address;
+                let string_interner = string_interner();
+                let module_name = string_interner
+                    .get_identifier(&struct_tag.module)
+                    .map_err(|e| e.finish(Location::Undefined))?;
+                let member_name = string_interner
+                    .get_identifier(&struct_tag.name)
+                    .map_err(|e| e.finish(Location::Undefined))?;
+                let key = VTableKey {
+                    package_key,
+                    inner_pkg_key: IntraPackageKey {
+                        module_name,
+                        member_name,
+                    },
+                };
                 let (idx, struct_type) = self
                     .resolve_type(&key)
                     .map_err(|e| e.finish(Location::Undefined))?;

@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{arena::ArenaPointer, move_cache::MoveCache},
+    cache::arena::ArenaPointer,
     dbg_println,
     execution::{dispatch_tables::VMDispatchTables, interpreter},
-    jit::runtime::ast::{Function, IntraPackageKey, Type, VTableKey},
+    jit::execution::ast::{Function, IntraPackageKey, Type, VTableKey},
     natives::extensions::NativeContextExtensions,
-    runtime::data_cache::TransactionDataCache,
     shared::{
         gas::GasMeter,
         linkage_context::LinkageContext,
         serialization::{SerializedReturnValues, *},
     },
+    string_interner,
 };
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
@@ -21,7 +21,6 @@ use move_binary_format::{
 use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    resolver::MoveResolver,
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
@@ -38,17 +37,13 @@ use std::{borrow::Borrow, sync::Arc};
 ///
 /// Note this does NOT support publication. See `vm.rs` for publication.
 #[allow(dead_code)]
-pub struct MoveVM<'extensions, S: MoveResolver> {
+pub struct MoveVM<'extensions> {
     /// The VM cache
     pub(crate) virtual_tables: VMDispatchTables,
-    /// The data store used to create this VM instance
-    pub(crate) data_cache: TransactionDataCache<S>,
     /// The linkage context used to create this VM instance
     pub(crate) link_context: LinkageContext,
     /// Native context extensions for the interpreter
     pub(crate) native_extensions: NativeContextExtensions<'extensions>,
-    /// An arc-lock reference to the VM's cache
-    pub(crate) vm_cache: Arc<MoveCache>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
 }
@@ -59,7 +54,7 @@ pub struct MoveVMFunction {
     pub return_type: Vec<Type>,
 }
 
-impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
+impl<'extensions> MoveVM<'extensions> {
     // -------------------------------------------
     // Entry Points
     // -------------------------------------------
@@ -200,18 +195,25 @@ impl<'extensions, DataCache: MoveResolver> MoveVM<'extensions, DataCache> {
         ty_args: &[Type],
     ) -> VMResult<MoveVMFunction> {
         let (package_key, module_id) = runtime_id.clone().into();
-        let member_name = function_name.into();
+        let string_interner = string_interner();
+        let module_name = string_interner
+            .get_identifier(&module_id)
+            .map_err(|err| err.finish(Location::Undefined))?;
+        let member_name = string_interner
+            .get_ident_str(&function_name)
+            .map_err(|err| err.finish(Location::Undefined))?;
         let vtable_key = VTableKey {
             package_key,
             inner_pkg_key: IntraPackageKey {
-                module_name: module_id,
+                module_name,
                 member_name,
             },
         };
-        let _loaded_module = self
-            .virtual_tables
-            .resolve_loaded_module(runtime_id)
-            .map_err(|err| err.finish(Location::Undefined))?;
+        // FIXME: remove
+        // let _loaded_module = self
+        //     .virtual_tables
+        //     .resolve_loaded_module(runtime_id)
+        //     .map_err(|err| err.finish(Location::Undefined))?;
         let function = self
             .virtual_tables
             .resolve_function(&vtable_key)

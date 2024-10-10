@@ -4,6 +4,7 @@
 use crate::{
     cache::{
         arena::{self, Arena, ArenaPointer},
+        identifier_interner::IdentifierKey,
         type_cache::CrossVersionPackageCache,
     },
     execution::values::ConstantValue,
@@ -14,6 +15,7 @@ use crate::{
         types::{PackageStorageId, RuntimePackageId},
     },
 };
+
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
@@ -276,8 +278,8 @@ pub struct VTableKey {
 
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct IntraPackageKey {
-    pub module_name: Identifier,
-    pub member_name: Identifier,
+    pub module_name: IdentifierKey,
+    pub member_name: IdentifierKey,
 }
 
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -306,6 +308,8 @@ pub struct CachedDatatype {
     pub name: Identifier,
     pub defining_id: ModuleId,
     pub runtime_id: ModuleId,
+    pub module_key: IdentifierKey,
+    pub member_key: IdentifierKey,
     pub depth: Option<DepthFormula>,
     pub datatype_info: Datatype,
 }
@@ -1179,11 +1183,13 @@ impl CachedDatatype {
     }
 
     pub fn datatype_key(&self) -> VTableKey {
+        let module_name = self.module_key;
+        let member_name = self.member_key;
         VTableKey {
             package_key: *self.runtime_id.address(),
             inner_pkg_key: IntraPackageKey {
-                module_name: self.runtime_id.name().to_owned(),
-                member_name: self.name.to_owned(),
+                module_name,
+                member_name,
             },
         }
     }
@@ -1192,32 +1198,6 @@ impl CachedDatatype {
 impl CachedDatatype {
     pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
         self.type_parameters.iter().map(|param| &param.constraints)
-    }
-}
-
-impl VTableKey {
-    pub fn from_tag(tag: &StructTag) -> Self {
-        Self {
-            package_key: tag.address,
-            inner_pkg_key: IntraPackageKey {
-                module_name: tag.module.clone(),
-                member_name: tag.name.clone(),
-            },
-        }
-    }
-}
-
-impl From<(RuntimePackageId, Identifier, Identifier)> for VTableKey {
-    fn from(
-        (package_key, module_name, member_name): (RuntimePackageId, Identifier, Identifier),
-    ) -> Self {
-        Self {
-            package_key,
-            inner_pkg_key: IntraPackageKey {
-                module_name,
-                member_name,
-            },
-        }
     }
 }
 
@@ -1428,7 +1408,7 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::DirectCall(a) => write!(f, "Call({})", a.to_ref().name),
             Bytecode::VirtualCall(a) => write!(
                 f,
-                "Call(~{}::{}::{})",
+                "Call(~{}::{:?}::{:?})",
                 a.package_key, a.inner_pkg_key.module_name, a.inner_pkg_key.member_name
             ),
             Bytecode::CallGeneric(ndx) => write!(f, "CallGeneric({})", ndx),
@@ -1505,7 +1485,7 @@ impl std::fmt::Debug for CallType {
             CallType::Direct(fun) => write!(f, "Known({})", fun.to_ref().name),
             CallType::Virtual(vtable) => write!(
                 f,
-                "Virtual({}::{}::{})",
+                "Virtual({}::{:?}::{:?})",
                 vtable.package_key,
                 vtable.inner_pkg_key.module_name,
                 vtable.inner_pkg_key.member_name

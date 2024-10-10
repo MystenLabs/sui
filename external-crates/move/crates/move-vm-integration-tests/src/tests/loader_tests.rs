@@ -28,7 +28,7 @@ use move_vm_runtime::{
         in_memory_test_adapter::InMemoryTestAdapter, storage::InMemoryStorage,
         vm_test_adapter::VMTestAdapter,
     },
-    jit::runtime::ast::{CachedDatatype, DepthFormula, IntraPackageKey, Type, VTableKey},
+    jit::execution::ast::{CachedDatatype, DepthFormula, IntraPackageKey, Type, VTableKey},
     natives::functions::NativeFunctions,
     runtime::MoveRuntime,
     shared::{

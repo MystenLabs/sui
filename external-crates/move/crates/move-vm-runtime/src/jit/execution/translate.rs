@@ -9,13 +9,14 @@ use crate::{
     },
     dbg_println,
     execution::values::Value,
-    jit::runtime::ast::*,
+    jit::execution::ast::*,
     natives::functions::NativeFunctions,
     shared::{
         binary_cache::BinaryCache,
         linkage_context::LinkageContext,
         types::{PackageStorageId, RuntimePackageId},
     },
+    string_interner,
 };
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
@@ -32,13 +33,15 @@ use std::{
     sync::Arc,
 };
 
-struct ModuleContext<'a> {
-    cache: &'a PackageContext,
+struct ModuleContext<'a, 'natives> {
+    package_context: &'a PackageContext<'natives>,
     module: &'a CompiledModule,
     single_signature_token_map: BTreeMap<SignatureIndex, Type>,
 }
 
-struct PackageContext {
+struct PackageContext<'natives> {
+    pub natives: &'natives NativeFunctions,
+
     pub storage_id: PackageStorageId,
     pub runtime_id: RuntimePackageId,
     // NB: this is under the package's context so we don't need to further resolve by
@@ -54,17 +57,20 @@ struct PackageContext {
     pub vtable: PackageVTable,
 }
 
-impl PackageContext {
+impl PackageContext<'_> {
     fn insert_and_make_module_function_vtable(
         &mut self,
         module_name: Identifier,
         vtable: impl IntoIterator<Item = (Identifier, ArenaPointer<Function>)>,
     ) -> PartialVMResult<()> {
+        let string_interner = string_interner();
+        let module_name = string_interner.get_or_intern_identifier(&module_name)?;
         for (name, func) in vtable {
+            let member_name = string_interner.get_or_intern_identifier(&name)?;
             self.vtable.functions.insert(
                 IntraPackageKey {
-                    module_name: module_name.clone(),
-                    member_name: name.clone(),
+                    module_name,
+                    member_name,
                 },
                 func,
             )?;
@@ -94,6 +100,7 @@ pub fn package(
         .collect::<BTreeSet<_>>();
 
     let mut package_context = PackageContext {
+        natives,
         storage_id,
         runtime_id,
         loaded_modules: BinaryCache::new(),
@@ -122,7 +129,6 @@ pub fn package(
         }
 
         let loaded_module = module(
-            natives,
             &mut package_context,
             link_context,
             storage_id,
@@ -139,6 +145,7 @@ pub fn package(
 
     let PackageContext {
         storage_id,
+        natives: _,
         runtime_id,
         loaded_modules,
         compiled_modules: _,
@@ -156,8 +163,7 @@ pub fn package(
 }
 
 fn module(
-    natives: &NativeFunctions,
-    package_context: &mut PackageContext,
+    package_context: &mut PackageContext<'_>,
     link_context: &LinkageContext,
     package_id: PackageStorageId,
     module: &CompiledModule,
@@ -166,7 +172,7 @@ fn module(
     dbg_println!("Loading module: {}", self_id);
 
     load_module_types(
-        &package_context.vtable.types,
+        package_context,
         link_context,
         package_context.runtime_id,
         package_id,
@@ -205,11 +211,13 @@ fn module(
     let mut constants = vec![];
 
     for datatype_handle in module.datatype_handles() {
-        let struct_name = module.identifier_at(datatype_handle.name);
+        let struct_name = string_interner()
+            .get_or_intern_ident_str(module.identifier_at(datatype_handle.name))?;
         let module_handle = module.module_handle_at(datatype_handle.module);
         let runtime_id = module.module_id_for_handle(module_handle);
+        let module_name = string_interner().get_or_intern_ident_str(runtime_id.name())?;
         type_refs.push(IntraPackageKey {
-            module_name: runtime_id.name().to_owned(),
+            module_name,
             member_name: struct_name.to_owned(),
         });
     }
@@ -299,7 +307,7 @@ fn module(
         .enumerate()
         .map(|(ndx, fun)| {
             let findex = FunctionDefinitionIndex(ndx as TableIndex);
-            alloc_function(natives, findex, fun, module)
+            alloc_function(package_context, findex, fun, module)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
     let loaded_functions = package_context
@@ -322,7 +330,7 @@ fn module(
 
     let single_signature_token_map = BTreeMap::new();
     let mut context = ModuleContext {
-        cache: package_context,
+        package_context,
         module,
         single_signature_token_map,
     };
@@ -378,7 +386,7 @@ fn module(
     }
 
     let ModuleContext {
-        cache: _,
+        package_context: _,
         module,
         single_signature_token_map,
     } = context;
@@ -404,13 +412,14 @@ fn module(
 }
 
 fn load_module_types(
-    package_cache: &RwLock<CrossVersionPackageCache>,
+    package_context: &mut PackageContext<'_>,
     _link_context: &LinkageContext,
     _package_uid: RuntimePackageId,
     package_id: PackageStorageId,
     module: &CompiledModule,
 ) -> PartialVMResult<()> {
     let module_id = module.self_id();
+    let module_name = string_interner().get_or_intern_ident_str(module_id.name())?;
 
     let mut cached_types = vec![];
 
@@ -429,12 +438,19 @@ fn load_module_types(
         // DEFINING_ADDRESS should refer to originally-defining address
         // ---------- THIS IS A HACK -----------
         let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
+
+        let member_name = string_interner().get_or_intern_ident_str(name)?;
         let struct_key = IntraPackageKey {
-            module_name: module_id.name().to_owned(),
-            member_name: name.to_owned(),
+            module_name,
+            member_name,
         };
 
-        if package_cache.read().contains_cached_type(&struct_key) {
+        if package_context
+            .vtable
+            .types
+            .read()
+            .contains_cached_type(&struct_key)
+        {
             continue;
         }
 
@@ -455,7 +471,7 @@ fn load_module_types(
             .map(|f| type_cache::make_type(module, &f.signature.0))
             .collect::<PartialVMResult<Vec<Type>>>()?;
 
-        package_cache.write().cache_datatype(
+        package_context.vtable.types.write().cache_datatype(
             struct_key.clone(),
             CachedDatatype {
                 abilities: struct_handle.abilities,
@@ -469,6 +485,8 @@ fn load_module_types(
                     field_names,
                     struct_def: StructDefinitionIndex(idx as u16),
                 }),
+                module_key: module_name,
+                member_key: member_name,
             },
         )?;
 
@@ -490,12 +508,19 @@ fn load_module_types(
         // DEFINING_ADDRESS should refer to originally-defining address
         // ---------- THIS IS A HACK -----------
         let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
+
+        let member_name = string_interner().get_or_intern_ident_str(name)?;
         let enum_key = IntraPackageKey {
-            module_name: module_id.name().to_owned(),
-            member_name: name.to_owned(),
+            module_name,
+            member_name,
         };
 
-        if package_cache.read().contains_cached_type(&enum_key) {
+        if package_context
+            .vtable
+            .types
+            .read()
+            .contains_cached_type(&enum_key)
+        {
             continue;
         }
 
@@ -522,7 +547,7 @@ fn load_module_types(
             })
             .collect::<PartialVMResult<_>>()?;
 
-        package_cache.write().cache_datatype(
+        package_context.vtable.types.write().cache_datatype(
             enum_key.clone(),
             CachedDatatype {
                 abilities: enum_handle.abilities,
@@ -535,6 +560,8 @@ fn load_module_types(
                     variants,
                     enum_def: EnumDefinitionIndex(idx as u16),
                 }),
+                module_key: module_name,
+                member_key: member_name,
             },
         )?;
         cached_types.push(enum_key);
@@ -544,7 +571,7 @@ fn load_module_types(
 }
 
 fn alloc_function(
-    natives: &NativeFunctions,
+    context: &PackageContext,
     index: FunctionDefinitionIndex,
     def: &FunctionDefinition,
     module: &CompiledModule,
@@ -555,7 +582,7 @@ fn alloc_function(
     let is_entry = def.is_entry;
     let (native, def_is_native) = if def.is_native() {
         (
-            natives.resolve(
+            context.natives.resolve(
                 module_id.address(),
                 module_id.name().as_str(),
                 name.as_str(),
@@ -605,7 +632,7 @@ fn alloc_function(
 }
 
 fn code(context: &mut ModuleContext, code: &[FF::Bytecode]) -> PartialVMResult<*const [Bytecode]> {
-    let result: *mut [Bytecode] = context.cache.package_arena.alloc_slice(
+    let result: *mut [Bytecode] = context.package_context.package_arena.alloc_slice(
         code.iter()
             .map(|bc| bytecode(context, bc))
             .collect::<PartialVMResult<Vec<Bytecode>>>()?
@@ -759,22 +786,28 @@ fn call(
     context: &mut ModuleContext,
     function_handle_index: FunctionHandleIndex,
 ) -> PartialVMResult<CallType> {
+    let string_interner = string_interner();
+
     let func_handle = context.module.function_handle_at(function_handle_index);
-    let func_name = context.module.identifier_at(func_handle.name);
+    let member_name =
+        string_interner.get_or_intern_ident_str(context.module.identifier_at(func_handle.name))?;
     let module_handle = context.module.module_handle_at(func_handle.module);
     let runtime_id = context.module.module_id_for_handle(module_handle);
+    let module_name = string_interner.get_or_intern_ident_str(runtime_id.name())?;
     let vtable_key = VTableKey {
         package_key: *runtime_id.address(),
         inner_pkg_key: IntraPackageKey {
-            module_name: runtime_id.name().to_owned(),
-            member_name: func_name.to_owned(),
+            module_name,
+            member_name,
         },
     };
     dbg_println!(flag: function_resolution, "Resolving function: {:?}", vtable_key);
-    Ok(match context.cache.try_resolve_function(&vtable_key) {
-        Some(func) => CallType::Direct(func),
-        None => CallType::Virtual(vtable_key),
-    })
+    Ok(
+        match context.package_context.try_resolve_function(&vtable_key) {
+            Some(func) => CallType::Direct(func),
+            None => CallType::Virtual(vtable_key),
+        },
+    )
 }
 
 fn check_vector_type(

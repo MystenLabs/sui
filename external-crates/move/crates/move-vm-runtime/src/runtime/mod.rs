@@ -95,7 +95,7 @@ impl MoveRuntime {
         &self,
         data_cache: DataCache,
         link_context: LinkageContext,
-    ) -> VMResult<MoveVM<'extensions, DataCache>> {
+    ) -> VMResult<MoveVM<'extensions>> {
         self.make_vm_with_native_extensions(
             data_cache,
             link_context,
@@ -108,7 +108,7 @@ impl MoveRuntime {
         data_cache: DataCache,
         link_context: LinkageContext,
         native_extensions: NativeContextExtensions<'extensions>,
-    ) -> VMResult<MoveVM<'extensions, DataCache>> {
+    ) -> VMResult<MoveVM<'extensions>> {
         let all_packages = link_context.all_packages()?;
 
         let data_cache = TransactionDataCache::new(data_cache);
@@ -128,16 +128,14 @@ impl MoveRuntime {
         let runtime_packages = packages
             .into_iter()
             .map(|(_, pkg)| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
-            .collect::<HashMap<RuntimePackageId, Arc<jit::runtime::ast::Package>>>();
+            .collect::<HashMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
 
         let virtual_tables = VMDispatchTables::new(runtime_packages)?;
 
         // Called and checked linkage, etc.
         let instance = MoveVM {
             virtual_tables,
-            vm_cache: self.cache.clone(),
             vm_config: self.vm_config.clone(),
-            data_cache,
             link_context,
             native_extensions,
         };

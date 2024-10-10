@@ -7,7 +7,7 @@ use crate::{
         dispatch_tables::VMDispatchTables,
         values::{self, Locals, VMValueCast, Value},
     },
-    jit::runtime::ast::{CallType, Constant, Function, Module, Type, VTableKey},
+    jit::execution::ast::{CallType, Constant, Function, Module, Type, VTableKey},
     shared::{
         constants::{
             CALL_STACK_SIZE_LIMIT, MAX_TYPE_INSTANTIATION_NODES, OPERAND_STACK_SIZE_LIMIT,

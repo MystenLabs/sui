@@ -21,7 +21,7 @@ use crate::{
     execution::{
         dispatch_tables::VMDispatchTables, interpreter::state::MachineState, values::Value,
     },
-    jit::runtime::ast::Type,
+    jit::execution::ast::Type,
     natives::extensions::NativeContextExtensions,
 };
 pub use move_binary_format::errors::PartialVMError;

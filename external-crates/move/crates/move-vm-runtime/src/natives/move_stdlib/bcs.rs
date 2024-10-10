@@ -4,7 +4,7 @@
 
 use crate::{
     execution::values::{values_impl::Reference, Value},
-    jit::runtime::ast::Type,
+    jit::execution::ast::Type,
     native_charge_gas_early_exit,
     natives::{
         functions::{NativeContext, NativeFunction, NativeResult},

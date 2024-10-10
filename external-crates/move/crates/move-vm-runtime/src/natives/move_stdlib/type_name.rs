@@ -3,7 +3,7 @@
 
 use crate::{
     execution::values::{Struct, Value},
-    jit::runtime::ast::Type,
+    jit::execution::ast::Type,
     native_charge_gas_early_exit,
     natives::functions::{NativeContext, NativeFunction, NativeResult},
 };

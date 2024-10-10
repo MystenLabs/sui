@@ -175,7 +175,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
     fn make_vm<'extensions>(
         &self,
         linkage_context: LinkageContext,
-    ) -> VMResult<MoveVM<'extensions, &InMemoryStorage>> {
+    ) -> VMResult<MoveVM<'extensions>> {
         let Self { runtime, storage } = self;
         let storage: &InMemoryStorage = storage;
         runtime.make_vm(storage, linkage_context)
@@ -185,7 +185,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
         &self,
         linkage_context: LinkageContext,
         native_extensions: NativeContextExtensions<'extensions>,
-    ) -> VMResult<MoveVM<'extensions, &InMemoryStorage>> {
+    ) -> VMResult<MoveVM<'extensions>> {
         let Self { runtime, storage } = self;
         runtime.make_vm_with_native_extensions(storage, linkage_context, native_extensions)
     }
