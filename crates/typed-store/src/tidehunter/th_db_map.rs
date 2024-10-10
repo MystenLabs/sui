@@ -10,6 +10,7 @@ use std::marker::PhantomData;
 use std::ops::{Bound, RangeBounds};
 use std::path::Path;
 use std::sync::Arc;
+use eyre::format_err;
 use tidehunter::batch::WriteBatch;
 use tidehunter::config::Config;
 use tidehunter::db::{Db, DbError};
@@ -74,12 +75,23 @@ where
     }
 
     fn deserialize_key(&self, k: &[u8]) -> K {
-        deserialize_key(&k[1..])
+        if self.kf_spec.2 == 0 {
+            deserialize_key(&k[1..])
+        } else if self.kf_spec.2 == 8 {
+            // we need to recover previously 'chopped off' key bytes
+            // todo this dirty fix only works for digest
+            let mut v = Vec::with_capacity(8 + k.len() - 1);
+            v.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 32]);
+            v.extend_from_slice(&k[1..]);
+            deserialize_key(&v)
+        } else {
+            panic!("deserialize_key is not supported with kf_spec {:?}", self.kf_spec)
+        }
     }
 
     fn checked_deserialize_key(&self, k: &[u8]) -> Option<K> {
         if k[0] == self.kf_spec.0 {
-            Some(deserialize_key(&k[1..]))
+            Some(self.deserialize_key(k))
         } else {
             None
         }
@@ -292,6 +304,7 @@ fn deserialize_key<K: DeserializeOwned>(v: &[u8]) -> K {
         .with_big_endian()
         .with_fixint_encoding()
         .deserialize(v)
+        .map_err(|err|format_err!("Error {:?} while deserializing {:?}({} bytes)", err, v, v.len()))
         .unwrap()
 }
 
