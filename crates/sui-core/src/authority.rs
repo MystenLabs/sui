@@ -4123,6 +4123,14 @@ impl AuthorityState {
                     limit,
                     descending,
                 )?,
+            // not using "_ =>" because we want to make sure we remember to add new variants here
+            EventFilter::Any(_) => {
+                return Err(SuiError::UserInputError {
+                    error: UserInputError::Unsupported(
+                        "'Any' queries are not supported by the fullnode.".to_string(),
+                    ),
+                })
+            }
         };
 
         // skip one event if exclusive cursor is provided,
