@@ -341,7 +341,7 @@ mod tests {
         );
         let sig = BridgeAuthoritySignInfo::new(&action, &secret);
         let signed_event = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig.clone());
-        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(signed_event.clone()));
+        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(signed_event.clone()), None);
 
         // success
         client
@@ -362,7 +362,7 @@ mod tests {
         let wrong_sig = BridgeAuthoritySignInfo::new(&action2, &secret);
         let wrong_signed_action =
             SignedBridgeAction::new_from_data_and_sig(action2.clone(), wrong_sig.clone());
-        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(wrong_signed_action));
+        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(wrong_signed_action), None);
         let err = client
             .request_sign_bridge_action(action.clone())
             .await
@@ -372,7 +372,7 @@ mod tests {
         // The action matches but the signature is wrong, fail
         let wrong_signed_action =
             SignedBridgeAction::new_from_data_and_sig(action.clone(), wrong_sig);
-        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(wrong_signed_action));
+        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(wrong_signed_action), None);
         let err = client
             .request_sign_bridge_action(action.clone())
             .await
@@ -389,7 +389,7 @@ mod tests {
             BridgeCommittee::new(vec![authority_blocklisted.clone(), authority2.clone()]).unwrap(),
         );
         client.update_committee(committee2);
-        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(signed_event));
+        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(signed_event), None);
 
         let err = client
             .request_sign_bridge_action(action.clone())
@@ -404,7 +404,7 @@ mod tests {
         // signed by a different authority in committee would fail
         let sig2 = BridgeAuthoritySignInfo::new(&action, &secret2);
         let signed_event2 = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig2.clone());
-        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(signed_event2));
+        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(signed_event2), None);
         let err = client
             .request_sign_bridge_action(action.clone())
             .await
@@ -416,7 +416,7 @@ mod tests {
         let secret3 = Arc::pin(kp3);
         let sig3 = BridgeAuthoritySignInfo::new(&action, &secret3);
         let signed_event3 = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig3);
-        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(signed_event3));
+        mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(signed_event3), None);
         let err = client
             .request_sign_bridge_action(action.clone())
             .await
