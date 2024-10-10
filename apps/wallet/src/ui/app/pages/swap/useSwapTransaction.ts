@@ -8,6 +8,7 @@ export type SwapRequest = {
 	amount: string;
 	fromType?: string;
 	slippage: number;
+	source: string;
 	sender?: string;
 	toType?: string;
 };
