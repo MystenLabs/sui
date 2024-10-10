@@ -385,32 +385,32 @@ module sui::bls12381_tests {
     #[test]
     fun test_to_from_uncompressed() {
         let a = bls12381::g1_generator();
-        let a_uncompressed = bls12381::g1_to_g1_uncompressed(&a);
+        let a_uncompressed = bls12381::g1_to_uncompressed_g1(&a);
         assert!(a_uncompressed.bytes() == x"17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1");
 
-        let reconstructed = bls12381::g1_uncompressed_to_g1(&a_uncompressed);
+        let reconstructed = bls12381::uncompressed_g1_to_g1(&a_uncompressed);
         assert!(group_ops::equal(&a, &reconstructed));
     }
 
     #[test]
     fun test_uncompressed_sum() {
-        let sum = bls12381::g1_uncompressed_sum(&vector[]);
-        assert!(group_ops::equal(&bls12381::g1_to_g1_uncompressed(&bls12381::g1_identity()), &sum));
+        let sum = bls12381::uncompressed_g1_sum(&vector[]);
+        assert!(group_ops::equal(&bls12381::g1_to_uncompressed_g1(&bls12381::g1_identity()), &sum));
 
         let a = bls12381::g1_generator();
-        let sum = bls12381::g1_uncompressed_sum(&vector[bls12381::g1_to_g1_uncompressed(&a)]);
-        assert!(group_ops::equal(&bls12381::g1_to_g1_uncompressed(&a), &sum));
+        let sum = bls12381::uncompressed_g1_sum(&vector[bls12381::g1_to_uncompressed_g1(&a)]);
+        assert!(group_ops::equal(&bls12381::g1_to_uncompressed_g1(&a), &sum));
 
         let b = bls12381::g1_mul(&bls12381::scalar_from_u64(2), &bls12381::g1_generator());
         let c = bls12381::g1_mul(&bls12381::scalar_from_u64(3), &bls12381::g1_generator());
 
         let terms = vector[
-            bls12381::g1_to_g1_uncompressed(&a),
-            bls12381::g1_to_g1_uncompressed(&b),
-            bls12381::g1_to_g1_uncompressed(&c),
+            bls12381::g1_to_uncompressed_g1(&a),
+            bls12381::g1_to_uncompressed_g1(&b),
+            bls12381::g1_to_uncompressed_g1(&c),
         ];
-        let sum = bls12381::g1_uncompressed_sum(&terms);
-        let expected = bls12381::g1_to_g1_uncompressed(&bls12381::g1_mul(&bls12381::scalar_from_u64(6), &bls12381::g1_generator()));
+        let sum = bls12381::uncompressed_g1_sum(&terms);
+        let expected = bls12381::g1_to_uncompressed_g1(&bls12381::g1_mul(&bls12381::scalar_from_u64(6), &bls12381::g1_generator()));
         assert!(group_ops::equal(&expected, &sum));
     }
 
