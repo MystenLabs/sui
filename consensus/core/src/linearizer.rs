@@ -7,12 +7,38 @@ use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, VerifiedBlock},
+    block::{BlockAPI, BlockRef, VerifiedBlock},
     commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
     dag_state::DagState,
     leader_schedule::LeaderSchedule,
-    Round,
+    Round, TransactionIndex,
 };
+
+/// The `StorageAPI` trait provides an interface for the block store and has been
+/// mostly introduced for allowing to inject the test store in `DagBuilder`.
+pub(crate) trait BlockStoreAPI {
+    fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>>;
+
+    fn gc_round(&self) -> Round;
+
+    fn gc_enabled(&self) -> bool;
+}
+
+impl BlockStoreAPI
+    for parking_lot::lock_api::RwLockReadGuard<'_, parking_lot::RawRwLock, DagState>
+{
+    fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
+        DagState::get_blocks(self, refs)
+    }
+
+    fn gc_round(&self) -> Round {
+        DagState::gc_round(self)
+    }
+
+    fn gc_enabled(&self) -> bool {
+        DagState::gc_enabled(self)
+    }
+}
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
 #[derive(Clone)]
@@ -46,19 +72,56 @@ impl Linearizer {
         let last_commit_digest = dag_state.last_commit_digest();
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
         let last_committed_rounds = dag_state.last_committed_rounds();
+        let timestamp_ms = leader_block.timestamp_ms().max(last_commit_timestamp_ms);
+
+        // Now linearize the sub-dag starting from the leader block
+        let (to_commit, rejected_transactions) =
+            Self::linearize_sub_dag(leader_block.clone(), last_committed_rounds, dag_state);
+
+        // Create the Commit.
+        let commit = Commit::new(
+            last_commit_index + 1,
+            last_commit_digest,
+            timestamp_ms,
+            leader_block.reference(),
+            to_commit
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+        );
+        let serialized = commit
+            .serialize()
+            .unwrap_or_else(|e| panic!("Failed to serialize commit: {}", e));
+        let commit = TrustedCommit::new_trusted(commit, serialized);
+
+        // Create the corresponding committed sub dag
+        let sub_dag = CommittedSubDag::new(
+            leader_block.reference(),
+            to_commit,
+            rejected_transactions,
+            timestamp_ms,
+            commit.reference(),
+            reputation_scores_desc,
+        );
+
+        (sub_dag, commit)
+    }
+
+    pub(crate) fn linearize_sub_dag(
+        leader_block: VerifiedBlock,
+        last_committed_rounds: Vec<u32>,
+        dag_state: impl BlockStoreAPI,
+    ) -> (Vec<VerifiedBlock>, Vec<Vec<TransactionIndex>>) {
         let gc_enabled = dag_state.gc_enabled();
         // The GC round here is calculated based on the last committed round of the leader block. The algorithm will attempt to
         // commit blocks up to this GC round. Once this commit has been processed and written to DagState, then gc round will update
         // and on the processing of the next commit we'll have it already updated, so no need to do any gc_round recalculations here.
         // We just use whatever is currently in DagState.
         let gc_round: Round = dag_state.gc_round();
-
-        let mut to_commit = Vec::new();
-        let mut committed = HashSet::new();
-
-        let timestamp_ms = leader_block.timestamp_ms().max(last_commit_timestamp_ms);
         let leader_block_ref = leader_block.reference();
         let mut buffer = vec![leader_block];
+        let mut committed = HashSet::new();
+        let mut to_commit = Vec::new();
         assert!(committed.insert(leader_block_ref));
 
         while let Some(x) = buffer.pop() {
@@ -96,12 +159,10 @@ impl Linearizer {
             }
         }
 
-        drop(dag_state);
-
         // The above code should have not yielded any blocks that are <= gc_round, but just to make sure that we'll never
         // commit anything that should be garbage collected we attempt to prune here as well.
         if gc_enabled {
-            assert!(to_commit.iter().all(|block| block.round() > gc_round), "No blocks <= {gc_round} should be committed. Commit index {}, leader round {}, blocks {to_commit:?}.", last_commit_index, leader_block_ref);
+            assert!(to_commit.iter().all(|block| block.round() > gc_round), "No blocks <= {gc_round} should be committed. Leader round {}, blocks {to_commit:?}.", leader_block_ref);
         }
 
         // Sort the blocks of the sub-dag blocks
@@ -111,33 +172,7 @@ impl Linearizer {
         // Get rejected transactions.
         let rejected_transactions = vec![vec![]; to_commit.len()];
 
-        // Create the Commit.
-        let commit = Commit::new(
-            last_commit_index + 1,
-            last_commit_digest,
-            timestamp_ms,
-            leader_block_ref,
-            to_commit
-                .iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        );
-        let serialized = commit
-            .serialize()
-            .unwrap_or_else(|e| panic!("Failed to serialize commit: {}", e));
-        let commit = TrustedCommit::new_trusted(commit, serialized);
-
-        // Create the corresponding committed sub dag
-        let sub_dag = CommittedSubDag::new(
-            leader_block_ref,
-            to_commit,
-            rejected_transactions,
-            timestamp_ms,
-            commit.reference(),
-            reputation_scores_desc,
-        );
-
-        (sub_dag, commit)
+        (to_commit, rejected_transactions)
     }
 
     // This function should be called whenever a new commit is observed. This will
