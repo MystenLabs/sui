@@ -298,7 +298,7 @@ impl PgIndexerStore {
         let mut connection = self.pool.get().await?;
 
         watermarks::table
-            .select(watermarks::checkpoint_hi)
+            .select(watermarks::checkpoint_hi_inclusive)
             .filter(watermarks::entity.eq("objects_snapshot"))
             .first::<i64>(&mut connection)
             .await
@@ -1604,9 +1604,10 @@ impl PgIndexerStore {
                     .on_conflict(watermarks::entity)
                     .do_update()
                     .set((
-                        watermarks::epoch_hi.eq(excluded(watermarks::epoch_hi)),
-                        watermarks::checkpoint_hi.eq(excluded(watermarks::checkpoint_hi)),
-                        watermarks::tx_hi.eq(excluded(watermarks::tx_hi)),
+                        watermarks::epoch_hi_inclusive.eq(excluded(watermarks::epoch_hi_inclusive)),
+                        watermarks::checkpoint_hi_inclusive
+                            .eq(excluded(watermarks::checkpoint_hi_inclusive)),
+                        watermarks::tx_hi_inclusive.eq(excluded(watermarks::tx_hi_inclusive)),
                     ))
                     .execute(conn)
                     .await
