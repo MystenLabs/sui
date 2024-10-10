@@ -322,12 +322,12 @@ pub fn open_thdb(path: &Path, registry: &Registry) -> Arc<Db> {
     db
 }
 
-#[cfg(not(test))]
+#[cfg(not(debug_assertions))]
 fn modify_large_table_size(config: &mut Config) {
     config.large_table_size = 32 * 1024 * 1024;
 }
 
-#[cfg(test)]
+#[cfg(debug_assertions)]
 fn modify_large_table_size(config: &mut Config) {
     config.large_table_size = 2 * 1024;
 }
