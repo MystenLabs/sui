@@ -43,7 +43,7 @@ use crate::{models, schema};
 /// Persistent layer impl
 #[derive(Clone)]
 pub struct PgDeepbookPersistent {
-    pool: PgPool,
+    pub pool: PgPool,
     save_progress_policy: ProgressSavingPolicy,
 }
 
