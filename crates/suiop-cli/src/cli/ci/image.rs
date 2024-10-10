@@ -90,7 +90,7 @@ pub enum ImageAction {
         /// Optional repo region, default to "us-central1"
         #[arg(long)]
         repo_region: Option<RepoRegion>,
-        /// Optional image name, default to "app", only used if multiple images are built within one repo
+        /// Optional image tags, default to ""
         #[arg(long)]
         image_tag: Option<String>,
         /// Optional image name, default to "app", only used if multiple images are built within one repo
@@ -117,6 +117,12 @@ pub enum ImageAction {
         /// Optional build args to pass to the docker build command
         #[arg(long)]
         build_args: Vec<String>,
+        /// Optional flag to force build even if build pod already exists
+        #[arg(short = 'f', long)]
+        force: bool,
+        /// Optional flag to target the image, used for multi-stage builds
+        #[arg(short = 't', long)]
+        image_target: Option<String>,
     },
     #[command(name = "query")]
     Query {
@@ -160,6 +166,8 @@ struct RequestBuildRequest {
     memory: String,
     disk: String,
     build_args: Vec<String>,
+    force: bool,
+    image_target: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -167,7 +175,6 @@ struct QueryBuildsRequest {
     repo_name: String,
     limit: u32,
 }
-
 #[derive(serde::Serialize)]
 struct ImageStatusRequest {
     repo_name: String,
@@ -303,6 +310,8 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 memory: _,
                 disk: _,
                 build_args: _,
+                force: _,
+                image_target,
             } => {
                 let ref_type = ref_type.clone().unwrap_or(RefType::Branch);
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
@@ -312,6 +321,9 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 let mut image_info = image_name;
                 if !image_tag.is_empty() {
                     image_info += &format!(":{}", image_tag);
+                }
+                if !image_target.is_none() {
+                    image_info += &format!("@{}", image_target.as_ref().unwrap());
                 }
                 println!(
                     "Requested built image for repo: {}, ref: {}, dockerfile: {}, image: {}",
@@ -454,6 +466,8 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             memory,
             disk,
             build_args,
+            force,
+            image_target,
         } => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
@@ -500,6 +514,8 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 memory,
                 disk,
                 build_args: build_args.clone(),
+                force: *force,
+                image_target: image_target.clone(),
             };
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))
