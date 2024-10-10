@@ -14057,7 +14057,7 @@ dependencies = [
  "move-analyzer",
  "sui",
  "sui-config",
- "sui-sdk 1.35.0",
+ "sui-sdk",
  "tokio",
 ]
 
