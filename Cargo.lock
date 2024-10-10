@@ -13349,6 +13349,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-rest-api",
  "sui-sdk",
+ "sui-sdk-types",
  "sui-simulator",
  "sui-storage",
  "sui-swarm",
@@ -14504,6 +14505,7 @@ dependencies = [
  "fastcrypto",
  "itertools 0.13.0",
  "mime",
+ "move-binary-format",
  "mysten-network",
  "openapiv3",
  "prometheus",
@@ -15003,6 +15005,7 @@ name = "sui-tls"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "axum 0.7.5",
  "axum-server",
  "ed25519 1.5.3",

@@ -18,7 +18,6 @@ pub struct IndexerConfig {
     pub concurrency: u64,
     pub metric_port: u16,
     pub service_port: u16,
-    pub resume_from_checkpoint: Option<u64>,
 }
 
 impl sui_config::Config for IndexerConfig {}

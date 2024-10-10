@@ -904,7 +904,7 @@ impl AuthorityStore {
             .iter()
             .map(|(id, new_object)| {
                 let version = new_object.version();
-                debug!(?id, ?version, "writing object");
+                trace!(?id, ?version, "writing object");
                 let StoreObjectPair(store_object, indirect_object) =
                     get_store_object_pair(new_object.clone(), self.indirect_objects_threshold);
                 (

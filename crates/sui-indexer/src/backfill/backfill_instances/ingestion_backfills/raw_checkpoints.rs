@@ -8,7 +8,7 @@ use crate::schema::raw_checkpoints::dsl::raw_checkpoints;
 use diesel_async::RunQueryDsl;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-pub struct RawCheckpointsBackFill {}
+pub struct RawCheckpointsBackFill;
 
 #[async_trait::async_trait]
 impl IngestionBackfillTrait for RawCheckpointsBackFill {

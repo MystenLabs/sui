@@ -1,0 +1,64 @@
+.mainwrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 6rem;
+}
+
+.outerwrapper {
+  z-index: 10;
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto; 
+  justify-content: center;
+  justify-content: space-between;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.h1 {
+  font-size: 2.25rem;
+  line-height: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 2rem;
+}
+
+.status {
+  margin-top: 1rem
+}
+
+.form {
+  margin-top: 2rem
+}
+
+.input {
+  padding: 0.5rem;
+  border-width: 1px;
+  border-radius: 0.25rem;
+  margin-right: 0.5rem;
+  color: black;
+}
+
+.connected {
+  background-color: rgb(191 219 254);
+  color: black;
+}
+
+.connected:hover {
+  background-color: rgb(147 197 253);
+}
+
+.notconnected {
+  background-color: rgb(209 213 219);
+  color: rgb(107 114 128);
+}
+
+.transition {
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+  transition-duration: 200ms;
+}

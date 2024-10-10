@@ -1020,7 +1020,7 @@ export const RPC_METHODS: {
 			(data) => {
 				return data.owner?.dynamicObjectField?.value?.__typename === 'MoveObject'
 					? data.owner.dynamicObjectField.value.owner?.__typename === 'Parent'
-						? data.owner.dynamicObjectField.value.owner.parent
+						? data.owner.dynamicObjectField.value.owner.parent?.asObject
 						: undefined
 					: undefined;
 			},

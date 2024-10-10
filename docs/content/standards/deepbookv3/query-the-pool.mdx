@@ -57,6 +57,18 @@ public fun get_quantity_out<BaseAsset, QuoteAsset>(
 ): (u64, u64, u64)
 ```
 
+### Check fee required
+
+Returns the DEEP required for an order if it's a taker or maker given quantity and price (`deep_required_taker`, `deep_required_maker`).
+
+```move
+public fun get_order_deep_required<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    base_quantity: u64,
+    price: u64,
+): (u64, u64)
+```
+
 ### Retrieve mid price for a pool 
 
 Returns the mid price of the pool.
@@ -111,10 +123,76 @@ public fun vault_balances<BaseAsset, QuoteAsset>(
 ): (u64, u64, u64)
 ```
 
-### Retrieve Pool ID
+### Retrieve pool ID
 
 Get the ID of the pool given the asset types.
 
 ```move
 public fun get_pool_id_by_asset<BaseAsset, QuoteAsset>(registry: &Registry): ID
+```
+
+### Retrieve order information
+
+Returns the `Order` struct using the order ID.
+
+```move
+public fun get_order<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    order_id: u128,
+): Order
+```
+
+Returns a vector of `Order` structs using a vector of order IDs.
+
+```move
+public fun get_orders<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    order_ids: vector<u128>,
+): vector<Order>
+```
+
+Returns a vector of `Order` structs for all orders that belong to a `BalanceManager` in the pool.
+
+```move
+public fun get_account_order_details<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &BalanceManager,
+): vector<Order>
+```
+
+### Retrieve locked balance
+
+Returns the locked balance for a `BalanceManager` in the pool (`base_quantity`, `quote_quantity`, `deep_quantity`).
+
+```move
+public fun locked_balance<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    balance_manager: &BalanceManager,
+): (u64, u64, u64)
+```
+
+### Retrieve pool parameters
+
+Returns the trade parameters for the pool (`taker_fee`, `maker_fee`, `stake_required`).
+
+```move
+public fun pool_trade_params<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+): (u64, u64, u64)
+```
+
+Returns the book parameters for the pool (`tick_size`, `lot_size`, `min_size`).
+
+```move
+public fun pool_book_params<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+): (u64, u64, u64)
+```
+
+Returns the `OrderDeepPrice` struct for the pool, which determines the conversion for DEEP fees.
+
+```move
+public fun get_order_deep_price<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+): OrderDeepPrice
 ```

@@ -93,11 +93,7 @@ task 10, lines 111-137:
 //# run-graphql
 Response: {
   "data": {
-    "latest_wrapped": {
-      "status": "WRAPPED_OR_DELETED",
-      "version": 5,
-      "asMoveObject": null
-    },
+    "latest_wrapped": null,
     "previous_version": {
       "status": "INDEXED",
       "version": 4,
@@ -140,11 +136,7 @@ Response: {
         }
       }
     },
-    "previous_version": {
-      "status": "WRAPPED_OR_DELETED",
-      "version": 5,
-      "asMoveObject": null
-    },
+    "previous_version": null,
     "first_version": {
       "status": "INDEXED",
       "version": 3,
@@ -174,16 +166,8 @@ task 16, lines 187-213:
 //# run-graphql
 Response: {
   "data": {
-    "latest_deleted": {
-      "status": "WRAPPED_OR_DELETED",
-      "version": 7,
-      "asMoveObject": null
-    },
-    "version_specified": {
-      "status": "WRAPPED_OR_DELETED",
-      "version": 7,
-      "asMoveObject": null
-    }
+    "latest_deleted": null,
+    "version_specified": null
   }
 }
 
@@ -275,11 +259,7 @@ Response: {
         }
       }
     },
-    "wrapped_or_deleted_object": {
-      "status": "WRAPPED_OR_DELETED",
-      "version": 5,
-      "asMoveObject": null
-    },
+    "wrapped_or_deleted_object": null,
     "object_not_in_snapshot": {
       "status": "INDEXED",
       "version": 3,

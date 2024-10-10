@@ -884,6 +884,137 @@
         }
       }
     },
+    "/transactions/simulate": {
+      "post": {
+        "tags": [
+          "Transactions"
+        ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
+        "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "balance_changes",
+            "description": "Request `BalanceChanges` be included in the Response.",
+            "schema": {
+              "description": "Request `BalanceChanges` be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "input_objects",
+            "description": "Request input `Object`s be included in the Response.",
+            "schema": {
+              "description": "Request input `Object`s be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "output_objects",
+            "description": "Request output `Object`s be included in the Response.",
+            "schema": {
+              "description": "Request output `Object`s be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/bcs": {}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionSimulationResponse"
+                }
+              },
+              "application/bcs": {}
+            }
+          }
+        }
+      }
+    },
+    "/transactions/resolve": {
+      "post": {
+        "tags": [
+          "Transactions"
+        ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
+        "operationId": "ResolveTransaction",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "balance_changes",
+            "description": "Request `BalanceChanges` be included in the Response.",
+            "schema": {
+              "description": "Request `BalanceChanges` be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "input_objects",
+            "description": "Request input `Object`s be included in the Response.",
+            "schema": {
+              "description": "Request input `Object`s be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "output_objects",
+            "description": "Request output `Object`s be included in the Response.",
+            "schema": {
+              "description": "Request output `Object`s be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "simulate",
+            "description": "Request that the fully resolved transaction be simulated and have its results sent back in the response.",
+            "schema": {
+              "description": "Request that the fully resolved transaction be simulated and have its results sent back in the response.",
+              "default": false,
+              "type": "boolean"
+            },
+            "style": "form"
+          }
+        ],
+        "requestBody": {},
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveTransactionResponse"
+                }
+              },
+              "application/bcs": {}
+            }
+          }
+        }
+      }
+    },
     "/coins/{coin_type}": {
       "get": {
         "tags": [
@@ -4027,6 +4158,21 @@
           }
         }
       },
+      "ResolveTransactionResponse": {
+        "description": "Response type for the execute transaction endpoint",
+        "type": "object",
+        "required": [
+          "transaction"
+        ],
+        "properties": {
+          "simulation": {
+            "$ref": "#/components/schemas/TransactionSimulationResponse"
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/Transaction"
+          }
+        }
+      },
       "Secp256k1PublicKey": {
         "description": "Base64 encoded data",
         "type": "string",
@@ -4046,24 +4192,6 @@
         "description": "Base64 encoded data",
         "type": "string",
         "format": "base64"
-      },
-      "SignedTransaction": {
-        "type": "object",
-        "required": [
-          "signatures",
-          "transaction"
-        ],
-        "properties": {
-          "signatures": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UserSignature"
-            }
-          },
-          "transaction": {
-            "$ref": "#/components/schemas/Transaction"
-          }
-        }
       },
       "SimpleSignature": {
         "oneOf": [
@@ -5170,6 +5298,39 @@
           },
           "transaction": {
             "$ref": "#/components/schemas/Transaction"
+          }
+        }
+      },
+      "TransactionSimulationResponse": {
+        "description": "Response type for the transaction simulation endpoint",
+        "type": "object",
+        "required": [
+          "effects"
+        ],
+        "properties": {
+          "balance_changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceChange"
+            }
+          },
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "events": {
+            "$ref": "#/components/schemas/TransactionEvents"
+          },
+          "input_objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
+          },
+          "output_objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
           }
         }
       },

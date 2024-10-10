@@ -371,6 +371,25 @@ pub struct IndexedObject {
 }
 
 impl IndexedObject {
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+        let random_address = SuiAddress::random_for_testing_only();
+        IndexedObject {
+            checkpoint_sequence_number: rng.gen(),
+            object: Object::with_owner_for_testing(random_address),
+            df_kind: {
+                let random_value = rng.gen_range(0..3);
+                match random_value {
+                    0 => Some(DynamicFieldType::DynamicField),
+                    1 => Some(DynamicFieldType::DynamicObject),
+                    _ => None,
+                }
+            },
+        }
+    }
+}
+
+impl IndexedObject {
     pub fn from_object(
         checkpoint_sequence_number: CheckpointSequenceNumber,
         object: Object,
@@ -389,6 +408,17 @@ pub struct IndexedDeletedObject {
     pub object_id: ObjectID,
     pub object_version: u64,
     pub checkpoint_sequence_number: u64,
+}
+
+impl IndexedDeletedObject {
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+        IndexedDeletedObject {
+            object_id: ObjectID::random(),
+            object_version: rng.gen(),
+            checkpoint_sequence_number: rng.gen(),
+        }
+    }
 }
 
 #[derive(Debug)]

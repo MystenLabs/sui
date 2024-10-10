@@ -504,11 +504,7 @@ async fn test_map_reducer() {
         |mut accumulated_state, authority_name, _authority_weight, _result| {
             Box::pin(async move {
                 accumulated_state.insert(authority_name);
-                if accumulated_state.len() <= 3 {
-                    ReduceOutput::Continue(accumulated_state)
-                } else {
-                    ReduceOutput::ContinueWithTimeout(accumulated_state, Duration::from_millis(10))
-                }
+                ReduceOutput::Continue(accumulated_state)
             })
         },
         // large delay
@@ -1354,6 +1350,50 @@ async fn test_handle_transaction_response() {
         |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
     )
     .await;
+
+    println!("Case 8.3 - Retryable Transaction (EpochEnded Error)");
+
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 0);
+
+    // 2 out 4 validators return epoch ended error
+    for (name, _) in authority_keys.iter().skip(2) {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(SuiError::EpochEnded(0));
+    }
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        tx.clone().into(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| matches!(e, SuiError::EpochEnded(0)),
+    )
+    .await;
+
+    println!("Case 8.4 - Retryable Transaction (EpochEnded Error) eventually succeeds");
+
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 0);
+
+    // 1 out 4 validators return epoch ended error
+    for (name, _) in authority_keys.iter().take(1) {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(SuiError::EpochEnded(0));
+    }
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    let cert = agg
+        .process_transaction(tx.clone().into(), Some(client_ip))
+        .await
+        .unwrap();
+    matches!(cert, ProcessTransactionResult::Certified { .. });
 
     println!("Case 9 - Non-Retryable Transaction (>=2f+1 ObjectNotFound Error)");
     // >= 2f+1 object not found errors
