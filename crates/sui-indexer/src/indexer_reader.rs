@@ -1042,7 +1042,7 @@ impl IndexerReader {
                     // Processed above
                     unreachable!()
                 }
-                EventFilter::TimeRange { .. } => {
+                EventFilter::TimeRange { .. } | EventFilter::Any(_) => {
                     return Err(IndexerError::NotSupportedError(
                         "This type of EventFilter is not supported.".to_owned(),
                     ));
