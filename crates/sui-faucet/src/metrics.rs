@@ -4,10 +4,13 @@
 
 use mysten_network::metrics::MetricsCallbackProvider;
 use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_histogram_vec_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
-    Histogram, IntGauge, Registry, IntCounterVec
+    register_int_counter_vec_with_registry,
+    IntGaugeVec, Registry, IntCounterVec, HistogramVec, IntGauge
 };
+use std::time::Duration;
+use tonic::Code;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 
@@ -39,57 +42,50 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 impl RequestMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            total_requests_received: register_int_gauge_vec_with_registry!(
+            total_requests_received: register_int_counter_vec_with_registry!(
                 "total_requests_received",
                 "Total number of requests received in Faucet",
                 &["path"],
                 registry,
-            )
-            .unwrap(),
-            total_requests_succeeded: register_int_gauge_vec_with_registry!(
+            ).unwrap(),
+            total_requests_succeeded: register_int_counter_vec_with_registry!(
                 "total_requests_succeeded",
                 "Total number of requests processed successfully in Faucet",
                 &["path"],
                 registry,
-            )
-            .unwrap(),
-            total_requests_shed: register_int_gauge_vec_with_registry!(
+            ).unwrap(),
+            total_requests_shed: register_int_counter_vec_with_registry!(
                 "total_requests_shed",
                 "Total number of requests that were dropped because the service was saturated",
                 &["path"],
                 registry,
-            )
-            .unwrap(),
-            total_requests_failed: register_int_gauge_vec_with_registry!(
+            ).unwrap(),
+            total_requests_failed: register_int_counter_vec_with_registry!(
                 "total_requests_failed",
                 "Total number of requests that started but failed with an uncaught error",
                 &["path"],
                 registry,
-            )
-            .unwrap(),
-            total_requests_disconnected: register_int_gauge_vec_with_registry!(
+            ).unwrap(),
+            total_requests_disconnected: register_int_counter_vec_with_registry!(
                 "total_requests_disconnected",
                 "Total number of requests where the client disconnected before the service \
-                returned a response",
+                 returned a response",
                 &["path"],
                 registry,
-            )
-            .unwrap(),
+            ).unwrap(),
             current_requests_in_flight: register_int_gauge_vec_with_registry!(
                 "current_requests_in_flight",
                 "Current number of requests being processed in Faucet",
                 &["path"],
                 registry,
-            )
-            .unwrap(),
+            ).unwrap(),
             process_latency: register_histogram_vec_with_registry!(
                 "process_latency",
                 "Latency of processing a Faucet request",
                 &["path"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
+            ).unwrap(),
         }
     }
 }
@@ -132,7 +128,13 @@ impl MetricsCallbackProvider for RequestMetrics {
             .inc();
     }
 
-    fn on_response(&self, path: String, latency: Duration, _status: u16, grpc_status_code: Code) {
+    fn on_response(
+        &self,
+        path: String,
+        latency: Duration,
+        _status: u16,
+        grpc_status_code: Code,
+    ) {
         self.process_latency
             .with_label_values(&[path.as_str()])
             .observe(latency.as_secs_f64());
