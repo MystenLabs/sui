@@ -19,11 +19,32 @@ export interface IRuntimeVariableScope {
 }
 
 /**
+ * A compound type:
+ * - a vector (converted to an array of values)
+ * - a struct/enum (converted to an array of string/field value pairs)
+ */
+export type CompoundType = RuntimeValueType[] | IRuntimeCompundValue;
+
+/**
+ * A runtime value can have any of the following types:
+ * - boolean, number, string (converted to string)
+ * - compound type (vector, struct, enum)
+ */
+export type RuntimeValueType = string | CompoundType;
+
+export interface IRuntimeCompundValue {
+    fields: [string, RuntimeValueType][];
+    type: string;
+    variantName?: string;
+    variantTag?: number;
+}
+
+/**
  * Describes a runtime local variable.
  */
 interface IRuntimeVariable {
     name: string;
-    value: string;
+    value: RuntimeValueType;
     type: string;
 }
 
