@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod ancestor;
 mod authority_node;
 mod authority_service;
 mod base_committer;

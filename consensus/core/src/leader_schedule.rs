@@ -138,7 +138,7 @@ impl LeaderSchedule {
 
         let (reputation_scores, last_commit_index) = {
             let dag_state = dag_state.read();
-            let reputation_scores = dag_state.calculate_scoring_subdag_scores();
+            let reputation_scores = dag_state.calculate_scoring_subdag_distributed_vote_scores();
 
             let last_commit_index = dag_state.scoring_subdag_commit_range();
 
@@ -747,7 +747,9 @@ mod tests {
             dag_state.read().last_committed_rounds()
         );
         assert_eq!(1, dag_state.read().scoring_subdags_count());
-        let recovered_scores = dag_state.read().calculate_scoring_subdag_scores();
+        let recovered_scores = dag_state
+            .read()
+            .calculate_scoring_subdag_distributed_vote_scores();
         let expected_scores = ReputationScores::new((11..=11).into(), vec![0, 0, 0, 0]);
         assert_eq!(recovered_scores, expected_scores);
 
@@ -863,7 +865,9 @@ mod tests {
             expected_scored_subdags.len(),
             dag_state.read().scoring_subdags_count()
         );
-        let recovered_scores = dag_state.read().calculate_scoring_subdag_scores();
+        let recovered_scores = dag_state
+            .read()
+            .calculate_scoring_subdag_distributed_vote_scores();
         let expected_scores = ReputationScores::new((1..=2).into(), vec![0, 0, 0, 0]);
         assert_eq!(recovered_scores, expected_scores);
 
