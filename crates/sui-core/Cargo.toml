@@ -88,6 +88,7 @@ sui-protocol-config.workspace = true
 sui-transaction-checks.workspace = true
 sui-simulator.workspace = true
 sui-storage.workspace = true
+sui-tls.workspace = true
 sui-types.workspace = true
 zeroize.workspace = true
 nonempty.workspace = true

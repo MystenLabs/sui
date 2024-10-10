@@ -24,6 +24,7 @@ use mysten_network::{
     Multiaddr,
 };
 use parking_lot::RwLock;
+use sui_tls::AllowPublicKeys;
 use tokio::{
     pin,
     task::JoinSet,
@@ -54,7 +55,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     network::{
         tonic_gen::consensus_service_server::ConsensusServiceServer,
-        tonic_tls::create_rustls_server_config,
+        tonic_tls::certificate_server_name,
     },
     CommitIndex, Round,
 };
@@ -735,8 +736,17 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             Arc::new(builder)
         };
 
-        let tls_server_config =
-            create_rustls_server_config(&self.context, self.network_keypair.clone());
+        let tls_server_config = sui_tls::create_rustls_server_config(
+            self.network_keypair.clone().private_key().into_inner(),
+            certificate_server_name(&self.context),
+            AllowPublicKeys::new(
+                self.context
+                    .committee
+                    .authorities()
+                    .map(|(_i, a)| a.network_key.clone().into_inner())
+                    .collect(),
+            ),
+        );
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
         // Create listener to incoming connections.
