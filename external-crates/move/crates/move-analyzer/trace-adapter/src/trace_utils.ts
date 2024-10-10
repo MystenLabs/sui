@@ -13,9 +13,26 @@ interface JSONTraceModule {
     name: string;
 }
 
+interface JSONStructTypeDescription {
+    address: string;
+    module: string;
+    name: string;
+    type_args: string[];
+}
+
+interface JSONStructType {
+    struct: JSONStructTypeDescription;
+}
+
+interface JSONVectorType {
+    vector: JSONBaseType;
+}
+
+type JSONBaseType = string | JSONStructType | JSONVectorType;
+
 interface JSONTraceType {
     ref_type: string | null;
-    type_: string;
+    type_: JSONBaseType;
 }
 
 type JSONTraceValueType = boolean | number | string | JSONTraceValueType[] | JSONTraceCompound;
@@ -244,7 +261,7 @@ export function readTrace(traceFilePath: string): ITrace {
             const localsTypes = [];
             const frame = event.OpenFrame.frame;
             for (const type of frame.locals_types) {
-                localsTypes.push(type.type_);
+                localsTypes.push(JSONTraceTypeToString(type.type_));
             }
             // process parameters - store their values in trace and set their
             // initial lifetimes
@@ -342,6 +359,39 @@ export function readTrace(traceFilePath: string): ITrace {
         }
     }
     return { events, localLifetimeEnds };
+}
+
+/**
+ * Converts a JSON trace type to a string representation.
+ */
+function JSONTraceTypeToString(type: JSONBaseType): string {
+    if (typeof type === 'string') {
+        return type;
+    } else if ('vector' in type) {
+        return `vector<${JSONTraceTypeToString(type.vector)}>`;
+    } else {
+        return JSONTraceAddressToHexString(type.struct.address)
+            + "::"
+            + type.struct.module
+            + "::"
+            + type.struct.name;
+    }
+}
+
+/**
+ * Attempts to convert an address found in the trace (which is a string
+ * representing a 32-byte number) to a shorter and more readable hex string.
+ * Returns original string address if conversion fails.
+ */
+function JSONTraceAddressToHexString(address: string): string {
+    try {
+        const number = BigInt(address);
+        const hexAddress = number.toString(16);
+        return `0x${hexAddress}`;
+    } catch (error) {
+        // Return the original string if it's not a valid number
+        return address;
+    }
 }
 
 /// Processes a location in a JSON trace (sets the end of lifetime for a local variable)

@@ -306,7 +306,7 @@ export class MoveDebugSession extends LoggingDebugSession {
             const datatypeName = accessChainParts[accessChainParts.length - 1];
             return {
                 name,
-                type,
+                type: value.type,
                 value: (value.variantName
                     ? datatypeName + '::' + value.variantName
                     : datatypeName
