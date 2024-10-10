@@ -80,7 +80,7 @@ export const mainnetCoins: CoinMap = {
 	WBTC: {
 		address: `0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881`,
 		type: `0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881::coin::COIN`,
-		scalar: 0,
+		scalar: 100000000,
 	},
 	WUSDT: {
 		address: `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c`,
