@@ -9,7 +9,7 @@ use futures::future;
 use regex::{Captures, Regex};
 use sui_types::{base_types::ObjectID, TypeTag};
 
-use crate::error::Error;
+use crate::{data::package_resolver::PackageResolver, error::Error};
 
 use super::{
     error::MoveRegistryError,
@@ -28,6 +28,7 @@ impl NamedType {
         name: &str,
         checkpoint_viewed_at: u64,
     ) -> Result<TypeTag, Error> {
+        let resolver: &PackageResolver = ctx.data_unchecked();
         // we do not de-duplicate the names here, as the dataloader will do this for us.
         let names = Self::parse_names(name)?;
 
@@ -55,7 +56,13 @@ impl NamedType {
 
         let correct_type_tag: String = Self::replace_names(name, &name_package_id_mapping)?;
 
-        TypeTag::from_str(&correct_type_tag).map_err(|e| Error::Client(format!("bad type: {e}")))
+        let tag = TypeTag::from_str(&correct_type_tag)
+            .map_err(|e| Error::Client(format!("bad type: {e}")))?;
+
+        resolver
+            .canonical_type(tag)
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to retrieve type: {e}")))
     }
 
     /// Is this already caught by the global limits?
