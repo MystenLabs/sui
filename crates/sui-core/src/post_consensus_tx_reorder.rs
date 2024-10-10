@@ -25,7 +25,7 @@ impl PostConsensusTxReorder {
     }
 
     fn order_by_gas_price(transactions: &mut [VerifiedSequencedConsensusTransaction]) {
-        let _scope = monitored_scope("HandleConsensusOutput::order_by_gas_price");
+        let _scope = monitored_scope("ConsensusCommitHandler::order_by_gas_price");
         transactions.sort_by_key(|txn| {
             // Reverse order, so that transactions with higher gas price are put to the beginning.
             std::cmp::Reverse({
