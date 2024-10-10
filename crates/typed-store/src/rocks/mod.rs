@@ -2524,7 +2524,6 @@ pub fn default_db_options() -> DBOptions {
     opt.set_table_cache_num_shard_bits(10);
 
     // LSM compression settings
-    opt.set_min_level_to_compress(2);
     opt.set_compression_type(rocksdb::DBCompressionType::Lz4);
     opt.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
     opt.set_bottommost_zstd_max_train_bytes(1024 * 1024, true);
