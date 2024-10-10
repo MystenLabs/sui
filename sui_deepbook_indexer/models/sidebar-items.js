@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Balances","Flashloan","OrderFill","OrderUpdate","PoolPrice","ProgressStore","Proposals","Rebates","Stakes","SuiErrorTransactions","TradeParamsUpdate","Votes"]};

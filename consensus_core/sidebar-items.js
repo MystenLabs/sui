@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ClientError","ConsensusAuthority","ValidationError"],"macro":["bail","ensure"],"struct":["CommitConsumer","CommitConsumerMonitor","CommitDigest","CommitRef","CommittedSubDag","TestBlock","Transaction","TransactionClient","VerifiedBlock"],"trait":["BlockAPI","TransactionVerifier"],"type":["CommitIndex","Round","TransactionIndex"]};

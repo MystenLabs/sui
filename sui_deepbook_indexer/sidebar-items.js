@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["config","events","metrics","models","postgres_manager","schema","sui_datasource","sui_deepbook_indexer","types"]};
