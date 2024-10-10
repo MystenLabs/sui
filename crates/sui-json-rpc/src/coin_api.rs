@@ -255,9 +255,7 @@ async fn find_package_object_id(
     spawn_monitored_task!(async move {
         let publish_txn_digest = state.find_publish_txn_digest(package_id)?;
 
-        let (_, effect) = state
-            .get_executed_transaction_and_effects(publish_txn_digest, kv_store)
-            .await?;
+        let effect = kv_store.get_fx_by_tx_digest(publish_txn_digest).await?;
 
         for ((id, _, _), _) in effect.created() {
             if let Ok(object_read) = state.get_object_read(&id) {
@@ -269,7 +267,7 @@ async fn find_package_object_id(
             }
         }
         Err(SuiRpcInputError::GenericNotFound(format!(
-            "Cannot find object [{}] from [{}] package event.",
+            "Cannot find object with type [{}] from [{}] package created objects.",
             object_struct_tag, package_id,
         ))
         .into())
