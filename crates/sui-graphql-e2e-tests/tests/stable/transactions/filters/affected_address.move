@@ -65,11 +65,6 @@
     nodes { ...CoinBalances }
   }
 
-  # ...and the transactions that A was a recipient for
-  receivedByA: transactionBlocks(filter: { kind: PROGRAMMABLE_TX, recvAddress: "@{A}" }, scanLimit: 1000) {
-    nodes { ...CoinBalances }
-  }
-
   # B was not affected by all the transactions
   affectsB: transactionBlocks(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{B}" }, scanLimit: 1000) {
     nodes { ...CoinBalances }

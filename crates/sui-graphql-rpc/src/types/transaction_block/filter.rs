@@ -40,14 +40,6 @@ pub(crate) struct TransactionBlockFilter {
     /// Limit to transactions that were sent by the given address.
     pub sent_address: Option<SuiAddress>,
 
-    /// Limit to transactions that sent an object to the given address. NOTE: this input filter has
-    /// been deprecated in favor of `affectedAddress` which offers an easier to understand
-    /// behavior.
-    ///
-    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-    /// `affectedAddress` is introduced, whichever is later.
-    pub recv_address: Option<SuiAddress>,
-
     /// Limit to transactions that accepted the given object as an input. NOTE: this input filter
     /// has been deprecated in favor of `affectedObject` which offers an easier to under behavior.
     ///
@@ -90,7 +82,6 @@ impl TransactionBlockFilter {
             #[cfg(feature = "staging")]
             affected_object: intersect!(affected_object, intersect::by_eq)?,
             sent_address: intersect!(sent_address, intersect::by_eq)?,
-            recv_address: intersect!(recv_address, intersect::by_eq)?,
             input_object: intersect!(input_object, intersect::by_eq)?,
             changed_object: intersect!(changed_object, intersect::by_eq)?,
 
@@ -112,7 +103,6 @@ impl TransactionBlockFilter {
             self.affected_address.is_some(),
             #[cfg(feature = "staging")]
             self.affected_object.is_some(),
-            self.recv_address.is_some(),
             self.input_object.is_some(),
             self.changed_object.is_some(),
             self.transaction_ids.is_some(),
@@ -130,7 +120,6 @@ impl TransactionBlockFilter {
         let missing_implicit_sender = self.function.is_none()
             && self.kind.is_none()
             && self.affected_address.is_none()
-            && self.recv_address.is_none()
             && self.input_object.is_none()
             && self.changed_object.is_none();
 
@@ -148,7 +137,6 @@ impl TransactionBlockFilter {
         let has_filters = self.function.is_some()
             || self.kind.is_some()
             || self.sent_address.is_some()
-            || self.recv_address.is_some()
             || self.affected_address.is_some()
             || self.input_object.is_some()
             || self.changed_object.is_some()

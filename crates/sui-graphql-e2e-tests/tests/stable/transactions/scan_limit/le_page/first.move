@@ -84,7 +84,7 @@ module Test::M1 {
 //# run-graphql
 # startCursor 2, endCursor 3, both scan limited
 {
-  transactionBlocks(first: 3 scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 3 scanLimit: 2 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -108,7 +108,7 @@ module Test::M1 {
 //# run-graphql --cursors {"c":4,"t":3,"i":true}
 # startCursor: 4, endCursor 5, both scan limited
 {
-  transactionBlocks(first: 3 scanLimit: 2 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 3 scanLimit: 2 after: "@{cursor_0}" filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -136,7 +136,7 @@ module Test::M1 {
 # we set the endCursor to the final tx scanned, rather than snapping
 # to the last matched tx
 {
-  transactionBlocks(first: 4 scanLimit: 3 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 4 scanLimit: 3 after: "@{cursor_0}" filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -160,7 +160,7 @@ module Test::M1 {
 //# run-graphql --cursors {"c":4,"t":8,"i":true}
 # startCursor: 9, endCursor: 11 both scanLimited
 {
-  transactionBlocks(first: 4 scanLimit: 3 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 4 scanLimit: 3 after: "@{cursor_0}" filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -185,7 +185,7 @@ module Test::M1 {
 # using the last element's cursor from the previous query
 # will yield an empty set, fixed on the last scannable tx
 {
-  transactionBlocks(first: 4 scanLimit: 3 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 4 scanLimit: 3 after: "@{cursor_0}" filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -210,7 +210,7 @@ module Test::M1 {
 # trying to paginate on the `endCursor` even though hasNextPage is false
 # cursors are null, both page flags are false
 {
-  transactionBlocks(first: 4 scanLimit: 3 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 4 scanLimit: 3 after: "@{cursor_0}" filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
