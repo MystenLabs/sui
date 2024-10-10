@@ -115,12 +115,11 @@ impl MetricsGuard {
         MetricsGuard {
             timer: Some(metrics.process_latency.with_label_values(&[path]).start_timer()),
             metrics,
-            path: path.to_string(), // Store path as String for later use
+            path: path.to_string(),
         }
     }
 
     fn succeeded(mut self) {
-        // Stop the timer and record the elapsed time
         if let Some(timer) = self.timer.take() {
             let elapsed = timer.stop_and_record();
             self.metrics
@@ -132,7 +131,6 @@ impl MetricsGuard {
     }
 
     fn failed(mut self, error: Option<&BoxError>, status: Option<StatusCode>) {
-        // Stop the timer and record the elapsed time
         if let Some(timer) = self.timer.take() {
             let elapsed = timer.stop_and_record();
             self.metrics
@@ -157,7 +155,6 @@ impl MetricsGuard {
     }
 
     fn shed(mut self) {
-        // Stop the timer and record the elapsed time
         if let Some(timer) = self.timer.take() {
             let elapsed = timer.stop_and_record();
             self.metrics
@@ -171,13 +168,12 @@ impl MetricsGuard {
 
 impl Drop for MetricsGuard {
     fn drop(&mut self) {
-        // Decrement the in-flight requests counter
         self.metrics
             .current_requests_in_flight
             .with_label_values(&[&self.path])
             .dec();
 
-        // Handle a request disconnect if it is still in flight
+        //Request was still in flight when the guard was dropped, implying the client disconnected.
         if let Some(timer) = self.timer.take() {
             let elapsed = timer.stop_and_record();
             self.metrics
