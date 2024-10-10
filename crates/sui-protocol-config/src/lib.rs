@@ -184,6 +184,7 @@ const MAX_PROTOCOL_VERSION: u64 = 62;
 //             Further reduce minimum number of random beacon shares.
 //             Add feature flag for Mysticeti fastpath.
 // Version 62: Makes the event's sending module package upgrade-aware.
+//             Enable UncompressedG1 in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -546,6 +547,10 @@ struct FeatureFlags {
     // Makes the event's sending module version-aware.
     #[serde(skip_serializing_if = "is_false")]
     relocate_event_module: bool,
+
+    // Enable uncompressed group elements in BLS123-81 G1
+    #[serde(skip_serializing_if = "is_false")]
+    uncompressed_g1_group_elements: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1134,6 +1139,11 @@ pub struct ProtocolConfig {
     group_ops_bls12381_g2_msm_base_cost_per_input: Option<u64>,
     group_ops_bls12381_msm_max_len: Option<u32>,
     group_ops_bls12381_pairing_cost: Option<u64>,
+    group_ops_bls12381_g1_to_uncompressed_g1_cost: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_to_g1_cost: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_sum_base_cost: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_sum_cost_per_term: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_sum_max_terms: Option<u32>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -1624,6 +1634,10 @@ impl ProtocolConfig {
     pub fn relocate_event_module(&self) -> bool {
         self.feature_flags.relocate_event_module
     }
+
+    pub fn uncompressed_g1_group_elements(&self) -> bool {
+        self.feature_flags.uncompressed_g1_group_elements
+    }
 }
 
 #[cfg(not(msim))]
@@ -2044,6 +2058,11 @@ impl ProtocolConfig {
             group_ops_bls12381_g2_msm_base_cost_per_input: None,
             group_ops_bls12381_msm_max_len: None,
             group_ops_bls12381_pairing_cost: None,
+            group_ops_bls12381_g1_to_uncompressed_g1_cost: None,
+            group_ops_bls12381_uncompressed_g1_to_g1_cost: None,
+            group_ops_bls12381_uncompressed_g1_sum_base_cost: None,
+            group_ops_bls12381_uncompressed_g1_sum_cost_per_term: None,
+            group_ops_bls12381_uncompressed_g1_sum_max_terms: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -2819,6 +2838,16 @@ impl ProtocolConfig {
                 }
                 62 => {
                     cfg.feature_flags.relocate_event_module = true;
+
+                    cfg.group_ops_bls12381_g1_to_uncompressed_g1_cost = Some(26);
+                    cfg.group_ops_bls12381_uncompressed_g1_to_g1_cost = Some(52);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_base_cost = Some(26);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_cost_per_term = Some(13);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_max_terms = Some(2000);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.uncompressed_g1_group_elements = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
