@@ -299,8 +299,9 @@ pub fn open_thdb(path: &Path, registry: &Registry) -> Arc<Db> {
     fs::create_dir_all(path).unwrap();
     let metrics = Metrics::new_in(registry);
     let mut config = Config::default();
-    // run snapshot every 16 Gb written to wal
-    config.snapshot_written_bytes = 16 * 1024 * 1024 * 1024;
+    config.large_table_size = 32 * 1024 * 1024;
+    // run snapshot every 64 Gb written to wal
+    config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
     let config = Arc::new(config);
     let db = Db::open(path, config, metrics).unwrap();
     let db = Arc::new(db);
