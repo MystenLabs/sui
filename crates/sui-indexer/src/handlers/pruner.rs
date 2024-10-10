@@ -25,7 +25,7 @@ impl Pruner {
         epochs_to_keep: u64,
         metrics: IndexerMetrics,
     ) -> Result<Self, IndexerError> {
-        let partition_manager = PgPartitionManager::new(store.pool())?;
+        let partition_manager = PgPartitionManager::new(metrics.clone(), store.pool())?;
         Ok(Self {
             store,
             partition_manager,

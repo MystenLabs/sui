@@ -120,8 +120,8 @@ impl PgIndexerStore {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
-        let partition_manager =
-            PgPartitionManager::new(pool.clone()).expect("Failed to initialize partition manager");
+        let partition_manager = PgPartitionManager::new(metrics.clone(), pool.clone())
+            .expect("Failed to initialize partition manager");
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
             parallel_objects_chunk_size,
@@ -312,24 +312,29 @@ impl PgIndexerStore {
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::insert_into(display::table)
-                    .values(display_updates)
-                    .on_conflict(display::object_type)
-                    .do_update()
-                    .set((
-                        display::id.eq(excluded(display::id)),
-                        display::version.eq(excluded(display::version)),
-                        display::bcs.eq(excluded(display::bcs)),
-                    ))
-                    .execute(conn)
-                    .await?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    diesel::insert_into(display::table)
+                        .values(display_updates)
+                        .on_conflict(display::object_type)
+                        .do_update()
+                        .set((
+                            display::id.eq(excluded(display::id)),
+                            display::version.eq(excluded(display::version)),
+                            display::bcs.eq(excluded(display::bcs)),
+                        ))
+                        .execute(conn)
+                        .await?;
 
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                    Ok::<(), IndexerError>(())
+                }
+                .scope_boxed()
+            },
+        )
         .await?;
 
         Ok(())
@@ -345,35 +350,40 @@ impl PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects_chunks
             .start_timer();
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::insert_into(objects::table)
-                    .values(mutated_object_mutation_chunk.clone())
-                    .on_conflict(objects::object_id)
-                    .do_update()
-                    .set((
-                        objects::object_id.eq(excluded(objects::object_id)),
-                        objects::object_version.eq(excluded(objects::object_version)),
-                        objects::object_digest.eq(excluded(objects::object_digest)),
-                        objects::checkpoint_sequence_number
-                            .eq(excluded(objects::checkpoint_sequence_number)),
-                        objects::owner_type.eq(excluded(objects::owner_type)),
-                        objects::owner_id.eq(excluded(objects::owner_id)),
-                        objects::object_type.eq(excluded(objects::object_type)),
-                        objects::serialized_object.eq(excluded(objects::serialized_object)),
-                        objects::coin_type.eq(excluded(objects::coin_type)),
-                        objects::coin_balance.eq(excluded(objects::coin_balance)),
-                        objects::df_kind.eq(excluded(objects::df_kind)),
-                        objects::df_name.eq(excluded(objects::df_name)),
-                        objects::df_object_type.eq(excluded(objects::df_object_type)),
-                        objects::df_object_id.eq(excluded(objects::df_object_id)),
-                    ))
-                    .execute(conn)
-                    .await?;
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    diesel::insert_into(objects::table)
+                        .values(mutated_object_mutation_chunk.clone())
+                        .on_conflict(objects::object_id)
+                        .do_update()
+                        .set((
+                            objects::object_id.eq(excluded(objects::object_id)),
+                            objects::object_version.eq(excluded(objects::object_version)),
+                            objects::object_digest.eq(excluded(objects::object_digest)),
+                            objects::checkpoint_sequence_number
+                                .eq(excluded(objects::checkpoint_sequence_number)),
+                            objects::owner_type.eq(excluded(objects::owner_type)),
+                            objects::owner_id.eq(excluded(objects::owner_id)),
+                            objects::object_type.eq(excluded(objects::object_type)),
+                            objects::serialized_object.eq(excluded(objects::serialized_object)),
+                            objects::coin_type.eq(excluded(objects::coin_type)),
+                            objects::coin_balance.eq(excluded(objects::coin_balance)),
+                            objects::df_kind.eq(excluded(objects::df_kind)),
+                            objects::df_name.eq(excluded(objects::df_name)),
+                            objects::df_object_type.eq(excluded(objects::df_object_type)),
+                            objects::df_object_id.eq(excluded(objects::df_object_id)),
+                        ))
+                        .execute(conn)
+                        .await?;
+                    Ok::<(), IndexerError>(())
+                }
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             guard.stop_and_record();
@@ -392,27 +402,32 @@ impl PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects_chunks
             .start_timer();
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::delete(
-                    objects::table.filter(
-                        objects::object_id.eq_any(
-                            deleted_objects_chunk
-                                .iter()
-                                .map(|o| o.object_id.clone())
-                                .collect::<Vec<_>>(),
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    diesel::delete(
+                        objects::table.filter(
+                            objects::object_id.eq_any(
+                                deleted_objects_chunk
+                                    .iter()
+                                    .map(|o| o.object_id.clone())
+                                    .collect::<Vec<_>>(),
+                            ),
                         ),
-                    ),
-                )
-                .execute(conn)
-                .await
-                .map_err(IndexerError::from)
-                .context("Failed to write object deletion to PostgresDB")?;
+                    )
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed to write object deletion to PostgresDB")?;
 
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                    Ok::<(), IndexerError>(())
+                }
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             guard.stop_and_record();
@@ -443,53 +458,60 @@ impl PgIndexerStore {
             }
         }
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for objects_snapshot_chunk in
-                    objects_snapshot.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(objects_snapshot::table)
-                        .values(objects_snapshot_chunk)
-                        .on_conflict(objects_snapshot::object_id)
-                        .do_update()
-                        .set((
-                            objects_snapshot::object_version
-                                .eq(excluded(objects_snapshot::object_version)),
-                            objects_snapshot::object_status
-                                .eq(excluded(objects_snapshot::object_status)),
-                            objects_snapshot::object_digest
-                                .eq(excluded(objects_snapshot::object_digest)),
-                            objects_snapshot::checkpoint_sequence_number
-                                .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
-                            objects_snapshot::owner_type.eq(excluded(objects_snapshot::owner_type)),
-                            objects_snapshot::owner_id.eq(excluded(objects_snapshot::owner_id)),
-                            objects_snapshot::object_type_package
-                                .eq(excluded(objects_snapshot::object_type_package)),
-                            objects_snapshot::object_type_module
-                                .eq(excluded(objects_snapshot::object_type_module)),
-                            objects_snapshot::object_type_name
-                                .eq(excluded(objects_snapshot::object_type_name)),
-                            objects_snapshot::object_type
-                                .eq(excluded(objects_snapshot::object_type)),
-                            objects_snapshot::serialized_object
-                                .eq(excluded(objects_snapshot::serialized_object)),
-                            objects_snapshot::coin_type.eq(excluded(objects_snapshot::coin_type)),
-                            objects_snapshot::coin_balance
-                                .eq(excluded(objects_snapshot::coin_balance)),
-                            objects_snapshot::df_kind.eq(excluded(objects_snapshot::df_kind)),
-                            objects_snapshot::df_name.eq(excluded(objects_snapshot::df_name)),
-                            objects_snapshot::df_object_type
-                                .eq(excluded(objects_snapshot::df_object_type)),
-                            objects_snapshot::df_object_id
-                                .eq(excluded(objects_snapshot::df_object_id)),
-                        ))
-                        .execute(conn)
-                        .await?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for objects_snapshot_chunk in
+                        objects_snapshot.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(objects_snapshot::table)
+                            .values(objects_snapshot_chunk)
+                            .on_conflict(objects_snapshot::object_id)
+                            .do_update()
+                            .set((
+                                objects_snapshot::object_version
+                                    .eq(excluded(objects_snapshot::object_version)),
+                                objects_snapshot::object_status
+                                    .eq(excluded(objects_snapshot::object_status)),
+                                objects_snapshot::object_digest
+                                    .eq(excluded(objects_snapshot::object_digest)),
+                                objects_snapshot::checkpoint_sequence_number
+                                    .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
+                                objects_snapshot::owner_type
+                                    .eq(excluded(objects_snapshot::owner_type)),
+                                objects_snapshot::owner_id.eq(excluded(objects_snapshot::owner_id)),
+                                objects_snapshot::object_type_package
+                                    .eq(excluded(objects_snapshot::object_type_package)),
+                                objects_snapshot::object_type_module
+                                    .eq(excluded(objects_snapshot::object_type_module)),
+                                objects_snapshot::object_type_name
+                                    .eq(excluded(objects_snapshot::object_type_name)),
+                                objects_snapshot::object_type
+                                    .eq(excluded(objects_snapshot::object_type)),
+                                objects_snapshot::serialized_object
+                                    .eq(excluded(objects_snapshot::serialized_object)),
+                                objects_snapshot::coin_type
+                                    .eq(excluded(objects_snapshot::coin_type)),
+                                objects_snapshot::coin_balance
+                                    .eq(excluded(objects_snapshot::coin_balance)),
+                                objects_snapshot::df_kind.eq(excluded(objects_snapshot::df_kind)),
+                                objects_snapshot::df_name.eq(excluded(objects_snapshot::df_name)),
+                                objects_snapshot::df_object_type
+                                    .eq(excluded(objects_snapshot::df_object_type)),
+                                objects_snapshot::df_object_id
+                                    .eq(excluded(objects_snapshot::df_object_id)),
+                            ))
+                            .execute(conn)
+                            .await?;
+                    }
+                    Ok::<(), IndexerError>(())
                 }
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             guard.stop_and_record();
@@ -520,46 +542,51 @@ impl PgIndexerStore {
                 }
             }
         }
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for mutated_object_change_chunk in
-                    mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    let error_message = concat!(
-                        "Failed to write to ",
-                        stringify!((objects_history::table)),
-                        " DB"
-                    );
-                    diesel::insert_into(objects_history::table)
-                        .values(mutated_object_change_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context(error_message)?;
-                }
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for mutated_object_change_chunk in
+                        mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        let error_message = concat!(
+                            "Failed to write to ",
+                            stringify!((objects_history::table)),
+                            " DB"
+                        );
+                        diesel::insert_into(objects_history::table)
+                            .values(mutated_object_change_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context(error_message)?;
+                    }
 
-                for deleted_objects_chunk in
-                    deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    let error_message = concat!(
-                        "Failed to write to ",
-                        stringify!((objects_history::table)),
-                        " DB"
-                    );
-                    diesel::insert_into(objects_history::table)
-                        .values(deleted_objects_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context(error_message)?;
-                }
+                    for deleted_objects_chunk in
+                        deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        let error_message = concat!(
+                            "Failed to write to ",
+                            stringify!((objects_history::table)),
+                            " DB"
+                        );
+                        diesel::insert_into(objects_history::table)
+                            .values(deleted_objects_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context(error_message)?;
+                    }
 
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                    Ok::<(), IndexerError>(())
+                }
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             guard.stop_and_record();
@@ -580,22 +607,27 @@ impl PgIndexerStore {
             .checkpoint_db_commit_latency_full_objects_history_chunks
             .start_timer();
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for objects_chunk in objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(full_objects_history::table)
-                        .values(objects_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context("Failed to write to full_objects_history table")?;
-                }
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for objects_chunk in objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(full_objects_history::table)
+                            .values(objects_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context("Failed to write to full_objects_history table")?;
+                    }
 
-                Ok(())
-            }
-            .scope_boxed()
-        })
+                    Ok(())
+                }
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
@@ -621,22 +653,28 @@ impl PgIndexerStore {
             .checkpoint_db_commit_latency_objects_version_chunks
             .start_timer();
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(objects_version::table)
-                        .values(object_version_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context("Failed to write to objects_version table")?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for object_version_chunk in
+                        object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(objects_version::table)
+                            .values(object_version_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context("Failed to write to objects_version table")?;
+                    }
+                    Ok::<(), IndexerError>(())
                 }
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
@@ -662,22 +700,28 @@ impl PgIndexerStore {
             .checkpoint_db_commit_latency_objects_version_unpartitioned_chunks
             .start_timer();
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(objects_version_unpartitioned::table)
-                        .values(object_version_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context("Failed to write to objects_version_unpartitioned table")?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for object_version_chunk in
+                        object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(objects_version_unpartitioned::table)
+                            .values(object_version_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context("Failed to write to objects_version_unpartitioned table")?;
+                    }
+                    Ok::<(), IndexerError>(())
                 }
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
@@ -719,21 +763,27 @@ impl PgIndexerStore {
             .start_timer();
 
         let stored_cp_txs = checkpoints.iter().map(StoredCpTx::from).collect::<Vec<_>>();
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for stored_cp_tx_chunk in stored_cp_txs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(pruner_cp_watermark::table)
-                        .values(stored_cp_tx_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context("Failed to write to pruner_cp_watermark table")?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for stored_cp_tx_chunk in stored_cp_txs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(pruner_cp_watermark::table)
+                            .values(stored_cp_tx_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context("Failed to write to pruner_cp_watermark table")?;
+                    }
+                    Ok::<(), IndexerError>(())
                 }
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             info!(
@@ -749,45 +799,50 @@ impl PgIndexerStore {
             .iter()
             .map(StoredCheckpoint::from)
             .collect::<Vec<_>>();
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for stored_checkpoint_chunk in
-                    stored_checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(checkpoints::table)
-                        .values(stored_checkpoint_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context("Failed to write to checkpoints table")?;
-                    let time_now_ms = chrono::Utc::now().timestamp_millis();
-                    for stored_checkpoint in stored_checkpoint_chunk {
-                        self.metrics
-                            .db_commit_lag_ms
-                            .set(time_now_ms - stored_checkpoint.timestamp_ms);
-                        self.metrics
-                            .max_committed_checkpoint_sequence_number
-                            .set(stored_checkpoint.sequence_number);
-                        self.metrics
-                            .committed_checkpoint_timestamp_ms
-                            .set(stored_checkpoint.timestamp_ms);
-                    }
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for stored_checkpoint_chunk in
+                        stored_checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(checkpoints::table)
+                            .values(stored_checkpoint_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context("Failed to write to checkpoints table")?;
+                        let time_now_ms = chrono::Utc::now().timestamp_millis();
+                        for stored_checkpoint in stored_checkpoint_chunk {
+                            self.metrics
+                                .db_commit_lag_ms
+                                .set(time_now_ms - stored_checkpoint.timestamp_ms);
+                            self.metrics
+                                .max_committed_checkpoint_sequence_number
+                                .set(stored_checkpoint.sequence_number);
+                            self.metrics
+                                .committed_checkpoint_timestamp_ms
+                                .set(stored_checkpoint.timestamp_ms);
+                        }
 
-                    for stored_checkpoint in stored_checkpoint_chunk {
-                        info!(
-                            "Indexer lag: \
+                        for stored_checkpoint in stored_checkpoint_chunk {
+                            info!(
+                                "Indexer lag: \
                             persisted checkpoint {} with time now {} and checkpoint time {}",
-                            stored_checkpoint.sequence_number,
-                            time_now_ms,
-                            stored_checkpoint.timestamp_ms
-                        );
+                                stored_checkpoint.sequence_number,
+                                time_now_ms,
+                                stored_checkpoint.timestamp_ms
+                            );
+                        }
                     }
+                    Ok::<(), IndexerError>(())
                 }
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
@@ -821,26 +876,31 @@ impl PgIndexerStore {
             .collect::<Vec<_>>();
         drop(transformation_guard);
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    let error_message = concat!(
-                        "Failed to write to ",
-                        stringify!((transactions::table)),
-                        " DB"
-                    );
-                    diesel::insert_into(transactions::table)
-                        .values(transaction_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context(error_message)?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        let error_message = concat!(
+                            "Failed to write to ",
+                            stringify!((transactions::table)),
+                            " DB"
+                        );
+                        diesel::insert_into(transactions::table)
+                            .values(transaction_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context(error_message)?;
+                    }
+                    Ok::<(), IndexerError>(())
                 }
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
@@ -867,23 +927,28 @@ impl PgIndexerStore {
             .map(StoredEvent::from)
             .collect::<Vec<_>>();
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for event_chunk in events.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    let error_message =
-                        concat!("Failed to write to ", stringify!((events::table)), " DB");
-                    diesel::insert_into(events::table)
-                        .values(event_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context(error_message)?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for event_chunk in events.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        let error_message =
+                            concat!("Failed to write to ", stringify!((events::table)), " DB");
+                        diesel::insert_into(events::table)
+                            .values(event_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context(error_message)?;
+                    }
+                    Ok::<(), IndexerError>(())
                 }
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
@@ -907,24 +972,29 @@ impl PgIndexerStore {
             .into_iter()
             .map(StoredPackage::from)
             .collect::<Vec<_>>();
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(packages::table)
-                        .values(packages_chunk)
-                        .on_conflict(packages::package_id)
-                        .do_update()
-                        .set((
-                            packages::package_id.eq(excluded(packages::package_id)),
-                            packages::move_package.eq(excluded(packages::move_package)),
-                        ))
-                        .execute(conn)
-                        .await?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(packages::table)
+                            .values(packages_chunk)
+                            .on_conflict(packages::package_id)
+                            .do_update()
+                            .set((
+                                packages::package_id.eq(excluded(packages::package_id)),
+                                packages::move_package.eq(excluded(packages::move_package)),
+                            ))
+                            .execute(conn)
+                            .await?;
+                    }
+                    Ok::<(), IndexerError>(())
                 }
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
@@ -993,79 +1063,86 @@ impl PgIndexerStore {
             },
         );
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for event_emit_packages_chunk in
-                    event_emit_packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(event_emit_package::table)
-                        .values(event_emit_packages_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for event_emit_packages_chunk in
+                        event_emit_packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(event_emit_package::table)
+                            .values(event_emit_packages_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for event_emit_modules_chunk in
-                    event_emit_modules.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(event_emit_module::table)
-                        .values(event_emit_modules_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for event_emit_modules_chunk in
+                        event_emit_modules.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(event_emit_module::table)
+                            .values(event_emit_modules_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for event_senders_chunk in event_senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(event_senders::table)
-                        .values(event_senders_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for event_senders_chunk in
+                        event_senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(event_senders::table)
+                            .values(event_senders_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for event_struct_packages_chunk in
-                    event_struct_packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(event_struct_package::table)
-                        .values(event_struct_packages_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for event_struct_packages_chunk in
+                        event_struct_packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(event_struct_package::table)
+                            .values(event_struct_packages_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for event_struct_modules_chunk in
-                    event_struct_modules.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(event_struct_module::table)
-                        .values(event_struct_modules_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for event_struct_modules_chunk in
+                        event_struct_modules.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(event_struct_module::table)
+                            .values(event_struct_modules_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for event_struct_names_chunk in
-                    event_struct_names.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(event_struct_name::table)
-                        .values(event_struct_names_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for event_struct_names_chunk in
+                        event_struct_names.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(event_struct_name::table)
+                            .values(event_struct_names_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for event_struct_instantiations_chunk in
-                    event_struct_instantiations.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(event_struct_instantiation::table)
-                        .values(event_struct_instantiations_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for event_struct_instantiations_chunk in
+                        event_struct_instantiations.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(event_struct_instantiation::table)
+                            .values(event_struct_instantiations_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
+                    Ok(())
                 }
-                Ok(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await?;
 
         let elapsed = guard.stop_and_record();
@@ -1148,106 +1225,113 @@ impl PgIndexerStore {
             },
         );
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for affected_addresses_chunk in
-                    affected_addresses.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(tx_affected_addresses::table)
-                        .values(affected_addresses_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for affected_addresses_chunk in
+                        affected_addresses.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(tx_affected_addresses::table)
+                            .values(affected_addresses_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for affected_objects_chunk in
-                    affected_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(tx_affected_objects::table)
-                        .values(affected_objects_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for affected_objects_chunk in
+                        affected_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(tx_affected_objects::table)
+                            .values(affected_objects_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for senders_chunk in senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_senders::table)
-                        .values(senders_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for senders_chunk in senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_senders::table)
+                            .values(senders_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_recipients::table)
-                        .values(recipients_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_recipients::table)
+                            .values(recipients_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for input_objects_chunk in input_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_input_objects::table)
-                        .values(input_objects_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for input_objects_chunk in
+                        input_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(tx_input_objects::table)
+                            .values(input_objects_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for changed_objects_chunk in
-                    changed_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                {
-                    diesel::insert_into(tx_changed_objects::table)
-                        .values(changed_objects_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for changed_objects_chunk in
+                        changed_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(tx_changed_objects::table)
+                            .values(changed_objects_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for pkgs_chunk in pkgs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_calls_pkg::table)
-                        .values(pkgs_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for pkgs_chunk in pkgs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_calls_pkg::table)
+                            .values(pkgs_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for mods_chunk in mods.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_calls_mod::table)
-                        .values(mods_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for mods_chunk in mods.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_calls_mod::table)
+                            .values(mods_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for funs_chunk in funs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_calls_fun::table)
-                        .values(funs_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for funs_chunk in funs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_calls_fun::table)
+                            .values(funs_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for digests_chunk in digests.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_digests::table)
-                        .values(digests_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for digests_chunk in digests.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_digests::table)
+                            .values(digests_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                for kinds_chunk in kinds.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_kinds::table)
-                        .values(kinds_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
+                    for kinds_chunk in kinds.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_kinds::table)
+                            .values(kinds_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
 
-                Ok(())
-            }
-            .scope_boxed()
-        })
+                    Ok(())
+                }
+                .scope_boxed()
+            },
+        )
         .await?;
 
         let elapsed = guard.stop_and_record();
@@ -1263,77 +1347,84 @@ impl PgIndexerStore {
             .start_timer();
         let epoch_id = epoch.new_epoch.epoch;
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                if let Some(last_epoch) = &epoch.last_epoch {
-                    let last_epoch_id = last_epoch.epoch;
-                    // Overwrites the `epoch_total_transactions` field on `epoch.last_epoch` because
-                    // we are not guaranteed to have the latest data in db when this is set on
-                    // indexer's chain-reading side. However, when we `persist_epoch`, the
-                    // checkpoints from an epoch ago must have been indexed.
-                    let previous_epoch_network_total_transactions = match epoch_id {
-                        0 | 1 => 0,
-                        _ => {
-                            let prev_epoch_id = epoch_id - 2;
-                            let result = checkpoints::table
-                                .filter(checkpoints::epoch.eq(prev_epoch_id as i64))
-                                .select(max(checkpoints::network_total_transactions))
-                                .first::<Option<i64>>(conn)
-                                .await
-                                .map(|o| o.unwrap_or(0))?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    if let Some(last_epoch) = &epoch.last_epoch {
+                        let last_epoch_id = last_epoch.epoch;
+                        // Overwrites the `epoch_total_transactions` field on `epoch.last_epoch` because
+                        // we are not guaranteed to have the latest data in db when this is set on
+                        // indexer's chain-reading side. However, when we `persist_epoch`, the
+                        // checkpoints from an epoch ago must have been indexed.
+                        let previous_epoch_network_total_transactions = match epoch_id {
+                            0 | 1 => 0,
+                            _ => {
+                                let prev_epoch_id = epoch_id - 2;
+                                let result = checkpoints::table
+                                    .filter(checkpoints::epoch.eq(prev_epoch_id as i64))
+                                    .select(max(checkpoints::network_total_transactions))
+                                    .first::<Option<i64>>(conn)
+                                    .await
+                                    .map(|o| o.unwrap_or(0))?;
 
-                            result as u64
-                        }
-                    };
+                                result as u64
+                            }
+                        };
 
-                    let epoch_total_transactions = epoch.network_total_transactions
-                        - previous_epoch_network_total_transactions;
+                        let epoch_total_transactions = epoch.network_total_transactions
+                            - previous_epoch_network_total_transactions;
 
-                    let mut last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
-                    last_epoch.epoch_total_transactions = Some(epoch_total_transactions as i64);
-                    info!(last_epoch_id, "Persisting epoch end data.");
+                        let mut last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
+                        last_epoch.epoch_total_transactions = Some(epoch_total_transactions as i64);
+                        info!(last_epoch_id, "Persisting epoch end data.");
+                        diesel::insert_into(epochs::table)
+                            .values(vec![last_epoch])
+                            .on_conflict(epochs::epoch)
+                            .do_update()
+                            .set((
+                                epochs::system_state.eq(excluded(epochs::system_state)),
+                                epochs::epoch_total_transactions
+                                    .eq(excluded(epochs::epoch_total_transactions)),
+                                epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
+                                epochs::epoch_end_timestamp
+                                    .eq(excluded(epochs::epoch_end_timestamp)),
+                                epochs::storage_fund_reinvestment
+                                    .eq(excluded(epochs::storage_fund_reinvestment)),
+                                epochs::storage_charge.eq(excluded(epochs::storage_charge)),
+                                epochs::storage_rebate.eq(excluded(epochs::storage_rebate)),
+                                epochs::stake_subsidy_amount
+                                    .eq(excluded(epochs::stake_subsidy_amount)),
+                                epochs::total_gas_fees.eq(excluded(epochs::total_gas_fees)),
+                                epochs::total_stake_rewards_distributed
+                                    .eq(excluded(epochs::total_stake_rewards_distributed)),
+                                epochs::leftover_storage_fund_inflow
+                                    .eq(excluded(epochs::leftover_storage_fund_inflow)),
+                                epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
+                            ))
+                            .execute(conn)
+                            .await?;
+                    }
+
+                    let epoch_id = epoch.new_epoch.epoch;
+                    info!(epoch_id, "Persisting epoch beginning info");
+                    let new_epoch = StoredEpochInfo::from_epoch_beginning_info(&epoch.new_epoch);
+                    let error_message =
+                        concat!("Failed to write to ", stringify!((epochs::table)), " DB");
                     diesel::insert_into(epochs::table)
-                        .values(vec![last_epoch])
-                        .on_conflict(epochs::epoch)
-                        .do_update()
-                        .set((
-                            epochs::system_state.eq(excluded(epochs::system_state)),
-                            epochs::epoch_total_transactions
-                                .eq(excluded(epochs::epoch_total_transactions)),
-                            epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
-                            epochs::epoch_end_timestamp.eq(excluded(epochs::epoch_end_timestamp)),
-                            epochs::storage_fund_reinvestment
-                                .eq(excluded(epochs::storage_fund_reinvestment)),
-                            epochs::storage_charge.eq(excluded(epochs::storage_charge)),
-                            epochs::storage_rebate.eq(excluded(epochs::storage_rebate)),
-                            epochs::stake_subsidy_amount.eq(excluded(epochs::stake_subsidy_amount)),
-                            epochs::total_gas_fees.eq(excluded(epochs::total_gas_fees)),
-                            epochs::total_stake_rewards_distributed
-                                .eq(excluded(epochs::total_stake_rewards_distributed)),
-                            epochs::leftover_storage_fund_inflow
-                                .eq(excluded(epochs::leftover_storage_fund_inflow)),
-                            epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
-                        ))
+                        .values(new_epoch)
+                        .on_conflict_do_nothing()
                         .execute(conn)
-                        .await?;
+                        .await
+                        .map_err(IndexerError::from)
+                        .context(error_message)?;
+                    Ok::<(), IndexerError>(())
                 }
-
-                let epoch_id = epoch.new_epoch.epoch;
-                info!(epoch_id, "Persisting epoch beginning info");
-                let new_epoch = StoredEpochInfo::from_epoch_beginning_info(&epoch.new_epoch);
-                let error_message =
-                    concat!("Failed to write to ", stringify!((epochs::table)), " DB");
-                diesel::insert_into(epochs::table)
-                    .values(new_epoch)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context(error_message)?;
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
@@ -1394,36 +1485,46 @@ impl PgIndexerStore {
 
     async fn prune_checkpoints_table(&self, cp: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::delete(
-                    checkpoints::table.filter(checkpoints::sequence_number.eq(cp as i64)),
-                )
-                .execute(conn)
-                .await
-                .map_err(IndexerError::from)
-                .context("Failed to prune checkpoints table")?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    diesel::delete(
+                        checkpoints::table.filter(checkpoints::sequence_number.eq(cp as i64)),
+                    )
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed to prune checkpoints table")?;
 
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                    Ok::<(), IndexerError>(())
+                }
+                .scope_boxed()
+            },
+        )
         .await
     }
 
     async fn prune_epochs_table(&self, epoch: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::delete(epochs::table.filter(epochs::epoch.eq(epoch as i64)))
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed to prune epochs table")?;
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    diesel::delete(epochs::table.filter(epochs::epoch.eq(epoch as i64)))
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context("Failed to prune epochs table")?;
+                    Ok::<(), IndexerError>(())
+                }
+                .scope_boxed()
+            },
+        )
         .await
     }
 
@@ -1435,60 +1536,67 @@ impl PgIndexerStore {
         use diesel_async::RunQueryDsl;
 
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::delete(
-                    event_emit_module::table
-                        .filter(event_emit_module::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    diesel::delete(
+                        event_emit_module::table
+                            .filter(event_emit_module::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    event_emit_package::table
-                        .filter(event_emit_package::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        event_emit_package::table
+                            .filter(event_emit_package::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    event_senders::table
-                        .filter(event_senders::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        event_senders::table
+                            .filter(event_senders::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(event_struct_instantiation::table.filter(
-                    event_struct_instantiation::tx_sequence_number.between(min_tx, max_tx),
-                ))
-                .execute(conn)
-                .await?;
+                    diesel::delete(event_struct_instantiation::table.filter(
+                        event_struct_instantiation::tx_sequence_number.between(min_tx, max_tx),
+                    ))
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    event_struct_module::table
-                        .filter(event_struct_module::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        event_struct_module::table.filter(
+                            event_struct_module::tx_sequence_number.between(min_tx, max_tx),
+                        ),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    event_struct_name::table
-                        .filter(event_struct_name::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        event_struct_name::table
+                            .filter(event_struct_name::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    event_struct_package::table
-                        .filter(event_struct_package::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        event_struct_package::table.filter(
+                            event_struct_package::tx_sequence_number.between(min_tx, max_tx),
+                        ),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                Ok(())
-            }
-            .scope_boxed()
-        })
+                    Ok(())
+                }
+                .scope_boxed()
+            },
+        )
         .await
     }
 
@@ -1496,102 +1604,114 @@ impl PgIndexerStore {
         use diesel_async::RunQueryDsl;
 
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::delete(
-                    tx_affected_addresses::table
-                        .filter(tx_affected_addresses::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    diesel::delete(
+                        tx_affected_addresses::table.filter(
+                            tx_affected_addresses::tx_sequence_number.between(min_tx, max_tx),
+                        ),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    tx_affected_objects::table
-                        .filter(tx_affected_objects::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        tx_affected_objects::table.filter(
+                            tx_affected_objects::tx_sequence_number.between(min_tx, max_tx),
+                        ),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    tx_senders::table
-                        .filter(tx_senders::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        tx_senders::table
+                            .filter(tx_senders::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    tx_recipients::table
-                        .filter(tx_recipients::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        tx_recipients::table
+                            .filter(tx_recipients::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    tx_input_objects::table
-                        .filter(tx_input_objects::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        tx_input_objects::table
+                            .filter(tx_input_objects::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    tx_changed_objects::table
-                        .filter(tx_changed_objects::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        tx_changed_objects::table
+                            .filter(tx_changed_objects::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    tx_calls_pkg::table
-                        .filter(tx_calls_pkg::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        tx_calls_pkg::table
+                            .filter(tx_calls_pkg::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    tx_calls_mod::table
-                        .filter(tx_calls_mod::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        tx_calls_mod::table
+                            .filter(tx_calls_mod::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    tx_calls_fun::table
-                        .filter(tx_calls_fun::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        tx_calls_fun::table
+                            .filter(tx_calls_fun::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                diesel::delete(
-                    tx_digests::table
-                        .filter(tx_digests::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
+                    diesel::delete(
+                        tx_digests::table
+                            .filter(tx_digests::tx_sequence_number.between(min_tx, max_tx)),
+                    )
+                    .execute(conn)
+                    .await?;
 
-                Ok(())
-            }
-            .scope_boxed()
-        })
+                    Ok(())
+                }
+                .scope_boxed()
+            },
+        )
         .await
     }
 
     async fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::delete(
-                    pruner_cp_watermark::table
-                        .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(cp as i64)),
-                )
-                .execute(conn)
-                .await
-                .map_err(IndexerError::from)
-                .context("Failed to prune pruner_cp_watermark table")?;
-                Ok(())
-            }
-            .scope_boxed()
-        })
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    diesel::delete(
+                        pruner_cp_watermark::table
+                            .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(cp as i64)),
+                    )
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed to prune pruner_cp_watermark table")?;
+                    Ok(())
+                }
+                .scope_boxed()
+            },
+        )
         .await
     }
 
@@ -2265,29 +2385,34 @@ impl IndexerStore for PgIndexerStore {
 
         // Now insert all of them into the db.
         // TODO: right now the size of these updates is manageable but later we may consider batching.
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                for config_chunk in all_configs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(protocol_configs::table)
-                        .values(config_chunk)
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    for config_chunk in all_configs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(protocol_configs::table)
+                            .values(config_chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context("Failed to write to protocol_configs table")?;
+                    }
+
+                    diesel::insert_into(feature_flags::table)
+                        .values(all_flags.clone())
                         .on_conflict_do_nothing()
                         .execute(conn)
                         .await
                         .map_err(IndexerError::from)
-                        .context("Failed to write to protocol_configs table")?;
+                        .context("Failed to write to feature_flags table")?;
+                    Ok::<(), IndexerError>(())
                 }
-
-                diesel::insert_into(feature_flags::table)
-                    .values(all_flags.clone())
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed to write to feature_flags table")?;
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+                .scope_boxed()
+            },
+        )
         .await?;
         Ok(())
     }
@@ -2298,19 +2423,24 @@ impl IndexerStore for PgIndexerStore {
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::insert_into(chain_identifier::table)
-                    .values(StoredChainIdentifier { checkpoint_digest })
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("failed to write to chain_identifier table")?;
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
+        transaction_with_retry(
+            &self.metrics,
+            &self.pool,
+            PG_DB_COMMIT_SLEEP_DURATION,
+            |conn| {
+                async {
+                    diesel::insert_into(chain_identifier::table)
+                        .values(StoredChainIdentifier { checkpoint_digest })
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context("failed to write to chain_identifier table")?;
+                    Ok::<(), IndexerError>(())
+                }
+                .scope_boxed()
+            },
+        )
         .await?;
         Ok(())
     }

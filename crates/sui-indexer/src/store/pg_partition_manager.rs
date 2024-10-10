@@ -11,6 +11,7 @@ use tracing::{error, info};
 use crate::database::ConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::EpochToCommit;
+use crate::metrics::IndexerMetrics;
 use crate::models::epoch::StoredEpochInfo;
 use crate::store::transaction_with_retry;
 
@@ -30,7 +31,7 @@ GROUP BY table_name;
 #[derive(Clone)]
 pub struct PgPartitionManager {
     pool: ConnectionPool,
-
+    metrics: IndexerMetrics,
     partition_strategies: HashMap<&'static str, PgPartitionStrategy>,
 }
 
@@ -86,13 +87,14 @@ impl EpochPartitionData {
 }
 
 impl PgPartitionManager {
-    pub fn new(pool: ConnectionPool) -> Result<Self, IndexerError> {
+    pub fn new(metrics: IndexerMetrics, pool: ConnectionPool) -> Result<Self, IndexerError> {
         let mut partition_strategies = HashMap::new();
         partition_strategies.insert("events", PgPartitionStrategy::TxSequenceNumber);
         partition_strategies.insert("transactions", PgPartitionStrategy::TxSequenceNumber);
         partition_strategies.insert("objects_version", PgPartitionStrategy::ObjectId);
         let manager = Self {
             pool,
+            metrics,
             partition_strategies,
         };
         Ok(manager)
@@ -165,7 +167,7 @@ impl PgPartitionManager {
             return Ok(());
         }
         if last_partition == data.last_epoch {
-            transaction_with_retry(&self.pool, Duration::from_secs(10), |conn| {
+            transaction_with_retry(&self.metrics, &self.pool, Duration::from_secs(10), |conn| {
                 async {
                     diesel_async::RunQueryDsl::execute(
                         diesel::sql_query("CALL advance_partition($1, $2, $3, $4, $5)")
@@ -209,7 +211,7 @@ impl PgPartitionManager {
         table: String,
         partition: u64,
     ) -> Result<(), IndexerError> {
-        transaction_with_retry(&self.pool, Duration::from_secs(10), |conn| {
+        transaction_with_retry(&self.metrics, &self.pool, Duration::from_secs(10), |conn| {
             async {
                 diesel_async::RunQueryDsl::execute(
                     diesel::sql_query("CALL drop_partition($1, $2)")
