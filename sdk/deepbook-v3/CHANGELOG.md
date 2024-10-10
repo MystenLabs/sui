@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.9.0
+
+### Minor Changes
+
+- 89f2e59: Mainnet packages
+
 ## 0.8.5
 
 ### Patch Changes
