@@ -108,6 +108,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Testnet:
         - Apple
@@ -119,6 +120,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -274,6 +276,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Testnet:
         - Apple
@@ -285,6 +288,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -440,6 +444,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Testnet:
         - Apple
@@ -451,6 +456,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -606,6 +612,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Testnet:
         - Apple
@@ -617,6 +624,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -772,6 +780,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Testnet:
         - Apple
@@ -783,6 +792,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -938,6 +948,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Testnet:
         - Apple
@@ -949,6 +960,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -1104,6 +1116,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Testnet:
         - Apple
@@ -1115,6 +1128,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
+        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -1172,4 +1186,3 @@ account_keys:
   - mfPjCoE6SX0Sl84MnmNS/LS+tfPpkn7I8tziuk2g0WM=
   - 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
 genesis: "[fake genesis]"
-
