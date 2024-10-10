@@ -125,7 +125,7 @@ enum Groups {
     BLS12381G1 = 1,
     BLS12381G2 = 2,
     BLS12381GT = 3,
-    BLS12381G1Uncompressed = 4,
+    BLS12381UncompressedG1 = 4,
 }
 
 impl Groups {
@@ -135,7 +135,7 @@ impl Groups {
             1 => Some(Groups::BLS12381G1),
             2 => Some(Groups::BLS12381G2),
             3 => Some(Groups::BLS12381GT),
-            4 => Some(Groups::BLS12381G1Uncompressed),
+            4 => Some(Groups::BLS12381UncompressedG1),
             _ => None,
         }
     }
@@ -801,7 +801,7 @@ pub fn internal_convert(
         .clone();
 
     let result = match (Groups::from_u8(from_type), Groups::from_u8(to_type)) {
-        (Some(Groups::BLS12381G1Uncompressed), Some(Groups::BLS12381G1)) => {
+        (Some(Groups::BLS12381UncompressedG1), Some(Groups::BLS12381G1)) => {
             native_charge_gas_early_exit_option!(
                 context,
                 cost_params.bls12381_uncompressed_g1_to_g1_cost
@@ -813,7 +813,7 @@ pub fn internal_convert(
                 .and_then(|e| bls::G1Element::try_from(&e))
                 .map(|e| e.to_byte_array().to_vec())
         }
-        (Some(Groups::BLS12381G1), Some(Groups::BLS12381G1Uncompressed)) => {
+        (Some(Groups::BLS12381G1), Some(Groups::BLS12381UncompressedG1)) => {
             native_charge_gas_early_exit_option!(
                 context,
                 cost_params.bls12381_g1_to_uncompressed_g1_cost
@@ -866,7 +866,7 @@ pub fn internal_sum(
         .value_as::<u64>()?;
 
     let result = match Groups::from_u8(group_type) {
-        Some(Groups::BLS12381G1Uncompressed) => {
+        Some(Groups::BLS12381UncompressedG1) => {
             let max_terms = cost_params
                 .bls12381_uncompressed_g1_sum_max_terms
                 .ok_or_else(|| {
