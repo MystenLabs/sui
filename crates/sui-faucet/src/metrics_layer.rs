@@ -109,7 +109,6 @@ impl<Res> Future for RequestMetricsFuture<Res> {
 
 impl MetricsGuard {
     fn new(metrics: Arc<RequestMetrics>, path: &str) -> Self {
-        // Increment counters for the total requests received and in-flight requests
         metrics.total_requests_received.with_label_values(&[path]).inc();
         metrics.current_requests_in_flight.with_label_values(&[path]).inc();
         MetricsGuard {
@@ -173,7 +172,7 @@ impl Drop for MetricsGuard {
             .with_label_values(&[&self.path])
             .dec();
 
-        //Request was still in flight when the guard was dropped, implying the client disconnected.
+        // Request was still in flight when the guard was dropped, implying the client disconnected.
         if let Some(timer) = self.timer.take() {
             let elapsed = timer.stop_and_record();
             self.metrics
