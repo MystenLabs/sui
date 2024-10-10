@@ -275,9 +275,9 @@ where
 
         Box::new(self.db.range_ordered_iterator(start..end).map(|r| {
             let (k, v) = r.unwrap();
-            let key = self
-                .checked_deserialize_key(&k)
-                .expect("Somehow got key from wrong key space");
+            let Some(key) = self.checked_deserialize_key(&k) else {
+                panic!("Somehow got key from wrong key space, expected {}, got {}", self.kf_spec.0, k[0]);
+            };
             Ok((key, self.deserialize_value(&v)))
         }))
     }
