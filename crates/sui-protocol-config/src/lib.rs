@@ -1539,10 +1539,6 @@ impl ProtocolConfig {
         self.feature_flags.consensus_network
     }
 
-    pub fn mysticeti_leader_scoring_and_schedule(&self) -> bool {
-        self.feature_flags.mysticeti_leader_scoring_and_schedule
-    }
-
     pub fn reshare_at_same_initial_version(&self) -> bool {
         self.feature_flags.reshare_at_same_initial_version
     }
@@ -2956,12 +2952,9 @@ impl ProtocolConfig {
     pub fn set_zklogin_max_epoch_upper_bound_delta_for_testing(&mut self, val: Option<u64>) {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
     }
+
     pub fn set_disable_bridge_for_testing(&mut self) {
         self.feature_flags.bridge = false
-    }
-
-    pub fn set_mysticeti_leader_scoring_and_schedule_for_testing(&mut self, val: bool) {
-        self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
     }
 
     pub fn set_mysticeti_num_leaders_per_round_for_testing(&mut self, val: Option<usize>) {
