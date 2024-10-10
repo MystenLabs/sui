@@ -42,3 +42,6 @@ export {
 export { isValidNamedPackage, isValidNamedType } from './move-registry.js';
 
 export { deriveDynamicFieldID } from './dynamic-fields.js';
+
+// eslint-disable-next-line import/no-cycle
+export { mergeAllSuiCoins } from './sui.js';
