@@ -143,8 +143,6 @@ pub struct ConsensusHandler<C> {
     transaction_manager_sender: TransactionManagerSender,
     /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
-
-    last_round: Option<u64>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -183,7 +181,6 @@ impl<C> ConsensusHandler<C> {
             processed_cache: LruCache::new(NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap()),
             transaction_manager_sender,
             throughput_calculator,
-            last_round: None,
         }
     }
 
@@ -205,14 +202,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
         let round = consensus_commit.leader_round();
-
-        if let Some(last_round) = self.last_round {
-            assert!(round > last_round);
-        } else {
-            debug!("xxx initing round");
-        }
-        debug!("xxx round {}", round);
-        self.last_round = Some(round);
 
         // TODO: Remove this once narwhal is deprecated. For now mysticeti will not return
         // more than one leader per round so we are not in danger of ignoring any commits.

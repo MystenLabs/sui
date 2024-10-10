@@ -1248,12 +1248,14 @@ impl AuthorityPerEpochStore {
         }
         batch.write()?;
 
-        self.shared_version_assignments.remove(tx_key);
-
         if !matches!(tx_key, TransactionKey::Digest(_)) {
             self.executed_digests_notify_read.notify(tx_key, tx_digest);
         }
         Ok(())
+    }
+
+    pub(crate) fn remove_shared_version_assignments(&self, tx_key: &TransactionKey) {
+        self.shared_version_assignments.remove(tx_key);
     }
 
     pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {
@@ -1323,23 +1325,28 @@ impl AuthorityPerEpochStore {
         &self,
         key: &TransactionKey,
         objects: &[InputObjectKind],
-    ) -> BTreeSet<InputKey> {
-        let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
+    ) -> SuiResult<BTreeSet<InputKey>> {
+        //let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
+        let shared_locks =
+            once_cell::unsync::OnceCell::<Option<HashMap<ObjectID, SequenceNumber>>>::new();
         objects
             .iter()
             .map(|kind| {
-                match kind {
+                Ok(match kind {
                     InputObjectKind::SharedMoveObject { id, .. } => {
-                        if shared_locks.is_empty() {
-                            shared_locks = self
-                                .get_shared_locks(key)
-                                .expect("Read from storage should not fail!")
-                                .into_iter()
-                                .collect();
-                        }
-                        // If we can't find the locked version, it means
-                        // 1. either we have a bug that skips shared object version assignment
-                        // 2. or we have some DB corruption
+                        // It is possible to
+                        let shared_locks = shared_locks
+                            .get_or_init(|| {
+                                self.get_shared_locks(key)
+                                    .map(|locks| locks.into_iter().collect())
+                            })
+                            .as_ref()
+                            .ok_or(SuiError::GenericAuthorityError {
+                                error: "no shared locks".to_string(),
+                            })?;
+
+                        // If we found locks, but they are missing the assignment for this object,
+                        // it indicates a serious inconsistency!
                         let Some(version) = shared_locks.get(id) else {
                             panic!(
                                 "Shared object locks should have been set. key: {key:?}, obj \
@@ -1356,7 +1363,7 @@ impl AuthorityPerEpochStore {
                         id: objref.0,
                         version: objref.1,
                     },
-                }
+                })
             })
             .collect()
     }
@@ -1493,8 +1500,10 @@ impl AuthorityPerEpochStore {
         tx_digest: &TransactionDigest,
         assigned_versions: &[(ObjectID, SequenceNumber)],
     ) -> SuiResult {
-        self.shared_version_assignments
-            .insert((*tx_digest).into(), assigned_versions.to_owned());
+        self.shared_version_assignments.insert(
+            TransactionKey::Digest(*tx_digest),
+            assigned_versions.to_owned(),
+        );
         Ok(())
     }
 
@@ -4770,15 +4779,10 @@ impl ConsensusCommitOutput {
 }
 
 impl GetSharedLocks for AuthorityPerEpochStore {
-    fn get_shared_locks(
-        &self,
-        key: &TransactionKey,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
-        Ok(self
-            .shared_version_assignments
+    fn get_shared_locks(&self, key: &TransactionKey) -> Option<Vec<(ObjectID, SequenceNumber)>> {
+        self.shared_version_assignments
             .get(key)
             .map(|locks| locks.clone())
-            .unwrap_or_default())
     }
 }
 

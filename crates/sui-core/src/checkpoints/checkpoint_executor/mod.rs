@@ -1163,12 +1163,12 @@ fn get_unexecuted_transactions(
             .zip(expected_effects_digests)
             .enumerate()
             .map(|(i, (tx, expected_effects_digest))| {
-                let tx = tx.unwrap_or_else(|| {
+                let tx = tx.unwrap_or_else(||
                     fatal!(
                         "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
                         unexecuted_txns[i]
-                    );
-                });
+                    )
+                );
                 // change epoch tx is handled specially in check_epoch_last_checkpoint
                 assert!(!tx.data().intent_message().value.is_end_of_epoch_tx());
                 (

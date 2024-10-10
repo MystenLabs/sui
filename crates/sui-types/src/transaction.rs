@@ -1992,10 +1992,6 @@ pub trait TransactionDataAPI {
     /// of the epoch
     fn is_end_of_epoch_tx(&self) -> bool;
 
-    fn is_randomness_update_tx(&self) -> bool {
-        matches!(self.kind(), TransactionKind::RandomnessStateUpdate(_))
-    }
-
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool;
 
@@ -3363,11 +3359,5 @@ impl TransactionKey {
             TransactionKey::Digest(d) => d,
             _ => panic!("called expect_digest on a non-Digest TransactionKey: {self:?}"),
         }
-    }
-}
-
-impl From<TransactionDigest> for TransactionKey {
-    fn from(d: TransactionDigest) -> Self {
-        TransactionKey::Digest(d)
     }
 }

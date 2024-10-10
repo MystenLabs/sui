@@ -76,11 +76,6 @@ use typed_store::{
     TypedStoreError,
 };
 
-#[inline(never)]
-fn breakbreak() {
-    println!("break here");
-}
-
 pub type CheckpointHeight = u64;
 
 pub struct EpochStats {
@@ -826,9 +821,6 @@ impl CheckpointBuilder {
 
     async fn run(mut self) {
         info!("Starting CheckpointBuilder");
-        scopeguard::guard((), |_| {
-            info!("CheckpointBuilder exited");
-        });
         loop {
             // Check whether an exit signal has been received, if so we break the loop.
             // This gives us a chance to exit, in case checkpoint making keeps failing.
@@ -1089,11 +1081,6 @@ impl CheckpointBuilder {
                 contents_digest = ?contents.digest(),
                 "writing checkpoint",
             );
-            if summary.sequence_number == 67
-                && format!("{:?}", self.state.name.concise()) == "k#addeef94.."
-            {
-                breakbreak();
-            }
             all_tx_digests.extend(contents.iter().map(|digests| digests.transaction));
 
             self.output
