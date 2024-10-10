@@ -10,7 +10,7 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
 };
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::{BuildConfig, SuiPackageHooksForTesting};
 
 const CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 const COMPILED_PACKAGES_DIR: &str = "packages_compiled";
@@ -19,7 +19,7 @@ const PUBLISHED_API_FILE: &str = "published_api.txt";
 
 #[test]
 fn build_system_packages() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let tempdir = tempfile::tempdir().unwrap();
     let out_dir = if std::env::var_os("UPDATE").is_some() {
         let crate_root = Path::new(CRATE_ROOT);

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use sui::client_commands::{OptsWithGas, SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::{BuildConfig, SuiPackageHooksForTesting};
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockEffectsV1,
 };
@@ -37,7 +37,7 @@ const TEST_FIXTURES_DIR: &str = "tests/fixture";
 #[tokio::test]
 #[ignore]
 async fn test_end_to_end() -> anyhow::Result<()> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooksForTesting));
     let mut test_cluster = TestClusterBuilder::new()
         .with_fullnode_rpc_port(LOCALNET_PORT)
         .build()

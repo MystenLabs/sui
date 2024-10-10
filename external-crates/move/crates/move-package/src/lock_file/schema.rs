@@ -32,7 +32,8 @@ use super::LockFile;
 /// V1: Adds toolchain versioning support.
 /// V2: Adds support for managing addresses on package publish and upgrades.
 /// V3: Renames dependency `name` field to `id` and adds a `name` field to store the name from the manifest.
-pub const VERSION: u16 = 3;
+/// V4: Enables on-chain package hooks.
+pub const VERSION: u16 = 4;
 
 /// Table for storing package info under an environment.
 const ENV_TABLE_NAME: &str = "env";
