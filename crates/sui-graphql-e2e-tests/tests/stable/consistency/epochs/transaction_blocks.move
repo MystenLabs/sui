@@ -249,7 +249,7 @@ module Test::M1 {
   checkpoint {
     sequenceNumber
   }
-  with_cursor: transactionBlocks(after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
+  with_cursor: transactionBlocks(after: "@{cursor_0}", filter: {sentAddress: "@{A}"}) {
     edges {
       cursor
       node {
@@ -264,7 +264,7 @@ module Test::M1 {
       }
     }
   }
-  without_cursor: transactionBlocks(filter: {signAddress: "@{A}"}) {
+  without_cursor: transactionBlocks(filter: {sentAddress: "@{A}"}) {
     edges {
       cursor
       node {
