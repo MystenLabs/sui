@@ -89,6 +89,7 @@ pub struct IndexerMetrics {
     // checkpoint E2E latency is: fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub checkpoint_download_bytes_size: IntGauge,
     pub tokio_blocking_task_wait_latency: Histogram,
+    pub connection_pool_wait_latency: Histogram,
     pub fullnode_checkpoint_data_download_latency: Histogram,
     pub fullnode_checkpoint_wait_and_download_latency: Histogram,
     pub fullnode_transaction_download_latency: Histogram,
@@ -567,6 +568,12 @@ impl IndexerMetrics {
             tokio_blocking_task_wait_latency: register_histogram_with_registry!(
                 "tokio_blocking_task_wait_latency",
                 "Time spent to wait for tokio blocking task pool",
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            connection_pool_wait_latency: register_histogram_with_registry!(
+                "connection_pool_wait_latency",
+                "Time spent to wait for connection pool",
                 DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
