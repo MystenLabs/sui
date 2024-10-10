@@ -118,10 +118,10 @@ pub enum ImageAction {
         #[arg(long)]
         build_args: Vec<String>,
         /// Optional flag to force build even if build pod already exists
-        #[arg(short='f', long)]
+        #[arg(short = 'f', long)]
         force: bool,
         /// Optional flag to target the image, used for multi-stage builds
-        #[arg(short='t', long)]
+        #[arg(short = 't', long)]
         image_target: Option<String>,
     },
     #[command(name = "query")]
