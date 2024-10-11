@@ -573,6 +573,7 @@ impl SuiNode {
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
                 config.remove_deprecated_tables,
+                &store,
             )))
         } else {
             None
