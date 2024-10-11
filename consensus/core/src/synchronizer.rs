@@ -52,6 +52,12 @@ const MAX_BLOCKS_PER_FETCH: usize = 32;
 
 const MAX_AUTHORITIES_TO_FETCH_PER_BLOCK: usize = 2;
 
+/// The number of rounds above the highest accepted round that still willing to fetch missing blocks via the periodic
+/// synchronizer. Any missing blocks of higher rounds are considered too far in the future to fetch. This property is taken into
+/// account only when it's detected that the node has fallen behind on its commit compared to the rest of the network, otherwise
+/// scheduler will attempt to fetch any missing block.
+const SYNC_MISSING_BLOCK_ROUND_THRESHOLD: u32 = 50;
+
 struct BlocksGuard {
     map: Arc<InflightBlocksMap>,
     block_refs: BTreeSet<BlockRef>,
@@ -855,9 +861,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             missing_blocks = missing_blocks
                 .into_iter()
                 .take_while(|b| {
-                    b.round
-                        <= highest_accepted_round
-                            + context.parameters.sync_missing_blocks_round_threshold
+                    b.round <= highest_accepted_round + SYNC_MISSING_BLOCK_ROUND_THRESHOLD
                 })
                 .collect::<BTreeSet<_>>();
 
@@ -1051,7 +1055,10 @@ mod tests {
     use parking_lot::RwLock;
     use tokio::{sync::Mutex, time::sleep};
 
-    use crate::{authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher};
+    use crate::{
+        authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
+        synchronizer::{MAX_BLOCKS_PER_FETCH, SYNC_MISSING_BLOCK_ROUND_THRESHOLD},
+    };
     use crate::{
         block::{BlockDigest, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
@@ -1466,8 +1473,7 @@ mod tests {
     async fn synchronizer_periodic_task_when_commit_lagging_with_missing_blocks_in_acceptable_thresholds(
     ) {
         // GIVEN
-        let (mut context, _) = Context::new_for_test(4);
-        context.parameters.sync_missing_blocks_round_threshold = 10;
+        let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
@@ -1477,38 +1483,43 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         // AND stub some missing blocks. The highest accepted round is 0. Create some blocks that are below and above the threshold sync.
-        let expected_blocks = (0..context.parameters.sync_missing_blocks_round_threshold * 2)
+        let expected_blocks = (0..SYNC_MISSING_BLOCK_ROUND_THRESHOLD * 2)
             .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()))
             .collect::<Vec<_>>();
+
         let missing_blocks = expected_blocks
             .iter()
             .map(|block| block.reference())
-            .collect::<BTreeSet<_>>();
+            .collect::<BTreeSet<_>>();        
         core_dispatcher
-            .stub_missing_blocks(missing_blocks.clone())
+            .stub_missing_blocks(missing_blocks)
             .await;
 
         // AND stub the requests for authority 1 & 2
         // Make the first authority timeout, so the second will be called. "We" are authority = 0, so
         // we are skipped anyways.
-        let expected_blocks = expected_blocks
+        let mut expected_blocks = expected_blocks
             .into_iter()
-            .filter(|block| block.round() <= context.parameters.sync_missing_blocks_round_threshold)
+            .filter(|block| block.round() <= SYNC_MISSING_BLOCK_ROUND_THRESHOLD)
             .collect::<Vec<_>>();
-        network_client
-            .stub_fetch_blocks(
-                expected_blocks.clone(),
-                AuthorityIndex::new_for_test(1),
-                Some(FETCH_REQUEST_TIMEOUT),
-            )
-            .await;
-        network_client
-            .stub_fetch_blocks(
-                expected_blocks.clone(),
-                AuthorityIndex::new_for_test(2),
-                None,
-            )
-            .await;
+
+        for chunk in expected_blocks.chunks(MAX_BLOCKS_PER_FETCH) {
+            network_client
+                .stub_fetch_blocks(
+                    chunk.to_vec(),
+                    AuthorityIndex::new_for_test(1),
+                    Some(FETCH_REQUEST_TIMEOUT),
+                )
+                .await;
+
+                network_client
+                .stub_fetch_blocks(
+                    chunk.to_vec(),
+                    AuthorityIndex::new_for_test(2),
+                    None,
+                )
+                .await;
+        }
 
         // Now create some blocks to simulate a commit lag
         let round = context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER * 2;
@@ -1544,15 +1555,18 @@ mod tests {
         sleep(4 * FETCH_REQUEST_TIMEOUT).await;
 
         // We should be in commit lag mode, but since there are missing blocks within the acceptable round thresholds those ones should be fetched. Nothing above.
-        let added_blocks = core_dispatcher.get_add_blocks().await;
+        let mut added_blocks = core_dispatcher.get_add_blocks().await;
+
+        added_blocks.sort_by_key(|block| block.reference());
+        expected_blocks.sort_by_key(|block| block.reference());
+
         assert_eq!(added_blocks, expected_blocks);
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn synchronizer_periodic_task_when_commit_lagging_gets_disabled() {
         // GIVEN
-        let (mut context, _) = Context::new_for_test(4);
-        context.parameters.sync_missing_blocks_round_threshold = 10;
+        let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
@@ -1562,8 +1576,8 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         // AND stub some missing blocks. The highest accepted round is 0. Create blocks that are above the threshold sync.
-        let expected_blocks = (context.parameters.sync_missing_blocks_round_threshold * 2
-            ..context.parameters.sync_missing_blocks_round_threshold * 3)
+        let mut expected_blocks = (SYNC_MISSING_BLOCK_ROUND_THRESHOLD * 2
+            ..SYNC_MISSING_BLOCK_ROUND_THRESHOLD * 3)
             .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()))
             .collect::<Vec<_>>();
         let missing_blocks = expected_blocks
@@ -1577,20 +1591,22 @@ mod tests {
         // AND stub the requests for authority 1 & 2
         // Make the first authority timeout, so the second will be called. "We" are authority = 0, so
         // we are skipped anyways.
-        network_client
-            .stub_fetch_blocks(
-                expected_blocks.clone(),
-                AuthorityIndex::new_for_test(1),
-                Some(FETCH_REQUEST_TIMEOUT),
-            )
-            .await;
-        network_client
-            .stub_fetch_blocks(
-                expected_blocks.clone(),
-                AuthorityIndex::new_for_test(2),
-                None,
-            )
-            .await;
+        for chunk in expected_blocks.chunks(MAX_BLOCKS_PER_FETCH) {
+            network_client
+                .stub_fetch_blocks(
+                    chunk.to_vec(),
+                    AuthorityIndex::new_for_test(1),
+                    Some(FETCH_REQUEST_TIMEOUT),
+                )
+                .await;
+            network_client
+                .stub_fetch_blocks(
+                    chunk.to_vec(),
+                    AuthorityIndex::new_for_test(2),
+                    None,
+                )
+                .await;
+        }
 
         // Now create some blocks to simulate a commit lag
         let round = context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER * 2;
@@ -1655,7 +1671,11 @@ mod tests {
         sleep(2 * FETCH_REQUEST_TIMEOUT).await;
 
         // THEN the missing blocks should now be fetched and added to core
-        let added_blocks = core_dispatcher.get_add_blocks().await;
+        let mut added_blocks = core_dispatcher.get_add_blocks().await;
+
+        added_blocks.sort_by_key(|block| block.reference());
+        expected_blocks.sort_by_key(|block| block.reference());
+
         assert_eq!(added_blocks, expected_blocks);
     }
 
