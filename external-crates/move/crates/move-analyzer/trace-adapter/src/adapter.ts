@@ -379,11 +379,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(
-                /* next */ true,
-                /* stopAtCloseFrame */ false,
-                /* nextLineSkip */ true
-            );
+            terminate = this.runtime.step(/* next */ true, /* stopAtCloseFrame */ false);
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -400,11 +396,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(
-                /* next */ false,
-                /* stopAtCloseFrame */ false,
-                /* nextLineSkip */ true
-            );
+            terminate = this.runtime.step(/* next */ false, /* stopAtCloseFrame */ false);
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
