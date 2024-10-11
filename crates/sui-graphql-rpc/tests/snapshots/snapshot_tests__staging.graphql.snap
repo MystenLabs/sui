@@ -172,14 +172,6 @@ enum AddressTransactionBlockRelationship {
 	"""
 	SENT
 	"""
-	Transactions that sent objects to this address. NOTE: this input filter has been deprecated
-	in favor of `AFFECTED`, which offers an easier to understand behavior.
-	
-	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-	`AFFECTED` is introduced, whichever is later.
-	"""
-	RECV
-	"""
 	Transactions that this address was involved in, either as the sender, sponsor, or as the
 	owner of some object that was created, modified or transfered.
 	"""
@@ -4360,15 +4352,6 @@ input TransactionBlockFilter {
 	Limit to transactions that were sent by the given address.
 	"""
 	sentAddress: SuiAddress
-	"""
-	Limit to transactions that sent an object to the given address. NOTE: this input filter has
-	been deprecated in favor of `affectedAddress` which offers an easier to understand
-	behavior.
-	
-	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-	`affectedAddress` is introduced, whichever is later.
-	"""
-	recvAddress: SuiAddress
 	"""
 	Limit to transactions that accepted the given object as an input. NOTE: this input filter
 	has been deprecated in favor of `affectedObject` which offers an easier to under behavior.

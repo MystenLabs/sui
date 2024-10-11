@@ -78,7 +78,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -103,7 +103,7 @@ module Test::M1 {
 //# run-graphql
 # startCursor 21 not scan limited, endCursor 21 is scan limited
 {
-  transactionBlocks(last: 1 scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(last: 1 scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -130,7 +130,7 @@ module Test::M1 {
 # `scanLimit` is 5 - if we set the `startCursor` to 17, then we will never yield tx 17
 # when paginating the other way, since the cursors are exclusive.
 {
-  transactionBlocks(last: 1 before: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(last: 1 before: "@{cursor_0}" scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -155,7 +155,7 @@ module Test::M1 {
 # continuing paginating backwards with scan limit
 # startCursor 11, endCursor 15, both scan limited
 {
-  transactionBlocks(last: 1 before: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(last: 1 before: "@{cursor_0}" scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -179,7 +179,7 @@ module Test::M1 {
 //# run-graphql --cursors {"c":7,"t":11,"i":true}
 # startCursor is 7, endCursor is 10, both scan limited
 {
-  transactionBlocks(last: 1 before: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(last: 1 before: "@{cursor_0}" scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -205,7 +205,7 @@ module Test::M1 {
 # this is because we found a matching element at tx 3, but within
 # the scanned window there is another tx that we need to return for
 {
-  transactionBlocks(last: 1 before: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(last: 1 before: "@{cursor_0}" scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -229,7 +229,7 @@ module Test::M1 {
 //# run-graphql --cursors {"c":7,"t":3,"i":false}
 # Reached the end
 {
-  transactionBlocks(last: 1 before: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+  transactionBlocks(last: 1 before: "@{cursor_0}" scanLimit: 5 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasPreviousPage
       hasNextPage

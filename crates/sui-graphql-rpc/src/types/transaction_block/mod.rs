@@ -338,8 +338,8 @@ impl TransactionBlock {
     /// If the `Page<Cursor>` is set, then this function will defer to the `checkpoint_viewed_at` in
     /// the cursor if they are consistent.
     ///
-    /// Filters that involve a combination of `recvAddress`, `inputObject`, `changedObject`, and
-    /// `function` should provide a value for `scan_limit`. This modifies querying behavior by
+    /// Filters that involve a combination of `affectedAddress`, `inputObject`, `changedObject`,
+    /// and `function` should provide a value for `scan_limit`. This modifies querying behavior by
     /// limiting how many transactions to scan through before applying filters, and also affects
     /// pagination behavior.
     pub(crate) async fn paginate(
