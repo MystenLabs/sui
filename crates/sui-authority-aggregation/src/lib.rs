@@ -15,12 +15,25 @@ use tokio::time::timeout;
 
 pub type AsyncResult<'a, T, E> = BoxFuture<'a, Result<T, E>>;
 
+pub struct SigRequestPrefs<K> {
+    pub ordering_pref: BTreeSet<K>,
+    pub prefetch_timeout: Duration,
+}
+
 pub enum ReduceOutput<R, S> {
     Continue(S),
     Failed(S),
     Success(R),
 }
 
+/// This function takes an initial state, than executes an asynchronous function (FMap) for each
+/// authority, and folds the results as they become available into the state using an async function (FReduce).
+///
+/// prefetch_timeout: the minimum amount of time to spend trying to gather results from all authorities
+/// before falling back to arrival order.
+///
+/// total_timeout: the maximum amount of total time to wait for results from all authorities, including
+/// time spent prefetching.
 pub async fn quorum_map_then_reduce_with_timeout_and_prefs<
     'a,
     C,
@@ -35,12 +48,11 @@ pub async fn quorum_map_then_reduce_with_timeout_and_prefs<
 >(
     committee: Arc<C>,
     authority_clients: Arc<BTreeMap<K, Arc<Client>>>,
-    authority_preferences: Option<&BTreeSet<K>>,
+    authority_preferences: Option<SigRequestPrefs<K>>,
     initial_state: S,
     map_each_authority: FMap,
     reduce_result: FReduce,
-    max_timeout: Duration,
-    min_timeout: Option<Duration>,
+    total_timeout: Duration,
 ) -> Result<
     (
         R,
@@ -54,9 +66,18 @@ where
     FMap: FnOnce(K, Arc<Client>) -> AsyncResult<'a, V, E> + Clone + 'a,
     FReduce: Fn(S, K, StakeUnit, Result<V, E>) -> BoxFuture<'a, ReduceOutput<R, S>>,
 {
-    let authorities_shuffled = committee.shuffle_by_stake(authority_preferences, None);
+    let (preference, prefetch_timeout) = if let Some(SigRequestPrefs {
+        ordering_pref,
+        prefetch_timeout,
+    }) = authority_preferences
+    {
+        (Some(ordering_pref), Some(prefetch_timeout))
+    } else {
+        (None, None)
+    };
+    let authorities_shuffled = committee.shuffle_by_stake(preference.as_ref(), None);
     let mut accumulated_state = initial_state;
-    let mut max_timeout = max_timeout;
+    let mut total_timeout = total_timeout;
 
     // First, execute in parallel for each authority FMap.
     let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
@@ -68,13 +89,12 @@ where
             monitored_future!(async move { (name.clone(), execute(name, client).await,) })
         })
         .collect();
-
-    if let Some(min_timeout) = min_timeout {
+    if let Some(prefetch_timeout) = prefetch_timeout {
         let elapsed = Instant::now();
-        let min_sleep = tokio::time::sleep(min_timeout);
+        let prefetch_sleep = tokio::time::sleep(prefetch_timeout);
         let mut authority_to_result: BTreeMap<K, Result<V, E>> = BTreeMap::new();
-        tokio::pin!(min_sleep);
-        // get all the sigs we can within min_timeout
+        tokio::pin!(prefetch_sleep);
+        // get all the sigs we can within prefetch_timeout
         loop {
             tokio::select! {
                 resp = responses.next() => {
@@ -88,7 +108,7 @@ where
                         }
                     }
                 }
-                _ = &mut min_sleep => {
+                _ = &mut prefetch_sleep => {
                     break;
                 }
             }
@@ -119,11 +139,11 @@ where
         }
         // if we got here, fallback through the if statement to continue in arrival order on
         // the remaining validators
-        max_timeout = max_timeout.saturating_sub(elapsed.elapsed());
+        total_timeout = total_timeout.saturating_sub(elapsed.elapsed());
     }
 
     // As results become available fold them into the state using FReduce.
-    while let Ok(Some((authority_name, result))) = timeout(max_timeout, responses.next()).await {
+    while let Ok(Some((authority_name, result))) = timeout(total_timeout, responses.next()).await {
         let authority_weight = committee.weight(&authority_name);
         accumulated_state =
             match reduce_result(accumulated_state, authority_name, authority_weight, result).await {
@@ -202,7 +222,6 @@ where
         map_each_authority,
         reduce_result,
         initial_timeout,
-        None,
     )
     .await
 }

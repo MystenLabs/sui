@@ -17,15 +17,15 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_authority_aggregation::quorum_map_then_reduce_with_timeout_and_prefs;
 use sui_authority_aggregation::ReduceOutput;
+use sui_authority_aggregation::{quorum_map_then_reduce_with_timeout_and_prefs, SigRequestPrefs};
 use sui_types::base_types::ConciseableName;
 use sui_types::committee::StakeUnit;
 use sui_types::committee::TOTAL_VOTING_POWER;
 use tracing::{error, info, warn};
 
-const MAX_TIMEOUT_MS: u64 = 5000;
-const MIN_TIMEOUT_MS: u64 = 1500;
+const TOTAL_TIMEOUT_MS: u64 = 5000;
+const PREFETCH_TIMEOUT_MS: u64 = 1500;
 
 pub struct BridgeAuthorityAggregator {
     pub committee: Arc<BridgeCommittee>,
@@ -75,6 +75,7 @@ impl BridgeAuthorityAggregator {
             self.committee.clone(),
             self.clients.clone(),
             state,
+            Duration::from_secs(PREFETCH_TIMEOUT_MS),
         )
         .await
     }
@@ -170,6 +171,7 @@ async fn request_sign_bridge_action_into_certification(
     committee: Arc<BridgeCommittee>,
     clients: Arc<BTreeMap<BridgeAuthorityPublicKeyBytes, Arc<BridgeClient>>>,
     state: GetSigsState,
+    prefetch_timeout: Duration,
 ) -> BridgeResult<VerifiedCertifiedBridgeAction> {
     // `preferences` is used as a trick here to influence the order of validators to be requested.
     // * if `Some(_)`, then we will request validators in the order of the voting power.
@@ -178,20 +180,26 @@ async fn request_sign_bridge_action_into_certification(
     // we pass in `Some` to make sure the validators with higher voting power are requested first
     // to save gas cost.
     let preference = match action {
-        BridgeAction::SuiToEthBridgeAction(_) => Some(BTreeSet::new()),
+        BridgeAction::SuiToEthBridgeAction(_) => Some(SigRequestPrefs {
+            ordering_pref: BTreeSet::new(),
+            prefetch_timeout,
+        }),
         BridgeAction::EthToSuiBridgeAction(_) => None,
         _ => {
             if action.chain_id().is_sui_chain() {
                 None
             } else {
-                Some(BTreeSet::new())
+                Some(SigRequestPrefs {
+                    ordering_pref: BTreeSet::new(),
+                    prefetch_timeout,
+                })
             }
         }
     };
     let (result, _) = quorum_map_then_reduce_with_timeout_and_prefs(
         committee,
         clients,
-        preference.as_ref(),
+        preference,
         state,
         |_name, client| {
             Box::pin(async move { client.request_sign_bridge_action(action.clone()).await })
@@ -237,9 +245,7 @@ async fn request_sign_bridge_action_into_certification(
                 }
             })
         },
-        // A herustic timeout, we expect the signing to finish within 5 seconds
-        Duration::from_secs(MAX_TIMEOUT_MS),
-        Some(Duration::from_secs(MIN_TIMEOUT_MS)),
+        Duration::from_secs(TOTAL_TIMEOUT_MS),
     )
     .await
     .map_err(|state| {
@@ -366,21 +372,25 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[0])),
+            None,
         );
         mock1.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[1])),
+            None,
         );
         mock2.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[2])),
+            None,
         );
         mock3.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[3])),
+            None,
         );
         agg.request_committee_signatures(action.clone())
             .await
@@ -391,6 +401,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Err(BridgeError::RestAPIError("".into())),
+            None,
         );
         agg.request_committee_signatures(action.clone())
             .await
@@ -401,6 +412,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Err(BridgeError::RestAPIError("".into())),
+            None,
         );
         agg.request_committee_signatures(action.clone())
             .await
@@ -411,6 +423,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Err(BridgeError::RestAPIError("".into())),
+            None,
         );
         let err = agg
             .request_committee_signatures(action.clone())
@@ -438,7 +451,7 @@ mod tests {
 
         // start servers - there is only one permutation of size 2 (1112, 2222) that will achieve quorum
         let (_handles, authorities, secrets) = get_test_authorities_and_run_mock_bridge_server(
-            vec![666, 1000, 1000, 1000, 1000, 1000, 1000, 1112, 2222],
+            vec![666, 1000, 900, 900, 900, 900, 900, 1612, 2222],
             vec![
                 mock0.clone(),
                 mock1.clone(),
@@ -452,9 +465,10 @@ mod tests {
             ],
         );
 
-        let committee = BridgeCommittee::new(authorities).unwrap();
+        let authorities_clone = authorities.clone();
+        let committee = Arc::new(BridgeCommittee::new(authorities_clone).unwrap());
 
-        let agg = BridgeAuthorityAggregator::new(Arc::new(committee));
+        let agg = BridgeAuthorityAggregator::new(committee.clone());
 
         let sui_tx_digest = TransactionDigest::random();
         let sui_tx_event_index = 0;
@@ -475,52 +489,120 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[0])),
+            Some(Duration::from_millis(200)),
         );
         mock1.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[1])),
+            Some(Duration::from_millis(200)),
         );
         mock2.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[2])),
+            Some(Duration::from_millis(700)),
         );
         mock3.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[3])),
+            Some(Duration::from_millis(700)),
         );
         mock4.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[4])),
+            Some(Duration::from_millis(700)),
         );
         mock5.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[5])),
+            Some(Duration::from_millis(700)),
         );
         mock6.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[6])),
+            Some(Duration::from_millis(700)),
         );
         mock7.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[7])),
+            Some(Duration::from_millis(900)),
         );
         mock8.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[8])),
+            Some(Duration::from_millis(1_500)),
         );
-        let resp = agg
-            .request_committee_signatures(action.clone())
-            .await
-            .unwrap();
-        assert_eq!(resp.auth_sig().signatures.len(), 2);
+
+        // we should receive all signatures in time, but only aggregate 2 authorities
+        // to achieve quorum
+        let state = GetSigsState::new(action.approval_threshold(), committee.clone());
+        let resp = request_sign_bridge_action_into_certification(
+            action.clone(),
+            agg.committee.clone(),
+            agg.clients.clone(),
+            state,
+            Duration::from_millis(2_000),
+        )
+        .await
+        .unwrap();
+        let sig_keys = resp.auth_sig().signatures.keys().collect::<BTreeSet<_>>();
+        assert_eq!(sig_keys.len(), 2);
+        assert!(sig_keys.contains(&authorities[7].pubkey_bytes()));
+        assert!(sig_keys.contains(&authorities[8].pubkey_bytes()));
+
+        // we should receive all but the highest stake signatures in time, but still be able to
+        // achieve quorum with 3 sigs
+        let state = GetSigsState::new(action.approval_threshold(), committee.clone());
+        let resp = request_sign_bridge_action_into_certification(
+            action.clone(),
+            agg.committee.clone(),
+            agg.clients.clone(),
+            state,
+            Duration::from_millis(1_200),
+        )
+        .await
+        .unwrap();
+        let sig_keys = resp.auth_sig().signatures.keys().collect::<BTreeSet<_>>();
+        assert_eq!(sig_keys.len(), 3);
+        assert!(sig_keys.contains(&authorities[7].pubkey_bytes()));
+        // this should not have come in time
+        assert!(!sig_keys.contains(&authorities[8].pubkey_bytes()));
+
+        // we should have fallen back to arrival order given that we timeout before we reach quorum
+        let state = GetSigsState::new(action.approval_threshold(), committee.clone());
+        let start = std::time::Instant::now();
+        let resp = request_sign_bridge_action_into_certification(
+            action.clone(),
+            agg.committee.clone(),
+            agg.clients.clone(),
+            state,
+            Duration::from_millis(500),
+        )
+        .await
+        .unwrap();
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed >= Duration::from_millis(700),
+            "Expected to have to wait at least 700ms to fallback to arrival order and achieve quorum, but was {:?}",
+            elapsed
+        );
+        let sig_keys = resp.auth_sig().signatures.keys().collect::<BTreeSet<_>>();
+        assert_eq!(sig_keys.len(), 4);
+        // These two do not make it on time initially, and then we should be able
+        // to achieve quorum before these ultimately arrive
+        assert!(!sig_keys.contains(&authorities[7].pubkey_bytes()));
+        assert!(!sig_keys.contains(&authorities[8].pubkey_bytes()));
+        // These were the first two to respond, and should be immediately
+        // included once we fallback to arrival order
+        assert!(sig_keys.contains(&authorities[0].pubkey_bytes()));
+        assert!(sig_keys.contains(&authorities[1].pubkey_bytes()));
     }
 
     #[tokio::test]
@@ -565,11 +647,13 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[2])),
+            None,
         );
         mock3.add_sui_event_response(
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[3])),
+            None,
         );
         let certified = agg
             .request_committee_signatures(action.clone())
@@ -594,6 +678,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Err(BridgeError::RestAPIError("".into())),
+            None,
         );
         let err = agg
             .request_committee_signatures(action.clone())
@@ -609,6 +694,7 @@ mod tests {
             sui_tx_digest,
             sui_tx_event_index,
             Ok(sign_action_with_key(&action, &secrets[2])),
+            None,
         );
         let err = agg
             .request_committee_signatures(action.clone())
