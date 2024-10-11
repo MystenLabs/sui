@@ -17,11 +17,9 @@ use super::metrics::QuinnConnectionMetrics;
 
 const CONNECTION_STAT_COLLECTION_INTERVAL: Duration = Duration::from_secs(60);
 
-pub(crate) struct ConnectionMonitorHandle {
+pub struct ConnectionMonitorHandle {
     handle: JoinHandle<()>,
     stop: Sender<()>,
-    // TODO: Sui will use this component eventually instead of the NW version
-    #[allow(unused)]
     connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
 }
 
@@ -29,6 +27,10 @@ impl ConnectionMonitorHandle {
     pub async fn stop(self) {
         self.stop.send(()).ok();
         self.handle.await.ok();
+    }
+
+    pub fn connection_statuses(&self) -> Arc<DashMap<PeerId, ConnectionStatus>> {
+        self.connection_statuses.clone()
     }
 }
 
@@ -276,7 +278,7 @@ mod tests {
         let network_3 = build_network().unwrap();
 
         let registry = Registry::new();
-        let metrics = Arc::new(QuinnConnectionMetrics::new(&registry));
+        let metrics = Arc::new(QuinnConnectionMetrics::new("consensus", &registry));
 
         // AND we connect to peer 2
         let peer_2 = network_1.connect(network_2.local_addr()).await.unwrap();

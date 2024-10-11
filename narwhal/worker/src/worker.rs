@@ -106,7 +106,6 @@ impl Worker {
         let channel_metrics: Arc<WorkerChannelMetrics> = Arc::new(metrics.channel_metrics.unwrap());
         let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
         let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
-        let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
@@ -351,13 +350,6 @@ impl Worker {
             );
         }
 
-        let (connection_monitor_handle, _) = network::connectivity::ConnectionMonitor::spawn(
-            network.downgrade(),
-            network_connection_metrics,
-            peer_types,
-            Some(shutdown_receivers.pop().unwrap()),
-        );
-
         let network_admin_server_base_port = parameters
             .network_admin_server
             .worker_network_admin_server_base_port
@@ -402,7 +394,7 @@ impl Worker {
                 .transactions
         );
 
-        let mut handles = vec![connection_monitor_handle, network_shutdown_handle];
+        let mut handles = vec![network_shutdown_handle];
         handles.extend(admin_handles);
         handles.extend(client_flow_handles);
         handles

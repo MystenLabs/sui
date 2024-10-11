@@ -11,7 +11,6 @@
 
 pub mod admin;
 pub mod client;
-pub mod connectivity;
 pub mod epoch_filter;
 pub mod failpoints;
 pub mod metrics;
