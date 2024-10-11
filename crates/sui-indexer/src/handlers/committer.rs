@@ -24,6 +24,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
     mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
+    stop_at_checkpoint_seq: Option<CheckpointSequenceNumber>,
 ) -> IndexerResult<()>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
@@ -42,14 +43,21 @@ where
 
     let mut unprocessed = HashMap::new();
     let mut batch = vec![];
-
+    let mut stop_at_checkpoint_seq_reached = false;
     while let Some(indexed_checkpoint_batch) = stream.next().await {
-        if cancel.is_cancelled() {
+        if cancel.is_cancelled() || stop_at_checkpoint_seq_reached {
             break;
         }
 
         // split the batch into smaller batches per epoch to handle partitioning
         for checkpoint in indexed_checkpoint_batch {
+            // if we want to stop at a specific checkpoint, we don't want to batch any further
+            if let Some(stop_at_checkpoint_seq) = stop_at_checkpoint_seq {
+                if checkpoint.checkpoint.sequence_number > stop_at_checkpoint_seq {
+                    stop_at_checkpoint_seq_reached = true;
+                    break;
+                }
+            }
             unprocessed.insert(checkpoint.checkpoint.sequence_number, checkpoint);
         }
         while let Some(checkpoint) = unprocessed.remove(&next_checkpoint_sequence_number) {

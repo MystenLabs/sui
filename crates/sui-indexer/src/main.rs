@@ -44,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
             snapshot_config,
             pruning_options,
             upload_options,
+            stop_at_checkpoint_seq,
         } => {
             // Make sure to run all migrations on startup, and also serve as a compatibility check.
             run_migrations(pool.dedicated_connection().await?).await?;
@@ -61,6 +62,7 @@ async fn main() -> anyhow::Result<()> {
                 snapshot_config,
                 retention_config,
                 CancellationToken::new(),
+                stop_at_checkpoint_seq,
             )
             .await?;
         }

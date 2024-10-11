@@ -9,6 +9,7 @@ use std::{collections::HashMap, net::SocketAddr, path::PathBuf};
 use strum::IntoEnumIterator;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use url::Url;
 
 /// The primary purpose of objects_history is to serve consistency query.
@@ -181,6 +182,8 @@ pub enum Command {
         pruning_options: PruningOptions,
         #[command(flatten)]
         upload_options: UploadOptions,
+        #[command(flatten)]
+        stop_at_checkpoint_seq: Option<u64>,
     },
     JsonRpcService(JsonRpcConfig),
     ResetDatabase {

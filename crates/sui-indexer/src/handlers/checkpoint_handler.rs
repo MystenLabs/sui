@@ -49,6 +49,7 @@ pub async fn new_handlers(
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
+    stop_at_checkpoint_seq: Option<CheckpointSequenceNumber>,
 ) -> Result<CheckpointHandler, IndexerError> {
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
@@ -76,6 +77,7 @@ pub async fn new_handlers(
         state,
         metrics,
         indexed_checkpoint_sender,
+        stop_at_checkpoint_seq,
     ))
 }
 
@@ -83,6 +85,7 @@ pub struct CheckpointHandler {
     state: PgIndexerStore,
     metrics: IndexerMetrics,
     indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
+    stop_at_checkpoint_seq: Option<CheckpointSequenceNumber>,
 }
 
 #[async_trait]
@@ -125,11 +128,13 @@ impl CheckpointHandler {
         state: PgIndexerStore,
         metrics: IndexerMetrics,
         indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
+        stop_at_checkpoint_seq: Option<CheckpointSequenceNumber>,
     ) -> Self {
         Self {
             state,
             metrics,
             indexed_checkpoint_sender,
+            stop_at_checkpoint_seq,
         }
     }
 

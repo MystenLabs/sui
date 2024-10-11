@@ -39,6 +39,7 @@ impl Indexer {
         snapshot_config: SnapshotLagConfig,
         retention_config: Option<RetentionConfig>,
         cancel: CancellationToken,
+        stop_at_checkpoint_seq: Option<CheckpointSequenceNumber>,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Writer (version {:?}) started...",
@@ -86,7 +87,10 @@ impl Indexer {
         }
 
         let mut exit_senders = vec![];
-        let mut executors = vec![];
+        let mut executors: Vec<(
+            IndexerExecutor<ShimIndexerProgressStore>,
+            oneshot::Receiver<()>,
+        )> = vec![];
         // Ingestion task watermarks are snapshotted once on indexer startup based on the
         // corresponding watermark table before being handed off to the ingestion task.
         let progress_store = ShimIndexerProgressStore::new(vec![
@@ -98,7 +102,14 @@ impl Indexer {
             2,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker = new_handlers(store, metrics, primary_watermark, cancel.clone()).await?;
+        let worker = new_handlers(
+            store,
+            metrics,
+            primary_watermark,
+            cancel.clone(),
+            stop_at_checkpoint_seq,
+        )
+        .await?;
         let worker_pool = WorkerPool::new(
             worker,
             "primary".to_string(),
