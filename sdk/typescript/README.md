@@ -178,7 +178,7 @@ For a primer for building transactions, refer to
 ```typescript
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
@@ -191,7 +191,7 @@ tx.transferObjects(
 	['0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2'],
 	'0x1d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b12a',
 );
-const result = await client.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransaction({
 	signer: keypair,
 	transactionBlock: tx,
 });
@@ -205,7 +205,7 @@ To transfer `1000` MIST to another address:
 ```typescript
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
@@ -216,7 +216,7 @@ const client = new SuiClient({
 const tx = new Transaction();
 const [coin] = tx.splitCoins(tx.gas, [1000]);
 tx.transferObjects([coin], keypair.getPublicKey().toSuiAddress());
-const result = await client.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransaction({
 	signer: keypair,
 	transactionBlock: tx,
 });
@@ -228,7 +228,7 @@ console.log({ result });
 ```typescript
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
@@ -240,7 +240,7 @@ const tx = new Transaction();
 tx.mergeCoins('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2', [
 	'0x127a8975134a4824d9288722c4ee4fc824cd22502ab4ad9f6617f3ba19229c1b',
 ]);
-const result = await client.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransaction({
 	signer: keypair,
 	transactionBlock: tx,
 });
@@ -252,7 +252,7 @@ console.log({ result });
 ```typescript
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
@@ -265,7 +265,7 @@ tx.moveCall({
 	target: `${packageObjectId}::nft::mint`,
 	arguments: [tx.pure.string('Example NFT')],
 });
-const result = await client.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransaction({
 	signer: keypair,
 	transactionBlock: tx,
 });
@@ -279,7 +279,7 @@ To publish a package:
 ```typescript
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
 const { execSync } = require('child_process');
 // Generate a new Ed25519 Keypair
@@ -298,9 +298,9 @@ const [upgradeCap] = tx.publish({
 	dependencies,
 });
 tx.transferObjects([upgradeCap], await client.getAddress());
-const result = await client.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransaction({
 	signer: keypair,
-	transactionBlock: tx,
+	Transaction: tx,
 });
 console.log({ result });
 ```
