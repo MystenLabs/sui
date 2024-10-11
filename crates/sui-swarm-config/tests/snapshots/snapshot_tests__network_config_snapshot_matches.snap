@@ -100,6 +100,7 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -112,6 +113,7 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -268,6 +270,7 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -280,6 +283,7 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -436,6 +440,7 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -448,6 +453,7 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -604,6 +610,7 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -616,6 +623,7 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -772,6 +780,7 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -784,6 +793,7 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -940,6 +950,7 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -952,6 +963,7 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -1108,6 +1120,7 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -1120,6 +1133,7 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
