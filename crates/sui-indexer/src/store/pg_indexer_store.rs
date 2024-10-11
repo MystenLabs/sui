@@ -898,7 +898,10 @@ impl PgIndexerStore {
                         .do_update()
                         .set((
                             packages::package_id.eq(excluded(packages::package_id)),
+                            packages::package_version.eq(excluded(packages::package_version)),
                             packages::move_package.eq(excluded(packages::move_package)),
+                            packages::checkpoint_sequence_number
+                                .eq(excluded(packages::checkpoint_sequence_number)),
                         ))
                         .execute(conn)
                         .await?;
