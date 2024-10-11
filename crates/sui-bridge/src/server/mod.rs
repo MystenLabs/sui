@@ -7,7 +7,10 @@ use crate::{
     crypto::BridgeAuthorityPublicKeyBytes,
     error::BridgeError,
     metrics::BridgeMetrics,
-    server::handler::{BridgeRequestHandler, BridgeRequestHandlerTrait},
+    server::{
+        handler::{BridgeRequestHandler, BridgeRequestHandlerTrait},
+        middleware::expect_client_challenge,
+    },
     types::{
         AddTokensOnEvmAction, AddTokensOnSuiAction, AssetPriceUpdateAction,
         BlocklistCommitteeAction, BlocklistType, BridgeAction, EmergencyAction,
@@ -15,7 +18,7 @@ use crate::{
     },
 };
 use axum::{
-    extract::{Path, State},
+    extract::{DefaultBodyLimit, Extension, Path, State},
     Json,
 };
 use axum::{http::StatusCode, routing::get, Router};
@@ -26,12 +29,34 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 use std::sync::Arc;
-use std::{net::SocketAddr, str::FromStr};
+use std::{net::SocketAddr, str::FromStr, time::Duration};
 use sui_types::{bridge::BridgeChainId, TypeTag};
+use tower_http::timeout::TimeoutLayer;
 use tracing::{info, instrument};
 
 pub mod governance_verifier;
 pub mod handler;
+pub mod middleware;
+
+/// var extracts environment variables at runtime with a default fallback value
+/// if a default is not provided, the value is simply an empty string if not found
+/// This function will return the provided default if env::var cannot find the key
+/// or if the key is somehow malformed.
+#[macro_export]
+macro_rules! get_var_or_default {
+    ($key:expr) => {
+        match std::env::var($key) {
+            Ok(val) => val,
+            Err(_) => "".into(),
+        }
+    };
+    ($key:expr, $default:expr) => {
+        match std::env::var($key) {
+            Ok(val) => val.parse::<_>().unwrap(),
+            Err(_) => $default,
+        }
+    };
+}
 
 #[cfg(test)]
 pub(crate) mod mock_handler;
@@ -108,8 +133,22 @@ pub(crate) fn make_router(
     metadata: Arc<BridgeNodePublicMetadata>,
 ) -> Router {
     Router::new()
+        // Enforce a max body size for all requests.
+        // default from axum is typically 2mb for some handler types.
+        // force this to be true for all types
+        .layer(DefaultBodyLimit::max(get_var_or_default!(
+            "MAX_BODY_SIZE",
+            1024 * 1024 * 2
+        )))
+        // If the request does not complete within the specified timeout it will be aborted
+        // and a 408 Request Timeout response will be sent.
+        .layer(TimeoutLayer::new(Duration::from_secs(get_var_or_default!(
+            "CLIENT_TIMEOUT",
+            120
+        ))))
         .route("/", get(health_check))
         .route(PING_PATH, get(ping))
+        .route_layer(axum::middleware::from_fn(expect_client_challenge)) // applies to previous layer only
         .route(METRICS_KEY_PATH, get(metrics_key_fetch))
         .route(ETH_TO_SUI_TX_PATH, get(handle_eth_tx_hash))
         .route(SUI_TO_ETH_TX_PATH, get(handle_sui_tx_digest))
@@ -130,6 +169,7 @@ pub(crate) fn make_router(
         )
         .route(ADD_TOKENS_ON_SUI_PATH, get(handle_add_tokens_on_sui))
         .route(ADD_TOKENS_ON_EVM_PATH, get(handle_add_tokens_on_evm))
+        .layer(Extension(metrics.clone()))
         .with_state((handler, metrics, metadata))
 }
 
@@ -752,6 +792,12 @@ mod tests {
             token_prices: vec![1_000_000_000, 2_000_000_000, 3_000_000_000],
         });
         client.request_sign_bridge_action(action).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_bridge_server_middleware_expect_client_challenge() {
+        let client = setup();
+        client.ping().await.unwrap();
     }
 
     fn setup() -> BridgeClient {

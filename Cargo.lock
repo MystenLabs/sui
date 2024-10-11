@@ -12913,6 +12913,7 @@ dependencies = [
  "tempfile",
  "test-cluster",
  "tokio",
+ "tower-http",
  "tracing",
  "typed-store",
  "url",

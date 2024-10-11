@@ -114,6 +114,8 @@ pub struct BridgeMetrics {
     pub(crate) sui_rpc_errors: IntCounterVec,
     pub(crate) observed_governance_actions: IntCounterVec,
     pub(crate) current_bridge_voting_rights: IntGaugeVec,
+
+    pub(crate) middleware_ops: IntCounterVec,
 }
 
 impl BridgeMetrics {
@@ -325,6 +327,13 @@ impl BridgeMetrics {
                 registry
             )
             .unwrap(),
+            middleware_ops: register_int_counter_vec_with_registry!(
+                "expect_client_challenge",
+                "Different operations middleware make detect or make during runtime",
+                &["operation", "status"],
+                registry
+            )
+            .unwrap()
         }
     }
 
