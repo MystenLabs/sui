@@ -231,7 +231,10 @@ impl IndexStoreTables {
             package_store,
         };
 
-        crate::par_index_live_object_set::par_index_live_object_set(authority_store, &make_live_object_indexer)?;
+        crate::par_index_live_object_set::par_index_live_object_set(
+            authority_store,
+            &make_live_object_indexer,
+        )?;
 
         self.coin.multi_insert(coin_index.into_inner().unwrap())?;
 
