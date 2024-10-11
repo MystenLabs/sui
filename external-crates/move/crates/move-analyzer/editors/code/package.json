@@ -124,13 +124,13 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "sui.serverVersion"
+          "command": "move.serverVersion"
         },
         {
-          "command": "sui.build"
+          "command": "move.build"
         },
         {
-          "command": "sui.test"
+          "command": "move.test"
         }
       ]
     }
