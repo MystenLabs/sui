@@ -187,6 +187,11 @@ enum AddressTransactionBlockRelationship {
 	`AFFECTED` is introduced, whichever is later.
 	"""
 	RECV
+	"""
+	Transactions that this address was involved in, either as the sender, sponsor, or as the
+	owner of some object that was created, modified or transfered.
+	"""
+	AFFECTED
 }
 
 """
@@ -4329,6 +4334,11 @@ input TransactionBlockFilter {
 	Limit to transaction that occured strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
+	"""
+	Limit to transactions that interacted with the given address. The address could be a
+	sender, sponsor, or recipient of the transaction.
+	"""
+	affectedAddress: SuiAddress
 	"""
 	Limit to transactions that were sent by the given address. NOTE: this input filter has been
 	deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
