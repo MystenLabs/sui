@@ -379,11 +379,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(
-                /* next */ true,
-                /* stopAtCloseFrame */ false,
-                /* nextLineSkip */ true
-            );
+            terminate = this.runtime.step(/* next */ true, /* stopAtCloseFrame */ false);
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -400,11 +396,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(
-                /* next */ false,
-                /* stopAtCloseFrame */ false,
-                /* nextLineSkip */ true
-            );
+            terminate = this.runtime.step(/* next */ false, /* stopAtCloseFrame */ false);
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -420,25 +412,9 @@ export class MoveDebugSession extends LoggingDebugSession {
         _args: DebugProtocol.StepOutArguments
     ): void {
         try {
-            const steppedOut = this.runtime.stepOut();
+            const steppedOut = this.runtime.stepOut(/* next */ false);
             if (!steppedOut) {
                 logger.log(`Cannot step out`);
-            }
-        } catch (err) {
-            response.success = false;
-            response.message = err instanceof Error ? err.message : String(err);
-        }
-        this.sendResponse(response);
-    }
-
-    protected stepBackRequest(
-        response: DebugProtocol.StepBackResponse,
-        _args: DebugProtocol.StepBackArguments
-    ): void {
-        try {
-            const steppedBack = this.runtime.stepBack();
-            if (!steppedBack) {
-                logger.log(`Cannot step back`);
             }
         } catch (err) {
             response.success = false;
@@ -453,24 +429,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            terminate = this.runtime.continue(/* reverse */ false);
-        } catch (err) {
-            response.success = false;
-            response.message = err instanceof Error ? err.message : String(err);
-        }
-        if (terminate) {
-            this.sendEvent(new TerminatedEvent());
-        }
-        this.sendResponse(response);
-    }
-
-    protected reverseContinueRequest(
-        response: DebugProtocol.ReverseContinueResponse,
-        _args: DebugProtocol.ReverseContinueArguments
-    ): void {
-        let terminate = false;
-        try {
-            terminate = this.runtime.continue(/* reverse */ true);
+            terminate = this.runtime.continue();
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
