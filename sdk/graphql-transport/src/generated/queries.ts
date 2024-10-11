@@ -313,13 +313,10 @@ export type AddressOwner = {
 /** The possible relationship types for a transaction block: sent, or received. */
 export enum AddressTransactionBlockRelationship {
   /**
-   * Transactions that sent objects to this address. NOTE: this input filter has been deprecated
-   * in favor of `AFFECTED`, which offers an easier to understand behavior.
-   *
-   * This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-   * `AFFECTED` is introduced, whichever is later.
+   * Transactions that this address was involved in, either as the sender, sponsor, or as the
+   * owner of some object that was created, modified or transfered.
    */
-  Recv = 'RECV',
+  Affected = 'AFFECTED',
   /** Transactions this address has sent. */
   Sent = 'SENT'
 }
@@ -1423,6 +1420,12 @@ export type Event = {
   sendingModule?: Maybe<MoveModule>;
   /** UTC timestamp in milliseconds since epoch (1/1/1970) */
   timestamp?: Maybe<Scalars['DateTime']['output']>;
+  /**
+   * The transaction block that emitted this event. This information is only available for
+   * events from indexed transactions, and not from transactions that have just been executed or
+   * dry-run.
+   */
+  transactionBlock?: Maybe<TransactionBlock>;
 };
 
 export type EventConnection = {
@@ -4947,6 +4950,11 @@ export type TransactionBlockEffectsUnchangedSharedObjectsArgs = {
 };
 
 export type TransactionBlockFilter = {
+  /**
+   * Limit to transactions that interacted with the given address. The address could be a
+   * sender, sponsor, or recipient of the transaction.
+   */
+  affectedAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   /** Limit to transactions that occured strictly after the given checkpoint. */
   afterCheckpoint?: InputMaybe<Scalars['UInt53']['input']>;
   /** Limit to transactions in the given checkpoint. */
@@ -4976,15 +4984,6 @@ export type TransactionBlockFilter = {
   inputObject?: InputMaybe<Scalars['SuiAddress']['input']>;
   /** An input filter selecting for either system or programmable transactions. */
   kind?: InputMaybe<TransactionBlockKindInput>;
-  /**
-   * Limit to transactions that sent an object to the given address. NOTE: this input filter has
-   * been deprecated in favor of `affectedAddress` which offers an easier to understand
-   * behavior.
-   *
-   * This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-   * `affectedAddress` is introduced, whichever is later.
-   */
-  recvAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   /** Limit to transactions that were sent by the given address. */
   sentAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   /** Select transactions by their digest. */
