@@ -300,7 +300,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 value: '(' + value.length + ')[...]',
                 variablesReference: compoundValueReference
             };
-        } else {
+        } else if ('fields' in value) {
             const compoundValueReference = this.variableHandles.create(value);
             const accessChainParts = value.type.split('::');
             const datatypeName = accessChainParts[accessChainParts.length - 1];
@@ -314,6 +314,14 @@ export class MoveDebugSession extends LoggingDebugSession {
                     : datatypeName
                 ) + '{...}',
                 variablesReference: compoundValueReference
+            };
+        } else {
+            // TODO: handle ref value
+            return {
+                name,
+                type,
+                value: JSON.stringify(value),
+                variablesReference: 0
             };
         }
     }
