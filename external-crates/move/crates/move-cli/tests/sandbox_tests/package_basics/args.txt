@@ -1,8 +1,9 @@
 build
-test --coverage --threads 1
-coverage summary --summarize-functions
-coverage source --module AModule
-coverage bytecode --module AModule
+# TODO(vm-rewrite): Re-enable these tests once we have tracing in the new VM 
+# test --coverage --threads 1
+# coverage summary --summarize-functions
+# coverage source --module AModule
+# coverage bytecode --module AModule
 disassemble --package MoveStdlib --name address
 info
 test double_two

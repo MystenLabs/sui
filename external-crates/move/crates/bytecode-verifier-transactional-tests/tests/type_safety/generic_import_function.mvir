@@ -19,7 +19,7 @@ module 0x1.M {
 }
 
 //# run
-module 0x1.m {
+module 0x2.m {
 import 0x1.M;
 
 entry foo() {
@@ -30,7 +30,7 @@ label b0:
 }
 
 //# run
-module 0x2.m {
+module 0x3.m {
 import 0x1.M;
 
 entry foo() {

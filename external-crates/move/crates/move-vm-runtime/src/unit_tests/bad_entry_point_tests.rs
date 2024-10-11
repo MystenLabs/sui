@@ -2,17 +2,20 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compiler::{as_module, compile_units};
+use crate::{
+    dev_utils::{
+        compilation_utils::{as_module, compile_units},
+        in_memory_test_adapter::InMemoryTestAdapter,
+        vm_test_adapter::VMTestAdapter,
+    },
+    shared::{gas::UnmeteredGasMeter, linkage_context::LinkageContext},
+};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::ModuleId,
     runtime_value::{serialize_values, MoveValue},
     vm_status::StatusType,
-};
-use move_vm_runtime::{
-    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
-    shared::{gas::UnmeteredGasMeter, linkage_context::LinkageContext},
 };
 use std::collections::HashMap;
 
@@ -37,7 +40,7 @@ fn call_non_existent_module() {
         )
         .unwrap_err();
 
-    assert_eq!(err.status_type(), StatusType::Verification);
+    assert_eq!(err.status_type(), StatusType::InvariantViolation);
 }
 
 #[test]
@@ -70,5 +73,5 @@ fn call_non_existent_function() {
         )
         .unwrap_err();
 
-    assert_eq!(err.status_type(), StatusType::Verification);
+    assert_eq!(err.status_type(), StatusType::InvariantViolation);
 }

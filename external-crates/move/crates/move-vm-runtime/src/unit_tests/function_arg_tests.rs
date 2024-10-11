@@ -2,7 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compiler::{as_module, compile_units};
+use crate::{
+    dev_utils::{
+        compilation_utils::{as_module, compile_units},
+        in_memory_test_adapter::InMemoryTestAdapter,
+        vm_test_adapter::VMTestAdapter,
+    },
+    shared::gas::UnmeteredGasMeter,
+};
 use move_binary_format::errors::VMResult;
 use move_core_types::{
     account_address::AccountAddress,
@@ -11,10 +18,6 @@ use move_core_types::{
     runtime_value::{MoveStruct, MoveValue},
     u256::U256,
     vm_status::StatusCode,
-};
-use move_vm_runtime::{
-    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
-    shared::gas::UnmeteredGasMeter,
 };
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
@@ -52,7 +55,7 @@ fn run(
     let mut units = compile_units(&code).unwrap();
     let m = as_module(units.pop().unwrap());
 
-    let adapter = InMemoryTestAdapter::new();
+    let mut adapter = InMemoryTestAdapter::new();
     adapter.insert_modules_into_storage(vec![m]).unwrap();
     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("M").unwrap());
 

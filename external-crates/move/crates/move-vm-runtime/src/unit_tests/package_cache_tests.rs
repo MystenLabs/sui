@@ -1,92 +1,22 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::{errors::VMResult, CompiledModule};
-use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::WarningFilters,
-    editions::{Edition, Flavor},
-    shared::PackageConfig,
-    Compiler as MoveCompiler,
-};
-use move_core_types::{account_address::AccountAddress, resolver::MoveResolver};
-use move_vm_config::runtime::VMConfig;
-use move_vm_runtime::{
+use crate::{
     cache::move_cache::{MoveCache, Package},
-    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
+    dev_utils::{
+        compilation_utils::{compile_modules_in_file, compile_packages},
+        in_memory_test_adapter::InMemoryTestAdapter,
+        vm_test_adapter::VMTestAdapter,
+    },
     natives::functions::NativeFunctions,
     runtime::{data_cache::TransactionDataCache, package_resolution::resolve_packages},
-    shared::{
-        linkage_context::LinkageContext,
-        types::{PackageStorageId, RuntimePackageId},
-    },
+    shared::{linkage_context::LinkageContext, types::PackageStorageId},
 };
-
+use move_binary_format::errors::VMResult;
+use move_core_types::{account_address::AccountAddress, resolver::MoveResolver};
+use move_vm_config::runtime::VMConfig;
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
 use std::sync::Arc;
-
-fn make_base_path() -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("tests");
-    path.push("move_packages");
-    path
-}
-
-fn expect_modules(
-    units: impl IntoIterator<Item = AnnotatedCompiledUnit>,
-) -> impl Iterator<Item = CompiledModule> {
-    units
-        .into_iter()
-        .map(|annot_module| annot_module.named_module.module)
-}
-
-fn compile_modules_in_file(filename: &str, dependencies: &[&str]) -> Vec<CompiledModule> {
-    let mut path = make_base_path();
-    path.push(filename);
-    let deps = dependencies
-        .iter()
-        .map(|dep| {
-            let mut path = make_base_path();
-            path.push(dep);
-            path.to_string_lossy().to_string()
-        })
-        .collect();
-    let (_, units) = MoveCompiler::from_files(
-        None,
-        vec![path.to_str().unwrap().to_string()],
-        deps,
-        std::collections::BTreeMap::<String, _>::new(),
-    )
-    .set_default_config(PackageConfig {
-        is_dependency: false,
-        warning_filter: WarningFilters::unused_warnings_filter_for_test(),
-        flavor: Flavor::Sui,
-        edition: Edition::E2024_ALPHA,
-    })
-    .build_and_report()
-    .expect("Failed module compilation");
-
-    expect_modules(units).collect::<Vec<_>>()
-}
-
-fn compile_packages(
-    filename: &str,
-    dependencies: &[&str],
-) -> BTreeMap<RuntimePackageId, Vec<CompiledModule>> {
-    let modules = compile_modules_in_file(filename, dependencies);
-    assert!(!modules.is_empty(), "Tried to publish an empty package");
-    let mut packages = BTreeMap::new();
-    for module in modules {
-        let module_id = module.self_id();
-        packages
-            .entry(*module_id.address())
-            .or_insert_with(Vec::new)
-            .push(module);
-    }
-
-    packages
-}
 
 fn load_linkage_packages_into_runtime<DataSource: MoveResolver + Send + Sync>(
     adapter: &mut impl VMTestAdapter<DataSource>,
@@ -171,6 +101,7 @@ fn cache_package_external_package_calls_no_types() {
 }
 
 /// Generate a new, dummy cachce for testing.
+#[allow(dead_code)]
 fn dummy_cache_for_testing() -> MoveCache {
     let native_functions = Arc::new(NativeFunctions::new(vec![]).unwrap());
     let config = Arc::new(VMConfig::default());
@@ -289,7 +220,7 @@ fn cache_package_external_generic_call_type_references() {
         .generate_linkage_context(package1_address, package1_address, &a_pkg)
         .expect("Failed to generate linkage");
     adapter
-        .publish_package(linkage_context, package1_address, a_pkg)
+        .publish_package_modules_for_test(linkage_context, package1_address, a_pkg)
         .unwrap();
 
     // publish b
@@ -297,7 +228,7 @@ fn cache_package_external_generic_call_type_references() {
         .generate_linkage_context(package2_address, package2_address, &b_pkg)
         .expect("Failed to generate linkage");
     adapter
-        .publish_package(
+        .publish_package_modules_for_test(
             linkage_context,
             package2_address,
             b_pkg,
@@ -619,7 +550,7 @@ fn publish_missing_dependency() {
 
     // Publication fails because `0x2` is not in the linkage context.
     adapter
-        .publish_package(linkage_context, runtime_package_id, modules)
+        .publish_package_modules_for_test(linkage_context, runtime_package_id, modules)
         .unwrap_err();
 }
 
@@ -649,7 +580,7 @@ fn publish_unpublished_dependency() {
 
     // Publication fails because `0x2` is not in the data cache.
     adapter
-        .publish_package(linkage_context, runtime_package_id, modules)
+        .publish_package_modules_for_test(linkage_context, runtime_package_id, modules)
         .unwrap_err();
 }
 
@@ -672,7 +603,7 @@ fn publish_upgrade() {
     let linkage_table = HashMap::from([(v0_pkg_address, v0_pkg_address)]);
     let linkage_context = LinkageContext::new(v0_pkg_address, linkage_table);
     adapter
-        .publish_package(
+        .publish_package_modules_for_test(
             linkage_context,
             /* runtime_id */ v0_pkg_address,
             modules,
@@ -690,7 +621,7 @@ fn publish_upgrade() {
     let linkage_table = HashMap::from([(v0_pkg_address, v1_pkg_address)]);
     let linkage_context = LinkageContext::new(v1_pkg_address, linkage_table);
     adapter
-        .publish_package(
+        .publish_package_modules_for_test(
             linkage_context,
             /* runtime_id */ v0_pkg_address,
             modules,

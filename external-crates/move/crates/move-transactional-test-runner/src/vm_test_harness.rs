@@ -219,13 +219,15 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
                 let linkage_context =
                     LinkageContext::new(sender, HashMap::from([(sender, sender)]));
                 println!("calling stdlib publish with address {sender:?}");
-                inner_adapter.publish_package(
-                    linkage_context,
-                    sender,
-                    move_stdlib,
-                    // FIXME(cswords): support gas
-                    // gas_status,
-                )?;
+                inner_adapter
+                    .publish_package_modules_for_test(
+                        linkage_context,
+                        sender,
+                        move_stdlib,
+                        // FIXME(cswords): support gas
+                        // gas_status,
+                    )
+                    .unwrap();
                 Ok(())
             })
             .unwrap();
@@ -262,6 +264,14 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
         println!("computing sender");
         let sender = *id.address();
         println!("performing publish for {sender}");
+        let ser_modules = pub_modules
+            .iter()
+            .map(|module| {
+                let mut module_bytes = vec![];
+                module.serialize_with_version(module.version, &mut module_bytes)?;
+                Ok(module_bytes)
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
         let publish_result =
             self.perform_action(gas_budget, |inner_adapter, _gas_status| {
                 // TODO: If there are linkage directives, respect them here.
@@ -271,7 +281,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
                 )?;
                 println!("linkage: {linkage_context:#?}");
                 println!("doing publish");
-                inner_adapter.publish_package(linkage_context, sender, pub_modules)?;
+                inner_adapter.publish_package(linkage_context, sender, ser_modules)?;
                 println!("done");
                 Ok(())
             });

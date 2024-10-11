@@ -140,8 +140,33 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
         &mut self,
         linkage_context: LinkageContext,
         runtime_id: RuntimePackageId,
-        modules: Vec<CompiledModule>,
+        modules: Vec<Vec<u8>>,
     ) -> VMResult<()> {
+        let Some(storage_id) = linkage_context.linkage_table.get(&runtime_id).cloned() else {
+            // TODO: VM error instead?
+            panic!("Did not find runtime ID in linkage context.");
+        };
+        let mut gas_meter = GasStatus::new_unmetered();
+        let (changeset, _) = self.runtime.validate_package(
+            &self.storage,
+            &linkage_context,
+            runtime_id,
+            storage_id,
+            modules,
+            &mut gas_meter,
+        );
+        self.storage
+            .apply(changeset?)
+            .expect("Failed to apply change set");
+        Ok(())
+    }
+
+    fn publish_package_modules_for_test(
+        &mut self,
+        linkage_context: LinkageContext,
+        runtime_id: RuntimePackageId,
+        modules: Vec<CompiledModule>,
+    ) -> anyhow::Result<()> {
         let Some(storage_id) = linkage_context.linkage_table.get(&runtime_id).cloned() else {
             // TODO: VM error instead?
             panic!("Did not find runtime ID in linkage context.");
@@ -150,12 +175,10 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
             .into_iter()
             .map(|module| {
                 let mut module_bytes = vec![];
-                module
-                    .serialize_with_version(module.version, &mut module_bytes)
-                    .unwrap();
-                module_bytes
+                module.serialize_with_version(module.version, &mut module_bytes)?;
+                Ok(module_bytes)
             })
-            .collect::<Vec<_>>();
+            .collect::<anyhow::Result<Vec<_>>>()?;
 
         let mut gas_meter = GasStatus::new_unmetered();
         let (changeset, _) = self.runtime.validate_package(

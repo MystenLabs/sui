@@ -9,6 +9,9 @@ pub mod in_memory_test_adapter;
 pub mod storage;
 pub mod vm_test_adapter;
 
+#[cfg(test)]
+pub mod compilation_utils;
+
 #[cfg(not(feature = "tiered-gas"))]
 pub mod gas_schedule;
 

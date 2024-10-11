@@ -1,2 +1,4 @@
 Command `sandbox publish`:
-Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000002/modules/M.mv f --dry-run`:
+Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000002/package/M.mv f --dry-run`:
+Command `sandbox publish --publish-at 0x42`:
+Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000042/package/M.mv f --dry-run`:

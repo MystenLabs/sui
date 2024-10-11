@@ -2,18 +2,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compiler::{as_module, compile_units, serialize_module_at_max_version};
-use move_binary_format::errors::{Location, PartialVMError, VMError};
-use move_core_types::{
-    account_address::AccountAddress,
-    identifier::Identifier,
-    language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, SerializedPackage},
-    vm_status::{StatusCode, StatusType},
-};
-use move_vm_runtime::{
-    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
+use crate::{
+    dev_utils::{
+        compilation_utils::{as_module, compile_units, serialize_module_at_max_version},
+        in_memory_test_adapter::InMemoryTestAdapter,
+        vm_test_adapter::VMTestAdapter,
+    },
     shared::{gas::UnmeteredGasMeter, linkage_context::LinkageContext},
+};
+use move_core_types::{
+    account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
+    vm_status::StatusType,
 };
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
@@ -75,18 +74,16 @@ fn test_malformed_module() {
         adapter
             .storage
             .publish_or_overwrite_module(m.self_id(), blob);
-        let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
-        let mut sess = adapter.make_vm(linkage).unwrap();
-        let err = sess
-            .execute_function_bypass_visibility(
-                &module_id,
-                &fun_name,
-                vec![],
-                Vec::<Vec<u8>>::new(),
-                &mut UnmeteredGasMeter,
-            )
-            .unwrap_err();
-        assert_eq!(err.status_type(), StatusType::InvariantViolation);
+        let linkage = LinkageContext {
+            root_package: TEST_ADDR,
+            linkage_table: [(TEST_ADDR, TEST_ADDR)].into_iter().collect(),
+        };
+
+        let Err(err) = adapter.make_vm(linkage) else {
+            panic!("Expected an error, but passed");
+        };
+        // NOTE(vm-rewrite): The error is now a deserialization error, not an invariant violation.
+        assert_eq!(err.status_type(), StatusType::Deserialization);
     }
 }
 
@@ -134,19 +131,12 @@ fn test_unverifiable_module() {
         let mut adapter = InMemoryTestAdapter::new();
         adapter.insert_modules_into_storage(vec![m]).unwrap();
         let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
-        let mut sess = adapter.make_vm(linkage).unwrap();
+        let Err(err) = adapter.make_vm(linkage) else {
+            panic!("Expected an error, but passed");
+        };
 
-        let err = sess
-            .execute_function_bypass_visibility(
-                &module_id,
-                &fun_name,
-                vec![],
-                Vec::<Vec<u8>>::new(),
-                &mut UnmeteredGasMeter,
-            )
-            .unwrap_err();
-
-        assert_eq!(err.status_type(), StatusType::InvariantViolation);
+        // NOTE(vm-rewrite): The error is now a verification error, not an invariant violation.
+        assert_eq!(err.status_type(), StatusType::Verification);
     }
 }
 
@@ -205,19 +195,11 @@ fn test_missing_module_dependency() {
 
         let linkage =
             LinkageContext::new(TEST_ADDR, [(TEST_ADDR, TEST_ADDR)].into_iter().collect());
-        let mut sess = adapter.make_vm(linkage).unwrap();
+        let Err(err) = adapter.make_vm(linkage) else {
+            panic!("Expected an error, but passed");
+        };
 
-        let err = sess
-            .execute_function_bypass_visibility(
-                &module_id,
-                &fun_name,
-                vec![],
-                Vec::<Vec<u8>>::new(),
-                &mut UnmeteredGasMeter,
-            )
-            .unwrap_err();
-
-        assert_eq!(err.status_type(), StatusType::InvariantViolation);
+        assert_eq!(err.status_type(), StatusType::Verification);
     }
 }
 
@@ -285,19 +267,12 @@ fn test_malformed_module_dependency() {
         adapter
             .storage
             .publish_or_overwrite_module(n.self_id(), blob_n);
-        let mut sess = adapter.make_vm(linkage).unwrap();
+        let Err(err) = adapter.make_vm(linkage) else {
+            panic!("Expected an error, but passed");
+        };
 
-        let err = sess
-            .execute_function_bypass_visibility(
-                &module_id,
-                &fun_name,
-                vec![],
-                Vec::<Vec<u8>>::new(),
-                &mut UnmeteredGasMeter,
-            )
-            .unwrap_err();
-
-        assert_eq!(err.status_type(), StatusType::InvariantViolation);
+        // NOTE(vm-rewrite): The error is now a verification error, not an invariant violation.
+        assert_eq!(err.status_type(), StatusType::Verification);
     }
 }
 
@@ -363,48 +338,40 @@ fn test_unverifiable_module_dependency() {
         adapter
             .storage
             .publish_or_overwrite_module(n.self_id(), blob_m);
-        let mut sess = adapter.make_vm(linkage).unwrap();
+        let Err(err) = adapter.make_vm(linkage) else {
+            panic!("Expected an error, but passed");
+        };
 
-        let err = sess
-            .execute_function_bypass_visibility(
-                &module_id,
-                &fun_name,
-                vec![],
-                Vec::<Vec<u8>>::new(),
-                &mut UnmeteredGasMeter,
-            )
-            .unwrap_err();
-
-        assert_eq!(err.status_type(), StatusType::InvariantViolation);
+        assert_eq!(err.status_type(), StatusType::Verification);
     }
 }
 
-struct BogusStorage {
-    bad_status_code: StatusCode,
-}
-
-impl ModuleResolver for BogusStorage {
-    type Error = VMError;
-
-    fn get_module(&self, _module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
-    }
-
-    fn get_packages_static<const N: usize>(
-        &self,
-        _ids: [AccountAddress; N],
-    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
-        Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
-    }
-
-    fn get_packages(
-        &self,
-        _ids: &[AccountAddress],
-    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
-    }
-}
-
+// struct BogusStorage {
+//     bad_status_code: StatusCode,
+// }
+//
+// impl ModuleResolver for BogusStorage {
+//     type Error = VMError;
+//
+//     fn get_module(&self, _module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+//         Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
+//     }
+//
+//     fn get_packages_static<const N: usize>(
+//         &self,
+//         _ids: [AccountAddress; N],
+//     ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+//         Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
+//     }
+//
+//     fn get_packages(
+//         &self,
+//         _ids: &[AccountAddress],
+//     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+//         Err(PartialVMError::new(self.bad_status_code).finish(Location::Undefined))
+//     }
+// }
+//
 // TODO(vm-rewrite): port and re-enable this test
 // const LIST_OF_ERROR_CODES: &[StatusCode] = &[
 //     StatusCode::UNKNOWN_VALIDATION_STATUS,

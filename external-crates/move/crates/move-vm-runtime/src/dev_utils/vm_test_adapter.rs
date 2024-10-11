@@ -22,9 +22,20 @@ pub trait VMTestAdapter<Storage: MoveResolver + Sync + Send> {
     fn publish_package(
         &mut self,
         linkage_context: LinkageContext,
-        storage_id: PackageStorageId,
-        modules: Vec<CompiledModule>,
+        runtime_id: RuntimePackageId,
+        modules: Vec<Vec<u8>>,
     ) -> VMResult<()>;
+
+    /// Perform a publication, including package verification and updating the relevant storage in
+    /// the test adapter so that it is available for subsequent calls.
+    /// This also serializes the modules, and therefore errors from this may be raised here. This
+    /// is why an anyhow error is returned as opposed to a VMResult.
+    fn publish_package_modules_for_test(
+        &mut self,
+        linkage_context: LinkageContext,
+        runtime_id: RuntimePackageId,
+        modules: Vec<CompiledModule>,
+    ) -> anyhow::Result<()>;
 
     /// Generate a VM instance which holds the relevant virtual tables for the provided linkage
     /// context.

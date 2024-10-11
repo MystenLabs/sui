@@ -13,4 +13,5 @@ mod invariant_violation_tests;
 mod leak_tests;
 mod loader_tests;
 mod nested_loop_tests;
+mod package_cache_tests;
 mod return_value_tests;

@@ -101,7 +101,7 @@ fn execute<M: Measurement + 'static>(
         .generate_linkage_context(sender, sender, &modules)
         .unwrap();
     adapter
-        .publish_package(linkage.clone(), sender, modules)
+        .publish_package_modules_for_test(linkage.clone(), sender, modules)
         .unwrap();
 
     // module and function to call

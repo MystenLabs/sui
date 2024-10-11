@@ -1,5 +1,5 @@
 Command `sandbox publish`:
-Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000042/modules/print_stack_trace.mv print_stack_trace --dry-run`:
+Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000007/package/print_stack_trace.mv print_stack_trace --dry-run`:
 Call Stack:
     [0] 0000000000000000000000000000000000000000000000000000000000000007::M::sum
 
@@ -7,7 +7,7 @@ Call Stack:
             [1] LdU64(2)
             [2] Lt
             [3] BrFalse(8)
-          > [4] Call(print_stack_trace)
+          > [4] Call(~0000000000000000000000000000000000000000000000000000000000000001::debug::print_stack_trace)
             [5] MoveLoc(0)
             [6] StLoc(1)
             [7] Branch(15)
@@ -17,7 +17,7 @@ Call Stack:
             [1] -
 
 
-    [1] 0000000000000000000000000000000000000000000000000000000000000042::print_stack_trace::print_stack_trace
+    [1] 0000000000000000000000000000000000000000000000000000000000000007::print_stack_trace::print_stack_trace
 
         Code:
             [10] LdU64(1)
@@ -112,7 +112,7 @@ Call Stack:
             [1] LdU64(2)
             [2] Lt
             [3] BrFalse(8)
-          > [4] Call(print_stack_trace)
+          > [4] Call(~0000000000000000000000000000000000000000000000000000000000000001::debug::print_stack_trace)
             [5] MoveLoc(0)
             [6] StLoc(1)
             [7] Branch(15)
@@ -122,7 +122,7 @@ Call Stack:
             [1] -
 
 
-    [1] 0000000000000000000000000000000000000000000000000000000000000042::print_stack_trace::print_stack_trace
+    [1] 0000000000000000000000000000000000000000000000000000000000000007::print_stack_trace::print_stack_trace
 
         Code:
             [16] CallGeneric(1)

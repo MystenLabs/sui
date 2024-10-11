@@ -20,6 +20,9 @@ pub mod natives;
 pub mod runtime;
 pub mod validation;
 
+#[cfg(test)]
+mod unit_tests;
+
 // #[macro_use]
 // mod tracing;
 

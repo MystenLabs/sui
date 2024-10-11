@@ -17,7 +17,7 @@ module 0x1.M {
 // all tests should abort, signaling they pass verification
 
 //# run --type-args u64 --args false
-module 0x1.m {
+module 0x2.m {
 import 0x1.M;
 entry foo<T: copy>(x: M.NeedsCopy<T>) {
     label l0:
@@ -26,7 +26,7 @@ entry foo<T: copy>(x: M.NeedsCopy<T>) {
 }
 
 //# run --type-args u64 --args false
-module 0x2.m {
+module 0x3.m {
 import 0x1.M;
 entry foo<T: drop>(x: M.NeedsDrop<T>) {
     label l0:
@@ -35,7 +35,7 @@ entry foo<T: drop>(x: M.NeedsDrop<T>) {
 }
 
 //# run --type-args u64 --args false
-module 0x3.m {
+module 0x4.m {
 import 0x1.M;
 entry foo<T: store>(x: M.NeedsStore<T>) {
     label l0:
@@ -44,7 +44,7 @@ entry foo<T: store>(x: M.NeedsStore<T>) {
 }
 
 //# run --type-args 0x1::M::K --args false
-module 0x4.m {
+module 0x5.m {
 import 0x1.M;
 entry foo<T: key>(x: M.NeedsKey<T>) {
     label l0:
@@ -53,7 +53,7 @@ entry foo<T: key>(x: M.NeedsKey<T>) {
 }
 
 //# run --type-args u64 --args false
-module 0x5.m {
+module 0x6.m {
 import 0x1.M;
 entry foo<T: copy>(x: M.NeedsCopy<M.BoxCopy<T>>) {
     label l0:
@@ -62,7 +62,7 @@ entry foo<T: copy>(x: M.NeedsCopy<M.BoxCopy<T>>) {
 }
 
 //# run --type-args u64 --args false
-module 0x6.m {
+module 0x7.m {
 import 0x1.M;
 entry foo<T: drop>(x: M.NeedsDrop<M.BoxDrop<T>>) {
     label l0:
@@ -71,7 +71,7 @@ entry foo<T: drop>(x: M.NeedsDrop<M.BoxDrop<T>>) {
 }
 
 //# run --type-args u64 --args false
-module 0x7.m {
+module 0x8.m {
 import 0x1.M;
 entry foo<T: store>(x: M.NeedsStore<M.BoxStore<T>>) {
     label l0:
@@ -80,7 +80,7 @@ entry foo<T: store>(x: M.NeedsStore<M.BoxStore<T>>) {
 }
 
 //# run --type-args u64 --args false
-module 0x8.m {
+module 0x9.m {
 import 0x1.M;
 entry foo<T: store>(x: M.NeedsKey<M.BoxKey<T>>) {
     label l0:

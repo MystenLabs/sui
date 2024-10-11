@@ -2105,25 +2105,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-vm-integration-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fail",
- "memory-stats",
- "move-binary-format",
- "move-bytecode-verifier",
- "move-compiler",
- "move-core-types",
- "move-ir-to-bytecode",
- "move-stdlib",
- "move-vm-config",
- "move-vm-profiler",
- "move-vm-runtime",
- "tempfile",
-]
-
-[[package]]
 name = "move-vm-profiler"
 version = "0.1.0"
 dependencies = [
@@ -2145,11 +2126,14 @@ dependencies = [
  "fail",
  "hex",
  "lasso",
+ "memory-stats",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-compiler",
  "move-core-types",
  "move-ir-compiler",
+ "move-ir-to-bytecode",
+ "move-stdlib",
  "move-vm-config",
  "move-vm-profiler",
  "once_cell",
@@ -2160,6 +2144,7 @@ dependencies = [
  "sha2",
  "sha3",
  "smallvec",
+ "tempfile",
  "tracing",
 ]
 

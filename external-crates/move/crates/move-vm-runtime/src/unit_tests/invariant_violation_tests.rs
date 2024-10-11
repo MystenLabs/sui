@@ -1,17 +1,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compiler::serialize_module_at_max_version;
+use crate::dev_utils::{
+    gas_schedule::GasStatus, in_memory_test_adapter::InMemoryTestAdapter,
+    vm_test_adapter::VMTestAdapter,
+};
 use move_binary_format::file_format::{
     empty_module, Bytecode::*, CodeUnit, Constant, ConstantPoolIndex, FunctionDefinition,
     FunctionHandle, FunctionHandleIndex, IdentifierIndex, Signature, SignatureIndex,
     SignatureToken::*, Visibility,
 };
-use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
-use move_vm_runtime::dev_utils::{
-    gas_schedule::GasStatus, in_memory_test_adapter::InMemoryTestAdapter,
-    vm_test_adapter::VMTestAdapter,
-};
+use move_core_types::vm_status::StatusCode;
 
 #[test]
 fn merge_borrow_states_infinite_loop() {
@@ -82,10 +81,10 @@ fn merge_borrow_states_infinite_loop() {
 
     let mut adapter = InMemoryTestAdapter::new();
     let linkage = adapter
-        .generate_linkage_context(*module_id.address(), *module_id.address(), &[m])
+        .generate_linkage_context(*module_id.address(), *module_id.address(), &[m.clone()])
         .unwrap();
     adapter
-        .publish_package(linkage, *module_id.address(), vec![m])
+        .publish_package_modules_for_test(linkage.clone(), *module_id.address(), vec![m])
         .unwrap();
     let mut session = adapter.make_vm(linkage).unwrap();
 

@@ -5,6 +5,15 @@
 #![allow(unused_must_use)]
 #![allow(unused_imports)]
 
+use crate::{
+    dev_utils::{
+        gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
+        in_memory_test_adapter::InMemoryTestAdapter,
+        storage::InMemoryStorage,
+        vm_test_adapter::VMTestAdapter,
+    },
+    shared::{linkage_context::LinkageContext, serialization::SerializedReturnValues},
+};
 use move_binary_format::{
     errors::VMResult,
     file_format::{
@@ -25,15 +34,6 @@ use move_core_types::{
 };
 #[cfg(feature = "gas-profiler")]
 use move_vm_profiler::GasProfiler;
-use move_vm_runtime::{
-    dev_utils::{
-        gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
-        in_memory_test_adapter::InMemoryTestAdapter,
-        storage::InMemoryStorage,
-        vm_test_adapter::VMTestAdapter,
-    },
-    shared::{linkage_context::LinkageContext, serialization::SerializedReturnValues},
-};
 #[cfg(feature = "gas-profiler")]
 use move_vm_types::gas::GasMeter;
 use std::time::Instant;
@@ -519,9 +519,18 @@ fn make_module(
     move_bytecode_verifier::verify_module_unmetered(&module).expect("verification failed");
 
     let module_id = module.self_id();
-    let linkage = session.generate_default_linkage(addr).unwrap();
+    let linkage = LinkageContext::new(
+        addr,
+        [(addr, addr)]
+            .into_iter()
+            .chain(module.module_handles().iter().map(|mhandle| {
+                let addr = *module.address_identifier_at(mhandle.address);
+                (addr, addr)
+            }))
+            .collect(),
+    );
     session
-        .publish_package(linkage, addr, vec![module])
+        .publish_package_modules_for_test(linkage, addr, vec![module])
         .unwrap();
     (module_id, entry_point)
 }

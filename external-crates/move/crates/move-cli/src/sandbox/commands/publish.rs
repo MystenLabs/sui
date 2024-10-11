@@ -80,7 +80,6 @@ pub fn publish(
 
     // Create a `LinkageContext`
     let linkage_context = LinkageContext::new(package_storage_id, dependency_map);
-    println!("LINKAGE CONTEXT: {:#?}", linkage_context);
 
     // Serialize the modules to prepare them for publishing
     let serialized_modules: Vec<Vec<u8>> = compiled_modules

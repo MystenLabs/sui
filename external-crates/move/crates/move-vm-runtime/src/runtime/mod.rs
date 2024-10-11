@@ -234,11 +234,11 @@ impl MoveRuntime {
     }
 }
 
-/// TODO: Do this next.
-/// Let's talk about what this looks like -- and what and when the overlaid cache is used to
-/// update the main cache.
-struct OverlaidMoveRuntime {}
-
-fn make_overlay_instance(_runtime: MoveRuntime) -> OverlaidMoveRuntime {
-    OverlaidMoveRuntime {}
-}
+// TODO: Do this next.
+// Let's talk about what this looks like -- and what and when the overlaid cache is used to
+// update the main cache.
+// struct OverlaidMoveRuntime {}
+//
+// fn make_overlay_instance(_runtime: MoveRuntime) -> OverlaidMoveRuntime {
+//     OverlaidMoveRuntime {}
+// }

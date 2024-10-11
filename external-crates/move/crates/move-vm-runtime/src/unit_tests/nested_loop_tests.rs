@@ -1,14 +1,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compiler::{as_module, compile_units};
-use move_core_types::account_address::AccountAddress;
-use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
-use move_vm_runtime::{
-    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
+use crate::{
+    dev_utils::{
+        compilation_utils::{as_module, compile_units},
+        in_memory_test_adapter::InMemoryTestAdapter,
+        vm_test_adapter::VMTestAdapter,
+    },
     runtime::MoveRuntime,
     shared::linkage_context::LinkageContext,
 };
+use move_core_types::account_address::AccountAddress;
+use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
 
@@ -38,9 +41,9 @@ fn test_publish_module_with_nested_loops() {
     // Should succeed with max_loop_depth = 2
     {
         let runtime = MoveRuntime::new(
-            move_vm_runtime::natives::move_stdlib::stdlib_native_functions(
+            crate::natives::move_stdlib::stdlib_native_functions(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
-                move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
+                crate::natives::move_stdlib::GasParameters::zeros(),
                 /* silent debug */ true,
             )
             .unwrap(),
@@ -57,16 +60,16 @@ fn test_publish_module_with_nested_loops() {
         let linkage =
             LinkageContext::new(TEST_ADDR, [(TEST_ADDR, TEST_ADDR)].into_iter().collect());
         adapter
-            .publish_package(linkage, TEST_ADDR, vec![m.clone()])
+            .publish_package_modules_for_test(linkage, TEST_ADDR, vec![m.clone()])
             .unwrap();
     }
 
     // Should fail with max_loop_depth = 1
     {
         let runtime = MoveRuntime::new(
-            move_vm_runtime::natives::move_stdlib::stdlib_native_functions(
+            crate::natives::move_stdlib::stdlib_native_functions(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
-                move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
+                crate::natives::move_stdlib::GasParameters::zeros(),
                 /* silent debug */ true,
             )
             .unwrap(),
@@ -83,7 +86,7 @@ fn test_publish_module_with_nested_loops() {
         let linkage =
             LinkageContext::new(TEST_ADDR, [(TEST_ADDR, TEST_ADDR)].into_iter().collect());
         adapter
-            .publish_package(linkage, TEST_ADDR, vec![m])
-            .unwrap();
+            .publish_package_modules_for_test(linkage, TEST_ADDR, vec![m])
+            .unwrap_err();
     }
 }
