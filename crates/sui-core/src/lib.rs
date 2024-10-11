@@ -29,6 +29,7 @@ pub mod overload_monitor;
 pub(crate) mod post_consensus_tx_reorder;
 pub mod quorum_driver;
 pub mod rest_index;
+mod par_index_live_object_set;
 pub mod safe_client;
 mod scoring_decision;
 mod stake_aggregator;
