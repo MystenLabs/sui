@@ -947,8 +947,8 @@ impl<'env> Docgen<'env> {
     /// Generates declaration for named constant
     fn named_constant_display(&self, const_env: &NamedConstantEnv<'_>) -> String {
         let name = self.name_string(const_env.get_name());
-        let is_error_const = const_env.get_attributes().iter().any(|attr| 
-            matches!(attr, Attribute::Apply(_, sym, _) if self.name_string(*sym).to_string() == "error".to_string())
+        let is_error_const = const_env.get_attributes().iter().any(|attr|
+            matches!(attr, Attribute::Apply(_, sym, _) if self.name_string(*sym).to_string() == *"error")
         );
         let rendered_value = match (is_error_const, const_env.get_value()) {
             (true, Value::ByteArray(bytes)) => {
