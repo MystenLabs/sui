@@ -193,7 +193,7 @@ tx.transferObjects(
 );
 const result = await client.signAndExecuteTransaction({
 	signer: keypair,
-	transactionBlock: tx,
+	transaction: tx,
 });
 console.log({ result });
 ```
@@ -218,7 +218,7 @@ const [coin] = tx.splitCoins(tx.gas, [1000]);
 tx.transferObjects([coin], keypair.getPublicKey().toSuiAddress());
 const result = await client.signAndExecuteTransaction({
 	signer: keypair,
-	transactionBlock: tx,
+	transaction: tx,
 });
 console.log({ result });
 ```
@@ -242,7 +242,7 @@ tx.mergeCoins('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f
 ]);
 const result = await client.signAndExecuteTransaction({
 	signer: keypair,
-	transactionBlock: tx,
+	transaction: tx,
 });
 console.log({ result });
 ```
@@ -267,7 +267,7 @@ tx.moveCall({
 });
 const result = await client.signAndExecuteTransaction({
 	signer: keypair,
-	transactionBlock: tx,
+	transaction: tx,
 });
 console.log({ result });
 ```
