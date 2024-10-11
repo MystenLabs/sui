@@ -128,14 +128,6 @@ pub fn search_index(
                 termination
             )
         }
-        "loaded_child_object_versions" => {
-            get_db_entries!(
-                db_read_only_handle.loaded_child_object_versions,
-                TransactionDigest::from_str,
-                start,
-                termination
-            )
-        }
         "event_by_event_module" => {
             get_db_entries!(
                 db_read_only_handle.event_by_event_module,
