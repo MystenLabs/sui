@@ -47,6 +47,41 @@ type EventId = (TxSequenceNumber, usize);
 type EventIndex = (TransactionEventsDigest, TransactionDigest, u64);
 type AllBalance = HashMap<TypeTag, TotalBalance>;
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct CoinIndexKey2 {
+    pub owner: SuiAddress,
+    pub coin_type: String,
+    // the balance of the coin inverted `!coin.balance` in order to force sorting of coins to be
+    // from greatest to least
+    pub inverted_balance: u64,
+    pub object_id: ObjectID,
+}
+
+impl CoinIndexKey2 {
+    pub fn new_from_cursor(
+        owner: SuiAddress,
+        coin_type: String,
+        inverted_balance: u64,
+        object_id: ObjectID,
+    ) -> Self {
+        Self {
+            owner,
+            coin_type,
+            inverted_balance,
+            object_id,
+        }
+    }
+
+    pub fn new(owner: SuiAddress, coin_type: String, balance: u64, object_id: ObjectID) -> Self {
+        Self {
+            owner,
+            coin_type,
+            inverted_balance: !balance,
+            object_id,
+        }
+    }
+}
+
 pub const MAX_TX_RANGE_SIZE: u64 = 4096;
 
 pub const MAX_GET_OWNED_OBJECT_SIZE: usize = 256;
@@ -189,6 +224,8 @@ pub struct IndexStoreTables {
 
     #[default_options_override_fn = "coin_index_table_default_config"]
     coin_index: DBMap<CoinIndexKey, CoinInfo>,
+    #[default_options_override_fn = "coin_index_table_default_config"]
+    coin_index_2: DBMap<CoinIndexKey2, CoinInfo>,
 
     /// This is an index of object references to currently existing dynamic field object, indexed by the
     /// composite key of the object ID of their parent and the object ID of the dynamic field object.
@@ -221,8 +258,8 @@ impl IndexStoreTables {
         &self.owner_index
     }
 
-    pub fn coin_index(&self) -> &DBMap<CoinIndexKey, CoinInfo> {
-        &self.coin_index
+    pub fn coin_index(&self) -> &DBMap<CoinIndexKey2, CoinInfo> {
+        &self.coin_index_2
     }
 }
 
@@ -349,84 +386,90 @@ impl IndexStore {
             HashMap::new();
         // Index coin info
         let (input_coins, written_coins) = tx_coins.unwrap();
-        // 1. Delete old owner if the object is deleted or transferred to a new owner,
-        // by looking at `object_index_changes.deleted_owners`.
-        // Objects in `deleted_owners` must be coin type (see `AuthorityState::commit_certificate`).
-        let coin_delete_keys = object_index_changes
-            .deleted_owners
-            .iter()
-            .filter_map(|(owner, obj_id)| {
-                let object = input_coins.get(obj_id).or(written_coins.get(obj_id))?;
-                let coin_type_tag = object.coin_type_maybe().unwrap_or_else(|| {
-                    panic!(
-                        "object_id: {:?} is not a coin type, input_coins: {:?}, written_coins: {:?}, tx_digest: {:?}",
-                        obj_id, input_coins, written_coins, digest
-                    )
-                });
+
+        // 1. Remove old coins from the DB by looking at the set of input coin objects
+        let coin_delete_keys = input_coins
+            .values()
+            .filter_map(|object| {
+                // only process address owned coins
+                let Owner::AddressOwner(owner) = object.owner() else {
+                    return None;
+                };
+
+                // only process coin types
+                let (coin_type, coin) = object
+                    .coin_type_maybe()
+                    .and_then(|coin_type| object.as_coin_maybe().map(|coin| (coin_type, coin)))?;
+
+                let key = CoinIndexKey2::new(
+                    *owner,
+                    coin_type.to_string(),
+                    coin.balance.value(),
+                    object.id(),
+                );
+
                 let map = balance_changes.entry(*owner).or_default();
-                let entry = map.entry(coin_type_tag.clone()).or_insert(TotalBalance {
+                let entry = map.entry(coin_type).or_insert(TotalBalance {
                     num_coins: 0,
-                    balance: 0
+                    balance: 0,
                 });
-                if let Ok(Some(coin_info)) = &self.tables.coin_index.get(&(*owner, coin_type_tag.to_string(), *obj_id)) {
-                    entry.num_coins -= 1;
-                    entry.balance -= coin_info.balance as i128;
-                }
-                Some((*owner, coin_type_tag.to_string(), *obj_id))
-            }).collect::<Vec<_>>();
+                entry.num_coins -= 1;
+                entry.balance -= coin.balance.value() as i128;
+
+                Some(key)
+            })
+            .collect::<Vec<_>>();
         trace!(
             tx_digset=?digest,
             "coin_delete_keys: {:?}",
             coin_delete_keys,
         );
-        batch.delete_batch(&self.tables.coin_index, coin_delete_keys.into_iter())?;
+        batch.delete_batch(&self.tables.coin_index_2, coin_delete_keys)?;
 
-        // 2. Upsert new owner, by looking at `object_index_changes.new_owners`.
-        // For a object to appear in `new_owners`, it must be owned by `Owner::Address` after the tx.
-        // It also must not be deleted, hence appear in written_coins (see `AuthorityState::commit_certificate`)
-        // It also must be a coin type (see `AuthorityState::commit_certificate`).
-        // Here the coin could be transferred to a new address, to simply have the metadata changed (digest, balance etc)
-        // due to a successful or failed transaction.
-        let coin_add_keys = object_index_changes
-        .new_owners
-        .iter()
-        .filter_map(|((owner, obj_id), obj_info)| {
-            // If it's in written_coins, then it's not a coin. Skip it.
-            let obj = written_coins.get(obj_id)?;
-            let coin_type_tag = obj.coin_type_maybe().unwrap_or_else(|| {
-                panic!(
-                    "object_id: {:?} in written_coins is not a coin type, written_coins: {:?}, tx_digest: {:?}",
-                    obj_id, written_coins, digest
-                )
-            });
-            let coin = obj.as_coin_maybe().unwrap_or_else(|| {
-                panic!(
-                    "object_id: {:?} in written_coins cannot be deserialzied as a Coin, written_coins: {:?}, tx_digest: {:?}",
-                    obj_id, written_coins, digest
-                )
-            });
-            let map = balance_changes.entry(*owner).or_default();
-            let entry = map.entry(coin_type_tag.clone()).or_insert(TotalBalance {
-                num_coins: 0,
-                balance: 0
-            });
-            let result = self.tables.coin_index.get(&(*owner, coin_type_tag.to_string(), *obj_id));
-            if let Ok(Some(coin_info)) = &result {
-                entry.balance -= coin_info.balance as i128;
-                entry.balance += coin.balance.value() as i128;
-            } else if let Ok(None) = &result {
+        // 2. Insert new coins, or new versions of coins, by looking at `written_coins`.
+        let coin_add_keys = written_coins
+            .values()
+            .filter_map(|object| {
+                // only process address owned coins
+                let Owner::AddressOwner(owner) = object.owner() else {
+                    return None;
+                };
+
+                // only process coin types
+                let (coin_type, coin) = object
+                    .coin_type_maybe()
+                    .and_then(|coin_type| object.as_coin_maybe().map(|coin| (coin_type, coin)))?;
+
+                let key = CoinIndexKey2::new(
+                    *owner,
+                    coin_type.to_string(),
+                    coin.balance.value(),
+                    object.id(),
+                );
+                let value = CoinInfo {
+                    version: object.version(),
+                    digest: object.digest(),
+                    balance: coin.balance.value(),
+                    previous_transaction: object.previous_transaction,
+                };
+                let map = balance_changes.entry(*owner).or_default();
+                let entry = map.entry(coin_type).or_insert(TotalBalance {
+                    num_coins: 0,
+                    balance: 0,
+                });
                 entry.num_coins += 1;
                 entry.balance += coin.balance.value() as i128;
-            }
-            Some(((*owner, coin_type_tag.to_string(), *obj_id), (CoinInfo {version: obj_info.version, digest: obj_info.digest, balance: coin.balance.value(), previous_transaction: *digest})))
-        }).collect::<Vec<_>>();
+
+                Some((key, value))
+            })
+            .collect::<Vec<_>>();
         trace!(
             tx_digset=?digest,
             "coin_add_keys: {:?}",
             coin_add_keys,
         );
 
-        batch.insert_batch(&self.tables.coin_index, coin_add_keys.into_iter())?;
+        batch.insert_batch(&self.tables.coin_index_2, coin_add_keys)?;
 
         let per_coin_type_balance_changes: Vec<_> = balance_changes
             .iter()
@@ -1212,56 +1255,63 @@ impl IndexStore {
     }
 
     pub fn get_owned_coins_iterator(
-        coin_index: &DBMap<CoinIndexKey, CoinInfo>,
+        coin_index: &DBMap<CoinIndexKey2, CoinInfo>,
         owner: SuiAddress,
         coin_type_tag: Option<String>,
-    ) -> SuiResult<impl Iterator<Item = (String, ObjectID, CoinInfo)> + '_> {
+    ) -> SuiResult<impl Iterator<Item = (CoinIndexKey2, CoinInfo)> + '_> {
         let all_coins = coin_type_tag.is_none();
         let starting_coin_type =
             coin_type_tag.unwrap_or_else(|| String::from_utf8([0u8].to_vec()).unwrap());
+        let start_key =
+            CoinIndexKey2::new(owner, starting_coin_type.clone(), u64::MAX, ObjectID::ZERO);
         Ok(coin_index
             .unbounded_iter()
-            .skip_to(&(owner, starting_coin_type.clone(), ObjectID::ZERO))?
-            .take_while(move |((addr, coin_type, _), _)| {
-                if addr != &owner {
+            .skip_to(&start_key)?
+            .take_while(move |(key, _)| {
+                if key.owner != owner {
                     return false;
                 }
-                if !all_coins && &starting_coin_type != coin_type {
+                if !all_coins && starting_coin_type != key.coin_type {
                     return false;
                 }
                 true
-            })
-            .map(|((_, coin_type, obj_id), coin)| (coin_type, obj_id, coin)))
+            }))
     }
 
     pub fn get_owned_coins_iterator_with_cursor(
         &self,
         owner: SuiAddress,
-        cursor: (String, ObjectID),
+        cursor: (String, u64, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
-    ) -> SuiResult<impl Iterator<Item = (String, ObjectID, CoinInfo)> + '_> {
-        let (starting_coin_type, starting_object_id) = cursor;
+    ) -> SuiResult<impl Iterator<Item = (CoinIndexKey2, CoinInfo)> + '_> {
+        let (starting_coin_type, inverted_balance, starting_object_id) = cursor;
+        let start_key = CoinIndexKey2::new_from_cursor(
+            owner,
+            starting_coin_type.clone(),
+            inverted_balance,
+            starting_object_id,
+        );
         Ok(self
             .tables
-            .coin_index
+            .coin_index_2
             .unbounded_iter()
-            .skip_to(&(owner, starting_coin_type.clone(), starting_object_id))?
-            .filter(move |((_, _, obj_id), _)| obj_id != &starting_object_id)
+            .skip_to(&start_key)?
+            .filter(move |(key, _)| key.object_id != starting_object_id)
             .enumerate()
-            .take_while(move |(index, ((addr, coin_type, _), _))| {
+            .take_while(move |(index, (key, _))| {
                 if *index >= limit {
                     return false;
                 }
-                if addr != &owner {
+                if key.owner != owner {
                     return false;
                 }
-                if one_coin_type_only && &starting_coin_type != coin_type {
+                if one_coin_type_only && starting_coin_type != key.coin_type {
                     return false;
                 }
                 true
             })
-            .map(|(_, ((_, coin_type, obj_id), coin))| (coin_type, obj_id, coin)))
+            .map(|(_index, (key, info))| (key, info)))
     }
 
     /// starting_object_id can be used to implement pagination, where a client remembers the last
@@ -1328,7 +1378,7 @@ impl IndexStore {
         let force_disable_cache = read_size_from_env(ENV_VAR_DISABLE_INDEX_CACHE).unwrap_or(0) > 0;
         let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();
-        let coin_index_cloned = self.tables.coin_index.clone();
+        let coin_index_cloned = self.tables.coin_index_2.clone();
         if force_disable_cache {
             return spawn_blocking(move || {
                 Self::get_balance_from_db(
@@ -1364,7 +1414,7 @@ impl IndexStore {
         }
         let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();
-        let coin_index_cloned = self.tables.coin_index.clone();
+        let coin_index_cloned = self.tables.coin_index_2.clone();
         self.caches
             .per_coin_type_balance
             .get_with((owner, coin_type), async move {
@@ -1396,7 +1446,7 @@ impl IndexStore {
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
         let force_disable_cache = read_size_from_env(ENV_VAR_DISABLE_INDEX_CACHE).unwrap_or(0) > 0;
         let metrics_cloned = self.metrics.clone();
-        let coin_index_cloned = self.tables.coin_index.clone();
+        let coin_index_cloned = self.tables.coin_index_2.clone();
         if force_disable_cache {
             return spawn_blocking(move || {
                 Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner)
@@ -1410,7 +1460,7 @@ impl IndexStore {
 
         self.metrics.all_balance_lookup_from_total.inc();
         let metrics_cloned = self.metrics.clone();
-        let coin_index_cloned = self.tables.coin_index.clone();
+        let coin_index_cloned = self.tables.coin_index_2.clone();
         self.caches
             .all_balances
             .get_with(owner, async move {
@@ -1429,19 +1479,18 @@ impl IndexStore {
     /// Read balance for a `SuiAddress` and `CoinType` from the backend database
     pub fn get_balance_from_db(
         metrics: Arc<IndexStoreMetrics>,
-        coin_index: DBMap<CoinIndexKey, CoinInfo>,
+        coin_index: DBMap<CoinIndexKey2, CoinInfo>,
         owner: SuiAddress,
         coin_type: TypeTag,
     ) -> SuiResult<TotalBalance> {
         metrics.balance_lookup_from_db.inc();
         let coin_type_str = coin_type.to_string();
         let coins =
-            Self::get_owned_coins_iterator(&coin_index, owner, Some(coin_type_str.clone()))?
-                .map(|(_coin_type, obj_id, coin)| (coin_type_str.clone(), obj_id, coin));
+            Self::get_owned_coins_iterator(&coin_index, owner, Some(coin_type_str.clone()))?;
 
         let mut balance = 0i128;
         let mut num_coins = 0;
-        for (_coin_type, _obj_id, coin_info) in coins {
+        for (_key, coin_info) in coins {
             balance += coin_info.balance as i128;
             num_coins += 1;
         }
@@ -1451,17 +1500,17 @@ impl IndexStore {
     /// Read all balances for a `SuiAddress` from the backend database
     pub fn get_all_balances_from_db(
         metrics: Arc<IndexStoreMetrics>,
-        coin_index: DBMap<CoinIndexKey, CoinInfo>,
+        coin_index: DBMap<CoinIndexKey2, CoinInfo>,
         owner: SuiAddress,
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
         metrics.all_balance_lookup_from_db.inc();
         let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
         let coins = Self::get_owned_coins_iterator(&coin_index, owner, None)?
-            .chunk_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
+            .chunk_by(|(key, _coin)| key.coin_type.clone());
         for (coin_type, coins) in &coins {
             let mut total_balance = 0i128;
             let mut coin_object_count = 0;
-            for (_coin_type, _obj_id, coin_info) in coins {
+            for (_key, coin_info) in coins {
                 total_balance += coin_info.balance as i128;
                 coin_object_count += 1;
             }
@@ -1600,6 +1649,7 @@ mod tests {
         let index_store = IndexStore::new(temp_dir(), &Registry::default(), Some(128), false);
         let address: SuiAddress = AccountAddress::random().into();
         let mut written_objects = BTreeMap::new();
+        let mut input_objects = BTreeMap::new();
         let mut object_map = BTreeMap::new();
 
         let mut new_objects = vec![];
@@ -1626,7 +1676,7 @@ mod tests {
             new_dynamic_fields: vec![],
         };
 
-        let tx_coins = (object_map.clone(), written_objects.clone());
+        let tx_coins = (input_objects.clone(), written_objects.clone());
         index_store
             .index_tx(
                 address,
@@ -1643,7 +1693,7 @@ mod tests {
 
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
-            index_store.tables.coin_index.clone(),
+            index_store.tables.coin_index_2.clone(),
             address,
             GAS::type_tag(),
         )?;
@@ -1662,15 +1712,15 @@ mod tests {
         let mut deleted_objects = vec![];
         for (id, object) in object_map.iter().take(3) {
             deleted_objects.push((address, *id));
-            written_objects.insert(object.data.id(), object.clone());
+            input_objects.insert(*id, object.to_owned());
         }
         let object_index_changes = ObjectIndexChanges {
-            deleted_owners: deleted_objects,
+            deleted_owners: deleted_objects.clone(),
             deleted_dynamic_fields: vec![],
             new_owners: vec![],
             new_dynamic_fields: vec![],
         };
-        let tx_coins = (object_map, written_objects);
+        let tx_coins = (input_objects, written_objects);
         index_store
             .index_tx(
                 address,
@@ -1686,7 +1736,7 @@ mod tests {
             .await?;
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
-            index_store.tables.coin_index.clone(),
+            index_store.tables.coin_index_2.clone(),
             address,
             GAS::type_tag(),
         )?;
