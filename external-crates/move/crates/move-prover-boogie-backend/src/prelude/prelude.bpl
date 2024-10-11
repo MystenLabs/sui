@@ -40,6 +40,12 @@ procedure {:inline 1} $0_prover_asserts(p: bool) {
 }
 
 type $1_integer_Integer = int;
+function {:inline} $IsValid'$1_integer_Integer'(x: int): bool {
+    true
+}
+function {:inline} $IsEqual'$1_integer_Integer'(x: int, y: int): bool {
+    x == y
+}
 procedure {:inline 1} $1_integer_from_u8(x: int) returns (y: int) {
     y := x;
 }
@@ -117,6 +123,12 @@ procedure {:inline 1} $1_integer_div_real(x: int, y: int) returns (z: real) {
 }
 
 type $1_real_Real = real;
+function {:inline} $IsValid'$1_real_Real'(x: real): bool {
+    true
+}
+function {:inline} $IsEqual'$1_real_Real'(x: real, y: real): bool {
+    x == y
+}
 procedure {:inline 1} $1_real_from_integer(x: int) returns (y: real) {
     y := real(x);
 }
