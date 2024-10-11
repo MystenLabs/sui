@@ -103,8 +103,6 @@ impl TxIndex {
     ) -> (
         Vec<StoredTxAffectedAddresses>,
         Vec<StoredTxAffectedObjects>,
-        Vec<StoredTxInputObject>,
-        Vec<StoredTxChangedObject>,
         Vec<StoredTxPkg>,
         Vec<StoredTxMod>,
         Vec<StoredTxFun>,
@@ -132,26 +130,6 @@ impl TxIndex {
             .map(|o| StoredTxAffectedObjects {
                 tx_sequence_number,
                 affected: o.to_vec(),
-                sender: self.sender.to_vec(),
-            })
-            .collect();
-
-        let tx_input_objects = self
-            .input_objects
-            .iter()
-            .map(|o| StoredTxInputObject {
-                tx_sequence_number,
-                object_id: bcs::to_bytes(&o).unwrap(),
-                sender: self.sender.to_vec(),
-            })
-            .collect();
-
-        let tx_changed_objects = self
-            .changed_objects
-            .iter()
-            .map(|o| StoredTxChangedObject {
-                tx_sequence_number,
-                object_id: bcs::to_bytes(&o).unwrap(),
                 sender: self.sender.to_vec(),
             })
             .collect();
@@ -213,8 +191,6 @@ impl TxIndex {
         (
             tx_affected_addresses,
             tx_affected_objects,
-            tx_input_objects,
-            tx_changed_objects,
             tx_pkgs,
             tx_mods,
             tx_calls,
