@@ -1,0 +1,29 @@
+---
+source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
+expression: normalize_path(err.to_string())
+---
+Upgrade compatibility check failed:
+error: struct is missing
+  ┌─ /fixtures/upgrade_errors/declarations_missing_v2/sources/UpgradeErrors.move:7:18
+  │
+7 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ Module 'upgrades' expected struct 'StructToBeRemoved', but found none
+  │
+  = The struct is missing in the new module, add the previously defined: 'StructToBeRemoved'
+
+error: enum is missing
+  ┌─ /fixtures/upgrade_errors/declarations_missing_v2/sources/UpgradeErrors.move:7:18
+  │
+7 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ Module 'upgrades' expected enum 'EnumToBeRemoved', but found none
+  │
+  = The enum is missing in the new module, add the previously defined: 'EnumToBeRemoved'
+
+error: public function is missing
+  ┌─ /fixtures/upgrade_errors/declarations_missing_v2/sources/UpgradeErrors.move:7:18
+  │
+7 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ Module 'upgrades' expected public function 'fun_to_be_removed', but found none
+  │
+  = The public function is missing in the new module, add the previously defined: 'fun_to_be_removed'
+

@@ -929,14 +929,7 @@ impl SuiClientCommands {
                     upgrade_package,
                 ) = upgrade_result?;
 
-                check_compatibility(
-                    &client,
-                    package_id,
-                    &compiled_modules,
-                    upgrade_package,
-                    protocol_config,
-                )
-                .await?;
+                check_compatibility(&client, package_id, upgrade_package, protocol_config).await?;
 
                 let tx_kind = client
                     .transaction_builder()
