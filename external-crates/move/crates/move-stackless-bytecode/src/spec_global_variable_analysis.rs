@@ -281,6 +281,6 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
     }
 
     fn name(&self) -> String {
-        todo!()
+        "spec_global_variable_analysis".to_string()
     }
 }
