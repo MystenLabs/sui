@@ -210,20 +210,6 @@ export type TraceEvent =
     | { type: TraceEventKind.Effect, effect: EventEffect };
 
 /**
- * Kind of a location in the trace.
- */
-export enum TraceLocKind {
-    Local = 'Local'
-    // TODO: other location types
-}
-
-/**
- * Location in the trace.
- */
-export type TraceLocation =
-    | { type: TraceLocKind.Local, loc: IRuntimeVariableLoc };
-
-/**
  * Kind of an effect of an instruction.
  */
 export enum TraceEffectKind {
@@ -235,7 +221,7 @@ export enum TraceEffectKind {
  * Effect of an instruction.
  */
 export type EventEffect =
-    | { type: TraceEffectKind.Write, location: TraceLocation, value: RuntimeValueType };
+    | { type: TraceEffectKind.Write, loc: IRuntimeVariableLoc, value: RuntimeValueType };
 
 /**
  * Execution trace consisting of a sequence of trace events.
@@ -361,15 +347,11 @@ export function readTrace(traceFilePath: string): ITrace {
                     const value = 'RuntimeValue' in effect.Write.root_value_after_write
                         ? traceRuntimeValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value)
                         : traceRefValueFromJSON(effect.Write.root_value_after_write);
-                    const traceLocation: TraceLocation = {
-                        type: TraceLocKind.Local,
-                        loc
-                    };
                     events.push({
                         type: TraceEventKind.Effect,
                         effect: {
                             type: TraceEffectKind.Write,
-                            location: traceLocation,
+                            loc,
                             value
                         }
                     });

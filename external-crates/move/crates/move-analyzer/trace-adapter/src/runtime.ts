@@ -12,7 +12,6 @@ import {
     TraceEvent,
     TraceEventKind,
     TraceInstructionKind,
-    TraceLocKind,
     readTrace
 } from './trace_utils';
 import { ModuleInfo } from './utils';
@@ -351,20 +350,18 @@ export class Runtime extends EventEmitter {
         } else if (currentEvent.type === TraceEventKind.Effect) {
             const effect = currentEvent.effect;
             if (effect.type === TraceEffectKind.Write) {
-                const traceLocation = effect.location;
+                const traceLocation = effect.loc;
                 const traceValue = effect.value;
-                if (traceLocation.type === TraceLocKind.Local) {
-                    const frame = this.frameStack.frames.find(
-                        frame => frame.id === traceLocation.loc.frameID
-                    );
-                    if (!frame) {
-                        throw new Error('Cannot find frame with ID: '
-                            + traceLocation.loc.frameID
-                            + ' when processing Write effect for local variable at index: '
-                            + traceLocation.loc.localIndex);
-                    }
-                    localWrite(frame, traceLocation.loc.localIndex, traceValue);
+                const frame = this.frameStack.frames.find(
+                    frame => frame.id === traceLocation.frameID
+                );
+                if (!frame) {
+                    throw new Error('Cannot find frame with ID: '
+                        + traceLocation.frameID
+                        + ' when processing Write effect for local variable at index: '
+                        + traceLocation.localIndex);
                 }
+                localWrite(frame, traceLocation.localIndex, traceValue);
             }
             return this.step(next, stopAtCloseFrame);
         } else {
