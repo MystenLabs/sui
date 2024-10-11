@@ -508,8 +508,8 @@ pub fn boogie_declare_global(env: &GlobalEnv, name: &str, ty: &Type) -> String {
         name,
         boogie_type(env, ty),
         // TODO: boogie crash boogie_well_formed_expr(env, name, ty)
-        // boogie_well_formed_expr(env, name, ty)"
-        "true"
+        boogie_well_formed_expr(env, name, ty)
+        // "true"
     )
 }
 
