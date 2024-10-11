@@ -11,7 +11,7 @@ use typed_store::traits::Map;
 use crate::get_db_entries;
 use move_core_types::language_storage::ModuleId;
 use std::fmt::Debug;
-use sui_storage::IndexStoreTables;
+use sui_core::jsonrpc_index::IndexStoreTables;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TxSequenceNumber},
     Identifier, TypeTag,

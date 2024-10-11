@@ -19,6 +19,7 @@ pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod execution_cache;
 mod execution_driver;
+pub mod jsonrpc_index;
 pub mod metrics;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod mock_consensus;

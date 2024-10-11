@@ -17,9 +17,9 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::sync::OwnedMutexGuard;
 use typed_store::TypedStoreError;
 
-use crate::mutex_table::MutexTable;
-use crate::sharded_lru::ShardedLruCache;
 use sui_json_rpc_types::{SuiObjectDataFilter, TransactionFilter};
+use sui_storage::mutex_table::MutexTable;
+use sui_storage::sharded_lru::ShardedLruCache;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
@@ -199,6 +199,7 @@ pub struct IndexStoreTables {
 
     /// This is an index of all the versions of loaded child objects
     #[deprecated]
+    #[allow(unused)]
     loaded_child_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
 
     #[default_options_override_fn = "index_table_default_config"]
@@ -1598,8 +1599,8 @@ impl IndexStore {
 
 #[cfg(test)]
 mod tests {
-    use crate::indexes::ObjectIndexChanges;
-    use crate::IndexStore;
+    use super::IndexStore;
+    use super::ObjectIndexChanges;
     use move_core_types::account_address::AccountAddress;
     use prometheus::Registry;
     use std::collections::BTreeMap;

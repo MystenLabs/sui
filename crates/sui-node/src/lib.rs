@@ -90,6 +90,7 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::consensus_store_pruner::ConsensusStorePruner;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
+use sui_core::jsonrpc_index::IndexStore;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
 use sui_core::rest_index::RestIndexStore;
@@ -122,7 +123,7 @@ use sui_storage::{
     key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
     key_value_store_metrics::KeyValueStoreMetrics,
 };
-use sui_storage::{FileCompression, IndexStore, StorageFormat};
+use sui_storage::{FileCompression, StorageFormat};
 use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
