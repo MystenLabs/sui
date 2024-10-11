@@ -103,7 +103,7 @@ impl TpsLogger {
             let tps = tx_delta as f64 / elapsed.as_secs_f64();
             info!(
                 "[{}] Total transactions processed: {}, total checkpoints: {}. \
-                TPS: {}. Checkpoints per second: {}",
+                TPS: {:.2}. Checkpoints per second: {:.2}",
                 self.name,
                 cur_tx_count,
                 cur_checkpoint,

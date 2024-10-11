@@ -8,13 +8,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 use tracing::{error, info};
 
+use super::{CheckpointDataToCommit, CommitterTables, CommitterWatermark, EpochToCommit};
 use crate::benchmark::TpsLogger;
 use crate::metrics::IndexerMetrics;
+use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use crate::store::IndexerStore;
 use crate::types::IndexerResult;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-
-use super::{CheckpointDataToCommit, CommitterTables, CommitterWatermark, EpochToCommit};
 
 pub(crate) const CHECKPOINT_COMMIT_BATCH_SIZE: usize = 100;
 
@@ -166,7 +166,7 @@ async fn commit_checkpoints<S>(
     let raw_checkpoints_batch = checkpoint_batch
         .iter()
         .map(|c| c.into())
-        .collect::<Vec<_>>();
+        .collect::<Vec<StoredRawCheckpoint>>();
 
     {
         let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();

@@ -19,7 +19,7 @@ use object_store::path::Path;
 use strum::IntoEnumIterator;
 use sui_types::base_types::ObjectID;
 use tap::TapFallible;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_protocol_config::ProtocolConfig;
@@ -519,7 +519,7 @@ impl PgIndexerStore {
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(
+            debug!(
                 elapsed,
                 "Deleted {} chunked object snapshots",
                 objects_snapshot_deletions.len(),
@@ -603,7 +603,7 @@ impl PgIndexerStore {
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(
+            debug!(
                 elapsed,
                 "Persisted {} chunked full objects history",
                 objects.len(),
@@ -644,7 +644,7 @@ impl PgIndexerStore {
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(
+            debug!(
                 elapsed,
                 "Persisted {} chunked object versions",
                 object_versions.len(),
@@ -826,7 +826,7 @@ impl PgIndexerStore {
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(
+            debug!(
                 elapsed,
                 "Persisted {} chunked transactions",
                 transactions.len()
@@ -869,7 +869,7 @@ impl PgIndexerStore {
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked events", len);
+            debug!(elapsed, "Persisted {} chunked events", len);
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist events with error: {}", e);
@@ -1051,7 +1051,7 @@ impl PgIndexerStore {
         .await?;
 
         let elapsed = guard.stop_and_record();
-        info!(elapsed, "Persisted {} chunked event indices", len);
+        debug!(elapsed, "Persisted {} chunked event indices", len);
         Ok(())
     }
 
@@ -1233,7 +1233,7 @@ impl PgIndexerStore {
         .await?;
 
         let elapsed = guard.stop_and_record();
-        info!(elapsed, "Persisted {} chunked tx_indices", len);
+        debug!(elapsed, "Persisted {} chunked tx_indices", len);
         Ok(())
     }
 
@@ -2031,7 +2031,7 @@ impl IndexerStore for PgIndexerStore {
                 let elapsed = guard.stop_and_record();
                 info!(elapsed, "Persisted {} event_indices chunks", len);
             })
-            .tap_err(|e| tracing::error!("Failed to persist all event_indices chunks: {:?}", e))?;
+            .tap_err(|e| tracing::error!("Failed to persist all event_indices: {:?}", e))?;
         Ok(())
     }
 
@@ -2062,7 +2062,7 @@ impl IndexerStore for PgIndexerStore {
             })
             .tap_ok(|_| {
                 let elapsed = guard.stop_and_record();
-                info!(elapsed, "Persisted {} tx_indices chunks", len);
+                info!(elapsed, "Persisted {} tx_indices", len);
             })
             .tap_err(|e| tracing::error!("Failed to persist all tx_indices chunks: {:?}", e))?;
         Ok(())
