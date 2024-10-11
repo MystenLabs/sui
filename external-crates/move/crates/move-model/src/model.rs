@@ -944,12 +944,14 @@ impl GlobalEnv {
         loc: Loc,
         typ: Type,
         value: Value,
+        attributes: Vec<Attribute>,
     ) -> NamedConstantData {
         NamedConstantData {
             name,
             loc,
             typ,
             value,
+            attributes,
         }
     }
 
@@ -2997,6 +2999,9 @@ pub struct NamedConstantData {
 
     /// The value of this constant
     value: Value,
+
+    /// Attributes attached to this constant
+    attributes: Vec<Attribute>,
 }
 
 #[derive(Debug)]
@@ -3036,6 +3041,11 @@ impl<'env> NamedConstantEnv<'env> {
     /// Returns the value of this constant
     pub fn get_value(&self) -> Value {
         self.data.value.clone()
+    }
+
+    /// Returns the attributes attached to this constant
+    pub fn get_attributes(&self) -> &[Attribute] {
+        &self.data.attributes
     }
 }
 
