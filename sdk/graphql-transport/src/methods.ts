@@ -622,7 +622,7 @@ export const RPC_METHODS: {
 										: undefined,
 								inputObject: 'InputObject' in filter ? filter.InputObject : undefined,
 								changedObject: 'ChangedObject' in filter ? filter.ChangedObject : undefined,
-								signAddress: 'FromAddress' in filter ? filter.FromAddress : undefined,
+								sentAddress: 'FromAddress' in filter ? filter.FromAddress : undefined,
 								recvAddress: 'ToAddress' in filter ? filter.ToAddress : undefined,
 								kind:
 									'TransactionKind' in filter

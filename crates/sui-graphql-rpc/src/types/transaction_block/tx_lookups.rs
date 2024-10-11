@@ -305,7 +305,7 @@ fn min_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
 /// Constructs a `RawQuery` as a join over all relevant side tables, filtered on their own filter
 /// condition, plus optionally a sender, plus optionally tx/cp bounds.
 pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -> Option<RawQuery> {
-    let sender = filter.sent_address.or(filter.sign_address);
+    let sender = filter.sent_address;
 
     let mut subqueries = vec![];
 

@@ -321,15 +321,7 @@ export enum AddressTransactionBlockRelationship {
    */
   Recv = 'RECV',
   /** Transactions this address has sent. */
-  Sent = 'SENT',
-  /**
-   * Transactions this address has sent. NOTE: this input filter has been deprecated in favor of
-   * `SENT` which behaves identically but is named more clearly. Both filters restrict
-   * transactions by their sender, only, not signers in general.
-   *
-   * This filter will be removed with 1.36.0 (2024-10-14).
-   */
-  Sign = 'SIGN'
+  Sent = 'SENT'
 }
 
 /** System transaction for creating the on-chain state used by zkLogin. */
@@ -4995,14 +4987,6 @@ export type TransactionBlockFilter = {
   recvAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   /** Limit to transactions that were sent by the given address. */
   sentAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
-  /**
-   * Limit to transactions that were sent by the given address. NOTE: this input filter has been
-   * deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
-   * Both filters restrict transactions by their sender, only, not signers in general.
-   *
-   * This filter will be removed with 1.36.0 (2024-10-14).
-   */
-  signAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   /** Select transactions by their digest. */
   transactionIds?: InputMaybe<Array<Scalars['String']['input']>>;
 };
