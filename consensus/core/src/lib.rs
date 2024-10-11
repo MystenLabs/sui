@@ -48,7 +48,9 @@ pub use authority_node::ConsensusAuthority;
 pub use block::{BlockAPI, Round, TransactionIndex};
 pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
 pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
-pub use transaction::{ClientError, TransactionClient, TransactionVerifier, ValidationError};
+pub use transaction::{
+    BlockStatus, ClientError, TransactionClient, TransactionVerifier, ValidationError,
+};
 
 /// Exported API for testing.
 pub use block::{TestBlock, Transaction, VerifiedBlock};
