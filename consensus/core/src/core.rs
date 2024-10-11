@@ -993,7 +993,6 @@ mod test {
 
     use consensus_config::{AuthorityIndex, Parameters};
     use futures::{stream::FuturesUnordered, StreamExt};
-    use mysten_metrics::monitored_mpsc::unbounded_channel;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::sleep;
@@ -1522,7 +1521,6 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (sender, _receiver) = unbounded_channel("consensus_output");
         let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
