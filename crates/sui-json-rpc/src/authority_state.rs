@@ -176,7 +176,7 @@ pub trait StateRead: Send + Sync {
     fn get_owned_coins(
         &self,
         owner: SuiAddress,
-        cursor: (String, ObjectID),
+        cursor: (String, u64, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
     ) -> StateReadResult<Vec<SuiCoin>>;
@@ -448,15 +448,15 @@ impl StateRead for AuthorityState {
     fn get_owned_coins(
         &self,
         owner: SuiAddress,
-        cursor: (String, ObjectID),
+        cursor: (String, u64, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
     ) -> StateReadResult<Vec<SuiCoin>> {
         Ok(self
             .get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)?
-            .map(|(coin_type, coin_object_id, coin)| SuiCoin {
-                coin_type,
-                coin_object_id,
+            .map(|(key, coin)| SuiCoin {
+                coin_type: key.coin_type,
+                coin_object_id: key.object_id,
                 version: coin.version,
                 digest: coin.digest,
                 balance: coin.balance,
