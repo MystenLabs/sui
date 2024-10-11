@@ -10,12 +10,12 @@ use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::AuthorityState;
 use sui_core::execution_cache::ObjectCacheRead;
+use sui_core::jsonrpc_index::TotalBalance;
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc_types::{
     Coin as SuiCoin, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
     SuiObjectDataFilter, TransactionFilter,
 };
-use sui_storage::indexes::TotalBalance;
 use sui_storage::key_value_store::{
     KVStoreCheckpointData, KVStoreTransactionData, TransactionKeyValueStore,
     TransactionKeyValueStoreTrait,

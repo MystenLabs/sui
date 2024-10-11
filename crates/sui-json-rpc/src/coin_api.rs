@@ -10,7 +10,7 @@ use cached::SizedCache;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use sui_storage::indexes::TotalBalance;
+use sui_core::jsonrpc_index::TotalBalance;
 use tap::TapFallible;
 use tracing::{debug, info, instrument};
 
