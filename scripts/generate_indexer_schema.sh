@@ -74,5 +74,5 @@ diesel migration run                                                          \
 diesel print-schema                                                           \
   --database-url "postgres://postgres:postgrespw@localhost:$PORT"             \
   --patch-file "$REPO/crates/sui-indexer/src/schema.patch"                    \
-  --except-tables "^objects_version_|_partition_"                             \
+  --except-tables "^objects_version_[0-9a-f]{2}|_partition_"                  \
   > "$REPO/crates/sui-indexer/src/schema.rs"
