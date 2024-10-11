@@ -170,6 +170,33 @@ impl BackFillConfig {
     const DEFAULT_CHUNK_SIZE: usize = 1000;
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct BenchmarkConfig {
+    #[arg(
+            long,
+            default_value_t = Self::DEFAULT_NUM_CHECKPOINTS,
+            help = "Number of checkpoints to run the benchmark"
+    )]
+    pub num_checkpoints: usize,
+    #[arg(
+            long,
+            default_value_t = Self::DEFAULT_CHECKPOINT_SIZE,
+            help = "Number of transactions per checkpoint"
+    )]
+    pub checkpoint_size: usize,
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Reset the database before running the benchmark"
+    )]
+    pub reset_database: bool,
+}
+
+impl BenchmarkConfig {
+    const DEFAULT_NUM_CHECKPOINTS: usize = 10000;
+    const DEFAULT_CHECKPOINT_SIZE: usize = 200;
+}
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     Indexer {
@@ -210,6 +237,7 @@ pub enum Command {
     },
     /// Restore the database from formal snaphots.
     Restore(RestoreConfig),
+    Benchmark(BenchmarkConfig),
 }
 
 #[derive(Args, Default, Debug, Clone)]

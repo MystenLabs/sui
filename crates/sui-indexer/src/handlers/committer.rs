@@ -8,11 +8,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 use tracing::{error, info};
 
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-
+use crate::benchmark::TpsLogger;
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerStore;
 use crate::types::IndexerResult;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use super::{CheckpointDataToCommit, CommitterTables, CommitterWatermark, EpochToCommit};
 
@@ -43,6 +43,8 @@ where
     let mut unprocessed = HashMap::new();
     let mut batch = vec![];
 
+    let mut logger = TpsLogger::new("CheckpointCommitter", 10000);
+
     while let Some(indexed_checkpoint_batch) = stream.next().await {
         if cancel.is_cancelled() {
             break;
@@ -60,7 +62,11 @@ where
             // The batch will consist of contiguous checkpoints and at most one epoch boundary at
             // the end.
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
+                let last_checkpoint = batch.last().unwrap();
+                let checkpoint_seq = last_checkpoint.checkpoint.sequence_number;
+                let total_tx = last_checkpoint.checkpoint.network_total_transactions;
                 commit_checkpoints(&state, batch, epoch, &metrics).await;
+                logger.log(total_tx, checkpoint_seq);
                 batch = vec![];
             }
             if let Some(epoch_number) = epoch_number_option {
@@ -74,7 +80,11 @@ where
             }
         }
         if !batch.is_empty() {
+            let last_checkpoint = batch.last().unwrap();
+            let checkpoint_seq = last_checkpoint.checkpoint.sequence_number;
+            let total_tx = last_checkpoint.checkpoint.network_total_transactions;
             commit_checkpoints(&state, batch, None, &metrics).await;
+            logger.log(total_tx, checkpoint_seq);
             batch = vec![];
         }
     }
