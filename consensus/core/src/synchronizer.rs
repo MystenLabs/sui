@@ -1056,7 +1056,8 @@ mod tests {
     use tokio::{sync::Mutex, time::sleep};
 
     use crate::{
-        authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
+        authority_service::COMMIT_LAG_MULTIPLIER,
+        core_thread::MockCoreThreadDispatcher,
         synchronizer::{MAX_BLOCKS_PER_FETCH, SYNC_MISSING_BLOCK_ROUND_THRESHOLD},
     };
     use crate::{
@@ -1156,7 +1157,6 @@ mod tests {
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             let mut lock = self.fetch_blocks_requests.lock().await;
-            println!("Block refs: {:?}", block_refs);
             let response = lock
                 .remove(&(block_refs, peer))
                 .expect("Unexpected fetch blocks request made");
@@ -1490,10 +1490,8 @@ mod tests {
         let missing_blocks = expected_blocks
             .iter()
             .map(|block| block.reference())
-            .collect::<BTreeSet<_>>();        
-        core_dispatcher
-            .stub_missing_blocks(missing_blocks)
-            .await;
+            .collect::<BTreeSet<_>>();
+        core_dispatcher.stub_missing_blocks(missing_blocks).await;
 
         // AND stub the requests for authority 1 & 2
         // Make the first authority timeout, so the second will be called. "We" are authority = 0, so
@@ -1512,12 +1510,8 @@ mod tests {
                 )
                 .await;
 
-                network_client
-                .stub_fetch_blocks(
-                    chunk.to_vec(),
-                    AuthorityIndex::new_for_test(2),
-                    None,
-                )
+            network_client
+                .stub_fetch_blocks(chunk.to_vec(), AuthorityIndex::new_for_test(2), None)
                 .await;
         }
 
@@ -1600,11 +1594,7 @@ mod tests {
                 )
                 .await;
             network_client
-                .stub_fetch_blocks(
-                    chunk.to_vec(),
-                    AuthorityIndex::new_for_test(2),
-                    None,
-                )
+                .stub_fetch_blocks(chunk.to_vec(), AuthorityIndex::new_for_test(2), None)
                 .await;
         }
 
