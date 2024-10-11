@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 anyhow.workspace = true
+arc-swap.workspace = true
 ed25519.workspace = true
 pkcs8.workspace = true
 rcgen.workspace = true

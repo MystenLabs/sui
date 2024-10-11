@@ -94,6 +94,78 @@ To enable historic data queries for the Sui Full nodes that prune old transactio
 
 If the information about the transaction digest, effects, events, or checkpoints is not available locally, a Full node automatically retrieves the historical data from a cloud-based key-value store (currently managed by MystenLabs). Note that the current key-value store implementation keeps historic transactional data only: we plan to provide support for a similar setup for retrieving the historic object versions in a future release.
 
+## Object pruning {#object-pruning}
+
+Sui adds new object versions to the database as part of transaction execution. This makes previous versions ready for 
+garbage collection. However, without pruning, this can result in database performance degradation and requires large 
+amounts of storage space. Sui identifies the objects that are eligible for pruning in each checkpoint, and then performs
+the pruning in the background.
+
+You can enable pruning for a Sui node by adding the `authority-store-pruning-config` config to `fullnode.yaml` file:
+```yaml
+authority-store-pruning-config:
+  # Number of epoch dbs to keep 
+  # Not relevant for object pruning
+  num-latest-epoch-dbs-to-retain: 3
+  # The amount of time, in seconds, between running the object pruning task.
+  # Not relevant for object pruning
+  epoch-db-pruning-period-secs: 3600
+  # Number of epochs to wait before performing object pruning.
+  # When set to 0, Sui prunes old object versions as soon
+  # as possible. This is also called *aggressive pruning*, and results in the most effective
+  # garbage collection method with the lowest disk usage possible. 
+  # This is the recommended setting for Sui Validator nodes since older object versions aren't
+  # necessary to execute transactions.
+  # When set to 1, Sui prunes only object versions from transaction checkpoints
+  # previous to the current epoch. In general, when set to N (where N >= 1), Sui prunes  
+  # only object versions from checkpoints up to `current - N` epoch. 
+  # It is therefore possible to have multiple versions of an object present 
+  # in the database. This setting is recommended for Sui Full nodes as they might need to serve 
+  # RPC requests that require looking up objects by ID and Version (rather than just latest
+  # version). However, if your Full node does not serve RPC requests you should then also enable  
+  # aggressive pruning.
+  num-epochs-to-retain: 1
+  # Advanced setting: Maximum number of checkpoints to prune in a batch. The default
+  # settings are appropriate for most use cases.
+  max-checkpoints-in-batch: 10
+  # Advanced setting: Maximum number of transactions in one batch of pruning run. The default
+  # settings are appropriate for most use cases.
+  max-transactions-in-batch: 1000
+```
+## Transaction pruning {#transaction-pruning}
+
+Transaction pruning removes previous transactions and effects from the database.
+Sui periodically creates checkpoints. Each checkpoint contains the transactions that occurred during the checkpoint and their associated effects.
+
+Sui performs transaction pruning in the background after checkpoints complete.
+
+You can enable transaction pruning for your Full node or Validator node by adding  `num-epochs-to-retain-for-checkpoints`
+to the `authority-store-pruning-config` config for the node:
+
+```yaml
+authority-store-pruning-config:
+  num-latest-epoch-dbs-to-retain: 3
+  epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 0
+  max-checkpoints-in-batch: 10
+  max-transactions-in-batch: 1000
+  # Number of epochs to wait before performing transaction pruning.
+  # When this is N (where N >= 2), Sui prunes transactions and effects from 
+  # checkpoints up to the `current - N` epoch. Sui never prunes transactions and effects from the current and
+  # immediately prior epoch. N = 2 is a recommended setting for Sui Validator nodes and Sui Full nodes that don't 
+  # serve RPC requests.
+  num-epochs-to-retain-for-checkpoints: 2
+  # Ensures that individual database files periodically go through the compaction process.
+  # This helps reclaim disk space and avoid fragmentation issues
+  periodic-compaction-threshold-days: 1
+```
+
+:::info
+
+If you prune transactions, Archival nodes can help ensure lagging peer nodes don't lose any information. For more information, see [Sui Archives](./archives.mdx).
+
+:::
+
 
 ## Pruning policy examples
 
