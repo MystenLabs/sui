@@ -219,7 +219,6 @@ impl SubmitResponse {
     }
 }
 
-
 #[mockall::automock]
 #[async_trait::async_trait]
 pub trait SubmitToConsensus: Sync + Send + 'static {
