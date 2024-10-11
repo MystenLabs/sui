@@ -2379,6 +2379,10 @@ type MovePackage implements IObject & IOwner {
 	"""
 	typeOrigins: [TypeOrigin!]
 	"""
+	BCS representation of the package itself, as a MovePackage.
+	"""
+	packageBcs: Base64
+	"""
 	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
 	name, followed by module bytes), in alphabetic order by module name.
 	"""
