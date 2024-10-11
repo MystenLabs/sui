@@ -297,10 +297,10 @@ const [upgradeCap] = tx.publish({
 	modules,
 	dependencies,
 });
-tx.transferObjects([upgradeCap], await client.getAddress());
+tx.transferObjects([upgradeCap], keypair.toSuiAddress());
 const result = await client.signAndExecuteTransaction({
 	signer: keypair,
-	Transaction: tx,
+	transaction: tx,
 });
 console.log({ result });
 ```
