@@ -14,12 +14,16 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use bigdecimal::BigDecimal;
+use bigdecimal::ToPrimitive;
+use diesel::dsl::sum;
 use diesel::prelude::*;
 use diesel::{ExpressionMethods, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use std::net::SocketAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::{net::TcpListener, task::JoinHandle};
+use tracing::info;
 
 pub const GET_POOLS_PATH: &str = "/get_pools";
 pub const GET_24HR_VOLUME_PATH: &str = "/get_24hr_volume/:pool_id";
@@ -93,17 +97,16 @@ async fn get_24hr_volume(
         .unwrap()
         .as_millis() as i64;
     let day_ago = unix_ts - 24 * 60 * 60 * 1000;
-    let results: Vec<OrderFill> = schema::order_fills::table
-        .select(OrderFill::as_select())
+    info!("day_ago: {}", day_ago);
+    let total_vol: BigDecimal = schema::order_fills::table
+        .select(sum(schema::order_fills::base_quantity).nullable())
         .filter(schema::order_fills::pool_id.eq(pool_id))
         .filter(schema::order_fills::onchain_timestamp.gt(day_ago))
-        .load(connection)
-        .await?;
+        .first::<Option<BigDecimal>>(connection)
+        .await?
+        .unwrap_or_default();
 
-    let mut total_vol = 0;
-    for order_fill in results {
-        total_vol += order_fill.base_quantity;
-    }
+    let total_vol = total_vol.to_i64().unwrap_or_default();
 
     Ok(Json(total_vol))
 }
