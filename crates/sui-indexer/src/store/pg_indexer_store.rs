@@ -1086,8 +1086,24 @@ impl PgIndexerStore {
                     mut tx_kinds,
                 ),
                  index| {
-                    tx_affected_addresses.extend(index.0);
-                    tx_affected_objects.extend(index.1);
+                    tx_affected_addresses.extend(index.0.clone());
+
+                    // XXX: Temporarily double the number of affected addresses/objects. Duplicates
+                    // all start with 0x42, which means we can efficiently detect and remove them
+                    // as follows:
+                    //
+                    // DELETE FROM
+                    //         tx_affected_addresses/tx_affected_objects
+                    // WHERE   affected >= '\x420000000000000000000000000000000000000000000000000000000000000000'::bytea;
+                    tx_affected_addresses.extend(index.0.into_iter().map(|mut a| {
+                        a.affected.insert(0, 0x42);
+                        a
+                    }));
+                    tx_affected_objects.extend(index.1.clone());
+                    tx_affected_objects.extend(index.1.into_iter().map(|mut a| {
+                        a.affected.insert(0, 0x42);
+                        a
+                    }));
                     tx_pkgs.extend(index.2);
                     tx_mods.extend(index.3);
                     tx_funs.extend(index.4);
@@ -1579,10 +1595,22 @@ impl IndexerStore for PgIndexerStore {
             .checkpoint_db_commit_latency_objects
             .start_timer();
         let (indexed_mutations, indexed_deletions) = retain_latest_indexed_objects(object_changes);
-        let object_mutations = indexed_mutations
+        let mut object_mutations = indexed_mutations
             .into_iter()
             .map(StoredObject::from)
             .collect::<Vec<_>>();
+
+        // XXX: Temporarily double the number of object mutations. Duplicates all start with 0x42,
+        // which means we can efficiently detect and remove them as follows:
+        //
+        // DELETE FROM
+        //         objects
+        // WHERE   object_id >= '\x420000000000000000000000000000000000000000000000000000000000000000'::bytea;
+        object_mutations.extend(object_mutations.clone().into_iter().map(|mut o| {
+            o.object_id.insert(0, 0x42);
+            o
+        }));
+
         let object_deletions = indexed_deletions
             .into_iter()
             .map(StoredDeletedObject::from)
@@ -1634,7 +1662,7 @@ impl IndexerStore for PgIndexerStore {
             .checkpoint_db_commit_latency_objects_snapshot
             .start_timer();
         let (indexed_mutations, indexed_deletions) = retain_latest_indexed_objects(object_changes);
-        let object_snapshot_mutations: Vec<StoredObjectSnapshot> = indexed_mutations
+        let mut object_snapshot_mutations: Vec<StoredObjectSnapshot> = indexed_mutations
             .into_iter()
             .map(StoredObjectSnapshot::from)
             .collect();
@@ -1642,6 +1670,20 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .map(StoredObjectSnapshot::from)
             .collect();
+
+        // XXX: Temporarily double the number of object mutations. Duplicates all start with 0x42,
+        // which means we can efficiently detect and remove them as follows:
+        //
+        // DELETE FROM
+        //         objects_snapshot
+        // WHERE   object_id >= '\x420000000000000000000000000000000000000000000000000000000000000000'::bytea;
+        object_snapshot_mutations.extend(object_snapshot_mutations.clone().into_iter().map(
+            |mut o| {
+                o.object_id.insert(0, 0x42);
+                o
+            },
+        ));
+
         let mutation_len = object_snapshot_mutations.len();
         let deletion_len = object_snapshot_deletions.len();
         let object_snapshot_mutation_chunks = chunk!(
@@ -1709,7 +1751,21 @@ impl IndexerStore for PgIndexerStore {
         if object_changes.is_empty() {
             return Ok(());
         }
-        let objects = make_objects_history_to_commit(object_changes);
+        let mut objects = make_objects_history_to_commit(object_changes);
+
+        // XXX: Temporarily double the number of object mutations. Duplicates all start with 0x42,
+        // which means we can efficiently detect and remove them as follows:
+        //
+        // DELETE
+        //         object_id
+        // FROM
+        //         objects_history
+        // WHERE   object_id >= '\x420000000000000000000000000000000000000000000000000000000000000000'::bytea;
+        objects.extend(objects.clone().into_iter().map(|mut o| {
+            o.object_id.insert(0, 0x42);
+            o
+        }));
+
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_objects_history
@@ -1754,7 +1810,7 @@ impl IndexerStore for PgIndexerStore {
         if object_changes.is_empty() {
             return Ok(());
         }
-        let objects: Vec<StoredFullHistoryObject> = object_changes
+        let mut objects: Vec<StoredFullHistoryObject> = object_changes
             .into_iter()
             .flat_map(|c| {
                 let TransactionObjectChangesToCommit {
@@ -1767,6 +1823,18 @@ impl IndexerStore for PgIndexerStore {
                     .chain(deleted_objects.into_iter().map(|o| o.into()))
             })
             .collect();
+
+        // XXX: Temporarily double the number of object mutations. Duplicates all start with 0x42, which
+        // means we can efficiently detect and remove them as follows:
+        //
+        // DELETE FROM
+        //         full_objects_history
+        // WHERE   object_id >= '\x420000000000000000000000000000000000000000000000000000000000000000'::bytea;
+        objects.extend(objects.clone().into_iter().map(|mut o| {
+            o.object_id.insert(0, 0x42);
+            o
+        }));
+
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_full_objects_history
@@ -1796,11 +1864,22 @@ impl IndexerStore for PgIndexerStore {
 
     async fn persist_objects_version(
         &self,
-        object_versions: Vec<StoredObjectVersion>,
+        mut object_versions: Vec<StoredObjectVersion>,
     ) -> Result<(), IndexerError> {
         if object_versions.is_empty() {
             return Ok(());
         }
+
+        // XXX: Temporarily double the number of object mutations. Duplicates all start with 0x42, which
+        // means we can efficiently detect and remove them as follows:
+        //
+        // DELETE FROM
+        //         objects_version
+        // WHERE   object_id >= '\x420000000000000000000000000000000000000000000000000000000000000000'::bytea;
+        object_versions.extend(object_versions.clone().into_iter().map(|mut o| {
+            o.object_id.insert(0, 0x42);
+            o
+        }));
 
         let guard = self
             .metrics
