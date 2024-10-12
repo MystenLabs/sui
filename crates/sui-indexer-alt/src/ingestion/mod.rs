@@ -43,7 +43,7 @@ impl IngestionClient {
     }
 
     /// Fetch a checkpoint from the remote store. Repeatedly retries transient errors with an
-    /// exponential backoff (up to [`MAX_RETRY_INTERVAL`]), but will immediately return
+    /// exponential backoff (up to [MAX_RETRY_INTERVAL]), but will immediately return
     /// non-transient errors, which include all client errors, except timeouts and rate limiting.
     pub async fn fetch(&self, checkpoint: u64) -> Result<Arc<CheckpointData>> {
         // SAFETY: The path being joined is statically known to be valid.
