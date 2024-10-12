@@ -796,11 +796,29 @@ impl PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_transactions_chunks_transformation
             .start_timer();
-        let transactions = transactions
+        let mut transactions = transactions
             .iter()
             .map(StoredTransaction::from)
             .collect::<Vec<_>>();
         drop(transformation_guard);
+
+        // XXX: Temporarily bloat the transaction payload size to simulate more bytes coming over
+        // the wire.
+        {
+            use rand::RngCore;
+            let mut rng = rand::thread_rng();
+            // Add a 512KB payload of random data to each transaction. Prefix it with a magic
+            // number so that it's easier to identify later.
+            let mut buf = vec![0u8; 512 * 1024];
+            buf[0] = 0xA1;
+            buf[1] = 0x1C;
+            buf[2] = 0xEB;
+            buf[3] = 0x0B;
+            for tx in &mut transactions {
+                rng.fill_bytes(&mut buf[4..]);
+                tx.object_changes.push(Some(buf.clone()));
+            }
+        }
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
