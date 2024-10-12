@@ -13784,6 +13784,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-alt"
+version = "1.37.0"
+dependencies = [
+ "anyhow",
+ "sui-types",
+]
+
+[[package]]
 name = "sui-indexer-builder"
 version = "0.1.0"
 dependencies = [
