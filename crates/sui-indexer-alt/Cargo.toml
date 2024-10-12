@@ -12,7 +12,12 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+bcs.workspace = true
 clap.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+tokio.workspace = true
 url.workspace = true
 
+sui-storage.workspace = true
 sui-types.workspace = true

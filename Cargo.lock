@@ -13788,8 +13788,13 @@ name = "sui-indexer-alt"
 version = "1.37.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "clap",
+ "reqwest 0.12.5",
+ "serde",
+ "sui-storage",
  "sui-types",
+ "tokio",
  "url",
 ]
 
