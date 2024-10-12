@@ -9,12 +9,15 @@ use sui_storage::blob::Blob;
 use sui_types::full_checkpoint_content::CheckpointData;
 use url::Url;
 
+use crate::metrics::IndexerMetrics;
+
 /// Wait at most this long between retries for transient errors.
 const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 
 pub struct IngestionClient {
     url: Url,
     client: Client,
+    metrics: IndexerMetrics,
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -35,10 +38,11 @@ pub enum Error {
 }
 
 impl IngestionClient {
-    pub fn new(url: Url) -> Result<Self> {
+    pub fn new(url: Url, metrics: IndexerMetrics) -> Result<Self> {
         Ok(Self {
             url,
             client: Client::builder().build()?,
+            metrics,
         })
     }
 
@@ -71,17 +75,20 @@ impl IngestionClient {
 
                     // Timeouts are a client error but they are usually transient.
                     code @ StatusCode::REQUEST_TIMEOUT => {
+                        self.metrics.total_ingested_retries.inc();
                         Err(BE::transient(Error::HttpError(checkpoint, code)))
                     }
 
                     // Rate limiting is also a client error, but the backoff will eventually widen the
                     // interval appropriately.
                     code @ StatusCode::TOO_MANY_REQUESTS => {
+                        self.metrics.total_ingested_retries.inc();
                         Err(BE::transient(Error::HttpError(checkpoint, code)))
                     }
 
                     // Assume that if the server is facing difficulties, it will recover eventually.
                     code if code.is_server_error() => {
+                        self.metrics.total_ingested_retries.inc();
                         Err(BE::transient(Error::HttpError(checkpoint, code)))
                     }
 
@@ -98,14 +105,48 @@ impl IngestionClient {
             ..Default::default()
         };
 
+        let _guard = self.metrics.ingested_checkpoint_latency.start_timer();
+
         let bytes = backoff::future::retry(backoff, request)
             .await?
             .bytes()
             .await?;
 
-        Ok(Arc::new(
-            Blob::from_bytes(&bytes).map_err(|e| Error::DeserializationError(checkpoint, e))?,
-        ))
+        let checkpoint: CheckpointData =
+            Blob::from_bytes(&bytes).map_err(|e| Error::DeserializationError(checkpoint, e))?;
+
+        self.metrics.total_ingested_checkpoints.inc();
+        self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
+
+        self.metrics
+            .total_ingested_transactions
+            .inc_by(checkpoint.transactions.len() as u64);
+
+        self.metrics.total_ingested_events.inc_by(
+            checkpoint
+                .transactions
+                .iter()
+                .map(|tx| tx.events.as_ref().map_or(0, |evs| evs.data.len()) as u64)
+                .sum(),
+        );
+
+        self.metrics.total_ingested_inputs.inc_by(
+            checkpoint
+                .transactions
+                .iter()
+                .map(|tx| tx.input_objects.len() as u64)
+                .sum(),
+        );
+
+        self.metrics.total_ingested_outputs.inc_by(
+            checkpoint
+                .transactions
+                .iter()
+                .map(|tx| tx.output_objects.len() as u64)
+                .sum(),
+        );
+
+        Ok(Arc::new(checkpoint))
     }
 }
 
@@ -117,6 +158,8 @@ mod tests {
         matchers::{method, path_regex},
         Mock, MockServer, Request, Respond, ResponseTemplate,
     };
+
+    use crate::metrics::tests::test_metrics;
 
     use super::*;
 
@@ -132,12 +175,16 @@ mod tests {
         ResponseTemplate::new(code.as_u16())
     }
 
+    fn test_client(uri: String) -> IngestionClient {
+        IngestionClient::new(Url::parse(&uri).unwrap(), test_metrics()).unwrap()
+    }
+
     #[tokio::test]
     async fn not_found() {
         let server = MockServer::start().await;
         respond_with(&server, status(StatusCode::NOT_FOUND)).await;
 
-        let client = IngestionClient::new(Url::parse(&server.uri()).unwrap()).unwrap();
+        let client = test_client(server.uri());
         let error = client.fetch(42).await.unwrap_err();
 
         assert!(matches!(error, Error::NotFound(42)));
@@ -148,7 +195,7 @@ mod tests {
         let server = MockServer::start().await;
         respond_with(&server, status(StatusCode::IM_A_TEAPOT)).await;
 
-        let client = IngestionClient::new(Url::parse(&server.uri()).unwrap()).unwrap();
+        let client = test_client(server.uri());
         let error = client.fetch(42).await.unwrap_err();
 
         assert!(matches!(
@@ -174,7 +221,7 @@ mod tests {
         })
         .await;
 
-        let client = IngestionClient::new(Url::parse(&server.uri()).unwrap()).unwrap();
+        let client = test_client(server.uri());
         let error = client.fetch(42).await.unwrap_err();
 
         assert!(matches!(
