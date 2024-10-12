@@ -13726,7 +13726,9 @@ name = "sui-indexer-alt"
 version = "1.36.0"
 dependencies = [
  "anyhow",
+ "clap",
  "sui-types",
+ "url",
 ]
 
 [[package]]
