@@ -43,12 +43,16 @@ use tokio::task::{JoinHandle, JoinSet};
 use tokio::{time, time::Instant};
 use tracing::{debug, error, info, warn};
 
+use crate::workloads::workload::FailureType;
+use sui_types::utils::to_sender_signed_transaction;
+
 use super::Interval;
 use super::{BenchmarkStats, StressStats};
 pub struct BenchMetrics {
     pub benchmark_duration: IntGauge,
     pub num_success: IntCounterVec,
     pub num_error: IntCounterVec,
+    pub num_expected_error: IntCounterVec,
     pub num_submitted: IntCounterVec,
     pub num_in_flight: GaugeVec,
     pub latency_s: HistogramVec,
@@ -75,6 +79,13 @@ impl BenchMetrics {
             num_success: register_int_counter_vec_with_registry!(
                 "num_success",
                 "Total number of transaction success",
+                &["workload"],
+                registry,
+            )
+            .unwrap(),
+            num_expected_error: register_int_counter_vec_with_registry!(
+                "num_expected_error",
+                "Total number of transaction errors that were expected",
                 &["workload"],
                 registry,
             )
@@ -171,6 +182,8 @@ enum NextOp {
     },
     // The transaction failed and could not be retried
     Failure,
+    // The transaction failed as expected
+    ExpectedFailure(Box<dyn Payload>),
     Retry(RetryType),
 }
 
@@ -373,6 +386,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 duration: Duration::ZERO,
                 num_error_txes: 0,
                 num_success_txes: 0,
+                num_expected_error_txes: 0,
                 num_success_cmds: 0,
                 total_gas_used: 0,
                 latency_ms: HistogramWrapper {
@@ -681,6 +695,7 @@ async fn run_bench_worker(
     let request_delay_micros = 1_000_000 / worker.target_qps;
     let mut num_success_txes = 0;
     let mut num_error_txes = 0;
+    let mut num_expected_error_txes = 0;
     let mut num_success_cmds = 0;
     let mut num_no_gas = 0;
     let mut num_in_flight: u64 = 0;
@@ -708,6 +723,7 @@ async fn run_bench_worker(
      -> NextOp {
         match result {
             Ok(effects) => {
+                assert!(payload.get_failure_type().is_none());
                 let latency = start.elapsed();
                 let time_from_start = total_benchmark_start_time.elapsed();
 
@@ -758,36 +774,47 @@ async fn run_bench_worker(
                 }
 
                 payload.make_new_payload(&effects);
-                NextOp::Response {
+                return NextOp::Response {
                     latency,
                     num_commands,
                     payload,
                     gas_used: effects.gas_used(),
-                }
+                };
             }
             Err(err) => {
                 error!("{}", err);
-                if err
-                    .downcast::<QuorumDriverError>()
-                    .and_then(|err| {
-                        if matches!(
-                            err,
-                            QuorumDriverError::NonRecoverableTransactionError { .. }
-                        ) {
-                            Err(err.into())
+                match payload.get_failure_type() {
+                    Some(_) => {
+                        metrics_cloned
+                            .num_expected_error
+                            .with_label_values(&[&payload.to_string()])
+                            .inc();
+                        NextOp::ExpectedFailure(payload)
+                    }
+                    None => {
+                        if err
+                            .downcast::<QuorumDriverError>()
+                            .and_then(|err| {
+                                if matches!(
+                                    err,
+                                    QuorumDriverError::NonRecoverableTransactionError { .. }
+                                ) {
+                                    Err(err.into())
+                                } else {
+                                    Ok(())
+                                }
+                            })
+                            .is_err()
+                        {
+                            NextOp::Failure
                         } else {
-                            Ok(())
+                            metrics_cloned
+                                .num_error
+                                .with_label_values(&[&payload.to_string(), "rpc"])
+                                .inc();
+                            NextOp::Retry(Box::new((transaction, payload)))
                         }
-                    })
-                    .is_err()
-                {
-                    NextOp::Failure
-                } else {
-                    metrics_cloned
-                        .num_error
-                        .with_label_values(&[&payload.to_string(), "rpc"])
-                        .inc();
-                    NextOp::Retry(Box::new((transaction, payload)))
+                    }
                 }
             }
         }
@@ -841,6 +868,7 @@ async fn run_bench_worker(
                         bench_stats: BenchmarkStats {
                             duration:stat_start_time.elapsed(),
                             num_error_txes,
+                            num_expected_error_txes,
                             num_success_txes,
                             num_success_cmds,
                             latency_ms:HistogramWrapper{
@@ -855,6 +883,7 @@ async fn run_bench_worker(
                 }
                 num_success_txes = 0;
                 num_error_txes = 0;
+                num_expected_error_txes = 0;
                 num_success_cmds = 0;
                 num_no_gas = 0;
                 num_submitted = 0;
@@ -899,6 +928,11 @@ async fn run_bench_worker(
                     metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).inc();
                     metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
                     let tx = payload.make_transaction();
+                    let tx = if let Some(failure_type) = payload.get_failure_type() {
+                        apply_failure(tx, failure_type)
+                    } else {
+                        tx
+                    };
                     let start = Arc::new(Instant::now());
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
@@ -924,6 +958,15 @@ async fn run_bench_worker(
                         error!("Permanent failure to execute payload. May result in gas objects being leaked");
                         num_error_txes += 1;
                         // Update total benchmark progress
+                        if update_progress(1) {
+                            break;
+                        }
+                    }
+                    NextOp::ExpectedFailure(payload) => {
+                        num_expected_error_txes += 1;
+                        num_in_flight -= 1;
+                        free_pool.push_back(payload);
+                        // Update progress and check if benchmark is finished
                         if update_progress(1) {
                             break;
                         }
@@ -958,6 +1001,7 @@ async fn run_bench_worker(
             bench_stats: BenchmarkStats {
                 duration: stat_start_time.elapsed(),
                 num_error_txes,
+                num_expected_error_txes,
                 num_success_txes,
                 num_success_cmds,
                 total_gas_used: worker_gas_used,
@@ -992,6 +1036,7 @@ async fn run_bench_worker(
                 payload,
             } => payload,
             NextOp::Retry(b) => b.1,
+            NextOp::ExpectedFailure(payload) => payload,
         };
         free_pool.push_back(p);
     }
@@ -1070,4 +1115,38 @@ fn stress_stats_collector(
             }
         }
     })
+}
+
+pub fn apply_failure(mut transaction: Transaction, failure_type: FailureType) -> Transaction {
+    let data = transaction.data().clone();
+
+    // TODO(william) make this work
+    match failure_type {
+        FailureType::InvalidSignature => {
+            let data = transaction.data().clone();
+            let invalid_keypair = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut OsRng));
+            let invalid_signature =
+                Signature::new_secure(data.intent_message().value.digest(), &invalid_keypair);
+            let new_data = SenderSignedData::new(
+                data.intent_message().clone(),
+                vec![invalid_signature],
+                data.gas().clone(),
+            );
+            to_sender_signed_transaction(new_data, transaction.tx_signatures()[0].as_ref())
+        }
+        FailureType::LowGasBudget => {
+            let data = transaction.data().clone();
+            let new_data = SenderSignedData::new(
+                data.intent_message().clone(),
+                data.tx_signatures().to_vec(),
+                GasData {
+                    payment: data.gas().payment.clone(),
+                    owner: data.gas().owner,
+                    price: data.gas().price,
+                    budget: 1, // Set to minimum possible value to ensure failure
+                },
+            );
+            to_sender_signed_transaction(new_data, transaction.tx_signatures()[0].as_ref())
+        }
+    }
 }
