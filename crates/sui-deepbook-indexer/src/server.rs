@@ -3,7 +3,7 @@
 
 use crate::{
     error::DeepBookError,
-    models::{OrderFill, Pools},
+    models::{OrderFillSummary, Pools},
     schema,
     sui_deepbook_indexer::PgDeepbookPersistent,
 };
@@ -14,16 +14,13 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use bigdecimal::BigDecimal;
-use bigdecimal::ToPrimitive;
-use diesel::dsl::sum;
-use diesel::prelude::*;
+use diesel::BoolExpressionMethods;
+use diesel::QueryDsl;
 use diesel::{ExpressionMethods, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use std::net::SocketAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::{net::TcpListener, task::JoinHandle};
-use tracing::info;
 
 pub const GET_POOLS_PATH: &str = "/get_pools";
 pub const GET_24HR_VOLUME_PATH: &str = "/get_24hr_volume/:pool_id";
@@ -90,25 +87,20 @@ async fn get_pools(
 async fn get_24hr_volume(
     Path(pool_id): Path<String>,
     State(state): State<PgDeepbookPersistent>,
-) -> Result<Json<i64>, DeepBookError> {
+) -> Result<Json<u64>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
     let unix_ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
     let day_ago = unix_ts - 24 * 60 * 60 * 1000;
-    info!("day_ago: {}", day_ago);
-    let total_vol: BigDecimal = schema::order_fills::table
-        .select(sum(schema::order_fills::base_quantity).nullable())
+    let vols: Vec<i64> = schema::order_fills::table
+        .select(schema::order_fills::base_quantity)
         .filter(schema::order_fills::pool_id.eq(pool_id))
         .filter(schema::order_fills::onchain_timestamp.gt(day_ago))
-        .first::<Option<BigDecimal>>(connection)
-        .await?
-        .unwrap_or_default();
-
-    let total_vol = total_vol.to_i64().unwrap_or_default();
-
-    Ok(Json(total_vol))
+        .load(connection)
+        .await?;
+    Ok(Json(vols.into_iter().map(|v| v as u64).sum()))
 }
 
 async fn get_24hr_volume_by_balance_manager_id(
@@ -121,10 +113,19 @@ async fn get_24hr_volume_by_balance_manager_id(
         .unwrap()
         .as_millis() as i64;
     let day_ago = unix_ts - 24 * 60 * 60 * 1000;
-    let results: Vec<OrderFill> = schema::order_fills::table
-        .select(OrderFill::as_select())
+    let results: Vec<OrderFillSummary> = schema::order_fills::table
+        .select((
+            schema::order_fills::maker_balance_manager_id,
+            schema::order_fills::taker_balance_manager_id,
+            schema::order_fills::base_quantity,
+        ))
         .filter(schema::order_fills::pool_id.eq(pool_id))
         .filter(schema::order_fills::onchain_timestamp.gt(day_ago))
+        .filter(
+            schema::order_fills::maker_balance_manager_id
+                .eq(&balance_manager_id)
+                .or(schema::order_fills::taker_balance_manager_id.eq(&balance_manager_id)),
+        )
         .load(connection)
         .await?;
 

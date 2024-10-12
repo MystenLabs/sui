@@ -58,6 +58,13 @@ pub struct OrderFill {
     pub onchain_timestamp: i64,
 }
 
+#[derive(Queryable)]
+pub struct OrderFillSummary {
+    pub maker_balance_manager_id: String,
+    pub taker_balance_manager_id: String,
+    pub base_quantity: i64,
+}
+
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
 #[diesel(table_name = flashloans, primary_key(digest))]
 pub struct Flashloan {
