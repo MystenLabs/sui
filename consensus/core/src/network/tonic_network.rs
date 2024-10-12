@@ -45,7 +45,6 @@ use super::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
-    tonic_tls::create_rustls_client_config,
     BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
@@ -394,7 +393,16 @@ impl ChannelPool {
             .user_agent("mysticeti")
             .unwrap();
 
-        let client_tls_config = create_rustls_client_config(&self.context, network_keypair, peer);
+        let client_tls_config = sui_tls::create_rustls_client_config(
+            self.context
+                .committee
+                .authority(peer)
+                .network_key
+                .clone()
+                .into_inner(),
+            certificate_server_name(&self.context),
+            Some(network_keypair.private_key().into_inner()),
+        );
         let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config(client_tls_config)
             .https_only()
