@@ -3,3 +3,4 @@
 
 pub mod args;
 pub mod ingestion;
+pub mod metrics;

@@ -12,15 +12,21 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+axum.workspace = true
 backoff.workspace = true
 bcs.workspace = true
 clap.workspace = true
+prometheus.workspace = true
 reqwest.workspace = true
 serde.workspace = true
+telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
 url.workspace = true
 
+mysten-metrics.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 

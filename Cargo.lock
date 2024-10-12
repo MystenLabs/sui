@@ -13881,15 +13881,21 @@ name = "sui-indexer-alt"
 version = "1.37.0"
 dependencies = [
  "anyhow",
+ "axum 0.7.5",
  "backoff",
  "bcs",
  "clap",
+ "mysten-metrics",
+ "prometheus",
  "reqwest 0.12.5",
  "serde",
  "sui-storage",
  "sui-types",
+ "telemetry-subscribers",
  "thiserror",
  "tokio",
+ "tokio-util 0.7.10",
+ "tracing",
  "url",
  "wiremock",
 ]
