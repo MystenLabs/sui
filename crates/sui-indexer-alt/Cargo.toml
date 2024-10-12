@@ -12,12 +12,17 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+backoff.workspace = true
 bcs.workspace = true
 clap.workspace = true
 reqwest.workspace = true
 serde.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 url.workspace = true
 
 sui-storage.workspace = true
 sui-types.workspace = true
+
+[dev-dependencies]
+wiremock.workspace = true

@@ -541,6 +541,7 @@ webpki = { version = "0.102", package = "rustls-webpki", features = [
     "alloc",
     "std",
 ] }
+wiremock = "0.5"
 x509-parser = "0.14.0"
 zstd = "0.12.3"
 zeroize = "1.6.0"
