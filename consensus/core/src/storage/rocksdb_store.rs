@@ -55,8 +55,8 @@ impl RocksDBStore {
                 Self::BLOCKS_CF,
                 default_db_options()
                     .optimize_for_write_throughput_no_deletion()
-                    // Using larger block is ok since there is not much point reads on the cf.
-                    .set_block_options(512, 128 << 10)
+                    // Using larger block is ok since there is not much random reads.
+                    .set_block_options(512, 256 << 10)
                     .options,
             ),
             (Self::DIGESTS_BY_AUTHORITIES_CF, cf_options.clone()),
