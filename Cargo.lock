@@ -1542,6 +1542,7 @@ checksum = "3a6c9af12842a67734c9a2e355436e5d03b22383ed60cf13cd0c18fbfe3dcbcf"
 dependencies = [
  "async-trait",
  "axum-core 0.4.3",
+ "axum-macros",
  "base64 0.21.7",
  "bytes",
  "futures-util",
@@ -1630,6 +1631,18 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "axum-macros"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00c055ee2d014ae5981ce1016374e8213682aa14d9bf40e48ab48b5f3ef20eaa"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2 1.0.87",
+ "quote 1.0.35",
+ "syn 2.0.79",
 ]
 
 [[package]]
@@ -13259,6 +13272,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum 0.7.5",
  "backoff",
  "bcs",
  "bigdecimal",
@@ -13272,18 +13286,15 @@ dependencies = [
  "prometheus",
  "serde",
  "serde_yaml 0.8.26",
- "sui-bridge",
  "sui-config",
  "sui-data-ingestion-core",
  "sui-indexer-builder",
  "sui-json-rpc-types",
  "sui-sdk",
- "sui-test-transaction-builder",
  "sui-types",
  "tap",
  "telemetry-subscribers",
  "tempfile",
- "test-cluster",
  "tokio",
  "tracing",
 ]
