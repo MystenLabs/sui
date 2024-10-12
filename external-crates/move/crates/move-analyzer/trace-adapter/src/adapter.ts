@@ -18,7 +18,8 @@ import {
     RuntimeEvents,
     RuntimeValueType,
     IRuntimeVariableScope,
-    CompoundType
+    CompoundType,
+    IRuntimeRefValue
 } from './runtime';
 import { run } from 'node:test';
 
@@ -229,14 +230,15 @@ export class MoveDebugSession extends LoggingDebugSession {
     /**
      * Gets the scopes for a given frame.
      *
-     * @param frameId identifier of the frame scopes are requested for.
+     * @param frameID identifier of the frame scopes are requested for.
      * @returns an array of scopes.
+     * @throws Error with a descriptive error message if scopes cannot be retrieved.
      */
-    private getScopes(frameId: number): DebugProtocol.Scope[] {
+    private getScopes(frameID: number): DebugProtocol.Scope[] {
         const runtimeStack = this.runtime.stack();
-        const frame = runtimeStack.frames.find(frame => frame.id === frameId);
+        const frame = runtimeStack.frames.find(frame => frame.id === frameID);
         if (!frame) {
-            throw new Error(`No frame found for id: ${frameId}`);
+            throw new Error(`No frame found for id: ${frameID} when getting scopes`);
         }
         const scopes: DebugProtocol.Scope[] = [];
         if (frame.locals.length > 0) {
@@ -270,6 +272,42 @@ export class MoveDebugSession extends LoggingDebugSession {
         }
 
         this.sendResponse(response);
+    }
+
+    /**
+     * Converts a runtime reference value to a DAP variable.
+     *
+     * @param value reference value.
+     * @returns a DAP variable.
+     * @throws Error with a descriptive error message if conversion fails.
+     */
+    private convertRefValue(value: IRuntimeRefValue): DebugProtocol.Variable {
+        const frameID = value.loc.frameID;
+        const localIndex = value.loc.localIndex;
+        const runtimeStack = this.runtime.stack();
+        const frame = runtimeStack.frames.find(frame => frame.id === frameID);
+        if (!frame) {
+            throw new Error('No frame found for id '
+                + frameID
+                + ' when converting ref value for local index '
+                + localIndex);
+        }
+        // a local will be in one of the scopes at a position corresponding to its local index
+        let local = undefined;
+        for (let i = 0; i < frame.locals.length; i++) {
+            local = frame.locals[i][localIndex];
+            if (local !== undefined) {
+                break;
+            }
+        }
+        if (!local) {
+            throw new Error('No local found for index '
+                + localIndex
+                + ' when converting ref value for frame id '
+                + frameID);
+        }
+
+        return this.convertRuntimeValue(local.value, local.name, local.type);
     }
 
     /**
@@ -316,13 +354,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 variablesReference: compoundValueReference
             };
         } else {
-            // TODO: handle ref value
-            return {
-                name,
-                type,
-                value: JSON.stringify(value),
-                variablesReference: 0
-            };
+            return this.convertRefValue(value);
         }
     }
 

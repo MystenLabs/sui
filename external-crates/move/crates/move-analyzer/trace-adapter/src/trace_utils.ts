@@ -272,7 +272,7 @@ export function readTrace(traceFilePath: string): ITrace {
             const localsTypes = [];
             const frame = event.OpenFrame.frame;
             for (const type of frame.locals_types) {
-                localsTypes.push(JSONTraceTypeToString(type.type_));
+                localsTypes.push(JSONTraceTypeToString(type.type_, type.ref_type));
             }
             // process parameters - store their values in trace and set their
             // initial lifetimes
@@ -365,17 +365,23 @@ export function readTrace(traceFilePath: string): ITrace {
 /**
  * Converts a JSON trace type to a string representation.
  */
-function JSONTraceTypeToString(type: JSONBaseType): string {
-    if (typeof type === 'string') {
-        return type;
-    } else if ('vector' in type) {
-        return `vector<${JSONTraceTypeToString(type.vector)}>`;
+function JSONTraceTypeToString(baseType: JSONBaseType, refType?: JSONTraceRefType): string {
+    const refPrefix = refType === JSONTraceRefType.Mut
+        ? '&mut '
+        : (refType === JSONTraceRefType.Imm
+            ? '&'
+            : '');
+    if (typeof baseType === 'string') {
+        return baseType;
+    } else if ('vector' in baseType) {
+        return refPrefix + `vector<${JSONTraceTypeToString(baseType.vector)}>`;
     } else {
-        return JSONTraceAddressToHexString(type.struct.address)
+        return refPrefix
+            + JSONTraceAddressToHexString(baseType.struct.address)
             + "::"
-            + type.struct.module
+            + baseType.struct.module
             + "::"
-            + type.struct.name;
+            + baseType.struct.name;
     }
 }
 
@@ -434,12 +440,12 @@ function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
     if ('MutRef' in value) {
         return {
             mutable: true,
-            loc: processJSONLocalLocation(value.MutRef.location, /* localLifetimeEnds */ undefined)
+            loc: processJSONLocalLocation(value.MutRef.location)
         };
     } else {
         return {
             mutable: false,
-            loc: processJSONLocalLocation(value.ImmRef.location, /* localLifetimeEnds */ undefined)
+            loc: processJSONLocalLocation(value.ImmRef.location)
         };
     }
 }
