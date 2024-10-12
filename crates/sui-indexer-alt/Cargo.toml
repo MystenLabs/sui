@@ -1,0 +1,15 @@
+[package]
+name = "sui-indexer-alt"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[[bin]]
+name = "sui-indexer-alt"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+sui-types.workspace = true
