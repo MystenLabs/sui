@@ -468,21 +468,6 @@ impl CheckpointHandler {
 
             db_transactions.push(db_txn);
 
-            // Input Objects
-            let input_objects = tx
-                .input_objects()
-                .expect("committed txns have been validated")
-                .into_iter()
-                .map(|obj_kind| obj_kind.object_id())
-                .collect();
-
-            // Changed Objects
-            let changed_objects = fx
-                .all_changed_objects()
-                .into_iter()
-                .map(|(object_ref, _owner, _write_kind)| object_ref.0)
-                .collect();
-
             // Affected Objects
             let affected_objects = fx
                 .object_changes()
@@ -518,8 +503,6 @@ impl CheckpointHandler {
                 tx_sequence_number,
                 transaction_digest: tx_digest,
                 checkpoint_sequence_number: *checkpoint_seq,
-                input_objects,
-                changed_objects,
                 affected_objects,
                 sender,
                 payers,

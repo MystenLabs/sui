@@ -55,7 +55,7 @@ module Test::M1 {
 //# run-graphql
 # Expect ten results
 {
-  transactionBlocks(filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasNextPage
       hasPreviousPage

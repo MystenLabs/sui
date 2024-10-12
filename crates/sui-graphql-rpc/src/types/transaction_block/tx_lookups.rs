@@ -471,13 +471,6 @@ fn select_sender(sender: &SuiAddress, bound: TxBounds) -> RawQuery {
     select_tx(Some(*sender), bound, "tx_senders")
 }
 
-fn select_recipient(recv: &SuiAddress, sender: Option<SuiAddress>, bound: TxBounds) -> RawQuery {
-    filter!(
-        select_tx(sender, bound, "tx_recipients"),
-        format!("recipient = {}", bytea_literal(recv.as_slice()))
-    )
-}
-
 fn select_input(input: &SuiAddress, sender: Option<SuiAddress>, bound: TxBounds) -> RawQuery {
     filter!(
         select_tx(sender, bound, "tx_input_objects"),

@@ -41,14 +41,6 @@ pub(crate) struct TransactionBlockFilter {
     /// Limit to transactions that were sent by the given address.
     pub sent_address: Option<SuiAddress>,
 
-    /// Limit to transactions that sent an object to the given address. NOTE: this input filter has
-    /// been deprecated in favor of `affectedAddress` which offers an easier to understand
-    /// behavior.
-    ///
-    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-    /// `affectedAddress` is introduced, whichever is later.
-    pub recv_address: Option<SuiAddress>,
-
     /// Limit to transactions that accepted the given object as an input. NOTE: this input filter
     /// has been deprecated in favor of `affectedObject` which offers an easier to under behavior.
     ///
@@ -91,7 +83,6 @@ impl TransactionBlockFilter {
             affected_address: intersect!(affected_address, intersect::by_eq)?,
             sign_address: intersect!(sign_address, intersect::by_eq)?,
             sent_address: intersect!(sent_address, intersect::by_eq)?,
-            recv_address: intersect!(recv_address, intersect::by_eq)?,
             input_object: intersect!(input_object, intersect::by_eq)?,
             changed_object: intersect!(changed_object, intersect::by_eq)?,
 

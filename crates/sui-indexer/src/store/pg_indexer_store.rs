@@ -1158,72 +1158,45 @@ impl PgIndexerStore {
             .checkpoint_db_commit_latency_tx_indices_chunks
             .start_timer();
         let len = indices.len();
-        let (
-            affected_addresses,
-            affected_objects,
-            senders,
-            recipients,
-            input_objects,
-            changed_objects,
-            pkgs,
-            mods,
-            funs,
-            digests,
-            kinds,
-        ) = indices.into_iter().map(|i| i.split()).fold(
-            (
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-            ),
-            |(
-                mut tx_affected_addresses,
-                mut tx_affected_objects,
-                mut tx_senders,
-                mut tx_recipients,
-                mut tx_input_objects,
-                mut tx_changed_objects,
-                mut tx_pkgs,
-                mut tx_mods,
-                mut tx_funs,
-                mut tx_digests,
-                mut tx_kinds,
-            ),
-             index| {
-                tx_affected_addresses.extend(index.0);
-                tx_affected_objects.extend(index.1);
-                tx_senders.extend(index.2);
-                tx_recipients.extend(index.3);
-                tx_input_objects.extend(index.4);
-                tx_changed_objects.extend(index.5);
-                tx_pkgs.extend(index.6);
-                tx_mods.extend(index.7);
-                tx_funs.extend(index.8);
-                tx_digests.extend(index.9);
-                tx_kinds.extend(index.10);
+        let (affected_addresses, affected_objects, pkgs, mods, funs, digests, kinds) =
+            indices.into_iter().map(|i| i.split()).fold(
                 (
-                    tx_affected_addresses,
-                    tx_affected_objects,
-                    tx_senders,
-                    tx_recipients,
-                    tx_input_objects,
-                    tx_changed_objects,
-                    tx_pkgs,
-                    tx_mods,
-                    tx_funs,
-                    tx_digests,
-                    tx_kinds,
-                )
-            },
-        );
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                ),
+                |(
+                    mut tx_affected_addresses,
+                    mut tx_affected_objects,
+                    mut tx_pkgs,
+                    mut tx_mods,
+                    mut tx_funs,
+                    mut tx_digests,
+                    mut tx_kinds,
+                ),
+                 index| {
+                    tx_affected_addresses.extend(index.0);
+                    tx_affected_objects.extend(index.1);
+                    tx_pkgs.extend(index.2);
+                    tx_mods.extend(index.3);
+                    tx_funs.extend(index.4);
+                    tx_digests.extend(index.5);
+                    tx_kinds.extend(index.6);
+                    (
+                        tx_affected_addresses,
+                        tx_affected_objects,
+                        tx_pkgs,
+                        tx_mods,
+                        tx_funs,
+                        tx_digests,
+                        tx_kinds,
+                    )
+                },
+            );
 
         transaction_with_retry(
             &self.metrics,
@@ -1246,42 +1219,6 @@ impl PgIndexerStore {
                     {
                         diesel::insert_into(tx_affected_objects::table)
                             .values(affected_objects_chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .await?;
-                    }
-
-                    for senders_chunk in senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        diesel::insert_into(tx_senders::table)
-                            .values(senders_chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .await?;
-                    }
-
-                    for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        diesel::insert_into(tx_recipients::table)
-                            .values(recipients_chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .await?;
-                    }
-
-                    for input_objects_chunk in
-                        input_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                    {
-                        diesel::insert_into(tx_input_objects::table)
-                            .values(input_objects_chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .await?;
-                    }
-
-                    for changed_objects_chunk in
-                        changed_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
-                    {
-                        diesel::insert_into(tx_changed_objects::table)
-                            .values(changed_objects_chunk)
                             .on_conflict_do_nothing()
                             .execute(conn)
                             .await?;

@@ -4342,15 +4342,6 @@ input TransactionBlockFilter {
 	"""
 	sentAddress: SuiAddress
 	"""
-	Limit to transactions that sent an object to the given address. NOTE: this input filter has
-	been deprecated in favor of `affectedAddress` which offers an easier to understand
-	behavior.
-	
-	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-	`affectedAddress` is introduced, whichever is later.
-	"""
-	recvAddress: SuiAddress
-	"""
 	Limit to transactions that accepted the given object as an input. NOTE: this input filter
 	has been deprecated in favor of `affectedObject` which offers an easier to under behavior.
 	

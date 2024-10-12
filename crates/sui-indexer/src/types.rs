@@ -419,8 +419,6 @@ pub struct TxIndex {
     pub tx_kind: TransactionKind,
     pub transaction_digest: TransactionDigest,
     pub checkpoint_sequence_number: u64,
-    pub input_objects: Vec<ObjectID>,
-    pub changed_objects: Vec<ObjectID>,
     pub affected_objects: Vec<ObjectID>,
     pub payers: Vec<SuiAddress>,
     pub sender: SuiAddress,
@@ -440,8 +438,6 @@ impl TxIndex {
             },
             transaction_digest: TransactionDigest::random(),
             checkpoint_sequence_number: rng.gen(),
-            input_objects: (0..1000).map(|_| ObjectID::random()).collect(),
-            changed_objects: (0..1000).map(|_| ObjectID::random()).collect(),
             affected_objects: (0..1000).map(|_| ObjectID::random()).collect(),
             payers: (0..rng.gen_range(0..100))
                 .map(|_| SuiAddress::random_for_testing_only())
