@@ -16,6 +16,7 @@ axum.workspace = true
 backoff.workspace = true
 bcs.workspace = true
 clap.workspace = true
+futures.workspace = true
 prometheus.workspace = true
 reqwest.workspace = true
 serde.workspace = true

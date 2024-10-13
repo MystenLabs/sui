@@ -3,8 +3,9 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use sui_indexer_alt::{args::Args, ingestion::IngestionClient, metrics::MetricsService};
-use tokio::signal;
+use mysten_metrics::spawn_monitored_task;
+use sui_indexer_alt::{args::Args, ingestion::IngestionService, metrics::MetricsService};
+use tokio::{signal, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -20,41 +21,46 @@ async fn main() -> Result<()> {
     let cancel = CancellationToken::new();
 
     let (metrics, metrics_service) = MetricsService::new(args.metrics_address, cancel.clone())?;
+    let mut ingestion_service =
+        IngestionService::new(args.ingestion, metrics.clone(), cancel.clone())?;
 
     let metrics_handle = metrics_service
         .run()
         .await
         .context("Failed to start metrics service")?;
 
-    info!("Fetching {}", args.remote_store_url);
+    let ingester_handle = digest_ingester(&mut ingestion_service, cancel.clone());
 
-    let client = IngestionClient::new(args.remote_store_url, metrics.clone())?;
-    let checkpoint = client.fetch(args.start).await?;
-
-    info!(
-        txs = checkpoint.transactions.len(),
-        evs = checkpoint
-            .transactions
-            .iter()
-            .map(|tx| tx.events.as_ref().map_or(0, |evs| evs.data.len()))
-            .sum::<usize>(),
-        ins = checkpoint
-            .transactions
-            .iter()
-            .map(|tx| tx.input_objects.len())
-            .sum::<usize>(),
-        outs = checkpoint
-            .transactions
-            .iter()
-            .map(|tx| tx.output_objects.len())
-            .sum::<usize>(),
-        "Fetch checkpoint {}",
-        args.start,
-    );
+    let ingestion_handle = ingestion_service
+        .run()
+        .await
+        .context("Failed to start ingestion service")?;
 
     // Once we receive a Ctrl-C, notify all services to shutdown, and wait for them to finish.
     signal::ctrl_c().await.unwrap();
     cancel.cancel();
+    ingester_handle.await.unwrap();
     metrics_handle.await.unwrap();
+    ingestion_handle.await.unwrap();
+
     Ok(())
+}
+
+/// Test ingester which logs the digests of checkpoints it receives.
+fn digest_ingester(ingestion: &mut IngestionService, cancel: CancellationToken) -> JoinHandle<()> {
+    let mut rx = ingestion.subscribe();
+    spawn_monitored_task!(async move {
+        info!("Starting checkpoint digest ingester");
+        loop {
+            tokio::select! {
+                _ = cancel.cancelled() => break,
+                Some(checkpoint) = rx.recv() => {
+                    let cp = checkpoint.checkpoint_summary.sequence_number;
+                    let digest = checkpoint.checkpoint_summary.content_digest;
+                    info!("{cp}: {digest}");
+                }
+            }
+        }
+        info!("Shutdown received, stopping digest ingester");
+    })
 }
