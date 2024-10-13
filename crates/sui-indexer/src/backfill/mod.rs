@@ -29,6 +29,7 @@ pub enum BackfillTaskKind {
 
 #[derive(ValueEnum, Clone, Debug)]
 pub enum IngestionBackfillKind {
+    Digest,
     RawCheckpoints,
     TxAffectedObjects,
 }
