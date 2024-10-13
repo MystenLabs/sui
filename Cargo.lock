@@ -15686,7 +15686,6 @@ dependencies = [
  "move-binary-format",
  "prometheus",
  "rand 0.8.5",
- "sui-bridge",
  "sui-config",
  "sui-core",
  "sui-framework",
