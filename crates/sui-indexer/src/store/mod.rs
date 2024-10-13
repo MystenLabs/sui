@@ -40,18 +40,17 @@ where
         })?;
         guard.stop_and_record();
 
-        connection
-            .build_transaction()
-            .read_write()
-            .run(query.clone())
-            .await
-            .map_err(|e| {
-                tracing::error!("Error with persisting data into DB: {:?}, retrying...", e);
-                backoff::Error::Transient {
-                    err: IndexerError::PostgresWriteError(e.to_string()),
-                    retry_after: None,
-                }
-            })
+        // run query with retry and without transaction
+        let cloned_query = query.clone();
+        cloned_query(&mut connection)
+        .await
+        .map_err(|e| {
+            tracing::error!("Error executing query: {:?}, retrying...", e);
+            backoff::Error::Transient {
+                err: IndexerError::PostgresWriteError(e.to_string()),
+                retry_after: None,
+            }
+        })
     })
     .await
 }
