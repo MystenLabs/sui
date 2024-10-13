@@ -186,6 +186,15 @@ pub struct BenchmarkConfig {
     pub checkpoint_size: usize,
     #[arg(
         long,
+        default_value_t = Self::DEFAULT_WARMUP_TX_COUNT,
+        help = "Number of synthetic transactions to generate before starting ingestion.\
+        This is useful to accumulate enough checkpoints in the file system before starting ingestion.\
+        For instance, if synthetic transaction generation speed is slower than ingestion speed,\
+        it's better to generate some transactions before starting ingestion to observe peak ingestion speed."
+    )]
+    pub warmup_tx_count: u64,
+    #[arg(
+        long,
         default_value_t = false,
         help = "Reset the database before running the benchmark"
     )]
@@ -195,6 +204,7 @@ pub struct BenchmarkConfig {
 impl BenchmarkConfig {
     const DEFAULT_NUM_CHECKPOINTS: usize = 10000;
     const DEFAULT_CHECKPOINT_SIZE: usize = 200;
+    const DEFAULT_WARMUP_TX_COUNT: u64 = 400_000;
 }
 
 #[derive(Subcommand, Clone, Debug)]

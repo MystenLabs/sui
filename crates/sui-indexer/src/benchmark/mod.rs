@@ -11,6 +11,7 @@ use crate::metrics::IndexerMetrics;
 use crate::store::PgIndexerStore;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tempfile::tempdir;
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -23,15 +24,19 @@ pub async fn run_benchmark(
 ) -> anyhow::Result<()> {
     let ingestion_dir = tempdir()?;
     let path = ingestion_dir.path().to_path_buf();
+    let (wamup_finish_sender, wamup_finish_receiver) = oneshot::channel();
 
     let ingestion_task = tokio::task::spawn(async move {
         synthetic_ingestion::run_synthetic_ingestion(
             path,
             config.checkpoint_size,
             config.num_checkpoints,
+            config.warmup_tx_count,
+            wamup_finish_sender,
         )
         .await
     });
+    wamup_finish_receiver.await?;
 
     if config.reset_database {
         reset_database(pool.dedicated_connection().await?).await?;
