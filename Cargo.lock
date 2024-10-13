@@ -13885,6 +13885,7 @@ dependencies = [
  "backoff",
  "bcs",
  "clap",
+ "futures",
  "mysten-metrics",
  "prometheus",
  "reqwest 0.12.5",
