@@ -121,6 +121,7 @@ members = [
     "crates/sui-json-rpc-tests",
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
+    "crates/sui-kvstore",
     "crates/sui-light-client",
     "crates/sui-macros",
     "crates/sui-metric-checker",
@@ -345,6 +346,7 @@ futures-core = "0.3.21"
 git-version = "0.3.5"
 glob = "0.3.1"
 governor = "0.6.0"
+gcp_auth = "0.12.3"
 hashbrown = "0.12"
 hdrhistogram = "7.5.1"
 hex = "0.4.3"
@@ -419,6 +421,7 @@ proptest = "1.1.0"
 proptest-derive = "0.3.0"
 prost = "0.13"
 prost-build = "0.13"
+prost-types = "0.13.1"
 protobuf = { version = "2.28", features = ["with-bytes"] }
 quinn-proto = "0.11.7"
 quote = "1.0.23"
