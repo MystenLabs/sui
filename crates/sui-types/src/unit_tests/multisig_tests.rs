@@ -498,3 +498,34 @@ fn test_derive_multisig_address() {
             .unwrap()
     );
 }
+
+#[test]
+fn bench_multisig() {
+    let kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
+    let kp2: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
+    let kp3: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
+
+    let pk1 = kp1.public();
+    let pk2 = kp2.public();
+    let pk3 = kp3.public();
+
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2, pk3], vec![1, 1, 1], 2).unwrap();
+    let multisig_addr = SuiAddress::from(&multisig_pk);
+
+    let msg = IntentMessage::new(
+        Intent::sui_transaction(),
+        PersonalMessage {
+            message: "Hello".as_bytes().to_vec(),
+        },
+    );
+    let sig1: GenericSignature = Signature::new_secure(&msg, &kp1).into();
+    let sig2 = Signature::new_secure(&msg, &kp2).into();
+    let multisig = MultiSig::combine(vec![sig1, sig2], multisig_pk.clone()).unwrap();
+
+    let res = multisig.verify_claims(
+        &msg,
+        multisig_addr,
+        &Default::default(),
+        Arc::new(VerifiedDigestCache::new_empty()),
+    );
+}
