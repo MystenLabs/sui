@@ -14,7 +14,7 @@ import { getPureBcsSchema, isTxContext, normalizedTypeToMoveTypeSignature } from
 import type { TransactionDataBuilder } from './TransactionData.js';
 
 // The maximum objects that can be fetched at once using multiGetObjects.
-const MAX_OBJECTS_PER_FETCH = 50;
+const DEFAULT_MAX_OBJECTS_PER_FETCH = 50;
 
 // An amount of gas (in gas units) that is added to transactions as an overhead to ensure transactions do not fail.
 const GAS_SAFE_OVERHEAD = 1000n;
@@ -23,6 +23,10 @@ const MAX_GAS = 50_000_000_000;
 export interface BuildTransactionOptions {
 	client?: SuiClient;
 	onlyTransactionKind?: boolean;
+	jsonRpc?: {
+		/** Sets the maximum number of objects to fetch per request when resolving object versions, defaults to 50 */
+		multiGetObjectsPageSize?: number;
+	};
 }
 
 export interface SerializeTransactionOptions extends BuildTransactionOptions {
@@ -159,7 +163,9 @@ async function resolveObjectReferences(
 		),
 	];
 
-	const objectChunks = dedupedIds.length ? chunk(dedupedIds, MAX_OBJECTS_PER_FETCH) : [];
+	const objectChunks = dedupedIds.length
+		? chunk(dedupedIds, options.jsonRpc?.multiGetObjectsPageSize ?? DEFAULT_MAX_OBJECTS_PER_FETCH)
+		: [];
 	const resolved = (
 		await Promise.all(
 			objectChunks.map((chunk) =>
