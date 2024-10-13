@@ -183,8 +183,7 @@ impl BridgeTestClusterBuilder {
             bridge_keys.push(kp.copy());
             bridge_keys_copy.push(kp);
         }
-        let start_cluster_task =
-            tokio::task::spawn(Self::start_test_cluster(bridge_keys, self.num_validators));
+        let start_cluster_task = tokio::task::spawn(Self::start_test_cluster(bridge_keys));
         let start_eth_env_task = tokio::task::spawn(Self::start_eth_env(bridge_keys_copy));
         let (start_cluster_res, start_eth_env_res) = join!(start_cluster_task, start_eth_env_task);
         let test_cluster = start_cluster_res.unwrap();
@@ -226,13 +225,12 @@ impl BridgeTestClusterBuilder {
         }
     }
 
-    async fn start_test_cluster(
-        bridge_keys: Vec<BridgeAuthorityKeyPair>,
-        num_validators: usize,
-    ) -> TestClusterWrapper {
-        assert_eq!(bridge_keys.len(), num_validators);
-        let test_cluster =
-            TestClusterWrapperBuilder::build(num_validators, bridge_keys, true).await;
+    async fn start_test_cluster(bridge_keys: Vec<BridgeAuthorityKeyPair>) -> TestClusterWrapper {
+        let test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
+            .await;
         info!("Test cluster built");
         test_cluster
             .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
@@ -871,19 +869,44 @@ impl Drop for TempDir {
     }
 }
 
-pub struct TestClusterWrapperBuilder;
+pub struct TestClusterWrapperBuilder {
+    protocol_version: u64,
+    bridge_authority_keys: Vec<BridgeAuthorityKeyPair>,
+    deploy_tokens: bool,
+}
 
 impl TestClusterWrapperBuilder {
-    pub async fn build(
-        num_validators: usize,
-        bridge_authority_keys: Vec<BridgeAuthorityKeyPair>,
-        deploy_tokens: bool,
-    ) -> TestClusterWrapper {
-        let builder = TestClusterBuilder::new()
-            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into());
+    pub fn new() -> Self {
+        Self {
+            protocol_version: BRIDGE_ENABLE_PROTOCOL_VERSION,
+            bridge_authority_keys: vec![],
+            deploy_tokens: false,
+        }
+    }
+
+    pub fn with_protocol_version(mut self, version: u64) -> Self {
+        self.protocol_version = version;
+        self
+    }
+
+    pub fn with_bridge_authority_keys(mut self, keys: Vec<BridgeAuthorityKeyPair>) -> Self {
+        self.bridge_authority_keys = keys;
+        self
+    }
+
+    pub fn with_deploy_tokens(mut self, deploy_tokens: bool) -> Self {
+        self.deploy_tokens = deploy_tokens;
+        self
+    }
+
+    pub async fn build(self) -> TestClusterWrapper {
+        assert_ne!(self.bridge_authority_keys.len(), 0);
+        let num_validators = self.bridge_authority_keys.len();
+        let builder = TestClusterBuilder::new().with_protocol_version(self.protocol_version.into());
 
         let timer = Instant::now();
-        let gas_objects_for_authority_keys = bridge_authority_keys
+        let gas_objects_for_authority_keys = self
+            .bridge_authority_keys
             .iter()
             .map(|k| {
                 let address = SuiAddress::from(k.public());
@@ -902,7 +925,7 @@ impl TestClusterWrapperBuilder {
         let ref_gas_price = test_cluster.get_reference_gas_price().await;
         let bridge_arg = get_mut_bridge_arg(&test_cluster).await.unwrap();
         assert_eq!(
-            bridge_authority_keys.len(),
+            self.bridge_authority_keys.len(),
             test_cluster.swarm.active_validators().count()
         );
 
@@ -935,7 +958,7 @@ impl TestClusterWrapperBuilder {
         let reordered_nodes = other_nodes
             .iter()
             .chain(std::iter::once(&node_with_max_stake));
-        for (node, kp) in reordered_nodes.zip(bridge_authority_keys.iter()) {
+        for (node, kp) in reordered_nodes.zip(self.bridge_authority_keys.iter()) {
             let validator_address = node.config().sui_address();
             // create committee registration tx
             let gas = test_cluster
@@ -975,7 +998,7 @@ impl TestClusterWrapperBuilder {
             });
         }
 
-        if deploy_tokens {
+        if self.deploy_tokens {
             let timer = Instant::now();
             let token_ids = vec![TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT];
             let token_prices = vec![500_000_000u64, 30_000_000u64, 1_000u64, 1_000u64];
@@ -994,7 +1017,8 @@ impl TestClusterWrapperBuilder {
             );
             let action = action.await;
             info!("register tokens took {:?} secs", timer.elapsed().as_secs());
-            let sig_map = bridge_authority_keys
+            let sig_map = self
+                .bridge_authority_keys
                 .iter()
                 .map(|key| {
                     (
@@ -1072,12 +1096,17 @@ impl TestClusterWrapperBuilder {
         );
         TestClusterWrapper {
             inner: test_cluster,
-            bridge_authority_keys,
+            bridge_authority_keys: self.bridge_authority_keys,
             bridge_server_ports: server_ports,
         }
     }
 }
 
+impl Default for TestClusterWrapperBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 pub struct TestClusterWrapper {
     pub inner: TestCluster,
     pub bridge_authority_keys: Vec<BridgeAuthorityKeyPair>,

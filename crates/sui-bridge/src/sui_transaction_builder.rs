@@ -646,7 +646,11 @@ mod tests {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
-        let mut test_cluster = TestClusterWrapperBuilder::build(4, bridge_keys, true).await;
+        let mut test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
+            .await;
 
         let metrics = Arc::new(BridgeMetrics::new_for_testing());
         let sui_client = SuiClient::new(&test_cluster.inner.fullnode_handle.rpc_url, metrics)
@@ -721,8 +725,11 @@ mod tests {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
-        let mut test_cluster =
-            TestClusterWrapperBuilder::build(num_valdiator, bridge_keys, true).await;
+        let mut test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
+            .await;
         let metrics = Arc::new(BridgeMetrics::new_for_testing());
         let sui_client = SuiClient::new(&test_cluster.inner.fullnode_handle.rpc_url, metrics)
             .await
@@ -789,7 +796,11 @@ mod tests {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
-        let mut test_cluster = TestClusterWrapperBuilder::build(4, bridge_keys, true).await;
+        let mut test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
+            .await;
         let metrics = Arc::new(BridgeMetrics::new_for_testing());
         let sui_client = SuiClient::new(&test_cluster.inner.fullnode_handle.rpc_url, metrics)
             .await
@@ -875,7 +886,11 @@ mod tests {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
-        let mut test_cluster = TestClusterWrapperBuilder::build(4, bridge_keys, true).await;
+        let mut test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
+            .await;
         let metrics = Arc::new(BridgeMetrics::new_for_testing());
         let sui_client = SuiClient::new(&test_cluster.inner.fullnode_handle.rpc_url, metrics)
             .await
@@ -942,7 +957,11 @@ mod tests {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
-        let mut test_cluster = TestClusterWrapperBuilder::build(4, bridge_keys, true).await;
+        let mut test_cluster = TestClusterWrapperBuilder::new()
+            .with_bridge_authority_keys(bridge_keys)
+            .with_deploy_tokens(true)
+            .build()
+            .await;
         let metrics = Arc::new(BridgeMetrics::new_for_testing());
         let sui_client = SuiClient::new(&test_cluster.inner.fullnode_handle.rpc_url, metrics)
             .await
