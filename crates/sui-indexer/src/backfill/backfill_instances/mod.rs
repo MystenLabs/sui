@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::backfill::backfill_instances::ingestion_backfills::digest_task::DigestBackfill;
 use crate::backfill::backfill_instances::ingestion_backfills::ingestion_backfill_task::IngestionBackfillTask;
 use crate::backfill::backfill_instances::ingestion_backfills::raw_checkpoints::RawCheckpointsBackFill;
 use crate::backfill::backfill_instances::ingestion_backfills::tx_affected_objects::TxAffectedObjectsBackfill;
@@ -28,6 +29,13 @@ pub async fn get_backfill_task(
             kind,
             remote_store_url,
         } => match kind {
+            IngestionBackfillKind::Digest => Arc::new(
+                IngestionBackfillTask::<DigestBackfill>::new(
+                    remote_store_url,
+                    range_start as CheckpointSequenceNumber,
+                )
+                .await,
+            ),
             IngestionBackfillKind::RawCheckpoints => Arc::new(
                 IngestionBackfillTask::<RawCheckpointsBackFill>::new(
                     remote_store_url,
