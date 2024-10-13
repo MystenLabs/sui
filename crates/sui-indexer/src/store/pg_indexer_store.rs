@@ -1802,7 +1802,7 @@ impl IndexerStore for PgIndexerStore {
             .start_timer();
 
         let len = objects.len();
-        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
+        let chunks = chunk!(objects, min(len, self.config.parallel_objects_chunk_size));
         let futures = chunks
             .into_iter()
             .map(|c| self.persist_objects_history_chunk(c))

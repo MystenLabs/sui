@@ -11,6 +11,8 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::MIST_PER_SUI;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::utils::to_sender_signed_transaction;
+use tokio::sync::oneshot;
+use tracing::info;
 
 /// 1 is fairly sufficient for now. It can sustain about 6000-8000 TPS.
 /// We can tune it up if we really need more.
@@ -21,7 +23,14 @@ pub(crate) async fn run_synthetic_ingestion(
     ingestion_dir: PathBuf,
     checkpoint_size: usize,
     num_checkpoints: usize,
+    warmup_tx_count: u64,
+    warmup_finish_sender: oneshot::Sender<()>,
 ) {
+    info!(
+        "Generating synthetic ingestion data, warmup tx count: {}",
+        warmup_tx_count
+    );
+    let mut warmup_finish_sender = Some(warmup_finish_sender);
     let mut sim = Simulacrum::new();
     sim.set_data_ingestion_path(ingestion_dir);
 
@@ -62,6 +71,10 @@ pub(crate) async fn run_synthetic_ingestion(
             })
             .collect();
         sim.create_checkpoint();
+        if tx_count >= warmup_tx_count && warmup_finish_sender.is_some() {
+            let sender = warmup_finish_sender.take().unwrap();
+            sender.send(()).unwrap();
+        }
         logger.log(tx_count, checkpoint as CheckpointSequenceNumber);
     }
 }
