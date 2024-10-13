@@ -35,7 +35,8 @@ pub struct IndexerMetrics {
     pub total_ingested_inputs: IntCounter,
     pub total_ingested_outputs: IntCounter,
     pub total_ingested_bytes: IntCounter,
-    pub total_ingested_retries: IntCounter,
+    pub total_ingested_transient_retries: IntCounter,
+    pub total_ingested_not_found_retries: IntCounter,
 
     // Distribution of times taken to fetch data from the remote store, including time taken on
     // retries.
@@ -75,7 +76,7 @@ impl MetricsService {
             axum::serve(listener, app)
                 .with_graceful_shutdown(async move {
                     self.cancel.cancelled().await;
-                    info!("Shutdown received, stopping metrics service.");
+                    info!("Shutdown received, stopping metrics service");
                 })
                 .await
                 .unwrap();
@@ -122,9 +123,15 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            total_ingested_retries: register_int_counter_with_registry!(
+            total_ingested_transient_retries: register_int_counter_with_registry!(
                 "indexer_total_ingested_retries",
-                "Total number of retries fetching data from the remote store",
+                "Total number of retries due to transient errors while fetching data from the remote store",
+                registry,
+            )
+            .unwrap(),
+            total_ingested_not_found_retries: register_int_counter_with_registry!(
+                "indexer_total_ingested_not_found_retries",
+                "Total number of retries due to the not found errors while fetching data from the remote store",
                 registry,
             )
             .unwrap(),
