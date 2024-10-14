@@ -119,7 +119,7 @@ export const mainnetPools: PoolMap = {
 		quoteCoin: 'SUI',
 	},
 	SUI_USDC: {
-		address: ``,
+		address: `0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407`,
 		baseCoin: 'SUI',
 		quoteCoin: 'USDC',
 	},
@@ -128,14 +128,19 @@ export const mainnetPools: PoolMap = {
 		baseCoin: 'DEEP',
 		quoteCoin: 'USDC',
 	},
-	USDT_USDC: {
-		address: ``,
-		baseCoin: 'USDT',
+	WUSDT_USDC: {
+		address: `0x52f9bf16d9e7eff79da73d5e3dea39fe1ef8c77684bf4ec2c6566b41396404d0`,
+		baseCoin: 'WUSDT',
 		quoteCoin: 'USDC',
 	},
 	WUSDC_USDC: {
-		address: ``,
+		address: `0xc69f7755fec146583e276a104bcf91e0c9f0cab91dcdb1c202e8d76a5a5a1101`,
 		baseCoin: 'WUSDC',
+		quoteCoin: 'USDC',
+	},
+	BETH_USDC: {
+		address: `0x1109352b9112717bd2a7c3eb9a416fff1ba6951760f5bdd5424cf5e4e5b3e65c`,
+		baseCoin: 'BETH',
 		quoteCoin: 'USDC',
 	},
 };
