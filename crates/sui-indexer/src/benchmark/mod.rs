@@ -56,7 +56,7 @@ pub async fn run_benchmark(
 
     Indexer::start_writer(
         &ingestion_config,
-        store,
+        store.clone(),
         metrics,
         SnapshotLagConfig::default(),
         None,
@@ -65,6 +65,14 @@ pub async fn run_benchmark(
     .await?;
 
     ingestion_task.await?;
+    while store
+        .get_latest_checkpoint_sequence_number()
+        .await?
+        .unwrap_or_default()
+        < config.num_checkpoints as u64
+    {
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    }
     cancel.cancel();
     Ok(())
 }
