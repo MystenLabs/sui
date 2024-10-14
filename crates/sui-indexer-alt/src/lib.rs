@@ -6,3 +6,4 @@ pub mod db;
 pub mod ingestion;
 pub mod metrics;
 mod schema;
+pub mod task;
