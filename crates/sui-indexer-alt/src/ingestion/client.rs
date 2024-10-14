@@ -46,12 +46,10 @@ impl IngestionClient {
         let request = move || {
             let url = url.clone();
             async move {
-                let response = self
-                    .client
-                    .get(url)
-                    .send()
-                    .await
-                    .expect("Unexpected error building request");
+                let response = self.client.get(url).send().await.map_err(|e| {
+                    self.metrics
+                        .inc_retry(checkpoint, "request", Error::ReqwestError(e))
+                })?;
 
                 use backoff::Error as BE;
                 match response.status() {
@@ -266,6 +264,42 @@ pub(crate) mod tests {
             error,
             Error::HttpError(42, StatusCode::IM_A_TEAPOT)
         ));
+    }
+
+    /// Assume that failures to send the request to the remote store are due to temporary
+    /// connectivity issues, and retry them.
+    #[tokio::test]
+    async fn retry_on_request_error() {
+        let server = MockServer::start().await;
+
+        let times: Mutex<u64> = Mutex::new(0);
+        respond_with(&server, move |r: &Request| {
+            let mut times = times.lock().unwrap();
+            *times += 1;
+            match (*times, r.url.path()) {
+                // The first request will trigger a redirect to 0.chk no matter what the original
+                // request was for -- triggering a request error.
+                (1, _) => status(StatusCode::MOVED_PERMANENTLY).append_header("Location", "/0.chk"),
+
+                // Set-up checkpoint 0 as an infinite redirect loop.
+                (_, "/0.chk") => {
+                    status(StatusCode::MOVED_PERMANENTLY).append_header("Location", r.url.as_str())
+                }
+
+                // Subsequently, requests will fail with a permanent error, this is what we expect
+                // to see.
+                _ => status(StatusCode::IM_A_TEAPOT),
+            }
+        })
+        .await;
+
+        let client = test_client(server.uri());
+        let error = client.fetch(42).await.unwrap_err();
+
+        assert!(
+            matches!(error, Error::HttpError(42, StatusCode::IM_A_TEAPOT),),
+            "{error}"
+        );
     }
 
     /// Assume that certain errors will recover by themselves, and keep retrying with an
