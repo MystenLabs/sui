@@ -7,12 +7,12 @@ use anyhow::Result;
 use axum::{extract::Extension, routing::get, Router};
 use mysten_metrics::RegistryService;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
-    Registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
 };
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 /// Histogram buckets for the distribution of checkpoint fetching latencies.
 const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -35,7 +35,7 @@ pub struct IndexerMetrics {
     pub total_ingested_inputs: IntCounter,
     pub total_ingested_outputs: IntCounter,
     pub total_ingested_bytes: IntCounter,
-    pub total_ingested_transient_retries: IntCounter,
+    pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
 
     // Distribution of times taken to fetch data from the remote store, including time taken on
@@ -123,15 +123,18 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            total_ingested_transient_retries: register_int_counter_with_registry!(
+            total_ingested_transient_retries: register_int_counter_vec_with_registry!(
                 "indexer_total_ingested_retries",
-                "Total number of retries due to transient errors while fetching data from the remote store",
+                "Total number of retries due to transient errors while fetching data from the \
+                 remote store",
+                &["reason"],
                 registry,
             )
             .unwrap(),
             total_ingested_not_found_retries: register_int_counter_with_registry!(
                 "indexer_total_ingested_not_found_retries",
-                "Total number of retries due to the not found errors while fetching data from the remote store",
+                "Total number of retries due to the not found errors while fetching data from the \
+                 remote store",
                 registry,
             )
             .unwrap(),
@@ -143,6 +146,14 @@ impl IndexerMetrics {
             )
             .unwrap(),
         }
+    }
+
+    /// Register that we're retrying a checkpoint fetch due to a transient error.
+    pub(crate) fn inc_retry(&self, checkpoint: u64, reason: &str) {
+        warn!(checkpoint, reason, "Transient error, retrying...");
+        self.total_ingested_transient_retries
+            .with_label_values(&[reason])
+            .inc();
     }
 }
 

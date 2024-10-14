@@ -7,7 +7,7 @@ use backoff::ExponentialBackoff;
 use reqwest::{Client, StatusCode};
 use sui_storage::blob::Blob;
 use sui_types::full_checkpoint_content::CheckpointData;
-use tracing::debug;
+use tracing::{debug, error};
 use url::Url;
 
 use crate::ingestion::error::{Error, Result};
@@ -60,13 +60,14 @@ impl IngestionClient {
                         // checkpoint from them is considered a transient error -- the store being
                         // fetched from needs to be corrected, and ingestion will keep retrying it
                         // until it is.
-                        let bytes = response
-                            .bytes()
-                            .await
-                            .map_err(|e| BE::transient(Error::ReqwestError(e)))?;
+                        let bytes = response.bytes().await.map_err(|e| {
+                            self.metrics.inc_retry(checkpoint, "bytes");
+                            BE::transient(Error::ReqwestError(e))
+                        })?;
 
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
                         let data: CheckpointData = Blob::from_bytes(&bytes).map_err(|e| {
+                            self.metrics.inc_retry(checkpoint, "deserialization");
                             BE::transient(Error::DeserializationError(checkpoint, e))
                         })?;
 
@@ -81,29 +82,26 @@ impl IngestionClient {
 
                     // Timeouts are a client error but they are usually transient.
                     code @ StatusCode::REQUEST_TIMEOUT => {
-                        debug!(checkpoint, %code, "Transient error, retrying...");
-                        self.metrics.total_ingested_transient_retries.inc();
+                        self.metrics.inc_retry(checkpoint, "timeout");
                         Err(BE::transient(Error::HttpError(checkpoint, code)))
                     }
 
                     // Rate limiting is also a client error, but the backoff will eventually widen the
                     // interval appropriately.
                     code @ StatusCode::TOO_MANY_REQUESTS => {
-                        debug!(checkpoint, %code, "Transient error, retrying...");
-                        self.metrics.total_ingested_transient_retries.inc();
+                        self.metrics.inc_retry(checkpoint, "too_many_requests");
                         Err(BE::transient(Error::HttpError(checkpoint, code)))
                     }
 
                     // Assume that if the server is facing difficulties, it will recover eventually.
                     code if code.is_server_error() => {
-                        debug!(checkpoint, %code, "Transient error, retrying...");
-                        self.metrics.total_ingested_transient_retries.inc();
+                        self.metrics.inc_retry(checkpoint, "server_error");
                         Err(BE::transient(Error::HttpError(checkpoint, code)))
                     }
 
                     // For everything else, assume it's a permanent error and don't retry.
                     code => {
-                        debug!(checkpoint, %code, "Permanent error, giving up!");
+                        error!(checkpoint, %code, "Permanent error, giving up!");
                         Err(BE::permanent(Error::HttpError(checkpoint, code)))
                     }
                 }
