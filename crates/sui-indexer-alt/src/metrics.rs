@@ -14,6 +14,8 @@ use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+use crate::ingestion::error::Error;
+
 /// Histogram buckets for the distribution of checkpoint fetching latencies.
 const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
@@ -148,12 +150,21 @@ impl IndexerMetrics {
         }
     }
 
-    /// Register that we're retrying a checkpoint fetch due to a transient error.
-    pub(crate) fn inc_retry(&self, checkpoint: u64, reason: &str) {
-        warn!(checkpoint, reason, "Transient error, retrying...");
+    /// Register that we're retrying a checkpoint fetch due to a transient error, logging the
+    /// reason and error.
+    pub(crate) fn inc_retry(
+        &self,
+        checkpoint: u64,
+        reason: &str,
+        error: Error,
+    ) -> backoff::Error<Error> {
+        warn!(checkpoint, reason, "Retrying due to error: {error}");
+
         self.total_ingested_transient_retries
             .with_label_values(&[reason])
             .inc();
+
+        backoff::Error::transient(error)
     }
 }
 
