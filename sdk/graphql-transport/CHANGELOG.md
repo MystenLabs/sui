@@ -1,5 +1,12 @@
 # @mysten/graphql-transport
 
+## 0.2.23
+
+### Patch Changes
+
+- 5299c18: Update the GraphQL transport to account for the removal of recvAddress and the
+  introduction of affectedAddress.
+
 ## 0.2.22
 
 ### Patch Changes
