@@ -483,6 +483,10 @@ impl MovePackage {
     /// The ObjectID that this package's modules believe they are from, at runtime (can differ from
     /// `MovePackage::id()` in the case of package upgrades).
     pub fn original_package_id(&self) -> ObjectID {
+        if self.version == OBJECT_START_VERSION {
+            // for a non-upgraded package, original ID is just the package ID
+            return self.id;
+        }
         let bytes = self.module_map.values().next().expect("Empty module map");
         let module = CompiledModule::deserialize_with_defaults(bytes)
             .expect("A Move package contains a module that cannot be deserialized");
