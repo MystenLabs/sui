@@ -4,3 +4,6 @@ public native fun global<T, U>(): &U;
 public native fun declare_global<T, U>();
 public native fun declare_global_mut<T, U>();
 // public native fun global_update<T, U>(x: &U);
+
+#[allow(unused)]
+native fun havoc_global<T, U>();

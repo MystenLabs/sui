@@ -31,6 +31,13 @@ impl SpecGlobalVariableInfo {
     pub fn all_vars(&self) -> impl Iterator<Item = Vec<Type>> + '_ {
         self.imm_vars.union(&self.mut_vars).cloned()
     }
+
+    pub fn union(&self, other: &Self) -> Self {
+        Self {
+            imm_vars: self.imm_vars.union(&other.imm_vars).cloned().collect(),
+            mut_vars: self.mut_vars.union(&other.mut_vars).cloned().collect(),
+        }
+    }
 }
 
 // Get the information computed by this analysis.
@@ -119,10 +126,22 @@ pub fn collect_spec_global_variable_info(
     func_env: &FunctionEnv,
     code: &[Bytecode],
 ) -> SpecGlobalVariableInfo {
+    let spec_module_id = func_env
+        .module_env
+        .env
+        .find_module_by_name(func_env.symbol_pool().make("ghost"))
+        .unwrap()
+        .get_id();
+    let global_function_id = FunId::new(func_env.symbol_pool().make("global"));
+
     let (imm_iter, mut_iter): (Vec<_>, Vec<_>) = code
         .iter()
         .filter_map(|bc| match bc {
             Bytecode::Call(_, _, Operation::Function(module_id, fun_id, type_inst), _, _) => {
+                if module_id.qualified(*fun_id) == spec_module_id.qualified(global_function_id) {
+                    return Some((vec![type_inst.clone()], vec![]));
+                }
+
                 let callee_id = module_id.qualified(*fun_id);
                 let fun_id_with_info = match targets.get_opaque_spec_by_fun(&callee_id) {
                     Some(spec_id) => {
@@ -134,6 +153,7 @@ pub fn collect_spec_global_variable_info(
                     }
                     None => &callee_id,
                 };
+
                 if func_env
                     .module_env
                     .env
@@ -142,6 +162,7 @@ pub fn collect_spec_global_variable_info(
                 {
                     return None;
                 }
+
                 let info = get_info(
                     targets
                         .get_data(fun_id_with_info, &FunctionVariant::Baseline)
@@ -163,8 +184,8 @@ pub fn collect_spec_global_variable_info(
         .unzip();
 
     SpecGlobalVariableInfo {
-        imm_vars: imm_iter.iter().flatten().map(|tys| tys.clone()).collect(),
-        mut_vars: mut_iter.iter().flatten().map(|tys| tys.clone()).collect(),
+        imm_vars: imm_iter.into_iter().flatten().collect(),
+        mut_vars: mut_iter.into_iter().flatten().collect(),
     }
 }
 

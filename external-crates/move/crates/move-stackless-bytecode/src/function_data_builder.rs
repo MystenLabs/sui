@@ -13,7 +13,7 @@ use move_model::{
     ast::{Exp, TempIndex},
     exp_generator::ExpGenerator,
     model::{FunctionEnv, Loc},
-    ty::Type,
+    ty::{Type, BOOL_TYPE},
 };
 
 #[derive(Default)]
@@ -238,6 +238,20 @@ impl<'env> FunctionDataBuilder<'env> {
             Bytecode::Call(id, vec![temp], Operation::Havoc(havoc_kind), vec![], None)
         });
         (temp, temp_exp)
+    }
+
+    pub fn emit_havoc(&mut self, temp: TempIndex, havoc_kind: HavocKind) {
+        self.emit_with(|id| {
+            Bytecode::Call(id, vec![temp], Operation::Havoc(havoc_kind), vec![], None)
+        });
+        self.emit_prop(
+            PropKind::Assume,
+            self.mk_call(
+                &BOOL_TYPE,
+                move_model::ast::Operation::WellFormed,
+                vec![self.mk_temporary(temp)],
+            ),
+        );
     }
 
     pub fn dup_code(&mut self, code: &[Bytecode]) -> Vec<Bytecode> {

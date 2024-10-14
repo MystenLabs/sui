@@ -6,7 +6,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use itertools::Itertools;
 use move_binary_format::file_format::CodeOffset;
-use move_model::{ast::TempIndex, model::FunId, model::FunctionEnv, ty::BOOL_TYPE};
+use move_model::{
+    ast::TempIndex,
+    model::{FunId, FunctionEnv},
+    ty::Type,
+};
 
 use crate::{
     function_data_builder::{FunctionDataBuilder, FunctionDataBuilderOptions},
@@ -14,6 +18,7 @@ use crate::{
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},
     graph::{Graph, NaturalLoop},
     options::ProverOptions,
+    spec_global_variable_analysis,
     stackless_bytecode::{AbortAction, Bytecode, HavocKind, Label, Operation},
     stackless_control_flow_graph::{BlockContent, BlockId, StacklessControlFlowGraph},
 };
@@ -33,6 +38,7 @@ pub struct FatLoop {
     pub mut_targets: BTreeMap<TempIndex, bool>,
     pub back_edges: BTreeSet<CodeOffset>,
     pub loop_invariant: LoopInvariant,
+    pub spec_global_var_mut: BTreeSet<Vec<Type>>,
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +78,7 @@ impl LoopAnalysisProcessor {
 impl FunctionTargetProcessor for LoopAnalysisProcessor {
     fn process(
         &self,
-        _targets: &mut FunctionTargetsHolder,
+        targets: &mut FunctionTargetsHolder,
         func_env: &FunctionEnv,
         data: FunctionData,
         _scc_opt: Option<&[FunctionEnv]>,
@@ -80,7 +86,7 @@ impl FunctionTargetProcessor for LoopAnalysisProcessor {
         if func_env.is_native() {
             return data;
         }
-        let loop_annotation = Self::build_loop_annotation(func_env, &data);
+        let loop_annotation = Self::build_loop_annotation(targets, func_env, &data);
         // println!("before {}:", self.name());
         // println!("{}", FunctionTarget::new(func_env, &data));
         // let result = Self::transform(func_env, data, &loop_annotation);
@@ -137,6 +143,13 @@ impl LoopAnalysisProcessor {
         );
         let ensures_requires_subst =
             BTreeMap::from_iter(vec![(ensures_function, requires_function)]);
+        let spec_module_id = func_env
+            .module_env
+            .env
+            .find_module_by_name(func_env.symbol_pool().make("ghost"))
+            .unwrap()
+            .get_id();
+        let havoc_global_function_id = FunId::new(func_env.symbol_pool().make("havoc_global"));
 
         let back_edge_locs = loop_annotation.back_edges_locations();
         let mut builder = FunctionDataBuilder::new_with_options(
@@ -155,17 +168,29 @@ impl LoopAnalysisProcessor {
                     builder.set_loc_from_attr(attr_id);
                     if let Some(loop_info) = loop_annotation.fat_loops.get(&label) {
                         // havoc all loop targets
+                        for idx in &loop_info.val_targets {
+                            builder.emit_havoc(*idx, HavocKind::Value);
+                        }
                         for (idx, havoc_all) in &loop_info.mut_targets {
                             let havoc_kind = if *havoc_all {
                                 HavocKind::MutationAll
                             } else {
                                 HavocKind::MutationValue
                             };
+                            builder.emit_havoc(*idx, havoc_kind);
+                        }
+
+                        // havoc mutable global spec variables
+                        for type_inst in &loop_info.spec_global_var_mut {
                             builder.emit_with(|attr_id| {
                                 Bytecode::Call(
                                     attr_id,
-                                    vec![*idx],
-                                    Operation::Havoc(havoc_kind),
+                                    vec![],
+                                    Operation::Function(
+                                        spec_module_id,
+                                        havoc_global_function_id,
+                                        type_inst.clone(),
+                                    ),
                                     vec![],
                                     None,
                                 )
@@ -223,7 +248,6 @@ impl LoopAnalysisProcessor {
                             });
                         }
 
-                        println!("Loop invariant\n{:?}", loop_info.loop_invariant.code);
                         let dup_code = builder
                             .dup_code(&loop_info.loop_invariant.code)
                             .iter()
@@ -311,13 +335,19 @@ impl LoopAnalysisProcessor {
     /// - the set of values to be havoc-ed, and
     /// - the set of mutations to he havoc-ed and how they should be havoc-ed.
     fn collect_loop_targets(
+        targets: &FunctionTargetsHolder,
         cfg: &StacklessControlFlowGraph,
         func_target: &FunctionTarget<'_>,
         sub_loops: &[NaturalLoop<BlockId>],
-    ) -> (BTreeSet<TempIndex>, BTreeMap<TempIndex, bool>) {
+    ) -> (
+        BTreeSet<TempIndex>,
+        BTreeMap<TempIndex, bool>,
+        BTreeSet<Vec<Type>>,
+    ) {
         let code = func_target.get_bytecode();
         let mut val_targets = BTreeSet::new();
         let mut mut_targets = BTreeMap::new();
+        let mut spec_global_var_mut = BTreeSet::new();
         let fat_loop_body: BTreeSet<_> = sub_loops
             .iter()
             .flat_map(|l| l.loop_body.iter())
@@ -339,9 +369,19 @@ impl LoopAnalysisProcessor {
                         })
                         .or_insert(is_full_havoc);
                 }
+                spec_global_var_mut.extend(
+                    spec_global_variable_analysis::collect_spec_global_variable_info(
+                        targets,
+                        func_target.func_env,
+                        &code[code_offset as usize..=code_offset as usize],
+                    )
+                    .mut_vars()
+                    .iter()
+                    .cloned(),
+                );
             }
         }
-        (val_targets, mut_targets)
+        (val_targets, mut_targets, spec_global_var_mut)
     }
 
     /// Collect code offsets that are branch instructions forming loop back-edges
@@ -376,7 +416,11 @@ impl LoopAnalysisProcessor {
 
     /// Find all loops in the function and collect information needed for invariant instrumentation
     /// and loop-to-DAG transformation.
-    fn build_loop_annotation(func_env: &FunctionEnv<'_>, data: &FunctionData) -> LoopAnnotation {
+    fn build_loop_annotation(
+        targets: &FunctionTargetsHolder,
+        func_env: &FunctionEnv<'_>,
+        data: &FunctionData,
+    ) -> LoopAnnotation {
         // build for natural loops
         let func_target = FunctionTarget::new(func_env, data);
         let code = func_target.get_bytecode();
@@ -451,8 +495,8 @@ impl LoopAnalysisProcessor {
                 },
             };
 
-            let (val_targets, mut_targets) =
-                Self::collect_loop_targets(&cfg, &func_target, &sub_loops);
+            let (val_targets, mut_targets, spec_global_var_mut) =
+                Self::collect_loop_targets(targets, &cfg, &func_target, &sub_loops);
             let back_edges = Self::collect_loop_back_edges(code, &cfg, label, &sub_loops);
 
             if let Some((begin, end)) = invariants_map.get(&label) {
@@ -466,7 +510,7 @@ impl LoopAnalysisProcessor {
                             None => None,
                         })
                     })
-                    .collect();
+                    .collect_vec();
                 // let mut code0 = code[(*begin)..=*end].to_vec();
                 // for bc in code.iter_mut() {
                 //     bc.set_abort_action(Some(AbortAction::Check));
@@ -478,6 +522,7 @@ impl LoopAnalysisProcessor {
                         mut_targets,
                         back_edges,
                         loop_invariant: LoopInvariant { code: code0 },
+                        spec_global_var_mut,
                     },
                 );
             }

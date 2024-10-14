@@ -1,6 +1,8 @@
 module prover::invariant_tests;
 
+use std::integer::Integer;
 use prover::prover::{requires, ensures, invariant, old};
+use prover::ghost;
 
 fun test0_spec(n: u64) {
     let mut i = 0;
@@ -96,4 +98,34 @@ fun test5_spec(n: u64) {
     };
 
     ensures(i >= n);
+}
+
+public struct SpecSum {}
+
+fun emit_u64(_x: u64) {}
+
+fun emit_u64_no_verify_spec(x: u64) {
+    ghost::declare_global_mut<SpecSum, Integer>();
+    let old_sum = *ghost::global<SpecSum, Integer>();
+    emit_u64(x);
+    ensures(ghost::global<SpecSum, Integer>() == old_sum.add(x.to_int()));
+}
+
+fun test6_spec(n: u64) {
+    ghost::declare_global_mut<SpecSum, Integer>();
+    requires(ghost::global<SpecSum, Integer>() == 0u64.to_int());
+
+    let mut i = 0;
+
+    invariant!(|| {
+        ensures(i <= n);
+        ensures(ghost::global<SpecSum, Integer>() == ((i as u128) * ((i as u128) + 1) / 2).to_int());
+    });
+    while (i < n) {
+        i = i + 1;
+        emit_u64(i);
+    };
+
+    ensures(i == n);
+    ensures(ghost::global<SpecSum, Integer>() == ((n as u128) * ((n as u128) + 1) / 2).to_int());
 }

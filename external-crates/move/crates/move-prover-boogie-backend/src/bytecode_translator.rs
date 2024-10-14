@@ -59,10 +59,10 @@ use crate::{
         boogie_function_bv_name, boogie_function_name, boogie_make_vec_from_strings,
         boogie_modifies_memory_name, boogie_num_literal, boogie_num_type_base,
         boogie_num_type_string_capital, boogie_reflection_type_info, boogie_reflection_type_name,
-        boogie_resource_memory_name, boogie_struct_name, boogie_temp, boogie_temp_from_suffix,
-        boogie_type, boogie_type_param, boogie_type_suffix, boogie_type_suffix_bv,
-        boogie_type_suffix_for_struct, boogie_well_formed_check, boogie_well_formed_expr_bv,
-        FunctionTranslationStyle, TypeIdentToken,
+        boogie_resource_memory_name, boogie_spec_global_var_name, boogie_struct_name, boogie_temp,
+        boogie_temp_from_suffix, boogie_type, boogie_type_param, boogie_type_suffix,
+        boogie_type_suffix_bv, boogie_type_suffix_for_struct, boogie_well_formed_check,
+        boogie_well_formed_expr_bv, FunctionTranslationStyle, TypeIdentToken,
     },
     options::BoogieOptions,
     spec_translator::SpecTranslator,
@@ -655,12 +655,19 @@ impl<'env> BoogieTranslator<'env> {
             .unwrap()
             .get_id();
         let global_function_id = FunId::new(self.env.symbol_pool().make("global"));
+        let havoc_global_function_id = FunId::new(self.env.symbol_pool().make("havoc_global"));
         let ghost_global_fun_env = self
             .env
             .get_function(ghost_module_id.qualified(global_function_id));
         let ghost_global_fun_target = self
             .targets
             .get_target(&ghost_global_fun_env, &FunctionVariant::Baseline);
+        let ghost_havoc_global_fun_env = self
+            .env
+            .get_function(ghost_module_id.qualified(havoc_global_function_id));
+        let ghost_havoc_global_fun_target = self
+            .targets
+            .get_target(&ghost_havoc_global_fun_env, &FunctionVariant::Baseline);
 
         let ghost_declare_global_type_instances = self
             .targets
@@ -672,6 +679,19 @@ impl<'env> BoogieTranslator<'env> {
                         .unwrap(),
                 )
                 .all_vars()
+            })
+            .flatten()
+            .collect::<BTreeSet<_>>();
+        let ghost_declare_global_mut_type_instances = self
+            .targets
+            .specs()
+            .map(|id| {
+                spec_global_variable_analysis::get_info(
+                    self.targets
+                        .get_data(id, &FunctionVariant::Baseline)
+                        .unwrap(),
+                )
+                .mut_vars()
             })
             .flatten()
             .collect::<BTreeSet<_>>();
@@ -690,13 +710,7 @@ impl<'env> BoogieTranslator<'env> {
         );
 
         for type_inst in &ghost_declare_global_type_instances {
-            FunctionTranslator {
-                parent: self,
-                fun_target: &ghost_global_fun_target,
-                type_inst,
-                style: FunctionTranslationStyle::Default,
-            }
-            .generate_ghost_global_var_declaration();
+            self.generate_ghost_global_var_declaration(type_inst);
         }
 
         for type_inst in ghost_global_type_instances {
@@ -708,6 +722,28 @@ impl<'env> BoogieTranslator<'env> {
             }
             .translate();
         }
+
+        for type_inst in &ghost_declare_global_mut_type_instances {
+            FunctionTranslator {
+                parent: self,
+                fun_target: &ghost_havoc_global_fun_target,
+                type_inst,
+                style: FunctionTranslationStyle::Default,
+            }
+            .translate();
+        }
+    }
+
+    fn generate_ghost_global_var_declaration(&self, type_inst: &[Type]) {
+        emitln!(
+            self.writer,
+            "{}",
+            boogie_declare_global(
+                self.env,
+                &boogie_spec_global_var_name(self.env, type_inst),
+                &type_inst[1],
+            ),
+        );
     }
 
     fn get_verification_target_fun_env(
@@ -1005,10 +1041,16 @@ impl<'env> FunctionTranslator<'env> {
             .unwrap()
             .get_id();
         let global_function_id = FunId::new(self.fun_target.func_env.symbol_pool().make("global"));
+        let havoc_global_function_id =
+            FunId::new(self.fun_target.func_env.symbol_pool().make("havoc_global"));
         if self.fun_target.func_env.get_qualified_id()
             == ghost_module_id.qualified(global_function_id)
         {
             self.generate_ghost_global_body();
+        } else if self.fun_target.func_env.get_qualified_id()
+            == ghost_module_id.qualified(havoc_global_function_id)
+        {
+            self.generate_ghost_havoc_global_body();
         } else {
             self.generate_function_body();
         }
@@ -1022,10 +1064,31 @@ impl<'env> FunctionTranslator<'env> {
                 && self.fun_target.get_parameter_count() == 0
                 && self.fun_target.get_return_count() == 1
         );
-        let global_var_name = format!("$global_var__{}", self.function_variant_name(self.style));
         emitln!(self.writer(), "{");
         self.writer().indent();
-        emitln!(self.writer(), "$ret0 := {};", global_var_name);
+        emitln!(
+            self.writer(),
+            "$ret0 := {};",
+            boogie_spec_global_var_name(self.parent.env, self.type_inst),
+        );
+        self.writer().unindent();
+        emitln!(self.writer(), "}");
+    }
+
+    fn generate_ghost_havoc_global_body(&self) {
+        assert!(
+            self.fun_target.func_env.is_native()
+                && self.fun_target.get_type_parameter_count() == 2
+                && self.fun_target.get_parameter_count() == 0
+                && self.fun_target.get_return_count() == 0
+        );
+        emitln!(self.writer(), "{");
+        self.writer().indent();
+        emitln!(
+            self.writer(),
+            "havoc {};",
+            boogie_spec_global_var_name(self.parent.env, self.type_inst),
+        );
         self.writer().unindent();
         emitln!(self.writer(), "}");
     }
@@ -2100,36 +2163,15 @@ impl<'env> FunctionTranslator<'env> {
                             && (self.style == FunctionTranslationStyle::SpecNoAbortCheck
                                 || self.style == FunctionTranslationStyle::Opaque)
                         {
-                            let ghost_module_id = self
-                                .fun_target
-                                .func_env
-                                .module_env
-                                .env
-                                .find_module_by_name(
-                                    self.fun_target.func_env.symbol_pool().make("ghost"),
-                                )
-                                .unwrap()
-                                .get_id();
-                            let global_function_id =
-                                FunId::new(self.fun_target.func_env.symbol_pool().make("global"));
-
                             for type_inst in
                                 spec_global_variable_analysis::get_info(&self.fun_target.data)
                                     .mut_vars()
                             {
-                                let global_name = format!(
-                                    "$global_var__{}",
-                                    boogie_function_name(
-                                        &self
-                                            .parent
-                                            .env
-                                            .get_module(ghost_module_id)
-                                            .into_function(global_function_id),
-                                        &type_inst,
-                                        FunctionTranslationStyle::Default,
-                                    )
+                                emitln!(
+                                    self.writer(),
+                                    "havoc {};",
+                                    boogie_spec_global_var_name(self.parent.env, type_inst),
                                 );
-                                emitln!(self.writer(), "havoc {};", global_name,);
                             }
                         };
 

@@ -31,25 +31,25 @@ use crate::{
 pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetPipeline {
     // NOTE: the order of these processors is import!
     let mut processors: Vec<Box<dyn FunctionTargetProcessor>> = vec![
+        SpecGlobalVariableAnalysisProcessor::new(),
         DebugInstrumenter::new(),
         // transformation and analysis
         EliminateImmRefsProcessor::new(),
         MutRefInstrumenter::new(),
+    ];
+
+    if !options.skip_loop_analysis {
+        processors.push(LoopAnalysisProcessor::new());
+    };
+
+    processors.append(&mut vec![
         ReachingDefProcessor::new(),
         LiveVarAnalysisProcessor::new(),
         BorrowAnalysisProcessor::new_borrow_natives(options.borrow_natives.clone()),
         MemoryInstrumentationProcessor::new(),
         CleanAndOptimizeProcessor::new(),
         UsageProcessor::new(),
-        SpecGlobalVariableAnalysisProcessor::new(),
         VerificationAnalysisProcessor::new(),
-    ];
-
-    if !options.skip_loop_analysis {
-        processors.push(LoopAnalysisProcessor::new());
-    }
-
-    processors.append(&mut vec![
         // spec instrumentation
         SpecInstrumentationProcessor::new(),
         GlobalInvariantAnalysisProcessor::new(),

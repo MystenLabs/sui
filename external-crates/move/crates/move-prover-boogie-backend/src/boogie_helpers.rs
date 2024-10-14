@@ -95,6 +95,11 @@ pub enum FunctionTranslationStyle {
     Opaque,
 }
 
+/// Return boogie name of given global spec variable.
+pub fn boogie_spec_global_var_name(env: &GlobalEnv, inst: &[Type]) -> String {
+    format!("$global_var__{}", boogie_inst_suffix(env, inst))
+}
+
 /// Return boogie name of given function.
 pub fn boogie_function_name(
     fun_env: &FunctionEnv<'_>,
@@ -507,9 +512,10 @@ pub fn boogie_declare_global(env: &GlobalEnv, name: &str, ty: &Type) -> String {
         "var {} : {} where {};",
         name,
         boogie_type(env, ty),
-        // TODO: boogie crash boogie_well_formed_expr(env, name, ty)
+        // there is a previous comment that boogie may crash when using
+        // `boogie_well_formed_expr(env, name, ty)``, and instead use `true` here
+        // and manually check the well-formedness
         boogie_well_formed_expr(env, name, ty)
-        // "true"
     )
 }
 
