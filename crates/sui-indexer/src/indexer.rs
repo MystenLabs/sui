@@ -127,7 +127,7 @@ impl Indexer {
             config.checkpoint_download_queue_size,
         );
         let executor = executors.last_mut().expect("executors is not empty");
-        executor.0.register(worker_pool).await?;
+        //executor.0.register(worker_pool).await?;
 
         // Spawn a task that links the cancellation token to the exit sender
         spawn_monitored_task!(async move {

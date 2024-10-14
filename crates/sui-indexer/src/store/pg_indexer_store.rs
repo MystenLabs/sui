@@ -1840,7 +1840,7 @@ impl IndexerStore for PgIndexerStore {
         if object_changes.is_empty() {
             return Ok(());
         }
-        let objects: Vec<StoredFullHistoryObject> = object_changes
+        let mut objects: Vec<StoredFullHistoryObject> = object_changes
             .into_iter()
             .flat_map(|c| {
                 let TransactionObjectChangesToCommit {
@@ -1853,6 +1853,10 @@ impl IndexerStore for PgIndexerStore {
                     .chain(deleted_objects.into_iter().map(|o| o.into()))
             })
             .collect();
+        //objects.extend(objects.clone().into_iter().flat_map(|mut o1| {
+        //    o1.object_id.insert(0, 0x40);
+        //    vec![o1]
+        //}));
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_full_objects_history
