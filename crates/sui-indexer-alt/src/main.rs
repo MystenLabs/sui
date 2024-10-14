@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use mysten_metrics::spawn_monitored_task;
-use sui_indexer_alt::{args::Args, ingestion::IngestionService, metrics::MetricsService};
+use sui_indexer_alt::{args::Args, db::Db, ingestion::IngestionService, metrics::MetricsService};
 use tokio::{signal, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -20,7 +20,12 @@ async fn main() -> Result<()> {
 
     let cancel = CancellationToken::new();
 
-    let (metrics, metrics_service) = MetricsService::new(args.metrics_address, cancel.clone())?;
+    let db = Db::new(args.db)
+        .await
+        .context("Failed to connect to database")?;
+
+    let (metrics, metrics_service) =
+        MetricsService::new(args.metrics_address, db.clone(), cancel.clone())?;
     let mut ingestion_service =
         IngestionService::new(args.ingestion, metrics.clone(), cancel.clone())?;
 
