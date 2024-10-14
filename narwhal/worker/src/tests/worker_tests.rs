@@ -104,7 +104,7 @@ async fn reject_invalid_clients_transactions() {
         .unwrap()
         .transactions;
     let config = mysten_network::config::Config::new();
-    let channel = config.connect_lazy(&address).unwrap();
+    let channel = config.connect_lazy(&address, None).unwrap();
     let mut client = TransactionsClient::new(channel);
     let tx = transaction();
     let txn = TransactionProto {
@@ -233,7 +233,7 @@ async fn handle_remote_clients_transactions() {
         .unwrap()
         .transactions;
     let config = mysten_network::config::Config::new();
-    let channel = config.connect_lazy(&address).unwrap();
+    let channel = config.connect_lazy(&address, None).unwrap();
     let client = TransactionsClient::new(channel);
 
     let join_handle = tokio::task::spawn(async move {

@@ -441,7 +441,7 @@ mod test {
         let address = server.local_addr().to_owned();
         let cancel_handle = server.take_cancel_handle().unwrap();
         let server_handle = tokio::spawn(server.serve());
-        let channel = config.connect(&address).await.unwrap();
+        let channel = config.connect(&address, None).await.unwrap();
         let mut client = HealthClient::new(channel);
 
         client
@@ -504,7 +504,7 @@ mod test {
         let address = server.local_addr().to_owned();
         let cancel_handle = server.take_cancel_handle().unwrap();
         let server_handle = tokio::spawn(server.serve());
-        let channel = config.connect(&address).await.unwrap();
+        let channel = config.connect(&address, None).await.unwrap();
         let mut client = HealthClient::new(channel);
 
         // Call the healthcheck for a service that doesn't exist
@@ -528,7 +528,7 @@ mod test {
         let address = server.local_addr().to_owned();
         let cancel_handle = server.take_cancel_handle().unwrap();
         let server_handle = tokio::spawn(server.serve());
-        let channel = config.connect(&address).await.unwrap();
+        let channel = config.connect(&address, None).await.unwrap();
         let mut client = HealthClient::new(channel);
 
         client

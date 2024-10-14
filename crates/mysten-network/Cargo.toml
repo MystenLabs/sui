@@ -19,6 +19,7 @@ multiaddr.workspace = true
 serde.workspace = true
 once_cell.workspace = true
 snap.workspace = true
+hyper-rustls.workspace = true
 hyper-util.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tokio-rustls.workspace = true

@@ -5,8 +5,6 @@ mod acceptor;
 mod certgen;
 mod verifier;
 
-pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
-
 pub use acceptor::{TlsAcceptor, TlsConnectionInfo};
 pub use certgen::SelfSignedCertificate;
 use rustls::ClientConfig;
@@ -19,6 +17,8 @@ pub use rustls;
 
 use fastcrypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
 use tokio_rustls::rustls::ServerConfig;
+
+pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
 
 pub fn create_rustls_server_config<A: Allower + 'static>(
     private_key: Ed25519PrivateKey,

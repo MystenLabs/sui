@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::{random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey};
+use crate::crypto::{
+    random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey, NetworkPublicKey,
+};
 use crate::error::{SuiError, SuiResult};
 use crate::multiaddr::Multiaddr;
 use fastcrypto::traits::KeyPair;
@@ -357,6 +359,7 @@ pub trait CommitteeTrait<K: Ord> {
 pub struct NetworkMetadata {
     pub network_address: Multiaddr,
     pub narwhal_primary_address: Multiaddr,
+    pub network_public_key: NetworkPublicKey,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
