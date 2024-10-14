@@ -7,6 +7,7 @@ use backoff::ExponentialBackoff;
 use reqwest::{Client, StatusCode};
 use sui_storage::blob::Blob;
 use sui_types::full_checkpoint_content::CheckpointData;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 use url::Url;
 
@@ -34,9 +35,23 @@ impl IngestionClient {
     }
 
     /// Fetch a checkpoint from the remote store. Repeatedly retries transient errors with an
-    /// exponential backoff (up to [MAX_RETRY_INTERVAL]), but will immediately return
-    /// non-transient errors, which include all client errors, except timeouts and rate limiting.
-    pub(crate) async fn fetch(&self, checkpoint: u64) -> Result<Arc<CheckpointData>> {
+    /// exponential backoff (up to [MAX_RETRY_INTERVAL]), but will immediately return on:
+    ///
+    /// - non-transient errors, which include all client errors, except timeouts and rate limiting.
+    /// - cancellation of the supplied `cancel` token.
+    ///
+    /// Transient errors include:
+    ///
+    /// - failures to issue a request, (network errors, redirect issues, etc)
+    /// - request timeouts,
+    /// - rate limiting,
+    /// - server errors (5xx),
+    /// - issues getting a full response and deserializing it as [CheckpointData].
+    pub(crate) async fn fetch(
+        &self,
+        checkpoint: u64,
+        cancel: &CancellationToken,
+    ) -> Result<Arc<CheckpointData>> {
         // SAFETY: The path being joined is statically known to be valid.
         let url = self
             .url
@@ -46,12 +61,16 @@ impl IngestionClient {
         let request = move || {
             let url = url.clone();
             async move {
+                use backoff::Error as BE;
+                if cancel.is_cancelled() {
+                    return Err(BE::permanent(Error::Cancelled));
+                }
+
                 let response = self.client.get(url).send().await.map_err(|e| {
                     self.metrics
                         .inc_retry(checkpoint, "request", Error::ReqwestError(e))
                 })?;
 
-                use backoff::Error as BE;
                 match response.status() {
                     code if code.is_success() => {
                         // Failure to extract all the bytes from the payload, or to deserialize the
@@ -247,7 +266,10 @@ pub(crate) mod tests {
         respond_with(&server, status(StatusCode::NOT_FOUND)).await;
 
         let client = test_client(server.uri());
-        let error = client.fetch(42).await.unwrap_err();
+        let error = client
+            .fetch(42, &CancellationToken::new())
+            .await
+            .unwrap_err();
 
         assert!(matches!(error, Error::NotFound(42)));
     }
@@ -258,12 +280,44 @@ pub(crate) mod tests {
         respond_with(&server, status(StatusCode::IM_A_TEAPOT)).await;
 
         let client = test_client(server.uri());
-        let error = client.fetch(42).await.unwrap_err();
+        let error = client
+            .fetch(42, &CancellationToken::new())
+            .await
+            .unwrap_err();
 
         assert!(matches!(
             error,
             Error::HttpError(42, StatusCode::IM_A_TEAPOT)
         ));
+    }
+
+    /// Even if the server is repeatedly returning transient errors, it is possible to cancel the
+    /// fetch request via its cancellation token.
+    #[tokio::test]
+    async fn fail_on_cancel() {
+        let cancel = CancellationToken::new();
+        let server = MockServer::start().await;
+
+        // This mock server repeatedly returns internal server errors, but will also send a
+        // cancellation with the second request (this is a bit of a contrived test set-up).
+        let times: Mutex<u64> = Mutex::new(0);
+        let server_cancel = cancel.clone();
+        respond_with(&server, move |_: &Request| {
+            let mut times = times.lock().unwrap();
+            *times += 1;
+
+            if *times > 2 {
+                server_cancel.cancel();
+            }
+
+            status(StatusCode::INTERNAL_SERVER_ERROR)
+        })
+        .await;
+
+        let client = test_client(server.uri());
+        let error = client.fetch(42, &cancel.clone()).await.unwrap_err();
+
+        assert!(matches!(error, Error::Cancelled));
     }
 
     /// Assume that failures to send the request to the remote store are due to temporary
@@ -294,7 +348,10 @@ pub(crate) mod tests {
         .await;
 
         let client = test_client(server.uri());
-        let error = client.fetch(42).await.unwrap_err();
+        let error = client
+            .fetch(42, &CancellationToken::new())
+            .await
+            .unwrap_err();
 
         assert!(
             matches!(error, Error::HttpError(42, StatusCode::IM_A_TEAPOT),),
@@ -322,7 +379,10 @@ pub(crate) mod tests {
         .await;
 
         let client = test_client(server.uri());
-        let error = client.fetch(42).await.unwrap_err();
+        let error = client
+            .fetch(42, &CancellationToken::new())
+            .await
+            .unwrap_err();
 
         assert!(matches!(
             error,
@@ -348,7 +408,7 @@ pub(crate) mod tests {
         .await;
 
         let client = test_client(server.uri());
-        let checkpoint = client.fetch(42).await.unwrap();
+        let checkpoint = client.fetch(42, &CancellationToken::new()).await.unwrap();
         assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
     }
 }
