@@ -55,7 +55,23 @@ impl IngestionClient {
 
                 use backoff::Error as BE;
                 match response.status() {
-                    code if code.is_success() => Ok(response),
+                    code if code.is_success() => {
+                        // Failure to extract all the bytes from the payload, or to deserialize the
+                        // checkpoint from them is considered a transient error -- the store being
+                        // fetched from needs to be corrected, and ingestion will keep retrying it
+                        // until it is.
+                        let bytes = response
+                            .bytes()
+                            .await
+                            .map_err(|e| BE::transient(Error::ReqwestError(e)))?;
+
+                        self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
+                        let data: CheckpointData = Blob::from_bytes(&bytes).map_err(|e| {
+                            BE::transient(Error::DeserializationError(checkpoint, e))
+                        })?;
+
+                        Ok(data)
+                    }
 
                     // Treat 404s as a special case so we can match on this error type.
                     code @ StatusCode::NOT_FOUND => {
@@ -102,24 +118,14 @@ impl IngestionClient {
         };
 
         let guard = self.metrics.ingested_checkpoint_latency.start_timer();
-
-        let bytes = backoff::future::retry(backoff, request)
-            .await?
-            .bytes()
-            .await?;
-
-        let data: CheckpointData =
-            Blob::from_bytes(&bytes).map_err(|e| Error::DeserializationError(checkpoint, e))?;
-
+        let data = backoff::future::retry(backoff, request).await?;
         let elapsed = guard.stop_and_record();
+
         debug!(
             checkpoint,
             "Fetched checkpoint in {:.03}ms",
             elapsed * 1000.0
         );
-
-        self.metrics.total_ingested_checkpoints.inc();
-        self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
 
         self.metrics
             .total_ingested_transactions
@@ -245,7 +251,7 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
-    async fn retry_on_client_error() {
+    async fn fail_on_client_error() {
         let server = MockServer::start().await;
         respond_with(&server, status(StatusCode::IM_A_TEAPOT)).await;
 
@@ -258,10 +264,12 @@ pub(crate) mod tests {
         ));
     }
 
+    /// Assume that certain errors will recover by themselves, and keep retrying with an
+    /// exponential back-off. These errors include: 5xx (server) errors, 408 (timeout), and 429
+    /// (rate limiting).
     #[tokio::test]
     async fn retry_on_transient_server_error() {
         let server = MockServer::start().await;
-
         let times: Mutex<u64> = Mutex::new(0);
         respond_with(&server, move |_: &Request| {
             let mut times = times.lock().unwrap();
@@ -282,5 +290,27 @@ pub(crate) mod tests {
             error,
             Error::HttpError(42, StatusCode::IM_A_TEAPOT)
         ));
+    }
+
+    /// Treat deserialization failure as another kind of transient error -- all checkpoint data
+    /// that is fetched should be valid (deserializable as a `CheckpointData`).
+    #[tokio::test]
+    async fn retry_on_deserialization_error() {
+        let server = MockServer::start().await;
+        let times: Mutex<u64> = Mutex::new(0);
+        respond_with(&server, move |_: &Request| {
+            let mut times = times.lock().unwrap();
+            *times += 1;
+            if *times < 3 {
+                status(StatusCode::OK).set_body_bytes(vec![])
+            } else {
+                status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42))
+            }
+        })
+        .await;
+
+        let client = test_client(server.uri());
+        let checkpoint = client.fetch(42).await.unwrap();
+        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
     }
 }
