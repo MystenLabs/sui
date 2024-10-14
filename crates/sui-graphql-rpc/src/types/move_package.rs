@@ -823,8 +823,7 @@ impl MovePackage {
             history_object.serialized_object,
             checkpoint_viewed_at,
             history_object.object_version as u64,
-        )
-        .ok_or_else(|| Error::Internal("Not a package!".to_string()))?;
+        );
 
         Self::try_from(&object).map_err(|_| Error::Internal("Not a package!".to_string()))
     }
