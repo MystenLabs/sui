@@ -46,7 +46,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(filter: {signAddress: "@{A}" transactionIds: []}) {
+  transactionBlocks(filter: {sentAddress: "@{A}" transactionIds: []}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -66,7 +66,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(filter: {recvAddress: "@{A}" transactionIds: []}) {
+  transactionBlocks(filter: {affectedAddress: "@{A}" transactionIds: []}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -86,7 +86,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(scanLimit: 10 filter: {recvAddress: "@{A}" transactionIds: []}) {
+  transactionBlocks(scanLimit: 10 filter: {affectedAddress: "@{A}" transactionIds: []}) {
     pageInfo {
       hasNextPage
       hasPreviousPage

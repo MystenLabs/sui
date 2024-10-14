@@ -73,7 +73,8 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 					transaction:
 						transactionBlock.rawTransaction &&
 						mapTransactionBlockToInput(
-							bcs.SenderSignedData.parse(fromBase64(transactionBlock.rawTransaction))[0],
+							bcs.TransactionData.parse(fromBase64(transactionBlock.rawTransaction)),
+							transactionBlock.signatures,
 						),
 				}
 			: {}),
@@ -169,10 +170,12 @@ function mapObjectChanges(
 }
 
 export function mapTransactionBlockToInput(
-	data: typeof bcs.SenderSignedTransaction.$inferType,
+	data: typeof bcs.TransactionData.$inferType,
+	signatures: any[] | null | undefined,
 ): SuiTransactionBlock | null {
-	const txData = data.intentMessage.value.V1;
-
+	const txData = data.V1;
+	console.log('Signatures:', signatures);
+	const sigs: string[] = (signatures ?? []).filter((sig): sig is string => typeof sig === 'string');
 	const programableTransaction =
 		'ProgrammableTransaction' in txData.kind ? txData.kind.ProgrammableTransaction : null;
 
@@ -181,7 +184,7 @@ export function mapTransactionBlockToInput(
 	}
 
 	return {
-		txSignatures: data.txSignatures,
+		txSignatures: sigs,
 		data: {
 			gasData: {
 				budget: txData.gasData.budget,

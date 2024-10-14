@@ -16,7 +16,3 @@
 # metric_url: <url>
 # Client metric port
 # metric_port: <port>
-# checkpoint size of each backfill worker, use 432000 for 1 worker per day, assume 5 checkpoint per second
-# back_fill_lot_size: <backfill lot size>
-# Optional starting checkpoint for realtime ingestion task
-# resume_from_checkpoint: <Sui checkpoint>

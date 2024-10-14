@@ -56,7 +56,7 @@ module Test::M1 {
   checkpoints {
     nodes {
       sequenceNumber
-      transactionBlocks(filter: { signAddress: "@{A}"}) {
+      transactionBlocks(filter: { sentAddress: "@{A}"}) {
         edges {
           cursor
           node {

@@ -59,7 +59,7 @@ module Test::M1 {
 # startCursor is at 3 + scanLimited, endCursor at 4 + not scanLimited
 # this is because between (2, 7), txs 4 and 6 match, and thus endCursor snaps to last of result
 {
-  transactionBlocks(first: 1 scanLimit: 4 after: "@{cursor_0}" before: "@{cursor_1}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 1 scanLimit: 4 after: "@{cursor_0}" before: "@{cursor_1}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -86,7 +86,7 @@ module Test::M1 {
 # and scan-limit logic will override this as there are still more txs to scan
 # note that we're scanning txs [3, 6]
 {
-  transactionBlocks(first: 3 scanLimit: 4 after: "@{cursor_0}" before: "@{cursor_1}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 3 scanLimit: 4 after: "@{cursor_0}" before: "@{cursor_1}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -111,7 +111,7 @@ module Test::M1 {
 # txs 5 and 7 match, but due to page size of `first: 1`, we only return tx 5
 # startCursor is 5 + scan limited, endCursor is also 5 + scan limited
 {
-  transactionBlocks(first: 1 scanLimit: 3 after: "@{cursor_0}" before: "@{cursor_1}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 1 scanLimit: 3 after: "@{cursor_0}" before: "@{cursor_1}" filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage

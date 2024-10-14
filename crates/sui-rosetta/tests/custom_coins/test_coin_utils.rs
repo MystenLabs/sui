@@ -131,8 +131,8 @@ pub async fn init_package(
     client: &SuiClient,
     keystore: &Keystore,
     sender: SuiAddress,
+    path: &Path,
 ) -> Result<InitRet> {
-    let path = Path::new("tests/custom_coins/test_coin");
     let path_buf = base::reroot_path(Some(path))?;
 
     let move_build_config = MoveBuildConfig::default();
@@ -266,7 +266,14 @@ async fn test_mint() {
     let keystore = &test_cluster.wallet.config.keystore;
 
     let sender = test_cluster.get_address_0();
-    let init_ret = init_package(&client, keystore, sender).await.unwrap();
+    let init_ret = init_package(
+        &client,
+        keystore,
+        sender,
+        Path::new("tests/custom_coins/test_coin"),
+    )
+    .await
+    .unwrap();
 
     let address1 = test_cluster.get_address_1();
     let address2 = test_cluster.get_address_2();
