@@ -32,4 +32,7 @@ sui-storage.workspace = true
 sui-types.workspace = true
 
 [dev-dependencies]
+rand.workspace = true
 wiremock.workspace = true
+
+sui-types = { workspace = true, features = ["test-utils"] }

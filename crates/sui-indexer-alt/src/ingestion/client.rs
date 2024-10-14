@@ -151,9 +151,21 @@ impl IngestionClient {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::sync::Mutex;
 
+    use rand::{rngs::StdRng, SeedableRng};
+    use sui_storage::blob::BlobEncoding;
+    use sui_types::{
+        crypto::KeypairTraits,
+        gas::GasCostSummary,
+        messages_checkpoint::{
+            CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
+            SignedCheckpointSummary,
+        },
+        supported_protocol_versions::ProtocolConfig,
+        utils::make_committee_key,
+    };
     use wiremock::{
         matchers::{method, path_regex},
         Mock, MockServer, Request, Respond, ResponseTemplate,
@@ -163,7 +175,12 @@ mod tests {
 
     use super::*;
 
-    async fn respond_with(server: &MockServer, response: impl Respond + 'static) {
+    const RNG_SEED: [u8; 32] = [
+        21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130,
+        157, 179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
+    ];
+
+    pub(crate) async fn respond_with(server: &MockServer, response: impl Respond + 'static) {
         Mock::given(method("GET"))
             .and(path_regex(r"/\d+.chk"))
             .respond_with(response)
@@ -171,8 +188,45 @@ mod tests {
             .await;
     }
 
-    fn status(code: StatusCode) -> ResponseTemplate {
+    pub(crate) fn status(code: StatusCode) -> ResponseTemplate {
         ResponseTemplate::new(code.as_u16())
+    }
+
+    pub(crate) fn test_checkpoint_data(cp: u64) -> Vec<u8> {
+        let mut rng = StdRng::from_seed(RNG_SEED);
+        let (keys, committee) = make_committee_key(&mut rng);
+        let contents = CheckpointContents::new_with_digests_only_for_tests(vec![]);
+        let summary = CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+            0,
+            cp,
+            0,
+            &contents,
+            None,
+            GasCostSummary::default(),
+            None,
+            0,
+            Vec::new(),
+        );
+
+        let sign_infos: Vec<_> = keys
+            .iter()
+            .map(|k| {
+                let name = k.public().into();
+                SignedCheckpointSummary::sign(committee.epoch, &summary, k, name)
+            })
+            .collect();
+
+        let checkpoint_data = CheckpointData {
+            checkpoint_summary: CertifiedCheckpointSummary::new(summary, sign_infos, &committee)
+                .unwrap(),
+            checkpoint_contents: contents,
+            transactions: vec![],
+        };
+
+        Blob::encode(&checkpoint_data, BlobEncoding::Bcs)
+            .unwrap()
+            .to_bytes()
     }
 
     fn test_client(uri: String) -> IngestionClient {
@@ -180,7 +234,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn not_found() {
+    async fn fail_on_not_found() {
         let server = MockServer::start().await;
         respond_with(&server, status(StatusCode::NOT_FOUND)).await;
 
@@ -191,7 +245,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn client_error() {
+    async fn retry_on_client_error() {
         let server = MockServer::start().await;
         respond_with(&server, status(StatusCode::IM_A_TEAPOT)).await;
 
@@ -205,7 +259,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn transient_server_error() {
+    async fn retry_on_transient_server_error() {
         let server = MockServer::start().await;
 
         let times: Mutex<u64> = Mutex::new(0);

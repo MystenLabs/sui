@@ -172,14 +172,269 @@ impl IngestionService {
                 .await
             {
                 Ok(()) => {}
+
                 Err(Break::Cancelled) => {
                     info!("Shutdown received, stopping ingestion service");
                 }
 
                 Err(Break::Err(checkpoint, e)) => {
                     error!(checkpoint, "Ingestion service failed: {}", e);
+                    cancel.cancel();
                 }
             }
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use reqwest::StatusCode;
+    use wiremock::{MockServer, Request};
+
+    use crate::ingestion::client::tests::{respond_with, status, test_checkpoint_data};
+    use crate::metrics::tests::test_metrics;
+
+    use super::*;
+
+    async fn test_ingestion(
+        uri: String,
+        buffer_size: usize,
+        concurrency: usize,
+        cancel: CancellationToken,
+    ) -> IngestionService {
+        IngestionService::new(
+            IngestionConfig {
+                remote_store_url: Url::parse(&uri).unwrap(),
+                start_checkpoint: 0,
+                buffer_size,
+                concurrency,
+                retry_interval: Duration::from_millis(200),
+            },
+            test_metrics(),
+            cancel,
+        )
+        .unwrap()
+    }
+
+    async fn test_subscriber(
+        stop_after: usize,
+        mut rx: mpsc::Receiver<Arc<CheckpointData>>,
+        cancel: CancellationToken,
+    ) -> JoinHandle<Vec<u64>> {
+        spawn_monitored_task!(async move {
+            let mut seqs = vec![];
+            for _ in 0..stop_after {
+                tokio::select! {
+                    _ = cancel.cancelled() => break,
+                    Some(checkpoint) = rx.recv() => {
+                        seqs.push(checkpoint.checkpoint_summary.sequence_number);
+                    }
+                }
+            }
+
+            rx.close();
+            seqs
+        })
+    }
+
+    /// If the ingestion service has no subscribers, it will fail fast (before fetching any
+    /// checkpoints).
+    #[tokio::test]
+    async fn fail_on_no_subscribers() {
+        telemetry_subscribers::init_for_testing();
+
+        // The mock server will repeatedly return 404, so if the service does try to fetch a
+        // checkpoint, it will be stuck repeatedly retrying.
+        let server = MockServer::start().await;
+        respond_with(&server, status(StatusCode::NOT_FOUND)).await;
+
+        let cancel = CancellationToken::new();
+        let ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
+
+        let err = ingestion_service.run().await.unwrap_err();
+        assert!(matches!(err, Error::NoSubscribers));
+    }
+
+    /// The subscriber has no effective limit, and the mock server will always return checkpoint
+    /// information, but the ingestion service can still be stopped using the cancellation token.
+    #[tokio::test]
+    async fn shutdown_on_cancel() {
+        telemetry_subscribers::init_for_testing();
+
+        let server = MockServer::start().await;
+        respond_with(
+            &server,
+            status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42)),
+        )
+        .await;
+
+        let cancel = CancellationToken::new();
+        let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
+
+        let rx = ingestion_service.subscribe();
+        let subscriber_handle = test_subscriber(usize::MAX, rx, cancel.clone()).await;
+        let ingestion_handle = ingestion_service.run().await.unwrap();
+
+        cancel.cancel();
+        subscriber_handle.await.unwrap();
+        ingestion_handle.await.unwrap();
+    }
+
+    /// The subscriber will stop after receiving a single checkpoint, and this will trigger the
+    /// ingestion service to stop as well, even if there are more checkpoints to fetch.
+    #[tokio::test]
+    async fn shutdown_on_subscriber_drop() {
+        telemetry_subscribers::init_for_testing();
+
+        let server = MockServer::start().await;
+        respond_with(
+            &server,
+            status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42)),
+        )
+        .await;
+
+        let cancel = CancellationToken::new();
+        let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
+
+        let rx = ingestion_service.subscribe();
+        let subscriber_handle = test_subscriber(1, rx, cancel.clone()).await;
+        let ingestion_handle = ingestion_service.run().await.unwrap();
+
+        cancel.cancelled().await;
+        subscriber_handle.await.unwrap();
+        ingestion_handle.await.unwrap();
+    }
+
+    /// If fetching the checkpoint throws an unexpected error, the whole pipeline will be shut
+    /// down.
+    #[tokio::test]
+    async fn shutdown_on_unexpected_error() {
+        telemetry_subscribers::init_for_testing();
+
+        let server = MockServer::start().await;
+        respond_with(&server, status(StatusCode::IM_A_TEAPOT)).await;
+
+        let cancel = CancellationToken::new();
+        let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
+
+        let rx = ingestion_service.subscribe();
+        let subscriber_handle = test_subscriber(usize::MAX, rx, cancel.clone()).await;
+        let ingestion_handle = ingestion_service.run().await.unwrap();
+
+        cancel.cancelled().await;
+        subscriber_handle.await.unwrap();
+        ingestion_handle.await.unwrap();
+    }
+
+    /// The service will retry fetching a checkpoint that does not exist, in this test, the 4th
+    /// checkpoint will return 404 a couple of times, before eventually succeeding.
+    #[tokio::test]
+    async fn retry_on_not_found() {
+        telemetry_subscribers::init_for_testing();
+
+        let server = MockServer::start().await;
+        let times: Mutex<u64> = Mutex::new(0);
+        respond_with(&server, move |_: &Request| {
+            let mut times = times.lock().unwrap();
+            *times += 1;
+            match *times {
+                1..4 => status(StatusCode::OK).set_body_bytes(test_checkpoint_data(*times)),
+                4..6 => status(StatusCode::NOT_FOUND),
+                _ => status(StatusCode::OK).set_body_bytes(test_checkpoint_data(*times)),
+            }
+        })
+        .await;
+
+        let cancel = CancellationToken::new();
+        let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
+
+        let rx = ingestion_service.subscribe();
+        let subscriber_handle = test_subscriber(5, rx, cancel.clone()).await;
+        let ingestion_handle = ingestion_service.run().await.unwrap();
+
+        cancel.cancelled().await;
+        let seqs = subscriber_handle.await.unwrap();
+        ingestion_handle.await.unwrap();
+
+        assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
+    }
+
+    /// Similar to the previous test, but now it's a transient error that causes the retry.
+    #[tokio::test]
+    async fn retry_on_transient_error() {
+        telemetry_subscribers::init_for_testing();
+
+        let server = MockServer::start().await;
+        let times: Mutex<u64> = Mutex::new(0);
+        respond_with(&server, move |_: &Request| {
+            let mut times = times.lock().unwrap();
+            *times += 1;
+            match *times {
+                1..4 => status(StatusCode::OK).set_body_bytes(test_checkpoint_data(*times)),
+                4..6 => status(StatusCode::REQUEST_TIMEOUT),
+                _ => status(StatusCode::OK).set_body_bytes(test_checkpoint_data(*times)),
+            }
+        })
+        .await;
+
+        let cancel = CancellationToken::new();
+        let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
+
+        let rx = ingestion_service.subscribe();
+        let subscriber_handle = test_subscriber(5, rx, cancel.clone()).await;
+        let ingestion_handle = ingestion_service.run().await.unwrap();
+
+        cancel.cancelled().await;
+        let seqs = subscriber_handle.await.unwrap();
+        ingestion_handle.await.unwrap();
+
+        assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
+    }
+
+    /// One subscriber is going to stop processing checkpoints, so even though the service can keep
+    /// fetching checkpoints, it will stop short because of the slow receiver. Other subscribers
+    /// can keep processing checkpoints that were buffered for the slow one.
+    #[tokio::test]
+    async fn back_pressure_and_buffering() {
+        telemetry_subscribers::init_for_testing();
+
+        let server = MockServer::start().await;
+        let times: Mutex<u64> = Mutex::new(0);
+        respond_with(&server, move |_: &Request| {
+            let mut times = times.lock().unwrap();
+            *times += 1;
+            status(StatusCode::OK).set_body_bytes(test_checkpoint_data(*times))
+        })
+        .await;
+
+        let cancel = CancellationToken::new();
+        let mut ingestion_service =
+            test_ingestion(server.uri(), /* buffer */ 3, 1, cancel.clone()).await;
+
+        // This subscriber will take its sweet time processing checkpoints.
+        let mut laggard = ingestion_service.subscribe();
+        async fn unblock(laggard: &mut mpsc::Receiver<Arc<CheckpointData>>) -> u64 {
+            let checkpoint = laggard.recv().await.unwrap();
+            checkpoint.checkpoint_summary.sequence_number
+        }
+
+        let rx = ingestion_service.subscribe();
+        let subscriber_handle = test_subscriber(5, rx, cancel.clone()).await;
+        let ingestion_handle = ingestion_service.run().await.unwrap();
+
+        // At this point, the service will have been able to pass 3 checkpoints to the non-lagging
+        // subscriber, while the laggard's buffer fills up. Now the laggard will pull two
+        // checkpoints, which will allow the rest of the pipeline to progress enough for the live
+        // subscriber to receive its quota.
+        assert_eq!(unblock(&mut laggard).await, 1);
+        assert_eq!(unblock(&mut laggard).await, 2);
+
+        cancel.cancelled().await;
+        let seqs = subscriber_handle.await.unwrap();
+        ingestion_handle.await.unwrap();
+
+        assert_eq!(seqs, vec![1, 2, 3, 4, 5]);
     }
 }
