@@ -30,11 +30,8 @@ jobs:
       - name: Notify Slack of Examples Changes
         uses: slackapi/slack-github-action@v1.24.0
         with:
-          payload: |
-            {
-              "channel": "#tech-docs",
-              "text": "An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>"
-            }
+          channel-id: 'tech-docs'
+          slack-message: "An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>"
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
   
