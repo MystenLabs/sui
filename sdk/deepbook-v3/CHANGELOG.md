@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.11.0
+
+### Minor Changes
+
+- 7b8e8ad: Mainnet pool packages
+
 ## 0.10.0
 
 ### Minor Changes
