@@ -8,6 +8,7 @@ module sui::coin_tests {
     use sui::url;
     use sui::test_scenario;
     use sui::deny_list;
+    use sui::test_utils;
 
     public struct COIN_TESTS has drop {}
 
@@ -647,5 +648,71 @@ module sui::coin_tests {
         };
         transfer::public_freeze_object(deny_cap);
         scenario.end();
+    }
+
+    #[test]
+    fun test_is_regulated_currency() {
+        let ctx = &mut tx_context::dummy();
+        deny_list::create_for_test(ctx);
+
+        let witness = COIN_TESTS {};
+        let (treasury, deny_cap, metadata) = coin::create_regulated_currency(
+            witness,
+            6,
+            b"COIN_TESTS",
+            b"coin_name",
+            b"description",
+            option::some(url::new_unsafe_from_bytes(b"icon_url")),
+            ctx,
+        );
+        assert!(metadata.is_regulated_currency().is_some());
+        assert!(metadata.is_regulated_currency().extract());
+        test_utils::destroy(treasury);
+        test_utils::destroy(deny_cap);
+        test_utils::destroy(metadata);
+    }
+
+
+    #[test]
+    fun test_is_regulated_currency_v2() {
+        let ctx = &mut tx_context::dummy();
+        deny_list::create_for_test(ctx);
+
+        let witness = COIN_TESTS {};
+        let (treasury, deny_cap, metadata) = coin::create_regulated_currency_v2(
+            witness,
+            6,
+            b"COIN_TESTS",
+            b"coin_name",
+            b"description",
+            option::some(url::new_unsafe_from_bytes(b"icon_url")),
+            true,
+            ctx,
+        );
+        assert!(metadata.is_regulated_currency().is_some());
+        assert!(metadata.is_regulated_currency().extract());
+        test_utils::destroy(treasury);
+        test_utils::destroy(deny_cap);
+        test_utils::destroy(metadata);
+    }
+
+    #[test]
+    fun test_is_regulated_currency_negative() {
+        let ctx = &mut tx_context::dummy();
+
+        let witness = COIN_TESTS {};
+        let (treasury, metadata) = coin::create_currency(
+            witness,
+            6,
+            b"COIN_TESTS",
+            b"coin_name",
+            b"description",
+            option::some(url::new_unsafe_from_bytes(b"icon_url")),
+            ctx,
+        );
+        assert!(metadata.is_regulated_currency().is_some());
+        assert!(!metadata.is_regulated_currency().extract());
+        test_utils::destroy(treasury);
+        test_utils::destroy(metadata);
     }
 }

@@ -2047,11 +2047,17 @@ TreasuryCap
 DenyCapV2
 	public struct
 	0x2::coin
+RegulatedMarker
+	public struct
+	0x2::coin
 CurrencyCreated
 	public struct
 	0x2::coin
 DenyCap
 	public struct
+	0x2::coin
+RegulatedInfo
+	public enum
 	0x2::coin
 total_supply
 	public fun
@@ -2104,7 +2110,13 @@ destroy_zero
 create_currency
 	public fun
 	0x2::coin
+create_currency_
+	fun
+	0x2::coin
 create_regulated_currency_v2
+	public fun
+	0x2::coin
+is_regulated_currency
 	public fun
 	0x2::coin
 migrate_regulated_currency_to_v2
