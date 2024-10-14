@@ -1,0 +1,10 @@
+[package]
+name = "kiosk_mail"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../crates/sui-framework/packages/sui-framework" }
+Kiosk = { local = "../" }
+
+[addresses]
+kiosk_mail = "0x0"
