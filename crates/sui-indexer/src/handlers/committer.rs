@@ -102,7 +102,7 @@ async fn commit_checkpoints<S>(
     let mut event_indices_batch = vec![];
     let mut display_updates_batch = BTreeMap::new();
     let mut object_changes_batch = vec![];
-    let mut object_history_changes_batch = vec![];
+    // let mut object_history_changes_batch = vec![];
     let mut object_versions_batch = vec![];
     let mut packages_batch = vec![];
 
@@ -115,7 +115,7 @@ async fn commit_checkpoints<S>(
             tx_indices,
             display_updates,
             object_changes,
-            object_history_changes,
+            object_history_changes: _,
             object_versions,
             packages,
             epoch: _,
@@ -127,7 +127,7 @@ async fn commit_checkpoints<S>(
         event_indices_batch.push(event_indices);
         display_updates_batch.extend(display_updates.into_iter());
         object_changes_batch.push(object_changes);
-        object_history_changes_batch.push(object_history_changes);
+        // object_history_changes_batch.push(object_history_changes);
         object_versions_batch.push(object_versions);
         packages_batch.push(packages);
     }
@@ -143,10 +143,10 @@ async fn commit_checkpoints<S>(
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
-    let object_versions_batch = object_versions_batch
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
+    // let object_versions_batch = object_versions_batch
+    //     .into_iter()
+    //     .flatten()
+    //     .collect::<Vec<_>>();
     let packages_batch = packages_batch.into_iter().flatten().collect::<Vec<_>>();
     let checkpoint_num = checkpoint_batch.len();
     let tx_count = tx_batch.len();
@@ -165,9 +165,9 @@ async fn commit_checkpoints<S>(
             //    committed object list. We could call it early and share the result.
             // 2. We could avoid clone by using Arc.
             state.persist_objects(object_changes_batch.clone()),
-            state.persist_object_history(object_history_changes_batch.clone()),
+            // state.persist_object_history(object_history_changes_batch.clone()),
             // state.persist_full_objects_history(object_history_changes_batch.clone()),
-            state.persist_objects_version(object_versions_batch.clone()),
+            // state.persist_objects_version(object_versions_batch.clone()),
         ];
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));

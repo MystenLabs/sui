@@ -42,9 +42,7 @@ where
 
         // run query with retry and without transaction
         let cloned_query = query.clone();
-        cloned_query(&mut connection)
-        .await
-        .map_err(|e| {
+        cloned_query(&mut connection).await.map_err(|e| {
             tracing::error!("Error executing query: {:?}, retrying...", e);
             backoff::Error::Transient {
                 err: IndexerError::PostgresWriteError(e.to_string()),
