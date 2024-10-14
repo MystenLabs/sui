@@ -103,13 +103,6 @@ impl IngestionService {
             cancel,
         } = self;
 
-        /// Individual iterations of `try_for_each_concurrent` communicate with the supervisor by
-        /// returning an `Err` with a `Break` variant.
-        enum Break {
-            Cancelled,
-            Err(u64, Error),
-        }
-
         if subscribers.is_empty() {
             return Err(Error::NoSubscribers);
         }
@@ -142,16 +135,16 @@ impl IngestionService {
                         async move {
                             use backoff::Error as BE;
                             if cancel.is_cancelled() {
-                                return Err(BE::permanent(Break::Cancelled));
+                                return Err(BE::permanent(Error::Cancelled));
                             }
 
-                            client.fetch(cp).await.map_err(|e| match e {
+                            client.fetch(cp, &cancel).await.map_err(|e| match e {
                                 Error::NotFound(checkpoint) => {
                                     debug!(checkpoint, "Checkpoint not found, retrying...");
                                     metrics.total_ingested_not_found_retries.inc();
-                                    BE::transient(Break::Err(cp, e))
+                                    BE::transient(e)
                                 }
-                                e => BE::permanent(Break::Err(cp, e)),
+                                e => BE::permanent(e),
                             })
                         }
                     };
@@ -163,7 +156,7 @@ impl IngestionService {
                         if try_join_all(futures).await.is_err() {
                             info!("Subscription dropped, signalling shutdown");
                             supervisor_cancel.cancel();
-                            Err(Break::Cancelled)
+                            Err(Error::Cancelled)
                         } else {
                             Ok(())
                         }
@@ -173,12 +166,12 @@ impl IngestionService {
             {
                 Ok(()) => {}
 
-                Err(Break::Cancelled) => {
+                Err(Error::Cancelled) => {
                     info!("Shutdown received, stopping ingestion service");
                 }
 
-                Err(Break::Err(checkpoint, e)) => {
-                    error!(checkpoint, "Ingestion service failed: {}", e);
+                Err(e) => {
+                    error!("Ingestion service failed: {}", e);
                     cancel.cancel();
                 }
             }
