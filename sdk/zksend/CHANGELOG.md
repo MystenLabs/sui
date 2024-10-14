@@ -1,5 +1,12 @@
 # @mysten/zksend
 
+## 0.11.7
+
+### Patch Changes
+
+- af39b6a: Update to reflect GraphQL schema renaming TransactionBlockFilter.signAddress to
+  .sentAddress.
+
 ## 0.11.6
 
 ### Patch Changes
