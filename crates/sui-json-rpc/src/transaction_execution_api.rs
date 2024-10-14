@@ -32,7 +32,7 @@ use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
+    ExecuteBundleRequestV3, ExecuteRequestV3, ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3
 };
 use sui_types::signature::GenericSignature;
 use sui_types::storage::PostExecutionPackageResolver;
@@ -133,6 +133,69 @@ impl TransactionExecutionApi {
             transaction,
             raw_transaction,
         ))
+    }
+
+    async fn execute_transaction_block_bundle(
+        &self,
+        tx_bytes: Vec<Base64>,
+        signatures: Vec<Vec<Base64>>,
+        opts: Option<SuiTransactionBlockResponseOptions>,
+    ) -> Result<Vec<SuiTransactionBlockResponse>, Error> {
+        let mut inputs = vec![];
+        // let (request, opts, sender, input_objs, txn, transaction, raw_transaction) =
+        //     self.prepare_execute_transaction_block(tx_bytes, signatures, opts)?;
+
+        for (tx_bytes, sigs) in tx_bytes.into_iter().zip(signatures) {
+            let (request, opts, sender, input_objs, txn, transaction, raw_transaction) =
+                self.prepare_execute_transaction_block(tx_bytes, sigs, opts.clone())?;
+            inputs.push((
+                request,
+                opts,
+                sender,
+                input_objs,
+                txn,
+                transaction,
+                raw_transaction,
+            ));
+        }
+        let (starting_req, _, _, _, _, _, _) = inputs.first().unwrap().clone();
+        let bundle_request = ExecuteBundleRequestV3 {
+            transactions: inputs.iter().map(|(request, _, _, _, _, _, _)| request.transaction.clone()).collect(),
+            include_events: starting_req.include_events,
+            include_input_objects: starting_req.include_input_objects,
+            include_output_objects: starting_req.include_output_objects,
+            include_auxiliary_data: starting_req.include_auxiliary_data,
+        };
+        let digest = ExecuteRequestV3::Bundle(bundle_request.clone()).digest();
+
+        let transaction_orchestrator = self.transaction_orchestrator.clone();
+        let orch_timer = self.metrics.orchestrator_latency_ms.start_timer();
+        let (response, is_executed_locally) = spawn_monitored_task!(
+            transaction_orchestrator.execute_transaction_block_bundle(bundle_request, None)
+        )
+        .await?
+        .map_err(Error::from)?;
+        drop(orch_timer);
+
+        let mut responses = vec![];
+        for (
+            (_, opts, sender, input_objs, _, transaction, raw_transaction),
+            response
+        ) in inputs.into_iter().zip(response) {
+            let response = self.handle_post_orchestration(
+                response,
+                is_executed_locally,
+                opts,
+                digest,
+                input_objs,
+                transaction,
+                raw_transaction,
+                sender,
+            )
+            .await?;
+            responses.push(response);
+        }
+        Ok(responses)
     }
 
     async fn execute_transaction_block(

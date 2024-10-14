@@ -53,8 +53,7 @@ use sui_types::effects::{
     VerifiedCertifiedTransactionEffects,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateRequestV3, HandleCertificateResponseV3, LayoutGenerationOption,
-    ObjectInfoRequest, TransactionInfoRequest,
+    HandleCertificateRequestV3, HandleCertificateResponseV3, HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3, LayoutGenerationOption, ObjectInfoRequest, TransactionInfoRequest
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
@@ -462,6 +461,32 @@ struct ProcessCertificateState {
     output_objects: Option<Vec<Object>>,
     auxiliary_data: Option<Vec<u8>>,
     request: HandleCertificateRequestV3,
+}
+
+
+
+struct ProcessSoftBundleState {
+    // Different authorities could return different effects.  We want at least one effect to come
+    // from 2f+1 authorities, which meets quorum and can be considered the approved effect.
+    // The map here allows us to count the stake for each unique effect.
+    effects_map:
+        MultiStakeAggregator<(EpochId, TransactionEffectsDigest), TransactionEffects, true>,
+    non_retryable_stake: StakeUnit,
+    non_retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    // As long as none of the exit criteria are met we consider the state retryable
+    // 1) >= 2f+1 signatures
+    // 2) >= f+1 non-retryable errors
+    retryable: bool,
+
+    // collection of extended data returned from the validators.
+    // Not all validators will be asked to return this data so we need to hold onto it when one
+    // validator has provided it
+    events: Option<Vec<TransactionEvents>>,
+    input_objects: Option<Vec<Vec<Object>>>,
+    output_objects: Option<Vec<Vec<Object>>>,
+    auxiliary_data: Option<Vec<Vec<u8>>>,
+    _request: HandleSoftBundleCertificatesRequestV3,
 }
 
 #[derive(Debug)]
@@ -1702,6 +1727,205 @@ where
         Ok(result)
     }
 
+
+    #[instrument(level = "trace", skip_all)]
+    pub async fn process_soft_bundle(
+        &self,
+        request: HandleSoftBundleCertificatesRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<Vec<QuorumDriverResponse>, AggregatorProcessCertificateError> {
+        let state = ProcessSoftBundleState {
+            effects_map: MultiStakeAggregator::new(self.committee.clone()),
+            non_retryable_stake: 0,
+            non_retryable_errors: vec![],
+            retryable_errors: vec![],
+            retryable: true,
+            events: None,
+            input_objects: None,
+            output_objects: None,
+            auxiliary_data: None,
+            request: request.clone(),
+        };
+
+        // create a set of validators that we should sample to request input/output objects from
+        let validators_to_sample =
+            if request.include_input_objects || request.include_output_objects {
+                // Number of validators to request input/output objects from
+                const NUMBER_TO_SAMPLE: usize = 10;
+
+                self.committee
+                    .choose_multiple_weighted_iter(NUMBER_TO_SAMPLE)
+                    .cloned()
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+
+        let tx_digest = *request.certificates.first().unwrap().digest();
+        let timeout_after_quorum = self.timeouts.post_quorum_timeout;
+
+        let request_ref = request;
+        let threshold = self.committee.quorum_threshold();
+        let validity = self.committee.validity_threshold();
+
+        debug!(
+            ?tx_digest,
+            quorum_threshold = threshold,
+            validity_threshold = validity,
+            ?timeout_after_quorum,
+            "Broadcasting certificate to authorities"
+        );
+        let committee: Arc<Committee> = self.committee.clone();
+        let authority_clients = self.authority_clients.clone();
+        let metrics = self.metrics.clone();
+        let metrics_clone = metrics.clone();
+        let validator_display_names = self.validator_display_names.clone();
+        let (result, mut remaining_tasks) = quorum_map_then_reduce_with_timeout(
+            committee.clone(),
+            authority_clients.clone(),
+            state,
+            move |name, client| {
+                Box::pin(async move {
+                    let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
+                    let concise_name = name.concise_owned();
+                    let req = if validators_to_sample.contains(&name) {
+                        request_ref
+                    } else {
+                        HandleSoftBundleCertificatesRequestV3 {
+                            include_input_objects: false,
+                            include_output_objects: false,
+                            include_auxiliary_data: false,
+                            ..request_ref
+                        }
+                    };
+
+                    client
+                        .authority_client()
+                        .handle_soft_bundle_certificates_v3(req, client_addr)
+                        .instrument(trace_span!("handle_soft_bundle_certificates_v3", authority =? concise_name))
+                        .await
+                })
+            },
+            move |mut state, name, weight, response| {
+                let committee_clone = committee.clone();
+                let metrics = metrics.clone();
+                let display_name = validator_display_names.get(&name).unwrap_or(&name.concise().to_string()).clone();
+                Box::pin(async move {
+                    // We aggregate the effects response, until we have more than 2f
+                    // and return.
+                    match AuthorityAggregator::<A>::handle_process_soft_bundle_response(
+                        committee_clone,
+                        &metrics,
+                        &tx_digest, &mut state, response, name)
+                    {
+                        Ok(Some(effects)) => ReduceOutput::Success(effects),
+                        Ok(None) => {
+                            // When the result is none, it is possible that the
+                            // non_retryable_stake had been incremented due to
+                            // failed individual signature verification.
+                            if state.non_retryable_stake >= validity {
+                                state.retryable = false;
+                                ReduceOutput::Failed(state)
+                            } else {
+                                ReduceOutput::Continue(state)
+                            }
+                        },
+                        Err(err) => {
+                            let concise_name = name.concise();
+                            debug!(?tx_digest, name=?concise_name, "Error processing certificate from validator: {:?}", err);
+                            metrics
+                                .process_cert_errors
+                                .with_label_values(&[&display_name, err.as_ref()])
+                                .inc();
+                            Self::record_rpc_error_maybe(metrics, &display_name, &err);
+                            let (retryable, categorized) = err.is_retryable();
+                            if !categorized {
+                                // TODO: Should minimize possible uncategorized errors here
+                                // use ERROR for now to make them easier to spot.
+                                error!(?tx_digest, "[WATCHOUT] uncategorized tx error: {err}");
+                            }
+                            if !retryable {
+                                state.non_retryable_stake += weight;
+                                state.non_retryable_errors.push((err, vec![name], weight));
+                            } else {
+                                state.retryable_errors.push((err, vec![name], weight));
+                            }
+                            if state.non_retryable_stake >= validity {
+                                state.retryable = false;
+                                ReduceOutput::Failed(state)
+                            } else {
+                                ReduceOutput::Continue(state)
+                            }
+                        }
+                    }
+                })
+            },
+            // A long timeout before we hear back from a quorum
+            self.timeouts.pre_quorum_timeout,
+        )
+        .await
+        .map_err(|state| {
+            debug!(
+                ?tx_digest,
+                num_unique_effects = state.effects_map.unique_key_count(),
+                non_retryable_stake = state.non_retryable_stake,
+                "Received effects responses from validators"
+            );
+
+            // record errors and tx retryable state
+            for (sui_err, _, _) in state.retryable_errors.iter().chain(state.non_retryable_errors.iter()) {
+                self
+                    .metrics
+                    .total_aggregated_err
+                    .with_label_values(&[
+                        sui_err.as_ref(),
+                        if state.retryable {
+                            "recoverable"
+                        } else {
+                            "non-recoverable"
+                        },
+                    ])
+                    .inc();
+            }
+            if state.retryable {
+                AggregatorProcessCertificateError::RetryableExecuteCertificate {
+                    retryable_errors: group_errors(state.retryable_errors),
+                }
+            } else {
+                AggregatorProcessCertificateError::FatalExecuteCertificate {
+                    non_retryable_errors: group_errors(state.non_retryable_errors),
+                }
+            }
+        })?;
+
+        let metrics = self.metrics.clone();
+        metrics
+            .remaining_tasks_when_reaching_cert_quorum
+            .observe(remaining_tasks.len() as f64);
+        if !remaining_tasks.is_empty() {
+            // Use best efforts to send the cert to remaining validators.
+            spawn_monitored_task!(async move {
+                let mut timeout = Box::pin(sleep(timeout_after_quorum));
+                loop {
+                    tokio::select! {
+                        _ = &mut timeout => {
+                            debug!(?tx_digest, "Timed out in post quorum cert broadcasting: {:?}. Remaining tasks: {:?}", timeout_after_quorum, remaining_tasks.len());
+                            metrics.cert_broadcasting_post_quorum_timeout.inc();
+                            metrics.remaining_tasks_when_cert_broadcasting_post_quorum_timeout.observe(remaining_tasks.len() as f64);
+                            break;
+                        }
+                        res = remaining_tasks.next() => {
+                            if res.is_none() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        Ok(result)
+    }
+
     fn handle_process_certificate_response(
         committee: Arc<Committee>,
         metrics: &AuthAggMetrics,
@@ -1793,6 +2017,93 @@ where
             Err(err) => Err(err),
         }
     }
+
+
+    fn handle_process_soft_bundle_response(
+        committee: Arc<Committee>,
+        _metrics: &AuthAggMetrics,
+        _tx_digest: &TransactionDigest,
+        state: &mut ProcessSoftBundleState,
+        response: SuiResult<HandleSoftBundleCertificatesResponseV3>,
+        _name: AuthorityName,
+    ) -> SuiResult<Option<Vec<QuorumDriverResponse>>> {
+        match response {    
+            Ok(HandleSoftBundleCertificatesResponseV3 { responses }) => {
+                let first_response = responses.first().unwrap().clone();
+
+                if first_response.events.is_some() && state.events.is_none() {
+                    state.events = Some(responses.iter().map(|r| r.events.clone().unwrap()).collect());
+                }
+
+                if first_response.input_objects.is_some() && state.input_objects.is_none() {
+                    state.input_objects = Some(responses.iter().map(|r| r.input_objects.clone().unwrap()).collect());
+                }
+
+                if first_response.output_objects.is_some() && state.output_objects.is_none() {
+                    state.output_objects = Some(responses.iter().map(|r| r.output_objects.clone().unwrap()).collect());
+                }
+
+                if first_response.auxiliary_data.is_some() && state.auxiliary_data.is_none() {
+                    state.auxiliary_data = Some(responses.iter().map(|r| r.auxiliary_data.clone().unwrap()).collect());
+                }
+
+                let effects_digest = *first_response.effects.digest();
+                // Note: here we aggregate votes by the hash of the effects structure
+                match state.effects_map.insert(
+                    (first_response.effects.epoch(), effects_digest),
+                    first_response.effects.clone(),
+                ) {
+                    InsertResult::NotEnoughVotes {
+                        bad_votes,
+                        bad_authorities,
+                    } => {
+                        state.non_retryable_stake += bad_votes;
+                        if bad_votes > 0 {
+                            state.non_retryable_errors.push((
+                                SuiError::InvalidSignature {
+                                    error: "Individual signature verification failed".to_string(),
+                                },
+                                bad_authorities,
+                                bad_votes,
+                            ));
+                        }
+                        Ok(None)
+                    }
+                    InsertResult::Failed { error } => Err(error),
+                    InsertResult::QuorumReached(cert_sig) => {
+                        let mut verified_cts = vec![];
+
+                        for response in responses {
+                            let ct = CertifiedTransactionEffects::new_from_data_and_sig(
+                                response.effects.into_data(),
+                                cert_sig.clone(),
+                            );
+
+                            if let Ok(ct) = ct.verify(&committee) {
+                                verified_cts.push(ct);
+                            } else {
+                                return Ok(None);
+                            }
+                        }
+                        let mut quorum_responses = Vec::new();
+                        for (nth, verified_ct) in verified_cts.into_iter().enumerate() {
+                            quorum_responses.push(QuorumDriverResponse {
+                                effects_cert: verified_ct,
+                                events: state.events.as_ref().map(|events| events[nth].clone()),
+                                input_objects: state.input_objects.as_ref().map(|objects| objects[nth].clone()), 
+                                output_objects: state.output_objects.as_ref().map(|objects| objects[nth].clone()),
+                                auxiliary_data: state.auxiliary_data.as_ref().map(|data| data[nth].clone()),
+                            });
+                        }
+                        Ok(Some(quorum_responses))
+                    }
+
+                }
+            }
+            Err(err) => Err(err),
+        }
+    }
+    
 
     #[instrument(level = "trace", skip_all, fields(tx_digest = ?transaction.digest()))]
     pub async fn execute_transaction_block(

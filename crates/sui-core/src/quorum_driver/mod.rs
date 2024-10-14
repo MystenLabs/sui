@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use sui_types::committee::{Committee, EpochId, StakeUnit};
-use sui_types::messages_grpc::HandleCertificateRequestV3;
+use sui_types::messages_grpc::{HandleCertificateRequestV3, HandleSoftBundleCertificatesRequestV3};
 use sui_types::quorum_driver_types::{
     ExecuteRequestV3, ExecuteTransactionRequestV3, QuorumDriverEffectsQueueResult, QuorumDriverError,
     QuorumDriverResponse, QuorumDriverResult,
@@ -259,10 +259,10 @@ where
     #[instrument(level = "trace", skip_all)]
     pub async fn submit_transaction_no_ticket(
         &self,
-        request: ExecuteTransactionRequestV3,
+        request: ExecuteRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> SuiResult<()> {
-        let tx_digest = request.transaction.digest();
+        let tx_digest = request.digest();
         debug!(
             ?tx_digest,
             "Received transaction execution request, no ticket."
@@ -270,7 +270,7 @@ where
         self.metrics.total_requests.inc();
 
         self.enqueue_task(QuorumDriverTask {
-            request: ExecuteRequestV3::Single(request),
+            request,
             tx_cert: None,
             retry_times: 0,
             next_retry_after: Instant::now(),
@@ -666,7 +666,7 @@ where
     // already obtained prior to calling this function, for instance, TransactionOrchestrator
     pub async fn submit_transaction_no_ticket(
         &self,
-        request: ExecuteTransactionRequestV3,
+        request: ExecuteRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> SuiResult<()> {
         self.quorum_driver
@@ -865,7 +865,112 @@ where
                 quorum_driver.notify(&tx_digest, &vec![Ok(response)], old_retry_times + 1);
             }
             ExecuteRequestV3::Bundle(request) => {
-                panic!("Bundle execution is not supported yet");
+                let transactions = &request.transactions;
+                let tx_digest = ExecuteRequestV3::Bundle(request.clone()).digest();
+                // let is_single_writer_tx = !transaction.contains_shared_object();
+
+                let _timer = Instant::now();
+                let mut certs = vec![];
+
+                for transaction in transactions {
+                    let (cert, _) = match tx_cert {
+                        None => match quorum_driver
+                            .process_transaction(transaction.clone(), client_addr)
+                            .await
+                        {
+                            Ok(ProcessTransactionResult::Certified {
+                                certificate,
+                                newly_formed,
+                            }) => {
+                                debug!(?tx_digest, "Transaction processing succeeded");
+                                (certificate, newly_formed)
+                            }
+                            Ok(ProcessTransactionResult::Executed(effects_cert, events)) => {
+                                debug!(
+                                    ?tx_digest,
+                                    "Transaction processing succeeded with effects directly"
+                                );
+                                let response = QuorumDriverResponse {
+                                    effects_cert,
+                                    events: Some(events),
+                                    input_objects: None,
+                                    output_objects: None,
+                                    auxiliary_data: None,
+                                };
+                                quorum_driver.notify(&tx_digest, &vec![Ok(response)], old_retry_times + 1);
+                                return;
+                            }
+                            Err(err) => {
+                                Self::handle_error(
+                                    quorum_driver,
+                                    ExecuteRequestV3::Bundle(request),
+                                    err,
+                                    None,
+                                    old_retry_times,
+                                    "get tx cert",
+                                    client_addr,
+                                );
+                                return;
+                            }
+                        },
+                        Some(ref tx_cert) => (tx_cert.clone(), false),
+                    };
+                    certs.push(cert);
+                }
+
+                let auth_agg = quorum_driver.validators.load();
+                let resp = auth_agg.process_soft_bundle(HandleSoftBundleCertificatesRequestV3 {
+                    certificates: certs,
+                    wait_for_effects: false,
+                    include_events: request.include_events,
+                    include_input_objects: request.include_input_objects,
+                    include_output_objects: request.include_output_objects,
+                    include_auxiliary_data: request.include_auxiliary_data,
+                }, client_addr).await;
+
+                let response = match resp {
+                    Ok(response) => {
+                        debug!(?tx_digest, "Certificate processing succeeded");
+                        response
+                    }
+                    // Note: non retryable failure when processing a cert
+                    // should be very rare.
+                    Err(err) => {
+                        Self::handle_error(
+                            quorum_driver,
+                            ExecuteRequestV3::Bundle(request),
+                            None,
+                            None,
+                            old_retry_times,
+                            "get effects cert",
+                            client_addr,
+                        );
+                        return;
+                    }
+                };
+                // if newly_formed {
+                    // let settlement_finality_latency = timer.elapsed().as_secs_f64();
+                    // quorum_driver
+                    //     .metrics
+                    //     .settlement_finality_latency
+                    //     .with_label_values(&[if is_single_writer_tx {
+                    //         TX_TYPE_SINGLE_WRITER_TX
+                    //     } else {
+                    //         TX_TYPE_SHARED_OBJ_TX
+                    //     }])
+                    //     .observe(settlement_finality_latency);
+                    // let is_out_of_expected_range =
+                    //     settlement_finality_latency >= 8.0 || settlement_finality_latency <= 0.1;
+                    // debug!(
+                    //     ?tx_digest,
+                    //     ?is_single_writer_tx,
+                    //     ?is_out_of_expected_range,
+                    //     "QuorumDriver settlement finality latency: {:.3} seconds",
+                    //     settlement_finality_latency
+                    // );
+                // }
+
+                quorum_driver.notify(&tx_digest, &response.into_iter().map(|r| Ok(r)).collect::<Vec<QuorumDriverResult>>(), old_retry_times + 1);
             }
         }
     }
