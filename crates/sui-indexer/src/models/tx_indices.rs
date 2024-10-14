@@ -4,7 +4,7 @@
 use crate::{
     schema::{
         tx_affected_addresses, tx_affected_objects, tx_calls_fun, tx_calls_mod, tx_calls_pkg,
-        tx_changed_objects, tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
+        tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
     },
     types::TxIndex,
 };
@@ -36,21 +36,6 @@ pub struct StoredTxAffectedAddresses {
 pub struct StoredTxAffectedObjects {
     pub tx_sequence_number: i64,
     pub affected: Vec<u8>,
-    pub sender: Vec<u8>,
-}
-
-#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
-#[diesel(table_name = tx_senders)]
-pub struct StoredTxSenders {
-    pub tx_sequence_number: i64,
-    pub sender: Vec<u8>,
-}
-
-#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
-#[diesel(table_name = tx_recipients)]
-pub struct StoredTxRecipients {
-    pub tx_sequence_number: i64,
-    pub recipient: Vec<u8>,
     pub sender: Vec<u8>,
 }
 
@@ -118,8 +103,6 @@ impl TxIndex {
     ) -> (
         Vec<StoredTxAffectedAddresses>,
         Vec<StoredTxAffectedObjects>,
-        Vec<StoredTxSenders>,
-        Vec<StoredTxRecipients>,
         Vec<StoredTxInputObject>,
         Vec<StoredTxChangedObject>,
         Vec<StoredTxPkg>,
@@ -149,21 +132,6 @@ impl TxIndex {
             .map(|o| StoredTxAffectedObjects {
                 tx_sequence_number,
                 affected: o.to_vec(),
-                sender: self.sender.to_vec(),
-            })
-            .collect();
-
-        let tx_sender = StoredTxSenders {
-            tx_sequence_number,
-            sender: self.sender.to_vec(),
-        };
-
-        let tx_recipients = self
-            .recipients
-            .iter()
-            .map(|s| StoredTxRecipients {
-                tx_sequence_number,
-                recipient: s.to_vec(),
                 sender: self.sender.to_vec(),
             })
             .collect();
@@ -245,8 +213,6 @@ impl TxIndex {
         (
             tx_affected_addresses,
             tx_affected_objects,
-            vec![tx_sender],
-            tx_recipients,
             tx_input_objects,
             tx_changed_objects,
             tx_pkgs,

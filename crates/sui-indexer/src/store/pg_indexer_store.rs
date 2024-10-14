@@ -53,7 +53,7 @@ use crate::schema::{
     objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
     raw_checkpoints, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
     tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
-    tx_recipients, tx_senders, watermarks,
+    watermarks,
 };
 use crate::store::transaction_with_retry;
 use crate::types::{EventIndex, IndexedDeletedObject, IndexedObject};
@@ -1069,8 +1069,6 @@ impl PgIndexerStore {
         let (
             affected_addresses,
             affected_objects,
-            senders,
-            recipients,
             input_objects,
             changed_objects,
             pkgs,
@@ -1089,14 +1087,10 @@ impl PgIndexerStore {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
-                Vec::new(),
-                Vec::new(),
             ),
             |(
                 mut tx_affected_addresses,
                 mut tx_affected_objects,
-                mut tx_senders,
-                mut tx_recipients,
                 mut tx_input_objects,
                 mut tx_changed_objects,
                 mut tx_pkgs,
@@ -1108,20 +1102,16 @@ impl PgIndexerStore {
              index| {
                 tx_affected_addresses.extend(index.0);
                 tx_affected_objects.extend(index.1);
-                tx_senders.extend(index.2);
-                tx_recipients.extend(index.3);
-                tx_input_objects.extend(index.4);
-                tx_changed_objects.extend(index.5);
-                tx_pkgs.extend(index.6);
-                tx_mods.extend(index.7);
-                tx_funs.extend(index.8);
-                tx_digests.extend(index.9);
-                tx_kinds.extend(index.10);
+                tx_input_objects.extend(index.2);
+                tx_changed_objects.extend(index.3);
+                tx_pkgs.extend(index.4);
+                tx_mods.extend(index.5);
+                tx_funs.extend(index.6);
+                tx_digests.extend(index.7);
+                tx_kinds.extend(index.8);
                 (
                     tx_affected_addresses,
                     tx_affected_objects,
-                    tx_senders,
-                    tx_recipients,
                     tx_input_objects,
                     tx_changed_objects,
                     tx_pkgs,
@@ -1150,22 +1140,6 @@ impl PgIndexerStore {
                 {
                     diesel::insert_into(tx_affected_objects::table)
                         .values(affected_objects_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
-
-                for senders_chunk in senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_senders::table)
-                        .values(senders_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
-
-                for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_recipients::table)
-                        .values(recipients_chunk)
                         .on_conflict_do_nothing()
                         .execute(conn)
                         .await?;
@@ -1477,20 +1451,6 @@ impl PgIndexerStore {
                 diesel::delete(
                     tx_affected_objects::table
                         .filter(tx_affected_objects::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
-
-                diesel::delete(
-                    tx_senders::table
-                        .filter(tx_senders::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
-
-                diesel::delete(
-                    tx_recipients::table
-                        .filter(tx_recipients::tx_sequence_number.between(min_tx, max_tx)),
                 )
                 .execute(conn)
                 .await?;
