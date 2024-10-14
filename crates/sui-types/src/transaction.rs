@@ -2107,11 +2107,15 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     /// Check if the transaction is compliant with sponsorship.
+    /// Theoretically non-programmable transactions (aka system transactions)
+    /// should not reach here. Now its mostly to ensure the function is not called
+    /// incorrectly in the future, like in a refactoring.
     fn check_sponsorship(&self) -> UserInputResult {
         // Not a sponsored transaction, nothing to check
         if self.gas_owner() == self.sender() {
             return Ok(());
         }
+        // Only programmable transactions can be sponsored
         if matches!(&self.kind, TransactionKind::ProgrammableTransaction(_)) {
             return Ok(());
         }
