@@ -689,19 +689,33 @@ pub enum Command {
     Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, ObjectID, Argument),
 }
 
-/// An argument to a programmable transaction command
+/// An argument to a programmable transaction command.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum Argument {
     /// The gas coin. The gas coin can only be used by-ref, except for with
     /// `TransferObjects`, which can use it by-value.
     GasCoin,
-    /// One of the input objects or primitive values (from
-    /// `ProgrammableTransaction` inputs)
+    /// One of the input objects or primitive values (from `ProgrammableTransactionBlock`
+    /// inputs).
+    ///
+    /// Indexing is zero-based, meaning that `Input(0u16)` refers to the fist input of the PTB,
+    /// `Input(1u16)` to the second, and so on.
     Input(u16),
-    /// The result of another command (from `ProgrammableTransaction` commands)
+    /// The result of another transaction (from `ProgrammableTransactionBlock` transactions).
+    ///
+    /// As with inputs, indexing is zero-based: `Output(u16)` refers to the output of the first
+    /// command, and so on.
     Result(u16),
     /// Like a `Result` but it accesses a nested result. Currently, the only usage
     /// of this is to access a value from a Move call with multiple return values.
+    ///
+    /// * The first component of the tuple is the index of the command which produces a
+    /// tuple with the desired result, and
+    /// * the second component is the index of the desired value in that tuple
+    ///
+    /// Indexing on either component of the tuple is zero based.
+    /// For example, to refer to the second output of the fourth command in a PTB, use
+    /// `NestedResult(3u16, 1u16)`.
     NestedResult(u16, u16),
 }
 
