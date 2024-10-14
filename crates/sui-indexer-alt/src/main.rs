@@ -4,8 +4,11 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use mysten_metrics::spawn_monitored_task;
-use sui_indexer_alt::{args::Args, db::Db, ingestion::IngestionService, metrics::MetricsService};
-use tokio::{signal, task::JoinHandle};
+use sui_indexer_alt::{
+    args::Args, db::Db, ingestion::IngestionService, metrics::MetricsService,
+    task::graceful_shutdown,
+};
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -41,12 +44,9 @@ async fn main() -> Result<()> {
         .await
         .context("Failed to start ingestion service")?;
 
-    // Once we receive a Ctrl-C, notify all services to shutdown, and wait for them to finish.
-    signal::ctrl_c().await.unwrap();
-    cancel.cancel();
-    ingester_handle.await.unwrap();
-    metrics_handle.await.unwrap();
-    ingestion_handle.await.unwrap();
+    // Once we receive a Ctrl-C or one of the services panics or is cancelled, notify all services
+    // to shutdown, and wait for them to finish.
+    graceful_shutdown([ingester_handle, metrics_handle, ingestion_handle], cancel).await;
 
     Ok(())
 }
