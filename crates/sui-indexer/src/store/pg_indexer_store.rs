@@ -82,6 +82,7 @@ macro_rules! chunk {
 // TODO: I think with the `per_db_tx` params, `PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX`
 // is now less relevant. We should do experiments and remove it if it's true.
 const PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX: usize = 1000;
+const PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX: usize = 5000;
 // The amount of rows to update in one DB transaction
 const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
 // The amount of rows to update in one DB transaction, for objects particularly
@@ -120,11 +121,16 @@ impl PgIndexerStore {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
+        let parallel_indices_chunk_size = std::env::var("PG_COMMIT_INDICES_PARALLEL_CHUNK_SIZE")
+            .unwrap_or_else(|_e| PG_COMMIT_INDICES_PARALLEL_CHUNK_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
         let partition_manager = PgPartitionManager::new(metrics.clone(), pool.clone())
             .expect("Failed to initialize partition manager");
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
             parallel_objects_chunk_size,
+            parallel_indices_chunk_size,
             gcs_cred_path: upload_options.gcs_cred_path,
             gcs_display_bucket: upload_options.gcs_display_bucket,
         };
@@ -1070,7 +1076,7 @@ impl PgIndexerStore {
             |conn| {
                 async {
                     for event_emit_packages_chunk in
-                        event_emit_packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                        event_emit_packages.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
                     {
                         diesel::insert_into(event_emit_package::table)
                             .values(event_emit_packages_chunk)
@@ -1080,7 +1086,7 @@ impl PgIndexerStore {
                     }
 
                     for event_emit_modules_chunk in
-                        event_emit_modules.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                        event_emit_modules.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
                     {
                         diesel::insert_into(event_emit_module::table)
                             .values(event_emit_modules_chunk)
@@ -1090,7 +1096,7 @@ impl PgIndexerStore {
                     }
 
                     for event_senders_chunk in
-                        event_senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                        event_senders.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
                     {
                         diesel::insert_into(event_senders::table)
                             .values(event_senders_chunk)
@@ -1100,7 +1106,7 @@ impl PgIndexerStore {
                     }
 
                     for event_struct_packages_chunk in
-                        event_struct_packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                        event_struct_packages.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
                     {
                         diesel::insert_into(event_struct_package::table)
                             .values(event_struct_packages_chunk)
@@ -1110,7 +1116,7 @@ impl PgIndexerStore {
                     }
 
                     for event_struct_modules_chunk in
-                        event_struct_modules.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                        event_struct_modules.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
                     {
                         diesel::insert_into(event_struct_module::table)
                             .values(event_struct_modules_chunk)
@@ -1120,7 +1126,7 @@ impl PgIndexerStore {
                     }
 
                     for event_struct_names_chunk in
-                        event_struct_names.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                        event_struct_names.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
                     {
                         diesel::insert_into(event_struct_name::table)
                             .values(event_struct_names_chunk)
@@ -1130,7 +1136,7 @@ impl PgIndexerStore {
                     }
 
                     for event_struct_instantiations_chunk in
-                        event_struct_instantiations.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                        event_struct_instantiations.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
                     {
                         diesel::insert_into(event_struct_instantiation::table)
                             .values(event_struct_instantiations_chunk)
@@ -1205,7 +1211,7 @@ impl PgIndexerStore {
             |conn| {
                 async {
                     for affected_addresses_chunk in
-                        affected_addresses.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                        affected_addresses.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
                     {
                         diesel::insert_into(tx_affected_addresses::table)
                             .values(affected_addresses_chunk)
@@ -1215,7 +1221,7 @@ impl PgIndexerStore {
                     }
 
                     for affected_objects_chunk in
-                        affected_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                        affected_objects.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
                     {
                         diesel::insert_into(tx_affected_objects::table)
                             .values(affected_objects_chunk)
@@ -1224,7 +1230,7 @@ impl PgIndexerStore {
                             .await?;
                     }
 
-                    for pkgs_chunk in pkgs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    for pkgs_chunk in pkgs.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
                         diesel::insert_into(tx_calls_pkg::table)
                             .values(pkgs_chunk)
                             .on_conflict_do_nothing()
@@ -1232,7 +1238,7 @@ impl PgIndexerStore {
                             .await?;
                     }
 
-                    for mods_chunk in mods.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    for mods_chunk in mods.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
                         diesel::insert_into(tx_calls_mod::table)
                             .values(mods_chunk)
                             .on_conflict_do_nothing()
@@ -1240,7 +1246,7 @@ impl PgIndexerStore {
                             .await?;
                     }
 
-                    for funs_chunk in funs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    for funs_chunk in funs.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
                         diesel::insert_into(tx_calls_fun::table)
                             .values(funs_chunk)
                             .on_conflict_do_nothing()
@@ -1248,7 +1254,7 @@ impl PgIndexerStore {
                             .await?;
                     }
 
-                    for digests_chunk in digests.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    for digests_chunk in digests.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
                         diesel::insert_into(tx_digests::table)
                             .values(digests_chunk)
                             .on_conflict_do_nothing()
@@ -1256,7 +1262,7 @@ impl PgIndexerStore {
                             .await?;
                     }
 
-                    for kinds_chunk in kinds.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    for kinds_chunk in kinds.chunks(PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
                         diesel::insert_into(tx_kinds::table)
                             .values(kinds_chunk)
                             .on_conflict_do_nothing()
