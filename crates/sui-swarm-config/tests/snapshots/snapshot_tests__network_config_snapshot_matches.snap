@@ -101,6 +101,7 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -109,11 +110,11 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -122,7 +123,6 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -271,6 +271,7 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -279,11 +280,11 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -292,7 +293,6 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -441,6 +441,7 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -449,11 +450,11 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -462,7 +463,6 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -611,6 +611,7 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -619,11 +620,11 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -632,7 +633,6 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -781,6 +781,7 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -789,11 +790,11 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -802,7 +803,6 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -951,6 +951,7 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -959,11 +960,11 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -972,7 +973,6 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Unknown:
         - Apple
@@ -1121,6 +1121,7 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -1129,11 +1130,11 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -1142,7 +1143,6 @@ validator_configs:
         - Onefc
         - Playtron
         - Threedos
-        - Trace
         - Twitch
       Unknown:
         - Apple
