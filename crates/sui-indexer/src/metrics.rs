@@ -131,6 +131,10 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency_checkpoints: Histogram,
     pub checkpoint_db_commit_latency_epoch: Histogram,
     pub thousand_transaction_avg_db_commit_latency: Histogram,
+
+    pub tx_indices_tx_affected_addresses_commit_latency: Histogram,
+    pub tx_indices_tx_affected_objects_commit_latency: Histogram,
+
     pub object_db_commit_latency: Histogram,
     pub object_mutation_db_commit_latency: Histogram,
     pub object_deletion_db_commit_latency: Histogram,
@@ -584,6 +588,23 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+
+            tx_indices_tx_affected_addresses_commit_latency: register_histogram_with_registry!(
+                "tx_indices_tx_affected_addresses_commit_latency",
+                "Time spent committing tx indices for tx affected addresses",
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            tx_indices_tx_affected_objects_commit_latency: register_histogram_with_registry!(
+                "tx_indices_tx_affected_objects_commit_latency",
+                "Time spent committing tx indices for tx affected objects",
+                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+
             object_db_commit_latency: register_histogram_with_registry!(
                 "object_db_commit_latency",
                 "Time spent committing a object to the db",

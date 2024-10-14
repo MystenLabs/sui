@@ -391,7 +391,8 @@ impl PgIndexerStore {
         )
         .await
         .tap_ok(|_| {
-            guard.stop_and_record();
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted {} chunked object mutations", mutated_object_mutation_chunk.len());
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object mutations with error: {}", e);
@@ -435,7 +436,8 @@ impl PgIndexerStore {
         )
         .await
         .tap_ok(|_| {
-            guard.stop_and_record();
+            let elapsed = guard.stop_and_record();
+            info!(elapsed, "Persisted {} chunked object deletions", deleted_objects_chunk.len());
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object deletions with error: {}", e);
@@ -1259,6 +1261,8 @@ impl PgIndexerStore {
         use diesel_async::RunQueryDsl;
         let len = tx_affected_addresses.len();
 
+        let guard = self.metrics.tx_indices_tx_affected_addresses_commit_latency.start_timer();
+
         transaction_with_retry(
             &self.metrics,
             &self.pool,
@@ -1279,8 +1283,10 @@ impl PgIndexerStore {
         )
         .await
         .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
             info!(
-                "Persisted {} tx_affected_addresses",
+                elapsed,
+                "Persisted {} chunked tx_affected_addresses",
                 len
             );
         })
@@ -1296,8 +1302,10 @@ impl PgIndexerStore {
         tx_affected_objects: Vec<StoredTxAffectedObjects>,
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
-
         let len = tx_affected_objects.len();
+
+        let guard = self.metrics.tx_indices_tx_affected_objects_commit_latency.start_timer();
+
         transaction_with_retry(
             &self.metrics,
             &self.pool,
@@ -1316,8 +1324,10 @@ impl PgIndexerStore {
         )
         .await
         .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
             info!(
-                "Persisted {} tx_affected_objects",
+                elapsed,
+                "Persisted {} chunked tx_affected_objects",
                 len
             );
         })
@@ -1954,30 +1964,36 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .map(|c| self.persist_object_mutation_chunk(c))
             .collect::<Vec<_>>();
-        futures::future::join_all(mutation_futures)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                IndexerError::PostgresWriteError(format!(
-                    "Failed to persist all object mutation chunks: {:?}",
-                    e
-                ))
-            })?;
+        // futures::future::join_all(mutation_futures)
+        //     .await
+        //     .into_iter()
+        //     .collect::<Result<Vec<_>, _>>()
+        //     .map_err(|e| {
+        //         IndexerError::PostgresWriteError(format!(
+        //             "Failed to persist all object mutation chunks: {:?}",
+        //             e
+        //         ))
+        //     })?;
         let deletion_futures = object_deletion_chunks
             .into_iter()
             .map(|c| self.persist_object_deletion_chunk(c))
             .collect::<Vec<_>>();
-        futures::future::join_all(deletion_futures)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                IndexerError::PostgresWriteError(format!(
-                    "Failed to persist all object deletion chunks: {:?}",
-                    e
-                ))
-            })?;
+        // futures::future::join_all(deletion_futures)
+        //     .await
+        //     .into_iter()
+        //     .collect::<Result<Vec<_>, _>>()
+        //     .map_err(|e| {
+        //         IndexerError::PostgresWriteError(format!(
+        //             "Failed to persist all object deletion chunks: {:?}",
+        //             e
+        //         ))
+        //     })?;
+
+        // TODOggao: handle errors
+        let (mutation_res, deletion_res) = futures::join!(
+            futures::future::join_all(mutation_futures),
+            futures::future::join_all(deletion_futures),
+        );
 
         let elapsed = guard.stop_and_record();
         info!(
@@ -2313,7 +2329,6 @@ impl IndexerStore for PgIndexerStore {
         //     })
         //     .tap_err(|e| tracing::error!("Failed to persist all event_indices chunks: {:?}", e))?;
 
-    let len = indices.len();
     let (
         event_emit_packages,
         event_emit_modules,
@@ -2461,12 +2476,27 @@ impl IndexerStore for PgIndexerStore {
                 },
             );
 
-        let tx_affected_addresses_futures = chunk!(affected_addresses, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
+        // read from env the indices chunk sizes
+        let indices_chunk_size = std::env::var("INDICES_CHUNK_SIZE")
+            .unwrap_or("5000".to_string())
+            .parse::<usize>()
+            .unwrap();
+
+        let affected_addresses_len = affected_addresses.len();
+        let affected_objects_len = affected_objects.len();
+        let pkgs_len = pkgs.len();
+        let mods_len = mods.len();
+        let funs_len = funs.len();
+        let digests_len = digests.len();
+        let kinds_len = kinds.len();
+
+
+        let tx_affected_addresses_futures = chunk!(affected_addresses, indices_chunk_size)
             .into_iter()
             .map(|chunk| self.persist_tx_affected_addresses_chunk(chunk))
             .collect::<Vec<_>>();
 
-        let tx_affected_objects_futures = chunk!(affected_objects, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
+        let tx_affected_objects_futures = chunk!(affected_objects, indices_chunk_size)
             .into_iter()
             .map(|chunk| self.persist_tx_affected_objects_chunk(chunk))
             .collect::<Vec<_>>();
@@ -2496,6 +2526,7 @@ impl IndexerStore for PgIndexerStore {
             .map(|chunk| self.persist_tx_kinds_chunk(chunk))
             .collect::<Vec<_>>();
 
+        // TODOggao: handle errors
         let (tx_affected_addresses_res, tx_affected_objects_res, tx_pkgs_res, tx_mods_res, tx_funs_res, tx_digests_res, tx_kinds_res) = futures::join!(
             futures::future::join_all(tx_affected_addresses_futures),
             futures::future::join_all(tx_affected_objects_futures),
@@ -2517,7 +2548,7 @@ impl IndexerStore for PgIndexerStore {
             })
             .tap_ok(|_| {
                 let elapsed = guard.stop_and_record();
-                info!(elapsed, "Persisted {} tx_indices chunks", len);
+                info!(elapsed, "Persisted {} tx_indices chunks with affected addresses length {} affected objects length {} pkgs length {} mods length {} funs length {} digests length {} kinds length {}", len, affected_addresses_len, affected_objects_len, pkgs_len, mods_len, funs_len, digests_len, kinds_len);
             })
             .tap_err(|e| tracing::error!("Failed to persist all tx_indices chunks: {:?}", e))?;
         Ok(())
