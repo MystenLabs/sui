@@ -2458,7 +2458,7 @@ impl DBOptions {
     }
 
     // Optimize tables receiving significant insertions.
-    pub fn optimize_for_write_throughput(mut self) -> DBOptions {
+    pub fn optimize_for_write_throughput(mut self, has_deletions: bool) -> DBOptions {
         // Increase write buffer size to 256MiB.
         let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
             .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
@@ -2474,9 +2474,24 @@ impl DBOptions {
         self.options
             .set_max_write_buffer_size_to_maintain((write_buffer_size).try_into().unwrap());
 
+        if !has_deletions {
+            // Switch to universal compactions with large number of layers, when there is no deletions.
+            self.options
+                .set_compaction_style(rocksdb::DBCompactionStyle::Universal);
+            let mut compaction_options = rocksdb::UniversalCompactOptions::default();
+            compaction_options.set_max_size_amplification_percent(10000);
+            compaction_options.set_stop_style(rocksdb::UniversalCompactionStopStyle::Similar);
+            self.options
+                .set_universal_compaction_options(&compaction_options);
+        }
+
         // Increase compaction trigger for level 0 to 6.
         let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
-            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
+            .unwrap_or(if has_deletions {
+                DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER
+            } else {
+                DEFAULT_UNIVERSAL_COMPACTION_L0_NUM_FILES_COMPACTION_TRIGGER
+            });
         self.options.set_level_zero_file_num_compaction_trigger(
             max_level_zero_file_num.try_into().unwrap(),
         );
@@ -2495,61 +2510,6 @@ impl DBOptions {
         );
 
         // Increase level 1 target size to 256MiB * 6 ~ 1.5GiB.
-        self.options
-            .set_max_bytes_for_level_base((write_buffer_size * max_level_zero_file_num) as u64);
-
-        self
-    }
-
-    // Optimize tables receiving significant insertions, without any deletions.
-    // TODO: merge this function with optimize_for_write_throughput(), and use a flag to
-    // indicate if deletion is received.
-    pub fn optimize_for_write_throughput_no_deletion(mut self) -> DBOptions {
-        // Increase write buffer size to 256MiB.
-        let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
-            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
-            * 1024
-            * 1024;
-        self.options.set_write_buffer_size(write_buffer_size);
-        // Increase write buffers to keep to 6 before slowing down writes.
-        let max_write_buffer_number = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_NUMBER)
-            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_NUMBER);
-        self.options
-            .set_max_write_buffer_number(max_write_buffer_number.try_into().unwrap());
-        // Keep 1 write buffer so recent writes can be read from memory.
-        self.options
-            .set_max_write_buffer_size_to_maintain((write_buffer_size).try_into().unwrap());
-
-        // Switch to universal compactions.
-        self.options
-            .set_compaction_style(rocksdb::DBCompactionStyle::Universal);
-        self.options.set_num_levels(1);
-        let mut compaction_options = rocksdb::UniversalCompactOptions::default();
-        compaction_options.set_max_size_amplification_percent(10000);
-        compaction_options.set_stop_style(rocksdb::UniversalCompactionStopStyle::Similar);
-        self.options
-            .set_universal_compaction_options(&compaction_options);
-
-        let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
-            .unwrap_or(DEFAULT_UNIVERSAL_COMPACTION_L0_NUM_FILES_COMPACTION_TRIGGER);
-        self.options.set_level_zero_file_num_compaction_trigger(
-            max_level_zero_file_num.try_into().unwrap(),
-        );
-        self.options.set_level_zero_slowdown_writes_trigger(
-            (max_level_zero_file_num * 12).try_into().unwrap(),
-        );
-        self.options
-            .set_level_zero_stop_writes_trigger((max_level_zero_file_num * 16).try_into().unwrap());
-
-        // Increase sst file size to 128MiB.
-        self.options.set_target_file_size_base(
-            read_size_from_env(ENV_VAR_TARGET_FILE_SIZE_BASE_MB)
-                .unwrap_or(DEFAULT_TARGET_FILE_SIZE_BASE_MB) as u64
-                * 1024
-                * 1024,
-        );
-
-        // This should be a no-op for universal compaction but increasing it to be safe.
         self.options
             .set_max_bytes_for_level_base((write_buffer_size * max_level_zero_file_num) as u64);
 

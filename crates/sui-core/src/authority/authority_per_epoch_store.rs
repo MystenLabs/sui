@@ -596,15 +596,13 @@ pub struct AuthorityEpochTables {
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
-    default_db_options()
-        .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(1 << 10)
+    default_db_options().optimize_for_write_throughput(false)
 }
 
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
     DBOptions {
         options: default_db_options()
-            .optimize_for_write_throughput()
+            .optimize_for_write_throughput(false)
             .optimize_for_read(read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024))
             .options,
         rw_options: ReadWriteOptions::default().set_ignore_range_deletions(false),
@@ -612,21 +610,15 @@ fn owned_object_transaction_locks_table_default_config() -> DBOptions {
 }
 
 fn pending_execution_table_default_config() -> DBOptions {
-    default_db_options()
-        .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(1 << 10)
+    default_db_options().optimize_for_write_throughput(false)
 }
 
 fn pending_consensus_transactions_table_default_config() -> DBOptions {
-    default_db_options()
-        .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(1 << 10)
+    default_db_options().optimize_for_write_throughput(false)
 }
 
 fn pending_checkpoints_table_default_config() -> DBOptions {
-    default_db_options()
-        .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(1 << 10)
+    default_db_options().optimize_for_write_throughput(false)
 }
 
 impl AuthorityEpochTables {

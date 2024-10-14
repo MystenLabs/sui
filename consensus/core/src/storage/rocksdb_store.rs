@@ -49,12 +49,14 @@ impl RocksDBStore {
         let db_options = default_db_options().optimize_db_for_write_throughput(2);
         let mut metrics_conf = MetricConf::new("consensus");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
-        let cf_options = default_db_options().optimize_for_write_throughput().options;
+        let cf_options = default_db_options()
+            .optimize_for_write_throughput(false)
+            .options;
         let column_family_options = vec![
             (
                 Self::BLOCKS_CF,
                 default_db_options()
-                    .optimize_for_write_throughput_no_deletion()
+                    .optimize_for_write_throughput(false)
                     // Using larger block is ok since there is not much point reads on the cf.
                     .set_block_options(512, 128 << 10)
                     .options,
