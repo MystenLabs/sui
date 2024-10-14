@@ -114,7 +114,7 @@ export const testnetPools: PoolMap = {
 
 export const mainnetPools: PoolMap = {
 	DEEP_SUI: {
-		address: `0xe9aecf5859310f8b596fbe8488222a7fb15a55003455c9f42d1b60fab9cca9ba`,
+		address: `0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'SUI',
 	},
@@ -124,7 +124,7 @@ export const mainnetPools: PoolMap = {
 		quoteCoin: 'USDC',
 	},
 	DEEP_USDC: {
-		address: `0xde096bb2c59538a25c89229127fe0bc8b63ecdbe52a3693099cc40a1d8a2cfd4`,
+		address: `0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'USDC',
 	},
