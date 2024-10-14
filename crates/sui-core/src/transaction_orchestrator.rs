@@ -57,7 +57,7 @@ pub struct TransactiondOrchestrator<A: Clone> {
     validator_state: Arc<AuthorityState>,
     _local_executor_handle: JoinHandle<()>,
     pending_tx_log: Arc<WritePathPendingTransactionLog>,
-    notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
+    notifier: Arc<NotifyRead<TransactionDigest, Vec<QuorumDriverResult>>>,
     metrics: Arc<TransactionOrchestratorMetrics>,
 }
 
@@ -284,10 +284,16 @@ where
                 warn!(?tx_digest, "QuorumDriverInternalError: {err:?}");
                 Err(QuorumDriverError::QuorumDriverInternalError(err))
             }
-            Ok(Err(err)) => Err(err),
-            Ok(Ok(response)) => {
-                good_response_metrics.inc();
-                Ok((transaction, response))
+            Ok(inner) => {
+                assert!(inner.len() == 1);
+                let res = inner.into_iter().next().unwrap();
+                match res {
+                    Ok(response) => {
+                        good_response_metrics.inc();
+                        Ok((transaction, response))
+                    },
+                    Err(err) => Err(err),
+                }
             }
         }
     }
@@ -300,7 +306,7 @@ where
         transaction: VerifiedTransaction,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
-    ) -> SuiResult<impl Future<Output = SuiResult<QuorumDriverResult>> + '_> {
+    ) -> SuiResult<impl Future<Output = SuiResult<Vec<QuorumDriverResult>>> + '_> {
         let tx_digest = *transaction.digest();
         let ticket = self.notifier.register_one(&tx_digest);
         // TODO(william) need to also write client adr to pending tx log below

@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use crate::base_types::{AuthorityName, EpochId, ObjectRef, TransactionDigest};
 use crate::committee::StakeUnit;
-use crate::crypto::{AuthorityStrongQuorumSignInfo, ConciseAuthorityPublicKeyBytes};
+use crate::crypto::{AuthorityStrongQuorumSignInfo, ConciseAuthorityPublicKeyBytes, DefaultHash};
 use crate::effects::{
     CertifiedTransactionEffects, TransactionEffects, TransactionEvents,
     VerifiedCertifiedTransactionEffects,
@@ -15,6 +15,7 @@ use crate::error::SuiError;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::object::Object;
 use crate::transaction::{Transaction, VerifiedTransaction};
+use fastcrypto::hash::HashFunction;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use thiserror::Error;
@@ -145,6 +146,40 @@ pub struct ExecuteTransactionRequestV3 {
     pub include_output_objects: bool,
     pub include_auxiliary_data: bool,
 }
+
+
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExecuteBundleRequestV3 {
+    pub transactions: Vec<Transaction>,
+
+    pub include_events: bool,
+    pub include_input_objects: bool,
+    pub include_output_objects: bool,
+    pub include_auxiliary_data: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ExecuteRequestV3 {
+    Single(ExecuteTransactionRequestV3),
+    Bundle(ExecuteBundleRequestV3),
+}
+
+impl ExecuteRequestV3 {
+    pub fn digest(&self) -> TransactionDigest {
+        match self {
+            ExecuteRequestV3::Single(request) => request.transaction.digest().clone(),
+            ExecuteRequestV3::Bundle(request) => {
+                let mut hasher = DefaultHash::default();
+                for tx in &request.transactions {
+                    hasher.update(tx.digest());
+                }
+                TransactionDigest::new(hasher.finalize().digest)
+            }
+        }
+    }
+}
+
 
 #[derive(Clone, Debug)]
 pub struct VerifiedExecuteTransactionResponseV3 {
