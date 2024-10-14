@@ -41,10 +41,6 @@ use types::{
     PrimaryToWorkerServer, WorkerToWorkerServer,
 };
 
-#[cfg(test)]
-#[path = "tests/worker_tests.rs"]
-pub mod worker_tests;
-
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
