@@ -15,6 +15,11 @@ export type DappPreflightResponse = {
 		title: string;
 		subtitle: string;
 	};
+	warnings: {
+		enabled: boolean;
+		title: string;
+		subtitles: string[];
+	};
 };
 
 export type Network = 'mainnet' | 'testnet' | 'devnet' | 'local';
