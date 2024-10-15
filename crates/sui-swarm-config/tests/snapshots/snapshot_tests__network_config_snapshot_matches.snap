@@ -145,8 +145,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -161,7 +161,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -315,8 +315,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -331,7 +331,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -485,8 +485,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -501,7 +501,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -655,8 +655,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -671,7 +671,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -825,8 +825,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -841,7 +841,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -995,8 +995,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -1011,7 +1011,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -1165,8 +1165,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -1181,7 +1181,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
