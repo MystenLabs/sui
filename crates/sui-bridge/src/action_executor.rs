@@ -1360,6 +1360,7 @@ mod tests {
                 sui_tx_digest,
                 sui_tx_event_index,
                 Ok(signed_action.clone()),
+                None,
             );
             signed_actions.insert(secret.public().into(), signed_action.into_sig().signature);
         }
@@ -1376,6 +1377,7 @@ mod tests {
                 sui_tx_digest,
                 sui_tx_event_index,
                 Err(BridgeError::RestAPIError("small issue".into())),
+                None,
             );
         }
     }
