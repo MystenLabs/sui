@@ -67,6 +67,9 @@ pub struct FunctionSourceMap {
     /// The names of the parameters to the function.
     pub parameters: Vec<SourceName>,
 
+    /// The locations of the return values
+    pub returns: Vec<Loc>,
+
     /// The index into the vector is the local's index. The corresponding `(Identifier, Location)` tuple
     /// is the name and location of the local.
     pub locals: Vec<SourceName>,
@@ -206,6 +209,7 @@ impl FunctionSourceMap {
             definition_location,
             type_parameters: Vec::new(),
             parameters: Vec::new(),
+            returns: Vec::new(),
             locals: Vec::new(),
             code_map: BTreeMap::new(),
             is_native,
@@ -252,6 +256,10 @@ impl FunctionSourceMap {
         self.parameters.push(name)
     }
 
+    /// add the locations of return values
+    pub fn add_return_mapping(&mut self, loc: Loc) {
+        self.returns.push(loc);
+    }
     /// Recall that we are using a segment tree. We therefore lookup the location for the code
     /// offset by performing a range query for the largest number less than or equal to the code
     /// offset passed in.
@@ -448,6 +456,18 @@ impl SourceMap {
             format_err!("Tried to add parameter mapping to undefined function index")
         })?;
         func_entry.add_parameter_mapping(name);
+        Ok(())
+    }
+
+    pub fn add_return_mapping(
+        &mut self,
+        fdef_idx: FunctionDefinitionIndex,
+        loc: Loc,
+    ) -> Result<()> {
+        let func_entry = self.function_map.get_mut(&fdef_idx.0).ok_or_else(|| {
+            format_err!("Tried to add return mapping to undefined function index")
+        })?;
+        func_entry.add_return_mapping(loc);
         Ok(())
     }
 
