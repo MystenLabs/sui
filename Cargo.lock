@@ -13881,6 +13881,7 @@ name = "sui-indexer-alt"
 version = "1.37.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum 0.7.5",
  "backoff",
  "bb8",
@@ -13899,6 +13900,7 @@ dependencies = [
  "telemetry-subscribers",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tokio-util 0.7.10",
  "tracing",
  "url",

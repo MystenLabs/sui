@@ -37,7 +37,7 @@ pub struct DbConfig {
     connection_timeout: Duration,
 }
 
-type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
+pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
 
 impl Db {
     /// Construct a new DB connection pool. Instances of [Db] can be cloned to share access to the
