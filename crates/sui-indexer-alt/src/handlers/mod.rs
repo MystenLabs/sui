@@ -21,6 +21,7 @@ use crate::{
 };
 
 pub mod kv_checkpoints;
+pub mod kv_objects;
 
 /// Extra buffer added to the channel between the handler and the committer. There does not need to
 /// be a huge capacity here because the committer is already buffering rows to insert internally.
