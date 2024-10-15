@@ -67,13 +67,13 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 				transactionModule: `${event.sendingModule?.package.address}::${event.sendingModule?.name}`,
 				type: toShortTypeString(event.contents.type?.repr)!,
 			})) ?? [],
-		rawTransaction: options?.showRawInput ? transactionBlock.rawTransaction : undefined,
+		rawTransaction: options?.showRawInput ? mapRawTransaction(transactionBlock) : undefined,
 		...(options?.showInput
 			? {
 					transaction:
 						transactionBlock.rawTransaction &&
 						mapTransactionBlockToInput(
-							bcs.TransactionData.parse(fromBase64(transactionBlock.rawTransaction)),
+							bcs.TransactionData.fromBase64(transactionBlock.rawTransaction),
 							transactionBlock.signatures,
 						),
 				}
@@ -82,6 +82,30 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 			? mapObjectChanges(transactionBlock, effects)
 			: undefined,
 	};
+}
+
+function mapRawTransaction(transactionBlock: Rpc_Transaction_FieldsFragment) {
+	const txData = bcs.TransactionData.fromBase64(transactionBlock.rawTransaction);
+
+	return bcs.SenderSignedData.serialize([
+		{
+			intentMessage: {
+				intent: {
+					scope: {
+						TransactionData: true,
+					},
+					version: {
+						V0: true,
+					},
+					appId: {
+						Sui: true,
+					},
+				},
+				value: txData,
+			},
+			txSignatures: transactionBlock.signatures?.map((sig) => fromBase64(sig)) ?? [],
+		},
+	]).toBase64();
 }
 
 function mapObjectChanges(
