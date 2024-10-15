@@ -981,13 +981,9 @@ impl DagState {
     }
 
     /// Calculates the eviction round for the given authority. The goal is to keep at least `cached_rounds`
-    /// of the latest blocks in the cache (if enough data is available), while evicting blocks with rounds < `gc_round` when possible.
+    /// of the latest blocks in the cache (if enough data is available), while evicting blocks with rounds <= `gc_round` when possible.
     fn gc_eviction_round(last_round: Round, gc_round: Round, cached_rounds: u32) -> Round {
-        if last_round.saturating_sub(gc_round) >= cached_rounds {
-            gc_round
-        } else {
-            last_round.saturating_sub(cached_rounds)
-        }
+        gc_round.min(last_round.saturating_sub(cached_rounds))
     }
 
     #[cfg(test)]
