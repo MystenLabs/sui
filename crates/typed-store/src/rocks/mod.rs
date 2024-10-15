@@ -2523,7 +2523,6 @@ impl DBOptions {
         // Switch to universal compactions.
         self.options
             .set_compaction_style(rocksdb::DBCompactionStyle::Universal);
-        self.options.set_num_levels(1);
         let mut compaction_options = rocksdb::UniversalCompactOptions::default();
         compaction_options.set_max_size_amplification_percent(10000);
         compaction_options.set_stop_style(rocksdb::UniversalCompactionStopStyle::Similar);
