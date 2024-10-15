@@ -81,7 +81,7 @@ pub struct IndexerMetrics {
     pub committer_batch_size: HistogramVec,
 }
 
-/// Collects information about the the database connection pool.
+/// Collects information about the database connection pool.
 struct DbConnectionStatsCollector {
     db: Db,
     desc: Vec<(MetricType, Desc)>,
