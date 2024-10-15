@@ -576,7 +576,11 @@ impl<'env> BoogieTranslator<'env> {
                     Ret(..) => {}
                     _ => builder.emit(
                         bc.substitute_operations(&ensures_asserts_to_requires_subst)
-                            .update_abort_action(|_| Some(AbortAction::Check)),
+                            .update_abort_action(|aa| match aa {
+                                Some(AbortAction::Jump(_, _)) => Some(AbortAction::Check),
+                                Some(AbortAction::Check) => Some(AbortAction::Check),
+                                None => None,
+                            }),
                     ),
                 },
                 FunctionTranslationStyle::Opaque => match bc {
@@ -590,11 +594,11 @@ impl<'env> BoogieTranslator<'env> {
         }
 
         let mut data = builder.data;
-        // let reach_def = ReachingDefProcessor::new();
-        // let live_vars = LiveVarAnalysisProcessor::new_no_annotate();
-        // let mut dummy_targets = FunctionTargetsHolder::default();
-        // data = reach_def.process(&mut dummy_targets, builder.fun_env, data, None);
-        // data = live_vars.process(&mut dummy_targets, builder.fun_env, data, None);
+        let reach_def = ReachingDefProcessor::new();
+        let live_vars = LiveVarAnalysisProcessor::new_no_annotate();
+        let mut dummy_targets = FunctionTargetsHolder::new();
+        data = reach_def.process(&mut dummy_targets, builder.fun_env, data, None);
+        data = live_vars.process(&mut dummy_targets, builder.fun_env, data, None);
 
         let fun_target = FunctionTarget::new(builder.fun_env, &data);
         if style == FunctionTranslationStyle::Default
@@ -3002,27 +3006,23 @@ impl<'env> FunctionTranslator<'env> {
                         self.track_global_mem(mem, node_id);
                     }
                 }
-                if FunctionTranslationStyle::Default == self.style
-                    || FunctionTranslationStyle::Opaque == self.style
-                {
-                    match aa {
-                        Some(AbortAction::Jump(target, code)) => {
-                            emitln!(self.writer(), "if ($abort_flag) {");
-                            self.writer().indent();
-                            *last_tracked_loc = None;
-                            self.track_loc(last_tracked_loc, &loc);
-                            let code_str = str_local(*code);
-                            emitln!(self.writer(), "{} := $abort_code;", code_str);
-                            self.track_abort(&code_str);
-                            emitln!(self.writer(), "goto L{};", target.as_usize());
-                            self.writer().unindent();
-                            emitln!(self.writer(), "}");
-                        }
-                        Some(AbortAction::Check) => {
-                            emitln!(self.writer(), "assert {:msg \"assert_failed(0,0,0): code should not abort\"} !$abort_flag;");
-                        }
-                        None => {}
+                match aa {
+                    Some(AbortAction::Jump(target, code)) => {
+                        emitln!(self.writer(), "if ($abort_flag) {");
+                        self.writer().indent();
+                        *last_tracked_loc = None;
+                        self.track_loc(last_tracked_loc, &loc);
+                        let code_str = str_local(*code);
+                        emitln!(self.writer(), "{} := $abort_code;", code_str);
+                        self.track_abort(&code_str);
+                        emitln!(self.writer(), "goto L{};", target.as_usize());
+                        self.writer().unindent();
+                        emitln!(self.writer(), "}");
                     }
+                    Some(AbortAction::Check) => {
+                        emitln!(self.writer(), "assert {:msg \"assert_failed(0,0,0): code should not abort\"} !$abort_flag;");
+                    }
+                    None => {}
                 }
             }
             Abort(_, src) => {
