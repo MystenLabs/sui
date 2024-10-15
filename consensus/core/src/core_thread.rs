@@ -390,7 +390,6 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
 
 #[cfg(test)]
 mod test {
-    use mysten_metrics::monitored_mpsc::unbounded_channel;
     use parking_lot::RwLock;
 
     use super::*;
@@ -423,14 +422,14 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let (sender, _receiver) = unbounded_channel("consensus_output");
+        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
         ));
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0),
+            commit_consumer,
             dag_state.clone(),
             store,
             leader_schedule.clone(),

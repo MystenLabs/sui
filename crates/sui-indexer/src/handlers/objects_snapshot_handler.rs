@@ -34,6 +34,7 @@ pub struct CheckpointObjectChanges {
 
 #[async_trait]
 impl Worker for ObjectsSnapshotHandler {
+    type Result = ();
     async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
         let transformed_data = CheckpointHandler::index_objects(checkpoint, &self.metrics).await?;
         self.sender

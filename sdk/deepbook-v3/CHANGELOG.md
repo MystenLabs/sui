@@ -1,5 +1,35 @@
 # @mysten/deepbook-v3
 
+## 0.11.0
+
+### Minor Changes
+
+- 7b8e8ad: Mainnet pool packages
+
+## 0.10.0
+
+### Minor Changes
+
+- 23c3a3a: DEEP Mainnet Redeploy
+
+## 0.9.0
+
+### Minor Changes
+
+- 89f2e59: Mainnet packages
+
+## 0.8.5
+
+### Patch Changes
+
+- c0fb6d6: Patch ID and bug fix
+
+## 0.8.4
+
+### Patch Changes
+
+- 5df4e5e: Test Mainnet Packages
+
 ## 0.8.3
 
 ### Patch Changes

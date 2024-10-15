@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::errors::IndexerError;
 use move_core_types::language_storage::StructTag;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_json_rpc_types::{
@@ -24,6 +24,8 @@ use sui_types::object::{Object, Owner};
 use sui_types::sui_serde::SuiStructTag;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::SenderSignedData;
+
+use crate::errors::IndexerError;
 
 pub type IndexerResult<T> = Result<T, IndexerError>;
 
@@ -254,6 +256,24 @@ pub struct EventIndex {
     pub type_instantiation: String,
 }
 
+// for ingestion test
+impl EventIndex {
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+        EventIndex {
+            tx_sequence_number: rng.gen(),
+            event_sequence_number: rng.gen(),
+            sender: SuiAddress::random_for_testing_only(),
+            emit_package: ObjectID::random(),
+            emit_module: rng.gen::<u64>().to_string(),
+            type_package: ObjectID::random(),
+            type_module: rng.gen::<u64>().to_string(),
+            type_name: rng.gen::<u64>().to_string(),
+            type_instantiation: rng.gen::<u64>().to_string(),
+        }
+    }
+}
+
 impl EventIndex {
     pub fn from_event(
         tx_sequence_number: u64,
@@ -351,6 +371,25 @@ pub struct IndexedObject {
 }
 
 impl IndexedObject {
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+        let random_address = SuiAddress::random_for_testing_only();
+        IndexedObject {
+            checkpoint_sequence_number: rng.gen(),
+            object: Object::with_owner_for_testing(random_address),
+            df_kind: {
+                let random_value = rng.gen_range(0..3);
+                match random_value {
+                    0 => Some(DynamicFieldType::DynamicField),
+                    1 => Some(DynamicFieldType::DynamicObject),
+                    _ => None,
+                }
+            },
+        }
+    }
+}
+
+impl IndexedObject {
     pub fn from_object(
         checkpoint_sequence_number: CheckpointSequenceNumber,
         object: Object,
@@ -369,6 +408,17 @@ pub struct IndexedDeletedObject {
     pub object_id: ObjectID,
     pub object_version: u64,
     pub checkpoint_sequence_number: u64,
+}
+
+impl IndexedDeletedObject {
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+        IndexedDeletedObject {
+            object_id: ObjectID::random(),
+            object_version: rng.gen(),
+            checkpoint_sequence_number: rng.gen(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -412,6 +462,41 @@ pub struct TxIndex {
     pub sender: SuiAddress,
     pub recipients: Vec<SuiAddress>,
     pub move_calls: Vec<(ObjectID, String, String)>,
+}
+
+impl TxIndex {
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+        TxIndex {
+            tx_sequence_number: rng.gen(),
+            tx_kind: if rng.gen_bool(0.5) {
+                TransactionKind::SystemTransaction
+            } else {
+                TransactionKind::ProgrammableTransaction
+            },
+            transaction_digest: TransactionDigest::random(),
+            checkpoint_sequence_number: rng.gen(),
+            input_objects: (0..1000).map(|_| ObjectID::random()).collect(),
+            changed_objects: (0..1000).map(|_| ObjectID::random()).collect(),
+            affected_objects: (0..1000).map(|_| ObjectID::random()).collect(),
+            payers: (0..rng.gen_range(0..100))
+                .map(|_| SuiAddress::random_for_testing_only())
+                .collect(),
+            sender: SuiAddress::random_for_testing_only(),
+            recipients: (0..rng.gen_range(0..1000))
+                .map(|_| SuiAddress::random_for_testing_only())
+                .collect(),
+            move_calls: (0..rng.gen_range(0..1000))
+                .map(|_| {
+                    (
+                        ObjectID::random(),
+                        rng.gen::<u64>().to_string(),
+                        rng.gen::<u64>().to_string(),
+                    )
+                })
+                .collect(),
+        }
+    }
 }
 
 // ObjectChange is not bcs deserializable, IndexedObjectChange is.

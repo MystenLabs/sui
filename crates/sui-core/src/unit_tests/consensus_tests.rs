@@ -7,20 +7,27 @@ use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
+use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use sui_network::tonic;
-use sui_types::crypto::deterministic_random_account_key;
+use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
+use sui_types::gas::GasCostSummary;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
+};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
-use sui_types::utils::to_sender_signed_transaction;
+use sui_types::utils::{make_committee_key, to_sender_signed_transaction};
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ExecutionDigests, ObjectID, SuiAddress},
     object::Object,
-    transaction::{CallArg, CertifiedTransaction, ObjectArg, TransactionData},
+    transaction::{CallArg, CertifiedTransaction, ObjectArg, TransactionData, VerifiedTransaction},
 };
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -105,6 +112,70 @@ pub async fn test_certificates(
     certificates
 }
 
+/// Fixture: creates a transaction using the specified gas and input objects.
+pub async fn test_user_transaction(
+    authority: &AuthorityState,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+    gas_object: Object,
+    input_objects: Vec<Object>,
+) -> VerifiedTransaction {
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let rgp = epoch_store.reference_gas_price();
+
+    // Object digest may be different in genesis than originally generated.
+    let gas_object = authority
+        .get_object(&gas_object.id())
+        .await
+        .unwrap()
+        .unwrap();
+    let mut input_objs = vec![];
+    for obj in input_objects {
+        input_objs.push(authority.get_object(&obj.id()).await.unwrap().unwrap());
+    }
+
+    let mut object_args: Vec<_> = input_objs
+        .into_iter()
+        .map(|obj| {
+            if obj.is_shared() {
+                ObjectArg::SharedObject {
+                    id: obj.id(),
+                    initial_shared_version: obj.version(),
+                    mutable: true,
+                }
+            } else {
+                ObjectArg::ImmOrOwnedObject(obj.compute_object_reference())
+            }
+        })
+        .map(CallArg::Object)
+        .collect();
+    object_args.extend(vec![
+        CallArg::Pure(16u64.to_le_bytes().to_vec()),
+        CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
+    ]);
+
+    // Make a sample transaction.
+    let module = "object_basics";
+    let function = "create";
+
+    let data = TransactionData::new_move_call(
+        sender,
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!(module).to_owned(),
+        ident_str!(function).to_owned(),
+        /* type_args */ vec![],
+        gas_object.compute_object_reference(),
+        object_args,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+        rgp,
+    )
+    .unwrap();
+
+    epoch_store
+        .verify_transaction(to_sender_signed_transaction(data, keypair))
+        .unwrap()
+}
+
 pub fn make_consensus_adapter_for_test(
     state: Arc<AuthorityState>,
     process_via_checkpoint: HashSet<TransactionDigest>,
@@ -155,6 +226,11 @@ pub fn make_consensus_adapter_for_test(
                                 .await?,
                         );
                     }
+                } else if let SequencedConsensusTransactionKey::External(
+                    ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number),
+                ) = tx.transaction.key()
+                {
+                    epoch_store.notify_synced_checkpoint(checkpoint_sequence_number);
                 } else {
                     transactions.extend(
                         epoch_store
@@ -264,6 +340,58 @@ async fn submit_multiple_transactions_to_consensus_adapter() {
         .into_iter()
         .map(|certificate| ConsensusTransaction::new_certificate_message(&state.name, certificate))
         .collect::<Vec<_>>();
+
+    let waiter = adapter
+        .submit_batch(
+            &transactions,
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
+        )
+        .unwrap();
+    waiter.await.unwrap();
+}
+
+#[tokio::test]
+async fn submit_checkpoint_signature_to_consensus_adapter() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut rng = StdRng::seed_from_u64(1_100);
+    let (keys, committee) = make_committee_key(&mut rng);
+
+    // Initialize an authority
+    let state = init_state_with_objects(vec![]).await;
+    let epoch_store = state.epoch_store_for_testing();
+
+    // Make a new consensus adapter instance.
+    let adapter = make_consensus_adapter_for_test(state, HashSet::new(), false);
+
+    let checkpoint_summary = CheckpointSummary::new(
+        &ProtocolConfig::get_for_max_version_UNSAFE(),
+        1,
+        2,
+        10,
+        &CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]),
+        None,
+        GasCostSummary::default(),
+        None,
+        100,
+        Vec::new(),
+    );
+
+    let authority_key = &keys[0];
+    let authority = authority_key.public().into();
+    let signed_checkpoint_summary = SignedCheckpointSummary::new(
+        committee.epoch,
+        checkpoint_summary,
+        authority_key,
+        authority,
+    );
+
+    let transactions = vec![ConsensusTransaction::new_checkpoint_signature_message(
+        CheckpointSignatureMessage {
+            summary: signed_checkpoint_summary,
+        },
+    )];
     let waiter = adapter
         .submit_batch(
             &transactions,

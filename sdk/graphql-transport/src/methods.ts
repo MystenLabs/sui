@@ -622,8 +622,8 @@ export const RPC_METHODS: {
 										: undefined,
 								inputObject: 'InputObject' in filter ? filter.InputObject : undefined,
 								changedObject: 'ChangedObject' in filter ? filter.ChangedObject : undefined,
-								signAddress: 'FromAddress' in filter ? filter.FromAddress : undefined,
-								recvAddress: 'ToAddress' in filter ? filter.ToAddress : undefined,
+								sentAddress: 'FromAddress' in filter ? filter.FromAddress : undefined,
+								affectedAddress: 'ToAddress' in filter ? filter.ToAddress : undefined,
 								kind:
 									'TransactionKind' in filter
 										? filter.TransactionKind === 'ProgrammableTransaction'
@@ -1020,7 +1020,7 @@ export const RPC_METHODS: {
 			(data) => {
 				return data.owner?.dynamicObjectField?.value?.__typename === 'MoveObject'
 					? data.owner.dynamicObjectField.value.owner?.__typename === 'Parent'
-						? data.owner.dynamicObjectField.value.owner.parent
+						? data.owner.dynamicObjectField.value.owner.parent?.asObject
 						: undefined
 					: undefined;
 			},

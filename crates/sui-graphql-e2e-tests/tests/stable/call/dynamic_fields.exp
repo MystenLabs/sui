@@ -1,4 +1,4 @@
-processed 13 tasks
+processed 12 tasks
 
 init:
 A: object(0,0)
@@ -31,7 +31,7 @@ task 5, line 60:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 6, lines 62-85:
+task 6, lines 62-118:
 //# run-graphql
 Response: {
   "data": {
@@ -49,7 +49,14 @@ Response: {
               "bcs": "AA=="
             },
             "value": {
-              "__typename": "MoveValue"
+              "__typename": "MoveValue",
+              "type": {
+                "repr": "u64"
+              },
+              "bcs": "AQAAAAAAAAA=",
+              "data": {
+                "Number": "1"
+              }
             }
           },
           {
@@ -63,7 +70,56 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
+              "__typename": "MoveObject",
+              "contents": {
+                "type": {
+                  "repr": "0x314faae908e1e1e6f5df9f3a03a4692a27cb974776f13551472d3831f5a964d9::m::Child"
+                },
+                "bcs": "79SK5tokongSfcWj2640StZoQwIktLuTsSSR/HV6Odc=",
+                "data": {
+                  "Struct": [
+                    {
+                      "name": "id",
+                      "value": {
+                        "UID": [
+                          239,
+                          212,
+                          138,
+                          230,
+                          218,
+                          36,
+                          162,
+                          120,
+                          18,
+                          125,
+                          197,
+                          163,
+                          219,
+                          174,
+                          52,
+                          74,
+                          214,
+                          104,
+                          67,
+                          2,
+                          36,
+                          180,
+                          187,
+                          147,
+                          177,
+                          36,
+                          145,
+                          252,
+                          117,
+                          122,
+                          57,
+                          215
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
             }
           },
           {
@@ -77,7 +133,14 @@ Response: {
               "bcs": "AA=="
             },
             "value": {
-              "__typename": "MoveValue"
+              "__typename": "MoveValue",
+              "type": {
+                "repr": "u64"
+              },
+              "bcs": "AgAAAAAAAAA=",
+              "data": {
+                "Number": "2"
+              }
             }
           },
           {
@@ -91,99 +154,19 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveValue"
+              "__typename": "MoveValue",
+              "type": {
+                "repr": "u64"
+              },
+              "bcs": "AAAAAAAAAAA=",
+              "data": {
+                "Number": "0"
+              }
             }
           }
         ]
       }
-    }
-  }
-}
-
-task 7, line 87:
-//# run Test::m::wrap --sender A --args object(2,0)
-created: object(7,0)
-mutated: object(0,0)
-wrapped: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
-
-task 8, line 89:
-//# create-checkpoint
-Checkpoint created: 2
-
-task 9, lines 91-114:
-//# run-graphql
-Response: {
-  "data": {
-    "object": {
-      "dynamicFields": {
-        "nodes": [
-          {
-            "name": {
-              "type": {
-                "repr": "vector<u8>"
-              },
-              "data": {
-                "Vector": []
-              },
-              "bcs": "AA=="
-            },
-            "value": {
-              "__typename": "MoveValue"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "u64"
-              },
-              "data": {
-                "Number": "0"
-              },
-              "bcs": "AAAAAAAAAAA="
-            },
-            "value": {
-              "__typename": "MoveObject"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "bool"
-              },
-              "data": {
-                "Bool": false
-              },
-              "bcs": "AA=="
-            },
-            "value": {
-              "__typename": "MoveValue"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "u64"
-              },
-              "data": {
-                "Number": "0"
-              },
-              "bcs": "AAAAAAAAAAA="
-            },
-            "value": {
-              "__typename": "MoveValue"
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 10, lines 116-141:
-//# run-graphql
-Response: {
-  "data": {
+    },
     "owner": {
       "dynamicFields": {
         "nodes": [
@@ -198,11 +181,14 @@ Response: {
               "bcs": "AA=="
             },
             "value": {
+              "__typename": "MoveValue",
+              "type": {
+                "repr": "u64"
+              },
               "bcs": "AQAAAAAAAAA=",
               "data": {
                 "Number": "1"
-              },
-              "__typename": "MoveValue"
+              }
             }
           },
           {
@@ -216,7 +202,56 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
+              "__typename": "MoveObject",
+              "contents": {
+                "type": {
+                  "repr": "0x314faae908e1e1e6f5df9f3a03a4692a27cb974776f13551472d3831f5a964d9::m::Child"
+                },
+                "bcs": "79SK5tokongSfcWj2640StZoQwIktLuTsSSR/HV6Odc=",
+                "data": {
+                  "Struct": [
+                    {
+                      "name": "id",
+                      "value": {
+                        "UID": [
+                          239,
+                          212,
+                          138,
+                          230,
+                          218,
+                          36,
+                          162,
+                          120,
+                          18,
+                          125,
+                          197,
+                          163,
+                          219,
+                          174,
+                          52,
+                          74,
+                          214,
+                          104,
+                          67,
+                          2,
+                          36,
+                          180,
+                          187,
+                          147,
+                          177,
+                          36,
+                          145,
+                          252,
+                          117,
+                          122,
+                          57,
+                          215
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
             }
           },
           {
@@ -230,11 +265,14 @@ Response: {
               "bcs": "AA=="
             },
             "value": {
+              "__typename": "MoveValue",
+              "type": {
+                "repr": "u64"
+              },
               "bcs": "AgAAAAAAAAA=",
               "data": {
                 "Number": "2"
-              },
-              "__typename": "MoveValue"
+              }
             }
           },
           {
@@ -248,11 +286,14 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
+              "__typename": "MoveValue",
+              "type": {
+                "repr": "u64"
+              },
               "bcs": "AAAAAAAAAAA=",
               "data": {
                 "Number": "0"
-              },
-              "__typename": "MoveValue"
+              }
             }
           }
         ]
@@ -261,7 +302,158 @@ Response: {
   }
 }
 
-task 11, lines 143-163:
+task 7, line 120:
+//# run Test::m::wrap --sender A --args object(2,0)
+created: object(7,0)
+mutated: object(0,0)
+wrapped: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 8, line 122:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 9, lines 124-180:
+//# run-graphql
+Response: {
+  "data": {
+    "object": null,
+    "owner": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue",
+              "type": {
+                "repr": "u64"
+              },
+              "bcs": "AQAAAAAAAAA=",
+              "data": {
+                "Number": "1"
+              }
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject",
+              "contents": {
+                "type": {
+                  "repr": "0x314faae908e1e1e6f5df9f3a03a4692a27cb974776f13551472d3831f5a964d9::m::Child"
+                },
+                "bcs": "79SK5tokongSfcWj2640StZoQwIktLuTsSSR/HV6Odc=",
+                "data": {
+                  "Struct": [
+                    {
+                      "name": "id",
+                      "value": {
+                        "UID": [
+                          239,
+                          212,
+                          138,
+                          230,
+                          218,
+                          36,
+                          162,
+                          120,
+                          18,
+                          125,
+                          197,
+                          163,
+                          219,
+                          174,
+                          52,
+                          74,
+                          214,
+                          104,
+                          67,
+                          2,
+                          36,
+                          180,
+                          187,
+                          147,
+                          177,
+                          36,
+                          145,
+                          252,
+                          117,
+                          122,
+                          57,
+                          215
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "bool"
+              },
+              "data": {
+                "Bool": false
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue",
+              "type": {
+                "repr": "u64"
+              },
+              "bcs": "AgAAAAAAAAA=",
+              "data": {
+                "Number": "2"
+              }
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveValue",
+              "type": {
+                "repr": "u64"
+              },
+              "bcs": "AAAAAAAAAAA=",
+              "data": {
+                "Number": "0"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 10, lines 182-201:
 //# run-graphql
 Response: {
   "data": {
@@ -278,6 +470,9 @@ Response: {
         },
         "value": {
           "__typename": "MoveValue",
+          "type": {
+            "repr": "u64"
+          },
           "bcs": "AAAAAAAAAAA=",
           "data": {
             "Number": "0"
@@ -288,14 +483,63 @@ Response: {
   }
 }
 
-task 12, lines 165-176:
+task 11, lines 203-219:
 //# run-graphql
 Response: {
   "data": {
     "owner": {
       "dynamicObjectField": {
         "value": {
-          "__typename": "MoveObject"
+          "__typename": "MoveObject",
+          "contents": {
+            "type": {
+              "repr": "0x314faae908e1e1e6f5df9f3a03a4692a27cb974776f13551472d3831f5a964d9::m::Child"
+            },
+            "bcs": "79SK5tokongSfcWj2640StZoQwIktLuTsSSR/HV6Odc=",
+            "data": {
+              "Struct": [
+                {
+                  "name": "id",
+                  "value": {
+                    "UID": [
+                      239,
+                      212,
+                      138,
+                      230,
+                      218,
+                      36,
+                      162,
+                      120,
+                      18,
+                      125,
+                      197,
+                      163,
+                      219,
+                      174,
+                      52,
+                      74,
+                      214,
+                      104,
+                      67,
+                      2,
+                      36,
+                      180,
+                      187,
+                      147,
+                      177,
+                      36,
+                      145,
+                      252,
+                      117,
+                      122,
+                      57,
+                      215
+                    ]
+                  }
+                }
+              ]
+            }
+          }
         }
       }
     }

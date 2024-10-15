@@ -3,25 +3,7 @@ source: crates/sui-upgrade-compatibility-transactional-tests/tests/tests.rs
 expression: results
 ---
 ====
-Compatibility { check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: true, check_private_entry_linking: true, disallowed_new_abilities: [], disallow_change_datatype_type_params: true, disallow_new_variants: true }
-0000000000000000000000000000000000000000000000000000000000000000::base_module:
-	base->upgrade: false
-	upgrade->base: false
-0000000000000000000000000000000000000000000000000000000000000000::friend_module:
-	base->upgrade: true
-	upgrade->base: true
-====
-====
-Compatibility { check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: true, check_private_entry_linking: false, disallowed_new_abilities: [Copy, Drop, Store, Key, ], disallow_change_datatype_type_params: true, disallow_new_variants: true }
-0000000000000000000000000000000000000000000000000000000000000000::base_module:
-	base->upgrade: false
-	upgrade->base: false
-0000000000000000000000000000000000000000000000000000000000000000::friend_module:
-	base->upgrade: true
-	upgrade->base: true
-====
-====
-Compatibility { check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: false, check_private_entry_linking: false, disallowed_new_abilities: [Copy, Drop, Store, Key, ], disallow_change_datatype_type_params: true, disallow_new_variants: true }
+Compatibility { check_datatype_layout: true, check_private_entry_linking: false, disallowed_new_abilities: [Copy, Drop, Store, Key, ] }
 0000000000000000000000000000000000000000000000000000000000000000::base_module:
 	base->upgrade: true
 	upgrade->base: true
@@ -30,7 +12,7 @@ Compatibility { check_datatype_and_pub_function_linking: true, check_datatype_la
 	upgrade->base: true
 ====
 ====
-Compatibility { check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: false, check_private_entry_linking: true, disallowed_new_abilities: [Copy, Drop, Store, Key, ], disallow_change_datatype_type_params: true, disallow_new_variants: true }
+Compatibility { check_datatype_layout: true, check_private_entry_linking: true, disallowed_new_abilities: [] }
 0000000000000000000000000000000000000000000000000000000000000000::base_module:
 	base->upgrade: false
 	upgrade->base: true
@@ -39,16 +21,16 @@ Compatibility { check_datatype_and_pub_function_linking: true, check_datatype_la
 	upgrade->base: true
 ====
 ====
-Compatibility { check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: true, check_private_entry_linking: true, disallowed_new_abilities: [Copy, Drop, Store, Key, ], disallow_change_datatype_type_params: true, disallow_new_variants: true }
+Compatibility { check_datatype_layout: true, check_private_entry_linking: true, disallowed_new_abilities: [Key, ] }
 0000000000000000000000000000000000000000000000000000000000000000::base_module:
 	base->upgrade: false
-	upgrade->base: false
+	upgrade->base: true
 0000000000000000000000000000000000000000000000000000000000000000::friend_module:
 	base->upgrade: true
 	upgrade->base: true
 ====
 ====
-Compatibility { check_datatype_and_pub_function_linking: false, check_datatype_layout: false, check_friend_linking: false, check_private_entry_linking: false, disallowed_new_abilities: [], disallow_change_datatype_type_params: false, disallow_new_variants: false }
+Compatibility { check_datatype_layout: false, check_private_entry_linking: false, disallowed_new_abilities: [] }
 0000000000000000000000000000000000000000000000000000000000000000::base_module:
 	base->upgrade: true
 	upgrade->base: true

@@ -1,19 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-
-use consensus_config::{AuthorityIndex, NetworkKeyPair};
-use fastcrypto::ed25519::Ed25519PublicKey;
-use tokio_rustls::rustls::{ClientConfig, ServerConfig};
-
 use crate::context::Context;
+use consensus_config::{AuthorityIndex, NetworkKeyPair};
+use sui_tls::AllowPublicKeys;
+use tokio_rustls::rustls::{ClientConfig, ServerConfig};
 
 pub(crate) fn create_rustls_server_config(
     context: &Context,
     network_keypair: NetworkKeyPair,
 ) -> ServerConfig {
-    let allower = AllowedPublicKeys::new(context);
+    let allower = AllowPublicKeys::new(
+        context
+            .committee
+            .authorities()
+            .map(|(_i, a)| a.network_key.clone().into_inner())
+            .collect(),
+    );
     let verifier = sui_tls::ClientCertVerifier::new(allower, certificate_server_name(context));
     // TODO: refactor to use key bytes
     let self_signed_cert = sui_tls::SelfSignedCertificate::new(
@@ -54,30 +57,6 @@ pub(crate) fn create_rustls_client_config(
     // using HttpsConnector from hyper-rustls, as in TonicManager.
     tls_config.alpn_protocols = vec![];
     tls_config
-}
-
-// Checks if the public key from a TLS certificate belongs to one of the validators.
-#[derive(Debug)]
-struct AllowedPublicKeys {
-    // TODO: refactor to use key bytes
-    keys: BTreeSet<Ed25519PublicKey>,
-}
-
-impl AllowedPublicKeys {
-    fn new(context: &Context) -> Self {
-        let keys = context
-            .committee
-            .authorities()
-            .map(|(_i, a)| a.network_key.clone().into_inner())
-            .collect();
-        Self { keys }
-    }
-}
-
-impl sui_tls::Allower for AllowedPublicKeys {
-    fn allowed(&self, key: &Ed25519PublicKey) -> bool {
-        self.keys.contains(key)
-    }
 }
 
 fn certificate_server_name(context: &Context) -> String {

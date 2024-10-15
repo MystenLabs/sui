@@ -54,10 +54,9 @@ impl RocksDBStore {
             (
                 Self::BLOCKS_CF,
                 default_db_options()
-                    .optimize_for_write_throughput()
-                    // Blocks can get large and they don't need to be compacted.
-                    // So keep them in rocksdb blobstore.
-                    .optimize_for_large_values_no_scan(1 << 10)
+                    .optimize_for_write_throughput_no_deletion()
+                    // Using larger block is ok since there is not much point reads on the cf.
+                    .set_block_options(512, 128 << 10)
                     .options,
             ),
             (Self::DIGESTS_BY_AUTHORITIES_CF, cf_options.clone()),

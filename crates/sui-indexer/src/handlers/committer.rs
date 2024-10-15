@@ -73,7 +73,7 @@ where
                 })?;
             }
         }
-        if !batch.is_empty() && unprocessed.is_empty() {
+        if !batch.is_empty() {
             commit_checkpoints(&state, batch, None, &metrics).await;
             batch = vec![];
         }
@@ -174,7 +174,7 @@ async fn commit_checkpoints<S>(
             state.persist_objects(object_changes_batch.clone()),
             state.persist_object_history(object_history_changes_batch.clone()),
             state.persist_full_objects_history(object_history_changes_batch.clone()),
-            state.persist_object_versions(object_versions_batch.clone()),
+            state.persist_objects_version(object_versions_batch.clone()),
             state.persist_raw_checkpoints(raw_checkpoints_batch),
         ];
         if let Some(epoch_data) = epoch.clone() {
@@ -219,17 +219,6 @@ async fn commit_checkpoints<S>(
         })
         .expect("Persisting data into DB should not fail.");
 
-    state
-        .update_watermarks_upper_bound::<CommitterTables>(committer_watermark)
-        .await
-        .tap_err(|e| {
-            error!(
-                "Failed to update watermark upper bound with error: {}",
-                e.to_string()
-            );
-        })
-        .expect("Updating watermark upper bound in DB should not fail.");
-
     if is_epoch_end {
         // The epoch has advanced so we update the configs for the new protocol version, if it has changed.
         let chain_id = state
@@ -241,6 +230,17 @@ async fn commit_checkpoints<S>(
             .persist_protocol_configs_and_feature_flags(chain_id)
             .await;
     }
+
+    state
+        .update_watermarks_upper_bound::<CommitterTables>(committer_watermark)
+        .await
+        .tap_err(|e| {
+            error!(
+                "Failed to update watermark upper bound with error: {}",
+                e.to_string()
+            );
+        })
+        .expect("Updating watermark upper bound in DB should not fail.");
 
     let elapsed = guard.stop_and_record();
 

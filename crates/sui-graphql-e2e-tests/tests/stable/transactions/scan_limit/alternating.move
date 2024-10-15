@@ -56,7 +56,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(first: 2 scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 scanLimit: 2 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -82,7 +82,7 @@ module Test::M1 {
 # so tx 4 and 6. the boundary cursors should wrap the response set,
 # and both should have isScanLimited set to false
 {
-  transactionBlocks(first: 2 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 after: "@{cursor_0}" filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -107,7 +107,7 @@ module Test::M1 {
 # Meanwhile, because of the scanLimit of 2, the boundary cursors are
 # startCursor: 4, endCursor: 5, and both are scan limited
 {
-  transactionBlocks(first: 2 after: "@{cursor_0}" scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 after: "@{cursor_0}" scanLimit: 2 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -133,7 +133,7 @@ module Test::M1 {
 # startCursor: 7, endCursor: 8, both scan limited
 # response set consists of single tx 8
 {
-  transactionBlocks(first: 2 after: "@{cursor_0}" scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 after: "@{cursor_0}" scanLimit: 2 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -162,7 +162,7 @@ module Test::M1 {
 # consequently, the endCursor wraps the result set
 # startCursor: 6, endCursor: 8, endCursor is not scan limited
 {
-  transactionBlocks(first: 2 after: "@{cursor_0}" scanLimit: 6 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 after: "@{cursor_0}" scanLimit: 6 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -187,7 +187,7 @@ module Test::M1 {
 # fetch the last tx without scan limit
 # startCursor = endCursor = 10, wrapping the response set
 {
-  transactionBlocks(first: 2 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 after: "@{cursor_0}" filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -213,7 +213,7 @@ module Test::M1 {
 # unlike the not-scan-limited query, the start and end cursors
 # are expanded out to the scanned window, instead of wrapping the response set
 {
-  transactionBlocks(first: 2 after: "@{cursor_0}" scanLimit: 6 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 after: "@{cursor_0}" scanLimit: 6 filter: {affectedAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
