@@ -58,10 +58,9 @@ pub struct IngestionConfig {
 impl IngestionService {
     pub fn new(
         config: IngestionConfig,
-        metrics: IndexerMetrics,
+        metrics: Arc<IndexerMetrics>,
         cancel: CancellationToken,
     ) -> Result<Self> {
-        let metrics = Arc::new(metrics);
         Ok(Self {
             client: IngestionClient::new(config.remote_store_url.clone(), metrics.clone())?,
             subscribers: Vec::new(),
@@ -205,7 +204,7 @@ mod tests {
                 concurrency,
                 retry_interval: Duration::from_millis(200),
             },
-            test_metrics(),
+            Arc::new(test_metrics()),
             cancel,
         )
         .unwrap()

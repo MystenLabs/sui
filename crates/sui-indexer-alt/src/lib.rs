@@ -3,7 +3,9 @@
 
 pub mod args;
 pub mod db;
+pub mod handlers;
 pub mod ingestion;
 pub mod metrics;
-mod schema;
+pub mod models;
+pub mod schema;
 pub mod task;
