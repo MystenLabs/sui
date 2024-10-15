@@ -3,7 +3,7 @@
 
 use std::net::SocketAddr;
 
-use crate::{db::DbConfig, ingestion::IngestionConfig};
+use crate::{db::DbConfig, handlers::CommitterConfig, ingestion::IngestionConfig};
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
@@ -12,6 +12,9 @@ pub struct Args {
 
     #[command(flatten)]
     pub db: DbConfig,
+
+    #[command(flatten)]
+    pub committer: CommitterConfig,
 
     /// Address to serve Prometheus Metrics from.
     #[arg(long, default_value = "0.0.0.0:9184")]
