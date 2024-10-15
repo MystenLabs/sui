@@ -372,7 +372,7 @@ function JSONTraceTypeToString(baseType: JSONBaseType, refType?: JSONTraceRefTyp
             ? '&'
             : '');
     if (typeof baseType === 'string') {
-        return baseType;
+        return refPrefix + baseType;
     } else if ('vector' in baseType) {
         return refPrefix + `vector<${JSONTraceTypeToString(baseType.vector)}>`;
     } else {

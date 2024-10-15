@@ -21,7 +21,6 @@ import {
     CompoundType,
     IRuntimeRefValue
 } from './runtime';
-import { run } from 'node:test';
 
 const enum LogLevel {
     Log = 'log',
@@ -278,10 +277,16 @@ export class MoveDebugSession extends LoggingDebugSession {
      * Converts a runtime reference value to a DAP variable.
      *
      * @param value reference value.
+     * @param name name of variable containing the reference value.
+     * @param type optional type of the variable containing the reference value.
      * @returns a DAP variable.
      * @throws Error with a descriptive error message if conversion fails.
      */
-    private convertRefValue(value: IRuntimeRefValue): DebugProtocol.Variable {
+    private convertRefValue(
+        value: IRuntimeRefValue,
+        name: string,
+        type?: string
+    ): DebugProtocol.Variable {
         const frameID = value.loc.frameID;
         const localIndex = value.loc.localIndex;
         const runtimeStack = this.runtime.stack();
@@ -307,7 +312,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 + frameID);
         }
 
-        return this.convertRuntimeValue(local.value, local.name, local.type);
+        return this.convertRuntimeValue(local.value, name, type);
     }
 
     /**
@@ -340,13 +345,18 @@ export class MoveDebugSession extends LoggingDebugSession {
             };
         } else if ('fields' in value) {
             const compoundValueReference = this.variableHandles.create(value);
-            const accessChainParts = value.type.split('::');
+            // use type if available as it will have information about whether
+            // it's a reference or not (e.g., `&mut 0x42::mod::SomeStruct`),
+            // as opposed to the type that come with the value
+            // (e.g., `0x42::mod::SomeStruct`)
+            const actualType = type ? type : value.type;
+            const accessChainParts = actualType.split('::');
             const datatypeName = accessChainParts[accessChainParts.length - 1];
             return {
                 name,
                 type: value.variantName
-                    ? value.type + '::' + value.variantName
-                    : value.type,
+                    ? actualType + '::' + value.variantName
+                    : actualType,
                 value: (value.variantName
                     ? datatypeName + '::' + value.variantName
                     : datatypeName
@@ -354,7 +364,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 variablesReference: compoundValueReference
             };
         } else {
-            return this.convertRefValue(value);
+            return this.convertRefValue(value, name, type);
         }
     }
 
