@@ -57,10 +57,12 @@ impl<Inner> Layer<Inner> for RequestMetricsLayer {
     }
 }
 
-
 impl<Inner, Body> Service<Request<Body>> for RequestMetricsService<Inner>
 where
-    Inner: Service<Request<Body>, Response = http::Response<Body>, Error = BoxError> + Clone + Send + 'static,
+    Inner: Service<Request<Body>, Response = http::Response<Body>, Error = BoxError>
+        + Clone
+        + Send
+        + 'static,
     Inner::Future: Send,
     Body: Send + 'static,
 {
@@ -109,10 +111,21 @@ impl<Res> Future for RequestMetricsFuture<Res> {
 
 impl MetricsGuard {
     fn new(metrics: Arc<RequestMetrics>, path: &str) -> Self {
-        metrics.total_requests_received.with_label_values(&[path]).inc();
-        metrics.current_requests_in_flight.with_label_values(&[path]).inc();
+        metrics
+            .total_requests_received
+            .with_label_values(&[path])
+            .inc();
+        metrics
+            .current_requests_in_flight
+            .with_label_values(&[path])
+            .inc();
         MetricsGuard {
-            timer: Some(metrics.process_latency.with_label_values(&[path]).start_timer()),
+            timer: Some(
+                metrics
+                    .process_latency
+                    .with_label_values(&[path])
+                    .start_timer(),
+            ),
             metrics,
             path: path.to_string(),
         }
@@ -125,7 +138,10 @@ impl MetricsGuard {
                 .total_requests_succeeded
                 .with_label_values(&[&self.path])
                 .inc();
-            info!("Request succeeded for path {} in {:.2}s", self.path, elapsed);
+            info!(
+                "Request succeeded for path {} in {:.2}s",
+                self.path, elapsed
+            );
         }
     }
 
@@ -179,7 +195,10 @@ impl Drop for MetricsGuard {
                 .total_requests_disconnected
                 .with_label_values(&[&self.path])
                 .inc();
-            info!("Request disconnected for path {} in {:.2}s", self.path, elapsed);
+            info!(
+                "Request disconnected for path {} in {:.2}s",
+                self.path, elapsed
+            );
         }
     }
 }
