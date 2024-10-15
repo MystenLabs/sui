@@ -14,6 +14,7 @@ use crate::{
         constants::TYPE_DEPTH_MAX,
         types::{PackageStorageId, RuntimePackageId},
     },
+    string_interner,
 };
 
 use move_binary_format::{
@@ -1405,12 +1406,21 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),
             Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
             Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
-            Bytecode::DirectCall(a) => write!(f, "Call({})", a.to_ref().name),
-            Bytecode::VirtualCall(a) => write!(
-                f,
-                "Call(~{}::{:?}::{:?})",
-                a.package_key, a.inner_pkg_key.module_name, a.inner_pkg_key.member_name
-            ),
+            Bytecode::DirectCall(fun) => write!(f, "Call({})", fun.to_ref().name),
+            Bytecode::VirtualCall(vtable_key) => {
+                let string_interner = string_interner();
+                let module_name = string_interner
+                    .resolve_string(&vtable_key.inner_pkg_key.module_name, "module name")
+                    .expect("Failed to find interned string");
+                let member_name = string_interner
+                    .resolve_string(&vtable_key.inner_pkg_key.member_name, "member name")
+                    .expect("Failed to find interned string");
+                write!(
+                    f,
+                    "Call(~{}::{}::{})",
+                    vtable_key.package_key, module_name, member_name
+                )
+            }
             Bytecode::CallGeneric(ndx) => write!(f, "CallGeneric({})", ndx),
             Bytecode::Pack(a) => write!(f, "Pack({})", a),
             Bytecode::PackGeneric(a) => write!(f, "PackGeneric({})", a),
@@ -1483,13 +1493,20 @@ impl std::fmt::Debug for CallType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CallType::Direct(fun) => write!(f, "Known({})", fun.to_ref().name),
-            CallType::Virtual(vtable) => write!(
-                f,
-                "Virtual({}::{:?}::{:?})",
-                vtable.package_key,
-                vtable.inner_pkg_key.module_name,
-                vtable.inner_pkg_key.member_name
-            ),
+            CallType::Virtual(vtable_key) => {
+                let string_interner = string_interner();
+                let module_name = string_interner
+                    .resolve_string(&vtable_key.inner_pkg_key.module_name, "module name")
+                    .expect("Failed to find interned string");
+                let member_name = string_interner
+                    .resolve_string(&vtable_key.inner_pkg_key.member_name, "member name")
+                    .expect("Failed to find interned string");
+                write!(
+                    f,
+                    "Virtual({}::{}::{})",
+                    vtable_key.package_key, module_name, member_name
+                )
+            }
         }
     }
 }
