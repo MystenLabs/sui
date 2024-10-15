@@ -262,8 +262,8 @@ pub enum ToolCommand {
         #[clap(long = "skip-indexes")]
         skip_indexes: bool,
         /// Number of parallel downloads to perform. Defaults to a reasonable
-        /// value based on number of available logical cores.
-        #[clap(long = "num-parallel-downloads")]
+        /// value based on number of available logical cores. Maximum value is 100.
+        #[clap(long = "num-parallel-downloads", value_parser = parse_parallel_downloads)]
         num_parallel_downloads: Option<usize>,
         /// Network to download snapshot for. Defaults to "mainnet".
         /// If `--snapshot-bucket` or `--archive-bucket` is not specified,
@@ -324,8 +324,8 @@ pub enum ToolCommand {
         #[clap(long = "path")]
         path: PathBuf,
         /// Number of parallel downloads to perform. Defaults to a reasonable
-        /// value based on number of available logical cores.
-        #[clap(long = "num-parallel-downloads")]
+        /// value based on number of available logical cores. Maximum value is 100.
+        #[clap(long = "num-parallel-downloads", value_parser = parse_parallel_downloads)]
         num_parallel_downloads: Option<usize>,
         /// Verification mode to employ.
         #[clap(long = "verify", default_value = "normal")]
@@ -416,6 +416,14 @@ pub enum ToolCommand {
         )]
         sender_signed_data: String,
     },
+}
+
+fn parse_parallel_downloads(s: &str) -> Result<usize, String> {
+    match s.parse::<usize>() {
+        Ok(val) if (1..=100).contains(&val) => Ok(val),
+        Ok(_) => Err(String::from("Value must be between 1 and 100")),
+        Err(_) => Err(String::from("Failed to parse value as usize")),
+    }
 }
 
 async fn check_locked_object(
