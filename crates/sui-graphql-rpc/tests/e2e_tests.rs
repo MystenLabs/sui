@@ -277,8 +277,6 @@ async fn test_graphql_client_variables() {
 
 #[tokio::test]
 async fn test_transaction_execution() {
-    telemetry_subscribers::init_for_testing();
-
     let cluster = start_cluster(ServiceConfig::test_defaults()).await;
 
     let addresses = cluster

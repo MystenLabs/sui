@@ -301,6 +301,7 @@ async fn test_congestion_control_execution_cancellation() {
             SharedObjectCongestionTracker::new_with_initial_value_for_test(
                 &[(shared_object_1.0, 10)],
                 PerObjectCongestionControlMode::TotalGasBudget,
+                Some(1000), // Not used.
             ),
         )
     });
