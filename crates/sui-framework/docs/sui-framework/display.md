@@ -12,25 +12,23 @@ substitution and filling-in the pieces using the data from the object T.
 
 More entry functions might be added in the future depending on the use cases.
 
-
--  [Resource `Display`](#0x2_display_Display)
--  [Struct `DisplayCreated`](#0x2_display_DisplayCreated)
--  [Struct `VersionUpdated`](#0x2_display_VersionUpdated)
--  [Constants](#@Constants_0)
--  [Function `new`](#0x2_display_new)
--  [Function `new_with_fields`](#0x2_display_new_with_fields)
--  [Function `create_and_keep`](#0x2_display_create_and_keep)
--  [Function `update_version`](#0x2_display_update_version)
--  [Function `add`](#0x2_display_add)
--  [Function `add_multiple`](#0x2_display_add_multiple)
--  [Function `edit`](#0x2_display_edit)
--  [Function `remove`](#0x2_display_remove)
--  [Function `is_authorized`](#0x2_display_is_authorized)
--  [Function `version`](#0x2_display_version)
--  [Function `fields`](#0x2_display_fields)
--  [Function `create_internal`](#0x2_display_create_internal)
--  [Function `add_internal`](#0x2_display_add_internal)
-
+- [Resource `Display`](#0x2_display_Display)
+- [Struct `DisplayCreated`](#0x2_display_DisplayCreated)
+- [Struct `VersionUpdated`](#0x2_display_VersionUpdated)
+- [Constants](#@Constants_0)
+- [Function `new`](#0x2_display_new)
+- [Function `new_with_fields`](#0x2_display_new_with_fields)
+- [Function `create_and_keep`](#0x2_display_create_and_keep)
+- [Function `update_version`](#0x2_display_update_version)
+- [Function `add`](#0x2_display_add)
+- [Function `add_multiple`](#0x2_display_add_multiple)
+- [Function `edit`](#0x2_display_edit)
+- [Function `remove`](#0x2_display_remove)
+- [Function `is_authorized`](#0x2_display_is_authorized)
+- [Function `version`](#0x2_display_version)
+- [Function `fields`](#0x2_display_fields)
+- [Function `create_internal`](#0x2_display_create_internal)
+- [Function `add_internal`](#0x2_display_add_internal)
 
 <pre><code><b>use</b> <a href="../move-stdlib/string.md#0x1_string">0x1::string</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
@@ -40,8 +38,6 @@ More entry functions might be added in the future depending on the use cases.
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="vec_map.md#0x2_vec_map">0x2::vec_map</a>;
 </code></pre>
-
-
 
 <a name="0x2_display_Display"></a>
 
@@ -55,6 +51,7 @@ of the type.
 Each of the display properties should support patterns outside
 of the system, making it simpler to customize Display based
 on the property values of an Object.
+
 ```
 // Example of a display object
 Display<0x...::capy::Capy> {
@@ -69,15 +66,11 @@ fields:
 Uses only String type due to external-facing nature of the object,
 the property names have a priority over their types.
 
-
 <pre><code><b>struct</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T: key&gt; <b>has</b> store, key
 </code></pre>
 
-
-
 <details>
 <summary>Fields</summary>
-
 
 <dl>
 <dt>
@@ -101,7 +94,6 @@ the property names have a priority over their types.
 </dd>
 </dl>
 
-
 </details>
 
 <a name="0x2_display_DisplayCreated"></a>
@@ -115,15 +107,11 @@ the discovery.
 Since Sui RPC supports querying events by type, finding a Display for the T
 would be as simple as looking for the first event with <code><a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;</code>.
 
-
 <pre><code><b>struct</b> <a href="display.md#0x2_display_DisplayCreated">DisplayCreated</a>&lt;T: key&gt; <b>has</b> <b>copy</b>, drop
 </code></pre>
 
-
-
 <details>
 <summary>Fields</summary>
-
 
 <dl>
 <dt>
@@ -134,7 +122,6 @@ would be as simple as looking for the first event with <code><a href="display.md
 </dd>
 </dl>
 
-
 </details>
 
 <a name="0x2_display_VersionUpdated"></a>
@@ -143,15 +130,11 @@ would be as simple as looking for the first event with <code><a href="display.md
 
 Version of Display got updated -
 
-
 <pre><code><b>struct</b> <a href="display.md#0x2_display_VersionUpdated">VersionUpdated</a>&lt;T: key&gt; <b>has</b> <b>copy</b>, drop
 </code></pre>
 
-
-
 <details>
 <summary>Fields</summary>
-
 
 <dl>
 <dt>
@@ -174,59 +157,44 @@ Version of Display got updated -
 </dd>
 </dl>
 
-
 </details>
 
 <a name="@Constants_0"></a>
 
 ## Constants
 
-
 <a name="0x2_display_ENotOwner"></a>
 
 For when T does not belong to the package <code>Publisher</code>.
 
-
 <pre><code><b>const</b> <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
-
-
 
 <a name="0x2_display_EVecLengthMismatch"></a>
 
 For when vectors passed into one of the multiple insert functions
 don't match in their lengths.
 
-
 <pre><code><b>const</b> <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
-
-
 
 <a name="0x2_display_new"></a>
 
 ## Function `new`
 
-Create an empty Display object. It can either be shared empty or filled
-with data right away via <code>add</code> or <code>add_multiple</code> methods.
-
+Creates an empty `Display<T>` object, which can be populated with data immediately using the <code>add</code> or <code>add_multiple</code> methods. The `Display` object should either be transferred to the Publisher or securely wrapped within another object to control access.
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new">new</a>&lt;T: key&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new">new</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext): <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt; {
     <b>assert</b>!(<a href="display.md#0x2_display_is_authorized">is_authorized</a>&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
     <a href="display.md#0x2_display_create_internal">create_internal</a>(ctx)
 }
 </code></pre>
-
-
 
 </details>
 
@@ -236,15 +204,11 @@ with data right away via <code>add</code> or <code>add_multiple</code> methods.
 
 Create a new Display<T> object with a set of fields.
 
-
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new_with_fields">new_with_fields</a>&lt;T: key&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>, fields: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>&gt;, values: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new_with_fields">new_with_fields</a>&lt;T: key&gt;(
     pub: &Publisher,
@@ -266,8 +230,6 @@ Create a new Display<T> object with a set of fields.
 }
 </code></pre>
 
-
-
 </details>
 
 <a name="0x2_display_create_and_keep"></a>
@@ -276,22 +238,16 @@ Create a new Display<T> object with a set of fields.
 
 Create a new empty Display<T> object and keep it.
 
-
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
     <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx), ctx.sender())
 }
 </code></pre>
-
-
 
 </details>
 
@@ -301,15 +257,11 @@ Create a new empty Display<T> object and keep it.
 
 Manually bump the version and emit an event with the updated version's contents.
 
-
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_update_version">update_version</a>&lt;T: key&gt;(<a href="display.md#0x2_display">display</a>: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;)
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_update_version">update_version</a>&lt;T: key&gt;(<a href="display.md#0x2_display">display</a>: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;) {
     <a href="display.md#0x2_display">display</a>.version = <a href="display.md#0x2_display">display</a>.version + 1;
@@ -321,8 +273,6 @@ Manually bump the version and emit an event with the updated version's contents.
 }
 </code></pre>
 
-
-
 </details>
 
 <a name="0x2_display_add"></a>
@@ -331,22 +281,16 @@ Manually bump the version and emit an event with the updated version's contents.
 
 Sets a custom <code>name</code> field with the <code>value</code>.
 
-
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_add">add</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, name: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, value: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>)
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_add">add</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
     self.<a href="display.md#0x2_display_add_internal">add_internal</a>(name, value)
 }
 </code></pre>
-
-
 
 </details>
 
@@ -356,15 +300,11 @@ Sets a custom <code>name</code> field with the <code>value</code>.
 
 Sets multiple <code>fields</code> with <code>values</code>.
 
-
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_add_multiple">add_multiple</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, fields: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>&gt;, values: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>&gt;)
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_add_multiple">add_multiple</a>&lt;T: key&gt;(
     self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;,
@@ -382,8 +322,6 @@ Sets multiple <code>fields</code> with <code>values</code>.
 }
 </code></pre>
 
-
-
 </details>
 
 <a name="0x2_display_edit"></a>
@@ -393,23 +331,17 @@ Sets multiple <code>fields</code> with <code>values</code>.
 Change the value of the field.
 TODO (long run): version changes;
 
-
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_edit">edit</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, name: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, value: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>)
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_edit">edit</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
     <b>let</b> (_, _) = self.fields.<a href="display.md#0x2_display_remove">remove</a>(&name);
     self.<a href="display.md#0x2_display_add_internal">add_internal</a>(name, value)
 }
 </code></pre>
-
-
 
 </details>
 
@@ -419,22 +351,16 @@ TODO (long run): version changes;
 
 Remove the key from the Display.
 
-
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_remove">remove</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, name: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>)
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_remove">remove</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String) {
     self.fields.<a href="display.md#0x2_display_remove">remove</a>(&name);
 }
 </code></pre>
-
-
 
 </details>
 
@@ -444,22 +370,16 @@ Remove the key from the Display.
 
 Authorization check; can be performed externally to implement protection rules for Display.
 
-
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_is_authorized">is_authorized</a>&lt;T: key&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>): bool
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_is_authorized">is_authorized</a>&lt;T: key&gt;(pub: &Publisher): bool {
     pub.from_package&lt;T&gt;()
 }
 </code></pre>
-
-
 
 </details>
 
@@ -469,22 +389,16 @@ Authorization check; can be performed externally to implement protection rules f
 
 Read the <code>version</code> field.
 
-
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_version">version</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;): u16
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_version">version</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;): u16 {
     d.version
 }
 </code></pre>
-
-
 
 </details>
 
@@ -494,22 +408,16 @@ Read the <code>version</code> field.
 
 Read the <code>fields</code> field.
 
-
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_fields">fields</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;): &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>&gt;
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_fields">fields</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;): &VecMap&lt;String, String&gt; {
     &d.fields
 }
 </code></pre>
-
-
 
 </details>
 
@@ -519,15 +427,11 @@ Read the <code>fields</code> field.
 
 Internal function to create a new <code><a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;</code>.
 
-
 <pre><code><b>fun</b> <a href="display.md#0x2_display_create_internal">create_internal</a>&lt;T: key&gt;(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>fun</b> <a href="display.md#0x2_display_create_internal">create_internal</a>&lt;T: key&gt;(ctx: &<b>mut</b> TxContext): <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt; {
     <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
@@ -544,8 +448,6 @@ Internal function to create a new <code><a href="display.md#0x2_display_Display"
 }
 </code></pre>
 
-
-
 </details>
 
 <a name="0x2_display_add_internal"></a>
@@ -554,21 +456,15 @@ Internal function to create a new <code><a href="display.md#0x2_display_Display"
 
 Private method for inserting fields without security checks.
 
-
 <pre><code><b>fun</b> <a href="display.md#0x2_display_add_internal">add_internal</a>&lt;T: key&gt;(<a href="display.md#0x2_display">display</a>: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, name: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, value: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>)
 </code></pre>
 
-
-
 <details>
 <summary>Implementation</summary>
-
 
 <pre><code><b>fun</b> <a href="display.md#0x2_display_add_internal">add_internal</a>&lt;T: key&gt;(<a href="display.md#0x2_display">display</a>: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
     <a href="display.md#0x2_display">display</a>.fields.insert(name, value)
 }
 </code></pre>
-
-
 
 </details>

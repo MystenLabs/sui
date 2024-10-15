@@ -73,8 +73,32 @@ public struct VersionUpdated<phantom T: key> has copy, drop {
 
 // === Initializer Methods ===
 
-/// Create an empty Display object. It can either be shared empty or filled
-/// with data right away via `add` or `add_multiple` methods.
+/// Creates an empty `Display<T>` object, which can be populated with data immediately
+/// using the `add` or `add_multiple` methods.
+///
+/// The `Display` object should either be transferred to the Publisher or securely wrapped
+/// within another object to control access.
+///
+/// #### Example:
+/// ```move
+/// let mut display = display::new<T>(&publisher, &mut ctx);
+///
+/// // Add a single field-value pair
+/// display.add(utf8(b"name"), utf8(b"Capy {name}"));
+///
+/// // Or add multiple fields and values at once
+/// let fields = vector [
+///     string::utf8(b"description"),
+///     string::utf8(b"image_url"),
+/// ];
+///
+/// let values = vector[
+///     string::utf8(b"{description}"),
+///     string::utf8(b"{image_url}"),
+/// ];
+///
+/// display.add_multiple(&mut display, fields, values);
+/// ```
 public fun new<T: key>(pub: &Publisher, ctx: &mut TxContext): Display<T> {
     assert!(is_authorized<T>(pub), ENotOwner);
     create_internal(ctx)
@@ -155,7 +179,8 @@ public entry fun remove<T: key>(self: &mut Display<T>, name: String) {
 
 // === Access fields ===
 
-/// Authorization check; can be performed externally to implement protection rules for Display.
+/// Authorization check; can be performed externally to implement protection rules for
+/// Display.
 public fun is_authorized<T: key>(pub: &Publisher): bool {
     pub.from_package<T>()
 }
