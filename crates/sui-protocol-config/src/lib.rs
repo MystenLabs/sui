@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 63;
+const MAX_PROTOCOL_VERSION: u64 = 64;
 
 // Record history of protocol version allocations here:
 //
@@ -184,11 +184,8 @@ const MAX_PROTOCOL_VERSION: u64 = 63;
 //             Further reduce minimum number of random beacon shares.
 //             Add feature flag for Mysticeti fastpath.
 // Version 62: Makes the event's sending module package upgrade-aware.
-<<<<<<< HEAD
-// Version 63: Switch to distributed vote scoring in consensus in mainnet
-=======
 // Version 63: Enable gas based congestion control in consensus commit.
->>>>>>> 8dc920ece7 (Implement gas budget based congestion control with PTB/Obj cap)
+// Version 64: Switch to distributed vote scoring in consensus in mainnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2832,14 +2829,11 @@ impl ProtocolConfig {
                 63 => {
                     cfg.feature_flags.per_object_congestion_control_mode =
                         PerObjectCongestionControlMode::TotalGasBudgetWithCap;
-                    cfg.gas_budget_based_txn_cost_cap_factor = Some(1_000_000_000);
-                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit =
-                        Some(1_000_000_000);
-                    cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(1_000_000_000);
+                    cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(18_500_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(240_000_000);
                 }
                 64 => {
-                    cfg.feature_flags.relocate_event_module = true;
-
                     // Enable distributed vote scoring for mainnet
                     cfg.feature_flags
                         .consensus_distributed_vote_scoring_strategy = true;

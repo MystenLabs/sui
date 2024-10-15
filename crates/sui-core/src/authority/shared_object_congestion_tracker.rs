@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::transaction::{SharedInputObject, TransactionDataAPI};
+use sui_types::transaction::{Argument, SharedInputObject, TransactionDataAPI};
 
 // SharedObjectCongestionTracker stores the accumulated cost of executing transactions on an object, for
 // all transactions in a consensus commit.
@@ -166,13 +166,19 @@ impl SharedObjectCongestionTracker {
     }
 
     fn get_tx_cost_cap(&self, cert: &VerifiedExecutableTransaction) -> u64 {
-        let number_of_input_objects = cert
-            .transaction_data()
-            .input_objects()
-            .unwrap_or_default()
-            .len();
-        let number_of_commands = cert.transaction_data().kind().num_commands();
-        (number_of_input_objects + number_of_commands) as u64
+        let mut number_of_move_call = 0;
+        let mut number_of_move_input = 0;
+        for command in cert.transaction_data().kind().iter_commands() {
+            if let sui_types::transaction::Command::MoveCall(move_call) = command {
+                number_of_move_call += 1;
+                for aug in move_call.arguments.iter() {
+                    if let Argument::Input(_) = aug {
+                        number_of_move_input += 1;
+                    }
+                }
+            }
+        }
+        (number_of_move_call + number_of_move_input) as u64
             * self
                 .gas_budget_based_txn_cost_cap_factor
                 .expect("cap factor must be set if TotalGasBudgetWithCap mode is used.")
@@ -382,7 +388,7 @@ mod object_cost_tests {
                 SharedObjectCongestionTracker::new_with_initial_value_for_test(
                     &[(shared_obj_0, 10), (shared_obj_1, 1)],
                     mode,
-                    Some(30), // Make the cap just less than the gas budget, there are 3 objects in tx.
+                    Some(45), // Make the cap just less than the gas budget, there are 1 objects in tx.
                 )
             }
         };
@@ -587,7 +593,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::None => unreachable!(),
             PerObjectCongestionControlMode::TotalGasBudget => 20,
             PerObjectCongestionControlMode::TotalTxCount => 11,
-            PerObjectCongestionControlMode::TotalGasBudgetWithCap => 15, // 4 objects, 1 command.
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap => 13, // 2 objects, 1 command.
         };
         assert_eq!(
             shared_object_congestion_tracker,
@@ -615,7 +621,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::None => unreachable!(),
             PerObjectCongestionControlMode::TotalGasBudget => 30,
             PerObjectCongestionControlMode::TotalTxCount => 12,
-            PerObjectCongestionControlMode::TotalGasBudgetWithCap => 21, // 5 objects, 1 command
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap => 17, // 3 objects, 1 command
         };
         shared_object_congestion_tracker.bump_object_execution_cost(&cert);
         assert_eq!(
@@ -649,7 +655,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::None => unreachable!(),
             PerObjectCongestionControlMode::TotalGasBudget => 60,
             PerObjectCongestionControlMode::TotalTxCount => 13,
-            PerObjectCongestionControlMode::TotalGasBudgetWithCap => 33, // 5 objects, 7 commands
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap => 45, // 3 objects, 7 commands
         };
         shared_object_congestion_tracker.bump_object_execution_cost(&cert);
         assert_eq!(
