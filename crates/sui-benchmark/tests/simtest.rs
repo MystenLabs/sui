@@ -461,6 +461,7 @@ mod test {
         let checkpoint_budget_factor; // The checkpoint congestion control budget in respect to transaction budget.
         let txn_count_limit; // When using transaction count as congestion control mode, the limit of transactions per object per commit.
         let max_deferral_rounds;
+        let cap_factor_denominator;
         {
             let mut rng = thread_rng();
             mode = if rng.gen_bool(0.33) {
@@ -478,7 +479,9 @@ mod test {
                 rng.gen_range(0..20) // Short deferral round (testing cancellation)
             } else {
                 rng.gen_range(1000..10000) // Large deferral round (testing liveness)
-            }
+            };
+
+            cap_factor_denominator = rng.gen_range(1..100);
         }
 
         info!(
@@ -514,7 +517,7 @@ mod test {
                         * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
-                    config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit);  // Not sure what to set here.
+                    config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit/cap_factor_denominator);
                 },
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
