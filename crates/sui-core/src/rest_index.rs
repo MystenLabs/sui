@@ -694,9 +694,9 @@ impl<'a> LiveObjectIndexer for RestLiveObjectIndexer<'a> {
             }
         }
 
-        // If the batch size grows to greater that 256MB then write out to the DB so that the
+        // If the batch size grows to greater that 128MB then write out to the DB so that the
         // data we need to hold in memory doesn't grown unbounded.
-        if self.batch.size_in_bytes() >= 1 << 28 {
+        if self.batch.size_in_bytes() >= 1 << 27 {
             std::mem::replace(&mut self.batch, self.tables.owner.batch()).write()?;
         }
 
