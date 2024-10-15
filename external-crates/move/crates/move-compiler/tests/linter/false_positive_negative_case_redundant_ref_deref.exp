@@ -1,4 +1,4 @@
-warning[Lint W01002]: 
+warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/false_positive_negative_case_redundant_ref_deref.move:22:20
    │
 22 │         let _ref = &*(&*(&resource));  // Triple nested borrow-dereference, might be missed
@@ -6,7 +6,7 @@ warning[Lint W01002]:
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01002]: 
+warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/false_positive_negative_case_redundant_ref_deref.move:22:23
    │
 22 │         let _ref = &*(&*(&resource));  // Triple nested borrow-dereference, might be missed

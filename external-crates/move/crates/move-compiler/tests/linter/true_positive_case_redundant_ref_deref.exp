@@ -1,4 +1,4 @@
-warning[Lint W01002]: 
+warning[Lint W01009]: redundant reference/dereference
   ┌─ tests/linter/true_positive_case_redundant_ref_deref.move:8:20
   │
 8 │         let _ref = &*(&resource);  // Redundant borrow-dereference

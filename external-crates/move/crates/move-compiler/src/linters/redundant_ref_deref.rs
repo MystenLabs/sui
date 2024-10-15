@@ -5,15 +5,12 @@
 // It identifies and reports unnecessary temporary borrow followed by a deref and a local borrow.
 // Aims to improve code efficiency by suggesting direct usage of expressions without redundant operations.
 
-use super::{LinterDiagnosticCategory, LINT_WARNING_PREFIX, REDUNDANT_REF_DEREF_DIAG_CODE};
+use crate::linters::StyleCodes;
 use crate::parser::ast::Field;
 use crate::typing::ast::Exp;
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::WarningFilters,
     shared::CompilationEnv,
     typing::{
         ast::{self as T, UnannotatedExp_},
@@ -21,14 +18,6 @@ use crate::{
     },
 };
 use move_ir_types::location::Loc;
-
-const REDUNDANT_REF_DEREF_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Complexity as u8,
-    REDUNDANT_REF_DEREF_DIAG_CODE,
-    "",
-);
 
 pub struct RedundantRefDerefVisitor;
 
@@ -62,7 +51,7 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_exp_custom(&mut self, exp: &mut Exp) -> bool {
+    fn visit_exp_custom(&mut self, exp: &Exp) -> bool {
         self.track_modifications(exp);
         self.check_redundant_ref_deref(exp);
         false
@@ -96,7 +85,6 @@ impl Context<'_> {
         }
     }
 
-
     // Check if the borrow expression is stored in the stored_mutations list
     fn is_stored_mutation(&self, borrow_exp: &Box<Exp>, field: &Field) -> bool {
         self.stored_mutations
@@ -105,16 +93,8 @@ impl Context<'_> {
     }
 
     fn add_redundant_ref_deref_diagnostic(&mut self, loc: Loc) {
-        let diag = diag!(
-            REDUNDANT_REF_DEREF_DIAG,
-            (
-                loc,
-                "Redundant borrow-dereference detected. Consider removing the borrow-dereference operation and using the expression directly."
-            )
-        );
-        self.env.add_diag(diag);
+        self.env.add_diag(diag!(StyleCodes::RedundantRefDeref.diag_info(), (loc, "Redundant borrow-dereference detected. Consider removing the borrow-dereference operation and using the expression directly.")));
     }
-
 
     // Track modifications to the stored_mutations list by checking if the expression is mutated
     fn track_modifications(&mut self, exp: &T::Exp) {

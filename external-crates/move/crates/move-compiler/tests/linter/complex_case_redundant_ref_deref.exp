@@ -1,4 +1,4 @@
-warning[Lint W01002]: 
+warning[Lint W01009]: redundant reference/dereference
   ┌─ tests/linter/complex_case_redundant_ref_deref.move:9:20
   │
 9 │         let _ref = &*&0;  // Redundant borrow-dereference on literal
@@ -6,7 +6,7 @@ warning[Lint W01002]:
   │
   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01002]: 
+warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/complex_case_redundant_ref_deref.move:17:20
    │
 17 │         let _ref = &*&get_resource();  // Redundant borrow-dereference on function call result
@@ -14,7 +14,7 @@ warning[Lint W01002]:
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01002]: 
+warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/complex_case_redundant_ref_deref.move:24:20
    │
 24 │         let _ref = &*&(&*&resource.value);  // Multiple redundant borrows on field
