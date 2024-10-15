@@ -4,7 +4,7 @@
 use crate::schema::kv_checkpoints;
 use diesel::prelude::*;
 
-#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
+#[derive(Insertable, Debug, Clone)]
 #[diesel(table_name = kv_checkpoints)]
 pub struct StoredCheckpoint {
     pub sequence_number: i64,
