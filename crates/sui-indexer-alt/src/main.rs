@@ -6,7 +6,7 @@ use clap::Parser;
 use sui_indexer_alt::{
     args::Args,
     db::Db,
-    handlers::{kv_checkpoints::KvCheckpoints, pipeline},
+    handlers::{kv_checkpoints::KvCheckpoints, kv_objects::KvObjects, pipeline},
     ingestion::IngestionService,
     metrics::MetricsService,
     task::graceful_shutdown,
@@ -46,6 +46,14 @@ async fn main() -> Result<()> {
         cancel.clone(),
     );
 
+    let (h_obj_handler, h_obj_committer) = pipeline::<KvObjects>(
+        db.clone(),
+        ingestion_service.subscribe(),
+        args.committer.clone(),
+        metrics.clone(),
+        cancel.clone(),
+    );
+
     let h_ingestion = ingestion_service
         .run()
         .await
@@ -54,7 +62,14 @@ async fn main() -> Result<()> {
     // Once we receive a Ctrl-C or one of the services panics or is cancelled, notify all services
     // to shutdown, and wait for them to finish.
     graceful_shutdown(
-        [h_cp_handler, h_cp_committer, h_metrics, h_ingestion],
+        [
+            h_cp_handler,
+            h_cp_committer,
+            h_obj_handler,
+            h_obj_committer,
+            h_metrics,
+            h_ingestion,
+        ],
         cancel,
     )
     .await;

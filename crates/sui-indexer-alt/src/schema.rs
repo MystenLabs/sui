@@ -9,3 +9,16 @@ diesel::table! {
         checkpoint_contents -> Bytea,
     }
 }
+
+diesel::table! {
+    kv_objects (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        serialized_object -> Nullable<Bytea>,
+    }
+}
+
+diesel::allow_tables_to_appear_in_same_query!(
+    kv_checkpoints,
+    kv_objects,
+);
