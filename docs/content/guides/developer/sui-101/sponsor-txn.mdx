@@ -2,12 +2,9 @@
 title: Sponsored Transaction
 ---
 
-Sponsored transactions are a primitive on the Sui blockchain that enable the execution of a transaction without a user paying the gas. It also discusses the roles in Sponsored Transaction, and a few common use cases. Then it discusses the flow of Sponsored Transaction, mostly for developers who are interested in building a Gas Station or integrate with one. Finally it talks about risk considerations of Sponsored Transaction.
+A transaction on Sui takes a payment to execute. The payment, also known as gas, is a list of `0x2::coin::Coin<0x2::sui::Sui>` objects. Although gas is a critical piece in Sui tokenomics, it sometimes adds challenges when new Web3 users start to navigate on Sui.
 
-# Overview
-A transaction on Sui takes a payment to execute. The payment, also known as gas, is a list of `0x2::coin::Coin<0x2::sui::Sui>` objects, and paid to Sui validators to secure the network. Although gas is a critical piece in Sui tokenomics, it sometimes adds challenges when new users start to navigate on Sui, especially for web 2.0 users.
-
-Sponsored transactions can reduce the onboarding friction for users because the feature streamlines the process for end users. Using sponsored transactions, you can execute a transaction without requiring the user to pay it themselves. Instead, you can act as a sponsor of the transaction, offering your own payment gas objects for the transaction.
+Sponsored transactions are a primitive on the Sui blockchain that enable the execution of a transaction without a user paying the gas. Sponsored transactions can reduce the onboarding friction for users because the feature streamlines the process for end users. Using sponsored transactions, you can execute a transaction without requiring the user to pay it themselves. Instead, you can act as a sponsor of the transaction, offering your own payment gas objects for the transaction.
 
 ## Roles in sponsored transactions
 
