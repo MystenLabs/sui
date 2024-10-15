@@ -411,7 +411,8 @@ async fn main() -> anyhow::Result<()> {
                 };
                 let url = url.to_string();
 
-                let name = names.get(&sui_address).unwrap();
+                let name = names.get(&sui_address).cloned().unwrap_or(url.clone());
+
                 if ping {
                     let client_clone = client.clone();
                     ping_tasks.push(client_clone.get(url.clone()).send());
