@@ -811,11 +811,11 @@ fn base_types(context: &mut Context, bs: Vec<H::BaseType>) -> Vec<IR::Type> {
     bs.into_iter().map(|b| base_type(context, b)).collect()
 }
 
-fn base_type(context: &mut Context, sp!(_, bt_): H::BaseType) -> IR::Type {
+fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
     use BuiltinTypeName_ as BT;
     use H::{BaseType_ as B, TypeName_ as TN};
-    use IR::Type as IRT;
-    match bt_ {
+    use IR::Type_ as IRT;
+    let type_ = match bt_ {
         B::Unreachable | B::UnresolvedError => {
             panic!("ICE should not have reached compilation if there are errors")
         }
@@ -845,15 +845,19 @@ fn base_type(context: &mut Context, sp!(_, bt_): H::BaseType) -> IR::Type {
             user_specified_name,
             ..
         }) => IRT::TypeParameter(type_var(user_specified_name).value),
-    }
+    };
+    sp(bt_loc, type_)
 }
 
-fn single_type(context: &mut Context, sp!(_, st_): H::SingleType) -> IR::Type {
+fn single_type(context: &mut Context, sp!(st_loc, st_): H::SingleType) -> IR::Type {
     use H::SingleType_ as S;
-    use IR::Type as IRT;
+    use IR::Type_ as IRT;
     match st_ {
         S::Base(bt) => base_type(context, bt),
-        S::Ref(mut_, bt) => IRT::Reference(mut_, Box::new(base_type(context, bt))),
+        S::Ref(mut_, bt) => sp(
+            st_loc,
+            IRT::Reference(mut_, Box::new(base_type(context, bt))),
+        ),
     }
 }
 

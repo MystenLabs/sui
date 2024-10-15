@@ -340,7 +340,7 @@ fn constant_name_as_constant_value_index(
 ) -> Result<ConstantPoolIndex> {
     let name_constant = compile_constant(
         context,
-        Type::Vector(Box::new(Type::U8)),
+        &MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
         MoveValue::vector_u8(const_name.to_string().into_bytes()),
     )?;
     context.constant_index(name_constant)
@@ -407,7 +407,11 @@ pub fn compile_module<'a>(
             constant_name_as_constant_value_index(&mut context, &ir_constant.name)?;
         }
 
-        let constant = compile_constant(&mut context, ir_constant.signature, ir_constant.value)?;
+        let constant = compile_constant(
+            &mut context,
+            &type_to_constant_type_layout(ir_constant.signature)?,
+            ir_constant.value,
+        )?;
         context.declare_constant(ir_constant.name.clone(), constant.clone())?;
         let const_idx = context.constant_index(constant)?;
         record_src_loc!(const_decl: context, const_idx, ir_constant.name);
@@ -672,22 +676,22 @@ fn compile_type(
     type_parameters: &HashMap<TypeVar_, TypeParameterIndex>,
     ty: &Type,
 ) -> Result<SignatureToken> {
-    Ok(match ty {
-        Type::Address => SignatureToken::Address,
-        Type::Signer => SignatureToken::Signer,
-        Type::U8 => SignatureToken::U8,
-        Type::U16 => SignatureToken::U16,
-        Type::U32 => SignatureToken::U32,
-        Type::U64 => SignatureToken::U64,
-        Type::U128 => SignatureToken::U128,
-        Type::U256 => SignatureToken::U256,
-        Type::Bool => SignatureToken::Bool,
-        Type::Vector(inner_type) => SignatureToken::Vector(Box::new(compile_type(
+    Ok(match &ty.value {
+        Type_::Address => SignatureToken::Address,
+        Type_::Signer => SignatureToken::Signer,
+        Type_::U8 => SignatureToken::U8,
+        Type_::U16 => SignatureToken::U16,
+        Type_::U32 => SignatureToken::U32,
+        Type_::U64 => SignatureToken::U64,
+        Type_::U128 => SignatureToken::U128,
+        Type_::U256 => SignatureToken::U256,
+        Type_::Bool => SignatureToken::Bool,
+        Type_::Vector(inner_type) => SignatureToken::Vector(Box::new(compile_type(
             context,
             type_parameters,
             inner_type,
         )?)),
-        Type::Reference(is_mutable, inner_type) => {
+        Type_::Reference(is_mutable, inner_type) => {
             let inner_token = Box::new(compile_type(context, type_parameters, inner_type)?);
             if *is_mutable {
                 SignatureToken::MutableReference(inner_token)
@@ -695,7 +699,7 @@ fn compile_type(
                 SignatureToken::Reference(inner_token)
             }
         }
-        Type::Datatype(ident, tys) => {
+        Type_::Datatype(ident, tys) => {
             let sh_idx = context.datatype_handle_index(ident.clone())?;
 
             if tys.is_empty() {
@@ -705,7 +709,7 @@ fn compile_type(
                 SignatureToken::DatatypeInstantiation(Box::new((sh_idx, tokens)))
             }
         }
-        Type::TypeParameter(ty_var) => {
+        Type_::TypeParameter(ty_var) => {
             let idx = match type_parameters.get(ty_var) {
                 None => bail!("Unbound type parameter {}", ty_var),
                 Some(idx) => *idx,
@@ -1267,7 +1271,7 @@ fn compile_expression(
         Exp_::Value(cv) => match cv.value {
             CopyableVal_::Address(address) => {
                 let address_value = MoveValue::Address(address);
-                let constant = compile_constant(context, Type::Address, address_value)?;
+                let constant = compile_constant(context, &MoveTypeLayout::Address, address_value)?;
                 let idx = context.constant_index(constant)?;
                 push_instr!(exp.loc, Bytecode::LdConst(idx));
                 function_frame.push()?;
@@ -1298,8 +1302,8 @@ fn compile_expression(
             }
             CopyableVal_::ByteArray(buf) => {
                 let vec_value = MoveValue::vector_u8(buf);
-                let ty = Type::Vector(Box::new(Type::U8));
-                let constant = compile_constant(context, ty, vec_value)?;
+                let ty = MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8));
+                let constant = compile_constant(context, &ty, vec_value)?;
                 let idx = context.constant_index(constant)?;
                 push_instr!(exp.loc, Bytecode::LdConst(idx));
                 function_frame.push()?;
@@ -1669,30 +1673,38 @@ fn compile_call(
     Ok(())
 }
 
-fn compile_constant(_context: &mut Context, ty: Type, value: MoveValue) -> Result<Constant> {
-    fn type_layout(ty: Type) -> Result<MoveTypeLayout> {
-        Ok(match ty {
-            Type::Address => MoveTypeLayout::Address,
-            Type::Signer => MoveTypeLayout::Signer,
-            Type::U8 => MoveTypeLayout::U8,
-            Type::U16 => MoveTypeLayout::U16,
-            Type::U32 => MoveTypeLayout::U32,
-            Type::U64 => MoveTypeLayout::U64,
-            Type::U128 => MoveTypeLayout::U128,
-            Type::U256 => MoveTypeLayout::U256,
-            Type::Bool => MoveTypeLayout::Bool,
-            Type::Vector(inner_type) => MoveTypeLayout::Vector(Box::new(type_layout(*inner_type)?)),
-            Type::Reference(_, _) => bail!("References are not supported in constant type layouts"),
-            Type::TypeParameter(_) => {
-                bail!("Type parameters are not supported in constant type layouts")
-            }
-            Type::Datatype(_ident, _tys) => {
-                bail!("TODO Structs are not *yet* supported in constant type layouts")
-            }
-        })
-    }
+fn type_to_constant_type_layout(ty: Type) -> Result<MoveTypeLayout> {
+    Ok(match ty.value {
+        Type_::Address => MoveTypeLayout::Address,
+        Type_::Signer => MoveTypeLayout::Signer,
+        Type_::U8 => MoveTypeLayout::U8,
+        Type_::U16 => MoveTypeLayout::U16,
+        Type_::U32 => MoveTypeLayout::U32,
+        Type_::U64 => MoveTypeLayout::U64,
+        Type_::U128 => MoveTypeLayout::U128,
+        Type_::U256 => MoveTypeLayout::U256,
+        Type_::Bool => MoveTypeLayout::Bool,
+        Type_::Vector(inner_type) => {
+            MoveTypeLayout::Vector(Box::new(type_to_constant_type_layout(*inner_type)?))
+        }
+        Type_::Reference(_, _) => {
+            bail!("References are not supported in constant type layouts")
+        }
+        Type_::TypeParameter(_) => {
+            bail!("Type parameters are not supported in constant type layouts")
+        }
+        Type_::Datatype(_ident, _tys) => {
+            bail!("TODO Structs are not *yet* supported in constant type layouts")
+        }
+    })
+}
 
-    Constant::serialize_constant(&type_layout(ty)?, &value)
+fn compile_constant(
+    _context: &mut Context,
+    layout: &MoveTypeLayout,
+    value: MoveValue,
+) -> Result<Constant> {
+    Constant::serialize_constant(layout, &value)
         .ok_or_else(|| format_err!("Could not serialize constant"))
 }
 
@@ -1793,7 +1805,7 @@ fn compile_bytecode(
         IRBytecode_::LdTrue => Bytecode::LdTrue,
         IRBytecode_::LdFalse => Bytecode::LdFalse,
         IRBytecode_::LdConst(ty, v) => {
-            let constant = compile_constant(context, ty, v)?;
+            let constant = compile_constant(context, &type_to_constant_type_layout(ty)?, v)?;
             Bytecode::LdConst(context.constant_index(constant)?)
         }
         IRBytecode_::LdNamedConst(c) => Bytecode::LdConst(context.named_constant_index(&c)?),
