@@ -5,7 +5,7 @@
 //! The main user of this data is the explorer.
 
 use std::cmp::{max, min};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -84,6 +84,25 @@ impl CoinIndexKey2 {
             object_id,
         }
     }
+}
+
+const CURRENT_DB_VERSION: u64 = 0;
+const CURRENT_COIN_INDEX_VERSION: u64 = 0;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct MetadataInfo {
+    /// Version of the Database
+    version: u64,
+    /// Version of each of the column families
+    ///
+    /// This is used to version individual column families to determine if a CF needs to be
+    /// (re)initialized on startup.
+    column_families: BTreeMap<String, ColumnFamilyInfo>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct ColumnFamilyInfo {
+    version: u64,
 }
 
 pub const MAX_TX_RANGE_SIZE: u64 = 4096;
@@ -179,6 +198,14 @@ pub struct IndexStoreCacheUpdates {
 
 #[derive(DBMapUtils)]
 pub struct IndexStoreTables {
+    /// A singleton that store metadata information on the DB.
+    ///
+    /// A few uses for this singleton:
+    /// - determining if the DB has been initialized (as some tables could still be empty post
+    ///     initialization)
+    /// - version of each column family and their respective initialization status
+    meta: DBMap<(), MetadataInfo>,
+
     /// Index from sui address to transactions initiated by that address.
     #[default_options_override_fn = "transactions_from_addr_table_default_config"]
     transactions_from_addr: DBMap<(SuiAddress, TxSequenceNumber), TransactionDigest>,
@@ -269,9 +296,27 @@ impl IndexStoreTables {
 
     #[allow(deprecated)]
     fn init(&mut self, authority_store: &AuthorityStore) -> Result<(), StorageError> {
-        // If the new coin index is empty, populate it
-        if self.coin_index_2.is_empty() {
+        let mut metadata = {
+            match self.meta.get(&()) {
+                Ok(Some(metadata)) => metadata,
+                Ok(None) | Err(_) => MetadataInfo {
+                    version: CURRENT_DB_VERSION,
+                    column_families: BTreeMap::new(),
+                },
+            }
+        };
+
+        // If the new coin index hasn't already been initialized, populate it
+        if !metadata
+            .column_families
+            .get(self.coin_index_2.cf_name())
+            .is_some_and(|cf_info| cf_info.version == CURRENT_COIN_INDEX_VERSION)
+            || self.coin_index_2.is_empty()
+        {
             info!("Initializing JSON-RPC coin index");
+
+            // clear the index so we're starting with a fresh table
+            self.coin_index_2.unsafe_clear()?;
 
             let make_live_object_indexer = CoinParLiveObjectSetIndexer { tables: self };
 
@@ -281,9 +326,21 @@ impl IndexStoreTables {
             )?;
 
             info!("Finished initializing JSON-RPC coin index");
+
+            // Once the coin_index_2 table has been finished, update the metadata indicating that
+            // its been initialized
+            metadata.column_families.insert(
+                self.coin_index_2.cf_name().to_owned(),
+                ColumnFamilyInfo {
+                    version: CURRENT_COIN_INDEX_VERSION,
+                },
+            );
         }
 
-        // Clear old, deprecated column families
+        // Commit to the DB that the indexes have been initialized
+        self.meta.insert(&(), &metadata)?;
+
+        // Clear old, deprecated and unused column families
         if !self.coin_index.is_empty() {
             self.coin_index.unsafe_clear()?;
         }

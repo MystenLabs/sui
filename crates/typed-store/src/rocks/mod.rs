@@ -839,6 +839,10 @@ impl<K, V> DBMap<K, V> {
         Ok(DBMap::new(db.clone(), rw_options, &cf_key, is_deprecated))
     }
 
+    pub fn cf_name(&self) -> &str {
+        &self.cf
+    }
+
     pub fn batch(&self) -> DBBatch {
         let batch = match *self.rocksdb {
             RocksDB::DBWithThreadMode(_) => RocksDBBatch::Regular(WriteBatch::default()),
