@@ -667,4 +667,21 @@ export class DeepBookContract {
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 	};
+
+	/**
+	 * @description Get the DEEP price conversion for a pool
+	 * @param {string} poolKey The key to identify the pool
+	 * @returns A function that takes a Transaction object
+	 */
+	getPoolDeepPrice = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_order_deep_price`,
+			arguments: [tx.object(pool.address)],
+			typeArguments: [baseCoin.type, quoteCoin.type],
+		});
+	};
 }
