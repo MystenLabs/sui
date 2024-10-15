@@ -144,9 +144,11 @@ impl IngestionClient {
 
         debug!(
             checkpoint,
-            "Fetched checkpoint in {:.03}ms",
-            elapsed * 1000.0
+            elapsed_ms = elapsed * 1000.0,
+            "Fetched checkpoint"
         );
+
+        self.metrics.total_ingested_checkpoints.inc();
 
         self.metrics
             .total_ingested_transactions

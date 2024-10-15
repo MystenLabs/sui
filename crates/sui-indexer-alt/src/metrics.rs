@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use axum::{extract::Extension, routing::get, Router};
@@ -9,8 +9,9 @@ use mysten_metrics::RegistryService;
 use prometheus::{
     core::{Collector, Desc},
     proto::{Counter, Gauge, LabelPair, Metric, MetricFamily, MetricType, Summary},
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, Histogram,
+    HistogramVec, IntCounter, IntCounterVec, Registry,
 };
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -21,6 +22,23 @@ use crate::{db::Db, ingestion::error::Error};
 /// Histogram buckets for the distribution of checkpoint fetching latencies.
 const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
+];
+
+/// Histogram buckets for the distribution of latencies for processing a checkpoint in the indexer
+/// (without having to call out to other services).
+const PROCESSING_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
+];
+
+/// Histogram buckets for the distribution of latencies for writing to the database.
+const DB_UPDATE_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0,
+    2000.0, 5000.0, 10000.0,
+];
+
+/// Histogram buckets for the distribution of batch sizes (number of rows) written to the database.
+const BATCH_SIZE_BUCKETS: &[f64] = &[
+    1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0, 20000.0,
 ];
 
 /// Service to expose prometheus metrics from the indexer.
@@ -42,9 +60,25 @@ pub struct IndexerMetrics {
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
 
-    // Distribution of times taken to fetch data from the remote store, including time taken on
-    // retries.
     pub ingested_checkpoint_latency: Histogram,
+
+    // Statistics related to individual ingestion pipelines' handlers.
+    pub total_handler_checkpoints_received: IntCounterVec,
+    pub total_handler_checkpoints_processed: IntCounterVec,
+    pub total_handler_rows_created: IntCounterVec,
+
+    pub handler_checkpoint_latency: HistogramVec,
+
+    // Statistics related to individual ingestion pipelines' committers.
+    pub total_committer_batches_attempted: IntCounterVec,
+    pub total_committer_batches_succeeded: IntCounterVec,
+    pub total_committer_rows_received: IntCounterVec,
+    pub total_committer_rows_committed: IntCounterVec,
+    pub total_committer_rows_affected: IntCounterVec,
+
+    pub committer_gather_latency: HistogramVec,
+    pub committer_commit_latency: HistogramVec,
+    pub committer_batch_size: HistogramVec,
 }
 
 /// Collects information about the database connection pool.
@@ -61,7 +95,7 @@ impl MetricsService {
         addr: SocketAddr,
         db: Db,
         cancel: CancellationToken,
-    ) -> Result<(IndexerMetrics, MetricsService)> {
+    ) -> Result<(Arc<IndexerMetrics>, MetricsService)> {
         let registry = Registry::new_custom(Some("indexer_alt".to_string()), None)?;
 
         let metrics = IndexerMetrics::new(&registry);
@@ -74,7 +108,7 @@ impl MetricsService {
             cancel,
         };
 
-        Ok((metrics, service))
+        Ok((Arc::new(metrics), service))
     }
 
     /// Start the service. The service will run until the cancellation token is triggered.
@@ -155,6 +189,94 @@ impl IndexerMetrics {
                 "indexer_ingested_checkpoint_latency",
                 "Time taken to fetch a checkpoint from the remote store, including retries",
                 INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_handler_checkpoints_received: register_int_counter_vec_with_registry!(
+                "indexer_total_handler_checkpoints_received",
+                "Total number of checkpoints received by this handler",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_handler_checkpoints_processed: register_int_counter_vec_with_registry!(
+                "indexer_total_handler_checkpoints_processed",
+                "Total number of checkpoints processed (converted into rows) by this handler",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_handler_rows_created: register_int_counter_vec_with_registry!(
+                "indexer_total_handler_rows_created",
+                "Total number of rows created by this handler",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            handler_checkpoint_latency: register_histogram_vec_with_registry!(
+                "indexer_handler_checkpoint_latency",
+                "Time taken to process a checkpoint by this handler",
+                &["pipeline"],
+                PROCESSING_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_committer_batches_attempted: register_int_counter_vec_with_registry!(
+                "indexer_total_committer_batches_attempted",
+                "Total number of batches writes attempted by this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_committer_batches_succeeded: register_int_counter_vec_with_registry!(
+                "indexer_total_committer_batches_succeeded",
+                "Total number of successful batches writes by this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_committer_rows_received: register_int_counter_vec_with_registry!(
+                "indexer_total_committer_rows_received",
+                "Total number of rows received by this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_committer_rows_committed: register_int_counter_vec_with_registry!(
+                "indexer_total_committer_rows_committed",
+                "Total number of rows sent to the database by this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_committer_rows_affected: register_int_counter_vec_with_registry!(
+                "indexer_total_committer_rows_affected",
+                "Total number of rows actually written to the database by this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_gather_latency: register_histogram_vec_with_registry!(
+                "indexer_committer_gather_latency",
+                "Time taken to gather rows into a batch by this committer",
+                &["pipeline"],
+                PROCESSING_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            committer_commit_latency: register_histogram_vec_with_registry!(
+                "indexer_committer_commit_latency",
+                "Time taken to write a batch of rows to the database by this committer",
+                &["pipeline"],
+                DB_UPDATE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            committer_batch_size: register_histogram_vec_with_registry!(
+                "indexer_committer_batch_size",
+                "Number of rows in a batch written to the database by this committer",
+                &["pipeline"],
+                BATCH_SIZE_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
