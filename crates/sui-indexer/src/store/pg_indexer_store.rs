@@ -36,7 +36,11 @@ use crate::models::checkpoints::StoredCpTx;
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
 use crate::models::epoch::{StoredFeatureFlag, StoredProtocolConfig};
-use crate::models::event_indices::{StoredEventEmitModule, StoredEventEmitPackage, StoredEventSenders, StoredEventStructInstantiation, StoredEventStructModule, StoredEventStructName, StoredEventStructPackage};
+use crate::models::event_indices::{
+    StoredEventEmitModule, StoredEventEmitPackage, StoredEventSenders,
+    StoredEventStructInstantiation, StoredEventStructModule, StoredEventStructName,
+    StoredEventStructPackage,
+};
 use crate::models::events::StoredEvent;
 use crate::models::obj_indices::{StoredObjectVersion, StoredObjectVersionUnpartitioned};
 use crate::models::objects::StoredFullHistoryObject;
@@ -47,7 +51,8 @@ use crate::models::objects::{
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::models::tx_indices::{
-    StoredTxAffectedAddresses, StoredTxAffectedObjects, StoredTxDigest, StoredTxFun, StoredTxKind, StoredTxMod, StoredTxPkg
+    StoredTxAffectedAddresses, StoredTxAffectedObjects, StoredTxDigest, StoredTxFun, StoredTxKind,
+    StoredTxMod, StoredTxPkg,
 };
 use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
@@ -89,6 +94,7 @@ const PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX: usize = 1000;
 const PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX: usize = 5000;
 // The amount of rows to update in one DB transaction
 const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
+const PG_COMMIT_OTHER_TX_INDICES: usize = 10000;
 // The amount of rows to update in one DB transaction, for objects particularly
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
@@ -392,7 +398,11 @@ impl PgIndexerStore {
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked object mutations", mutated_object_mutation_chunk.len());
+            info!(
+                elapsed,
+                "Persisted {} chunked object mutations",
+                mutated_object_mutation_chunk.len()
+            );
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object mutations with error: {}", e);
@@ -437,7 +447,11 @@ impl PgIndexerStore {
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked object deletions", deleted_objects_chunk.len());
+            info!(
+                elapsed,
+                "Persisted {} chunked object deletions",
+                deleted_objects_chunk.len()
+            );
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object deletions with error: {}", e);
@@ -1018,22 +1032,27 @@ impl PgIndexerStore {
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         let len = event_emit_packages.len();
-        
+
         transaction_with_retry(
             &self.metrics,
             &self.pool,
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(event_emit_package::table)
-                    .values(event_emit_packages)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await?;
+                    for chunk in chunk!(
+                        event_emit_packages,
+                        PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX
+                    ) {
+                        diesel::insert_into(event_emit_package::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
-            }
+            },
         )
         .await
         .tap_ok(|_| {
@@ -1059,15 +1078,19 @@ impl PgIndexerStore {
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(event_emit_module::table)
-                        .values(event_emit_modules)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for chunk in
+                        chunk!(event_emit_modules, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
+                    {
+                        diesel::insert_into(event_emit_module::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
-            }
+            },
         )
         .await
         .tap_ok(|_| {
@@ -1086,8 +1109,6 @@ impl PgIndexerStore {
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         let len = event_senders.len();
-        
-        
 
         transaction_with_retry(
             &self.metrics,
@@ -1095,15 +1116,17 @@ impl PgIndexerStore {
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(event_senders::table)
-                        .values(event_senders)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for chunk in chunk!(event_senders, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(event_senders::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
-            }
+            },
         )
         .await
         .tap_ok(|_| {
@@ -1122,24 +1145,30 @@ impl PgIndexerStore {
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         let len = event_struct_packages.len();
-        
-        
 
         transaction_with_retry(
             &self.metrics,
             &self.pool,
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
-                async {
-                    diesel::insert_into(event_struct_package::table)
-                        .values(event_struct_packages)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                    Ok(())
+                {
+                    async {
+                        for chunk in chunk!(
+                            event_struct_packages,
+                            PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX
+                        ) {
+                            diesel::insert_into(event_struct_package::table)
+                                .values(chunk)
+                                .on_conflict_do_nothing()
+                                .execute(conn)
+                                .await?;
+                        }
+                        Ok(())
+                    }
+                    .scope_boxed()
                 }
-            }
-            .scope_boxed()
+                .scope_boxed()
+            },
         )
         .await
         .tap_ok(|_| {
@@ -1165,15 +1194,20 @@ impl PgIndexerStore {
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(event_struct_module::table)
-                        .values(event_struct_modules)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for chunk in chunk!(
+                        event_struct_modules,
+                        PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX
+                    ) {
+                        diesel::insert_into(event_struct_module::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
-            }
+            },
         )
         .await
         .tap_ok(|_| {
@@ -1192,22 +1226,29 @@ impl PgIndexerStore {
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         let len = event_struct_names.len();
-        
+
         transaction_with_retry(
             &self.metrics,
             &self.pool,
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
-                async {
-                    diesel::insert_into(event_struct_name::table)
-                        .values(event_struct_names)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                    Ok(())
+                {
+                    async {
+                        for chunk in
+                            chunk!(event_struct_names, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
+                        {
+                            diesel::insert_into(event_struct_name::table)
+                                .values(chunk)
+                                .on_conflict_do_nothing()
+                                .execute(conn)
+                                .await?;
+                        }
+                        Ok(())
+                    }
+                    .scope_boxed()
                 }
-            }
-            .scope_boxed()
+                .scope_boxed()
+            },
         )
         .await
         .tap_ok(|_| {
@@ -1226,29 +1267,37 @@ impl PgIndexerStore {
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         let len = event_struct_instantiations.len();
-        
+
         transaction_with_retry(
             &self.metrics,
             &self.pool,
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(event_struct_instantiation::table)
-                        .values(event_struct_instantiations)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for chunk in chunk!(
+                        event_struct_instantiations,
+                        PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX
+                    ) {
+                        diesel::insert_into(event_struct_instantiation::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
-            }
+            },
         )
         .await
         .tap_ok(|_| {
             info!("Persisted {} event_struct_instantiations", len);
         })
         .tap_err(|e| {
-            tracing::error!("Failed to persist event_struct_instantiations with error: {}", e);
+            tracing::error!(
+                "Failed to persist event_struct_instantiations with error: {}",
+                e
+            );
         })?;
 
         Ok(())
@@ -1261,7 +1310,10 @@ impl PgIndexerStore {
         use diesel_async::RunQueryDsl;
         let len = tx_affected_addresses.len();
 
-        let guard = self.metrics.tx_indices_tx_affected_addresses_commit_latency.start_timer();
+        let guard = self
+            .metrics
+            .tx_indices_tx_affected_addresses_commit_latency
+            .start_timer();
 
         transaction_with_retry(
             &self.metrics,
@@ -1269,13 +1321,18 @@ impl PgIndexerStore {
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(tx_affected_addresses::table)
-                        .values(tx_affected_addresses)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await
-                        .map_err(IndexerError::from)
-                        .context("Failed to write to tx_affected_addresses table")?;
+                    for chunk in chunk!(
+                        tx_affected_addresses,
+                        PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX
+                    ) {
+                        diesel::insert_into(tx_affected_addresses::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await
+                            .map_err(IndexerError::from)
+                            .context("Failed to write to tx_affected_addresses table")?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
@@ -1284,11 +1341,7 @@ impl PgIndexerStore {
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(
-                elapsed,
-                "Persisted {} chunked tx_affected_addresses",
-                len
-            );
+            info!(elapsed, "Persisted {} chunked tx_affected_addresses", len);
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist tx_affected_addresses with error: {}", e);
@@ -1304,7 +1357,10 @@ impl PgIndexerStore {
         use diesel_async::RunQueryDsl;
         let len = tx_affected_objects.len();
 
-        let guard = self.metrics.tx_indices_tx_affected_objects_commit_latency.start_timer();
+        let guard = self
+            .metrics
+            .tx_indices_tx_affected_objects_commit_latency
+            .start_timer();
 
         transaction_with_retry(
             &self.metrics,
@@ -1312,11 +1368,16 @@ impl PgIndexerStore {
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(tx_affected_objects::table)
-                        .values(tx_affected_objects)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for chunk in chunk!(
+                        tx_affected_objects,
+                        PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX
+                    ) {
+                        diesel::insert_into(tx_affected_objects::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
@@ -1325,11 +1386,7 @@ impl PgIndexerStore {
         .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
-            info!(
-                elapsed,
-                "Persisted {} chunked tx_affected_objects",
-                len
-            );
+            info!(elapsed, "Persisted {} chunked tx_affected_objects", len);
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist tx_affected_objects with error: {}", e);
@@ -1351,11 +1408,13 @@ impl PgIndexerStore {
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(tx_calls_pkg::table)
-                        .values(tx_calls_pkg)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for chunk in chunk!(tx_calls_pkg, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_calls_pkg::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
@@ -1385,11 +1444,13 @@ impl PgIndexerStore {
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(tx_calls_mod::table)
-                        .values(tx_calls_mod)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for chunk in chunk!(tx_calls_mod, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_calls_mod::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
@@ -1412,18 +1473,20 @@ impl PgIndexerStore {
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
         let len = tx_calls_fun.len();
-            
+
         transaction_with_retry(
             &self.metrics,
             &self.pool,
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(tx_calls_fun::table)
-                        .values(tx_calls_fun)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for chunk in chunk!(tx_calls_fun, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_calls_fun::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
@@ -1452,11 +1515,13 @@ impl PgIndexerStore {
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(tx_digests::table)
-                        .values(tx_digests)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for chunk in chunk!(tx_digests, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_digests::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
@@ -1485,11 +1550,13 @@ impl PgIndexerStore {
             PG_DB_COMMIT_SLEEP_DURATION,
             |conn| {
                 async {
-                    diesel::insert_into(tx_kinds::table)
-                        .values(tx_kinds)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
+                    for chunk in chunk!(tx_kinds, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_kinds::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .await?;
+                    }
                     Ok(())
                 }
                 .scope_boxed()
@@ -2329,99 +2396,113 @@ impl IndexerStore for PgIndexerStore {
         //     })
         //     .tap_err(|e| tracing::error!("Failed to persist all event_indices chunks: {:?}", e))?;
 
-    let (
-        event_emit_packages,
-        event_emit_modules,
-        event_senders,
-        event_struct_packages,
-        event_struct_modules,
-        event_struct_names,
-        event_struct_instantiations,
-    ) = indices.into_iter().map(|i| i.split()).fold(
-        (
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        ),
-        |(
-            mut event_emit_packages,
-            mut event_emit_modules,
-            mut event_senders,
-            mut event_struct_packages,
-            mut event_struct_modules,
-            mut event_struct_names,
-            mut event_struct_instantiations,
-        ),
-         index| {
-            event_emit_packages.push(index.0);
-            event_emit_modules.push(index.1);
-            event_senders.push(index.2);
-            event_struct_packages.push(index.3);
-            event_struct_modules.push(index.4);
-            event_struct_names.push(index.5);
-            event_struct_instantiations.push(index.6);
+        let (
+            event_emit_packages,
+            event_emit_modules,
+            event_senders,
+            event_struct_packages,
+            event_struct_modules,
+            event_struct_names,
+            event_struct_instantiations,
+        ) = indices.into_iter().map(|i| i.split()).fold(
             (
-                event_emit_packages,
-                event_emit_modules,
-                event_senders,
-                event_struct_packages,
-                event_struct_modules,
-                event_struct_names,
-                event_struct_instantiations,
-            )
-        },
-    );
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            ),
+            |(
+                mut event_emit_packages,
+                mut event_emit_modules,
+                mut event_senders,
+                mut event_struct_packages,
+                mut event_struct_modules,
+                mut event_struct_names,
+                mut event_struct_instantiations,
+            ),
+             index| {
+                event_emit_packages.push(index.0);
+                event_emit_modules.push(index.1);
+                event_senders.push(index.2);
+                event_struct_packages.push(index.3);
+                event_struct_modules.push(index.4);
+                event_struct_names.push(index.5);
+                event_struct_instantiations.push(index.6);
+                (
+                    event_emit_packages,
+                    event_emit_modules,
+                    event_senders,
+                    event_struct_packages,
+                    event_struct_modules,
+                    event_struct_names,
+                    event_struct_instantiations,
+                )
+            },
+        );
 
-    let event_emit_packages_futures = chunk!(event_emit_packages, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
-        .into_iter()
-        .map(|chunk| self.persist_event_emit_packages_chunk(chunk))
-        .collect::<Vec<_>>();
+        let event_indices_chunk_size = std::env::var("EVENT_INDICES_CHUNK_SIZE")
+            .unwrap_or(PG_COMMIT_OTHER_TX_INDICES.to_string())
+            .parse::<usize>()
+            .unwrap();
 
-    let event_emit_modules_futures = chunk!(event_emit_modules, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
-        .into_iter()
-        .map(|chunk| self.persist_event_emit_modules_chunk(chunk))
-        .collect::<Vec<_>>();
+        let event_emit_packages_futures = chunk!(event_emit_packages, event_indices_chunk_size)
+            .into_iter()
+            .map(|chunk| self.persist_event_emit_packages_chunk(chunk))
+            .collect::<Vec<_>>();
 
-    let event_senders_futures = chunk!(event_senders, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
-        .into_iter()
-        .map(|chunk| self.persist_event_senders_chunk(chunk))
-        .collect::<Vec<_>>();
+        let event_emit_modules_futures = chunk!(event_emit_modules, event_indices_chunk_size)
+            .into_iter()
+            .map(|chunk| self.persist_event_emit_modules_chunk(chunk))
+            .collect::<Vec<_>>();
 
-    let event_struct_packages_futures = chunk!(event_struct_packages, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
-        .into_iter()
-        .map(|chunk| self.persist_event_struct_packages_chunk(chunk))
-        .collect::<Vec<_>>();
+        let event_senders_futures = chunk!(event_senders, event_indices_chunk_size)
+            .into_iter()
+            .map(|chunk| self.persist_event_senders_chunk(chunk))
+            .collect::<Vec<_>>();
 
-    let event_struct_modules_futures = chunk!(event_struct_modules, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
-        .into_iter()
-        .map(|chunk| self.persist_event_struct_modules_chunk(chunk))
-        .collect::<Vec<_>>();
+        let event_struct_packages_futures = chunk!(event_struct_packages, event_indices_chunk_size)
+            .into_iter()
+            .map(|chunk| self.persist_event_struct_packages_chunk(chunk))
+            .collect::<Vec<_>>();
 
-    let event_struct_names_futures = chunk!(event_struct_names, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
-        .into_iter()
-        .map(|chunk| self.persist_event_struct_names_chunk(chunk))
-        .collect::<Vec<_>>();
+        let event_struct_modules_futures = chunk!(event_struct_modules, event_indices_chunk_size)
+            .into_iter()
+            .map(|chunk| self.persist_event_struct_modules_chunk(chunk))
+            .collect::<Vec<_>>();
 
-    let event_struct_instantiations_futures = chunk!(event_struct_instantiations, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
-        .into_iter()
-        .map(|chunk| self.persist_event_struct_instantiations_chunk(chunk))
-        .collect::<Vec<_>>();
+        let event_struct_names_futures = chunk!(event_struct_names, event_indices_chunk_size)
+            .into_iter()
+            .map(|chunk| self.persist_event_struct_names_chunk(chunk))
+            .collect::<Vec<_>>();
 
-    // TODOggao: handle errors
-    let (event_emit_packages_res, event_emit_modules_res, event_senders_res, event_struct_packages_res, event_struct_modules_res, event_struct_names_res, event_struct_instantiations_res) = futures::join!(
-        futures::future::join_all(event_emit_packages_futures),
-        futures::future::join_all(event_emit_modules_futures),
-        futures::future::join_all(event_senders_futures),
-        futures::future::join_all(event_struct_packages_futures),
-        futures::future::join_all(event_struct_modules_futures),
-        futures::future::join_all(event_struct_names_futures),
-        futures::future::join_all(event_struct_instantiations_futures),
-    );
-    
+        let event_struct_instantiations_futures =
+            chunk!(event_struct_instantiations, event_indices_chunk_size)
+                .into_iter()
+                .map(|chunk| self.persist_event_struct_instantiations_chunk(chunk))
+                .collect::<Vec<_>>();
+
+        // TODOggao: handle errors
+        let (
+            event_emit_packages_res,
+            event_emit_modules_res,
+            event_senders_res,
+            event_struct_packages_res,
+            event_struct_modules_res,
+            event_struct_names_res,
+            event_struct_instantiations_res,
+        ) = futures::join!(
+            futures::future::join_all(event_emit_packages_futures),
+            futures::future::join_all(event_emit_modules_futures),
+            futures::future::join_all(event_senders_futures),
+            futures::future::join_all(event_struct_packages_futures),
+            futures::future::join_all(event_struct_modules_futures),
+            futures::future::join_all(event_struct_names_futures),
+            futures::future::join_all(event_struct_instantiations_futures),
+        );
+
         Ok(())
     }
 
@@ -2435,8 +2516,7 @@ impl IndexerStore for PgIndexerStore {
             .checkpoint_db_commit_latency_tx_indices
             .start_timer();
 
-
-            let (affected_addresses, affected_objects, pkgs, mods, funs, digests, kinds) =
+        let (affected_addresses, affected_objects, pkgs, mods, funs, digests, kinds) =
             indices.into_iter().map(|i| i.split()).fold(
                 (
                     Vec::new(),
@@ -2477,8 +2557,8 @@ impl IndexerStore for PgIndexerStore {
             );
 
         // read from env the indices chunk sizes
-        let indices_chunk_size = std::env::var("INDICES_CHUNK_SIZE")
-            .unwrap_or("5000".to_string())
+        let indices_chunk_size = std::env::var("AFFECTED_INDICES_CHUNK_SIZE")
+            .unwrap_or(PG_COMMIT_OTHER_TX_INDICES.to_string())
             .parse::<usize>()
             .unwrap();
 
@@ -2490,7 +2570,6 @@ impl IndexerStore for PgIndexerStore {
         let digests_len = digests.len();
         let kinds_len = kinds.len();
 
-
         let tx_affected_addresses_futures = chunk!(affected_addresses, indices_chunk_size)
             .into_iter()
             .map(|chunk| self.persist_tx_affected_addresses_chunk(chunk))
@@ -2501,33 +2580,46 @@ impl IndexerStore for PgIndexerStore {
             .map(|chunk| self.persist_tx_affected_objects_chunk(chunk))
             .collect::<Vec<_>>();
 
-        let tx_pkgs_futures = chunk!(pkgs, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
+        let other_tx_indices = std::env::var("OTHER_TX_INDICES_CHUNK_SIZE")
+            .unwrap_or(PG_COMMIT_OTHER_TX_INDICES.to_string())
+            .parse::<usize>()
+            .unwrap();
+
+        let tx_pkgs_futures = chunk!(pkgs, other_tx_indices)
             .into_iter()
             .map(|chunk| self.persist_tx_pkgs_chunk(chunk))
             .collect::<Vec<_>>();
 
-        let tx_mods_futures = chunk!(mods, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
+        let tx_mods_futures = chunk!(mods, other_tx_indices)
             .into_iter()
             .map(|chunk| self.persist_tx_mods_chunk(chunk))
             .collect::<Vec<_>>();
 
-        let tx_funs_futures = chunk!(funs, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
+        let tx_funs_futures = chunk!(funs, other_tx_indices)
             .into_iter()
             .map(|chunk| self.persist_tx_funs_chunk(chunk))
             .collect::<Vec<_>>();
 
-        let tx_digests_futures = chunk!(digests, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
+        let tx_digests_futures = chunk!(digests, other_tx_indices)
             .into_iter()
             .map(|chunk| self.persist_tx_digests_chunk(chunk))
             .collect::<Vec<_>>();
 
-        let tx_kinds_futures = chunk!(kinds, PG_COMMIT_INDICES_CHUNK_SIZE_INTRA_DB_TX)
+        let tx_kinds_futures = chunk!(kinds, other_tx_indices)
             .into_iter()
             .map(|chunk| self.persist_tx_kinds_chunk(chunk))
             .collect::<Vec<_>>();
 
         // TODOggao: handle errors
-        let (tx_affected_addresses_res, tx_affected_objects_res, tx_pkgs_res, tx_mods_res, tx_funs_res, tx_digests_res, tx_kinds_res) = futures::join!(
+        let (
+            tx_affected_addresses_res,
+            tx_affected_objects_res,
+            tx_pkgs_res,
+            tx_mods_res,
+            tx_funs_res,
+            tx_digests_res,
+            tx_kinds_res,
+        ) = futures::join!(
             futures::future::join_all(tx_affected_addresses_futures),
             futures::future::join_all(tx_affected_objects_futures),
             futures::future::join_all(tx_pkgs_futures),
