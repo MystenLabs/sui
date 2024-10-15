@@ -44,10 +44,8 @@ use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
-use tokio::sync::broadcast;
-use tokio::sync::mpsc;
-use tokio::sync::{watch, Mutex};
-use tokio::task::JoinHandle;
+use tokio::sync::{broadcast, mpsc, watch, Mutex};
+use tokio::task::{JoinHandle, JoinSet};
 use tower::ServiceBuilder;
 use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
@@ -150,10 +148,12 @@ pub struct ValidatorComponents {
     consensus_manager: ConsensusManager,
     consensus_store_pruner: ConsensusStorePruner,
     consensus_adapter: Arc<ConsensusAdapter>,
-    // dropping this will eventually stop checkpoint tasks. The receiver side of this channel
-    // is copied into each checkpoint service task, and they are listening to any change to this
-    // channel. When the sender is dropped, a change is triggered and those tasks will exit.
+    // Sending to the channel or dropping this will eventually stop checkpoint tasks.
+    // The receiver side of this channel is copied into each checkpoint service task,
+    // and they are listening to any change to this channel.
     checkpoint_service_exit: watch::Sender<()>,
+    // Keeping the handle to the checkpoint service tasks to shut them down during reconfiguration.
+    checkpoint_service_tasks: JoinSet<()>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
@@ -1261,16 +1261,17 @@ impl SuiNode {
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
-        let (checkpoint_service, checkpoint_service_exit) = Self::start_checkpoint_service(
-            config,
-            consensus_adapter.clone(),
-            checkpoint_store,
-            epoch_store.clone(),
-            state.clone(),
-            state_sync_handle,
-            accumulator,
-            checkpoint_metrics.clone(),
-        );
+        let (checkpoint_service, checkpoint_service_exit, checkpoint_service_tasks) =
+            Self::start_checkpoint_service(
+                config,
+                consensus_adapter.clone(),
+                checkpoint_store,
+                epoch_store.clone(),
+                state.clone(),
+                state_sync_handle,
+                accumulator,
+                checkpoint_metrics.clone(),
+            );
 
         // create a new map that gets injected into both the consensus handler and the consensus adapter
         // the consensus handler will write values forwarded from consensus, and the consensus adapter
@@ -1348,6 +1349,7 @@ impl SuiNode {
             consensus_store_pruner,
             consensus_adapter,
             checkpoint_service_exit,
+            checkpoint_service_tasks,
             checkpoint_metrics,
             sui_tx_validator_metrics,
         })
@@ -1362,7 +1364,7 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         accumulator: Weak<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
-    ) -> (Arc<CheckpointService>, watch::Sender<()>) {
+    ) -> (Arc<CheckpointService>, watch::Sender<()>, JoinSet<()>) {
         let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
         let epoch_duration_ms = epoch_store.epoch_start_state().epoch_duration_ms();
 
@@ -1657,15 +1659,19 @@ impl SuiNode {
                 consensus_store_pruner,
                 consensus_adapter,
                 checkpoint_service_exit,
+                mut checkpoint_service_tasks,
                 checkpoint_metrics,
                 sui_tx_validator_metrics,
             }) = self.validator_components.lock().await.take()
             {
                 info!("Reconfiguring the validator.");
-                // Stop the old checkpoint service.
-                drop(checkpoint_service_exit);
+                // Stop the old checkpoint service and wait for them to finish.
+                let _ = checkpoint_service_exit.send(());
+                while let Some(_result) = checkpoint_service_tasks.join_next().await {}
+                info!("Checkpoint service has shut down.");
 
                 consensus_manager.shutdown().await;
+                info!("Consensus has shut down.");
 
                 let new_epoch_store = self
                     .reconfigure_state(
@@ -1676,6 +1682,7 @@ impl SuiNode {
                         accumulator.clone(),
                     )
                     .await;
+                info!("Epoch store finished reconfiguration.");
 
                 // No other components should be holding a strong reference to state accumulator
                 // at this point. Confirm here before we swap in the new accumulator.
