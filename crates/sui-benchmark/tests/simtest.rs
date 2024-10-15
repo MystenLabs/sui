@@ -463,10 +463,14 @@ mod test {
         let max_deferral_rounds;
         {
             let mut rng = thread_rng();
-            mode = if rng.gen_bool(0.5) {
+            mode = if rng.gen_bool(0.33) {
                 PerObjectCongestionControlMode::TotalGasBudget
             } else {
-                PerObjectCongestionControlMode::TotalTxCount
+                if rng.gen_bool(0.5) {
+                    PerObjectCongestionControlMode::TotalTxCount
+                } else {
+                    PerObjectCongestionControlMode::TotalGasBudgetWithCap
+                }
             };
             checkpoint_budget_factor = rng.gen_range(1..20);
             txn_count_limit = rng.gen_range(1..=10);
@@ -503,6 +507,14 @@ mod test {
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
                         txn_count_limit
                     );
+                },
+                PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
+                    let total_gas_limit = checkpoint_budget_factor
+                        * DEFAULT_VALIDATOR_GAS_PRICE
+                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
+                    config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit);  // Not sure what to set here.
                 },
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
