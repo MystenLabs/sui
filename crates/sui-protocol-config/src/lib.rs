@@ -184,11 +184,7 @@ const MAX_PROTOCOL_VERSION: u64 = 63;
 //             Further reduce minimum number of random beacon shares.
 //             Add feature flag for Mysticeti fastpath.
 // Version 62: Makes the event's sending module package upgrade-aware.
-<<<<<<< HEAD
-=======
 // Version 63: Enable gas based congestion control in consensus commit.
-// Version 64: Switch to distributed vote scoring in consensus in mainnet
->>>>>>> 72e54057fc (Implement gas budget based congestion control with PTB/Obj cap (#19853))
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
