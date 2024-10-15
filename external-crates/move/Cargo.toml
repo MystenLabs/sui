@@ -3,24 +3,24 @@ resolver = "2"
 
 members = [
     "crates/*",
-    "move-execution/v0/crates/bytecode-verifier-tests",
-    "move-execution/v1/crates/bytecode-verifier-tests",
-    "move-execution/v2/crates/bytecode-verifier-tests",
-    # "move-execution/$CUT/crates/bytecode-verifier-tests",
-    "move-execution/v0/crates/move-bytecode-verifier",
-    "move-execution/v1/crates/move-bytecode-verifier",
-    "move-execution/v2/crates/move-bytecode-verifier",
-    # "move-execution/$CUT/crates/move-bytecode-verifier",
-    "move-execution/v0/crates/move-vm-runtime",
-    "move-execution/v1/crates/move-vm-runtime",
-    "move-execution/v2/crates/move-vm-runtime",
-    # "move-execution/$CUT/crates/move-vm-runtime",
-    "move-execution/v0/crates/move-stdlib-natives",
-    "move-execution/v1/crates/move-stdlib-natives",
-    "move-execution/v2/crates/move-stdlib-natives",
-    # "move-execution/$CUT/crates/move-stdlib-natives",
-    "move-execution/v2/crates/move-abstract-interpreter",
-    # "move-execution/$CUT/crates/move-abstract-interpreter",
+    # "move-execution/v0/crates/bytecode-verifier-tests",
+    # "move-execution/v1/crates/bytecode-verifier-tests",
+    # "move-execution/v2/crates/bytecode-verifier-tests",
+    # # "move-execution/$CUT/crates/bytecode-verifier-tests",
+    # "move-execution/v0/crates/move-bytecode-verifier",
+    # "move-execution/v1/crates/move-bytecode-verifier",
+    # "move-execution/v2/crates/move-bytecode-verifier",
+    # # "move-execution/$CUT/crates/move-bytecode-verifier",
+    # "move-execution/v0/crates/move-vm-runtime",
+    # "move-execution/v1/crates/move-vm-runtime",
+    # "move-execution/v2/crates/move-vm-runtime",
+    # # "move-execution/$CUT/crates/move-vm-runtime",
+    # "move-execution/v0/crates/move-stdlib-natives",
+    # "move-execution/v1/crates/move-stdlib-natives",
+    # "move-execution/v2/crates/move-stdlib-natives",
+    # # "move-execution/$CUT/crates/move-stdlib-natives",
+    # "move-execution/v2/crates/move-abstract-interpreter",
+    # # "move-execution/$CUT/crates/move-abstract-interpreter",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace
@@ -68,6 +68,7 @@ internment = { version = "0.5.0", features = [ "arc"] }
 itertools = "0.10.0"
 json_comments = "0.2.2"
 leb128 = "0.2.5"
+lasso = { version = "0.7.3", features = ["multi-threaded", "inline-more"] }
 libfuzzer-sys = "0.4"
 log = { version = "0.4.14", features = ["serde"] }
 lsp-server = "0.7.6"
@@ -132,6 +133,7 @@ whoami = { version = "1.2.1" }
 x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
 z3tracer = "0.8.0"
 
+
 bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util"}
 invalid-mutations = { path = "crates/invalid-mutations" }
@@ -170,7 +172,6 @@ move-unit-test = { path = "crates/move-unit-test" }
 move-vm-config = { path = "crates/move-vm-config" }
 move-vm-profiler = { path = "crates/move-vm-profiler" }
 move-vm-runtime = { path = "crates/move-vm-runtime" }
-move-vm-test-utils = { path = "crates/move-vm-test-utils" }
 move-vm-types = { path = "crates/move-vm-types" }
 prover_bytecode = { path = "crates/move-stackless-bytecode", package="move-stackless-bytecode" }
 
@@ -179,11 +180,6 @@ debug = true
 
 [profile.dev]
 debug = true
-
-[profile.test.package.move-vm-integration-tests]
-# opt-level 2 for move-compiler reduces the size of some of its
-# (recursive) stack frames by up to 10x, avoiding stack overflows.
-opt-level = 3
 
 # use release settings to reduce memory pressure in the linking step in CI
 [profile.ci]

@@ -1,5 +1,5 @@
 Command `sandbox publish`:
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M2.mv --struct C --type-args u64`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M2.mv --struct C --type-args u64`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::M2::C<u64>":
   STRUCT:
@@ -16,7 +16,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M2.mv --struct C --type-args address`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M2.mv --struct C --type-args address`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::M2::C<AccountAddress>":
   STRUCT:
@@ -34,7 +34,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M2.mv --struct C --type-args vector<u8>`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M2.mv --struct C --type-args vector<u8>`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::M2::C<vector<u8>>":
   STRUCT:
@@ -51,7 +51,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M1.mv --struct B --type-args bool`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M1.mv --struct B --type-args bool`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::M1::B<bool>":
   STRUCT:
@@ -75,7 +75,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M1.mv --struct B --type-args bool --shallow`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M1.mv --struct B --type-args bool --shallow`:
 ---
 AccountAddress:
   NEWTYPESTRUCT:
@@ -88,7 +88,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M1.mv --struct A --type-args 0x6::M1::S<u64>`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M1.mv --struct A --type-args 0x6::M1::S<u64>`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::M1::A<0000000000000000000000000000000000000000000000000000000000000006::M1::S<u64>>":
   STRUCT:
@@ -123,7 +123,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M1.mv --struct A --type-args vector<0x6::M1::S<u64>>`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M1.mv --struct A --type-args vector<0x6::M1::S<u64>>`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::M1::A<vector<0000000000000000000000000000000000000000000000000000000000000006::M1::S<u64>>>":
   STRUCT:
@@ -160,7 +160,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M1.mv --struct A --type-args 0x6::M1::S<u64> --shallow`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M1.mv --struct A --type-args 0x6::M1::S<u64> --shallow`:
 ---
 AccountAddress:
   NEWTYPESTRUCT:
@@ -173,7 +173,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M1.mv --struct A --type-args vector<0x6::M1::S<u64>> --shallow`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M1.mv --struct A --type-args vector<0x6::M1::S<u64>> --shallow`:
 ---
 AccountAddress:
   NEWTYPESTRUCT:
@@ -186,7 +186,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M2.mv --struct C --type-args 0x6::M2::C<u64>`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M2.mv --struct C --type-args 0x6::M2::C<u64>`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::M2::C<0000000000000000000000000000000000000000000000000000000000000006::M2::C<u64>>":
   STRUCT:
@@ -208,7 +208,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/M1.mv --struct G`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/M1.mv --struct G`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::M1::G":
   STRUCT:
@@ -229,7 +229,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/phantoms.mv --struct A --type-args bool --ignore-phantom-types`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/phantoms.mv --struct A --type-args bool --ignore-phantom-types`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::phantoms::A":
   STRUCT:
@@ -245,7 +245,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/phantoms.mv --struct A --type-args u64 --ignore-phantom-types`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/phantoms.mv --struct A --type-args u64 --ignore-phantom-types`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::phantoms::A":
   STRUCT:
@@ -261,7 +261,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/phantoms.mv --struct B --type-args bool u8 --ignore-phantom-types`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/phantoms.mv --struct B --type-args bool u8 --ignore-phantom-types`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::phantoms::B":
   STRUCT:
@@ -277,7 +277,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/phantoms.mv --struct C --type-args u8 u64 u128 --ignore-phantom-types`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/phantoms.mv --struct C --type-args u8 u64 u128 --ignore-phantom-types`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::phantoms::A":
   STRUCT:
@@ -302,7 +302,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/phantoms.mv --struct D --type-args bool u64 --ignore-phantom-types`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/phantoms.mv --struct D --type-args bool u64 --ignore-phantom-types`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::phantoms::D<u64>":
   STRUCT:
@@ -319,7 +319,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/phantoms.mv --struct E --type-args bool u64 u128 --ignore-phantom-types`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/phantoms.mv --struct E --type-args bool u64 u128 --ignore-phantom-types`:
 ---
 "0000000000000000000000000000000000000000000000000000000000000006::phantoms::E<bool,u128>":
   STRUCT:
@@ -338,7 +338,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/phantoms.mv --struct E --type-args bool u64 u128 --omit-addresses`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/phantoms.mv --struct E --type-args bool u64 u128 --omit-addresses`:
 ---
 AccountAddress:
   NEWTYPESTRUCT:
@@ -357,7 +357,7 @@ Signer:
     - v2:
         SEQ: U128
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/phantoms.mv --struct E --type-args bool u64 u128 --separator __`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/phantoms.mv --struct E --type-args bool u64 u128 --separator __`:
 ---
 0000000000000000000000000000000000000000000000000000000000000006__phantoms__E__bool__u64__u128__:
   STRUCT:
@@ -376,7 +376,7 @@ Signer:
       CONTENT: U8
       SIZE: 32
 
-Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/modules/phantoms.mv --struct E --type-args bool u64 u128 --omit-addresses --separator __`:
+Command `sandbox generate struct-layouts --module storage/0x0000000000000000000000000000000000000000000000000000000000000006/package/phantoms.mv --struct E --type-args bool u64 u128 --omit-addresses --separator __`:
 ---
 AccountAddress:
   NEWTYPESTRUCT:

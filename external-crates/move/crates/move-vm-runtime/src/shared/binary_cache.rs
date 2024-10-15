@@ -14,6 +14,15 @@ pub struct BinaryCache<K, V> {
     pub binaries: Vec<Arc<V>>,
 }
 
+impl<K, V> Default for BinaryCache<K, V>
+where
+    K: Eq + Hash,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K, V> BinaryCache<K, V>
 where
     K: Eq + Hash,
@@ -53,5 +62,9 @@ where
 
     pub fn len(&self) -> usize {
         self.binaries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.binaries.is_empty()
     }
 }

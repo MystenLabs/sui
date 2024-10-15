@@ -18,6 +18,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "ahash"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e89da841a80418a9b391ebaea17f5c112ffaaa96f621d2c285b5174da76b9011"
+dependencies = [
+ "cfg-if",
+ "once_cell",
+ "version_check",
+ "zerocopy",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -31,6 +43,12 @@ name = "aliasable"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
+
+[[package]]
+name = "allocator-api2"
+version = "0.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c6cb57a04249c6480766f7f7cef5467412af1490f8d1e243141daddada3264f"
 
 [[package]]
 name = "android-tzdata"
@@ -358,51 +376,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
- "move-core-types",
- "move-vm-config",
- "petgraph",
-]
-
-[[package]]
-name = "bytecode-verifier-tests-v0"
-version = "0.1.0"
-dependencies = [
- "fail",
- "hex",
- "move-abstract-interpreter-v2",
- "move-binary-format",
- "move-bytecode-verifier-meter",
- "move-bytecode-verifier-v0",
- "move-core-types",
- "move-vm-config",
- "petgraph",
-]
-
-[[package]]
-name = "bytecode-verifier-tests-v1"
-version = "0.1.0"
-dependencies = [
- "fail",
- "hex",
- "move-abstract-interpreter-v2",
- "move-binary-format",
- "move-bytecode-verifier-meter",
- "move-bytecode-verifier-v1",
- "move-core-types",
- "move-vm-config",
- "petgraph",
-]
-
-[[package]]
-name = "bytecode-verifier-tests-v2"
-version = "0.1.0"
-dependencies = [
- "fail",
- "hex",
- "move-abstract-interpreter-v2",
- "move-binary-format",
- "move-bytecode-verifier-meter",
- "move-bytecode-verifier-v2",
  "move-core-types",
  "move-vm-config",
  "petgraph",
@@ -801,6 +774,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "804c8821570c3f8b70230c2ba75ffa5c0f9a4189b9a432b6656c536712acae28"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core 0.9.10",
+]
+
+[[package]]
 name = "datatest-stable"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1096,6 +1083,10 @@ name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
+dependencies = [
+ "ahash",
+ "allocator-api2",
+]
 
 [[package]]
 name = "heck"
@@ -1324,9 +1315,17 @@ dependencies = [
  "move-core-types",
  "move-stdlib",
  "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
  "once_cell",
+]
+
+[[package]]
+name = "lasso"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e14eda50a3494b3bf7b9ce51c52434a761e383d7238ce1dd5dcec2fbc13e9fb"
+dependencies = [
+ "dashmap",
+ "hashbrown 0.14.5",
 ]
 
 [[package]]
@@ -1510,13 +1509,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-abstract-interpreter-v2"
-version = "0.1.0"
-dependencies = [
- "move-binary-format",
-]
-
-[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -1622,51 +1614,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-bytecode-verifier-v0"
-version = "0.1.0"
-dependencies = [
- "hex-literal",
- "move-abstract-interpreter-v2",
- "move-abstract-stack",
- "move-binary-format",
- "move-borrow-graph",
- "move-bytecode-verifier-meter",
- "move-core-types",
- "move-vm-config",
- "petgraph",
-]
-
-[[package]]
-name = "move-bytecode-verifier-v1"
-version = "0.1.0"
-dependencies = [
- "hex-literal",
- "move-abstract-interpreter-v2",
- "move-abstract-stack",
- "move-binary-format",
- "move-borrow-graph",
- "move-bytecode-verifier-meter",
- "move-core-types",
- "move-vm-config",
- "petgraph",
-]
-
-[[package]]
-name = "move-bytecode-verifier-v2"
-version = "0.1.0"
-dependencies = [
- "hex-literal",
- "move-abstract-interpreter-v2",
- "move-abstract-stack",
- "move-binary-format",
- "move-borrow-graph",
- "move-bytecode-verifier-meter",
- "move-core-types",
- "move-vm-config",
- "petgraph",
-]
-
-[[package]]
 name = "move-bytecode-viewer"
 version = "0.1.0"
 dependencies = [
@@ -1708,8 +1655,6 @@ dependencies = [
  "move-unit-test",
  "move-vm-profiler",
  "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
  "serde_yaml",
  "tempfile",
  "toml_edit 0.14.4",
@@ -2082,48 +2027,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-stdlib-natives-v0"
-version = "0.1.1"
-dependencies = [
- "hex",
- "move-binary-format",
- "move-core-types",
- "move-vm-runtime-v0",
- "move-vm-types",
- "sha2",
- "sha3",
- "smallvec",
-]
-
-[[package]]
-name = "move-stdlib-natives-v1"
-version = "0.1.1"
-dependencies = [
- "hex",
- "move-binary-format",
- "move-core-types",
- "move-vm-runtime-v1",
- "move-vm-types",
- "sha2",
- "sha3",
- "smallvec",
-]
-
-[[package]]
-name = "move-stdlib-natives-v2"
-version = "0.1.1"
-dependencies = [
- "hex",
- "move-binary-format",
- "move-core-types",
- "move-vm-runtime-v2",
- "move-vm-types",
- "sha2",
- "sha3",
- "smallvec",
-]
-
-[[package]]
 name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
@@ -2155,8 +2058,6 @@ dependencies = [
  "move-symbol-pool",
  "move-vm-config",
  "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
  "once_cell",
  "rayon",
  "regex",
@@ -2188,9 +2089,8 @@ dependencies = [
  "move-symbol-pool",
  "move-vm-profiler",
  "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
  "once_cell",
+ "parking_lot 0.11.2",
  "rand 0.8.5",
  "rayon",
  "regex",
@@ -2202,27 +2102,6 @@ version = "0.1.0"
 dependencies = [
  "move-binary-format",
  "once_cell",
-]
-
-[[package]]
-name = "move-vm-integration-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fail",
- "memory-stats",
- "move-binary-format",
- "move-bytecode-verifier",
- "move-compiler",
- "move-core-types",
- "move-ir-to-bytecode",
- "move-stdlib",
- "move-vm-config",
- "move-vm-profiler",
- "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
- "tempfile",
 ]
 
 [[package]]
@@ -2241,109 +2120,32 @@ name = "move-vm-runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "better_any",
  "bumpalo",
  "fail",
  "hex",
+ "lasso",
+ "memory-stats",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-compiler",
  "move-core-types",
  "move-ir-compiler",
+ "move-ir-to-bytecode",
+ "move-stdlib",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-test-utils",
- "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
  "petgraph",
  "proptest",
+ "serde",
  "sha2",
  "sha3",
  "smallvec",
+ "tempfile",
  "tracing",
-]
-
-[[package]]
-name = "move-vm-runtime-v0"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "better_any",
- "fail",
- "hex",
- "move-binary-format",
- "move-bytecode-verifier-v0",
- "move-compiler",
- "move-core-types",
- "move-ir-compiler",
- "move-vm-config",
- "move-vm-profiler",
- "move-vm-types",
- "once_cell",
- "parking_lot 0.11.2",
- "proptest",
- "smallvec",
- "tracing",
-]
-
-[[package]]
-name = "move-vm-runtime-v1"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "better_any",
- "fail",
- "hex",
- "move-binary-format",
- "move-bytecode-verifier-v1",
- "move-compiler",
- "move-core-types",
- "move-ir-compiler",
- "move-vm-config",
- "move-vm-profiler",
- "move-vm-types",
- "once_cell",
- "parking_lot 0.11.2",
- "proptest",
- "smallvec",
- "tracing",
-]
-
-[[package]]
-name = "move-vm-runtime-v2"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "better_any",
- "fail",
- "hex",
- "move-binary-format",
- "move-bytecode-verifier-v2",
- "move-compiler",
- "move-core-types",
- "move-ir-compiler",
- "move-vm-config",
- "move-vm-profiler",
- "move-vm-types",
- "once_cell",
- "parking_lot 0.11.2",
- "proptest",
- "smallvec",
- "tracing",
-]
-
-[[package]]
-name = "move-vm-test-utils"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "move-binary-format",
- "move-core-types",
- "move-vm-profiler",
- "move-vm-types",
- "once_cell",
- "serde",
 ]
 
 [[package]]
@@ -2352,19 +2154,6 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "move-transactional-test-runner",
-]
-
-[[package]]
-name = "move-vm-types"
-version = "0.1.0"
-dependencies = [
- "bcs",
- "move-binary-format",
- "move-core-types",
- "move-vm-profiler",
- "proptest",
- "serde",
- "smallvec",
 ]
 
 [[package]]
@@ -3255,6 +3044,7 @@ dependencies = [
 name = "serializer-tests"
 version = "0.1.0"
 dependencies = [
+ "bcs",
  "move-binary-format",
  "proptest",
  "proptest-derive",
@@ -3537,8 +3327,6 @@ dependencies = [
  "move-core-types",
  "move-stdlib",
  "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
  "num_cpus",
  "once_cell",
  "rand 0.8.5",
@@ -4207,6 +3995,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.7.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
+dependencies = [
+ "zerocopy-derive",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.7.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
+dependencies = [
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
 ]
 
 [[package]]

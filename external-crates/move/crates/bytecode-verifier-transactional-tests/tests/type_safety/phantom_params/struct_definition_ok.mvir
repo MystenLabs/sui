@@ -24,7 +24,7 @@ module 0x1.M1 {
 }
 
 //# publish
-module 0x1.M2 {
+module 0x2.M2 {
     import 0x1.M1;
 
     // Phantom position across modules
@@ -34,7 +34,7 @@ module 0x1.M2 {
 }
 
 //# publish
-module 0x1.M3 {
+module 0x3.M3 {
     // Phantom parameters should be allowed to be declared with constraints.
 
     struct S1<phantom T: copy> {
@@ -47,7 +47,7 @@ module 0x1.M3 {
 }
 
 //# publish
-module 0x2.M1 {
+module 0x4.M1 {
     // Not using a phantom parameter at all is ok.
     enum S1<phantom T> {
         V { a: u64 }
@@ -76,8 +76,8 @@ module 0x2.M1 {
 }
 
 //# publish
-module 0x2.M2 {
-    import 0x2.M1;
+module 0x5.M2 {
+    import 0x4.M1;
 
     // Phantom position across modules
     enum S<phantom T> {
@@ -86,7 +86,7 @@ module 0x2.M2 {
 }
 
 //# publish
-module 0x2.M3 {
+module 0x5.M3 {
     // Phantom parameters should be allowed to be declared with constraints.
 
     enum S1<phantom T: copy> {
@@ -99,7 +99,7 @@ module 0x2.M3 {
 }
 
 //# publish
-module 0x2.M4 {
+module 0x6.M4 {
     import 0x1.M1;
 
     // Phantom position across modules
