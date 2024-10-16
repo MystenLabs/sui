@@ -20,9 +20,18 @@ RUN ./new-genesis.sh
 RUN echo "SUI_NODE_A_TAG=$SUI_NODE_A_TAG" >> /.env
 RUN echo "SUI_NODE_B_TAG=$SUI_NODE_B_TAG" >> /.env
 
+COPY ./docker-compose-antithesis.yaml /docker-compose.yaml
+RUN <<EOF
+sed 's/sui-node-alt:${SUI_NODE_B_TAG}/sui-node:${SUI_NODE_A_TAG}/' < /docker-compose.yaml > docker-compose-1.yaml
+sed 's/sui-node:${SUI_NODE_A_TAG}/sui-node-alt:${SUI_NODE_B_TAG}/' < /docker-compose.yaml > docker-compose-2.yaml
+EOF
+
 FROM scratch
 
-COPY ./docker-compose-antithesis.yaml /docker-compose.yaml
+COPY --from=setup /docker-compose-1.yaml /docker-compose-1.yaml
+COPY --from=setup /docker-compose-2.yaml /docker-compose-2.yaml
+COPY --from=setup /docker-compose.yaml /docker-compose.yaml
+
 COPY /genesis/overlays/* /genesis/overlays/
 COPY /genesis/static/* /genesis/static/
 COPY --from=setup /genesis/files/* /genesis/files/
