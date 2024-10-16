@@ -214,6 +214,7 @@ pub struct SuiNode {
     metrics: Arc<SuiNodeMetrics>,
 
     _discovery: discovery::Handle,
+    _connection_monitor_handle: consensus_core::ConnectionMonitorHandle,
     state_sync_handle: state_sync::Handle,
     randomness_handle: randomness::Handle,
     checkpoint_store: Arc<CheckpointStore>,
@@ -809,6 +810,7 @@ impl SuiNode {
             metrics: sui_node_metrics,
 
             _discovery: discovery_handle,
+            _connection_monitor_handle: connection_monitor_handle,
             state_sync_handle,
             randomness_handle,
             checkpoint_store,
