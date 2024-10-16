@@ -5,6 +5,7 @@ use super::*;
 use crate::authority::authority_store::LockDetailsWrapperDeprecated;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use tidehunter::key_shape::KeySpaceConfig;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
@@ -23,7 +24,7 @@ use crate::authority::authority_store_types::{
     StoreMoveObjectWrapper, StoreObject, StoreObjectPair, StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use typed_store::tidehunter::th_db_map::{open_thdb, ThDbBatch, ThDbMap};
+use typed_store::tidehunter::th_db_map::{key_shape_builder, open_thdb, ThDbBatch, ThDbMap};
 use typed_store::DBMapUtils;
 
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
@@ -130,7 +131,6 @@ pub struct AuthorityPerpetualTables {
     /// This number is the result of storage_fund_balance - sum(storage_rebate).
     pub(crate) expected_storage_fund_imbalance: ThDbMap<(), i64>,
 
-    // todo rework this table for ThDbMap - all keys will go to the same bucket currently
     /// Table that stores the set of received objects and deleted objects and the version at
     /// which they were received. This is used to prevent possible race conditions around receiving
     /// objects (since they are not locked by the transaction manager) and for tracking shared
@@ -186,23 +186,50 @@ impl AuthorityPerpetualTables {
             ),
         ]));
         let path = Self::path(parent_path);
-        let thdb = open_thdb(&path, registry);
-        let kfs = 4;
+
+        // todo - update those values when adding new space
+        let const_spaces = 6;
+        let frac_spaces = 8;
+        let mut builder = key_shape_builder(const_spaces, frac_spaces);
+        // 6 const key spaces
+        let root_state_hash_by_epoch = builder.const_key_space(1);
+        let epoch_start_configuration = builder.const_key_space(1);
+        let pruned_checkpoint = builder.const_key_space(1);
+        let expected_network_sui_amount = builder.const_key_space(1);
+        let expected_storage_fund_imbalance = builder.const_key_space(1);
+        // todo chop off too?
+        // decide what to do with it - make it frac_key_space or get rid of?
+        let indirect_move_objects = builder.const_key_space(1);
+
+        // 8 frac key spaces
+        let objects = builder.frac_key_space(1);
+        let live_owned_object_markers = builder.frac_key_space(1);
+        let transactions = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
+        let effects = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
+        let executed_effects = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
+        let events = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
+        let executed_transactions_to_checkpoint = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
+
+        // key_offset is set to 8 to hash by object id rather then epoch
+        let object_per_epoch_marker_table = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
+
+        let key_shape = builder.build();
+        let thdb = open_thdb(&path, key_shape, const_spaces, registry);
         Self {
-            objects: ThDbMap::new(&thdb, (0, kfs, 0)),
-            indirect_move_objects: ThDbMap::new(&thdb, (1, kfs, 0)), // todo chop off too?
-            live_owned_object_markers: ThDbMap::new(&thdb, (2, kfs, 0)),
-            transactions: ThDbMap::new(&thdb, (3, kfs, 8)),
-            effects: ThDbMap::new(&thdb, (4, kfs, 8)),
-            executed_effects: ThDbMap::new(&thdb, (5, kfs, 8)),
-            events: ThDbMap::new(&thdb, (6, kfs, 8)),
-            executed_transactions_to_checkpoint: ThDbMap::new(&thdb, (7, kfs, 8)),
-            root_state_hash_by_epoch: ThDbMap::new(&thdb, (8, kfs, 0)),
-            epoch_start_configuration: ThDbMap::new(&thdb, (9, kfs, 0)),
-            pruned_checkpoint: ThDbMap::new(&thdb, (10, kfs, 0)),
-            expected_network_sui_amount: ThDbMap::new(&thdb, (11, kfs, 0)),
-            expected_storage_fund_imbalance: ThDbMap::new(&thdb, (12, kfs, 0)),
-            object_per_epoch_marker_table: ThDbMap::new(&thdb, (13, kfs, 0)),
+            objects: ThDbMap::new(&thdb, objects),
+            indirect_move_objects: ThDbMap::new(&thdb, indirect_move_objects),
+            live_owned_object_markers: ThDbMap::new(&thdb, live_owned_object_markers),
+            transactions: ThDbMap::new(&thdb, transactions),
+            effects: ThDbMap::new(&thdb, effects),
+            executed_effects: ThDbMap::new(&thdb, executed_effects),
+            events: ThDbMap::new(&thdb, events),
+            executed_transactions_to_checkpoint: ThDbMap::new(&thdb, executed_transactions_to_checkpoint),
+            root_state_hash_by_epoch: ThDbMap::new(&thdb, root_state_hash_by_epoch),
+            epoch_start_configuration: ThDbMap::new(&thdb, epoch_start_configuration),
+            pruned_checkpoint: ThDbMap::new(&thdb, pruned_checkpoint),
+            expected_network_sui_amount: ThDbMap::new(&thdb, expected_network_sui_amount),
+            expected_storage_fund_imbalance: ThDbMap::new(&thdb, expected_storage_fund_imbalance),
+            object_per_epoch_marker_table: ThDbMap::new(&thdb, object_per_epoch_marker_table),
         }
     }
 
