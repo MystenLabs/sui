@@ -1,9 +1,9 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
-assertion_line: 3148
+assertion_line: 3149
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 64
+version: 65
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
