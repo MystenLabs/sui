@@ -261,7 +261,7 @@ macro_rules! profile_open_frame_impl {
             if let Some(profiler) = $profiler {
                 if let Some(config) = &profiler.config {
                     let name = if !config.use_long_function_name {
-                        GasProfiler::short_name(&$frame_name)
+                        $crate::GasProfiler::short_name(&$frame_name)
                     } else {
                         $frame_name
                     };
@@ -295,7 +295,7 @@ macro_rules! profile_close_frame_impl {
             if let Some(profiler) = $profiler {
                 if let Some(config) = &profiler.config {
                     let name = if !config.use_long_function_name {
-                        GasProfiler::short_name(&$frame_name)
+                        $crate::GasProfiler::short_name(&$frame_name)
                     } else {
                         $frame_name
                     };
