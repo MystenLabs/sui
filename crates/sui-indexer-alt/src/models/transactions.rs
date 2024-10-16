@@ -24,7 +24,7 @@ pub enum BalanceChange {
 #[derive(Insertable, Debug, Clone)]
 #[diesel(table_name = kv_transactions)]
 pub struct StoredTransaction {
-    pub tx_sequence_number: i64,
+    pub tx_digest: Vec<u8>,
     pub cp_sequence_number: i64,
     pub timestamp_ms: i64,
     pub raw_transaction: Vec<u8>,
