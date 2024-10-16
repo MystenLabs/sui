@@ -30,26 +30,28 @@ impl Handler for KvTransactions {
             ..
         } = checkpoint.as_ref();
 
-        let mut values = Vec::with_capacity(transactions.len());
-        let first_tx = checkpoint_summary.network_total_transactions as usize - transactions.len();
+        let cp_sequence_number = checkpoint_summary.sequence_number as i64;
 
+        let mut values = Vec::with_capacity(transactions.len());
         for (i, tx) in transactions.iter().enumerate() {
-            let tx_sequence_number = (first_tx + i) as i64;
+            let tx_digest = tx.transaction.digest();
             let transaction = &tx.transaction.data().intent_message().value;
+
             let effects = &tx.effects;
             let events: Vec<_> = tx.events.iter().flat_map(|e| e.data.iter()).collect();
 
             values.push(StoredTransaction {
-                tx_sequence_number: (first_tx + i) as i64,
-                cp_sequence_number: checkpoint_summary.sequence_number as i64,
+                tx_digest: tx_digest.inner().into(),
+                cp_sequence_number,
                 timestamp_ms: checkpoint_summary.timestamp_ms as i64,
-                raw_transaction: bcs::to_bytes(transaction)
-                    .with_context(|| format!("Serializing transaction {tx_sequence_number}"))?,
+                raw_transaction: bcs::to_bytes(transaction).with_context(|| {
+                    format!("Serializing transaction {tx_digest} (cp {cp_sequence_number}, tx {i})")
+                })?,
                 raw_effects: bcs::to_bytes(effects).with_context(|| {
-                    format!("Serializing effects for transaction {tx_sequence_number}")
+                    format!("Serializing effects for transaction {tx_digest} (cp {cp_sequence_number}, tx {i})")
                 })?,
                 events: bcs::to_bytes(&events).with_context(|| {
-                    format!("Serializing events for transaction {tx_sequence_number}")
+                    format!("Serializing events for transaction {tx_digest} (cp {cp_sequence_number}, tx {i})")
                 })?,
             });
         }

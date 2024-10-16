@@ -19,8 +19,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    kv_transactions (tx_sequence_number) {
-        tx_sequence_number -> Int8,
+    kv_transactions (tx_digest) {
+        tx_digest -> Bytea,
         cp_sequence_number -> Int8,
         timestamp_ms -> Int8,
         raw_transaction -> Bytea,
