@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::{Display, Formatter};
+use strum_macros::Display;
 
 use sui_types::base_types::{SuiAddress, TransactionDigest};
 
+use crate::models::GovernanceAction as DBGovernanceAction;
 use crate::models::TokenTransferData as DBTokenTransferData;
 use crate::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 

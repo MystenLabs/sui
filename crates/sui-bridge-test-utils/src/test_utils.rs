@@ -17,6 +17,17 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_bridge::abi::EthBridgeCommittee;
+use sui_bridge::abi::EthBridgeConfig;
+use sui_bridge::config::default_ed25519_key_pair;
+use sui_bridge::crypto::BridgeAuthorityKeyPair;
+use sui_bridge::crypto::BridgeAuthorityPublicKeyBytes;
+use sui_bridge::events::*;
+use sui_bridge::metrics::BridgeMetrics;
+use sui_bridge::server::BridgeNodePublicMetadata;
+use sui_bridge::types::BridgeAction;
+use sui_bridge::utils::get_eth_signer_client;
+use sui_bridge::utils::EthSigner;
 use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
@@ -38,19 +49,9 @@ use tracing::info;
 
 use ethers::prelude::*;
 use std::process::Child;
-use sui_bridge::abi::{EthBridgeCommittee, EthBridgeConfig};
-use sui_bridge::config::{default_ed25519_key_pair, BridgeNodeConfig, EthConfig, SuiConfig};
-use sui_bridge::crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKeyBytes};
-use sui_bridge::events::{
-    init_all_struct_tags, TokenTransferAlreadyApproved, TokenTransferAlreadyClaimed,
-    TokenTransferApproved, TokenTransferClaimed,
-};
-use sui_bridge::metrics::BridgeMetrics;
+use sui_bridge::config::{BridgeNodeConfig, EthConfig, SuiConfig};
 use sui_bridge::node::run_bridge_node;
-use sui_bridge::server::BridgeNodePublicMetadata;
 use sui_bridge::sui_client::SuiBridgeClient;
-use sui_bridge::types::BridgeAction;
-use sui_bridge::utils::{get_eth_signer_client, EthSigner};
 use sui_bridge::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use sui_config::local_ip_utils::get_available_port;
 use sui_sdk::SuiClient;
@@ -695,9 +696,11 @@ impl EthBridgeEnvironment {
         self.contracts.as_ref().unwrap()
     }
 
-    pub(crate) fn get_bridge_config(&self) -> EthBridgeConfig<Provider<Http>> {
+    pub(crate) fn get_bridge_config(
+        &self,
+    ) -> EthBridgeConfig<ethers::prelude::Provider<ethers::providers::Http>> {
         let provider = Arc::new(
-            ethers::prelude::Provider::<Http>::try_from(&self.rpc_url)
+            ethers::prelude::Provider::<ethers::providers::Http>::try_from(&self.rpc_url)
                 .unwrap()
                 .interval(std::time::Duration::from_millis(2000)),
         );

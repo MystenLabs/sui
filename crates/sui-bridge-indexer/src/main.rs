@@ -3,7 +3,9 @@
 
 use anyhow::Result;
 use clap::*;
+use ethers::providers::{Http, Provider};
 use ethers::types::Address as EthAddress;
+use prometheus::Registry;
 use std::collections::HashSet;
 use std::env;
 use std::net::IpAddr;
@@ -12,9 +14,12 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::eth_client::EthClient;
-use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
+use sui_bridge::metered_eth_provider::{new_metered_eth_provider, MeteredEthHttpProvier};
+use sui_bridge::sui_client::SuiBridgeClient;
+use sui_bridge::utils::get_eth_contract_addresses;
 use sui_bridge_indexer::eth_bridge_indexer::EthFinalizedSyncDatasource;
 use sui_bridge_indexer::eth_bridge_indexer::EthSubscriptionDatasource;
+use sui_config::Config;
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -128,10 +133,6 @@ async fn main() -> Result<()> {
             eth_client.clone(),
             config.eth_ws_url.clone(),
             indexer_meterics.clone(),
-            &config,
-            eth_client.clone(),
-            config.eth_ws_url.clone(),
-            indexer_meterics.clone(),
             config.eth_bridge_genesis_block,
         )
         .await?;
@@ -189,7 +190,15 @@ async fn main() -> Result<()> {
             .unwrap_or(tempfile::tempdir()?.into_path()),
         config.sui_bridge_genesis_checkpoint,
         ingestion_metrics.clone(),
-        &config,
+        indexer_meterics.clone(),
+    );
+    let indexer = IndexerBuilder::new(
+        "SuiBridgeIndexer",
+        sui_checkpoint_datasource,
+        SuiBridgeDataMapper {
+            metrics: indexer_meterics.clone(),
+        },
+        datastore_with_out_of_order_source,
     )
     .build();
     tasks.push(spawn_logged_monitored_task!(indexer.start()));
