@@ -47,6 +47,11 @@ macro_rules! record_src_loc {
             .source_map
             .add_parameter_mapping($context.current_function_definition_index(), source_name)?;
     }};
+    (return_: $context:expr, $_type:expr) => {{
+        $context
+            .source_map
+            .add_return_mapping($context.current_function_definition_index(), $_type.loc)?;
+    }};
     (field: $context:expr, $idx: expr, $field:expr) => {{
         $context
             .source_map
@@ -882,6 +887,7 @@ fn compile_function_body_impl(
                 context,
                 m,
                 ast_function.signature.formals,
+                ast_function.signature.return_type,
                 locals,
                 code,
             )?)
@@ -898,6 +904,7 @@ fn compile_function_body_impl(
                 context,
                 m,
                 ast_function.signature.formals,
+                ast_function.signature.return_type,
                 locals,
                 code,
             )?)
@@ -906,6 +913,9 @@ fn compile_function_body_impl(
         FunctionBody::Native => {
             for (var, _) in ast_function.signature.formals.into_iter() {
                 record_src_loc!(parameter: context, var)
+            }
+            for _type in ast_function.signature.return_type.into_iter() {
+                record_src_loc!(return_: context, _type)
             }
             None
         }
@@ -954,6 +964,7 @@ fn compile_function_body(
     context: &mut Context,
     type_parameters: HashMap<TypeVar_, TypeParameterIndex>,
     formals: Vec<(Var, Type)>,
+    return_type: Vec<Type>,
     locals: Vec<(Var, Type)>,
     blocks: Vec<Block>,
 ) -> Result<CodeUnit> {
@@ -964,6 +975,9 @@ fn compile_function_body(
         record_src_loc!(parameter: context, var);
     }
 
+    for _type in return_type {
+        record_src_loc!(return_: context, _type);
+    }
     let mut locals_signature = Signature(vec![]);
     for (var_, t) in locals {
         let sig = compile_type(context, function_frame.type_parameters(), &t)?;
@@ -1716,6 +1730,7 @@ fn compile_function_body_bytecode(
     context: &mut Context,
     type_parameters: HashMap<TypeVar_, TypeParameterIndex>,
     formals: Vec<(Var, Type)>,
+    return_type: Vec<Type>,
     locals: Vec<(Var, Type)>,
     blocks: BytecodeBlocks,
 ) -> Result<CodeUnit> {
@@ -1725,6 +1740,9 @@ fn compile_function_body_bytecode(
         let sig = compile_type(context, function_frame.type_parameters(), &t)?;
         function_frame.define_local(&var.value, sig.clone())?;
         record_src_loc!(parameter: context, var);
+    }
+    for _type in return_type {
+        record_src_loc!(return_: context, _type);
     }
     for (var_, t) in locals {
         let sig = compile_type(context, function_frame.type_parameters(), &t)?;
