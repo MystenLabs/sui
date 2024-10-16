@@ -200,7 +200,8 @@ impl AuthorityPerpetualTables {
         // todo chop off too?
         // decide what to do with it - make it frac_key_space or get rid of?
         let indirect_move_objects = builder.const_key_space(1);
-
+        // todo - this is very confusing - need to fix
+        let const_spaces_round_up = builder.pad_const_space();
         // 8 frac key spaces
         let objects = builder.frac_key_space(1);
         let live_owned_object_markers = builder.frac_key_space(1);
@@ -214,7 +215,7 @@ impl AuthorityPerpetualTables {
         let object_per_epoch_marker_table = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
 
         let key_shape = builder.build();
-        let thdb = open_thdb(&path, key_shape, const_spaces, registry);
+        let thdb = open_thdb(&path, key_shape, const_spaces_round_up, registry);
         Self {
             objects: ThDbMap::new(&thdb, objects),
             indirect_move_objects: ThDbMap::new(&thdb, indirect_move_objects),
