@@ -56,7 +56,7 @@ where
             let epoch = checkpoint.epoch.clone();
             batch.push(checkpoint);
             next_checkpoint_sequence_number += 1;
-            let epoch_number_option = epoch.as_ref().map(|epoch| epoch.new_epoch.epoch);
+            let epoch_number_option = epoch.as_ref().map(|epoch| epoch.new_epoch_id());
             // The batch will consist of contiguous checkpoints and at most one epoch boundary at
             // the end.
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {

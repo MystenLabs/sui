@@ -62,6 +62,7 @@ diesel::table! {
         leftover_storage_fund_inflow -> Nullable<Int8>,
         epoch_commitments -> Nullable<Bytea>,
         system_state_summary_json -> Nullable<Jsonb>,
+        first_tx_sequence_number -> Nullable<Int8>,
     }
 }
 
