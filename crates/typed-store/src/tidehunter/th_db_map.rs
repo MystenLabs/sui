@@ -1,6 +1,7 @@
 use crate::rocks::be_fix_int_ser;
 use crate::Map;
 use bincode::Options;
+use eyre::format_err;
 use prometheus::Registry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -10,7 +11,6 @@ use std::marker::PhantomData;
 use std::ops::{Bound, RangeBounds};
 use std::path::Path;
 use std::sync::Arc;
-use eyre::format_err;
 use tidehunter::batch::WriteBatch;
 use tidehunter::config::Config;
 use tidehunter::db::{Db, DbError};
@@ -110,7 +110,8 @@ impl ThDbBatch {
             "Cross db batch calls not allowed"
         );
         for (k, v) in new_vals {
-            self.batch.write(db.ks, db.serialize_key(k), db.serialize_value(v));
+            self.batch
+                .write(db.ks, db.serialize_key(k), db.serialize_value(v));
         }
         Ok(self)
     }
@@ -139,15 +140,16 @@ impl ThDbBatch {
             .map_err(typed_store_error_from_db_error)
     }
 
-    pub fn schedule_delete_range_inclusive<K: Serialize + DeserializeOwned, V: Serialize + DeserializeOwned>(
+    pub fn schedule_delete_range_inclusive<
+        K: Serialize + DeserializeOwned,
+        V: Serialize + DeserializeOwned,
+    >(
         &mut self,
         db: &ThDbMap<K, V>,
         from: &K,
         to: &K,
     ) -> Result<(), TypedStoreError> {
-        let delete: Vec<_> = db.range_iter(from..=to)
-            .map(|(k, _)|k)
-            .collect();
+        let delete: Vec<_> = db.range_iter(from..=to).map(|(k, _)| k).collect();
         self.delete_batch(&db, delete)?;
         Ok(())
     }
@@ -173,7 +175,10 @@ where
 
     fn get(&self, key: &K) -> Result<Option<V>, Self::Error> {
         let key = self.serialize_key(key);
-        let v = self.db.get(self.ks, &key).map_err(typed_store_error_from_db_error)?;
+        let v = self
+            .db
+            .get(self.ks, &key)
+            .map_err(typed_store_error_from_db_error)?;
         if let Some(v) = v {
             Ok(Some(self.deserialize_value(&v)))
         } else {
@@ -183,7 +188,10 @@ where
 
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error> {
         let key = self.serialize_key(key);
-        let v = self.db.get(self.ks, &key).map_err(typed_store_error_from_db_error)?;
+        let v = self
+            .db
+            .get(self.ks, &key)
+            .map_err(typed_store_error_from_db_error)?;
         Ok(v.map(|v| v.into_vec()))
     }
 
@@ -197,7 +205,9 @@ where
 
     fn remove(&self, key: &K) -> Result<(), Self::Error> {
         let key = self.serialize_key(key);
-        self.db.remove(self.ks, key).map_err(typed_store_error_from_db_error)
+        self.db
+            .remove(self.ks, key)
+            .map_err(typed_store_error_from_db_error)
     }
 
     fn unsafe_clear(&self) -> Result<(), Self::Error> {
@@ -265,12 +275,16 @@ where
         let start = self.serialize_key(start).into();
         let end = self.serialize_key(end).into();
 
-        Box::new(self.db.range_ordered_iterator(self.ks, start..end).map(|r| {
-            let (k, v) = r.unwrap();
-            let key = self.deserialize_key(&k);
-            let value = self.deserialize_value(&v);
-            Ok((key, value))
-        }))
+        Box::new(
+            self.db
+                .range_ordered_iterator(self.ks, start..end)
+                .map(|r| {
+                    let (k, v) = r.unwrap();
+                    let key = self.deserialize_key(&k);
+                    let value = self.deserialize_value(&v);
+                    Ok((key, value))
+                }),
+        )
     }
 
     fn keys(&'a self) -> Self::Keys {
@@ -295,11 +309,23 @@ fn deserialize_key<K: DeserializeOwned>(v: &[u8]) -> K {
         .with_big_endian()
         .with_fixint_encoding()
         .deserialize(v)
-        .map_err(|err|format_err!("Error {:?} while deserializing {:?}({} bytes)", err, v, v.len()))
+        .map_err(|err| {
+            format_err!(
+                "Error {:?} while deserializing {:?}({} bytes)",
+                err,
+                v,
+                v.len()
+            )
+        })
         .unwrap()
 }
 
-pub fn open_thdb(path: &Path, key_shape: KeyShape, const_spaces: usize, registry: &Registry) -> Arc<Db> {
+pub fn open_thdb(
+    path: &Path,
+    key_shape: KeyShape,
+    const_spaces: usize,
+    registry: &Registry,
+) -> Arc<Db> {
     fs::create_dir_all(path).unwrap();
     let metrics = Metrics::new_in(registry);
     let config = thdb_config(const_spaces);
@@ -343,5 +369,4 @@ fn modify_frag_size(config: &mut Config) {
 }
 
 #[cfg(debug_assertions)]
-fn modify_frag_size(_config: &mut Config) {
-}
+fn modify_frag_size(_config: &mut Config) {}
