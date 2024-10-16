@@ -57,8 +57,6 @@ pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use mysten_service::server_timing::server_timing_middleware;
-use narwhal_network::metrics::MetricsMakeCallbackHandler;
-use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
@@ -231,6 +229,7 @@ pub struct SuiNode {
     metrics: Arc<SuiNodeMetrics>,
 
     _discovery: discovery::Handle,
+    _connection_monitor_handle: consensus_core::ConnectionMonitorHandle,
     state_sync_handle: state_sync::Handle,
     randomness_handle: randomness::Handle,
     checkpoint_store: Arc<CheckpointStore>,
@@ -769,21 +768,22 @@ impl SuiNode {
             .epoch_start_state()
             .get_authority_names_to_peer_ids();
 
-        let network_connection_metrics =
-            NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
+        let network_connection_metrics = consensus_core::QuinnConnectionMetrics::new(
+            "sui",
+            &registry_service.default_registry(),
+        );
 
         let authority_names_to_peer_ids = ArcSwap::from_pointee(authority_names_to_peer_ids);
 
-        let (_connection_monitor_handle, connection_statuses) =
-            narwhal_network::connectivity::ConnectionMonitor::spawn(
-                p2p_network.downgrade(),
-                network_connection_metrics,
-                HashMap::new(),
-                None,
-            );
+        let connection_monitor_handle = consensus_core::AnemoConnectionMonitor::spawn(
+            p2p_network.downgrade(),
+            Arc::new(network_connection_metrics),
+            // TODO: add known seed peers via discovery so metrics will update.
+            HashMap::new(),
+        );
 
         let connection_monitor_status = ConnectionMonitorStatus {
-            connection_statuses,
+            connection_statuses: connection_monitor_handle.connection_statuses(),
             authority_names_to_peer_ids,
         };
 
@@ -826,6 +826,7 @@ impl SuiNode {
             metrics: sui_node_metrics,
 
             _discovery: discovery_handle,
+            _connection_monitor_handle: connection_monitor_handle,
             state_sync_handle,
             randomness_handle,
             checkpoint_store,
@@ -1055,9 +1056,9 @@ impl SuiNode {
             let routes = routes.merge(randomness_router);
 
             let inbound_network_metrics =
-                NetworkMetrics::new("sui", "inbound", prometheus_registry);
+                consensus_core::NetworkRouteMetrics::new("sui", "inbound", prometheus_registry);
             let outbound_network_metrics =
-                NetworkMetrics::new("sui", "outbound", prometheus_registry);
+                consensus_core::NetworkRouteMetrics::new("sui", "outbound", prometheus_registry);
 
             let service = ServiceBuilder::new()
                 .layer(
@@ -1065,10 +1066,12 @@ impl SuiNode {
                         .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
                         .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
                 )
-                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                    Arc::new(inbound_network_metrics),
-                    config.p2p_config.excessive_message_size(),
-                )))
+                .layer(CallbackLayer::new(
+                    consensus_core::MetricsMakeCallbackHandler::new(
+                        Arc::new(inbound_network_metrics),
+                        config.p2p_config.excessive_message_size(),
+                    ),
+                ))
                 .service(routes);
 
             let outbound_layer = ServiceBuilder::new()
@@ -1077,10 +1080,12 @@ impl SuiNode {
                         .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
                         .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
                 )
-                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                    Arc::new(outbound_network_metrics),
-                    config.p2p_config.excessive_message_size(),
-                )))
+                .layer(CallbackLayer::new(
+                    consensus_core::MetricsMakeCallbackHandler::new(
+                        Arc::new(outbound_network_metrics),
+                        config.p2p_config.excessive_message_size(),
+                    ),
+                ))
                 .into_inner();
 
             let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
@@ -1695,7 +1700,7 @@ impl SuiNode {
                 consensus_store_pruner.prune(next_epoch).await;
 
                 if self.state.is_validator(&new_epoch_store) {
-                    // Only restart Narwhal if this node is still a validator in the new epoch.
+                    // Only restart consensus if this node is still a validator in the new epoch.
                     Some(
                         Self::start_epoch_specific_validator_components(
                             &self.config,
