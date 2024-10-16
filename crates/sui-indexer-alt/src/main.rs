@@ -6,7 +6,10 @@ use clap::Parser;
 use sui_indexer_alt::{
     args::Args,
     db::Db,
-    handlers::{kv_checkpoints::KvCheckpoints, kv_objects::KvObjects, pipeline},
+    handlers::{
+        kv_checkpoints::KvCheckpoints, kv_objects::KvObjects, kv_transactions::KvTransactions,
+        pipeline,
+    },
     ingestion::IngestionService,
     metrics::MetricsService,
     task::graceful_shutdown,
@@ -54,6 +57,14 @@ async fn main() -> Result<()> {
         cancel.clone(),
     );
 
+    let (h_tx_handler, h_tx_committer) = pipeline::<KvTransactions>(
+        db.clone(),
+        ingestion_service.subscribe(),
+        args.committer.clone(),
+        metrics.clone(),
+        cancel.clone(),
+    );
+
     let h_ingestion = ingestion_service
         .run()
         .await
@@ -67,6 +78,8 @@ async fn main() -> Result<()> {
             h_cp_committer,
             h_obj_handler,
             h_obj_committer,
+            h_tx_handler,
+            h_tx_committer,
             h_metrics,
             h_ingestion,
         ],
