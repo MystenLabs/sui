@@ -1,3 +1,5 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
@@ -28,8 +30,17 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    tx_affected_objects (affected, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        affected -> Bytea,
+        sender -> Bytea,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     kv_checkpoints,
     kv_objects,
     kv_transactions,
+    tx_affected_objects,
 );

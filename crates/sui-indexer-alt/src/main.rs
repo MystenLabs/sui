@@ -8,7 +8,7 @@ use sui_indexer_alt::{
     db::Db,
     handlers::{
         kv_checkpoints::KvCheckpoints, kv_objects::KvObjects, kv_transactions::KvTransactions,
-        pipeline,
+        pipeline, tx_affected_objects::TxAffectedObjects,
     },
     ingestion::IngestionService,
     metrics::MetricsService,
@@ -65,6 +65,14 @@ async fn main() -> Result<()> {
         cancel.clone(),
     );
 
+    let (h_tx_objs_handler, h_tx_objs_committer) = pipeline::<TxAffectedObjects>(
+        db.clone(),
+        ingestion_service.subscribe(),
+        args.committer.clone(),
+        metrics.clone(),
+        cancel.clone(),
+    );
+
     let h_ingestion = ingestion_service
         .run()
         .await
@@ -80,6 +88,8 @@ async fn main() -> Result<()> {
             h_obj_committer,
             h_tx_handler,
             h_tx_committer,
+            h_tx_objs_handler,
+            h_tx_objs_committer,
             h_metrics,
             h_ingestion,
         ],
