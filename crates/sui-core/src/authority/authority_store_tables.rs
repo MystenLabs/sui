@@ -192,27 +192,27 @@ impl AuthorityPerpetualTables {
         let frac_spaces = 8;
         let mut builder = key_shape_builder(const_spaces, frac_spaces);
         // 6 const key spaces
-        let root_state_hash_by_epoch = builder.const_key_space(1);
-        let epoch_start_configuration = builder.const_key_space(1);
-        let pruned_checkpoint = builder.const_key_space(1);
-        let expected_network_sui_amount = builder.const_key_space(1);
-        let expected_storage_fund_imbalance = builder.const_key_space(1);
+        let root_state_hash_by_epoch = builder.const_key_space("root_state_hash_by_epoch", 1);
+        let epoch_start_configuration = builder.const_key_space("epoch_start_configuration", 1);
+        let pruned_checkpoint = builder.const_key_space("pruned_checkpoint", 1);
+        let expected_network_sui_amount = builder.const_key_space("expected_network_sui_amount", 1);
+        let expected_storage_fund_imbalance = builder.const_key_space("expected_storage_fund_imbalance", 1);
         // todo chop off too?
         // decide what to do with it - make it frac_key_space or get rid of?
-        let indirect_move_objects = builder.const_key_space(1);
+        let indirect_move_objects = builder.const_key_space("indirect_move_objects", 1);
         // todo - this is very confusing - need to fix
         let const_spaces_round_up = builder.pad_const_space();
         // 8 frac key spaces
-        let objects = builder.frac_key_space(1);
-        let live_owned_object_markers = builder.frac_key_space(1);
-        let transactions = builder.frac_key_space(1);
-        let effects = builder.frac_key_space(1);
-        let executed_effects = builder.frac_key_space(1);
-        let events = builder.frac_key_space(1);
-        let executed_transactions_to_checkpoint = builder.frac_key_space(1);
+        let objects = builder.frac_key_space("objects", 1);
+        let live_owned_object_markers = builder.frac_key_space("live_owned_object_markers", 1);
+        let transactions = builder.frac_key_space("transactions", 1);
+        let effects = builder.frac_key_space("effects", 1);
+        let executed_effects = builder.frac_key_space("executed_effects", 1);
+        let events = builder.frac_key_space("events", 1);
+        let executed_transactions_to_checkpoint = builder.frac_key_space("executed_transactions_to_checkpoint", 1);
 
         // key_offset is set to 8 to hash by object id rather then epoch
-        let object_per_epoch_marker_table = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
+        let object_per_epoch_marker_table = builder.frac_key_space_config("object_per_epoch_marker_table", 1, KeySpaceConfig::new_with_key_offset(8));
 
         let key_shape = builder.build();
         let thdb = open_thdb(&path, key_shape, const_spaces_round_up, registry);
