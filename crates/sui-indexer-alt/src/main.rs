@@ -5,14 +5,11 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use sui_indexer_alt::{
     args::Args,
-    db::Db,
     handlers::{
         kv_checkpoints::KvCheckpoints, kv_objects::KvObjects, kv_transactions::KvTransactions,
-        pipeline, tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
+        tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     },
-    ingestion::IngestionService,
-    metrics::MetricsService,
-    task::graceful_shutdown,
+    Indexer,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -27,85 +24,18 @@ async fn main() -> Result<()> {
 
     let cancel = CancellationToken::new();
 
-    let db = Db::new(args.db)
-        .await
-        .context("Failed to connect to database")?;
+    let mut indexer = Indexer::new(args.indexer_config, cancel.clone()).await?;
 
-    let (metrics, metrics_service) =
-        MetricsService::new(args.metrics_address, db.clone(), cancel.clone())?;
-    let mut ingestion_service =
-        IngestionService::new(args.ingestion, metrics.clone(), cancel.clone())?;
+    indexer.pipeline::<KvCheckpoints>();
+    indexer.pipeline::<KvObjects>();
+    indexer.pipeline::<KvTransactions>();
+    indexer.pipeline::<TxAffectedObjects>();
+    indexer.pipeline::<TxBalanceChanges>();
 
-    let h_metrics = metrics_service
-        .run()
-        .await
-        .context("Failed to start metrics service")?;
+    let h_indexer = indexer.run().await.context("Failed to start indexer")?;
 
-    let (h_cp_handler, h_cp_committer) = pipeline::<KvCheckpoints>(
-        db.clone(),
-        ingestion_service.subscribe(),
-        args.committer.clone(),
-        metrics.clone(),
-        cancel.clone(),
-    );
-
-    let (h_obj_handler, h_obj_committer) = pipeline::<KvObjects>(
-        db.clone(),
-        ingestion_service.subscribe(),
-        args.committer.clone(),
-        metrics.clone(),
-        cancel.clone(),
-    );
-
-    let (h_tx_handler, h_tx_committer) = pipeline::<KvTransactions>(
-        db.clone(),
-        ingestion_service.subscribe(),
-        args.committer.clone(),
-        metrics.clone(),
-        cancel.clone(),
-    );
-
-    let (h_tx_objs_handler, h_tx_objs_committer) = pipeline::<TxAffectedObjects>(
-        db.clone(),
-        ingestion_service.subscribe(),
-        args.committer.clone(),
-        metrics.clone(),
-        cancel.clone(),
-    );
-
-    let (h_tx_bal_handler, h_tx_bal_committer) = pipeline::<TxBalanceChanges>(
-        db.clone(),
-        ingestion_service.subscribe(),
-        args.committer.clone(),
-        metrics.clone(),
-        cancel.clone(),
-    );
-
-    let h_ingestion = ingestion_service
-        .run()
-        .await
-        .context("Failed to start ingestion service")?;
-
-    // Once we receive a Ctrl-C or one of the services panics or is cancelled, notify all services
-    // to shutdown, and wait for them to finish.
-    graceful_shutdown(
-        [
-            h_cp_handler,
-            h_cp_committer,
-            h_obj_handler,
-            h_obj_committer,
-            h_tx_handler,
-            h_tx_committer,
-            h_tx_objs_handler,
-            h_tx_objs_committer,
-            h_tx_bal_handler,
-            h_tx_bal_committer,
-            h_metrics,
-            h_ingestion,
-        ],
-        cancel,
-    )
-    .await;
+    cancel.cancelled().await;
+    let _ = h_indexer.await;
 
     Ok(())
 }
