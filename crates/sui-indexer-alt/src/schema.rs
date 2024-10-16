@@ -1,3 +1,5 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
@@ -28,8 +30,18 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    watermarks (entity) {
+        entity -> Text,
+        epoch_hi_inclusive -> Int8,
+        checkpoint_hi_inclusive -> Int8,
+        tx_hi_inclusive -> Int8,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     kv_checkpoints,
     kv_objects,
     kv_transactions,
+    watermarks,
 );

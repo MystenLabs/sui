@@ -3,9 +3,16 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
+use crate::handlers::progress::ProgressTracker;
+use crate::{
+    db::{self, Db},
+    metrics::IndexerMetrics,
+};
 use futures::TryStreamExt;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use tokio::sync::watch;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -15,14 +22,10 @@ use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::{
-    db::{self, Db},
-    metrics::IndexerMetrics,
-};
-
 pub mod kv_checkpoints;
 pub mod kv_objects;
 pub mod kv_transactions;
+mod progress;
 
 /// Extra buffer added to the channel between the handler and the committer. There does not need to
 /// be a huge capacity here because the committer is already buffering rows to insert internally.
@@ -90,30 +93,51 @@ pub struct CommitterConfig {
 /// A batch of processed values associated with a single checkpoint. This is an internal type used
 /// to communicate between the handler and the committer parts of the pipeline.
 struct Indexed<H: Handler> {
-    sequence_number: u64,
+    pub metadata: IndexedMetadata,
     values: Vec<H::Value>,
 }
 
-/// Start a new indexing pipeline served by the handler, `H`. Each pipeline consists of a handler
-/// task which takes checkpoint data and breaks it down into rows, ready for insertion, and a
-/// committer which writes those rows out to the database.
-///
-/// Checkpoint data is fed into the pipeline through the `handler_rx` channel, and an internal
-/// channel is created to communicate checkpoint-wise data to the committer. The pipeline can be
-/// shutdown using its `cancel` token.
-pub fn pipeline<H: Handler + 'static>(
-    db: Db,
-    handler_rx: mpsc::Receiver<Arc<CheckpointData>>,
-    config: CommitterConfig,
-    metrics: Arc<IndexerMetrics>,
-    cancel: CancellationToken,
-) -> (JoinHandle<()>, JoinHandle<()>) {
-    let (handler_tx, committer_rx) = mpsc::channel(H::FANOUT + COMMITTER_BUFFER);
+#[derive(Clone, Debug, Default)]
+pub struct IndexedMetadata {
+    pub epoch: u64,
+    pub sequence_number: u64,
+    pub network_total_transactions: u64,
+}
 
-    let handler = handler::<H>(handler_rx, handler_tx, metrics.clone(), cancel.clone());
-    let committer = committer::<H>(db, committer_rx, config, metrics, cancel);
+pub struct Pipeline {
+    pub handler: JoinHandle<()>,
+    pub committer: JoinHandle<()>,
+    pub committed_checkpoint_rx: watch::Receiver<IndexedMetadata>,
+}
 
-    (handler, committer)
+impl Pipeline {
+    /// Start a new indexing pipeline served by the handler, `H`. Each pipeline consists of a handler
+    /// task which takes checkpoint data and breaks it down into rows, ready for insertion, and a
+    /// committer which writes those rows out to the database.
+    ///
+    /// Checkpoint data is fed into the pipeline through the `handler_rx` channel, and an internal
+    /// channel is created to communicate checkpoint-wise data to the committer. The pipeline can be
+    /// shutdown using its `cancel` token.
+    pub async fn new<H: Handler + 'static>(
+        db: Db,
+        handler_rx: mpsc::Receiver<Arc<CheckpointData>>,
+        config: CommitterConfig,
+        metrics: Arc<IndexerMetrics>,
+        cancel: CancellationToken,
+    ) -> anyhow::Result<Pipeline> {
+        let (handler_tx, committer_rx) = mpsc::channel(H::FANOUT + COMMITTER_BUFFER);
+
+        let handler = handler::<H>(handler_rx, handler_tx, metrics.clone(), cancel.clone());
+
+        let (committer, committed_checkpoint_rx) =
+            committer::<H>(db, committer_rx, config, metrics, cancel).await?;
+
+        Ok(Self {
+            handler,
+            committer,
+            committed_checkpoint_rx,
+        })
+    }
 }
 
 /// The handler task is responsible for taking checkpoint data and breaking it down into rows ready
@@ -184,7 +208,13 @@ fn handler<H: Handler + 'static>(
                         .inc_by(values.len() as u64);
 
                     tx.send(Indexed {
-                        sequence_number: checkpoint.checkpoint_summary.sequence_number,
+                        metadata: IndexedMetadata {
+                            epoch: checkpoint.checkpoint_summary.epoch as u64,
+                            sequence_number: checkpoint.checkpoint_summary.sequence_number,
+                            network_total_transactions: checkpoint
+                                .checkpoint_summary
+                                .network_total_transactions,
+                        },
                         values,
                     })
                     .await
@@ -207,7 +237,7 @@ fn handler<H: Handler + 'static>(
     })
 }
 
-/// The commiter task is responsible for gathering rows to write to the database. It is a single
+/// The committer task is responsible for gathering rows to write to the database. It is a single
 /// work loop that gathers checkpoint-wise row information, and periodically writes them out to the
 /// database.
 ///
@@ -225,20 +255,22 @@ fn handler<H: Handler + 'static>(
 /// - Number of pending rows. If this exceeds `H::BATCH_SIZE`, the committer will attempt to write
 ///   out at most `H::CHUNK_SIZE` worth of rows to the DB.
 ///
-/// If a write fails, the commiter will save the batch it meant to write and try to write them
+/// If a write fails, the committer will save the batch it meant to write and try to write them
 /// again at the next opportunity, potentially adding more rows to the batch if more have arrived
 /// in the interim.
 ///
 /// This task will shutdown if canceled via the `cancel` token, or if the channel it receives data
 /// on has been closed by the handler for some reason.
-fn committer<H: Handler + 'static>(
+async fn committer<H: Handler + 'static>(
     db: Db,
     mut rx: mpsc::Receiver<Indexed<H>>,
     config: CommitterConfig,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> JoinHandle<()> {
-    spawn_monitored_task!(async move {
+) -> anyhow::Result<(JoinHandle<()>, watch::Receiver<IndexedMetadata>)> {
+    let mut progress = ProgressTracker::<H>::new(&db).await?;
+    let committed_checkpoints_rx = progress.subscribe_to_last_committed_checkpoint();
+    let handle = spawn_monitored_task!(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.
         let mut poll = interval(config.commit_interval);
@@ -250,14 +282,14 @@ fn committer<H: Handler + 'static>(
         cool.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // Buffer to gather the next batch to write. This may be non-empty at the top of a tick of
-        // the commiter's loop if the previous attempt at a write failed. Attempt is incremented
+        // the committer's loop if the previous attempt at a write failed. Attempt is incremented
         // every time a batch write fails, and is reset when it succeeds.
         let mut attempt = 0;
         let mut batch = vec![];
 
         // Data for checkpoints that haven't been written yet. Note that `pending_rows` includes
         // rows in `batch`.
-        let mut pending: BTreeMap<u64, Vec<H::Value>> = BTreeMap::new();
+        let mut pending: BTreeMap<CheckpointSequenceNumber, Indexed<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
         // TODO: Track the watermark (keep track of out-of-order commits, and update the watermark
@@ -269,7 +301,7 @@ fn committer<H: Handler + 'static>(
                 biased;
 
                 _ = cancel.cancelled() => {
-                    info!(pipline = H::NAME, "Shutdown received, stopping committer");
+                    info!(pipeline = H::NAME, "Shutdown received, stopping committer");
                     break;
                 }
 
@@ -291,14 +323,16 @@ fn committer<H: Handler + 'static>(
                             break;
                         };
 
-                        let values = entry.get_mut();
-                        if batch.len() + values.len() > H::CHUNK_SIZE {
-                            let mut for_batch = values.split_off(H::CHUNK_SIZE - batch.len());
-                            std::mem::swap(values, &mut for_batch);
+                        let indexed = entry.get_mut();
+                        if batch.len() + indexed.values.len() > H::CHUNK_SIZE {
+                            let mut for_batch = indexed.values.split_off(H::CHUNK_SIZE - batch.len());
+                            std::mem::swap(&mut indexed.values, &mut for_batch);
                             batch.extend(for_batch);
                             break;
                         } else {
-                            batch.extend(entry.remove());
+                            let Indexed { metadata, values } = entry.remove();
+                            batch.extend(values);
+                            progress.add_checkpoint_to_commit_from_batch(metadata);
                         }
                     }
 
@@ -375,6 +409,7 @@ fn committer<H: Handler + 'static>(
 
                             pending_rows -= batch.len();
                             attempt = 0;
+                            progress.commit_batch(&mut conn).await;
 
                             batch.clear();
                             cool.reset();
@@ -407,14 +442,14 @@ fn committer<H: Handler + 'static>(
                 }
 
                 indexed = rx.recv(), if pending_rows < H::MAX_PENDING_SIZE => {
-                    if let Some(Indexed { sequence_number, values }) = indexed {
+                    if let Some(indexed) = indexed {
                         metrics
                             .total_committer_rows_received
                             .with_label_values(&[H::NAME])
-                            .inc_by(values.len() as u64);
+                            .inc_by(indexed.values.len() as u64);
 
-                        pending_rows += values.len();
-                        pending.insert(sequence_number, values);
+                        pending_rows += indexed.values.len();
+                        pending.insert(indexed.metadata.sequence_number, indexed);
                     } else {
                         info!(pipeline = H::NAME, "Handler closed channel, stopping committer");
                         break;
@@ -422,5 +457,6 @@ fn committer<H: Handler + 'static>(
                 }
             }
         }
-    })
+    });
+    Ok((handle, committed_checkpoints_rx))
 }
