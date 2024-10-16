@@ -14975,6 +14975,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-synthetic-ingestion"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "simulacrum",
+ "sui-test-transaction-builder",
+ "sui-types",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-telemetry"
 version = "0.1.0"
 dependencies = [

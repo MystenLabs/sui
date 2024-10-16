@@ -391,6 +391,12 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             .unwrap();
     }
 
+    pub fn override_last_checkpoint_number(&mut self, number: CheckpointSequenceNumber) {
+        let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
+        self.checkpoint_builder
+            .override_last_checkpoint_number(number, &committee);
+    }
+
     fn process_data_ingestion(
         &self,
         checkpoint: VerifiedCheckpoint,

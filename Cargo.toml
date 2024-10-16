@@ -154,6 +154,7 @@ members = [
     "crates/sui-surfer",
     "crates/sui-swarm",
     "crates/sui-swarm-config",
+    "crates/sui-synthetic-ingestion",
     "crates/sui-telemetry",
     "crates/sui-test-transaction-builder",
     "crates/sui-test-validator",
@@ -669,6 +670,7 @@ sui-storage = { path = "crates/sui-storage" }
 sui-surfer = { path = "crates/sui-surfer" }
 sui-swarm = { path = "crates/sui-swarm" }
 sui-swarm-config = { path = "crates/sui-swarm-config" }
+sui-synthetic-ingestion = { path = "crates/sui-synthetic-ingestion" }
 sui-telemetry = { path = "crates/sui-telemetry" }
 sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
