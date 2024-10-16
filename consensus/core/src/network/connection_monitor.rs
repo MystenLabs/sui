@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use anemo::{types::PeerEvent, PeerId};
+use anemo::types::PeerEvent;
 use dashmap::DashMap;
 use mysten_metrics::spawn_logged_monitored_task;
 use quinn_proto::ConnectionStats;
@@ -17,13 +17,33 @@ use super::metrics::QuinnConnectionMetrics;
 
 const CONNECTION_STAT_COLLECTION_INTERVAL: Duration = Duration::from_secs(60);
 
-pub struct ConnectionMonitorHandle {
+#[async_trait]
+pub trait ConnectionMonitor {
+    type Network;
+    type PeerId;
+    type PeerEvent;
+    type ConnectionMetrics;
+
+    fn spawn(
+        network: Self::Network,
+        connection_metrics: Arc<Self::ConnectionMetrics>,
+        known_peers: HashMap<Self::PeerId, String>,
+    ) -> ConnectionMonitorHandle<Self::PeerId>;
+
+    async fn run(self);
+
+    async fn handle_peer_event(&self, peer_event: Self::PeerEvent);
+
+    fn update_metrics_for_peer(&self, peer_id: &str, hostname: &str, stats: &ConnectionStats);
+}
+
+pub struct ConnectionMonitorHandle<PeerId> {
     handle: JoinHandle<()>,
     stop: Sender<()>,
     connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
 }
 
-impl ConnectionMonitorHandle {
+impl<PeerId> ConnectionMonitorHandle<PeerId> {
     pub async fn stop(self) {
         self.stop.send(()).ok();
         self.handle.await.ok();
@@ -43,18 +63,22 @@ pub enum ConnectionStatus {
 pub struct AnemoConnectionMonitor {
     network: anemo::NetworkRef,
     connection_metrics: Arc<QuinnConnectionMetrics>,
-    known_peers: HashMap<PeerId, String>,
-    connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
+    known_peers: HashMap<anemo::types::PeerId, String>,
+    connection_statuses: Arc<DashMap<anemo::types::PeerId, ConnectionStatus>>,
     stop: Receiver<()>,
 }
 
-impl AnemoConnectionMonitor {
-    #[must_use]
+#[async_trait]
+impl ConnectionMonitor for AnemoConnectionMonitor {
+    type Network = anemo::NetworkRef;
+    type PeerId = anemo::types::PeerId;
+    type ConnectionMetrics = QuinnConnectionMetrics;
+
     pub fn spawn(
-        network: anemo::NetworkRef,
-        connection_metrics: Arc<QuinnConnectionMetrics>,
-        known_peers: HashMap<PeerId, String>,
-    ) -> ConnectionMonitorHandle {
+        network: Self::Network,
+        connection_metrics: Arc<Self::ConnectionMetrics>,
+        known_peers: HashMap<Self::PeerId, String>,
+    ) -> ConnectionMonitorHandle<Self::PeerId> {
         let connection_statuses_outer = Arc::new(DashMap::new());
         let connection_statuses = connection_statuses_outer.clone();
         let (stop_sender, stop) = tokio::sync::oneshot::channel();
