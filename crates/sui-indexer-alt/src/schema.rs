@@ -26,7 +26,6 @@ diesel::table! {
         raw_transaction -> Bytea,
         raw_effects -> Bytea,
         events -> Bytea,
-        balance_changes -> Bytea,
     }
 }
 
@@ -38,9 +37,17 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    tx_balance_changes (tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        balance_changes -> Bytea,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     kv_checkpoints,
     kv_objects,
     kv_transactions,
     tx_affected_objects,
+    tx_balance_changes,
 );

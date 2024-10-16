@@ -1,22 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
-use sui_types::{
-    coin::Coin,
-    effects::TransactionEffectsAPI,
-    full_checkpoint_content::{CheckpointData, CheckpointTransaction},
-    gas_coin::GAS,
-};
+use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{
-    db,
-    models::transactions::{StoredBalanceChange, StoredTransaction},
-    schema::kv_transactions,
-};
+use crate::{db, models::transactions::StoredTransaction, schema::kv_transactions};
 
 use super::Handler;
 
@@ -47,9 +38,6 @@ impl Handler for KvTransactions {
             let transaction = &tx.transaction.data().intent_message().value;
             let effects = &tx.effects;
             let events: Vec<_> = tx.events.iter().flat_map(|e| e.data.iter()).collect();
-            let balance_changes = balance_changes(tx).with_context(|| {
-                format!("Calculating balance changes for transaction {tx_sequence_number}")
-            })?;
 
             values.push(StoredTransaction {
                 tx_sequence_number: (first_tx + i) as i64,
@@ -62,9 +50,6 @@ impl Handler for KvTransactions {
                 })?,
                 events: bcs::to_bytes(&events).with_context(|| {
                     format!("Serializing events for transaction {tx_sequence_number}")
-                })?,
-                balance_changes: bcs::to_bytes(&balance_changes).with_context(|| {
-                    format!("Serializing balance changes for transaction {tx_sequence_number}")
                 })?,
             });
         }
@@ -79,38 +64,4 @@ impl Handler for KvTransactions {
             .execute(conn)
             .await?)
     }
-}
-
-/// Calculate balance changes based on the object's input and output objects.
-fn balance_changes(transaction: &CheckpointTransaction) -> Result<Vec<StoredBalanceChange>> {
-    // Shortcut if the transaction failed -- we know that only gas was charged.
-    if transaction.effects.status().is_err() {
-        return Ok(vec![StoredBalanceChange {
-            owner: transaction.effects.gas_object().1,
-            coin_type: GAS::type_tag().to_canonical_string(/* with_prefix */ true),
-            amount: -(transaction.effects.gas_cost_summary().net_gas_usage() as i128),
-        }]);
-    }
-
-    let mut changes = BTreeMap::new();
-    for object in &transaction.input_objects {
-        if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
-            *changes.entry((object.owner(), type_)).or_insert(0i128) -= balance as i128;
-        }
-    }
-
-    for object in &transaction.output_objects {
-        if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
-            *changes.entry((object.owner(), type_)).or_insert(0i128) += balance as i128;
-        }
-    }
-
-    Ok(changes
-        .into_iter()
-        .map(|((owner, coin_type), amount)| StoredBalanceChange {
-            owner: *owner,
-            coin_type: coin_type.to_canonical_string(/* with_prefix */ true),
-            amount,
-        })
-        .collect())
 }
