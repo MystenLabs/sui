@@ -53,7 +53,7 @@ use crate::schema::{
     objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
     raw_checkpoints, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
     tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
-    tx_recipients, tx_senders, watermarks,
+    watermarks,
 };
 use crate::store::transaction_with_retry;
 use crate::types::{EventIndex, IndexedDeletedObject, IndexedObject};
@@ -298,7 +298,7 @@ impl PgIndexerStore {
         let mut connection = self.pool.get().await?;
 
         watermarks::table
-            .select(watermarks::checkpoint_hi)
+            .select(watermarks::checkpoint_hi_inclusive)
             .filter(watermarks::entity.eq("objects_snapshot"))
             .first::<i64>(&mut connection)
             .await
@@ -898,7 +898,10 @@ impl PgIndexerStore {
                         .do_update()
                         .set((
                             packages::package_id.eq(excluded(packages::package_id)),
+                            packages::package_version.eq(excluded(packages::package_version)),
                             packages::move_package.eq(excluded(packages::move_package)),
+                            packages::checkpoint_sequence_number
+                                .eq(excluded(packages::checkpoint_sequence_number)),
                         ))
                         .execute(conn)
                         .await?;
@@ -1066,8 +1069,6 @@ impl PgIndexerStore {
         let (
             affected_addresses,
             affected_objects,
-            senders,
-            recipients,
             input_objects,
             changed_objects,
             pkgs,
@@ -1086,14 +1087,10 @@ impl PgIndexerStore {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
-                Vec::new(),
-                Vec::new(),
             ),
             |(
                 mut tx_affected_addresses,
                 mut tx_affected_objects,
-                mut tx_senders,
-                mut tx_recipients,
                 mut tx_input_objects,
                 mut tx_changed_objects,
                 mut tx_pkgs,
@@ -1105,20 +1102,16 @@ impl PgIndexerStore {
              index| {
                 tx_affected_addresses.extend(index.0);
                 tx_affected_objects.extend(index.1);
-                tx_senders.extend(index.2);
-                tx_recipients.extend(index.3);
-                tx_input_objects.extend(index.4);
-                tx_changed_objects.extend(index.5);
-                tx_pkgs.extend(index.6);
-                tx_mods.extend(index.7);
-                tx_funs.extend(index.8);
-                tx_digests.extend(index.9);
-                tx_kinds.extend(index.10);
+                tx_input_objects.extend(index.2);
+                tx_changed_objects.extend(index.3);
+                tx_pkgs.extend(index.4);
+                tx_mods.extend(index.5);
+                tx_funs.extend(index.6);
+                tx_digests.extend(index.7);
+                tx_kinds.extend(index.8);
                 (
                     tx_affected_addresses,
                     tx_affected_objects,
-                    tx_senders,
-                    tx_recipients,
                     tx_input_objects,
                     tx_changed_objects,
                     tx_pkgs,
@@ -1147,22 +1140,6 @@ impl PgIndexerStore {
                 {
                     diesel::insert_into(tx_affected_objects::table)
                         .values(affected_objects_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
-
-                for senders_chunk in senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_senders::table)
-                        .values(senders_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                }
-
-                for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_recipients::table)
-                        .values(recipients_chunk)
                         .on_conflict_do_nothing()
                         .execute(conn)
                         .await?;
@@ -1249,64 +1226,20 @@ impl PgIndexerStore {
             async {
                 if let Some(last_epoch) = &epoch.last_epoch {
                     let last_epoch_id = last_epoch.epoch;
-                    // Overwrites the `epoch_total_transactions` field on `epoch.last_epoch` because
-                    // we are not guaranteed to have the latest data in db when this is set on
-                    // indexer's chain-reading side. However, when we `persist_epoch`, the
-                    // checkpoints from an epoch ago must have been indexed.
-                    let previous_epoch_network_total_transactions = match epoch_id {
-                        0 | 1 => 0,
-                        _ => {
-                            let prev_epoch_id = epoch_id - 2;
-                            let result = checkpoints::table
-                                .filter(checkpoints::epoch.eq(prev_epoch_id as i64))
-                                .select(max(checkpoints::network_total_transactions))
-                                .first::<Option<i64>>(conn)
-                                .await
-                                .map(|o| o.unwrap_or(0))?;
 
-                            result as u64
-                        }
-                    };
-
-                    let epoch_total_transactions = epoch.network_total_transactions
-                        - previous_epoch_network_total_transactions;
-
-                    let mut last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
-                    last_epoch.epoch_total_transactions = Some(epoch_total_transactions as i64);
                     info!(last_epoch_id, "Persisting epoch end data.");
-                    diesel::insert_into(epochs::table)
-                        .values(vec![last_epoch])
-                        .on_conflict(epochs::epoch)
-                        .do_update()
-                        .set((
-                            epochs::system_state.eq(excluded(epochs::system_state)),
-                            epochs::epoch_total_transactions
-                                .eq(excluded(epochs::epoch_total_transactions)),
-                            epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
-                            epochs::epoch_end_timestamp.eq(excluded(epochs::epoch_end_timestamp)),
-                            epochs::storage_fund_reinvestment
-                                .eq(excluded(epochs::storage_fund_reinvestment)),
-                            epochs::storage_charge.eq(excluded(epochs::storage_charge)),
-                            epochs::storage_rebate.eq(excluded(epochs::storage_rebate)),
-                            epochs::stake_subsidy_amount.eq(excluded(epochs::stake_subsidy_amount)),
-                            epochs::total_gas_fees.eq(excluded(epochs::total_gas_fees)),
-                            epochs::total_stake_rewards_distributed
-                                .eq(excluded(epochs::total_stake_rewards_distributed)),
-                            epochs::leftover_storage_fund_inflow
-                                .eq(excluded(epochs::leftover_storage_fund_inflow)),
-                            epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
-                        ))
+                    diesel::update(epochs::table.filter(epochs::epoch.eq(last_epoch_id)))
+                        .set(last_epoch)
                         .execute(conn)
                         .await?;
                 }
 
                 let epoch_id = epoch.new_epoch.epoch;
                 info!(epoch_id, "Persisting epoch beginning info");
-                let new_epoch = StoredEpochInfo::from_epoch_beginning_info(&epoch.new_epoch);
                 let error_message =
                     concat!("Failed to write to ", stringify!((epochs::table)), " DB");
                 diesel::insert_into(epochs::table)
-                    .values(new_epoch)
+                    .values(epoch.new_epoch)
                     .on_conflict_do_nothing()
                     .execute(conn)
                     .await
@@ -1335,7 +1268,7 @@ impl PgIndexerStore {
         // partition_0 has been created, so no need to advance it.
         if let Some(last_epoch_id) = last_epoch_id {
             let last_db_epoch: Option<StoredEpochInfo> = epochs::table
-                .filter(epochs::epoch.eq(last_epoch_id as i64))
+                .filter(epochs::epoch.eq(last_epoch_id))
                 .first::<StoredEpochInfo>(&mut connection)
                 .await
                 .optional()
@@ -1479,20 +1412,6 @@ impl PgIndexerStore {
                 .await?;
 
                 diesel::delete(
-                    tx_senders::table
-                        .filter(tx_senders::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
-
-                diesel::delete(
-                    tx_recipients::table
-                        .filter(tx_recipients::tx_sequence_number.between(min_tx, max_tx)),
-                )
-                .execute(conn)
-                .await?;
-
-                diesel::delete(
                     tx_input_objects::table
                         .filter(tx_input_objects::tx_sequence_number.between(min_tx, max_tx)),
                 )
@@ -1564,20 +1483,24 @@ impl PgIndexerStore {
     async fn get_network_total_transactions_by_end_of_epoch(
         &self,
         epoch: u64,
-    ) -> Result<u64, IndexerError> {
+    ) -> Result<Option<u64>, IndexerError> {
         use diesel_async::RunQueryDsl;
 
         let mut connection = self.pool.get().await?;
 
-        checkpoints::table
-            .filter(checkpoints::epoch.eq(epoch as i64))
-            .select(checkpoints::network_total_transactions)
-            .order_by(checkpoints::sequence_number.desc())
-            .first::<i64>(&mut connection)
-            .await
-            .map_err(Into::into)
-            .context("Failed to get network total transactions in epoch")
-            .map(|v| v as u64)
+        // TODO: (wlmyng) update to read from epochs::network_total_transactions
+
+        Ok(Some(
+            checkpoints::table
+                .filter(checkpoints::epoch.eq(epoch as i64))
+                .select(checkpoints::network_total_transactions)
+                .order_by(checkpoints::sequence_number.desc())
+                .first::<i64>(&mut connection)
+                .await
+                .map_err(Into::into)
+                .context("Failed to get network total transactions in epoch")
+                .map(|v| v as u64)?,
+        ))
     }
 
     async fn update_watermarks_upper_bound<E: IntoEnumIterator>(
@@ -1604,9 +1527,10 @@ impl PgIndexerStore {
                     .on_conflict(watermarks::entity)
                     .do_update()
                     .set((
-                        watermarks::epoch_hi.eq(excluded(watermarks::epoch_hi)),
-                        watermarks::checkpoint_hi.eq(excluded(watermarks::checkpoint_hi)),
-                        watermarks::tx_hi.eq(excluded(watermarks::tx_hi)),
+                        watermarks::epoch_hi_inclusive.eq(excluded(watermarks::epoch_hi_inclusive)),
+                        watermarks::checkpoint_hi_inclusive
+                            .eq(excluded(watermarks::checkpoint_hi_inclusive)),
+                        watermarks::tx_hi_inclusive.eq(excluded(watermarks::tx_hi_inclusive)),
                     ))
                     .execute(conn)
                     .await
@@ -2198,7 +2122,7 @@ impl IndexerStore for PgIndexerStore {
     async fn get_network_total_transactions_by_end_of_epoch(
         &self,
         epoch: u64,
-    ) -> Result<u64, IndexerError> {
+    ) -> Result<Option<u64>, IndexerError> {
         self.get_network_total_transactions_by_end_of_epoch(epoch)
             .await
     }

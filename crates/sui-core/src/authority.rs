@@ -4,6 +4,7 @@
 
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
+use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rest_index::RestIndexStore;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::verify_indexes;
@@ -64,6 +65,8 @@ use self::authority_store_pruner::AuthorityStorePruningMetrics;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
+use crate::jsonrpc_index::IndexStore;
+use crate::jsonrpc_index::{CoinInfo, ObjectIndexChanges};
 use once_cell::sync::OnceCell;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_archival::reader::ArchiveReaderBalancer;
@@ -76,10 +79,8 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEvents, TransactionFilter,
 };
 use sui_macros::{fail_point, fail_point_async, fail_point_if};
-use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
-use sui_storage::IndexStore;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
@@ -3664,10 +3665,10 @@ impl AuthorityState {
         &self,
         owner: SuiAddress,
         // If `Some`, the query will start from the next item after the specified cursor
-        cursor: (String, ObjectID),
+        cursor: (String, u64, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
-    ) -> SuiResult<impl Iterator<Item = (String, ObjectID, CoinInfo)> + '_> {
+    ) -> SuiResult<impl Iterator<Item = (CoinIndexKey2, CoinInfo)> + '_> {
         if let Some(indexes) = &self.indexes {
             indexes.get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)
         } else {
@@ -4123,6 +4124,14 @@ impl AuthorityState {
                     limit,
                     descending,
                 )?,
+            // not using "_ =>" because we want to make sure we remember to add new variants here
+            EventFilter::Any(_) => {
+                return Err(SuiError::UserInputError {
+                    error: UserInputError::Unsupported(
+                        "'Any' queries are not supported by the fullnode.".to_string(),
+                    ),
+                })
+            }
         };
 
         // skip one event if exclusive cursor is provided,

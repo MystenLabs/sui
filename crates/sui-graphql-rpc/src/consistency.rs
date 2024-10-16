@@ -147,6 +147,7 @@ pub(crate) fn build_objects_query(
     // Similar to the snapshot query, construct the filtered inner query for the history table.
     let mut history_objs_inner = query!("SELECT * FROM objects_history");
     history_objs_inner = filter_fn(history_objs_inner);
+    history_objs_inner = filter!(history_objs_inner, "object_status = 0");
 
     let mut history_objs = match view {
         View::Consistent => {
@@ -167,16 +168,14 @@ pub(crate) fn build_objects_query(
                 newer
             );
             history_objs = filter!(history_objs, "newer.object_version IS NULL");
-            history_objs = filter!(history_objs, "object_status = 0");
             history_objs
         }
         View::Historical => {
             // The cursor pagination logic refers to the table with the `candidates` alias
-            let query = query!(
+            query!(
                 "SELECT candidates.* FROM ({}) candidates",
                 history_objs_inner
-            );
-            filter!(query, "object_status = 0")
+            )
         }
     };
 

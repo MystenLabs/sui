@@ -12,10 +12,14 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     errors::IndexerError,
-    models::{display::StoredDisplay, obj_indices::StoredObjectVersion},
+    models::{
+        display::StoredDisplay,
+        epoch::{EndOfEpochUpdate, StartOfEpochUpdate},
+        obj_indices::StoredObjectVersion,
+    },
     types::{
-        EventIndex, IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent,
-        IndexedObject, IndexedPackage, IndexedTransaction, IndexerResult, TxIndex,
+        EventIndex, IndexedCheckpoint, IndexedDeletedObject, IndexedEvent, IndexedObject,
+        IndexedPackage, IndexedTransaction, IndexerResult, TxIndex,
     },
 };
 
@@ -50,9 +54,28 @@ pub struct TransactionObjectChangesToCommit {
 
 #[derive(Clone, Debug)]
 pub struct EpochToCommit {
-    pub last_epoch: Option<IndexedEpochInfo>,
-    pub new_epoch: IndexedEpochInfo,
-    pub network_total_transactions: u64,
+    pub last_epoch: Option<EndOfEpochUpdate>,
+    pub new_epoch: StartOfEpochUpdate,
+}
+
+impl EpochToCommit {
+    pub fn new_epoch_id(&self) -> u64 {
+        self.new_epoch.epoch as u64
+    }
+
+    pub fn new_epoch_first_checkpoint_id(&self) -> u64 {
+        self.new_epoch.first_checkpoint_id as u64
+    }
+
+    pub fn last_epoch_total_transactions(&self) -> Option<u64> {
+        self.last_epoch
+            .as_ref()
+            .map(|e| e.epoch_total_transactions as u64)
+    }
+
+    pub fn new_epoch_first_tx_sequence_number(&self) -> u64 {
+        self.new_epoch.first_tx_sequence_number as u64
+    }
 }
 
 pub struct CommonHandler<T> {
@@ -195,7 +218,7 @@ impl From<&CheckpointData> for CommitterWatermark {
     }
 }
 
-/// Enum representing tables that a committer updates.
+/// Enum representing tables that the committer handler writes to.
 #[derive(
     Debug,
     Eq,
@@ -253,7 +276,7 @@ pub enum CommitterTables {
     PrunerCpWatermark,
 }
 
-/// Enum representing tables that the objects snapshot processor updates.
+/// Enum representing tables that the objects snapshot handler writes to.
 #[derive(
     Debug,
     Eq,

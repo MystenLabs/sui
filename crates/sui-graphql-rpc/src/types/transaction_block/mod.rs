@@ -218,17 +218,18 @@ impl TransactionBlock {
             .extend()
     }
 
-    /// Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
+    /// Serialized form of this transaction's `TransactionData`, BCS serialized and Base64 encoded.
     async fn bcs(&self) -> Option<Base64> {
         match &self.inner {
-            TransactionBlockInner::Stored { stored_tx, .. } => {
-                Some(Base64::from(&stored_tx.raw_transaction))
+            TransactionBlockInner::Stored { native, .. } => Some(Base64::from(
+                &bcs::to_bytes(native.transaction_data()).unwrap(),
+            )),
+            TransactionBlockInner::Executed { tx_data, .. } => Some(Base64::from(
+                &bcs::to_bytes(tx_data.transaction_data()).unwrap(),
+            )),
+            TransactionBlockInner::DryRun { tx_data, .. } => {
+                Some(Base64::from(&bcs::to_bytes(tx_data).unwrap()))
             }
-            TransactionBlockInner::Executed { tx_data, .. } => {
-                bcs::to_bytes(&tx_data).ok().map(Base64::from)
-            }
-            // Dry run transaction does not have signatures so no sender signed data.
-            TransactionBlockInner::DryRun { .. } => None,
         }
     }
 }
@@ -337,8 +338,8 @@ impl TransactionBlock {
     /// If the `Page<Cursor>` is set, then this function will defer to the `checkpoint_viewed_at` in
     /// the cursor if they are consistent.
     ///
-    /// Filters that involve a combination of `recvAddress`, `inputObject`, `changedObject`, and
-    /// `function` should provide a value for `scan_limit`. This modifies querying behavior by
+    /// Filters that involve a combination of `affectedAddress`, `inputObject`, `changedObject`,
+    /// and `function` should provide a value for `scan_limit`. This modifies querying behavior by
     /// limiting how many transactions to scan through before applying filters, and also affects
     /// pagination behavior.
     pub(crate) async fn paginate(

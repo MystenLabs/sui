@@ -839,6 +839,10 @@ impl<K, V> DBMap<K, V> {
         Ok(DBMap::new(db.clone(), rw_options, &cf_key, is_deprecated))
     }
 
+    pub fn cf_name(&self) -> &str {
+        &self.cf
+    }
+
     pub fn batch(&self) -> DBBatch {
         let batch = match *self.rocksdb {
             RocksDB::DBWithThreadMode(_) => RocksDBBatch::Regular(WriteBatch::default()),
@@ -2523,7 +2527,6 @@ impl DBOptions {
         // Switch to universal compactions.
         self.options
             .set_compaction_style(rocksdb::DBCompactionStyle::Universal);
-        self.options.set_num_levels(1);
         let mut compaction_options = rocksdb::UniversalCompactOptions::default();
         compaction_options.set_max_size_amplification_percent(10000);
         compaction_options.set_stop_style(rocksdb::UniversalCompactionStopStyle::Similar);

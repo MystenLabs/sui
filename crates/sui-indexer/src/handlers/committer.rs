@@ -56,7 +56,7 @@ where
             let epoch = checkpoint.epoch.clone();
             batch.push(checkpoint);
             next_checkpoint_sequence_number += 1;
-            let epoch_number_option = epoch.as_ref().map(|epoch| epoch.new_epoch.epoch);
+            let epoch_number_option = epoch.as_ref().map(|epoch| epoch.new_epoch_id());
             // The batch will consist of contiguous checkpoints and at most one epoch boundary at
             // the end.
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
@@ -219,17 +219,6 @@ async fn commit_checkpoints<S>(
         })
         .expect("Persisting data into DB should not fail.");
 
-    state
-        .update_watermarks_upper_bound::<CommitterTables>(committer_watermark)
-        .await
-        .tap_err(|e| {
-            error!(
-                "Failed to update watermark upper bound with error: {}",
-                e.to_string()
-            );
-        })
-        .expect("Updating watermark upper bound in DB should not fail.");
-
     if is_epoch_end {
         // The epoch has advanced so we update the configs for the new protocol version, if it has changed.
         let chain_id = state
@@ -241,6 +230,17 @@ async fn commit_checkpoints<S>(
             .persist_protocol_configs_and_feature_flags(chain_id)
             .await;
     }
+
+    state
+        .update_watermarks_upper_bound::<CommitterTables>(committer_watermark)
+        .await
+        .tap_err(|e| {
+            error!(
+                "Failed to update watermark upper bound with error: {}",
+                e.to_string()
+            );
+        })
+        .expect("Updating watermark upper bound in DB should not fail.");
 
     let elapsed = guard.stop_and_record();
 

@@ -1,4 +1,4 @@
-# Filter on recvAddress
+# Filter on affected address
 {
   transactionBlocks(
     filter: {

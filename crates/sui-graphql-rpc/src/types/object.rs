@@ -164,11 +164,13 @@ pub(crate) struct Shared {
 }
 
 /// If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
-/// the dynamic field, or the intermediate Field object itself). Also note that if the owner
-/// is a parent, then it's guaranteed to be an object.
+/// the dynamic field, or the intermediate Field object itself), and it is owned by another object.
+///
+/// Although its owner is guaranteed to be an object, it is exposed as an Owner, as the parent
+/// object could be wrapped and therefore not directly accessible.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct Parent {
-    parent: Option<Object>,
+    parent: Option<Owner>,
 }
 
 /// An address-owned object is owned by a specific 32-byte address that is
@@ -440,8 +442,8 @@ impl Object {
 
     /// The owner type of this object: Immutable, Shared, Parent, Address
     /// Immutable and Shared Objects do not have owners.
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
-        ObjectImpl(self).owner(ctx).await
+    pub(crate) async fn owner(&self) -> Option<ObjectOwner> {
+        ObjectImpl(self).owner().await
     }
 
     /// The transaction block that created this version of the object.
@@ -581,7 +583,7 @@ impl ObjectImpl<'_> {
             .map(|native| native.digest().base58_encode())
     }
 
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
+    pub(crate) async fn owner(&self) -> Option<ObjectOwner> {
         use NativeOwner as O;
 
         let native = self.0.native_impl()?;
@@ -599,16 +601,14 @@ impl ObjectImpl<'_> {
             }
             O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
             O::ObjectOwner(address) => {
-                let parent = Object::query(
-                    ctx,
-                    address.into(),
-                    Object::latest_at(self.0.checkpoint_viewed_at),
-                )
-                .await
-                .ok()
-                .flatten();
-
-                Some(ObjectOwner::Parent(Parent { parent }))
+                let address = SuiAddress::from(address);
+                Some(ObjectOwner::Parent(Parent {
+                    parent: Some(Owner {
+                        address,
+                        checkpoint_viewed_at: self.0.checkpoint_viewed_at,
+                        root_version: Some(self.0.root_version()),
+                    }),
+                }))
             }
             O::Shared {
                 initial_shared_version,
@@ -656,9 +656,6 @@ impl ObjectImpl<'_> {
         let Some(filter) = filter
             .unwrap_or_default()
             .intersect(TransactionBlockFilter {
-                #[cfg(not(feature = "staging"))]
-                recv_address: Some(self.0.address),
-                #[cfg(feature = "staging")]
                 affected_address: Some(self.0.address),
                 ..Default::default()
             })

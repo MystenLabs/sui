@@ -17,30 +17,32 @@ query getDynamicFieldObject($parentId: SuiAddress!, $name: DynamicFieldName!) {
 						__typename
 						... on Parent {
 							parent {
-								address
-								digest
-								version
-								storageRebate
-								owner {
-									__typename
-									... on Parent {
-										parent {
-											address
-										}
-									}
-								}
-								previousTransactionBlock {
+								asObject {
+									address
 									digest
-								}
-								asMoveObject {
-									contents {
-										data
-										type {
-											repr
-											layout
+									version
+									storageRebate
+									owner {
+										__typename
+										... on Parent {
+											parent {
+												address
+											}
 										}
 									}
-									hasPublicTransfer
+									previousTransactionBlock {
+										digest
+									}
+									asMoveObject {
+										contents {
+											data
+											type {
+												repr
+												layout
+											}
+										}
+										hasPublicTransfer
+									}
 								}
 							}
 						}

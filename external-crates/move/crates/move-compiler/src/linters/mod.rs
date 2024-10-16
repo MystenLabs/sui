@@ -15,6 +15,7 @@ pub mod abort_constant;
 pub mod constant_naming;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
+pub mod redundant_ref_deref;
 pub mod self_assignment;
 pub mod unnecessary_conditional;
 pub mod unnecessary_while_loop;
@@ -146,6 +147,12 @@ lints!(
         "self_assignment",
         "assignment preserves the same value"
     ),
+    (
+        RedundantRefDeref,
+        LinterDiagnosticCategory::Complexity,
+        "redundant_ref_deref",
+        "redundant reference/dereference"
+    )
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -181,6 +188,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 loop_without_exit::LoopWithoutExit.visitor(),
                 unnecessary_conditional::UnnecessaryConditional.visitor(),
                 self_assignment::SelfAssignmentVisitor.visitor(),
+                redundant_ref_deref::RedundantRefDerefVisitor.visitor(),
             ]
         }
     }

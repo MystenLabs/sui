@@ -313,23 +313,12 @@ export type AddressOwner = {
 /** The possible relationship types for a transaction block: sent, or received. */
 export enum AddressTransactionBlockRelationship {
   /**
-   * Transactions that sent objects to this address. NOTE: this input filter has been deprecated
-   * in favor of `AFFECTED`, which offers an easier to understand behavior.
-   *
-   * This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-   * `AFFECTED` is introduced, whichever is later.
+   * Transactions that this address was involved in, either as the sender, sponsor, or as the
+   * owner of some object that was created, modified or transfered.
    */
-  Recv = 'RECV',
+  Affected = 'AFFECTED',
   /** Transactions this address has sent. */
-  Sent = 'SENT',
-  /**
-   * Transactions this address has sent. NOTE: this input filter has been deprecated in favor of
-   * `SENT` which behaves identically but is named more clearly. Both filters restrict
-   * transactions by their sender, only, not signers in general.
-   *
-   * This filter will be removed with 1.36.0 (2024-10-14).
-   */
-  Sign = 'SIGN'
+  Sent = 'SENT'
 }
 
 /** System transaction for creating the on-chain state used by zkLogin. */
@@ -1394,6 +1383,25 @@ export type EpochTransactionBlocksArgs = {
   scanLimit?: InputMaybe<Scalars['Int']['input']>;
 };
 
+export type EpochConnection = {
+  __typename?: 'EpochConnection';
+  /** A list of edges. */
+  edges: Array<EpochEdge>;
+  /** A list of nodes. */
+  nodes: Array<Epoch>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+};
+
+/** An edge in a connection. */
+export type EpochEdge = {
+  __typename?: 'EpochEdge';
+  /** A cursor for use in pagination */
+  cursor: Scalars['String']['output'];
+  /** The item at the end of the edge */
+  node: Epoch;
+};
+
 export type Event = {
   __typename?: 'Event';
   /** The Base64 encoded BCS serialized bytes of the event. */
@@ -1412,6 +1420,12 @@ export type Event = {
   sendingModule?: Maybe<MoveModule>;
   /** UTC timestamp in milliseconds since epoch (1/1/1970) */
   timestamp?: Maybe<Scalars['DateTime']['output']>;
+  /**
+   * The transaction block that emitted this event. This information is only available for
+   * events from indexed transactions, and not from transactions that have just been executed or
+   * dry-run.
+   */
+  transactionBlock?: Maybe<TransactionBlock>;
 };
 
 export type EventConnection = {
@@ -3278,12 +3292,7 @@ export enum ObjectKind {
    * The object is loaded from serialized data, such as the contents of a transaction that hasn't
    * been indexed yet.
    */
-  NotIndexed = 'NOT_INDEXED',
-  /**
-   * The object is deleted or wrapped and only partial information can be loaded from the
-   * indexer.
-   */
-  WrappedOrDeleted = 'WRAPPED_OR_DELETED'
+  NotIndexed = 'NOT_INDEXED'
 }
 
 /** The object's owner type: Immutable, Shared, Parent, or Address. */
@@ -3520,12 +3529,14 @@ export type PageInfo = {
 
 /**
  * If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
- * the dynamic field, or the intermediate Field object itself). Also note that if the owner
- * is a parent, then it's guaranteed to be an object.
+ * the dynamic field, or the intermediate Field object itself), and it is owned by another object.
+ *
+ * Although its owner is guaranteed to be an object, it is exposed as an Owner, as the parent
+ * object could be wrapped and therefore not directly accessible.
  */
 export type Parent = {
   __typename?: 'Parent';
-  parent?: Maybe<Object>;
+  parent?: Maybe<Owner>;
 };
 
 /** A single transaction, or command, in the programmable transaction block. */
@@ -3717,6 +3728,7 @@ export type Query = {
   dryRunTransactionBlock: DryRunResult;
   /** Fetch epoch information by ID (defaults to the latest epoch). */
   epoch?: Maybe<Epoch>;
+  epochs: EpochConnection;
   /**
    * Query events that are emitted in the network.
    * We currently do not support filtering by emitting module and event type
@@ -3883,6 +3895,14 @@ export type QueryDryRunTransactionBlockArgs = {
 
 export type QueryEpochArgs = {
   id?: InputMaybe<Scalars['UInt53']['input']>;
+};
+
+
+export type QueryEpochsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -4930,6 +4950,11 @@ export type TransactionBlockEffectsUnchangedSharedObjectsArgs = {
 };
 
 export type TransactionBlockFilter = {
+  /**
+   * Limit to transactions that interacted with the given address. The address could be a
+   * sender, sponsor, or recipient of the transaction.
+   */
+  affectedAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   /** Limit to transactions that occured strictly after the given checkpoint. */
   afterCheckpoint?: InputMaybe<Scalars['UInt53']['input']>;
   /** Limit to transactions in the given checkpoint. */
@@ -4959,25 +4984,8 @@ export type TransactionBlockFilter = {
   inputObject?: InputMaybe<Scalars['SuiAddress']['input']>;
   /** An input filter selecting for either system or programmable transactions. */
   kind?: InputMaybe<TransactionBlockKindInput>;
-  /**
-   * Limit to transactions that sent an object to the given address. NOTE: this input filter has
-   * been deprecated in favor of `affectedAddress` which offers an easier to understand
-   * behavior.
-   *
-   * This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-   * `affectedAddress` is introduced, whichever is later.
-   */
-  recvAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   /** Limit to transactions that were sent by the given address. */
   sentAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
-  /**
-   * Limit to transactions that were sent by the given address. NOTE: this input filter has been
-   * deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
-   * Both filters restrict transactions by their sender, only, not signers in general.
-   *
-   * This filter will be removed with 1.36.0 (2024-10-14).
-   */
-  signAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   /** Select transactions by their digest. */
   transactionIds?: InputMaybe<Array<Scalars['String']['input']>>;
 };
@@ -5433,7 +5441,7 @@ export type GetDynamicFieldObjectQueryVariables = Exact<{
 }>;
 
 
-export type GetDynamicFieldObjectQuery = { __typename?: 'Query', owner?: { __typename?: 'Owner', dynamicObjectField?: { __typename?: 'DynamicField', value?: { __typename: 'MoveObject', owner?: { __typename: 'AddressOwner' } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any, digest?: string | null, version: any, storageRebate?: any | null, owner?: { __typename: 'AddressOwner' } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared' } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null } } | null } | null } | null } | { __typename: 'Shared' } | null } | { __typename: 'MoveValue' } | null } | null } | null };
+export type GetDynamicFieldObjectQuery = { __typename?: 'Query', owner?: { __typename?: 'Owner', dynamicObjectField?: { __typename?: 'DynamicField', value?: { __typename: 'MoveObject', owner?: { __typename: 'AddressOwner' } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any, digest?: string | null, version: any, storageRebate?: any | null, owner?: { __typename: 'AddressOwner' } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Owner', address: any } | null } | { __typename: 'Shared' } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null } } | null } | null } | null } | null } | { __typename: 'Shared' } | null } | { __typename: 'MoveValue' } | null } | null } | null };
 
 export type GetDynamicFieldsQueryVariables = Exact<{
   parentId: Scalars['SuiAddress']['input'];
@@ -5577,7 +5585,7 @@ export type GetOwnedObjectsQueryVariables = Exact<{
 }>;
 
 
-export type GetOwnedObjectsQuery = { __typename?: 'Query', address?: { __typename?: 'Address', objects: { __typename?: 'MoveObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'MoveObject', bcs?: any | null, hasPublicTransfer?: boolean, storageRebate?: any | null, digest?: string | null, version: any, objectId: any, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null }> } } | null };
+export type GetOwnedObjectsQuery = { __typename?: 'Query', address?: { __typename?: 'Address', objects: { __typename?: 'MoveObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'MoveObject', bcs?: any | null, hasPublicTransfer?: boolean, storageRebate?: any | null, digest?: string | null, version: any, objectId: any, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Owner', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null }> } } | null };
 
 export type GetObjectQueryVariables = Exact<{
   id: Scalars['SuiAddress']['input'];
@@ -5591,7 +5599,7 @@ export type GetObjectQueryVariables = Exact<{
 }>;
 
 
-export type GetObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', version: any, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | null };
+export type GetObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', version: any, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Owner', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | null };
 
 export type TryGetPastObjectQueryVariables = Exact<{
   id: Scalars['SuiAddress']['input'];
@@ -5606,7 +5614,7 @@ export type TryGetPastObjectQueryVariables = Exact<{
 }>;
 
 
-export type TryGetPastObjectQuery = { __typename?: 'Query', current?: { __typename?: 'Object', address: any, version: any } | null, object?: { __typename?: 'Object', version: any, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | null };
+export type TryGetPastObjectQuery = { __typename?: 'Query', current?: { __typename?: 'Object', address: any, version: any } | null, object?: { __typename?: 'Object', version: any, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Owner', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | null };
 
 export type MultiGetObjectsQueryVariables = Exact<{
   ids: Array<Scalars['SuiAddress']['input']> | Scalars['SuiAddress']['input'];
@@ -5622,17 +5630,17 @@ export type MultiGetObjectsQueryVariables = Exact<{
 }>;
 
 
-export type MultiGetObjectsQuery = { __typename?: 'Query', objects: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', version: any, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null }> } };
+export type MultiGetObjectsQuery = { __typename?: 'Query', objects: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', version: any, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Owner', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null }> } };
 
-export type Rpc_Object_FieldsFragment = { __typename?: 'Object', version: any, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null };
+export type Rpc_Object_FieldsFragment = { __typename?: 'Object', version: any, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Owner', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null };
 
-export type Rpc_Move_Object_FieldsFragment = { __typename?: 'MoveObject', bcs?: any | null, hasPublicTransfer?: boolean, storageRebate?: any | null, digest?: string | null, version: any, objectId: any, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null };
+export type Rpc_Move_Object_FieldsFragment = { __typename?: 'MoveObject', bcs?: any | null, hasPublicTransfer?: boolean, storageRebate?: any | null, digest?: string | null, version: any, objectId: any, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout?: any | null, signature: any } } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Owner', address: any } | null } | { __typename: 'Shared', initialSharedVersion: any } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null };
 
 type Rpc_Object_Owner_Fields_AddressOwner_Fragment = { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null };
 
 type Rpc_Object_Owner_Fields_Immutable_Fragment = { __typename: 'Immutable' };
 
-type Rpc_Object_Owner_Fields_Parent_Fragment = { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null };
+type Rpc_Object_Owner_Fields_Parent_Fragment = { __typename: 'Parent', parent?: { __typename?: 'Owner', address: any } | null };
 
 type Rpc_Object_Owner_Fields_Shared_Fragment = { __typename: 'Shared', initialSharedVersion: any };
 
@@ -7138,30 +7146,32 @@ export const GetDynamicFieldObjectDocument = new TypedDocumentString(`
             __typename
             ... on Parent {
               parent {
-                address
-                digest
-                version
-                storageRebate
-                owner {
-                  __typename
-                  ... on Parent {
-                    parent {
-                      address
-                    }
-                  }
-                }
-                previousTransactionBlock {
+                asObject {
+                  address
                   digest
-                }
-                asMoveObject {
-                  contents {
-                    data
-                    type {
-                      repr
-                      layout
+                  version
+                  storageRebate
+                  owner {
+                    __typename
+                    ... on Parent {
+                      parent {
+                        address
+                      }
                     }
                   }
-                  hasPublicTransfer
+                  previousTransactionBlock {
+                    digest
+                  }
+                  asMoveObject {
+                    contents {
+                      data
+                      type {
+                        repr
+                        layout
+                      }
+                    }
+                    hasPublicTransfer
+                  }
                 }
               }
             }

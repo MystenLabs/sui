@@ -1,5 +1,22 @@
 # @mysten/graphql-transport
 
+## 0.2.23
+
+### Patch Changes
+
+- 5299c18: Update the GraphQL transport to account for the removal of recvAddress and the
+  introduction of affectedAddress.
+
+## 0.2.22
+
+### Patch Changes
+
+- af39b6a: Update to reflect GraphQL schema renaming TransactionBlockFilter.signAddress to
+  .sentAddress.
+- 4d63e50: Update GraphQL transport layer to accommodate change in schema
+- 2cddd9d: Update the GraphQL transport to account for the removal of recvAddress and the
+  introduction of affectedAddress.
+
 ## 0.2.21
 
 ### Patch Changes

@@ -114,28 +114,33 @@ export const testnetPools: PoolMap = {
 
 export const mainnetPools: PoolMap = {
 	DEEP_SUI: {
-		address: `0xe9aecf5859310f8b596fbe8488222a7fb15a55003455c9f42d1b60fab9cca9ba`,
+		address: `0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'SUI',
 	},
 	SUI_USDC: {
-		address: ``,
+		address: `0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407`,
 		baseCoin: 'SUI',
 		quoteCoin: 'USDC',
 	},
 	DEEP_USDC: {
-		address: `0xde096bb2c59538a25c89229127fe0bc8b63ecdbe52a3693099cc40a1d8a2cfd4`,
+		address: `0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'USDC',
 	},
-	USDT_USDC: {
-		address: ``,
-		baseCoin: 'USDT',
+	WUSDT_USDC: {
+		address: `0x52f9bf16d9e7eff79da73d5e3dea39fe1ef8c77684bf4ec2c6566b41396404d0`,
+		baseCoin: 'WUSDT',
 		quoteCoin: 'USDC',
 	},
 	WUSDC_USDC: {
-		address: ``,
+		address: `0xc69f7755fec146583e276a104bcf91e0c9f0cab91dcdb1c202e8d76a5a5a1101`,
 		baseCoin: 'WUSDC',
+		quoteCoin: 'USDC',
+	},
+	BETH_USDC: {
+		address: `0x1109352b9112717bd2a7c3eb9a416fff1ba6951760f5bdd5424cf5e4e5b3e65c`,
+		baseCoin: 'BETH',
 		quoteCoin: 'USDC',
 	},
 };

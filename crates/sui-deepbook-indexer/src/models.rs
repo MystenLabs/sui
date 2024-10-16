@@ -4,11 +4,12 @@
 use diesel::data_types::PgTimestamp;
 use diesel::{Identifiable, Insertable, Queryable, Selectable};
 
+use serde::Serialize;
 use sui_indexer_builder::{Task, LIVE_TASK_TARGET_CHECKPOINT};
 
 use crate::schema::{
-    balances, flashloans, order_fills, order_updates, pool_prices, progress_store, proposals,
-    rebates, stakes, sui_error_transactions, trade_params_update, votes,
+    balances, flashloans, order_fills, order_updates, pool_prices, pools, progress_store,
+    proposals, rebates, stakes, sui_error_transactions, trade_params_update, votes,
 };
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -55,6 +56,13 @@ pub struct OrderFill {
     pub maker_balance_manager_id: String,
     pub taker_balance_manager_id: String,
     pub onchain_timestamp: i64,
+}
+
+#[derive(Queryable)]
+pub struct OrderFillSummary {
+    pub maker_balance_manager_id: String,
+    pub taker_balance_manager_id: String,
+    pub base_quantity: i64,
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -162,6 +170,24 @@ pub struct Votes {
     pub from_proposal_id: Option<String>,
     pub to_proposal_id: String,
     pub stake: i64,
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug, Serialize)]
+#[diesel(table_name = pools, primary_key(pool_id))]
+pub struct Pools {
+    pub pool_id: String,
+    pub pool_name: String,
+    pub base_asset_id: String,
+    pub base_asset_decimals: i16,
+    pub base_asset_symbol: String,
+    pub base_asset_name: String,
+    pub quote_asset_id: String,
+    pub quote_asset_decimals: i16,
+    pub quote_asset_symbol: String,
+    pub quote_asset_name: String,
+    pub min_size: i32,
+    pub lot_size: i32,
+    pub tick_size: i32,
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]

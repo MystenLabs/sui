@@ -181,8 +181,8 @@ impl StakedSui {
     }
 
     /// The owner type of this object: Immutable, Shared, Parent, Address
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
-        ObjectImpl(&self.super_.super_).owner(ctx).await
+    pub(crate) async fn owner(&self) -> Option<ObjectOwner> {
+        ObjectImpl(&self.super_.super_).owner().await
     }
 
     /// The transaction block that created this version of the object.
