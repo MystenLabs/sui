@@ -148,7 +148,7 @@ async fn fetch_coins<P: ObjectProvider<Error = E>, E>(
                     o.owner,
                     coin_type,
                     // we know this is a coin, safe to unwrap
-                    Coin::extract_balance_if_coin(&o).unwrap().unwrap(),
+                    Coin::extract_balance_if_coin(&o).unwrap().unwrap().1,
                 ))
             }
         }
