@@ -138,11 +138,16 @@ pub fn collect_spec_global_variable_info(
         .iter()
         .filter_map(|bc| match bc {
             Bytecode::Call(_, _, Operation::Function(module_id, fun_id, type_inst), _, _) => {
-                if module_id.qualified(*fun_id) == spec_module_id.qualified(global_function_id) {
+                let callee_id = module_id.qualified(*fun_id);
+
+                if callee_id == func_env.get_qualified_id() {
+                    return None;
+                }
+
+                if callee_id == spec_module_id.qualified(global_function_id) {
                     return Some((vec![type_inst.clone()], vec![]));
                 }
 
-                let callee_id = module_id.qualified(*fun_id);
                 let fun_id_with_info = match targets.get_opaque_spec_by_fun(&callee_id) {
                     Some(spec_id) => {
                         if spec_id != &func_env.get_qualified_id() {
@@ -205,7 +210,7 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
         mut data: FunctionData,
         scc_opt: Option<&[FunctionEnv]>,
     ) -> FunctionData {
-        assert!(scc_opt.is_none(), "recursive functions not supported");
+        // assert!(scc_opt.is_none(), "recursive functions not supported");
 
         let spec_module_id = func_env
             .module_env

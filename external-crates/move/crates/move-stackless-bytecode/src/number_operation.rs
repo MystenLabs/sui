@@ -295,6 +295,10 @@ impl GlobalNumberOperationState {
         self.struct_operation_map.insert((mid, sid), field_oper_map);
     }
 
+    pub fn insert_node_num_oper(&mut self, node_id: NodeId, num_oper: NumOperation) {
+        self.exp_operation_map.insert(node_id, num_oper);
+    }
+
     /// Updates the number operation for the given node id.
     pub fn update_node_oper(
         &mut self,

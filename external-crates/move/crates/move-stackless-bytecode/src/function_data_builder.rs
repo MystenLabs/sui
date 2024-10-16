@@ -7,6 +7,8 @@
 
 use crate::{
     function_target::{FunctionData, FunctionTarget},
+    function_target_pipeline::FunctionVariant,
+    number_operation::GlobalNumberOperationState,
     stackless_bytecode::{AttrId, Bytecode, HavocKind, Label, Operation, PropKind},
 };
 use move_model::{
@@ -244,14 +246,48 @@ impl<'env> FunctionDataBuilder<'env> {
         self.emit_with(|id| {
             Bytecode::Call(id, vec![temp], Operation::Havoc(havoc_kind), vec![], None)
         });
+        self.emit_well_formed(temp);
+    }
+
+    pub fn emit_well_formed(&mut self, temp: TempIndex) {
+        let temp_exp = self.mk_temporary(temp);
+        let temp_exp_node_id = temp_exp.node_id();
         self.emit_prop(
             PropKind::Assume,
             self.mk_call(
                 &BOOL_TYPE,
                 move_model::ast::Operation::WellFormed,
-                vec![self.mk_temporary(temp)],
+                vec![temp_exp],
             ),
         );
+
+        // This is a hack to allow to emit well formedness for the temporary
+        // variable during the bytecode translation to boogie, *after* the
+        // GlobalNumberOperationState has been computed. This is necessary
+        // because the GlobalNumberOperationState is computed as the last
+        // processor in the pipeline, *before* the bytecode translation to
+        // boogie. If the GlobalNumberOperationState is computed, insert the
+        // computed value for the temporary variable.
+        if let Some(global_state) = &self
+            .fun_env
+            .module_env
+            .env
+            .get_extension::<GlobalNumberOperationState>()
+        {
+            if let Some(num_oper) = global_state.get_temp_index_oper(
+                self.fun_env.module_env.get_id(),
+                self.fun_env.get_id(),
+                temp,
+                self.data.variant == FunctionVariant::Baseline,
+            ) {
+                self.fun_env
+                    .module_env
+                    .env
+                    .update_extension::<GlobalNumberOperationState>(|state| {
+                        state.insert_node_num_oper(temp_exp_node_id, *num_oper);
+                    });
+            }
+        }
     }
 
     pub fn dup_code(&mut self, code: &[Bytecode]) -> Vec<Bytecode> {
