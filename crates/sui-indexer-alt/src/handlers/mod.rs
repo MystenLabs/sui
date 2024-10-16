@@ -24,6 +24,7 @@ pub mod kv_checkpoints;
 pub mod kv_objects;
 pub mod kv_transactions;
 pub mod tx_affected_objects;
+pub mod tx_balance_changes;
 
 /// Extra buffer added to the channel between the handler and the committer. There does not need to
 /// be a huge capacity here because the committer is already buffering rows to insert internally.

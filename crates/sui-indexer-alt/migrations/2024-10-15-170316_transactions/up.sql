@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS kv_transactions
 (
-    tx_sequence_number          BIGINT        NOT NULL,
+    tx_sequence_number          BIGINT        PRIMARY KEY,
     cp_sequence_number          BIGINT        NOT NULL,
     timestamp_ms                BIGINT        NOT NULL,
     -- BCS serialized TransactionData
@@ -8,8 +8,5 @@ CREATE TABLE IF NOT EXISTS kv_transactions
     -- BCS serialized TransactionEffects
     raw_effects                 BYTEA         NOT NULL,
     -- BCS serialized array of Events
-    events                      BYTEA         NOT NULL,
-    -- BCS serialized array of BalanceChanges
-    balance_changes             BYTEA         NOT NULL,
-    PRIMARY KEY (tx_sequence_number)
+    events                      BYTEA         NOT NULL
 );
