@@ -13178,6 +13178,7 @@ dependencies = [
  "tempfile",
  "test-fuzz",
  "thiserror",
+ "tidehunter",
  "tokio",
  "tokio-retry",
  "tokio-stream",
