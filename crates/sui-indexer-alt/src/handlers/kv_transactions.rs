@@ -46,7 +46,7 @@ impl Handler for KvTransactions {
             let tx_sequence_number = (first_tx + i) as i64;
             let transaction = &tx.transaction.data().intent_message().value;
             let effects = &tx.effects;
-            let events: Vec<_> = tx.events.iter().map(|e| e.data.iter()).flatten().collect();
+            let events: Vec<_> = tx.events.iter().flat_map(|e| e.data.iter()).collect();
             let balance_changes = balance_changes(tx).with_context(|| {
                 format!("Calculating balance changes for transaction {tx_sequence_number}")
             })?;
@@ -108,7 +108,7 @@ fn balance_changes(transaction: &CheckpointTransaction) -> Result<Vec<StoredBala
     Ok(changes
         .into_iter()
         .map(|((owner, coin_type), amount)| StoredBalanceChange {
-            owner: owner.clone(),
+            owner: *owner,
             coin_type: coin_type.to_canonical_string(/* with_prefix */ true),
             amount,
         })
