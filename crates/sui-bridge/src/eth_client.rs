@@ -36,6 +36,10 @@ impl EthClient<MeteredEthHttpProvier> {
         self_.describe().await?;
         Ok(self_)
     }
+
+    pub fn provider(&self) -> Arc<Provider<MeteredEthHttpProvier>> {
+        Arc::new(self.provider.clone())
+    }
 }
 
 #[cfg(test)]

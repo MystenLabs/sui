@@ -1,9 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config::{BridgeServerConfig, WatchdogConfig};
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
+use crate::metered_eth_provider::MeteredEthHttpProvier;
+use crate::sui_bridge_watchdog::eth_bridge_status::EthBridgeStatus;
+use crate::sui_bridge_watchdog::eth_vault_balance::EthVaultBalance;
+use crate::sui_bridge_watchdog::metrics::WatchdogMetrics;
+use crate::sui_bridge_watchdog::sui_bridge_status::SuiBridgeStatus;
+use crate::sui_bridge_watchdog::total_suppies::TotalSupplies;
+use crate::sui_bridge_watchdog::{BridgeWatchDog, Observable};
 use crate::types::BridgeCommittee;
-use crate::utils::{get_committee_voting_power_by_name, get_validator_names_by_pub_keys};
+use crate::utils::{
+    get_committee_voting_power_by_name, get_eth_contract_addresses, get_validator_names_by_pub_keys,
+};
 use crate::{
     action_executor::BridgeActionExecutor,
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
@@ -18,6 +28,7 @@ use crate::{
     sui_syncer::SuiSyncer,
 };
 use arc_swap::ArcSwap;
+use ethers::providers::Provider;
 use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::BTreeMap;
@@ -45,6 +56,7 @@ pub async fn run_bridge_node(
 ) -> anyhow::Result<JoinHandle<()>> {
     init_all_struct_tags();
     let metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
+    let watchdog_config = config.watchdog_config.clone();
     let (server_config, client_config) = config.validate(metrics.clone()).await?;
     let sui_chain_identifier = server_config
         .sui_client
@@ -73,6 +85,15 @@ pub async fn run_bridge_node(
             .await
             .expect("Failed to get committee"),
     );
+
+    // Start watchdog
+    start_watchdog(
+        watchdog_config,
+        &prometheus_registry,
+        server_config.eth_client.provider(),
+        &server_config,
+    )
+    .await?;
 
     // Update voting right metrics
     // Before reconfiguration happens we only set it once when the node starts
@@ -123,6 +144,54 @@ pub async fn run_bridge_node(
         metrics,
         Arc::new(metadata),
     ))
+}
+
+async fn start_watchdog(
+    watchdog_config: Option<WatchdogConfig>,
+    registry: &prometheus::Registry,
+    eth_provider: Arc<Provider<MeteredEthHttpProvier>>,
+    server_config: &BridgeServerConfig,
+) -> anyhow::Result<()> {
+    let watchdog_metrics = WatchdogMetrics::new(registry);
+    let (_committee_address, _limiter_address, vault_address, _config_address, weth_address) =
+        get_eth_contract_addresses(server_config.eth_bridge_proxy_address, &eth_provider).await?;
+
+    let eth_vault_balance = EthVaultBalance::new(
+        eth_provider.clone(),
+        vault_address,
+        weth_address,
+        watchdog_metrics.eth_vault_balance.clone(),
+    );
+
+    let eth_bridge_status = EthBridgeStatus::new(
+        eth_provider,
+        server_config.eth_bridge_proxy_address,
+        watchdog_metrics.eth_bridge_paused.clone(),
+    );
+
+    let sui_bridge_status = SuiBridgeStatus::new(
+        server_config.sui_client.clone(),
+        watchdog_metrics.sui_bridge_paused.clone(),
+    );
+
+    let mut observables: Vec<Box<dyn Observable + Send + Sync>> = vec![
+        Box::new(eth_vault_balance),
+        Box::new(eth_bridge_status),
+        Box::new(sui_bridge_status),
+    ];
+    if let Some(watchdog_config) = watchdog_config {
+        if !watchdog_config.total_supplies.is_empty() {
+            let total_supplies = TotalSupplies::new(
+                Arc::new(server_config.sui_client.sui_client().clone()),
+                watchdog_config.total_supplies,
+                watchdog_metrics.total_supplies.clone(),
+            );
+            observables.push(Box::new(total_supplies));
+        }
+    }
+
+    BridgeWatchDog::new(observables).run().await;
+    Ok(())
 }
 
 // TODO: is there a way to clean up the overrides after it's stored in DB?
@@ -503,6 +572,7 @@ mod tests {
             db_path: None,
             metrics_key_pair: default_ed25519_key_pair(),
             metrics: None,
+            watchdog_config: None,
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
@@ -569,6 +639,7 @@ mod tests {
             db_path: Some(db_path),
             metrics_key_pair: default_ed25519_key_pair(),
             metrics: None,
+            watchdog_config: None,
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
@@ -646,6 +717,7 @@ mod tests {
             db_path: Some(db_path),
             metrics_key_pair: default_ed25519_key_pair(),
             metrics: None,
+            watchdog_config: None,
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
