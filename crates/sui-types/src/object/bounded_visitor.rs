@@ -299,12 +299,13 @@ impl Default for BoundedVisitor {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use std::str::FromStr;
+
+    use crate::parse_sui_struct_tag;
 
     use super::*;
 
     use expect_test::expect;
-    use move_core_types::{identifier::Identifier, language_storage::StructTag};
+    use move_core_types::identifier::Identifier;
 
     #[test]
     fn test_success() {
@@ -495,7 +496,7 @@ pub(crate) mod tests {
 
     /// Create a struct value for test purposes.
     pub(crate) fn value_(rep: &str, fields: Vec<(&str, A::MoveValue)>) -> A::MoveValue {
-        let type_ = StructTag::from_str(rep).unwrap();
+        let type_ = parse_sui_struct_tag(rep).unwrap();
         let fields = fields
             .into_iter()
             .map(|(name, value)| (ident_(name), value))
@@ -506,7 +507,7 @@ pub(crate) mod tests {
 
     /// Create a struct layout for test purposes.
     pub(crate) fn layout_(rep: &str, fields: Vec<FieldLayout<'_>>) -> A::MoveTypeLayout {
-        let type_ = StructTag::from_str(rep).unwrap();
+        let type_ = parse_sui_struct_tag(rep).unwrap();
         let fields = fields
             .into_iter()
             .map(|(name, layout)| A::MoveFieldLayout::new(ident_(name), layout))
@@ -525,7 +526,7 @@ pub(crate) mod tests {
         tag: u16,
         fields: Vec<(&str, A::MoveValue)>,
     ) -> A::MoveValue {
-        let type_ = StructTag::from_str(rep).unwrap();
+        let type_ = parse_sui_struct_tag(rep).unwrap();
         let fields = fields
             .into_iter()
             .map(|(name, value)| (ident_(name), value))
@@ -544,7 +545,7 @@ pub(crate) mod tests {
         rep: &str,
         variants: Vec<(Variant<'_>, Vec<FieldLayout<'_>>)>,
     ) -> A::MoveTypeLayout {
-        let type_ = StructTag::from_str(rep).unwrap();
+        let type_ = parse_sui_struct_tag(rep).unwrap();
         let variants = variants
             .into_iter()
             .map(|((name, tag), fields)| {

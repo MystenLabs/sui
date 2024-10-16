@@ -15,7 +15,6 @@ use serde_with::serde_as;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::abi::EthBridgeCommittee;
 use sui_bridge::abi::{eth_sui_bridge, EthSuiBridge};
@@ -37,6 +36,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::bridge::{BridgeChainId, BRIDGE_MODULE_NAME};
 use sui_types::crypto::{Signature, SuiKeyPair};
+use sui_types::parse_sui_type_tag;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, Transaction, TransactionData};
 use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
@@ -175,7 +175,7 @@ pub enum GovernanceClientCommands {
         nonce: u64,
         #[clap(name = "token-ids", use_value_delimiter = true, long)]
         token_ids: Vec<u8>,
-        #[clap(name = "token-type-names", use_value_delimiter = true, long)]
+        #[clap(name = "token-type-names", use_value_delimiter = true, long, value_parser = parse_sui_type_tag)]
         token_type_names: Vec<TypeTag>,
         #[clap(name = "token-prices", use_value_delimiter = true, long)]
         token_prices: Vec<u64>,
@@ -587,7 +587,7 @@ impl BridgeClientCommands {
                 recipient_address,
             } => {
                 let target_chain = BridgeChainId::try_from(target_chain).expect("Invalid chain id");
-                let coin_type = TypeTag::from_str(&coin_type).expect("Invalid coin type");
+                let coin_type = parse_sui_type_tag(&coin_type).expect("Invalid coin type");
                 deposit_on_sui(
                     coin_object_id,
                     coin_type,

@@ -17,6 +17,7 @@ use move_core_types::{
 use sui_types::{
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
     error::ExecutionErrorKind,
+    parse_sui_type_tag,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
     SUI_FRAMEWORK_PACKAGE_ID,
@@ -30,8 +31,8 @@ use sui_types::{
     error::SuiError,
 };
 
+use std::env;
 use std::{collections::HashSet, path::PathBuf};
-use std::{env, str::FromStr};
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::move_package::UpgradeCap;
 
@@ -786,7 +787,7 @@ async fn test_entry_point_vector_empty() {
 
     // call a function with an empty vector
     let type_tag =
-        TypeTag::from_str(format!("{}::entry_point_vector::Obj", package.0).as_str()).unwrap();
+        parse_sui_type_tag(format!("{}::entry_point_vector::Obj", package.0).as_str()).unwrap();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         let empty_vec =
@@ -1347,7 +1348,7 @@ async fn test_entry_point_vector_any() {
     .await;
 
     let any_type_tag =
-        TypeTag::from_str(format!("{}::entry_point_vector::Any", package.0).as_str()).unwrap();
+        parse_sui_type_tag(format!("{}::entry_point_vector::Any", package.0).as_str()).unwrap();
 
     // mint an owned object
     let effects = call_move(
@@ -1471,7 +1472,7 @@ async fn test_entry_point_vector_any_error() {
     .await;
 
     let any_type_tag =
-        TypeTag::from_str(format!("{}::entry_point_vector::Any", package.0).as_str()).unwrap();
+        parse_sui_type_tag(format!("{}::entry_point_vector::Any", package.0).as_str()).unwrap();
 
     // mint an owned object of a wrong type
     let effects = call_move(

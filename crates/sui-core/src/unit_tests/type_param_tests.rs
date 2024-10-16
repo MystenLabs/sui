@@ -1,20 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
-
 use crate::authority::{
     authority_tests::{call_move, init_state_with_ids, TestCallArg},
     move_integration_tests::build_and_publish_test_package,
 };
 
-use move_core_types::language_storage::TypeTag;
-
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::{
     base_types::ObjectID,
     crypto::{get_key_pair, AccountKeyPair},
 };
+use sui_types::{effects::TransactionEffectsAPI, parse_sui_type_tag};
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
@@ -51,7 +47,7 @@ async fn test_same_module_type_param() {
     .unwrap();
 
     let created_object_id = effects.created()[0].0 .0;
-    let type_param = TypeTag::from_str(format!("{}::m1::Object", package.0).as_str()).unwrap();
+    let type_param = parse_sui_type_tag(format!("{}::m1::Object", package.0).as_str()).unwrap();
 
     let effects = call_move(
         &authority,
@@ -109,7 +105,7 @@ async fn test_different_module_type_param() {
 
     let created_object_id = effects.created()[0].0 .0;
     let type_param =
-        TypeTag::from_str(format!("{}::m2::AnotherObject", package.0).as_str()).unwrap();
+        parse_sui_type_tag(format!("{}::m2::AnotherObject", package.0).as_str()).unwrap();
 
     let effects = call_move(
         &authority,
@@ -167,7 +163,7 @@ async fn test_nested_type_param() {
     .unwrap();
 
     let created_object_id = effects.created()[0].0 .0;
-    let type_param = TypeTag::from_str(
+    let type_param = parse_sui_type_tag(
         format!(
             "{}::m1::GenObject<{}::m2::AnotherObject>",
             package.0, package.0
@@ -232,7 +228,7 @@ async fn test_nested_type_param_different_module() {
     .unwrap();
 
     let created_object_id = effects.created()[0].0 .0;
-    let type_param = TypeTag::from_str(
+    let type_param = parse_sui_type_tag(
         format!(
             "{}::m1::GenObject<{}::m2::AnotherObject>",
             package.0, package.0
@@ -308,7 +304,7 @@ async fn test_different_package_type_param() {
 
     let created_object_id = effects.created()[0].0 .0;
     let type_param =
-        TypeTag::from_str(format!("{}::m2::AnotherObject", package.0).as_str()).unwrap();
+        parse_sui_type_tag(format!("{}::m2::AnotherObject", package.0).as_str()).unwrap();
 
     let effects = call_move(
         &authority,
@@ -376,7 +372,7 @@ async fn test_nested_type_param_different_package() {
     .unwrap();
 
     let created_object_id = effects.created()[0].0 .0;
-    let type_param = TypeTag::from_str(
+    let type_param = parse_sui_type_tag(
         format!(
             "{}::m1::GenObject<{}::m2::AnotherObject>",
             package.0, package.0

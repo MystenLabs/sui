@@ -13,6 +13,7 @@ use sui_types::{
     dynamic_field::Field,
     full_checkpoint_content::{CheckpointData, CheckpointTransaction},
     object::Object,
+    parse_sui_struct_tag,
 };
 
 use crate::models::VerifiedDomain;
@@ -48,8 +49,8 @@ impl SuinsIndexer {
     /// Useful for testing or custom environments.
     pub fn new(registry_address: String, wrapper_type: String, record_type: String) -> Self {
         let registry_table_id = SuiAddress::from_str(&registry_address).unwrap();
-        let name_record_type = StructTag::from_str(&record_type).unwrap();
-        let subdomain_wrapper_type = StructTag::from_str(&wrapper_type).unwrap();
+        let name_record_type = parse_sui_struct_tag(&record_type).unwrap();
+        let subdomain_wrapper_type = parse_sui_struct_tag(&wrapper_type).unwrap();
 
         Self {
             registry_table_id,

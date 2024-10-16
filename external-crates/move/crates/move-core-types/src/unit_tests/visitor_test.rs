@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Write, str::FromStr};
+use std::fmt::Write;
 
 use crate::{
     account_address::AccountAddress,
@@ -299,7 +299,7 @@ fn traversal() {
     use MoveValue as V;
 
     let type_layout = struct_layout_(
-        "0x0::foo::Bar",
+        struct_tag("0x0", "foo", "Bar"),
         vec![
             ("a", T::U8),
             ("b", T::U16),
@@ -311,10 +311,16 @@ fn traversal() {
             ("h", T::Address),
             ("i", T::Signer),
             ("j", T::Vector(Box::new(T::U8))),
-            ("k", struct_layout_("0x0::foo::Baz", vec![("l", T::U8)])),
+            (
+                "k",
+                struct_layout_(struct_tag("0x0", "foo", "Baz"), vec![("l", T::U8)]),
+            ),
             (
                 "m",
-                enum_layout_("0x0::foo::Qux", vec![("n", vec![("o", T::U8)])]),
+                enum_layout_(
+                    struct_tag("0x0", "foo", "Qux"),
+                    vec![("n", vec![("o", T::U8)])],
+                ),
             ),
         ],
     );
@@ -324,7 +330,7 @@ fn traversal() {
     };
 
     let value = struct_value_(
-        "0x0::foo::Bar",
+        struct_tag("0x0", "foo", "Bar"),
         vec![
             ("a", V::U8(1)),
             ("b", V::U16(2)),
@@ -336,10 +342,18 @@ fn traversal() {
             ("h", V::Address(AccountAddress::ZERO)),
             ("i", V::Signer(AccountAddress::ZERO)),
             ("j", V::Vector(vec![V::U8(7), V::U8(8), V::U8(9)])),
-            ("k", struct_value_("0x0::foo::Baz", vec![("l", V::U8(10))])),
+            (
+                "k",
+                struct_value_(struct_tag("0x0", "foo", "Baz"), vec![("l", V::U8(10))]),
+            ),
             (
                 "m",
-                variant_value_("0x0::foo::Qux", "n", 0, vec![("o", V::U8(11))]),
+                variant_value_(
+                    struct_tag("0x0", "foo", "Qux"),
+                    "n",
+                    0,
+                    vec![("o", V::U8(11))],
+                ),
             ),
         ],
     );
@@ -361,8 +375,8 @@ fn unexpected_eof() {
     use MoveTypeLayout as T;
     use MoveValue as V;
 
-    let type_layout = struct_layout_("0x0::foo::Bar", vec![("a", T::U64)]);
-    let value = struct_value_("0x0::foo::Bar", vec![("a", V::U64(42))]);
+    let type_layout = struct_layout_(struct_tag("0x0", "foo", "Bar"), vec![("a", T::U64)]);
+    let value = struct_value_(struct_tag("0x0", "foo", "Bar"), vec![("a", V::U64(42))]);
 
     let T::Struct(struct_layout) = &type_layout else {
         panic!("Not a struct layout");
@@ -392,8 +406,16 @@ fn unexpected_eof() {
 fn no_enum_tag() {
     use MoveTypeLayout as T;
     use MoveValue as V;
-    let layout = enum_layout_("0x0::foo::Bar", vec![("a", vec![("b", T::U8)])]);
-    let value = variant_value_("0x0::foo::Bar", "a", 0, vec![("b", V::U8(42))]);
+    let layout = enum_layout_(
+        struct_tag("0x0", "foo", "Bar"),
+        vec![("a", vec![("b", T::U8)])],
+    );
+    let value = variant_value_(
+        struct_tag("0x0", "foo", "Bar"),
+        "a",
+        0,
+        vec![("b", V::U8(42))],
+    );
     let mut bytes = serialize(value);
 
     // drop tag
@@ -411,8 +433,16 @@ fn no_enum_tag() {
 fn out_of_range_enum_tag() {
     use MoveTypeLayout as T;
     use MoveValue as V;
-    let layout = enum_layout_("0x0::foo::Bar", vec![("a", vec![("b", T::U8)])]);
-    let value = variant_value_("0x0::foo::Bar", "a", 0, vec![("b", V::U8(42))]);
+    let layout = enum_layout_(
+        struct_tag("0x0", "foo", "Bar"),
+        vec![("a", vec![("b", T::U8)])],
+    );
+    let value = variant_value_(
+        struct_tag("0x0", "foo", "Bar"),
+        "a",
+        0,
+        vec![("b", V::U8(42))],
+    );
     let mut bytes = serialize(value);
 
     // Invalid tag value
@@ -430,8 +460,16 @@ fn out_of_range_enum_tag() {
 fn invalid_variant_tag() {
     use MoveTypeLayout as T;
     use MoveValue as V;
-    let layout = enum_layout_("0x0::foo::Bar", vec![("a", vec![("b", T::U8)])]);
-    let value = variant_value_("0x0::foo::Bar", "a", 0, vec![("b", V::U8(42))]);
+    let layout = enum_layout_(
+        struct_tag("0x0", "foo", "Bar"),
+        vec![("a", vec![("b", T::U8)])],
+    );
+    let value = variant_value_(
+        struct_tag("0x0", "foo", "Bar"),
+        "a",
+        0,
+        vec![("b", V::U8(42))],
+    );
     let mut bytes = serialize(value);
 
     // tag for variant that doesn't exist
@@ -494,18 +532,21 @@ fn nested_datatype_visit() {
     use MoveValue as V;
 
     let type_layout = struct_layout_(
-        "0x0::foo::Bar",
+        struct_tag("0x0", "foo", "Bar"),
         vec![
             (
                 "inner",
                 struct_layout_(
-                    "0x0::baz::Qux",
+                    struct_tag("0x0", "baz", "Qux"),
                     vec![("f", T::U64), ("g", T::Vector(Box::new(T::U32)))],
                 ),
             ),
             (
                 "last",
-                enum_layout_("0x0::foo::Baz", vec![("e", vec![("h", T::U64)])]),
+                enum_layout_(
+                    struct_tag("0x0", "foo", "Baz"),
+                    vec![("e", vec![("h", T::U64)])],
+                ),
             ),
         ],
     );
@@ -515,12 +556,12 @@ fn nested_datatype_visit() {
     };
 
     let value = struct_value_(
-        "0x0::foo::Bar",
+        struct_tag("0x0", "foo", "Bar"),
         vec![
             (
                 "inner",
                 struct_value_(
-                    "0x0::baz::Qux",
+                    struct_tag("0x0", "baz", "Qux"),
                     vec![
                         ("f", V::U64(7)),
                         ("g", V::Vector(vec![V::U32(1), V::U32(2), V::U32(3)])),
@@ -529,7 +570,12 @@ fn nested_datatype_visit() {
             ),
             (
                 "last",
-                variant_value_("0x0::foo::Baz", "e", 0, vec![("h", V::U64(4))]),
+                variant_value_(
+                    struct_tag("0x0", "foo", "Baz"),
+                    "e",
+                    0,
+                    vec![("h", V::U64(4))],
+                ),
             ),
         ],
     );
@@ -721,15 +767,21 @@ fn peek_field_test() {
     }
 
     let type_layout = struct_layout_(
-        "0x0::foo::Bar",
+        struct_tag("0x0", "foo", "Bar"),
         vec![
             ("a", T::U64),
             ("b", T::U32),
             ("c", T::Vector(Box::new(T::U64))),
-            ("d", struct_layout_("0x0::foo::Baz", vec![("e", T::U64)])),
+            (
+                "d",
+                struct_layout_(struct_tag("0x0", "foo", "Baz"), vec![("e", T::U64)]),
+            ),
             (
                 "f",
-                enum_layout_("0x0::foo::Qux", vec![("g", vec![("h", T::U64)])]),
+                enum_layout_(
+                    struct_tag("0x0", "foo", "Qux"),
+                    vec![("g", vec![("h", T::U64)])],
+                ),
             ),
         ],
     );
@@ -739,15 +791,23 @@ fn peek_field_test() {
     };
 
     let value = struct_value_(
-        "0x0::foo::Bar",
+        struct_tag("0x0", "foo", "Bar"),
         vec![
             ("a", V::U64(42)),
             ("b", V::U32(43)),
             ("c", V::Vector(vec![V::U64(44)])),
-            ("d", struct_value_("0x0::foo::Baz", vec![("e", V::U64(45))])),
+            (
+                "d",
+                struct_value_(struct_tag("0x0", "foo", "Baz"), vec![("e", V::U64(45))]),
+            ),
             (
                 "f",
-                variant_value_("0x0::foo::Qux", "g", 0, vec![("h", V::U64(46))]),
+                variant_value_(
+                    struct_tag("0x0", "foo", "Qux"),
+                    "g",
+                    0,
+                    vec![("h", V::U64(46))],
+                ),
             ),
         ],
     );
@@ -976,18 +1036,21 @@ fn byte_offset_test() {
     }
 
     let type_layout = struct_layout_(
-        "0x0::foo::Bar",
+        struct_tag("0x0", "foo", "Bar"),
         vec![
             (
                 "inner",
                 struct_layout_(
-                    "0x0::baz::Qux",
+                    struct_tag("0x0", "baz", "Qux"),
                     vec![("f", T::U64), ("g", T::Vector(Box::new(T::U32)))],
                 ),
             ),
             (
                 "last",
-                enum_layout_("0x0::foo::Baz", vec![("e", vec![("h", T::U64)])]),
+                enum_layout_(
+                    struct_tag("0x0", "foo", "Baz"),
+                    vec![("e", vec![("h", T::U64)])],
+                ),
             ),
         ],
     );
@@ -997,12 +1060,12 @@ fn byte_offset_test() {
     };
 
     let bytes = serialize(struct_value_(
-        "0x0::foo::Bar",
+        struct_tag("0x0", "foo", "Bar"),
         vec![
             (
                 "inner",
                 struct_value_(
-                    "0x0::baz::Qux",
+                    struct_tag("0x0", "baz", "Qux"),
                     vec![
                         ("f", V::U64(7)),
                         ("g", V::Vector(vec![V::U32(1), V::U32(2), V::U32(3)])),
@@ -1011,7 +1074,12 @@ fn byte_offset_test() {
             ),
             (
                 "last",
-                variant_value_("0x0::foo::Baz", "e", 0, vec![("h", V::U64(4))]),
+                variant_value_(
+                    struct_tag("0x0", "foo", "Baz"),
+                    "e",
+                    0,
+                    vec![("h", V::U64(4))],
+                ),
             ),
         ],
     ));
@@ -1054,6 +1122,15 @@ fn byte_offset_test() {
     assert_eq!(struct_visitor.0, expected_output);
 }
 
+fn struct_tag(addr: &str, mname: &str, sname: &str) -> StructTag {
+    StructTag {
+        address: AccountAddress::from_hex_literal(addr).unwrap(),
+        module: Identifier::new(mname).unwrap(),
+        name: Identifier::new(sname).unwrap(),
+        type_params: vec![],
+    }
+}
+
 /// Create a struct value for test purposes.
 pub(crate) fn struct_value_(rep: &str, fields: Vec<(&str, MoveValue)>) -> MoveValue {
     let type_ = StructTag::from_str(rep).unwrap();
@@ -1061,7 +1138,6 @@ pub(crate) fn struct_value_(rep: &str, fields: Vec<(&str, MoveValue)>) -> MoveVa
         .into_iter()
         .map(|(name, value)| (Identifier::new(name).unwrap(), value))
         .collect();
-
     MoveValue::Struct(MoveStruct::new(type_, fields))
 }
 

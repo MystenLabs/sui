@@ -468,7 +468,6 @@ async fn get_latest_bridge_pause_status_with_emergency_event<C: SuiClientInner>(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
 
     use super::*;
     use crate::events::{init_all_struct_tags, NewTokenEvent};
@@ -482,6 +481,7 @@ mod tests {
     use sui_types::bridge::BridgeCommitteeSummary;
     use sui_types::bridge::MoveTypeCommitteeMember;
     use sui_types::crypto::get_key_pair;
+    use sui_types::parse_sui_type_tag;
 
     use crate::{sui_mock_client::SuiMockClient, types::BridgeCommittee};
     use sui_types::crypto::ToFromBytes;
@@ -1095,7 +1095,7 @@ mod tests {
         ) = setup();
         let event = NewTokenEvent {
             token_id: 255,
-            type_name: TypeTag::from_str("0xbeef::beef::BEEF").unwrap(),
+            type_name: parse_sui_type_tag("0xbeef::beef::BEEF").unwrap(),
             native_token: false,
             decimal_multiplier: 1000000,
             notional_value: 100000000,

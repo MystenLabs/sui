@@ -2328,6 +2328,7 @@ dependencies = [
  "memory-stats",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-command-line-common",
  "move-compiler",
  "move-core-types",
  "move-ir-to-bytecode",

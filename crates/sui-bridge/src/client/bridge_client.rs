@@ -246,7 +246,7 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_BTC, TOKEN_ID_USDT};
-    use sui_types::TypeTag;
+    use sui_types::parse_sui_type_tag;
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 
     #[tokio::test]
@@ -594,9 +594,9 @@ mod tests {
             native: false,
             token_ids: vec![99, 100, 101],
             token_type_names: vec![
-                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1").unwrap(),
-                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2").unwrap(),
-                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3").unwrap(),
+                parse_sui_type_tag("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1").unwrap(),
+                parse_sui_type_tag("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2").unwrap(),
+                parse_sui_type_tag("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3").unwrap(),
             ],
             token_prices: vec![1_000_000_000, 2_000_000_000, 3_000_000_000],
         });

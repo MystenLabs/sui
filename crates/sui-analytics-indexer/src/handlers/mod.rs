@@ -288,19 +288,20 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use move_core_types::annotated_value::{MoveStruct, MoveValue, MoveVariant};
     use move_core_types::identifier::Identifier;
-    use move_core_types::language_storage::StructTag;
+
     use std::collections::BTreeMap;
     use std::str::FromStr;
     use sui_types::base_types::ObjectID;
+    use sui_types::parse_sui_struct_tag;
 
     #[tokio::test]
     async fn test_wrapped_object_parsing() -> anyhow::Result<()> {
         let uid_field = MoveValue::Struct(MoveStruct {
-            type_: StructTag::from_str("0x2::object::UID")?,
+            type_: parse_sui_struct_tag("0x2::object::UID")?,
             fields: vec![(
                 Identifier::from_str("id")?,
                 MoveValue::Struct(MoveStruct {
-                    type_: StructTag::from_str("0x2::object::ID")?,
+                    type_: parse_sui_struct_tag("0x2::object::ID")?,
                     fields: vec![(
                         Identifier::from_str("bytes")?,
                         MoveValue::Signer(AccountAddress::from_hex_literal("0x300")?),
@@ -309,11 +310,11 @@ mod tests {
             )],
         });
         let balance_field = MoveValue::Struct(MoveStruct {
-            type_: StructTag::from_str("0x2::balance::Balance")?,
+            type_: parse_sui_struct_tag("0x2::balance::Balance")?,
             fields: vec![(Identifier::from_str("value")?, MoveValue::U32(10))],
         });
         let move_struct = MoveStruct {
-            type_: StructTag::from_str("0x2::test::Test")?,
+            type_: parse_sui_struct_tag("0x2::test::Test")?,
             fields: vec![
                 (Identifier::from_str("id")?, uid_field),
                 (Identifier::from_str("principal")?, balance_field),
@@ -327,7 +328,7 @@ mod tests {
         );
         assert_eq!(
             all_structs.get("$.principal").unwrap().struct_tag,
-            Some(StructTag::from_str("0x2::balance::Balance")?)
+            Some(parse_sui_struct_tag("0x2::balance::Balance")?)
         );
         Ok(())
     }
@@ -335,11 +336,11 @@ mod tests {
     #[tokio::test]
     async fn test_wrapped_object_parsing_within_enum() -> anyhow::Result<()> {
         let uid_field = MoveValue::Struct(MoveStruct {
-            type_: StructTag::from_str("0x2::object::UID")?,
+            type_: parse_sui_struct_tag("0x2::object::UID")?,
             fields: vec![(
                 Identifier::from_str("id")?,
                 MoveValue::Struct(MoveStruct {
-                    type_: StructTag::from_str("0x2::object::ID")?,
+                    type_: parse_sui_struct_tag("0x2::object::ID")?,
                     fields: vec![(
                         Identifier::from_str("bytes")?,
                         MoveValue::Signer(AccountAddress::from_hex_literal("0x300")?),
@@ -348,11 +349,11 @@ mod tests {
             )],
         });
         let balance_field = MoveValue::Struct(MoveStruct {
-            type_: StructTag::from_str("0x2::balance::Balance")?,
+            type_: parse_sui_struct_tag("0x2::balance::Balance")?,
             fields: vec![(Identifier::from_str("value")?, MoveValue::U32(10))],
         });
         let move_enum = MoveVariant {
-            type_: StructTag::from_str("0x2::test::TestEnum")?,
+            type_: parse_sui_struct_tag("0x2::test::TestEnum")?,
             variant_name: Identifier::from_str("TestVariant")?,
             tag: 0,
             fields: vec![
@@ -361,7 +362,7 @@ mod tests {
             ],
         };
         let move_struct = MoveStruct {
-            type_: StructTag::from_str("0x2::test::Test")?,
+            type_: parse_sui_struct_tag("0x2::test::Test")?,
             fields: vec![
                 (Identifier::from_str("id")?, uid_field),
                 (
@@ -381,7 +382,7 @@ mod tests {
                 .get("$.enum_field.principal")
                 .unwrap()
                 .struct_tag,
-            Some(StructTag::from_str("0x2::balance::Balance")?)
+            Some(parse_sui_struct_tag("0x2::balance::Balance")?)
         );
         Ok(())
     }

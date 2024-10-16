@@ -10,7 +10,6 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
-use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::resolver::ModuleResolver;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -55,6 +54,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::MoveObject;
 use sui_types::object::Owner;
+use sui_types::parse_sui_type_tag;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
@@ -502,7 +502,7 @@ impl RpcExampleProvider {
                         "query",
                         json!(SuiObjectResponseQuery {
                             filter: Some(SuiObjectDataFilter::StructType(
-                                StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap()
+                                parse_sui_struct_tag("0x2::coin::Coin<0x2::sui::SUI>").unwrap()
                             )),
                             options: Some(
                                 SuiObjectDataOptions::new()
@@ -1151,7 +1151,7 @@ impl RpcExampleProvider {
         let dynamic_fields = (0..3)
             .map(|_| DynamicFieldInfo {
                 name: DynamicFieldName {
-                    type_: TypeTag::from_str("0x9::test::TestField").unwrap(),
+                    type_: parse_sui_type_tag("0x9::test::TestField").unwrap(),
                     value: serde_json::Value::String("some_value".to_string()),
                 },
                 bcs_name: bcs::to_bytes("0x9::test::TestField").unwrap(),
@@ -1186,7 +1186,7 @@ impl RpcExampleProvider {
     fn suix_get_dynamic_field_object(&mut self) -> Examples {
         let parent_object_id = ObjectID::new(self.rng.gen());
         let field_name = DynamicFieldName {
-            type_: TypeTag::from_str("0x9::test::TestField").unwrap(),
+            type_: parse_sui_type_tag("0x9::test::TestField").unwrap(),
             value: serde_json::Value::String("some_value".to_string()),
         };
 
@@ -1249,7 +1249,7 @@ impl RpcExampleProvider {
         );
         let filter = Some(SuiObjectDataFilter::MatchAll(vec![
             SuiObjectDataFilter::StructType(
-                StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap(),
+                parse_sui_struct_tag("0x2::coin::Coin<0x2::sui::SUI>").unwrap(),
             ),
             SuiObjectDataFilter::AddressOwner(owner),
             SuiObjectDataFilter::Version(version),
@@ -1312,7 +1312,7 @@ impl RpcExampleProvider {
                 package_id,
                 transaction_module: identifier.clone(),
                 sender: SuiAddress::from(ObjectID::new(self.rng.gen())),
-                type_: StructTag::from_str("0x3::test::Test<0x3::test::Test>").unwrap(),
+                type_: parse_sui_struct_tag("0x3::test::Test<0x3::test::Test>").unwrap(),
                 parsed_json: serde_json::Value::String("some_value".to_string()),
                 bcs: vec![],
                 timestamp_ms: None,

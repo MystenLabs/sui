@@ -6,7 +6,6 @@ use crate::{
     account_address::AccountAddress,
     gas_algebra::{AbstractMemorySize, BOX_ABSTRACT_SIZE, ENUM_BASE_ABSTRACT_SIZE},
     identifier::{IdentStr, Identifier},
-    parser::{parse_struct_tag, parse_type_tag},
 };
 use move_proc_macros::test_variant_order;
 use once_cell::sync::Lazy;
@@ -15,7 +14,7 @@ use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
-    str::FromStr,
+    // str::FromStr,
 };
 
 pub const CODE_TAG: u8 = 0;
@@ -133,13 +132,13 @@ impl TypeTag {
     }
 }
 
-impl FromStr for TypeTag {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_type_tag(s)
-    }
-}
+// impl FromStr for TypeTag {
+//     type Err = anyhow::Error;
+//
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         parse_type_tag(s)
+//     }
+// }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
 pub struct StructTag {
@@ -248,13 +247,13 @@ impl StructTag {
     }
 }
 
-impl FromStr for StructTag {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_struct_tag(s)
-    }
-}
+// impl FromStr for StructTag {
+//     type Err = anyhow::Error;
+//
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         parse_struct_tag(s)
+//     }
+// }
 
 /// Represents the initial key into global storage where we first index by the address, and then
 /// the struct tag

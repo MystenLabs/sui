@@ -654,14 +654,14 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use std::collections::{BTreeMap, HashMap};
-    use std::str::FromStr;
+
     use sui_json_rpc_types::SuiTransactionBlockEffects;
     use sui_json_rpc_types::SuiTransactionBlockEvents;
     use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockResponse};
     use sui_types::crypto::get_key_pair;
     use sui_types::gas_coin::GasCoin;
-    use sui_types::TypeTag;
     use sui_types::{base_types::random_object_ref, transaction::TransactionData};
+    use sui_types::{parse_sui_type_tag, TypeTag};
 
     use crate::{
         crypto::{
@@ -1255,7 +1255,7 @@ mod tests {
     #[tokio::test]
     async fn test_action_executor_handle_new_token() {
         let new_token_id = 255u8; // token id that does not exist
-        let new_type_tag = TypeTag::from_str("0xbeef::beef::BEEF").unwrap();
+        let new_type_tag = parse_sui_type_tag("0xbeef::beef::BEEF").unwrap();
         let (
             _signing_tx,
             execution_tx,

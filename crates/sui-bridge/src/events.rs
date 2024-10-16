@@ -29,6 +29,7 @@ use sui_types::bridge::MoveTypeCommitteeMemberRegistration;
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::ToFromBytes;
 use sui_types::digests::TransactionDigest;
+use sui_types::parse_sui_struct_tag;
 use sui_types::parse_sui_type_tag;
 use sui_types::TypeTag;
 use sui_types::BRIDGE_PACKAGE_ID;
@@ -379,7 +380,7 @@ macro_rules! declare_events {
 
         pub(crate) fn init_all_struct_tags() {
             $($variant.get_or_init(|| {
-                StructTag::from_str(&format!("0x{}::{}", BRIDGE_PACKAGE_ID.to_hex(), $event_tag)).unwrap()
+                parse_sui_struct_tag(&format!("0x{}::{}", BRIDGE_PACKAGE_ID.to_hex(), $event_tag)).unwrap()
             });)*
         }
 

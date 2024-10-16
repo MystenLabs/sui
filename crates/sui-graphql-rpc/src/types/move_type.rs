@@ -346,14 +346,14 @@ pub(crate) fn unexpected_signer_error() -> Error {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
 
     use super::*;
 
     use expect_test::expect;
+    use sui_types::parse_sui_type_tag;
 
     fn signature(repr: impl Into<String>) -> Result<MoveTypeSignature, Error> {
-        let tag = TypeTag::from_str(repr.into().as_str()).unwrap();
+        let tag = parse_sui_type_tag(repr.into().as_str()).unwrap();
         MoveType::from(tag).signature_impl()
     }
 

@@ -481,13 +481,14 @@ mod tests {
         annotated_value::{self as A, MoveFieldLayout, MoveStructLayout as S, MoveTypeLayout as L},
         u256::U256,
     };
+    use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 
     use super::*;
 
     macro_rules! struct_layout {
         ($type:literal { $($name:literal : $layout:expr),* $(,)?}) => {
             A::MoveTypeLayout::Struct(Box::new(S {
-                type_: StructTag::from_str($type).expect("Failed to parse struct"),
+                type_: parse_sui_struct_tag($type).expect("Failed to parse struct"),
                 fields: Box::new(vec![$(MoveFieldLayout {
                     name: ident_str!($name).to_owned(),
                     layout: $layout,
@@ -520,7 +521,7 @@ mod tests {
         layout: A::MoveTypeLayout,
         data: T,
     ) -> Result<MoveData, Error> {
-        let tag = TypeTag::from_str(tag.into().as_str()).unwrap();
+        let tag = parse_sui_type_tag(tag.into().as_str()).unwrap();
         let type_ = MoveType::from(tag);
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
         MoveValue { type_, bcs }.data_impl(layout)
