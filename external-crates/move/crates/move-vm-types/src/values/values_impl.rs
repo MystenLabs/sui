@@ -10,7 +10,6 @@ use move_binary_format::{
     errors::*,
     file_format::{Constant, SignatureToken, VariantTag},
 };
-#[cfg(feature = "gas-profiler")]
 use move_core_types::annotated_value as A;
 use move_core_types::{
     account_address::AccountAddress,
@@ -4206,13 +4205,14 @@ impl Value {
         self.0.as_move_value(layout)
     }
 
-    #[cfg(feature = "gas-profiler")]
-    pub fn as_annotated_move_value(&self, layout: &A::MoveTypeLayout) -> Option<A::MoveValue> {
+    pub fn as_annotated_move_value_for_tracing_only(
+        &self,
+        layout: &A::MoveTypeLayout,
+    ) -> Option<A::MoveValue> {
         self.0.as_annotated_move_value(layout)
     }
 }
 
-#[cfg(feature = "gas-profiler")]
 impl ValueImpl {
     /// Converts the value to an annotated move value. This is only needed for tracing and care
     /// should be taken when using this function as it can possibly inflate the size of the value.
@@ -4264,7 +4264,6 @@ impl ValueImpl {
     }
 }
 
-#[cfg(feature = "gas-profiler")]
 impl Container {
     fn as_annotated_move_value(&self, layout: &A::MoveTypeLayout) -> Option<A::MoveValue> {
         use move_core_types::annotated_value::MoveTypeLayout as L;
@@ -4322,7 +4321,7 @@ impl Container {
                 Container::Vec(r) => r
                     .borrow()
                     .iter()
-                    .map(|v| v.as_annotated_move_value(&**inner_layout))
+                    .map(|v| v.as_annotated_move_value(inner_layout))
                     .collect::<Option<_>>()?,
                 Container::Struct(_) | Container::Variant { .. } | Container::Locals(_) => {
                     return None
