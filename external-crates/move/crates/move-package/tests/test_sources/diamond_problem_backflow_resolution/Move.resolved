@@ -136,6 +136,7 @@ ResolvedGraph {
                 },
                 dev_dependencies: {},
             },
+            lockfile: None,
             package_path: "ELIDED_FOR_TEST",
             renaming: {
                 "AA": (
@@ -181,6 +182,7 @@ ResolvedGraph {
                 },
                 dev_dependencies: {},
             },
+            lockfile: None,
             package_path: "ELIDED_FOR_TEST",
             renaming: {
                 "BA": (
@@ -213,6 +215,7 @@ ResolvedGraph {
                 dependencies: {},
                 dev_dependencies: {},
             },
+            lockfile: None,
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
@@ -263,6 +266,7 @@ ResolvedGraph {
                 },
                 dev_dependencies: {},
             },
+            lockfile: None,
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {

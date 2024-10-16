@@ -99,6 +99,7 @@ ResolvedGraph {
                 dependencies: {},
                 dev_dependencies: {},
             },
+            lockfile: None,
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
@@ -128,6 +129,7 @@ ResolvedGraph {
                 dependencies: {},
                 dev_dependencies: {},
             },
+            lockfile: None,
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
@@ -178,6 +180,7 @@ ResolvedGraph {
                 },
                 dev_dependencies: {},
             },
+            lockfile: None,
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {

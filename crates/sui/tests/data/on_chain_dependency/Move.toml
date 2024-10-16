@@ -1,0 +1,12 @@
+[package]
+name = "Root"
+edition = "2024.beta"
+
+[dependencies]
+Local = { local = "./dependencies/Local" }
+LocalWithoutLockfile = { local = "./dependencies/LocalWithoutLockfile" }
+OnChain = { id = "$ONCHAIN" }
+
+[addresses]
+root = "0x0"
+onchain = "$ONCHAIN"
