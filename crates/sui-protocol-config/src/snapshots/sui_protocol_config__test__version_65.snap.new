@@ -1,9 +1,9 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
-assertion_line: 3148
+assertion_line: 3149
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 64
+version: 65
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -43,8 +43,10 @@ feature_flags:
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
+  enable_poseidon: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
+  enable_group_ops_native_function_msm: true
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode: TotalGasBudgetWithCap
   consensus_choice: Mysticeti
@@ -54,17 +56,22 @@ feature_flags:
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
+  enable_vdf: true
   record_consensus_determined_version_assignments_in_prologue: true
   fresh_vm_on_framework_upgrade: true
   prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
   mysticeti_num_leaders_per_round: 1
   soft_bundle: true
   enable_coin_deny_list_v2: true
+  passkey_auth: true
+  authority_capabilities_v2: true
   rethrow_serialization_type_layout_errors: true
   consensus_distributed_vote_scoring_strategy: true
   consensus_round_prober: true
   validate_identifier_inputs: true
+  mysticeti_fastpath: true
   relocate_event_module: true
+  uncompressed_g1_group_elements: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -244,6 +251,8 @@ hash_blake2b256_data_cost_per_block: 2
 hash_keccak256_cost_base: 52
 hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
+poseidon_bn254_cost_base: 260
+poseidon_bn254_cost_per_block: 10
 group_ops_bls12381_decode_scalar_cost: 52
 group_ops_bls12381_decode_g1_cost: 52
 group_ops_bls12381_decode_g2_cost: 52
@@ -284,6 +293,8 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
+vdf_verify_vdf_cost: 1500
+vdf_hash_to_input_cost: 100
 bcs_per_byte_serialized_cost: 2
 bcs_legacy_min_output_size_cost: 1
 bcs_failure_cost: 52
