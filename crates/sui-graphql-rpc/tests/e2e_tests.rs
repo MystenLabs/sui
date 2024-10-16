@@ -756,7 +756,6 @@ async fn test_epoch_live_object_set_digest() {
         .await;
 
     // Wait for the epoch to be indexed
-    // sleep(Duration::from_secs(10)).await;
     cluster
         .wait_for_epoch_catchup(0, Duration::from_secs(30))
         .await;
