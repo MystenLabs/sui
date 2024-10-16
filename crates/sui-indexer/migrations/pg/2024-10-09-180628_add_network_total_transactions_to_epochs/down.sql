@@ -1,1 +1,1 @@
-ALTER TABLE epochs DROP COLUMN network_total_transactions;
+ALTER TABLE epochs DROP COLUMN first_tx_sequence_number;

@@ -1,1 +1,1 @@
-ALTER TABLE epochs ADD COLUMN network_total_transactions bigint;
+ALTER TABLE epochs ADD COLUMN first_tx_sequence_number bigint;

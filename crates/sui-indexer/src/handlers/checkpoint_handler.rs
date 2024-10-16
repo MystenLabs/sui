@@ -156,6 +156,7 @@ impl CheckpointHandler {
                 new_epoch: StartOfEpochUpdate::new(
                     system_state_summary,
                     0, //first_checkpoint_id
+                    0, // first_tx_sequence_number
                     None,
                 ),
             }));
@@ -212,6 +213,7 @@ impl CheckpointHandler {
             new_epoch: StartOfEpochUpdate::new(
                 system_state_summary,
                 checkpoint_summary.sequence_number + 1, // first_checkpoint_id
+                checkpoint_summary.network_total_transactions,
                 Some(&event),
             ),
         }))

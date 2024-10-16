@@ -73,10 +73,8 @@ impl EpochToCommit {
             .map(|e| e.epoch_total_transactions as u64)
     }
 
-    pub fn last_epoch_network_total_transactions(&self) -> Option<u64> {
-        self.last_epoch
-            .as_ref()
-            .map(|e| e.network_total_transactions as u64)
+    pub fn new_epoch_first_tx_sequence_number(&self) -> u64 {
+        self.new_epoch.first_tx_sequence_number as u64
     }
 }
 

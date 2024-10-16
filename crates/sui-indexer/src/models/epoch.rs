@@ -34,9 +34,8 @@ pub struct StoredEpochInfo {
     pub epoch_commitments: Option<Vec<u8>>,
     /// This is the system state summary at the beginning of the epoch, serialized as JSON.
     pub system_state_summary_json: Option<serde_json::Value>,
-    /// Total number of transactions that have occurred at the end of this epoch, populated at the
-    /// end of the epoch.
-    pub network_total_transactions: Option<i64>,
+    /// First transaction sequence number of this epoch.
+    pub first_tx_sequence_number: Option<i64>,
 }
 
 #[derive(Insertable, Identifiable, AsChangeset, Clone, Debug)]
@@ -45,6 +44,7 @@ pub struct StoredEpochInfo {
 pub struct StartOfEpochUpdate {
     pub epoch: i64,
     pub first_checkpoint_id: i64,
+    pub first_tx_sequence_number: i64,
     pub epoch_start_timestamp: i64,
     pub reference_gas_price: i64,
     pub protocol_version: i64,
@@ -59,7 +59,6 @@ pub struct StartOfEpochUpdate {
 pub struct EndOfEpochUpdate {
     pub epoch: i64,
     pub epoch_total_transactions: i64,
-    pub network_total_transactions: i64,
     pub last_checkpoint_id: i64,
     pub epoch_end_timestamp: i64,
     pub storage_fund_reinvestment: i64,
@@ -99,7 +98,7 @@ pub struct QueryableEpochInfo {
     pub total_stake: i64,
     pub storage_fund_balance: i64,
     pub epoch_total_transactions: Option<i64>,
-    pub network_total_transactions: Option<i64>,
+    pub first_tx_sequence_number: Option<i64>,
     pub last_checkpoint_id: Option<i64>,
     pub epoch_end_timestamp: Option<i64>,
     pub storage_fund_reinvestment: Option<i64>,
@@ -122,6 +121,7 @@ impl StartOfEpochUpdate {
     pub fn new(
         new_system_state_summary: SuiSystemStateSummary,
         first_checkpoint_id: u64,
+        first_tx_sequence_number: u64,
         event: Option<&SystemEpochInfoEvent>,
     ) -> Self {
         Self {
@@ -129,6 +129,7 @@ impl StartOfEpochUpdate {
             system_state_summary_json: serde_json::to_value(new_system_state_summary.clone())
                 .unwrap(),
             first_checkpoint_id: first_checkpoint_id as i64,
+            first_tx_sequence_number: first_tx_sequence_number as i64,
             epoch_start_timestamp: new_system_state_summary.epoch_start_timestamp_ms as i64,
             reference_gas_price: new_system_state_summary.reference_gas_price as i64,
             protocol_version: new_system_state_summary.protocol_version as i64,
@@ -145,14 +146,12 @@ impl EndOfEpochUpdate {
     pub fn new(
         last_checkpoint_summary: &CertifiedCheckpointSummary,
         event: &SystemEpochInfoEvent,
-        network_total_tx_num_at_last_epoch_end: u64,
+        first_tx_sequence_number: u64,
     ) -> Self {
         Self {
             epoch: last_checkpoint_summary.epoch as i64,
             epoch_total_transactions: (last_checkpoint_summary.network_total_transactions
-                - network_total_tx_num_at_last_epoch_end)
-                as i64,
-            network_total_transactions: last_checkpoint_summary.network_total_transactions as i64,
+                - first_tx_sequence_number) as i64,
             last_checkpoint_id: *last_checkpoint_summary.sequence_number() as i64,
             epoch_end_timestamp: last_checkpoint_summary.timestamp_ms as i64,
             storage_fund_reinvestment: event.storage_fund_reinvestment as i64,
