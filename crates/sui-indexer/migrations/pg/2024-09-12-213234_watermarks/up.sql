@@ -22,8 +22,5 @@ CREATE TABLE watermarks
     -- be dropped. The pruner uses this column to determine whether to prune or wait long enough
     -- that all in-flight reads complete or timeout before it acts on an updated watermark.
     timestamp_ms                BIGINT        NOT NULL,
-    -- Updated and used by the pruner. Data up to and excluding this watermark can be immediately
-    -- dropped. Data between this and `reader_lo` can be pruned after a delay.
-    pruner_lo                   BIGINT,
     PRIMARY KEY (entity)
 );

@@ -11,7 +11,6 @@ use tracing::{error, info};
 
 use crate::config::RetentionConfig;
 use crate::errors::IndexerError;
-use crate::models::watermarks::PrunableWatermark;
 use crate::store::pg_partition_manager::PgPartitionManager;
 use crate::store::PgIndexerStore;
 use crate::{metrics::IndexerMetrics, store::IndexerStore, types::IndexerResult};
@@ -102,15 +101,6 @@ impl PrunableTable {
 
             PrunableTable::Checkpoints => cp,
             PrunableTable::PrunerCpWatermark => cp,
-        }
-    }
-
-    pub fn select_pruner_lo(&self, epoch_lo: u64, reader_lo: u64) -> u64 {
-        match self {
-            PrunableTable::ObjectsHistory => epoch_lo,
-            PrunableTable::Transactions => epoch_lo,
-            PrunableTable::Events => epoch_lo,
-            _ => reader_lo,
         }
     }
 }
@@ -261,7 +251,7 @@ async fn update_watermarks_lower_bounds(
     retention_policies: &HashMap<PrunableTable, u64>,
     cancel: &CancellationToken,
 ) -> IndexerResult<()> {
-    let (watermarks, latest_db_timestamp) = store.get_watermarks().await?;
+    let (watermarks, _) = store.get_watermarks().await?;
     let mut lower_bound_updates = vec![];
 
     for watermark in watermarks.iter() {
@@ -270,21 +260,21 @@ async fn update_watermarks_lower_bounds(
             return Ok(());
         }
 
-        let Some(watermark) = PrunableWatermark::new(watermark.clone(), latest_db_timestamp) else {
+        let Some(prunable_table) = watermark.entity() else {
             continue;
         };
 
-        let Some(epochs_to_keep) = retention_policies.get(&watermark.entity) else {
+        let Some(epochs_to_keep) = retention_policies.get(&prunable_table) else {
+            error!(
+                "No retention policy found for prunable table {}",
+                prunable_table
+            );
             continue;
         };
 
-        if watermark.epoch_lo + epochs_to_keep <= watermark.epoch_hi_inclusive {
-            let new_epoch_lo = watermark
-                .epoch_hi_inclusive
-                .saturating_sub(epochs_to_keep - 1);
-
-            lower_bound_updates.push((watermark, new_epoch_lo));
-        }
+        if let Some(new_epoch_lo) = watermark.new_epoch_lo(*epochs_to_keep) {
+            lower_bound_updates.push((prunable_table, new_epoch_lo));
+        };
     }
 
     if !lower_bound_updates.is_empty() {
