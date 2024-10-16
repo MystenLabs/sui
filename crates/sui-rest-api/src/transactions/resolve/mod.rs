@@ -33,6 +33,7 @@ use sui_sdk_types::types::UnresolvedInputArgument;
 use sui_sdk_types::types::UnresolvedObjectReference;
 use sui_sdk_types::types::UnresolvedProgrammableTransaction;
 use sui_sdk_types::types::UnresolvedTransaction;
+use sui_sdk_types::types::UnresolvedValue;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -48,9 +49,8 @@ use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
 use tap::Pipe;
 
-// TODO
-// - Updating the UnresolvedTransaction format to provide less information about inputs
-// - handle basic type inference and BCS serialization of pure args
+mod literal;
+
 pub struct ResolveTransaction;
 
 impl ApiEndpoint<RestService> for ResolveTransaction {
@@ -72,7 +72,7 @@ impl ApiEndpoint<RestService> for ResolveTransaction {
             .query_parameters::<ResolveTransactionQueryParameters>(generator)
             .request_body(
                 RequestBodyBuilder::new()
-                    // .json_content::<UnresolvedTransaction>(generator)
+                    .json_content::<UnresolvedTransaction>(generator)
                     .build(),
             )
             .response(
@@ -319,26 +319,56 @@ fn resolve_object_reference(
     reader: &StateReader,
     unresolved_object_reference: UnresolvedObjectReference,
 ) -> Result<ObjectRef> {
+    let object_id = unresolved_object_reference.object_id;
+    let object = reader
+        .inner()
+        .get_object(&object_id.into())?
+        .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
+    resolve_object_reference_with_object(&object, unresolved_object_reference)
+}
+
+// Resolve an object reference against the provided object.
+//
+// Callers should check that the object_id matches the id in the `unresolved_object_reference`
+// before calling.
+fn resolve_object_reference_with_object(
+    object: &sui_types::object::Object,
+    unresolved_object_reference: UnresolvedObjectReference,
+) -> Result<ObjectRef> {
     let UnresolvedObjectReference {
         object_id,
         version,
         digest,
     } = unresolved_object_reference;
 
-    let id = object_id.into();
-    let (v, d) = if let Some(version) = version {
-        let object = reader
-            .inner()
-            .get_object_by_key(&id, version.into())?
-            .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?;
-        (object.version(), object.digest())
-    } else {
-        let object = reader
-            .inner()
-            .get_object(&id)?
-            .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
-        (object.version(), object.digest())
-    };
+    match object.owner() {
+        sui_types::object::Owner::AddressOwner(_) | sui_types::object::Owner::Immutable => {}
+        _ => {
+            return Err(RestError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("object {object_id} is not Immutable or AddressOwned"),
+            ))
+        }
+    }
+
+    let id = object.id();
+    let v = object.version();
+    let d = object.digest();
+
+    // This really should be an assert
+    if object_id.inner() != &id.into_bytes() {
+        return Err(RestError::new(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "provided object and object_id should match",
+        ));
+    }
+
+    if version.is_some_and(|version| version != v.value()) {
+        return Err(RestError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("provided version doesn't match, provided: {version:?} actual: {v}"),
+        ));
+    }
 
     if digest.is_some_and(|digest| digest.inner() != d.inner()) {
         return Err(RestError::new(
@@ -388,116 +418,309 @@ fn resolve_arg(
     arg: UnresolvedInputArgument,
     arg_idx: usize,
 ) -> Result<CallArg> {
-    match arg {
-        UnresolvedInputArgument::Pure { value } => CallArg::Pure(value),
-        UnresolvedInputArgument::ImmutableOrOwned(obj_ref) => CallArg::Object(
-            ObjectArg::ImmOrOwnedObject(resolve_object_reference(reader, obj_ref)?),
-        ),
-        UnresolvedInputArgument::Shared {
-            object_id,
-            initial_shared_version: _,
-            mutable: _,
-        } => {
-            let id = object_id.into();
-            let object = reader
-                .inner()
-                .get_object(&id)?
-                .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
+    use fastcrypto::encoding::Base64;
+    use fastcrypto::encoding::Encoding;
+    use sui_sdk_types::types::UnresolvedInputArgumentKind::*;
 
-            let initial_shared_version = if let sui_types::object::Owner::Shared {
-                initial_shared_version,
-            } = object.owner()
-            {
-                *initial_shared_version
-            } else {
-                return Err(RestError::new(
+    let UnresolvedInputArgument {
+        kind,
+        value,
+        object_id,
+        version,
+        digest,
+        mutable,
+    } = arg;
+
+    match (kind, value, object_id, version, digest, mutable) {
+        // pre serialized BCS input encoded as a base64 string
+        (Some(Pure), Some(UnresolvedValue::String(v)), None, None, None, None) => {
+            let value = Base64::decode(&v).map_err(|e| {
+                RestError::new(
                     axum::http::StatusCode::BAD_REQUEST,
-                    format!("object {object_id} is not a shared object"),
-                ));
-            };
-
-            let mut mutable = false;
-
-            for (command, idx) in find_arg_uses(arg_idx, commands) {
-                match (command, idx) {
-                    (Command::MoveCall(move_call), Some(idx)) => {
-                        let function = called_packages
-                            // Find the package
-                            .get(&move_call.package)
-                            // Find the module
-                            .and_then(|package| {
-                                package.normalized_modules.get(move_call.module.as_str())
-                            })
-                            // Find the function
-                            .and_then(|module| module.functions.get(move_call.function.as_str()))
-                            .ok_or_else(|| {
-                                RestError::new(
-                                    axum::http::StatusCode::BAD_REQUEST,
-                                    format!(
-                                        "unable to find function {package}::{module}::{function}",
-                                        package = move_call.package,
-                                        module = move_call.module,
-                                        function = move_call.function
-                                    ),
-                                )
-                            })?;
-
-                        let arg_type = function.parameters.get(idx).ok_or_else(|| {
-                            RestError::new(
-                                axum::http::StatusCode::BAD_REQUEST,
-                                "invalid input parameter",
-                            )
-                        })?;
-
-                        if matches!(
-                            arg_type,
-                            move_binary_format::normalized::Type::MutableReference(_)
-                                | move_binary_format::normalized::Type::Struct { .. }
-                        ) {
-                            mutable = true;
-                        }
-                    }
-
-                    (
-                        Command::SplitCoins(_)
-                        | Command::MergeCoins(_)
-                        | Command::MakeMoveVector(_),
-                        _,
-                    ) => {
-                        mutable = true;
-                    }
-
-                    _ => {}
-                }
-
-                // Early break out of the loop if we've already determined that the shared object
-                // is needed to be mutable
-                if mutable {
-                    break;
-                }
-            }
-
-            CallArg::Object(ObjectArg::SharedObject {
-                id,
-                initial_shared_version,
-                mutable,
-            })
+                    format!("argument is an invalid pure arguement: {e}"),
+                )
+            })?;
+            CallArg::Pure(value)
         }
-        UnresolvedInputArgument::Receiving(obj_ref) => CallArg::Object(ObjectArg::Receiving(
-            resolve_object_reference(reader, obj_ref)?,
-        )),
+        // pre serialized BCS input encoded as a a JSON array of u8s
+        (Some(Pure), Some(array @ UnresolvedValue::Array(_)), None, None, None, None) => {
+            let value = serde_json::from_value(serde_json::Value::from(array)).map_err(|e| {
+                RestError::new(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    format!("argument is an invalid pure arguement: {e}"),
+                )
+            })?;
+            CallArg::Pure(value)
+        }
+
+        // Literal, unresolved pure argument
+        (Some(Literal), Some(value), None, None, None, None)
+        | (None, Some(value), None, None, None, None) => CallArg::Pure(literal::resolve_literal(
+            called_packages,
+            commands,
+            arg_idx,
+            value,
+        )?),
+
+        // Immutable or owned
+        (
+            Some(ImmutableOrOwned | Immutable | Owned),
+            None,
+            Some(object_id),
+            version,
+            digest,
+            None,
+        ) => CallArg::Object(ObjectArg::ImmOrOwnedObject(resolve_object_reference(
+            reader,
+            UnresolvedObjectReference {
+                object_id,
+                version,
+                digest,
+            },
+        )?)),
+
+        // Shared object
+        (Some(Shared), None, Some(object_id), _version, None, _mutable) => CallArg::Object(
+            resolve_shared_input(reader, called_packages, commands, arg_idx, object_id)?,
+        ),
+
+        // Receiving
+        (Some(Receiving), None, Some(object_id), version, digest, None) => {
+            CallArg::Object(ObjectArg::Receiving(resolve_object_reference(
+                reader,
+                UnresolvedObjectReference {
+                    object_id,
+                    version,
+                    digest,
+                },
+            )?))
+        }
+
+        // Object, could be Immutable, Owned, Shared, or Receiving
+        (None, None, Some(object_id), version, digest, mutable) => CallArg::Object(resolve_object(
+            reader,
+            called_packages,
+            commands,
+            arg_idx,
+            object_id,
+            version,
+            digest,
+            mutable,
+        )?),
+
+        _ => {
+            return Err(RestError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "invalid unresolved input argument",
+            ))
+        }
     }
     .pipe(Ok)
+}
+
+fn resolve_object(
+    reader: &StateReader,
+    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    commands: &[Command],
+    arg_idx: usize,
+    object_id: ObjectId,
+    version: Option<sui_sdk_types::types::Version>,
+    digest: Option<sui_sdk_types::types::ObjectDigest>,
+    _mutable: Option<bool>,
+) -> Result<ObjectArg> {
+    let id = object_id.into();
+    let object = reader
+        .inner()
+        .get_object(&id)?
+        .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
+
+    match object.owner() {
+        sui_types::object::Owner::Immutable => resolve_object_reference_with_object(
+            &object,
+            UnresolvedObjectReference {
+                object_id,
+                version,
+                digest,
+            },
+        )
+        .map(ObjectArg::ImmOrOwnedObject),
+
+        sui_types::object::Owner::AddressOwner(_) => {
+            let object_ref = resolve_object_reference_with_object(
+                &object,
+                UnresolvedObjectReference {
+                    object_id,
+                    version,
+                    digest,
+                },
+            )?;
+
+            if is_input_argument_receiving(called_packages, commands, arg_idx)? {
+                ObjectArg::Receiving(object_ref)
+            } else {
+                ObjectArg::ImmOrOwnedObject(object_ref)
+            }
+            .pipe(Ok)
+        }
+        sui_types::object::Owner::Shared { .. } => {
+            resolve_shared_input_with_object(called_packages, commands, arg_idx, object)
+        }
+        sui_types::object::Owner::ObjectOwner(_) => Err(RestError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("object {object_id} is object owned and cannot be used as an input"),
+        )),
+    }
+}
+
+fn resolve_shared_input(
+    reader: &StateReader,
+    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    commands: &[Command],
+    arg_idx: usize,
+    object_id: ObjectId,
+) -> Result<ObjectArg> {
+    let id = object_id.into();
+    let object = reader
+        .inner()
+        .get_object(&id)?
+        .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
+    resolve_shared_input_with_object(called_packages, commands, arg_idx, object)
+}
+
+// Checks if the provided input argument is used as a recieving object
+fn is_input_argument_receiving(
+    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    commands: &[Command],
+    arg_idx: usize,
+) -> Result<bool> {
+    let (receiving_package, receiving_module, receiving_struct) =
+        sui_types::transfer::RESOLVED_RECEIVING_STRUCT;
+
+    let mut receiving = false;
+    for (command, idx) in find_arg_uses(arg_idx, commands) {
+        if let (Command::MoveCall(move_call), Some(idx)) = (command, idx) {
+            let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
+
+            if let move_binary_format::normalized::Type::Struct {
+                address,
+                module,
+                name,
+                ..
+            } = arg_type
+            {
+                if receiving_package == address
+                    && receiving_module == module.as_ref()
+                    && receiving_struct == name.as_ref()
+                {
+                    receiving = true;
+                }
+            }
+        }
+
+        //XXX do we want to ensure its only used once as receiving?
+        if receiving {
+            break;
+        }
+    }
+
+    Ok(receiving)
+}
+
+// TODO still need to handle the case where a function parameter is a generic parameter and the
+// real type needs to be lookedup from the provided type args in the MoveCall itself
+fn arg_type_of_move_call_input<'a>(
+    called_packages: &'a HashMap<ObjectId, NormalizedPackage>,
+    move_call: &sui_sdk_types::types::MoveCall,
+    idx: usize,
+) -> Result<&'a move_binary_format::normalized::Type> {
+    let function = called_packages
+        // Find the package
+        .get(&move_call.package)
+        // Find the module
+        .and_then(|package| package.normalized_modules.get(move_call.module.as_str()))
+        // Find the function
+        .and_then(|module| module.functions.get(move_call.function.as_str()))
+        .ok_or_else(|| {
+            RestError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                format!(
+                    "unable to find function {package}::{module}::{function}",
+                    package = move_call.package,
+                    module = move_call.module,
+                    function = move_call.function
+                ),
+            )
+        })?;
+    function.parameters.get(idx).ok_or_else(|| {
+        RestError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            "invalid input parameter",
+        )
+    })
+}
+
+fn resolve_shared_input_with_object(
+    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    commands: &[Command],
+    arg_idx: usize,
+    object: sui_types::object::Object,
+) -> Result<ObjectArg> {
+    let object_id = object.id();
+    let initial_shared_version = if let sui_types::object::Owner::Shared {
+        initial_shared_version,
+    } = object.owner()
+    {
+        *initial_shared_version
+    } else {
+        return Err(RestError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("object {object_id} is not a shared object"),
+        ));
+    };
+    let mut mutable = false;
+    for (command, idx) in find_arg_uses(arg_idx, commands) {
+        match (command, idx) {
+            (Command::MoveCall(move_call), Some(idx)) => {
+                let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
+                if matches!(
+                    arg_type,
+                    move_binary_format::normalized::Type::MutableReference(_)
+                        | move_binary_format::normalized::Type::Struct { .. }
+                ) {
+                    mutable = true;
+                }
+            }
+            (Command::SplitCoins(_) | Command::MergeCoins(_) | Command::MakeMoveVector(_), _) => {
+                mutable = true;
+            }
+            _ => {}
+        }
+        // Early break out of the loop if we've already determined that the shared object
+        // is needed to be mutable
+        if mutable {
+            break;
+        }
+    }
+
+    Ok(ObjectArg::SharedObject {
+        id: object_id,
+        initial_shared_version,
+        mutable,
+    })
 }
 
 /// Given an particular input argument, find all of its uses.
 ///
 /// The returned iterator contains all commands where the argument is used and an optional index
-/// for where the argument is used in that command.
+/// to indicate where the argument is used in that command.
 fn find_arg_uses(
     arg_idx: usize,
     commands: &[Command],
 ) -> impl Iterator<Item = (&Command, Option<usize>)> {
+    fn matches_input_arg(arg: Argument, arg_idx: usize) -> bool {
+        matches!(arg, Argument::Input(idx) if idx as usize == arg_idx)
+    }
+
     commands.iter().filter_map(move |command| {
         match command {
             Command::MoveCall(move_call) => move_call
@@ -505,13 +728,27 @@ fn find_arg_uses(
                 .iter()
                 .position(|elem| matches_input_arg(*elem, arg_idx))
                 .map(Some),
-            Command::TransferObjects(transfer_objects) => transfer_objects
-                .objects
-                .iter()
-                .position(|elem| matches_input_arg(*elem, arg_idx))
-                .map(Some),
+            Command::TransferObjects(transfer_objects) => {
+                if matches_input_arg(transfer_objects.address, arg_idx) {
+                    Some(None)
+                } else {
+                    transfer_objects
+                        .objects
+                        .iter()
+                        .position(|elem| matches_input_arg(*elem, arg_idx))
+                        .map(Some)
+                }
+            }
             Command::SplitCoins(split_coins) => {
-                matches_input_arg(split_coins.coin, arg_idx).then_some(None)
+                if matches_input_arg(split_coins.coin, arg_idx) {
+                    Some(None)
+                } else {
+                    split_coins
+                        .amounts
+                        .iter()
+                        .position(|amount| matches_input_arg(*amount, arg_idx))
+                        .map(Some)
+                }
             }
             Command::MergeCoins(merge_coins) => {
                 if matches_input_arg(merge_coins.coin, arg_idx) {
@@ -534,10 +771,6 @@ fn find_arg_uses(
         }
         .map(|x| (command, x))
     })
-}
-
-fn matches_input_arg(arg: Argument, arg_idx: usize) -> bool {
-    matches!(arg, Argument::Input(idx) if idx as usize == arg_idx)
 }
 
 /// Estimate the gas budget using the gas_cost_summary from a previous DryRun
@@ -569,6 +802,7 @@ fn select_gas(
     max_gas_payment_objects: u32,
     input_objects: &[ObjectID],
 ) -> Result<Vec<ObjectRef>> {
+    //TODO implement index of gas coins sorted in order of decreasing value
     let gas_coins = reader
         .inner()
         .account_owned_objects_info_iter(owner, None)?

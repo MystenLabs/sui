@@ -999,7 +999,15 @@
             "style": "form"
           }
         ],
-        "requestBody": {},
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnresolvedTransaction"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "",
@@ -5502,6 +5510,145 @@
           }
         }
       },
+      "UnresolvedGasPayment": {
+        "type": "object",
+        "required": [
+          "owner"
+        ],
+        "properties": {
+          "budget": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnresolvedObjectReference"
+            }
+          },
+          "owner": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "price": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "UnresolvedInputArgument": {
+        "type": "object",
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/ObjectDigest"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/UnresolvedInputArgumentKind"
+          },
+          "mutable": {
+            "type": "boolean"
+          },
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "value": {
+            "$ref": "#/components/schemas/UnresolvedValue"
+          },
+          "version": {
+            "description": "Either the `initial_shared_version` if object is a shared object, or the `version` if this is an owned object",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "UnresolvedInputArgumentKind": {
+        "type": "string",
+        "enum": [
+          "pure",
+          "shared",
+          "receiving",
+          "immutable_or_owned",
+          "immutable",
+          "owned",
+          "literal"
+        ]
+      },
+      "UnresolvedObjectReference": {
+        "type": "object",
+        "required": [
+          "object_id"
+        ],
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/ObjectDigest"
+          },
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "version": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "UnresolvedTransaction": {
+        "type": "object",
+        "required": [
+          "commands",
+          "expiration",
+          "inputs",
+          "sender"
+        ],
+        "properties": {
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Command"
+            }
+          },
+          "expiration": {
+            "$ref": "#/components/schemas/TransactionExpiration"
+          },
+          "gas_payment": {
+            "$ref": "#/components/schemas/UnresolvedGasPayment"
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnresolvedInputArgument"
+            }
+          },
+          "sender": {
+            "$ref": "#/components/schemas/Address"
+          }
+        }
+      },
+      "UnresolvedValue": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnresolvedValue"
+            }
+          }
+        ]
+      },
       "UpgradeInfo": {
         "description": "Upgraded package info for the linkage table",
         "type": "object",
@@ -5629,7 +5776,7 @@
                 ]
               },
               "signatures": {
-                "description": "The plain signature encoded with signature scheme.",
+                "description": "The plain signature encoded with signature scheme.\n\nThe signatures must be in the same order as they are listed in the committee.",
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/MultisigMemberSignature"

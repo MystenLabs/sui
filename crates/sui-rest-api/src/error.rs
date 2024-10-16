@@ -5,6 +5,7 @@ use axum::http::StatusCode;
 
 pub type Result<T, E = RestError> = std::result::Result<T, E>;
 
+#[derive(Debug)]
 pub struct RestError {
     status: StatusCode,
     message: Option<String>,
