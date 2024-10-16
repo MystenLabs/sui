@@ -5,7 +5,7 @@ use crate::abi::{
     EthBridgeCommittee, EthBridgeConfig, EthBridgeLimiter, EthBridgeVault, EthSuiBridge,
 };
 use crate::config::{
-    default_ed25519_key_pair, BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig,
+    default_ed25519_key_pair, BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig, WatchdogConfig,
 };
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
@@ -206,6 +206,13 @@ pub fn generate_bridge_node_config_and_write_to_file(
         metrics: Some(MetricsConfig {
             push_interval_seconds: None, // use default value
             push_url: "metrics_proxy_url".to_string(),
+        }),
+        watchdog_config: Some(WatchdogConfig {
+            total_supplies: BTreeMap::from_iter(vec![(
+                "eth".to_string(),
+                "0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH"
+                    .to_string(),
+            )]),
         }),
     };
     if run_client {
