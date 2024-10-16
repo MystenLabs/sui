@@ -209,7 +209,7 @@ fn handler<H: Handler + 'static>(
     })
 }
 
-/// The commiter task is responsible for gathering rows to write to the database. It is a single
+/// The committer task is responsible for gathering rows to write to the database. It is a single
 /// work loop that gathers checkpoint-wise row information, and periodically writes them out to the
 /// database.
 ///
@@ -227,7 +227,7 @@ fn handler<H: Handler + 'static>(
 /// - Number of pending rows. If this exceeds `H::BATCH_SIZE`, the committer will attempt to write
 ///   out at most `H::CHUNK_SIZE` worth of rows to the DB.
 ///
-/// If a write fails, the commiter will save the batch it meant to write and try to write them
+/// If a write fails, the committer will save the batch it meant to write and try to write them
 /// again at the next opportunity, potentially adding more rows to the batch if more have arrived
 /// in the interim.
 ///
@@ -252,7 +252,7 @@ fn committer<H: Handler + 'static>(
         cool.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // Buffer to gather the next batch to write. This may be non-empty at the top of a tick of
-        // the commiter's loop if the previous attempt at a write failed. Attempt is incremented
+        // the committer's loop if the previous attempt at a write failed. Attempt is incremented
         // every time a batch write fails, and is reset when it succeeds.
         let mut attempt = 0;
         let mut batch = vec![];
@@ -271,7 +271,7 @@ fn committer<H: Handler + 'static>(
                 biased;
 
                 _ = cancel.cancelled() => {
-                    info!(pipline = H::NAME, "Shutdown received, stopping committer");
+                    info!(pipeline = H::NAME, "Shutdown received, stopping committer");
                     break;
                 }
 
