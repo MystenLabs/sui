@@ -602,7 +602,7 @@ impl Core {
             self.block_manager
                 .try_unsuspend_blocks_for_latest_gc_round();
 
-                committed_sub_dags.extend(subdags);
+            committed_sub_dags.extend(subdags);
         }
 
         // Notify about our own committed blocks
