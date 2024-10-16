@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/bcs';
+import { fromBase64 } from '@mysten/bcs';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
 
@@ -27,7 +27,7 @@ export class Secp256k1PublicKey extends PublicKey {
 		super();
 
 		if (typeof value === 'string') {
-			this.data = fromB64(value);
+			this.data = fromBase64(value);
 		} else if (value instanceof Uint8Array) {
 			this.data = value;
 		} else {

@@ -3363,23 +3363,25 @@ async fn test_store_revert_transfer_sui() {
         .await
         .unwrap();
 
-    let db = &authority_state.database_for_testing();
-    db.revert_state_update(&tx_digest).unwrap();
+    let cache = authority_state.get_object_cache_reader();
+    let tx_cache = authority_state.get_transaction_cache_reader();
+    let reconfig_api = authority_state.get_reconfig_api();
+    reconfig_api.revert_state_update(&tx_digest).unwrap();
+    reconfig_api
+        .clear_state_end_of_epoch(&authority_state.execution_lock_for_reconfiguration().await);
 
     assert_eq!(
-        db.get_object(&gas_object_id).unwrap().unwrap().owner,
+        cache.get_object(&gas_object_id).unwrap().unwrap().owner,
         Owner::AddressOwner(sender),
     );
     assert_eq!(
-        db.get_latest_object_ref_or_tombstone(gas_object_id)
+        cache
+            .get_latest_object_ref_or_tombstone(gas_object_id)
             .unwrap()
             .unwrap(),
         gas_object_ref
     );
-    // Transaction should not be deleted on revert in case it's needed
-    // to execute a future state sync checkpoint.
-    assert!(db.get_transaction_block(&tx_digest).unwrap().is_some());
-    assert!(!db.is_tx_already_executed(&tx_digest).unwrap());
+    assert!(!tx_cache.is_tx_already_executed(&tx_digest).unwrap());
 }
 
 #[tokio::test]
@@ -3399,6 +3401,15 @@ async fn test_store_revert_wrap_move_call() {
     )
     .await
     .unwrap();
+
+    authority_state
+        .get_cache_commit()
+        .commit_transaction_outputs(
+            authority_state.epoch_store_for_testing().epoch(),
+            &[*create_effects.transaction_digest()],
+        )
+        .await
+        .unwrap();
 
     assert!(create_effects.status().is_ok());
     assert_eq!(create_effects.created().len(), 1);
@@ -3436,18 +3447,21 @@ async fn test_store_revert_wrap_move_call() {
 
     let wrapper_v0 = wrap_effects.created()[0].0;
 
-    let db = &authority_state.database_for_testing();
-    db.revert_state_update(&wrap_digest).unwrap();
+    let cache = &authority_state.get_object_cache_reader();
+    let reconfig_api = authority_state.get_reconfig_api();
+    reconfig_api.revert_state_update(&wrap_digest).unwrap();
+    reconfig_api
+        .clear_state_end_of_epoch(&authority_state.execution_lock_for_reconfiguration().await);
 
     // The wrapped object is unwrapped once again (accessible from storage).
-    let object = db.get_object(&object_v0.0).unwrap().unwrap();
+    let object = cache.get_object(&object_v0.0).unwrap().unwrap();
     assert_eq!(object.version(), object_v0.1);
 
     // The wrapper doesn't exist
-    assert!(db.get_object(&wrapper_v0.0).unwrap().is_none());
+    assert!(cache.get_object(&wrapper_v0.0).unwrap().is_none());
 
     // The gas is uncharged
-    let gas = db.get_object(&gas_object_id).unwrap().unwrap();
+    let gas = cache.get_object(&gas_object_id).unwrap().unwrap();
     assert_eq!(gas.version(), create_effects.gas_object().0 .1);
 }
 
@@ -3484,6 +3498,18 @@ async fn test_store_revert_unwrap_move_call() {
     )
     .await
     .unwrap();
+
+    authority_state
+        .get_cache_commit()
+        .commit_transaction_outputs(
+            authority_state.epoch_store_for_testing().epoch(),
+            &[
+                *create_effects.transaction_digest(),
+                *wrap_effects.transaction_digest(),
+            ],
+        )
+        .await
+        .unwrap();
 
     assert!(wrap_effects.status().is_ok());
     assert_eq!(wrap_effects.created().len(), 1);
@@ -3522,21 +3548,25 @@ async fn test_store_revert_unwrap_move_call() {
     assert_eq!(unwrap_effects.unwrapped().len(), 1);
     assert_eq!(unwrap_effects.unwrapped()[0].0 .0, object_v0.0);
 
-    let db = &authority_state.database_for_testing();
+    let cache = &authority_state.get_object_cache_reader();
+    let reconfig_api = authority_state.get_reconfig_api();
 
-    db.revert_state_update(&unwrap_digest).unwrap();
+    reconfig_api.revert_state_update(&unwrap_digest).unwrap();
+    reconfig_api
+        .clear_state_end_of_epoch(&authority_state.execution_lock_for_reconfiguration().await);
 
     // The unwrapped object is wrapped once again
-    assert!(db.get_object(&object_v0.0).unwrap().is_none());
+    assert!(cache.get_object(&object_v0.0).unwrap().is_none());
 
     // The wrapper exists
-    let wrapper = db.get_object(&wrapper_v0.0).unwrap().unwrap();
+    let wrapper = cache.get_object(&wrapper_v0.0).unwrap().unwrap();
     assert_eq!(wrapper.version(), wrapper_v0.1);
 
     // The gas is uncharged
-    let gas = db.get_object(&gas_object_id).unwrap().unwrap();
+    let gas = cache.get_object(&gas_object_id).unwrap().unwrap();
     assert_eq!(gas.version(), wrap_effects.gas_object().0 .1);
 }
+
 #[tokio::test]
 async fn test_store_get_dynamic_object() {
     let (_, fields) = create_and_retrieve_df_info(ident_str!("add_ofield")).await;
@@ -3743,6 +3773,18 @@ async fn test_store_revert_add_ofield() {
     let outer_v0 = create_outer_effects.created()[0].0;
     let inner_v0 = create_inner_effects.created()[0].0;
 
+    authority_state
+        .get_cache_commit()
+        .commit_transaction_outputs(
+            authority_state.epoch_store_for_testing().epoch(),
+            &[
+                *create_outer_effects.transaction_digest(),
+                *create_inner_effects.transaction_digest(),
+            ],
+        )
+        .await
+        .unwrap();
+
     let add_txn = to_sender_signed_transaction(
         TransactionData::new_move_call(
             sender,
@@ -3777,27 +3819,31 @@ async fn test_store_revert_add_ofield() {
     let outer_v1 = find_by_id(&add_effects.mutated(), outer_v0.0).unwrap();
     let inner_v1 = find_by_id(&add_effects.mutated(), inner_v0.0).unwrap();
 
-    let db = &authority_state.database_for_testing();
+    let cache = authority_state.get_object_cache_reader();
+    let reconfig_api = &authority_state.get_reconfig_api();
 
-    let outer = db.get_object(&outer_v0.0).unwrap().unwrap();
+    let outer = cache.get_object(&outer_v0.0).unwrap().unwrap();
     assert_eq!(outer.version(), outer_v1.1);
 
-    let field = db.get_object(&field_v0.0).unwrap().unwrap();
+    let field = cache.get_object(&field_v0.0).unwrap().unwrap();
     assert_eq!(field.owner, Owner::ObjectOwner(outer_v0.0.into()));
 
-    let inner = db.get_object(&inner_v0.0).unwrap().unwrap();
+    let inner = cache.get_object(&inner_v0.0).unwrap().unwrap();
     assert_eq!(inner.version(), inner_v1.1);
     assert_eq!(inner.owner, Owner::ObjectOwner(field_v0.0.into()));
 
-    db.revert_state_update(&add_digest).unwrap();
+    reconfig_api.revert_state_update(&add_digest).unwrap();
 
-    let outer = db.get_object(&outer_v0.0).unwrap().unwrap();
+    reconfig_api
+        .clear_state_end_of_epoch(&authority_state.execution_lock_for_reconfiguration().await);
+
+    let outer = cache.get_object(&outer_v0.0).unwrap().unwrap();
     assert_eq!(outer.version(), outer_v0.1);
 
     // Field no longer exists
-    assert!(db.get_object(&field_v0.0).unwrap().is_none());
+    assert!(cache.get_object(&field_v0.0).unwrap().is_none());
 
-    let inner = db.get_object(&inner_v0.0).unwrap().unwrap();
+    let inner = cache.get_object(&inner_v0.0).unwrap().unwrap();
     assert_eq!(inner.version(), inner_v0.1);
     assert_eq!(inner.owner, Owner::AddressOwner(sender));
 }
@@ -3854,6 +3900,19 @@ async fn test_store_revert_remove_ofield() {
     assert!(add_effects.status().is_ok());
     assert_eq!(add_effects.created().len(), 1);
 
+    authority_state
+        .get_cache_commit()
+        .commit_transaction_outputs(
+            authority_state.epoch_store_for_testing().epoch(),
+            &[
+                *create_outer_effects.transaction_digest(),
+                *create_inner_effects.transaction_digest(),
+                *add_effects.transaction_digest(),
+            ],
+        )
+        .await
+        .unwrap();
+
     let field_v0 = add_effects.created()[0].0;
     let outer_v1 = find_by_id(&add_effects.mutated(), outer_v0.0).unwrap();
     let inner_v1 = find_by_id(&add_effects.mutated(), inner_v0.0).unwrap();
@@ -3889,24 +3948,29 @@ async fn test_store_revert_remove_ofield() {
     let outer_v2 = find_by_id(&remove_effects.mutated(), outer_v0.0).unwrap();
     let inner_v2 = find_by_id(&remove_effects.mutated(), inner_v0.0).unwrap();
 
-    let db = &authority_state.database_for_testing();
+    let cache = &authority_state.get_object_cache_reader();
+    let reconfig_api = &authority_state.get_reconfig_api();
 
-    let outer = db.get_object(&outer_v0.0).unwrap().unwrap();
+    let outer = cache.get_object(&outer_v0.0).unwrap().unwrap();
     assert_eq!(outer.version(), outer_v2.1);
 
-    let inner = db.get_object(&inner_v0.0).unwrap().unwrap();
+    let inner = cache.get_object(&inner_v0.0).unwrap().unwrap();
     assert_eq!(inner.owner, Owner::AddressOwner(sender));
     assert_eq!(inner.version(), inner_v2.1);
 
-    db.revert_state_update(&remove_ofield_digest).unwrap();
+    reconfig_api
+        .revert_state_update(&remove_ofield_digest)
+        .unwrap();
+    reconfig_api
+        .clear_state_end_of_epoch(&authority_state.execution_lock_for_reconfiguration().await);
 
-    let outer = db.get_object(&outer_v0.0).unwrap().unwrap();
+    let outer = cache.get_object(&outer_v0.0).unwrap().unwrap();
     assert_eq!(outer.version(), outer_v1.1);
 
-    let field = db.get_object(&field_v0.0).unwrap().unwrap();
+    let field = cache.get_object(&field_v0.0).unwrap().unwrap();
     assert_eq!(field.owner, Owner::ObjectOwner(outer_v0.0.into()));
 
-    let inner = db.get_object(&inner_v0.0).unwrap().unwrap();
+    let inner = cache.get_object(&inner_v0.0).unwrap().unwrap();
     assert_eq!(inner.owner, Owner::ObjectOwner(field_v0.0.into()));
     assert_eq!(inner.version(), inner_v1.1);
 }
@@ -4693,7 +4757,10 @@ async fn test_shared_object_transaction_ok() {
     authority.try_execute_for_test(&certificate).await.unwrap();
 
     // Ensure transaction effects are available.
-    authority.notify_read_effects(&certificate).await.unwrap();
+    authority
+        .notify_read_effects(*certificate.digest())
+        .await
+        .unwrap();
 
     // Ensure shared object sequence number increased.
     let shared_object_version = authority
@@ -5799,6 +5866,7 @@ async fn test_consensus_handler_per_object_congestion_control(
         PerObjectCongestionControlMode::None => unreachable!(),
         PerObjectCongestionControlMode::TotalGasBudget => 5,
         PerObjectCongestionControlMode::TotalTxCount => 2,
+        PerObjectCongestionControlMode::TotalGasBudgetWithCap => 5,
     };
     let gas_objects_commit_1 = create_gas_objects(5 + non_congested_tx_count, sender);
     let gas_objects_commit_2 = create_gas_objects(non_congested_tx_count, sender);
@@ -5823,6 +5891,15 @@ async fn test_consensus_handler_per_object_congestion_control(
                 .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(2);
             protocol_config
                 .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(2);
+        }
+        PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
+            protocol_config
+                .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(200_000_000);
+            protocol_config
+                .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                    200_000_000,
+                );
+            protocol_config.set_gas_budget_based_txn_cost_cap_factor_for_testing(100_000_000);
         }
     }
     protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(1000); // Set to a large number so that we don't hit this limit.
@@ -6011,6 +6088,14 @@ async fn test_consensus_handler_per_object_congestion_control_using_budget() {
 async fn test_consensus_handler_per_object_congestion_control_using_tx_count() {
     test_consensus_handler_per_object_congestion_control(
         PerObjectCongestionControlMode::TotalTxCount,
+    )
+    .await;
+}
+
+#[sim_test]
+async fn test_consensus_handler_per_object_congestion_control_using_budget_with_cap() {
+    test_consensus_handler_per_object_congestion_control(
+        PerObjectCongestionControlMode::TotalGasBudgetWithCap,
     )
     .await;
 }

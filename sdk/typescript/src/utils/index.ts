@@ -13,7 +13,18 @@ export {
 	SUI_ADDRESS_LENGTH,
 } from './sui-types.js';
 
-export { fromB64, toB64, fromHEX, toHEX } from '@mysten/bcs';
+export {
+	fromB64,
+	toB64,
+	fromHEX,
+	toHex,
+	toHEX,
+	fromHex,
+	fromBase64,
+	toBase64,
+	fromBase58,
+	toBase58,
+} from '@mysten/bcs';
 export { isValidSuiNSName, normalizeSuiNSName } from './suins.js';
 
 export {
@@ -29,3 +40,5 @@ export {
 } from './constants.js';
 
 export { isValidNamedPackage, isValidNamedType } from './move-registry.js';
+
+export { deriveDynamicFieldID } from './dynamic-fields.js';

@@ -391,15 +391,22 @@ public enum Enums::variant_match::SomeEnum has drop {
 }
 
 -- test 11 -------------------
-use line: 15, use_ndx: 3
-Use: 's', start: 45, end: 46
-Def: 'SomeStruct', line: 7, def char: 30
-TypeDef: 'SomeStruct', line: 2, char: 18
+use line: 15, use_ndx: 2
+Use: 'PositionalFields', start: 24, end: 40
+Def: 'PositionalFields', line: 7, def char: 8
+TypeDef: no info
 On Hover:
-Enums::variant_match::SomeEnum
-1: Enums::variant_match::SomeStruct
+Enums::variant_match::SomeEnum::PositionalFields(u64, Enums::variant_match::SomeStruct)
 
 -- test 12 -------------------
+use line: 15, use_ndx: 3
+Use: 's', start: 45, end: 46
+Def: 's', line: 12, def char: 29
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+s: Enums::variant_match::SomeStruct
+
+-- test 13 -------------------
 use line: 19, use_ndx: 0
 Use: 'e', start: 20, end: 21
 Def: 'e', line: 14, def char: 16
@@ -407,7 +414,7 @@ TypeDef: 'SomeEnum', line: 6, char: 16
 On Hover:
 let mut e: Enums::variant_match::SomeEnum
 
--- test 13 -------------------
+-- test 14 -------------------
 use line: 20, use_ndx: 0
 Use: 'SomeEnum', start: 12, end: 20
 Def: 'SomeEnum', line: 6, def char: 16
@@ -419,7 +426,7 @@ public enum Enums::variant_match::SomeEnum has drop {
 	PositionalFields( /* ... */ )
 }
 
--- test 14 -------------------
+-- test 15 -------------------
 use line: 20, use_ndx: 1
 Use: 'PositionalFields', start: 22, end: 38
 Def: 'PositionalFields', line: 7, def char: 8
@@ -427,7 +434,7 @@ TypeDef: no info
 On Hover:
 Enums::variant_match::SomeEnum::PositionalFields(u64, Enums::variant_match::SomeStruct)
 
--- test 15 -------------------
+-- test 16 -------------------
 use line: 20, use_ndx: 2
 Use: 'num', start: 39, end: 42
 Def: 'u64', line: 7, def char: 25
@@ -436,7 +443,7 @@ On Hover:
 Enums::variant_match::SomeEnum
 0: u64
 
--- test 16 -------------------
+-- test 17 -------------------
 use line: 20, use_ndx: 3
 Use: 's', start: 44, end: 45
 Def: 'SomeStruct', line: 7, def char: 30
@@ -445,7 +452,7 @@ On Hover:
 Enums::variant_match::SomeEnum
 1: Enums::variant_match::SomeStruct
 
--- test 17 -------------------
+-- test 18 -------------------
 use line: 21, use_ndx: 0
 Use: 'num', start: 17, end: 20
 Def: 'num', line: 19, def char: 39
@@ -453,7 +460,7 @@ TypeDef: no info
 On Hover:
 num: &mut u64
 
--- test 18 -------------------
+-- test 19 -------------------
 use line: 21, use_ndx: 1
 Use: 's', start: 23, end: 24
 Def: 's', line: 19, def char: 44
@@ -461,7 +468,7 @@ TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
 s: &mut Enums::variant_match::SomeStruct
 
--- test 19 -------------------
+-- test 20 -------------------
 use line: 21, use_ndx: 2
 Use: 'some_field', start: 25, end: 35
 Def: 'some_field', line: 3, def char: 8
@@ -470,7 +477,7 @@ On Hover:
 Enums::variant_match::SomeStruct
 some_field: u64
 
--- test 20 -------------------
+-- test 21 -------------------
 use line: 24, use_ndx: 0
 Use: 'SE', start: 12, end: 14
 Def: 'SomeEnum', line: 6, def char: 16
@@ -482,7 +489,7 @@ public enum Enums::variant_match::SomeEnum has drop {
 	PositionalFields( /* ... */ )
 }
 
--- test 21 -------------------
+-- test 22 -------------------
 use line: 24, use_ndx: 1
 Use: 'NamedFields', start: 16, end: 27
 Def: 'NamedFields', line: 8, def char: 8
@@ -490,7 +497,7 @@ TypeDef: no info
 On Hover:
 Enums::variant_match::SomeEnum::NamedFields{num1: u64, num2: u64, s: Enums::variant_match::SomeStruct}
 
--- test 22 -------------------
+-- test 23 -------------------
 use line: 24, use_ndx: 2
 Use: 'num1', start: 30, end: 34
 Def: 'num1', line: 8, def char: 21
@@ -499,7 +506,7 @@ On Hover:
 Enums::variant_match::SomeEnum
 num1: u64
 
--- test 23 -------------------
+-- test 24 -------------------
 use line: 24, use_ndx: 3
 Use: 'num2', start: 36, end: 40
 Def: 'num2', line: 8, def char: 32
@@ -508,7 +515,7 @@ On Hover:
 Enums::variant_match::SomeEnum
 num2: u64
 
--- test 24 -------------------
+-- test 25 -------------------
 use line: 24, use_ndx: 4
 Use: 's', start: 46, end: 47
 Def: 's', line: 8, def char: 43
@@ -517,7 +524,7 @@ On Hover:
 Enums::variant_match::SomeEnum
 s: Enums::variant_match::SomeStruct
 
--- test 25 -------------------
+-- test 26 -------------------
 use line: 24, use_ndx: 5
 Use: 'num1', start: 55, end: 59
 Def: 'num1', line: 23, def char: 30
@@ -525,7 +532,7 @@ TypeDef: no info
 On Hover:
 num1: &u64
 
--- test 26 -------------------
+-- test 27 -------------------
 use line: 24, use_ndx: 6
 Use: 's', start: 62, end: 63
 Def: 's', line: 23, def char: 46
@@ -533,7 +540,7 @@ TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
 s: &Enums::variant_match::SomeStruct
 
--- test 27 -------------------
+-- test 28 -------------------
 use line: 24, use_ndx: 8
 Use: 'num1', start: 79, end: 83
 Def: 'num1', line: 23, def char: 30
@@ -541,7 +548,7 @@ TypeDef: no info
 On Hover:
 num1: &u64
 
--- test 28 -------------------
+-- test 29 -------------------
 use line: 24, use_ndx: 9
 Use: 'local', start: 86, end: 91
 Def: 'local', line: 16, def char: 12
@@ -549,7 +556,7 @@ TypeDef: no info
 On Hover:
 let local: u64
 
--- test 29 -------------------
+-- test 30 -------------------
 use line: 25, use_ndx: 0
 Use: 's', start: 16, end: 17
 Def: 's', line: 23, def char: 46
@@ -557,7 +564,7 @@ TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
 s: &mut Enums::variant_match::SomeStruct
 
--- test 30 -------------------
+-- test 31 -------------------
 use line: 25, use_ndx: 2
 Use: 'num1', start: 32, end: 36
 Def: 'num1', line: 23, def char: 30
@@ -565,7 +572,7 @@ TypeDef: no info
 On Hover:
 num1: &mut u64
 
--- test 31 -------------------
+-- test 32 -------------------
 use line: 25, use_ndx: 3
 Use: 'num2', start: 40, end: 44
 Def: 'num2', line: 23, def char: 36

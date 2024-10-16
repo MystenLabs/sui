@@ -26,6 +26,7 @@ use crate::indexer_reader::IndexerReader;
 use errors::IndexerError;
 
 pub mod apis;
+pub mod backfill;
 pub mod config;
 pub mod database;
 pub mod db;
@@ -37,7 +38,6 @@ pub mod metrics;
 pub mod models;
 pub mod restorer;
 pub mod schema;
-pub mod sql_backfill;
 pub mod store;
 pub mod system_package_task;
 pub mod tempdb;
@@ -48,6 +48,7 @@ pub async fn build_json_rpc_server(
     prometheus_registry: &Registry,
     reader: IndexerReader,
     config: &JsonRpcConfig,
+    cancel: CancellationToken,
 ) -> Result<ServerHandle, IndexerError> {
     let mut builder =
         JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry, None, None);
@@ -65,7 +66,6 @@ pub async fn build_json_rpc_server(
     builder.register_module(CoinReadApi::new(reader.clone()))?;
     builder.register_module(ExtendedApi::new(reader.clone()))?;
 
-    let cancel = CancellationToken::new();
     let system_package_task =
         SystemPackageTask::new(reader.clone(), cancel.clone(), Duration::from_secs(10));
 

@@ -1,0 +1,58 @@
+{
+  "object": "page",
+  "id": "b55c9c91-384d-452b-81db-d1ef79372b75",
+  "created_time": "2020-03-17T19:10:04.968Z",
+  "last_edited_time": "2020-03-17T21:49:37.913Z",
+  "archived": false,
+  "parent": {
+    "type": "workspace"
+  },
+  "properties": {
+    "Name": {
+      "type": "title",
+      "id": "some-property-id",
+      "title": [
+        {
+          "type": "text",
+          "plain_text": "Stuff",
+          "text": {
+            "content": "Stuff"
+          }
+        },
+        {
+          "type": "text",
+          "plain_text": "some",
+          "text": {
+            "content": "some"
+          },
+          "annotations": {
+            "italic": true
+          }
+        }
+      ]
+    },
+    "Description": {
+      "type": "rich_text",
+      "id": "some-property-id2",
+      "rich_text": [
+        {
+          "type": "text",
+          "plain_text": "Stuff",
+          "text": {
+            "content": "Stuff"
+          }
+        },
+        {
+          "type": "text",
+          "plain_text": "some",
+          "text": {
+            "content": "some"
+          },
+          "annotations": {
+            "italic": true
+          }
+        }
+      ]
+    }
+  }
+}

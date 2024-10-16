@@ -126,5 +126,19 @@ mod tests {
             .unwrap();
         let accept = AcceptFormat::from_request(req, &()).await.unwrap();
         assert_eq!(accept, AcceptFormat::Json);
+
+        let req = Request::builder()
+            .header(header::ACCEPT, "application/json, application/bcs")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let accept = AcceptFormat::from_request(req, &()).await.unwrap();
+        assert_eq!(accept, AcceptFormat::Json);
+
+        let req = Request::builder()
+            .header(header::ACCEPT, "application/bcs, application/json")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let accept = AcceptFormat::from_request(req, &()).await.unwrap();
+        assert_eq!(accept, AcceptFormat::Bcs);
     }
 }

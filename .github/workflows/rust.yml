@@ -68,12 +68,6 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-      - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
-        with:
-          crate: cargo-hakari
-          locked: true
       - run: cargo xlint
 
   move-auto-formatter-ci-test:
@@ -132,9 +126,6 @@ jobs:
       - name: cargo test
         run: |
           cargo nextest run --profile ci -E '!package(sui-bridge)'
-      - name: cargo test (sui-graphql staging)
-        run: |
-          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -165,6 +156,9 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
+      - name: cargo test (sui-graphql staging)
+        run: |
+          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)'
       - name: benchmark (smoke)
         run: |
           cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
@@ -377,14 +371,10 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - run: rustup component add rustfmt
-      - name: rustfmt
-        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # pin@v1.0.3
-        with:
-          command: fmt
-          args: --check
+      - run: cargo fmt --check
 
   cargo-deny:
-    name: cargo-deny (advisories, licenses, bans, ...)
+    name: cargo-deny (bans, licenses, sources)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-latest ]
@@ -393,7 +383,19 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@cargo-deny
-      - run: cargo deny check
+      - run: cargo deny check bans licenses sources
+
+  cargo-deny-advisories:
+    name: cargo-deny (advisories)
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ ubuntu-latest ]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@cargo-deny
+      - run: cargo deny check advisories
 
   sui-excution-cut:
     name: cutting a new execution layer

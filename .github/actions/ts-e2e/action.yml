@@ -28,12 +28,7 @@ runs:
 
     - name: cargo build
       if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to s3 yet
-      run: |
-        if [[ "${{ inputs.ref }}" == 'devnet' || "${{ inputs.ref }}" == 'testnet' ]]; then
-          cargo build --bin sui --features indexer
-        else
-          cargo build --bin sui
-        fi
+      run: cargo build --bin sui
       shell: bash
 
     - name: Dowload from S3
@@ -66,5 +61,10 @@ runs:
       shell: bash
 
     - name: Run TS SDK e2e tests
-      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui --filter @mysten/graphql-transport test:e2e'
+      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui test:e2e'
+      shell: bash
+
+    - name: Run TS SDK GraphQL compatibility e2e tests
+      if: (!contains(fromJSON('["testnet", "devnet"]'), inputs.ref))
+      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/graphql-transport test:e2e'
       shell: bash

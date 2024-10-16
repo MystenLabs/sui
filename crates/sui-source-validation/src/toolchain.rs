@@ -249,9 +249,9 @@ fn download_and_compile(
         let mut dest_binary = dest_version.clone();
         dest_binary.extend(["target", "release"]);
         if platform == "windows-x86_64" {
-            dest_binary.push(&format!("sui-{platform}.exe"));
+            dest_binary.push(format!("sui-{platform}.exe"));
         } else {
-            dest_binary.push(&format!("sui-{platform}"));
+            dest_binary.push(format!("sui-{platform}"));
         }
         let dest_binary_os = OsStr::new(dest_binary.as_path());
         set_executable_permission(dest_binary_os)?;

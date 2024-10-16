@@ -1,9 +1,5 @@
 [package]
 name = "Root"
 
-[dependencies.A]
-resolver = "../resolvers/successful.sh"
-
-[dependencies.A.packages]
-Contains = "Anything"
-Has = { No = "Schema" }
+[dependencies]
+A = { r."../resolvers/successful.sh" = "A" }

@@ -10,12 +10,12 @@ use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::AuthorityState;
 use sui_core::execution_cache::ObjectCacheRead;
+use sui_core::jsonrpc_index::TotalBalance;
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc_types::{
     Coin as SuiCoin, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
     SuiObjectDataFilter, TransactionFilter,
 };
-use sui_storage::indexes::TotalBalance;
 use sui_storage::key_value_store::{
     KVStoreCheckpointData, KVStoreTransactionData, TransactionKeyValueStore,
     TransactionKeyValueStoreTrait,
@@ -176,7 +176,7 @@ pub trait StateRead: Send + Sync {
     fn get_owned_coins(
         &self,
         owner: SuiAddress,
-        cursor: (String, ObjectID),
+        cursor: (String, u64, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
     ) -> StateReadResult<Vec<SuiCoin>>;
@@ -448,15 +448,15 @@ impl StateRead for AuthorityState {
     fn get_owned_coins(
         &self,
         owner: SuiAddress,
-        cursor: (String, ObjectID),
+        cursor: (String, u64, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
     ) -> StateReadResult<Vec<SuiCoin>> {
         Ok(self
             .get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)?
-            .map(|(coin_type, coin_object_id, coin)| SuiCoin {
-                coin_type,
-                coin_object_id,
+            .map(|(key, coin)| SuiCoin {
+                coin_type: key.coin_type,
+                coin_object_id: key.object_id,
                 version: coin.version,
                 digest: coin.digest,
                 balance: coin.balance,

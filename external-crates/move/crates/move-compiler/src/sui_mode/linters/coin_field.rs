@@ -30,7 +30,7 @@ const COIN_FIELD_DIAG: DiagnosticInfo = custom(
 pub struct CoinFieldVisitor;
 
 impl TypingVisitor for CoinFieldVisitor {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &T::Program) {
+    fn visit(&self, env: &mut CompilationEnv, program: &T::Program) {
         for (_, _, mdef) in program.modules.iter() {
             if mdef.attributes.is_test_or_test_only() {
                 continue;

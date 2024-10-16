@@ -11,7 +11,9 @@ use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
 use sui_graphql_rpc::test_infra::cluster::start_graphql_server_with_fn_rpc;
 use sui_indexer::tempdb::TempDb;
-use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
+use sui_indexer::test_utils::{
+    start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
+};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
@@ -229,36 +231,34 @@ impl Cluster for LocalNewCluster {
             let graphql_address = format!("127.0.0.1:{}", get_available_port("127.0.0.1"));
             let graphql_url = format!("http://{graphql_address}");
 
-            // Start indexer writer
-            let (_, _, writer_token) = start_test_indexer(
+            let (_, _, writer_token) = start_indexer_writer_for_testing(
                 pg_address.clone(),
-                fullnode_url.clone(),
-                ReaderWriterConfig::writer_mode(None, None),
-                data_ingestion_path.path().to_path_buf(),
+                None,
+                None,
+                Some(data_ingestion_path.path().to_path_buf()),
+                None, /* cancel */
             )
             .await;
             cancellation_tokens.push(writer_token.drop_guard());
 
             // Start indexer jsonrpc service
-            let (_, _, reader_token) = start_test_indexer(
+            let (_, reader_token) = start_indexer_jsonrpc_for_testing(
                 pg_address.clone(),
                 fullnode_url.clone(),
-                ReaderWriterConfig::reader_mode(indexer_jsonrpc_address.clone()),
-                data_ingestion_path.path().to_path_buf(),
+                indexer_jsonrpc_address.clone(),
+                None, /* cancel */
             )
             .await;
             cancellation_tokens.push(reader_token.drop_guard());
 
             // Start the graphql service
             let graphql_address = graphql_address.parse::<SocketAddr>()?;
-            let graphql_connection_config = ConnectionConfig::new(
-                Some(graphql_address.port()),
-                Some(graphql_address.ip().to_string()),
-                Some(pg_address),
-                None,
-                None,
-                None,
-            );
+            let graphql_connection_config = ConnectionConfig {
+                port: graphql_address.port(),
+                host: graphql_address.ip().to_string(),
+                db_url: pg_address,
+                ..Default::default()
+            };
 
             start_graphql_server_with_fn_rpc(
                 graphql_connection_config.clone(),

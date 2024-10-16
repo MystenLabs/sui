@@ -12,9 +12,10 @@ use crate::{
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, ModuleIdent, ModuleIdent_},
         legacy_aliases,
+        name_validation::is_valid_datatype_or_constant_name,
         translate::{
-            is_valid_datatype_or_constant_name, make_address, module_ident, top_level_address,
-            top_level_address_opt, value, DefnContext,
+            make_address, module_ident, top_level_address, top_level_address_opt, value,
+            DefnContext,
         },
     },
     ice, ice_assert,

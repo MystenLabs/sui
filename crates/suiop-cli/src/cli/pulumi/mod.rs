@@ -8,7 +8,7 @@ use anyhow::Result;
 use clap::Parser;
 use init::ProjectType;
 use setup::ensure_gcloud;
-use setup::ensure_setup;
+use setup::ensure_pulumi_setup;
 
 #[derive(Parser, Debug, Clone)]
 pub struct PulumiArgs {
@@ -21,20 +21,9 @@ pub enum PulumiAction {
     /// initialize a new pulumi project
     #[command(name = "init", aliases=["i"])]
     InitProject {
-        /// initialize app project
-        #[arg(short, long, group = "type")]
-        app: bool,
-
-        #[arg(short, long, group = "type")]
-        service: bool,
-
-        /// initialize barebones project (default)
-        #[arg(short, long, group = "type")]
-        basic: bool,
-
-        /// initialize cronjob project
-        #[arg(short, long, group = "type")]
-        cronjob: bool,
+        /// subcommand for project type
+        #[command(subcommand)]
+        project_type: ProjectType,
 
         /// use GCP KMS as encryption provider
         #[arg(short, long, group = "feature")]
@@ -46,26 +35,17 @@ pub enum PulumiAction {
     },
 }
 
-pub async fn pulumi_cmd(args: &PulumiArgs) -> Result<()> {
-    ensure_setup()?;
+pub fn pulumi_cmd(args: &PulumiArgs) -> Result<()> {
+    ensure_pulumi_setup()?;
     match &args.action {
         PulumiAction::InitProject {
-            app,
-            service,
-            basic,
-            cronjob,
+            project_type,
             kms,
             project_name,
         } => {
             if *kms {
                 ensure_gcloud()?;
             }
-            let project_type = match (app, service, basic, cronjob) {
-                (false, true, false, false) => ProjectType::Service,
-                (true, false, false, false) => ProjectType::App,
-                (false, false, false, true) => ProjectType::CronJob,
-                (_, _, _, _) => ProjectType::Basic,
-            };
             project_type.create_project(kms, project_name.clone())
         }
     }

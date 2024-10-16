@@ -49,7 +49,7 @@ diesel::table! {
         protocol_version -> Int8,
         total_stake -> Int8,
         storage_fund_balance -> Int8,
-        system_state -> Bytea,
+        system_state -> Nullable<Bytea>,
         epoch_total_transactions -> Nullable<Int8>,
         last_checkpoint_id -> Nullable<Int8>,
         epoch_end_timestamp -> Nullable<Int8>,
@@ -62,6 +62,7 @@ diesel::table! {
         leftover_storage_fund_inflow -> Nullable<Int8>,
         epoch_commitments -> Nullable<Bytea>,
         system_state_summary_json -> Nullable<Jsonb>,
+        first_tx_sequence_number -> Nullable<Int8>,
     }
 }
 
@@ -144,6 +145,7 @@ diesel::table! {
         event_type -> Text,
         timestamp_ms -> Int8,
         bcs -> Bytea,
+        sender -> Nullable<Bytea>,
     }
 }
 
@@ -367,6 +369,19 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    watermarks (entity) {
+        entity -> Text,
+        epoch_hi_inclusive -> Int8,
+        epoch_lo -> Int8,
+        checkpoint_hi_inclusive -> Int8,
+        tx_hi_inclusive -> Int8,
+        reader_lo -> Int8,
+        timestamp_ms -> Int8,
+        pruner_lo -> Nullable<Int8>,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     chain_identifier,
     checkpoints,
@@ -402,4 +417,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     tx_kinds,
     tx_recipients,
     tx_senders,
+    watermarks,
 );

@@ -2,23 +2,21 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-
 use crate::{
+    compatibility_mode::{CompatibilityMode, ExecutionCompatibilityMode},
     errors::{PartialVMError, PartialVMResult},
-    file_format::{AbilitySet, DatatypeTyParameter, Visibility},
+    file_format::{Ability, AbilitySet, DatatypeTyParameter, Visibility},
     file_format_common::VERSION_5,
     normalized::Module,
 };
 use move_core_types::vm_status::StatusCode;
-
 // ***************************************************************************
 // ******************* IMPORTANT NOTE ON COMPATIBILITY ***********************
 // ***************************************************************************
 //
-// If `check_datatype_layout` and/or `check_datatype_and_pub_function_linking` is false, type
-// safety over a series of upgrades cannot be guaranteed for either structs or enums. This is
-// because the type could first be removed, and then re-introduced with a diferent layout and/or
+// If `check_datatype_layout` is false, type safety over a series of upgrades cannot be guaranteed
+// for either structs or enums.
+// This is because the type could first be removed, and then re-introduced with a diferent layout and/or
 // additional variants in a later upgrade. E.g.,
 // * For enums you could add a new variant even if `disallow_new_variants` is true, by first
 //   removing the enum in an upgrade, and then reintroducing it with a new variant in a later
@@ -30,41 +28,26 @@ use move_core_types::vm_status::StatusCode;
 /// The result of a linking and layout compatibility check.
 ///
 /// Here is what the different combinations of the compatibility flags mean:
-/// `{ check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: true, check_private_entry_linking: true }`: fully backward compatible
-/// `{ check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: true, check_private_entry_linking: false }`: Backwards compatible, private entry function signatures can change
-/// `{ check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: false, check_private_entry_linking: true }`: Backward compatible, exclude the friend module declare and friend functions
-/// `{ check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: false, check_private_entry_linking: false }`: Backward compatible, exclude the friend module declarations, friend functions, and private and friend entry function
-/// `{ check_datatype_and_pub_function_linking: false, check_datatype_layout: true, check_friend_linking: false, check_private_entry_linking: _ }`: Dependent modules that reference functions or types in this module may not link. However, fixing, recompiling, and redeploying all dependent modules will work--no data migration needed.
-/// `{ check_datatype_and_pub_function_linking: true, check_datatype_layout: false, check_friend_linking: true, check_private_entry_linking: _ }`: Attempting to read structs published by this module will now fail at runtime. However, dependent modules will continue to link. Requires data migration, but no changes to dependent modules.
-/// `{ check_datatype_and_pub_function_linking: false, check_datatype_layout: false, check_friend_linking: false, check_private_entry_linking: _ }`: Everything is broken. Need both a data migration and changes to dependent modules.
+/// `{ check_datatype_layout: true, check_private_entry_linking: true }`: fully backward compatible
+/// `{ check_datatype_layout: true, check_private_entry_linking: false }`: Backwards compatible, private entry function signatures can change
+/// `{ check_datatype_layout: true, check_private_entry_linking: true }`: Backward compatible, exclude the friend module declare and friend functions
+/// `{ check_datatype_layout: true, check_private_entry_linking: false }`: Backward compatible, exclude the friend module declarations, friend functions, and private and friend entry function
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct Compatibility {
-    /// if false, do not ensure the dependent modules that reference public functions or structs in this module can link
-    pub check_datatype_and_pub_function_linking: bool,
     /// if false, do not ensure the struct layout capability
     pub check_datatype_layout: bool,
-    /// if false, treat `friend` as `private` when `check_datatype_and_pub_function_linking`.
-    pub check_friend_linking: bool,
-    /// if false, treat `entry` as `private` when `check_datatype_and_pub_function_linking`.
+    /// if false, treat `entry` as `private`
     pub check_private_entry_linking: bool,
     /// The set of abilities that cannot be added to an already exisiting type.
     pub disallowed_new_abilities: AbilitySet,
-    /// Don't allow generic type parameters in structs to change their abilities or constraints.
-    pub disallow_change_datatype_type_params: bool,
-    /// Don't allow adding new variants at the end of an enum.
-    pub disallow_new_variants: bool,
 }
 
 impl Default for Compatibility {
     fn default() -> Self {
         Self {
-            check_datatype_and_pub_function_linking: true,
             check_datatype_layout: true,
-            check_friend_linking: true,
             check_private_entry_linking: true,
             disallowed_new_abilities: AbilitySet::EMPTY,
-            disallow_change_datatype_type_params: true,
-            disallow_new_variants: true,
         }
     }
 }
@@ -76,13 +59,35 @@ impl Compatibility {
 
     pub fn no_check() -> Self {
         Self {
-            check_datatype_and_pub_function_linking: false,
             check_datatype_layout: false,
-            check_friend_linking: false,
             check_private_entry_linking: false,
             disallowed_new_abilities: AbilitySet::EMPTY,
-            disallow_change_datatype_type_params: false,
-            disallow_new_variants: false,
+        }
+    }
+
+    /// Check compatibility for userspace module upgrades
+    pub fn upgrade_check() -> Self {
+        Self {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::ALL,
+        }
+    }
+
+    /// Check compatibility for system module upgrades
+    pub fn framework_upgrade_check() -> Self {
+        Self {
+            check_datatype_layout: true,
+            // Checking `entry` linkage is required because system packages are updated in-place, and a
+            // transaction that was rolled back to make way for reconfiguration should still be runnable
+            // after a reconfiguration that upgraded the framework.
+            //
+            // A transaction that calls a system function that was previously `entry` and is now private
+            // will fail because its entrypoint became no longer callable. A transaction that calls a
+            // system function that was previously `public entry` and is now just `public` could also
+            // fail if one of its mutable inputs was being used in another private `entry` function.
+            check_private_entry_linking: true,
+            disallowed_new_abilities: AbilitySet::singleton(Ability::Key),
         }
     }
 
@@ -92,15 +97,25 @@ impl Compatibility {
 
     /// Check compatibility for `new_module` relative to old module `old_module`.
     pub fn check(&self, old_module: &Module, new_module: &Module) -> PartialVMResult<()> {
-        let mut datatype_and_function_linking = true;
-        let mut datatype_layout = true;
-        let mut friend_linking = true;
-        let mut entry_linking = true;
-        let mut no_new_variants = true;
+        self.check_with_mode::<ExecutionCompatibilityMode>(old_module, new_module)
+            .map_err(|_| PartialVMError::new(StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE))
+    }
+
+    pub fn check_with_mode<M: CompatibilityMode>(
+        &self,
+        old_module: &Module,
+        new_module: &Module,
+    ) -> Result<(), M::Error> {
+        let mut context = M::default();
 
         // module's name and address are unchanged
         if old_module.address != new_module.address || old_module.name != new_module.name {
-            datatype_and_function_linking = false;
+            context.module_id_mismatch(
+                &old_module.address,
+                &old_module.name,
+                &new_module.address,
+                &new_module.name,
+            );
         }
 
         // old module's structs are a subset of the new module's structs
@@ -109,21 +124,24 @@ impl Compatibility {
                 // Struct not present in new . Existing modules that depend on this struct will fail to link with the new version of the module.
                 // Also, struct layout cannot be guaranteed transitively, because after
                 // removing the struct, it could be re-added later with a different layout.
-                datatype_and_function_linking = false;
-                datatype_layout = false;
-                break;
+                context.struct_missing(name, old_struct);
+                continue;
             };
 
             if !datatype_abilities_compatible(
                 self.disallowed_new_abilities,
                 old_struct.abilities,
                 new_struct.abilities,
-            ) || !datatype_type_parameters_compatible(
-                self.disallow_change_datatype_type_params,
+            ) {
+                context.struct_ability_mismatch(name, old_struct, new_struct);
+            }
+
+            if !datatype_type_parameters_compatible(
+                self.check_datatype_layout,
                 &old_struct.type_parameters,
                 &new_struct.type_parameters,
             ) {
-                datatype_and_function_linking = false;
+                context.struct_type_param_mismatch(name, old_struct, new_struct);
             }
             if new_struct.fields != old_struct.fields {
                 // Fields changed. Code in this module will fail at runtime if it tries to
@@ -132,7 +150,8 @@ impl Compatibility {
                 // choose that changing the name (but not position or type) of a field is
                 // compatible. The VM does not care about the name of a field
                 // (it's purely informational), but clients presumably do.
-                datatype_layout = false
+
+                context.struct_field_mismatch(name, old_struct, new_struct);
             }
         }
 
@@ -141,37 +160,37 @@ impl Compatibility {
                 // Enum not present in new. Existing modules that depend on this enum will fail to link with the new version of the module.
                 // Also, enum layout cannot be guaranteed transitively, because after
                 // removing the enum, it could be re-added later with a different layout.
-                datatype_and_function_linking = false;
-                datatype_layout = false;
-                break;
+
+                context.enum_missing(name, old_enum);
+                continue;
             };
 
             if !datatype_abilities_compatible(
                 self.disallowed_new_abilities,
                 old_enum.abilities,
                 new_enum.abilities,
-            ) || !datatype_type_parameters_compatible(
-                self.disallow_change_datatype_type_params,
+            ) {
+                context.enum_ability_mismatch(name, old_enum, new_enum);
+            }
+
+            if !datatype_type_parameters_compatible(
+                self.check_datatype_layout,
                 &old_enum.type_parameters,
                 &new_enum.type_parameters,
             ) {
-                datatype_and_function_linking = false;
+                context.enum_type_param_mismatch(name, old_enum, new_enum);
             }
 
             if new_enum.variants.len() > old_enum.variants.len() {
-                no_new_variants = false;
-            }
-
-            if new_enum.variants.len() < old_enum.variants.len() {
-                datatype_layout = false;
+                context.enum_new_variant(name, old_enum, new_enum);
             }
 
             for (tag, old_variant) in old_enum.variants.iter().enumerate() {
                 // If the new enum has fewer variants than the old one, datatype_layout is false
                 // and we don't need to check the rest of the variants.
                 let Some(new_variant) = new_enum.variants.get(tag) else {
-                    datatype_layout = false;
-                    break;
+                    context.enum_variant_missing(name, old_enum, tag);
+                    continue;
                 };
                 if new_variant.name != old_variant.name {
                     // TODO: Variant renamed. This is a stricter definition than required.
@@ -179,7 +198,7 @@ impl Compatibility {
                     // type) of a variant is compatible. The VM does not care about the name of a
                     // variant if it's non-public (it's purely informational), but clients
                     // presumably would.
-                    datatype_layout = false;
+                    context.enum_variant_mismatch(name, old_enum, new_enum, tag);
                 }
                 if new_variant.fields != old_variant.fields {
                     // Fields changed. Code in this module will fail at runtime if it tries to
@@ -188,7 +207,7 @@ impl Compatibility {
                     // choose that changing the name (but not position or type) of a field is
                     // compatible. The VM does not care about the name of a field
                     // (it's purely informational), but clients presumably do.
-                    datatype_layout = false
+                    context.enum_variant_mismatch(name, old_enum, new_enum, tag);
                 }
             }
         }
@@ -199,46 +218,36 @@ impl Compatibility {
         //   (i.e. we cannot remove or change public functions)
         // - old module's script functions are a subset of the new module's script functions
         //   (i.e. we cannot remove or change script functions)
-        // - for any friend function that is removed or changed in the old module
-        //   - if the function visibility is upgraded to public, it is OK
-        //   - otherwise, it is considered as incompatible.
-        //
-        // NOTE: it is possible to relax the compatibility checking for a friend function, i.e.,
-        // we can remove/change a friend function if the function is not used by any module in the
-        // friend list. But for simplicity, we decided to go to the more restrictive form now and
-        // we may revisit this in the future.
         for (name, old_func) in &old_module.functions {
+            // Check for removed public functions
             let Some(new_func) = new_module.functions.get(name) else {
-                if old_func.visibility == Visibility::Friend {
-                    friend_linking = false;
-                } else if old_func.visibility != Visibility::Private {
-                    datatype_and_function_linking = false;
+                if old_func.visibility == Visibility::Public {
+                    context.function_missing_public(name, old_func);
                 } else if old_func.is_entry && self.check_private_entry_linking {
                     // This must be a private entry function. So set the link breakage if we're
                     // checking for that.
-                    entry_linking = false;
+                    context.function_missing_entry(name, old_func);
                 }
                 continue;
             };
 
             // Check visibility compatibility
-            match (old_func.visibility, new_func.visibility) {
-                (Visibility::Public, Visibility::Private | Visibility::Friend) => {
-                    datatype_and_function_linking = false
-                }
-                (Visibility::Friend, Visibility::Private) => friend_linking = false,
-                _ => (),
+            if old_func.visibility == Visibility::Public
+                && new_func.visibility != Visibility::Public
+            {
+                context.function_lost_public_visibility(name, old_func);
             }
 
             // Check entry compatibility
+            #[allow(clippy::if_same_then_else)]
             if old_module.file_format_version < VERSION_5
                 && new_module.file_format_version < VERSION_5
                 && old_func.visibility != Visibility::Private
                 && old_func.is_entry != new_func.is_entry
             {
-                entry_linking = false
+                context.function_entry_compatibility(name, old_func, new_func);
             } else if old_func.is_entry && !new_func.is_entry {
-                entry_linking = false;
+                context.function_entry_compatibility(name, old_func, new_func);
             }
 
             // Check signature compatibility
@@ -249,55 +258,11 @@ impl Compatibility {
                     &new_func.type_parameters,
                 )
             {
-                match old_func.visibility {
-                    Visibility::Friend => friend_linking = false,
-                    Visibility::Public => datatype_and_function_linking = false,
-                    Visibility::Private => (),
-                }
-
-                if old_func.is_entry {
-                    entry_linking = false;
-                }
+                context.function_signature_mismatch(name, old_func, new_func);
             }
         }
 
-        // check friend declarations compatibility
-        //
-        // - additions to the list are allowed
-        // - removals are not allowed
-        //
-        let old_friend_module_ids: BTreeSet<_> = old_module.friends.iter().cloned().collect();
-        let new_friend_module_ids: BTreeSet<_> = new_module.friends.iter().cloned().collect();
-        if !old_friend_module_ids.is_subset(&new_friend_module_ids) {
-            friend_linking = false;
-        }
-
-        if self.check_datatype_and_pub_function_linking && !datatype_and_function_linking {
-            return Err(PartialVMError::new(
-                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-            ));
-        }
-        if self.check_datatype_layout && !datatype_layout {
-            return Err(PartialVMError::new(
-                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-            ));
-        }
-        if self.check_friend_linking && !friend_linking {
-            return Err(PartialVMError::new(
-                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-            ));
-        }
-        if self.check_private_entry_linking && !entry_linking {
-            return Err(PartialVMError::new(
-                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-            ));
-        }
-        if self.disallow_new_variants && !no_new_variants {
-            return Err(PartialVMError::new(
-                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
-            ));
-        }
-        Ok(())
+        context.finish(self)
     }
 }
 

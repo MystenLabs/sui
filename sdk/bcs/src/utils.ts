@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB58, toB58 } from './b58.js';
-import { fromB64, toB64 } from './b64.js';
-import { fromHEX, toHEX } from './hex.js';
+import { fromBase58, toBase58 } from './b58.js';
+import { fromBase64, toBase64 } from './b64.js';
+import { fromHex, toHex } from './hex.js';
 import type { Encoding } from './types.js';
 
 /**
@@ -16,11 +16,11 @@ import type { Encoding } from './types.js';
 export function encodeStr(data: Uint8Array, encoding: Encoding): string {
 	switch (encoding) {
 		case 'base58':
-			return toB58(data);
+			return toBase58(data);
 		case 'base64':
-			return toB64(data);
+			return toBase64(data);
 		case 'hex':
-			return toHEX(data);
+			return toHex(data);
 		default:
 			throw new Error('Unsupported encoding, supported values are: base64, hex');
 	}
@@ -36,11 +36,11 @@ export function encodeStr(data: Uint8Array, encoding: Encoding): string {
 export function decodeStr(data: string, encoding: Encoding): Uint8Array {
 	switch (encoding) {
 		case 'base58':
-			return fromB58(data);
+			return fromBase58(data);
 		case 'base64':
-			return fromB64(data);
+			return fromBase64(data);
 		case 'hex':
-			return fromHEX(data);
+			return fromHex(data);
 		default:
 			throw new Error('Unsupported encoding, supported values are: base64, hex');
 	}

@@ -6,7 +6,7 @@ use std::str::FromStr;
 use super::cursor::{Page, Target};
 use super::{
     address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
-    move_value::MoveValue,
+    move_value::MoveValue, transaction_block::TransactionBlock,
 };
 use crate::data::{self, DbConnection, QueryExecutor};
 use crate::query;
@@ -50,6 +50,22 @@ type Query<ST, GB> = data::Query<ST, events::table, GB>;
 
 #[Object]
 impl Event {
+    /// The transaction block that emitted this event. This information is only available for
+    /// events from indexed transactions, and not from transactions that have just been executed or
+    /// dry-run.
+    async fn transaction_block(&self, ctx: &Context<'_>) -> Result<Option<TransactionBlock>> {
+        let Some(stored) = &self.stored else {
+            return Ok(None);
+        };
+
+        TransactionBlock::query(
+            ctx,
+            TransactionBlock::by_seq(stored.tx_sequence_number as u64, self.checkpoint_viewed_at),
+        )
+        .await
+        .extend()
+    }
+
     /// The Move module containing some function that when called by
     /// a programmable transaction block (PTB) emitted this event.
     /// For example, if a PTB invokes A::m1::foo, which internally
@@ -87,11 +103,18 @@ impl Event {
         }
     }
 
-    #[graphql(flatten)]
-    async fn move_value(&self) -> Result<MoveValue> {
+    /// The event's contents as a Move value.
+    async fn contents(&self) -> Result<MoveValue> {
         Ok(MoveValue::new(
             self.native.type_.clone().into(),
             Base64::from(self.native.contents.clone()),
+        ))
+    }
+
+    /// The Base64 encoded BCS serialized bytes of the event.
+    async fn bcs(&self) -> Result<Base64> {
+        Ok(Base64::from(
+            bcs::to_bytes(&self.native).map_err(|e| Error::Internal(e.to_string()))?,
         ))
     }
 }
@@ -240,6 +263,7 @@ impl Event {
                 .to_canonical_string(/* with_prefix */ true),
             bcs: native_event.contents.clone(),
             timestamp_ms: stored_tx.timestamp_ms,
+            sender: Some(native_event.sender.to_vec()),
         };
 
         Ok(Self {

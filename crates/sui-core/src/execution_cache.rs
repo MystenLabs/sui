@@ -104,7 +104,7 @@ impl ExecutionCacheTraitPointers {
     }
 }
 
-static ENABLE_WRITEBACK_CACHE_ENV_VAR: &str = "ENABLE_WRITEBACK_CACHE";
+static DISABLE_WRITEBACK_CACHE_ENV_VAR: &str = "DISABLE_WRITEBACK_CACHE";
 
 #[derive(Debug)]
 pub enum ExecutionCacheConfigType {
@@ -130,12 +130,12 @@ pub fn choose_execution_cache(config: &ExecutionCacheConfig) -> ExecutionCacheCo
         }
     }
 
-    if std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok()
-        || matches!(config, ExecutionCacheConfig::WritebackCache { .. })
+    if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok()
+        || matches!(config, ExecutionCacheConfig::PassthroughCache)
     {
-        ExecutionCacheConfigType::WritebackCache
-    } else {
         ExecutionCacheConfigType::PassthroughCache
+    } else {
+        ExecutionCacheConfigType::WritebackCache
     }
 }
 
@@ -158,13 +158,13 @@ pub fn build_execution_cache_from_env(
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
-    if std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
+    if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
         ExecutionCacheTraitPointers::new(
-            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
+            PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
         )
     } else {
         ExecutionCacheTraitPointers::new(
-            PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
+            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
         )
     }
 }
@@ -847,11 +847,11 @@ macro_rules! implement_passthrough_traits {
 
         impl ExecutionCacheReconfigAPI for $implementor {
             fn insert_genesis_object(&self, object: Object) -> SuiResult {
-                self.store.insert_genesis_object(object)
+                self.insert_genesis_object_impl(object)
             }
 
             fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult {
-                self.store.bulk_insert_genesis_objects(objects)
+                self.bulk_insert_genesis_objects_impl(objects)
             }
 
             fn revert_state_update(&self, digest: &TransactionDigest) -> SuiResult {

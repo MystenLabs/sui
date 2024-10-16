@@ -23,8 +23,8 @@ use move_proc_macros::growing_stack;
 pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
 
-pub trait CFGIRVisitor {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &G::Program);
+pub trait CFGIRVisitor: Send + Sync {
+    fn visit(&self, env: &mut CompilationEnv, program: &G::Program);
 
     fn visitor(self) -> Visitor
     where
@@ -34,9 +34,9 @@ pub trait CFGIRVisitor {
     }
 }
 
-pub trait AbstractInterpreterVisitor {
+pub trait AbstractInterpreterVisitor: Send + Sync {
     fn verify(
-        &mut self,
+        &self,
         env: &CompilationEnv,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
@@ -54,12 +54,12 @@ pub trait AbstractInterpreterVisitor {
 // CFGIR visitor
 //**************************************************************************************************
 
-pub trait CFGIRVisitorConstructor {
+pub trait CFGIRVisitorConstructor: Send {
     type Context<'a>: Sized + CFGIRVisitorContext;
 
     fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a>;
 
-    fn visit(&mut self, env: &mut CompilationEnv, program: &G::Program) {
+    fn visit(env: &mut CompilationEnv, program: &G::Program) {
         let mut context = Self::context(env, program);
         context.visit(program);
     }
@@ -321,9 +321,9 @@ impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
     }
 }
 
-impl<V: CFGIRVisitorConstructor> CFGIRVisitor for V {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &G::Program) {
-        self.visit(env, program)
+impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
+    fn visit(&self, env: &mut CompilationEnv, program: &G::Program) {
+        Self::visit(env, program)
     }
 }
 
@@ -454,12 +454,7 @@ pub trait SimpleAbsIntConstructor: Sized {
         init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>>;
 
-    fn verify(
-        &mut self,
-        env: &CompilationEnv,
-        context: &CFGContext,
-        cfg: &ImmForwardCFG,
-    ) -> Diagnostics {
+    fn verify(env: &CompilationEnv, context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics {
         let mut locals = context
             .locals
             .key_cloned_iter()
@@ -758,14 +753,20 @@ impl<V: SimpleAbsInt> TransferFunctions for V {
 }
 impl<V: SimpleAbsInt> AbstractInterpreter for V {}
 
-impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
+impl<V: AbstractInterpreterVisitor + 'static> From<V> for AbsIntVisitorObj {
+    fn from(value: V) -> Self {
+        Box::new(value)
+    }
+}
+
+impl<V: SimpleAbsIntConstructor + Send + Sync> AbstractInterpreterVisitor for V {
     fn verify(
-        &mut self,
+        &self,
         env: &CompilationEnv,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
     ) -> Diagnostics {
-        SimpleAbsIntConstructor::verify(self, env, context, cfg)
+        <Self as SimpleAbsIntConstructor>::verify(env, context, cfg)
     }
 }
 

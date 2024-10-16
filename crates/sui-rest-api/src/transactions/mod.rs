@@ -5,13 +5,23 @@ mod execution;
 pub use execution::EffectsFinality;
 pub use execution::ExecuteTransaction;
 pub use execution::ExecuteTransactionQueryParameters;
+pub use execution::SimulateTransaction;
+pub use execution::SimulateTransactionQueryParameters;
 pub use execution::TransactionExecutionResponse;
+pub use execution::TransactionSimulationResponse;
+
+mod resolve;
+pub use resolve::ResolveTransaction;
+pub use resolve::ResolveTransactionQueryParameters;
+pub use resolve::ResolveTransactionResponse;
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use sui_sdk2::types::CheckpointSequenceNumber;
-use sui_sdk2::types::Transaction;
-use sui_sdk2::types::{TransactionDigest, TransactionEffects, TransactionEvents, UserSignature};
+use sui_sdk_types::types::CheckpointSequenceNumber;
+use sui_sdk_types::types::Transaction;
+use sui_sdk_types::types::{
+    TransactionDigest, TransactionEffects, TransactionEvents, UserSignature,
+};
 use tap::Pipe;
 
 use crate::openapi::ApiEndpoint;

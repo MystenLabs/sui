@@ -74,6 +74,7 @@ struct TestWorker;
 
 #[async_trait]
 impl Worker for TestWorker {
+    type Result = ();
     async fn process_checkpoint(&self, _checkpoint: &CheckpointData) -> Result<()> {
         Ok(())
     }

@@ -3188,18 +3188,16 @@ fn parse_function_decl(
     );
 
     let return_type = parse_ret_type(context, name)
-        .map_err(|diag| {
+        .inspect_err(|diag| {
             context.advance_until_stop_set(Some(*diag.clone()));
-            diag
         })
         .ok();
 
     context.stop_set.remove(Tok::LBrace);
 
     let body = parse_body(context, native)
-        .map_err(|diag| {
+        .inspect_err(|diag| {
             context.advance_until_stop_set(Some(*diag.clone()));
-            diag
         })
         .ok();
 
@@ -3560,11 +3558,10 @@ fn parse_struct_decl(
 
     let mut abilities = if infix_ability_declaration_loc.is_some() {
         parse_infix_ability_declarations(context)
-            .map_err(|diag| {
+            .inspect_err(|diag| {
                 // if parsing failed, assume no abilities present even if `has` keyword was present
                 infix_ability_declaration_loc = None;
                 context.advance_until_stop_set(Some(*diag.clone()));
-                diag
             })
             .unwrap_or_default()
     } else {
@@ -3610,9 +3607,8 @@ fn parse_struct_decl(
             infix_ability_declaration_loc,
             &mut abilities,
         )
-        .map_err(|diag| {
+        .inspect_err(|diag| {
             context.advance_until_stop_set(Some(*diag.clone()));
-            diag
         })
         .ok();
     }

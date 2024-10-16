@@ -3,7 +3,7 @@
 
 import { parseSerializedSignature, PublicKey, SignatureScheme } from '@mysten/sui/cryptography';
 import { parsePartialSignatures } from '@mysten/sui/multisig';
-import { toB64 } from '@mysten/sui/utils';
+import { toBase64 } from '@mysten/sui/utils';
 import { publicKeyFromRawBytes } from '@mysten/sui/verify';
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
@@ -47,7 +47,7 @@ function Signature({ signature, index }: { signature: SignaturePubkeyPair; index
 		{ label: 'Signature Public Key', value: pubkey },
 		{ label: 'Sui Format Public Key ( flag | pk )', value: pubkey_base64_sui_format },
 		{ label: 'Sui Address', value: suiAddress },
-		{ label: 'Signature', value: toB64(signature.signature) },
+		{ label: 'Signature', value: toBase64(signature.signature) },
 	];
 
 	return (

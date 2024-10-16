@@ -24,7 +24,7 @@ use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::sui_serde::BigInt;
 
 #[derive(Clone)]
-pub(crate) struct ReadApi {
+pub struct ReadApi {
     inner: IndexerReader,
 }
 

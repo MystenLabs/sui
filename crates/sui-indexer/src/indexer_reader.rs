@@ -1,5 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use anyhow::anyhow;
 use anyhow::Result;
 use diesel::{
     dsl::sql, sql_types::Bool, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
@@ -7,12 +9,14 @@ use diesel::{
 };
 use itertools::Itertools;
 use std::sync::Arc;
+use sui_types::dynamic_field::visitor as DFV;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use tap::{Pipe, TapFallible};
 use tracing::{debug, error, warn};
 
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
-use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
+use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_json_rpc_types::DisplayFieldsResponse;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin, SuiCoinMetadata, SuiMoveValue};
@@ -29,7 +33,7 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress, VersionNumber},
     committee::EpochId,
     digests::TransactionDigest,
-    dynamic_field::{DynamicFieldInfo, DynamicFieldType},
+    dynamic_field::DynamicFieldInfo,
     object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
@@ -324,27 +328,7 @@ impl IndexerReader {
             Some(stored_epoch) => stored_epoch,
             None => return Err(IndexerError::InvalidArgumentError("Invalid epoch".into())),
         };
-
-        let system_state_summary: SuiSystemStateSummary =
-            bcs::from_bytes(&stored_epoch.system_state).map_err(|_| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Failed to deserialize `system_state` for epoch {:?}",
-                    epoch,
-                ))
-            })?;
-        #[cfg(debug_assertions)]
-        {
-            let correct_system_state_summary: SuiSystemStateSummary =
-                serde_json::from_value(stored_epoch.system_state_summary_json.clone().unwrap())
-                    .unwrap();
-            // The old system state summary is incorrect and its epoch will be offset by 1.
-            // This is fixed in the new system state summary. Assert it here to double check.
-            assert_eq!(
-                correct_system_state_summary.epoch,
-                stored_epoch.epoch as u64
-            );
-        }
-        Ok(system_state_summary)
+        stored_epoch.get_json_system_state_summary()
     }
 
     async fn get_checkpoint_from_db(
@@ -721,17 +705,15 @@ impl IndexerReader {
                 let package = Hex::encode(package.to_vec());
                 match (module, function) {
                     (Some(module), Some(function)) => (
-                        "tx_calls_fun".into(),
+                        "tx_calls_fun".to_owned(),
                         format!(
-                            "package = '\\x{}'::bytea AND module = '{}' AND func = '{}'",
-                            package, module, function
+                            "package = '\\x{package}'::bytea AND module = '{module}' AND func = '{function}'",
                         ),
                     ),
                     (Some(module), None) => (
-                        "tx_calls_mod".into(),
+                        "tx_calls_mod".to_owned(),
                         format!(
-                            "package = '\\x{}'::bytea AND module = '{}'",
-                            package, module
+                            "package = '\\x{package}'::bytea AND module = '{module}'",
                         ),
                     ),
                     (None, Some(_)) => {
@@ -740,106 +722,39 @@ impl IndexerReader {
                         ));
                     }
                     (None, None) => (
-                        "tx_calls_pkg".into(),
-                        format!("package = '\\x{}'::bytea", package),
+                        "tx_calls_pkg".to_owned(),
+                        format!("package = '\\x{package}'::bytea"),
                     ),
                 }
             }
-            Some(TransactionFilter::InputObject(object_id)) => {
+            Some(TransactionFilter::AffectedObject(object_id)) => {
                 let object_id = Hex::encode(object_id.to_vec());
                 (
-                    "tx_input_objects".into(),
-                    format!("object_id = '\\x{}'::bytea", object_id),
-                )
-            }
-            Some(TransactionFilter::ChangedObject(object_id)) => {
-                let object_id = Hex::encode(object_id.to_vec());
-                (
-                    "tx_changed_objects".into(),
-                    format!("object_id = '\\x{}'::bytea", object_id),
+                    "tx_affected_objects".to_owned(),
+                    format!("affected = '\\x{object_id}'::bytea"),
                 )
             }
             Some(TransactionFilter::FromAddress(from_address)) => {
                 let from_address = Hex::encode(from_address.to_vec());
                 (
-                    "tx_senders".into(),
-                    format!("sender = '\\x{}'::bytea", from_address),
-                )
-            }
-            Some(TransactionFilter::ToAddress(to_address)) => {
-                let to_address = Hex::encode(to_address.to_vec());
-                (
-                    "tx_recipients".into(),
-                    format!("recipient = '\\x{}'::bytea", to_address),
+                    "tx_affected_addresses".to_owned(),
+                    format!("sender = '\\x{from_address}'::bytea AND affected = '\\x{from_address}'::bytea"),
                 )
             }
             Some(TransactionFilter::FromAndToAddress { from, to }) => {
                 let from_address = Hex::encode(from.to_vec());
                 let to_address = Hex::encode(to.to_vec());
-                // Need to remove ambiguities for tx_sequence_number column
-                let cursor_clause = if let Some(cursor_tx_seq) = cursor_tx_seq {
-                    if is_descending {
-                        format!(
-                            "AND tx_senders.{TX_SEQUENCE_NUMBER_STR} < {}",
-                            cursor_tx_seq
-                        )
-                    } else {
-                        format!(
-                            "AND tx_senders.{TX_SEQUENCE_NUMBER_STR} > {}",
-                            cursor_tx_seq
-                        )
-                    }
-                } else {
-                    "".to_string()
-                };
-                let inner_query = format!(
-                    "(SELECT tx_senders.{TX_SEQUENCE_NUMBER_STR} \
-                    FROM tx_senders \
-                    JOIN tx_recipients \
-                    ON tx_senders.{TX_SEQUENCE_NUMBER_STR} = tx_recipients.{TX_SEQUENCE_NUMBER_STR} \
-                    WHERE tx_senders.sender = '\\x{}'::BYTEA \
-                    AND tx_recipients.recipient = '\\x{}'::BYTEA \
-                    {} \
-                    ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
-                    LIMIT {}) AS inner_query
-                    ",
-                    from_address,
-                    to_address,
-                    cursor_clause,
-                    order_str,
-                    limit,
-                );
-                (inner_query, "1 = 1".into())
+                (
+                    "tx_affected_addresses".to_owned(),
+                    format!("sender = '\\x{from_address}'::bytea AND affected = '\\x{to_address}'::bytea"),
+                )
             }
-            // TODO: replace with tx_affected_address
             Some(TransactionFilter::FromOrToAddress { addr }) => {
                 let address = Hex::encode(addr.to_vec());
-                let inner_query = format!(
-                    "( \
-                        ( \
-                            SELECT {TX_SEQUENCE_NUMBER_STR} FROM tx_senders \
-                            WHERE sender = '\\x{}'::BYTEA {} \
-                            ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
-                            LIMIT {} \
-                        ) \
-                        UNION \
-                        ( \
-                            SELECT {TX_SEQUENCE_NUMBER_STR} FROM tx_recipients \
-                            WHERE recipient = '\\x{}'::BYTEA {} \
-                            ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
-                            LIMIT {} \
-                        ) \
-                    ) AS combined",
-                    address,
-                    cursor_clause,
-                    order_str,
-                    limit,
-                    address,
-                    cursor_clause,
-                    order_str,
-                    limit,
-                );
-                (inner_query, "1 = 1".into())
+                (
+                    "tx_affected_addresses".to_owned(),
+                    format!("affected = '\\x{address}'::bytea"),
+                )
             }
             Some(
                 TransactionFilter::TransactionKind(_) | TransactionFilter::TransactionKindIn(_),
@@ -848,9 +763,19 @@ impl IndexerReader {
                     "TransactionKind filter is not supported.".into(),
                 ));
             }
+            Some(TransactionFilter::InputObject(_) | TransactionFilter::ChangedObject(_)) => {
+                return Err(IndexerError::NotSupportedError(
+                    "InputObject and OutputObject filters are not supported, please use AffectedObject instead.".into()
+                ))
+            }
+            Some(TransactionFilter::ToAddress(_)) => {
+                return Err(IndexerError::NotSupportedError(
+                    "ToAddress filter is not supported, please use FromOrToAddress instead.".into()
+                ))
+            }
             None => {
                 // apply no filter
-                ("transactions".into(), "1 = 1".into())
+                ("transactions".to_owned(), "1 = 1".into())
             }
         };
 
@@ -1072,11 +997,10 @@ impl IndexerReader {
             format!(
                 "( \
                     SELECT *
-                    FROM tx_senders s
+                    FROM event_senders s
                     JOIN events e
-                    ON e.tx_sequence_number = s.tx_sequence_number
-                    AND s.sender = '\\x{}'::bytea
-                    WHERE {} \
+                    USING (tx_sequence_number, event_sequence_number)
+                    WHERE s.sender = '\\x{}'::bytea AND {} \
                     ORDER BY {} \
                     LIMIT {}
                 )",
@@ -1091,8 +1015,9 @@ impl IndexerReader {
                 .await;
         } else {
             let main_where_clause = match filter {
-                EventFilter::Package(package_id) => {
-                    format!("package = '\\x{}'::bytea", package_id.to_hex())
+                EventFilter::All([]) => {
+                    // No filter
+                    "1 = 1".to_string()
                 }
                 EventFilter::MoveModule { package, module } => {
                     format!(
@@ -1116,14 +1041,9 @@ impl IndexerReader {
                     // Processed above
                     unreachable!()
                 }
-                EventFilter::MoveEventField { .. }
-                | EventFilter::All(_)
-                | EventFilter::Any(_)
-                | EventFilter::And(_, _)
-                | EventFilter::Or(_, _)
-                | EventFilter::TimeRange { .. } => {
+                EventFilter::TimeRange { .. } | EventFilter::Any(_) => {
                     return Err(IndexerError::NotSupportedError(
-                        "This type of EventFilter is not supported.".into(),
+                        "This type of EventFilter is not supported.".to_owned(),
                     ));
                 }
             };
@@ -1249,49 +1169,57 @@ impl IndexerReader {
                 ));
             }
         };
-        let struct_tag: StructTag = move_object.type_().clone().into();
-        let move_type_layout = self
+        let type_tag: TypeTag = move_object.type_().clone().into();
+        let layout = self
             .package_resolver
-            .type_layout(TypeTag::Struct(Box::new(struct_tag.clone())))
+            .type_layout(type_tag.clone())
             .await
             .map_err(|e| {
                 IndexerError::ResolveMoveStructError(format!(
-                    "Failed to get type layout for type {}: {}",
-                    struct_tag, e
+                    "Failed to get type layout for type {}: {e}",
+                    type_tag.to_canonical_display(/* with_prefix */ true),
                 ))
             })?;
-        let MoveTypeLayout::Struct(move_struct_layout) = move_type_layout else {
-            return Err(IndexerError::ResolveMoveStructError(
-                "MoveTypeLayout is not Struct".to_string(),
-            ));
-        };
 
-        let move_struct = move_object.to_move_struct(&move_struct_layout)?;
-        let (move_value, type_, object_id) =
-            DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
-        let name_type = move_object.type_().try_extract_field_name(&type_)?;
-        let bcs_name = bcs::to_bytes(&move_value.clone().undecorate()).map_err(|e| {
-            IndexerError::SerdeError(format!(
-                "Failed to serialize dynamic field name {:?}: {e}",
-                move_value
-            ))
-        })?;
+        let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)
+            .tap_err(|e| warn!("{e}"))?;
+
+        let type_ = field.kind;
+        let name_type: TypeTag = field.name_layout.into();
+        let bcs_name = field.name_bytes.to_owned();
+
+        let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout)
+            .tap_err(|e| warn!("{e}"))?;
+
         let name = DynamicFieldName {
             type_: name_type,
-            value: SuiMoveValue::from(move_value).to_json_value(),
+            value: SuiMoveValue::from(name_value).to_json_value(),
         };
 
-        Ok(Some(match type_ {
-            DynamicFieldType::DynamicObject => {
-                let object = self.get_object(&object_id, None).await?.ok_or(
-                    IndexerError::UncategorizedError(anyhow::anyhow!(
-                        "Failed to find object_id {:?} when trying to create dynamic field info",
-                        object_id
-                    )),
-                )?;
+        let value_metadata = field.value_metadata().map_err(|e| {
+            warn!("{e}");
+            IndexerError::UncategorizedError(anyhow!(e))
+        })?;
 
-                let version = object.version();
-                let digest = object.digest();
+        Ok(Some(match value_metadata {
+            DFV::ValueMetadata::DynamicField(object_type) => DynamicFieldInfo {
+                name,
+                bcs_name,
+                type_,
+                object_type: object_type.to_canonical_string(/* with_prefix */ true),
+                object_id: object.id(),
+                version: object.version(),
+                digest: object.digest(),
+            },
+
+            DFV::ValueMetadata::DynamicObjectField(object_id) => {
+                let object = self.get_object(&object_id, None).await?.ok_or_else(|| {
+                    IndexerError::UncategorizedError(anyhow!(
+                        "Failed to find object_id {} when trying to create dynamic field info",
+                        object_id.to_canonical_display(/* with_prefix */ true),
+                    ))
+                })?;
+
                 let object_type = object.data.type_().unwrap().clone();
                 DynamicFieldInfo {
                     name,
@@ -1299,20 +1227,10 @@ impl IndexerReader {
                     type_,
                     object_type: object_type.to_canonical_string(/* with_prefix */ true),
                     object_id,
-                    version,
-                    digest,
+                    version: object.version(),
+                    digest: object.digest(),
                 }
             }
-            DynamicFieldType::DynamicField => DynamicFieldInfo {
-                name,
-                bcs_name,
-                type_,
-                object_type: move_object.into_type().into_type_params()[1]
-                    .to_canonical_string(/* with_prefix */ true),
-                object_id: object.id(),
-                version: object.version(),
-                digest: object.digest(),
-            },
         }))
     }
 

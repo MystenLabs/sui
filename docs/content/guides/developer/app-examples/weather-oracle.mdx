@@ -430,7 +430,9 @@ First, initialize your backend project. To do this, you need to follow these ste
 - Create a new file named `init.ts`
 
 ```typescript title='init.ts'
-import { Connection, Ed25519Keypair, JsonRpcProvider, RawSigner, Transaction } from '@mysten/sui';
+import { SuiClient } from '@mysten/sui/client';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
 import * as dotenv from 'dotenv';
 
 import { City } from './city';
@@ -444,12 +446,9 @@ dotenv.config({ path: '../.env' });
 const phrase = process.env.ADMIN_PHRASE;
 const fullnode = process.env.FULLNODE!;
 const keypair = Ed25519Keypair.deriveKeypair(phrase!);
-const provider = new JsonRpcProvider(
-	new Connection({
-		fullnode: fullnode,
-	}),
-);
-const signer = new RawSigner(keypair, provider);
+const client = new SuiClient({
+	url: fullnode,
+});
 
 const packageId = process.env.PACKAGE_ID;
 const adminCap = process.env.ADMIN_CAP_ID!;
@@ -462,7 +461,7 @@ async function addCityWeather() {
 	const cities: City[] = await getCities();
 	const thousandGeoNameIds = await get1000Geonameids();
 
-	const weatherOracleDynamicFields = await getWeatherOracleDynamicFields(provider, weatherOracleId);
+	const weatherOracleDynamicFields = await getWeatherOracleDynamicFields(client, weatherOracleId);
 	const geonames = weatherOracleDynamicFields.map(function (obj) {
 		return obj.name;
 	});
@@ -502,8 +501,9 @@ async function addCityWeather() {
 
 async function signAndExecuteTransaction(transaction: Transaction) {
 	transaction.setGasBudget(5000000000);
-	await signer
+	await client
 		.signAndExecuteTransaction({
+			signer: keypair,
 			transaction,
 			requestType: 'WaitForLocalExecution',
 			options: {
@@ -521,12 +521,11 @@ addCityWeather();
 
 The code of init.ts does the following:
 
-- Imports the necessary modules and classes from the library, such as `Connection`, `Ed25519Keypair`, `JsonRpcProvider`, `RawSigner`, and `Transaction`.
+- Imports the necessary modules and classes from the library, such as `Ed25519Keypair`, `SuiClient`, and `Transaction`.
 - Imports the `dotenv` module to load environment variables from a .env file.
 - Imports some custom modules and functions from the local files, such as `City`, `get1000Geonameids`, `getCities`, `getWeatherOracleDynamicFields`, and `logger`.
 - Derives a key pair from a phrase stored in the `ADMIN_PHRASE` environment variable.
-- Creates a provider object that connects to a Full node specified by the `FULLNODE` environment variable.
-- Creates a signer object that uses the key pair and the provider to sign and execute transactions on the blockchain.
+- Creates a sui client object that connects to a Full node specified by the `FULLNODE` environment variable.
 - Reads some other environment variables, such as `PACKAGE_ID`, `ADMIN_CAP_ID`, `WEATHER_ORACLE_ID`, and `MODULE_NAME`, which are used to identify the weather oracle contract and its methods.
 - Defines a constant `NUMBER_OF_CITIES`, which is the number of cities to be added to the weather oracle in each batch.
 - Defines an async function `addCityWeather`, which does the following:
@@ -542,7 +541,9 @@ The code of init.ts does the following:
 You have now initialized the `WeatherOracle` shared object. The next step is to learn how to update them every 10 minutes with the latest weather data from the OpenWeatherMap API.
 
 ```typescript title='index.ts'
-import { Connection, Ed25519Keypair, JsonRpcProvider, RawSigner, Transaction } from '@mysten/sui';
+import { SuiClient } from '@mysten/sui/client';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
 import * as dotenv from 'dotenv';
 
 import { City } from './city';
@@ -556,12 +557,9 @@ dotenv.config({ path: '../.env' });
 const phrase = process.env.ADMIN_PHRASE;
 const fullnode = process.env.FULLNODE!;
 const keypair = Ed25519Keypair.deriveKeypair(phrase!);
-const provider = new JsonRpcProvider(
-	new Connection({
-		fullnode: fullnode,
-	}),
-);
-const signer = new RawSigner(keypair, provider);
+const client = new SuiClient({
+	url: fullnode,
+});
 
 const packageId = process.env.PACKAGE_ID;
 const adminCap = process.env.ADMIN_CAP_ID!;
@@ -593,7 +591,8 @@ async function performUpdates(
 
 		let transaction = await getTransaction(chunk);
 		try {
-			await signer.signAndExecuteTransaction({
+			await client.signAndExecuteTransaction({
+				signer: keypair,
 				transaction,
 			});
 		} catch (e) {
@@ -649,7 +648,7 @@ async function run() {
 	const weatherOracleDynamicFields: {
 		name: number;
 		objectId: string;
-	}[] = await getWeatherOracleDynamicFields(provider, weatherOracleId);
+	}[] = await getWeatherOracleDynamicFields(client, weatherOracleId);
 	performUpdates(cities, weatherOracleDynamicFields);
 }
 
@@ -658,12 +657,12 @@ run();
 
 The code in index.ts does the following:
 
-- Uses `dotenv` to load some environment variables from a `.env` file, such as `ADMIN_PHRASE`, `FULLNODE`, `PACKAGE_ID`, `ADMIN_CAP_ID`, `WEATHER_ORACLE_ID`, `APPID`, and `MODULE_NAME`. These variables are used to configure some parameters for the code, such as the key pair, the provider, the signer, and the target package and module.
+- Uses `dotenv` to load some environment variables from a `.env` file, such as `ADMIN_PHRASE`, `FULLNODE`, `PACKAGE_ID`, `ADMIN_CAP_ID`, `WEATHER_ORACLE_ID`, `APPID`, and `MODULE_NAME`. These variables are used to configure some parameters for the code, such as the key pair, the client, and the target package and module.
 - Defines some constants, such as `CHUNK_SIZE`, `MS`, `MINUTE`, and `TEN_MINUTES`. These constants are used to control the frequency and size of the updates that the code performs.
 - Defines an async function called `performUpdates`, which takes two arguments: `cities` and `weatherOracleDynamicFields`. This function is the main logic of the code, and it does the following:
   - Filters the `cities` array based on the `weatherOracleDynamicFields` array, which contains the names and object IDs of the weather oracle dynamic fields that the code needs to update.
   - Loops through the filtered cities in chunks of `CHUNK_SIZE`, and for each chunk, it calls another async function called `getTransaction`, which returns a transaction block that contains the Move calls to update the weather oracle dynamic fields with the latest weather data from the OpenWeatherMap API.
-  - Tries to sign and execute the transaction block using the signer, and catches any errors that may occur.
+  - Tries to sign and execute the transaction block using the client and keypair, and catches any errors that may occur.
   - Calculates the time it took to perform the updates, and sets a timeout to call itself again after `TEN_MINUTES` minus the elapsed time.
 - The code defines another async function called `getTransaction`, which takes one argument: `cities`. This function does the following:
   - Creates a new transaction block object.
@@ -672,7 +671,7 @@ The code in index.ts does the following:
   - Returns the transaction block object.
 - An async `run` function is defined, which does the following:
   - Calls another async function called `getCities`, which returns an array of city objects that contain information such as name, geoname id, latitude, and longitude.
-  - Calls another async function called `getWeatherOracleDynamicFields`, which takes the package id, the module name, and the signer as arguments, and returns an array of weather oracle dynamic field objects that contain information such as name and object id.
+  - Calls another async function called `getWeatherOracleDynamicFields`, which takes the package id, the module name, and the client as arguments, and returns an array of weather oracle dynamic field objects that contain information such as name and object id.
   - Calls the `performUpdates` function with the cities and weather oracle dynamic fields arrays as arguments.
 
 Congratulations, you completed the Sui Weather Oracle tutorial. You can carry the lessons learned here forward when building your next Sui project.

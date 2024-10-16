@@ -56,8 +56,8 @@ pub fn call_completion_item(
 ) -> CompletionItem {
     let sig_string = format!(
         "fun {}({}){}",
-        type_args_to_ide_string(type_args, /* verbose */ false),
-        type_list_to_ide_string(arg_types, /* verbose */ false),
+        type_args_to_ide_string(type_args, /* separate_lines */ false, /* verbose */ false),
+        type_list_to_ide_string(arg_types, /* separate_lines */ false, /* verbose */ false),
         ret_type_to_ide_str(ret_type, /* verbose */ false)
     );
     // if it's a method call we omit the first argument which is guaranteed to be there as this is a
@@ -83,8 +83,8 @@ pub fn call_completion_item(
     let macro_suffix = if is_macro { "!" } else { "" };
     let label_details = Some(CompletionItemLabelDetails {
         detail: Some(format!(
-            " ({}::{})",
-            mod_ident_to_ide_string(mod_ident),
+            " ({}{})",
+            mod_ident_to_ide_string(mod_ident, None, true),
             function_name
         )),
         description: Some(sig_string),

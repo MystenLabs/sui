@@ -11,6 +11,7 @@ pub struct DeepBookIndexerMetrics {
     pub(crate) total_deepbook_transactions: IntCounter,
     pub(crate) backfill_tasks_remaining_checkpoints: IntGaugeVec,
     pub(crate) tasks_processed_checkpoints: IntCounterVec,
+    pub(crate) inflight_live_tasks: IntGaugeVec,
 }
 
 impl DeepBookIndexerMetrics {
@@ -33,6 +34,13 @@ impl DeepBookIndexerMetrics {
                 "deepbook_indexer_tasks_processed_checkpoints",
                 "Total processed checkpoints for each task",
                 &["task_name", "task_type"],
+                registry,
+            )
+            .unwrap(),
+            inflight_live_tasks: register_int_gauge_vec_with_registry!(
+                "deepbook_indexer_inflight_live_tasks",
+                "Number of inflight live tasks",
+                &["task_name"],
                 registry,
             )
             .unwrap(),

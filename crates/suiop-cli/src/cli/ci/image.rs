@@ -90,7 +90,7 @@ pub enum ImageAction {
         /// Optional repo region, default to "us-central1"
         #[arg(long)]
         repo_region: Option<RepoRegion>,
-        /// Optional image name, default to "app", only used if multiple images are built within one repo
+        /// Optional image tags, default to ""
         #[arg(long)]
         image_tag: Option<String>,
         /// Optional image name, default to "app", only used if multiple images are built within one repo
@@ -117,11 +117,19 @@ pub enum ImageAction {
         /// Optional build args to pass to the docker build command
         #[arg(long)]
         build_args: Vec<String>,
+        /// Optional flag to force build even if build pod already exists
+        #[arg(short = 'f', long)]
+        force: bool,
+        /// Optional flag to target the image, used for multi-stage builds
+        #[arg(short = 't', long)]
+        image_target: Option<String>,
     },
     #[command(name = "query")]
     Query {
         #[arg(short, long)]
         repo_name: String,
+        #[arg(short, long)]
+        watch: bool,
         #[arg(short, long)]
         limit: Option<u32>,
     },
@@ -160,6 +168,8 @@ struct RequestBuildRequest {
     memory: String,
     disk: String,
     build_args: Vec<String>,
+    force: bool,
+    image_target: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -167,7 +177,6 @@ struct QueryBuildsRequest {
     repo_name: String,
     limit: u32,
 }
-
 #[derive(serde::Serialize)]
 struct ImageStatusRequest {
     repo_name: String,
@@ -280,6 +289,24 @@ struct ImageListResponse {
     pub images: Vec<ImageDetails>,
 }
 
+async fn get_status_table(resp: reqwest::Response) -> Result<tabled::Table> {
+    let json_resp = resp.json::<QueryBuildResponse>().await?;
+    let job_statuses = json_resp.pods.into_iter().map(|pod| {
+        // Parse the string into a NaiveDateTime
+        let start_time = utc_to_local_time(pod.start_time);
+        let end_time = utc_to_local_time(pod.end_time.unwrap_or("".to_string()));
+
+        BuildInfo {
+            name: pod.name,
+            status: pod.status,
+            start_time,
+            end_time,
+        }
+    });
+    let mut tabled = Table::new(job_statuses);
+    Ok(tabled.with(Style::rounded()).to_owned())
+}
+
 async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
     let req = generate_image_request(token, action);
 
@@ -303,6 +330,8 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 memory: _,
                 disk: _,
                 build_args: _,
+                force: _,
+                image_target,
             } => {
                 let ref_type = ref_type.clone().unwrap_or(RefType::Branch);
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
@@ -312,6 +341,9 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                 let mut image_info = image_name;
                 if !image_tag.is_empty() {
                     image_info += &format!(":{}", image_tag);
+                }
+                if !image_target.is_none() {
+                    image_info += &format!("@{}", image_target.as_ref().unwrap());
                 }
                 println!(
                     "Requested built image for repo: {}, ref: {}, dockerfile: {}, image: {}",
@@ -330,27 +362,25 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
             }
             ImageAction::Query {
                 repo_name,
+                watch,
                 limit: _,
             } => {
-                println!("Requested query for repo: {}", repo_name.green());
-                let json_resp = resp.json::<QueryBuildResponse>().await?;
-                let job_statuses = json_resp.pods.into_iter().map(|pod| {
-                    // Parse the string into a NaiveDateTime
-                    let start_time = utc_to_local_time(pod.start_time);
-                    let end_time = utc_to_local_time(pod.end_time.unwrap_or("".to_string()));
+                if !*watch {
+                    println!("Requested query for repo: {}", repo_name.green());
+                    let status_table = get_status_table(resp).await?.to_string();
+                    println!("{}", status_table);
+                } else {
+                    loop {
+                        print!("{}[2J", 27 as char);
+                        let req = generate_image_request(token, action);
 
-                    BuildInfo {
-                        name: pod.name,
-                        status: pod.status,
-                        start_time,
-                        end_time,
+                        let resp = req.send().await?;
+                        let status_table = get_status_table(resp).await?.to_string();
+                        println!("{}", status_table);
+                        let half_sec = std::time::Duration::from_millis(500);
+                        std::thread::sleep(half_sec);
                     }
-                });
-                let mut tabled = Table::new(job_statuses);
-                tabled.with(Style::rounded());
-
-                let tabled_str = tabled.to_string();
-                println!("{}", tabled_str);
+                }
             }
             ImageAction::Status {
                 repo_name,
@@ -454,6 +484,8 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             memory,
             disk,
             build_args,
+            force,
+            image_target,
         } => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
@@ -500,11 +532,17 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 memory,
                 disk,
                 build_args: build_args.clone(),
+                force: *force,
+                image_target: image_target.clone(),
             };
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))
         }
-        ImageAction::Query { repo_name, limit } => {
+        ImageAction::Query {
+            repo_name,
+            limit,
+            watch: _,
+        } => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
             let req = client.get(full_url);

@@ -272,9 +272,8 @@ impl CutPlan {
     /// their destinations, and their dependencies will be fixed up.  On failure, pending changes
     /// are rolled back.
     pub(crate) fn execute(&self) -> Result<()> {
-        self.execute_().map_err(|e| {
+        self.execute_().inspect_err(|_| {
             self.rollback();
-            e
         })
     }
     fn execute_(&self) -> Result<()> {

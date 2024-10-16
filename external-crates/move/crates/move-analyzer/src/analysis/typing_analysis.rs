@@ -138,18 +138,18 @@ impl TypingAnalysisContext<'_> {
     }
 
     /// Add use of a const identifier
-    fn add_const_use_def(&mut self, module_ident: &E::ModuleIdent, name: &ConstantName) {
+    fn add_const_use_def(&mut self, module_ident: &E::ModuleIdent_, name: &ConstantName) {
         if self.traverse_only {
             return;
         }
         let use_pos = name.loc();
         let use_name = name.value();
-        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
+        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
         };
         // insert use of the const's module
-        let mod_name = module_ident.value.module;
+        let mod_name = module_ident.module;
         if let Some(mod_name_start) = self.file_start_position_opt(&mod_name.loc()) {
             // a module will not be present if a constant belongs to an implicit module
             self.use_defs.insert(
@@ -388,7 +388,14 @@ impl TypingAnalysisContext<'_> {
                 sp!(_, N::TypeName_::ModuleType(sp!(_, mod_ident), struct_name)),
                 _,
             ) => {
-                self.add_field_use_def(mod_ident, &struct_name.value(), None, use_name, use_pos);
+                self.add_field_use_def(
+                    mod_ident,
+                    &struct_name.value(),
+                    None,
+                    use_name,
+                    use_pos,
+                    /* named_only */ false,
+                );
             }
             _ => (),
         }
@@ -441,7 +448,8 @@ impl TypingAnalysisContext<'_> {
         );
     }
 
-    /// Add use of a variant field identifier
+    /// Add use of a variant field identifier. In some cases, such as packing (controlled by `named_only`), we only
+    /// want to add named fields.
     fn add_field_use_def(
         &mut self,
         module_ident: &E::ModuleIdent_,
@@ -449,6 +457,7 @@ impl TypingAnalysisContext<'_> {
         variant_name_opt: Option<&Symbol>,
         use_name: &Symbol,
         use_loc: &Loc,
+        named_only: bool,
     ) {
         if self.traverse_only {
             return;
@@ -463,7 +472,7 @@ impl TypingAnalysisContext<'_> {
             return;
         };
 
-        let field_defs = if let Some(variant_name) = variant_name_opt {
+        let (field_defs, positional) = if let Some(variant_name) = variant_name_opt {
             // get the enum
             let Some(def) = mod_defs.enums.get(datatype_name) else {
                 return;
@@ -474,10 +483,10 @@ impl TypingAnalysisContext<'_> {
                 return;
             };
             // get variant's fields
-            let Some((_, field_defs, _)) = variants_info.get(variant_name) else {
+            let Some((_, field_defs, positional)) = variants_info.get(variant_name) else {
                 return;
             };
-            field_defs
+            (field_defs, positional)
         } else {
             // get the struct
             let Some(def) = mod_defs.structs.get(datatype_name) else {
@@ -486,13 +495,17 @@ impl TypingAnalysisContext<'_> {
             // get variant's fields
             let MemberDefInfo::Struct {
                 field_defs,
-                positional: _,
+                positional,
             } = &def.info
             else {
                 return;
             };
-            field_defs
+            (field_defs, positional)
         };
+
+        if *positional && named_only {
+            return;
+        }
 
         for fdef in field_defs {
             if fdef.name == *use_name {
@@ -568,6 +581,7 @@ impl TypingAnalysisContext<'_> {
                             Some(&vname.value()),
                             fname,
                             &fpos,
+                            /* named_only */ false,
                         );
                     }
                     self.process_match_patterm(pat);
@@ -579,12 +593,19 @@ impl TypingAnalysisContext<'_> {
                 tyargs.iter().for_each(|t| self.visit_type(None, t));
                 for (fpos, fname, (_, (_, pat))) in fields.iter() {
                     if self.compiler_info.ellipsis_binders.get(&fpos).is_none() {
-                        self.add_field_use_def(&mident.value, &name.value(), None, fname, &fpos);
+                        self.add_field_use_def(
+                            &mident.value,
+                            &name.value(),
+                            None,
+                            fname,
+                            &fpos,
+                            /* named_only */ false,
+                        );
                     }
                     self.process_match_patterm(pat);
                 }
             }
-            UA::Constant(mod_ident, name) => self.add_const_use_def(mod_ident, name),
+            UA::Constant(mod_ident, name) => self.add_const_use_def(&mod_ident.value, name),
             UA::Or(pat1, pat2) => {
                 self.process_match_patterm(pat1);
                 self.process_match_patterm(pat2);
@@ -932,7 +953,14 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     self.add_datatype_use_def(mident, name);
                     tyargs.iter().for_each(|t| self.visit_type(None, t));
                     for (fpos, fname, (_, (_, lvalue))) in fields {
-                        self.add_field_use_def(&mident.value, &name.value(), None, fname, &fpos);
+                        self.add_field_use_def(
+                            &mident.value,
+                            &name.value(),
+                            None,
+                            fname,
+                            &fpos,
+                            /* named_only */ false,
+                        );
                         lvalue_queue.push(lvalue);
                     }
                 }
@@ -948,6 +976,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                             Some(&vname.value()),
                             fname,
                             &fpos,
+                            /* named_only */ false,
                         );
                         lvalue_queue.push(lvalue);
                     }
@@ -990,7 +1019,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                     true
                 }
                 TE::Constant(mod_ident, name) => {
-                    visitor.add_const_use_def(mod_ident, name);
+                    visitor.add_const_use_def(&mod_ident.value, name);
                     true
                 }
                 TE::ModuleCall(mod_call) => {
@@ -1007,7 +1036,14 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 TE::Pack(mident, name, tyargs, fields) => {
                     visitor.add_datatype_use_def(mident, name);
                     for (fpos, fname, (_, (_, init_exp))) in fields.iter() {
-                        visitor.add_field_use_def(&mident.value, &name.value(), None, fname, &fpos);
+                        visitor.add_field_use_def(
+                            &mident.value,
+                            &name.value(),
+                            None,
+                            fname,
+                            &fpos,
+                            /* named_only */ true,
+                        );
                         visitor.visit_exp(init_exp);
                     }
                     tyargs
@@ -1022,6 +1058,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 }
                 TE::PackVariant(mident, name, vname, tyargs, fields) => {
                     visitor.add_datatype_use_def(mident, name);
+                    visitor.add_variant_use_def(mident, name, vname);
                     for (fpos, fname, (_, (_, init_exp))) in fields.iter() {
                         visitor.add_field_use_def(
                             &mident.value,
@@ -1029,6 +1066,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                             Some(&vname.value()),
                             fname,
                             &fpos,
+                            /* named_only */ true,
                         );
                         visitor.visit_exp(init_exp);
                     }
@@ -1045,6 +1083,23 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 TE::Match(exp, sp!(_, v)) => {
                     visitor.visit_exp(exp);
                     v.iter().for_each(|arm| visitor.process_match_arm(arm));
+                    true
+                }
+                TE::ErrorConstant {
+                    line_number_loc: _,
+                    error_constant,
+                } => {
+                    // assume that constant is defined in the same module where it's used
+                    // TODO: if above ever changes, we need to update this (presumably
+                    // `ErrorConstant` will carry module ident at this point)
+                    if let Some(name) = error_constant {
+                        if let Some(mod_def) = visitor
+                            .mod_outer_defs
+                            .get(visitor.current_mod_ident_str.as_ref().unwrap())
+                        {
+                            visitor.add_const_use_def(&mod_def.ident.clone(), name);
+                        }
+                    };
                     true
                 }
                 TE::Unit { .. }
@@ -1069,7 +1124,6 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 | TE::TempBorrow(_, _)
                 | TE::Cast(_, _)
                 | TE::Annotate(_, _)
-                | TE::ErrorConstant { .. }
                 | TE::UnresolvedError => false,
             }
         }

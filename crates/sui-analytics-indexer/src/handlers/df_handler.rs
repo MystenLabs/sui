@@ -7,7 +7,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use sui_data_ingestion_core::Worker;
 use sui_indexer::errors::IndexerError;
-use sui_types::SYSTEM_PACKAGE_ADDRESSES;
+use sui_types::object::bounded_visitor::BoundedVisitor;
+use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
 use tap::tap::TapFallible;
 use tokio::sync::Mutex;
 use tracing::warn;
@@ -17,10 +18,11 @@ use sui_json_rpc_types::SuiMoveValue;
 use sui_package_resolver::Resolver;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
 use sui_types::base_types::ObjectID;
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
+use sui_types::dynamic_field::visitor as DFV;
+use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
 use sui_types::object::Object;
 
-use crate::handlers::{get_move_struct, AnalyticsHandler};
+use crate::handlers::AnalyticsHandler;
 use crate::package_store::{LocalDBPackageStore, PackageCache};
 use crate::tables::DynamicFieldEntry;
 use crate::FileType;
@@ -37,6 +39,8 @@ struct State {
 
 #[async_trait::async_trait]
 impl Worker for DynamicFieldHandler {
+    type Result = ();
+
     async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
@@ -114,28 +118,23 @@ impl DynamicFieldHandler {
         if !move_object.type_().is_dynamic_field() {
             return Ok(());
         }
-        let move_struct = if let Some((tag, contents)) = object
-            .struct_tag()
-            .and_then(|tag| object.data.try_as_move().map(|mo| (tag, mo.contents())))
-        {
-            let move_struct = get_move_struct(&tag, contents, &state.resolver).await?;
-            Some(move_struct)
-        } else {
-            None
-        };
-        let Some(move_struct) = move_struct else {
-            return Ok(());
-        };
-        let (name_value, type_, object_id) =
-            DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
-        let name_type = move_object.type_().try_extract_field_name(&type_)?;
 
-        let bcs_name = bcs::to_bytes(&name_value.clone().undecorate()).map_err(|e| {
-            IndexerError::SerdeError(format!(
-                "Failed to serialize dynamic field name {:?}: {e}",
-                name_value
-            ))
-        })?;
+        let layout = state
+            .resolver
+            .type_layout(move_object.type_().clone().into())
+            .await?;
+        let object_id = object.id();
+
+        let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)?;
+
+        let type_ = field.kind;
+        let name_type: TypeTag = field.name_layout.into();
+        let bcs_name = field.name_bytes.to_owned();
+
+        let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout)
+            .tap_err(|e| {
+                warn!("{e}");
+            })?;
         let name = DynamicFieldName {
             type_: name_type,
             value: SuiMoveValue::from(name_value).to_json_value(),

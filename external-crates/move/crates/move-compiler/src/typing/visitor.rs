@@ -16,8 +16,8 @@ use move_proc_macros::growing_stack;
 
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
 
-pub trait TypingVisitor {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &T::Program);
+pub trait TypingVisitor: Send + Sync {
+    fn visit(&self, env: &mut CompilationEnv, program: &T::Program);
 
     fn visitor(self) -> Visitor
     where
@@ -27,12 +27,12 @@ pub trait TypingVisitor {
     }
 }
 
-pub trait TypingVisitorConstructor {
+pub trait TypingVisitorConstructor: Send + Sync {
     type Context<'a>: Sized + TypingVisitorContext;
 
     fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a>;
 
-    fn visit(&mut self, env: &mut CompilationEnv, program: &T::Program) {
+    fn visit(env: &mut CompilationEnv, program: &T::Program) {
         let mut context = Self::context(env, program);
         context.visit(program);
     }
@@ -554,9 +554,9 @@ impl<V: TypingVisitor + 'static> From<V> for TypingVisitorObj {
     }
 }
 
-impl<V: TypingVisitorConstructor> TypingVisitor for V {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &T::Program) {
-        self.visit(env, program)
+impl<V: TypingVisitorConstructor + Send + Sync> TypingVisitor for V {
+    fn visit(&self, env: &mut CompilationEnv, program: &T::Program) {
+        Self::visit(env, program)
     }
 }
 
@@ -564,16 +564,16 @@ impl<V: TypingVisitorConstructor> TypingVisitor for V {
 // Mut Vistor
 //**************************************************************************************************
 
-pub trait TypingMutVisitor {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &mut T::Program);
+pub trait TypingMutVisitor: Send + Sync {
+    fn visit(&self, env: &mut CompilationEnv, program: &mut T::Program);
 }
 
-pub trait TypingMutVisitorConstructor {
+pub trait TypingMutVisitorConstructor: Send + Sync {
     type Context<'a>: Sized + TypingMutVisitorContext;
 
     fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a>;
 
-    fn visit(&mut self, env: &mut CompilationEnv, program: &mut T::Program) {
+    fn visit(env: &mut CompilationEnv, program: &mut T::Program) {
         let mut context = Self::context(env, program);
         context.visit(program);
     }
@@ -1092,8 +1092,8 @@ pub trait TypingMutVisitorContext {
 }
 
 impl<V: TypingMutVisitorConstructor> TypingMutVisitor for V {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &mut T::Program) {
-        self.visit(env, program)
+    fn visit(&self, env: &mut CompilationEnv, program: &mut T::Program) {
+        Self::visit(env, program)
     }
 }
 

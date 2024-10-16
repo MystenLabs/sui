@@ -38,14 +38,16 @@ module Test::M2 {
       sendingModule {
         name
       }
-      type {
-        repr
-      }
       sender {
         address
       }
-      json
-      bcs
+      contents {
+        type {
+          repr
+        }
+        bcs
+        json
+      }
     }
   }
 }

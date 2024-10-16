@@ -19,6 +19,7 @@ use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
     leader_scoring::ReputationScores,
     storage::Store,
+    TransactionIndex,
 };
 
 /// Index of a commit among all consensus commits.
@@ -109,6 +110,7 @@ pub(crate) struct CommitV1 {
     leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
     blocks: Vec<BlockRef>,
+    // TODO(fastpath): record rejected transactions.
 }
 
 impl CommitAPI for CommitV1 {
@@ -293,6 +295,8 @@ pub struct CommittedSubDag {
     pub leader: BlockRef,
     /// All the committed blocks that are part of this sub-dag
     pub blocks: Vec<VerifiedBlock>,
+    /// Indices of rejected transactions in each block.
+    pub rejected_transactions_by_block: Vec<Vec<TransactionIndex>>,
     /// The timestamp of the commit, obtained from the timestamp of the leader block.
     pub timestamp_ms: BlockTimestampMs,
     /// The reference of the commit.
@@ -309,13 +313,16 @@ impl CommittedSubDag {
     pub fn new(
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
+        rejected_transactions_by_block: Vec<Vec<TransactionIndex>>,
         timestamp_ms: BlockTimestampMs,
         commit_ref: CommitRef,
         reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> Self {
+        assert_eq!(blocks.len(), rejected_transactions_by_block.len());
         Self {
             leader,
             blocks,
+            rejected_transactions_by_block,
             timestamp_ms,
             commit_ref,
             reputation_scores_desc,
@@ -386,11 +393,14 @@ pub fn load_committed_subdag_from_store(
             commit_block
         })
         .collect::<Vec<_>>();
+    // TODO(fastpath): recover rejected transaction indices from commit.
+    let rejected_transactions = vec![vec![]; blocks.len()];
     let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
     let leader_block_ref = blocks[leader_block_idx].reference();
     CommittedSubDag::new(
         leader_block_ref,
         blocks,
+        rejected_transactions,
         commit.timestamp_ms(),
         commit.reference(),
         reputation_scores_desc,
@@ -506,16 +516,6 @@ impl Display for DecidedLeader {
 pub(crate) struct CommitInfo {
     pub(crate) committed_rounds: Vec<Round>,
     pub(crate) reputation_scores: ReputationScores,
-}
-
-impl CommitInfo {
-    // Returns a new CommitInfo.
-    pub(crate) fn new(committed_rounds: Vec<Round>, reputation_scores: ReputationScores) -> Self {
-        CommitInfo {
-            committed_rounds,
-            reputation_scores,
-        }
-    }
 }
 
 /// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)

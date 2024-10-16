@@ -308,9 +308,9 @@ Sender is not @0x0 the system address.
 
 <pre><code><b>fun</b> <a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_jwk_equal">jwk_equal</a>(a: &<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_JWK">JWK</a>, b: &<a href="../sui-framework/authenticator_state.md#0x2_authenticator_state_JWK">JWK</a>): bool {
     (&a.kty == &b.kty) &&
-           (&a.e == &b.e) &&
-           (&a.n == &b.n) &&
-           (&a.alg == &b.alg)
+        (&a.e == &b.e) &&
+        (&a.n == &b.n) &&
+        (&a.alg == &b.alg)
 }
 </code></pre>
 

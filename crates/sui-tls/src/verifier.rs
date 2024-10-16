@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use arc_swap::ArcSwap;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::traits::ToFromBytes;
 use rustls::crypto::WebPkiSupportedAlgorithms;
@@ -10,10 +11,8 @@ use rustls::pki_types::ServerName;
 use rustls::pki_types::SignatureVerificationAlgorithm;
 use rustls::pki_types::TrustAnchor;
 use rustls::pki_types::UnixTime;
-use std::{
-    collections::HashSet,
-    sync::{Arc, RwLock},
-};
+use std::collections::BTreeSet;
+use std::sync::Arc;
 
 static SUPPORTED_SIG_ALGS: &[&dyn SignatureVerificationAlgorithm] = &[webpki::ring::ED25519];
 
@@ -22,13 +21,12 @@ static SUPPORTED_ALGORITHMS: WebPkiSupportedAlgorithms = WebPkiSupportedAlgorith
     mapping: &[(rustls::SignatureScheme::ED25519, SUPPORTED_SIG_ALGS)],
 };
 
-pub type ValidatorAllowlist = Arc<RwLock<HashSet<Ed25519PublicKey>>>;
-
 /// The Allower trait provides an interface for callers to inject decsions whether
 /// to allow a cert to be verified or not.  This does not prform actual cert validation
 /// it only acts as a gatekeeper to decide if we should even try.  For example, we may want
 /// to filter our actions to well known public keys.
 pub trait Allower: std::fmt::Debug + Send + Sync {
+    // TODO: change allower interface to use raw key bytes.
     fn allowed(&self, key: &Ed25519PublicKey) -> bool;
 }
 
@@ -42,32 +40,28 @@ impl Allower for AllowAll {
     }
 }
 
-/// HashSetAllow restricts keys to those that are found in the member set. non-members will not be
-/// allowed.
+/// AllowPublicKeys restricts keys to those that are found in the member set. non-members will
+/// not be allowed.
 #[derive(Debug, Clone, Default)]
-pub struct HashSetAllow {
-    inner: ValidatorAllowlist,
+pub struct AllowPublicKeys {
+    inner: Arc<ArcSwap<BTreeSet<Ed25519PublicKey>>>,
 }
 
-impl HashSetAllow {
-    pub fn new() -> Self {
-        let inner = Arc::new(RwLock::new(HashSet::new()));
-        Self { inner }
-    }
-    /// Get a reference to the inner service
-    pub fn inner(&self) -> &ValidatorAllowlist {
-        &self.inner
+impl AllowPublicKeys {
+    pub fn new(allowed: BTreeSet<Ed25519PublicKey>) -> Self {
+        Self {
+            inner: Arc::new(ArcSwap::from_pointee(allowed)),
+        }
     }
 
-    /// Get a mutable reference to the inner service
-    pub fn inner_mut(&mut self) -> &mut ValidatorAllowlist {
-        &mut self.inner
+    pub fn update(&self, new_allowed: BTreeSet<Ed25519PublicKey>) {
+        self.inner.store(Arc::new(new_allowed));
     }
 }
 
-impl Allower for HashSetAllow {
+impl Allower for AllowPublicKeys {
     fn allowed(&self, key: &Ed25519PublicKey) -> bool {
-        self.inner.read().unwrap().contains(key)
+        self.inner.load().contains(key)
     }
 }
 

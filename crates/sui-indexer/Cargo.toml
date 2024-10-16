@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+rand = "0.8.5" 
 async-trait.workspace = true
 axum.workspace = true
 backoff.workspace = true
@@ -31,16 +32,20 @@ regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
 tap.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true, features = ["rt"] }
+toml.workspace = true
 tracing.workspace = true
 url.workspace = true
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
+simulacrum.workspace = true
 sui-config.workspace = true
 sui-archival.workspace = true
 sui-core.workspace = true
@@ -66,6 +71,8 @@ move-binary-format.workspace = true
 
 diesel_migrations.workspace = true
 cached.workspace = true
+tokio-stream.workspace = true
+dashmap.workspace = true
 
 [dev-dependencies]
 sui-keys.workspace = true
@@ -74,7 +81,6 @@ sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 ntest.workspace = true
 criterion.workspace = true
-simulacrum.workspace = true
 
 [[bin]]
 name = "sui-indexer"

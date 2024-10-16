@@ -473,7 +473,7 @@ function isReceivingType(type: OpenMoveTypeSignature): boolean {
 export function getClient(options: BuildTransactionOptions): SuiClient {
 	if (!options.client) {
 		throw new Error(
-			`No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,
+			`No sui client passed to Transaction#build, but transaction data was not sufficient to build offline.`,
 		);
 	}
 

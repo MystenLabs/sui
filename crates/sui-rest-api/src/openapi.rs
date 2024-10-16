@@ -15,6 +15,7 @@ use axum::{
     routing::{get, MethodRouter},
     Router,
 };
+use documented::Documented;
 use openapiv3::v3_1::{
     Components, Header, Info, MediaType, OpenApi, Operation, Parameter, ParameterData, PathItem,
     Paths, ReferenceOr, RequestBody, Response, SchemaObject, Tag,
@@ -22,10 +23,29 @@ use openapiv3::v3_1::{
 use schemars::{gen::SchemaGenerator, JsonSchema};
 use tap::Pipe;
 
+const STABLE_BADGE_MARKDOWN: &str =
+    "[![stable](https://img.shields.io/badge/api-stable-53b576?style=for-the-badge)](#)\n\n";
+
+const UNSTABLE_BADGE_MARKDOWN: &str =
+    "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n";
+
 pub trait ApiEndpoint<S> {
     fn method(&self) -> Method;
     fn path(&self) -> &'static str;
     fn hidden(&self) -> bool {
+        false
+    }
+
+    /// Indicates the stability of the API
+    ///
+    /// Stable APIs are enabled in the REST service by default, unstable ones need to be explicitly
+    /// configured to be enabled via config.
+    ///
+    /// Both stable and unstable APIs have a badge, indicating the api's stability, added to the
+    /// top of the description field of their OpenAPI definition.
+    ///
+    /// By default all apis are unstable, individual apis need to explicitly opt-in to being stable
+    fn stable(&self) -> bool {
         false
     }
 
@@ -200,7 +220,19 @@ impl<'a, S> Api<'a, S> {
             other => panic!("unexpected method `{}`", other),
         };
 
-        let operation = endpoint.operation(generator);
+        let mut operation = endpoint.operation(generator);
+
+        if endpoint.stable() {
+            operation
+                .description
+                .get_or_insert_with(String::new)
+                .insert_str(0, STABLE_BADGE_MARKDOWN);
+        } else {
+            operation
+                .description
+                .get_or_insert_with(String::new)
+                .insert_str(0, UNSTABLE_BADGE_MARKDOWN);
+        }
 
         // Collect tags defined by this operation
         tags.extend(operation.tags.clone());
@@ -268,6 +300,8 @@ impl OpenApiDocument {
     }
 }
 
+/// Return the OpenAPI v3.1.0 definition for this service as a JSON document
+#[derive(Documented)]
 pub struct OpenApiJson;
 
 impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiJson {
@@ -279,13 +313,18 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiJson {
         "/openapi.json"
     }
 
+    fn stable(&self) -> bool {
+        true
+    }
+
     fn operation(
         &self,
         _generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
-            .tag("OpenApi")
+            .tag("OpenAPI")
             .operation_id("openapi.json")
+            .description(Self::DOCS)
             .response(
                 200,
                 ResponseBuilder::new()
@@ -300,6 +339,8 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiJson {
     }
 }
 
+/// Return the OpenAPI v3.1.0 definition for this service as a YAML document
+#[derive(Documented)]
 pub struct OpenApiYaml;
 
 impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiYaml {
@@ -311,13 +352,18 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiYaml {
         "/openapi.yaml"
     }
 
+    fn stable(&self) -> bool {
+        true
+    }
+
     fn operation(
         &self,
         _generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
-            .tag("OpenApi")
+            .tag("OpenAPI")
             .operation_id("openapi.yaml")
+            .description(Self::DOCS)
             .response(
                 200,
                 ResponseBuilder::new()
@@ -332,6 +378,8 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiYaml {
     }
 }
 
+/// Provides a web UI for exploring the OpenAPI v3.1.0 definition for this service
+#[derive(Documented)]
 pub struct OpenApiExplorer;
 
 impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiExplorer {
@@ -343,13 +391,18 @@ impl ApiEndpoint<Arc<OpenApiDocument>> for OpenApiExplorer {
         "/openapi"
     }
 
+    fn stable(&self) -> bool {
+        true
+    }
+
     fn operation(
         &self,
         _generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
         OperationBuilder::new()
-            .tag("OpenApi")
-            .operation_id("OpenApi Explorer")
+            .tag("OpenAPI")
+            .operation_id("OpenAPI Explorer")
+            .description(Self::DOCS)
             .response(
                 200,
                 ResponseBuilder::new()

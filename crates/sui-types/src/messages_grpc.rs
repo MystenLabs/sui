@@ -4,10 +4,11 @@
 use crate::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::effects::{
-    SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
+    SignedTransactionEffects, TransactionEffects, TransactionEvents,
+    VerifiedSignedTransactionEffects,
 };
 use crate::object::Object;
-use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
+use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction, Transaction};
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 
@@ -184,7 +185,7 @@ pub struct SystemStateRequest {
 
 /// Response type for version 3 of the handle certifacte validator API.
 ///
-/// The coorisponding version 3 request type allows for a client to request events as well as
+/// The corresponding version 3 request type allows for a client to request events as well as
 /// input/output objects from a transaction's execution. Given Validators operate with very
 /// aggressive object pruning, the return of input/output objects is only done immediately after
 /// the transaction has been executed locally on the validator and will not be returned for
@@ -217,6 +218,43 @@ pub struct HandleCertificateRequestV3 {
     pub include_input_objects: bool,
     pub include_output_objects: bool,
     pub include_auxiliary_data: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleTransactionRequestV2 {
+    pub transaction: Transaction,
+
+    pub include_events: bool,
+    pub include_input_objects: bool,
+    pub include_output_objects: bool,
+    pub include_auxiliary_data: bool,
+}
+
+/// Response type for version 2 of the handle transaction validator API.
+///
+/// The corresponding version 2 request type allows for a client to request events as well as
+/// input/output objects from a transaction's execution. Given Validators operate with very
+/// aggressive object pruning, the return of input/output objects is only done immediately after
+/// the transaction has been executed locally on the validator and will not be returned for
+/// requests to previously executed transactions.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleTransactionResponseV2 {
+    pub effects: TransactionEffects,
+    pub events: Option<TransactionEvents>,
+
+    /// If requested, will included all initial versions of objects modified in this transaction.
+    /// This includes owned objects included as input into the transaction as well as the assigned
+    /// versions of shared objects.
+    //
+    // TODO: In the future we may want to include shared objects or child objects which were read
+    // but not modified during exectuion.
+    pub input_objects: Option<Vec<Object>>,
+
+    /// If requested, will included all changed objects, including mutated, created and unwrapped
+    /// objects. In other words, all objects that still exist in the object state after this
+    /// transaction.
+    pub output_objects: Option<Vec<Object>>,
+    pub auxiliary_data: Option<Vec<u8>>,
 }
 
 impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {

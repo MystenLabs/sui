@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::executor::MAX_CHECKPOINTS_IN_PROGRESS;
-use crate::Worker;
+use crate::reducer::reduce;
+use crate::{Reducer, Worker};
 use mysten_metrics::spawn_monitored_task;
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -17,6 +18,7 @@ pub struct WorkerPool<W: Worker> {
     pub task_name: String,
     concurrency: usize,
     worker: Arc<W>,
+    reducer: Option<Box<dyn Reducer<W::Result>>>,
 }
 
 impl<W: Worker + 'static> WorkerPool<W> {
@@ -25,21 +27,35 @@ impl<W: Worker + 'static> WorkerPool<W> {
             task_name,
             concurrency,
             worker: Arc::new(worker),
+            reducer: None,
         }
     }
+    pub fn new_with_reducer(
+        worker: W,
+        task_name: String,
+        concurrency: usize,
+        reducer: Box<dyn Reducer<W::Result>>,
+    ) -> Self {
+        Self {
+            task_name,
+            concurrency,
+            worker: Arc::new(worker),
+            reducer: Some(reducer),
+        }
+    }
+
     pub async fn run(
-        self,
-        mut current_checkpoint_number: CheckpointSequenceNumber,
+        mut self,
+        watermark: CheckpointSequenceNumber,
         mut checkpoint_receiver: mpsc::Receiver<Arc<CheckpointData>>,
         executor_progress_sender: mpsc::Sender<(String, CheckpointSequenceNumber)>,
     ) {
         info!(
             "Starting indexing pipeline {} with concurrency {}. Current watermark is {}.",
-            self.task_name, self.concurrency, current_checkpoint_number
+            self.task_name, self.concurrency, watermark
         );
-        let mut updates = HashMap::new();
-
         let (progress_sender, mut progress_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
+        let (reducer_sender, reducer_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let mut workers = vec![];
         let mut idle: BTreeSet<_> = (0..self.concurrency).collect();
         let mut checkpoints = VecDeque::new();
@@ -65,7 +81,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
                             info!("received checkpoint for processing {} for workflow {}", sequence_number, task_name);
                             let start_time = Instant::now();
                             let backoff = backoff::ExponentialBackoff::default();
-                            backoff::future::retry(backoff, || async {
+                            let result = backoff::future::retry(backoff, || async {
                                 worker
                                     .clone()
                                     .process_checkpoint(&checkpoint)
@@ -78,7 +94,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
                             .await
                             .expect("checkpoint processing failed for checkpoint");
                             info!("finished checkpoint processing {} for workflow {} in {:?}", sequence_number, task_name, start_time.elapsed());
-                            if cloned_progress_sender.send((worker_id, sequence_number, worker.save_progress(sequence_number).await)).await.is_err() {
+                            if cloned_progress_sender.send((worker_id, sequence_number, result)).await.is_err() {
                                 // The progress channel closing is a sign we need to exit this loop.
                                 break;
                             }
@@ -90,29 +106,20 @@ impl<W: Worker + 'static> WorkerPool<W> {
             // Keep all join handles to ensure all workers are terminated before exiting
             join_handles.push(join_handle);
         }
+        spawn_monitored_task!(reduce::<W>(
+            self.task_name.clone(),
+            watermark,
+            reducer_receiver,
+            executor_progress_sender,
+            std::mem::take(&mut self.reducer),
+        ));
         // main worker pool loop
         loop {
             tokio::select! {
-                Some((worker_id, status_update, progress_watermark)) = progress_receiver.recv() => {
+                Some((worker_id, checkpoint_number, message)) = progress_receiver.recv() => {
                     idle.insert(worker_id);
-                    updates.insert(status_update, progress_watermark);
-                    if status_update == current_checkpoint_number {
-                        let mut executor_status_update = None;
-                        while let Some(progress_watermark) = updates.remove(&current_checkpoint_number) {
-                            if let Some(watermark) =  progress_watermark {
-                                executor_status_update = Some(watermark + 1);
-                            }
-                            current_checkpoint_number += 1;
-                        }
-                        if let Some(update) = executor_status_update {
-                            if executor_progress_sender
-                                .send((self.task_name.clone(), update))
-                                .await.is_err() {
-                                    // The executor progress channel closing is a sign we need to
-                                    // exit this loop.
-                                    break;
-                                }
-                        }
+                    if reducer_sender.send((checkpoint_number, message)).await.is_err() {
+                        break;
                     }
                     while !checkpoints.is_empty() && !idle.is_empty() {
                         let checkpoint = checkpoints.pop_front().unwrap();
@@ -129,7 +136,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
                     }
                     let checkpoint = maybe_checkpoint.expect("invariant's checked");
                     let sequence_number = checkpoint.checkpoint_summary.sequence_number;
-                    if sequence_number < current_checkpoint_number {
+                    if sequence_number < watermark {
                         continue;
                     }
                     self.worker.preprocess_hook(&checkpoint).expect("failed to preprocess task");

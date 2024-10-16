@@ -1,13 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::db::ConnectionPoolConfig;
+use crate::{backfill::BackfillTaskKind, handlers::pruner::PrunableTable};
 use clap::{Args, Parser, Subcommand};
-use std::{net::SocketAddr, path::PathBuf};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, net::SocketAddr, path::PathBuf};
+use strum::IntoEnumIterator;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use url::Url;
 
-use crate::db::ConnectionPoolConfig;
+/// The primary purpose of objects_history is to serve consistency query.
+/// A short retention is sufficient.
+const OBJECTS_HISTORY_EPOCHS_TO_KEEP: u64 = 2;
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -144,7 +150,7 @@ impl Default for IngestionConfig {
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct SqlBackFillConfig {
+pub struct BackFillConfig {
     /// Maximum number of concurrent tasks to run.
     #[arg(
         long,
@@ -159,7 +165,7 @@ pub struct SqlBackFillConfig {
     pub chunk_size: usize,
 }
 
-impl SqlBackFillConfig {
+impl BackFillConfig {
     const DEFAULT_MAX_CONCURRENCY: usize = 10;
     const DEFAULT_CHUNK_SIZE: usize = 1000;
 }
@@ -183,23 +189,24 @@ pub enum Command {
     },
     /// Run through the migration scripts.
     RunMigrations,
-    /// Backfill DB tables for checkpoint range [\first_checkpoint, \last_checkpoint].
-    /// by running a SQL query provided in \sql.
-    /// The tool will automatically slice it into smaller checkpoint ranges and for each range [start, end],
-    /// it augments the \sql query with:
-    ///   "WHERE {checkpoint_column_name} BETWEEN {start} AND {end}"
-    /// to avoid running out of memory.
-    /// Example:
-    ///  ./sui-indexer --database-url <...> sql-back-fill
-    ///   "INSERT INTO full_objects_history (object_id, object_version, serialized_object) SELECT object_id, object_version, serialized_object FROM objects_history"
-    ///   "checkpoint_sequence_number" 0 100000
-    SqlBackFill {
-        sql: String,
-        checkpoint_column_name: String,
-        first_checkpoint: u64,
-        last_checkpoint: u64,
+    /// Backfill DB tables for some ID range [\start, \end].
+    /// The tool will automatically slice it into smaller ranges and for each range,
+    /// it first makes a read query to the DB to get data needed for backfil if needed,
+    /// which then can be processed and written back to the DB.
+    /// To add a new backfill, add a new module and implement the `BackfillTask` trait.
+    /// full_objects_history.rs provides an example to do SQL-only backfills.
+    /// system_state_summary_json.rs provides an example to do SQL + processing backfills.
+    RunBackFill {
+        /// Start of the range to backfill, inclusive.
+        /// It can be a checkpoint number or an epoch or any other identifier that can be used to
+        /// slice the backfill range.
+        start: usize,
+        /// End of the range to backfill, inclusive.
+        end: usize,
+        #[clap(subcommand)]
+        runner_kind: BackfillTaskKind,
         #[command(flatten)]
-        backfill_config: SqlBackFillConfig,
+        backfill_config: BackFillConfig,
     },
     /// Restore the database from formal snaphots.
     Restore(RestoreConfig),
@@ -207,8 +214,93 @@ pub enum Command {
 
 #[derive(Args, Default, Debug, Clone)]
 pub struct PruningOptions {
-    #[arg(long, env = "EPOCHS_TO_KEEP")]
-    pub epochs_to_keep: Option<u64>,
+    /// Path to TOML file containing configuration for retention policies.
+    #[arg(long)]
+    pub pruning_config_path: Option<PathBuf>,
+}
+
+/// Represents the default retention policy and overrides for prunable tables. Instantiated only if
+/// `PruningOptions` is provided on indexer start.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetentionConfig {
+    /// Default retention policy for all tables.
+    pub epochs_to_keep: u64,
+    /// A map of tables to their respective retention policies that will override the default.
+    /// Prunable tables not named here will use the default retention policy.
+    #[serde(default)]
+    pub overrides: HashMap<PrunableTable, u64>,
+}
+
+impl PruningOptions {
+    /// Load default retention policy and overrides from file.
+    pub fn load_from_file(&self) -> Option<RetentionConfig> {
+        let config_path = self.pruning_config_path.as_ref()?;
+
+        let contents = std::fs::read_to_string(config_path)
+            .expect("Failed to read default retention policy and overrides from file");
+        let retention_with_overrides = toml::de::from_str::<RetentionConfig>(&contents)
+            .expect("Failed to parse into RetentionConfig struct");
+
+        let default_retention = retention_with_overrides.epochs_to_keep;
+
+        assert!(
+            default_retention > 0,
+            "Default retention must be greater than 0"
+        );
+        assert!(
+            retention_with_overrides
+                .overrides
+                .values()
+                .all(|&policy| policy > 0),
+            "All retention overrides must be greater than 0"
+        );
+
+        Some(retention_with_overrides)
+    }
+}
+
+impl RetentionConfig {
+    /// Create a new `RetentionConfig` with the specified default retention and overrides. Call
+    /// `finalize()` on the instance to update the `policies` field with the default retention
+    /// policy for all tables that do not have an override specified.
+    pub fn new(epochs_to_keep: u64, overrides: HashMap<PrunableTable, u64>) -> Self {
+        Self {
+            epochs_to_keep,
+            overrides,
+        }
+    }
+
+    pub fn new_with_default_retention_only_for_testing(epochs_to_keep: u64) -> Self {
+        let mut overrides = HashMap::new();
+        overrides.insert(
+            PrunableTable::ObjectsHistory,
+            OBJECTS_HISTORY_EPOCHS_TO_KEEP,
+        );
+
+        Self::new(epochs_to_keep, HashMap::new())
+    }
+
+    /// Consumes this struct to produce a full mapping of every prunable table and its retention
+    /// policy. By default, every prunable table will have the default retention policy from
+    /// `epochs_to_keep`. Some tables like `objects_history` will observe a different default
+    /// retention policy. These default values are overridden by any entries in `overrides`.
+    pub fn retention_policies(self) -> HashMap<PrunableTable, u64> {
+        let RetentionConfig {
+            epochs_to_keep,
+            mut overrides,
+        } = self;
+
+        for table in PrunableTable::iter() {
+            let default_retention = match table {
+                PrunableTable::ObjectsHistory => OBJECTS_HISTORY_EPOCHS_TO_KEEP,
+                _ => epochs_to_keep,
+            };
+
+            overrides.entry(table).or_insert(default_retention);
+        }
+
+        overrides
+    }
 }
 
 #[derive(Args, Debug, Clone)]
@@ -251,30 +343,47 @@ pub struct UploadOptions {
 
 #[derive(Args, Debug, Clone)]
 pub struct RestoreConfig {
+    #[arg(long, env = "START_EPOCH", required = true)]
+    pub start_epoch: u64,
+    #[arg(long, env = "SNAPSHOT_ENDPOINT")]
+    pub snapshot_endpoint: String,
+    #[arg(long, env = "SNAPSHOT_BUCKET")]
+    pub snapshot_bucket: String,
+    #[arg(long, env = "SNAPSHOT_DOWNLOAD_DIR", required = true)]
+    pub snapshot_download_dir: String,
+
     #[arg(long, env = "GCS_ARCHIVE_BUCKET")]
     pub gcs_archive_bucket: String,
-    #[arg(long, env = "GCS_CRED_PATH")]
-    pub gcs_cred_path: String,
     #[arg(long, env = "GCS_DISPLAY_BUCKET")]
     pub gcs_display_bucket: String,
-    #[arg(long, env = "GCS_SNAPSHOT_DIR")]
-    pub gcs_snapshot_dir: String,
-    #[arg(long, env = "GCS_SNAPSHOT_BUCKET")]
-    pub gcs_snapshot_bucket: String,
-    #[arg(long, env = "START_EPOCH")]
-    pub start_epoch: u64,
-    #[arg(long, env = "S3_ENDPOINT")]
-    pub s3_endpoint: String,
+
     #[arg(env = "OBJECT_STORE_CONCURRENT_LIMIT")]
     pub object_store_concurrent_limit: usize,
     #[arg(env = "OBJECT_STORE_MAX_TIMEOUT_SECS")]
     pub object_store_max_timeout_secs: u64,
 }
 
+impl Default for RestoreConfig {
+    fn default() -> Self {
+        Self {
+            start_epoch: 0, // not used b/c it's required
+            snapshot_endpoint: "https://formal-snapshot.mainnet.sui.io".to_string(),
+            snapshot_bucket: "mysten-mainnet-formal".to_string(),
+            snapshot_download_dir: "".to_string(), // not used b/c it's required
+            gcs_archive_bucket: "mysten-mainnet-archives".to_string(),
+            gcs_display_bucket: "mysten-mainnet-display-table".to_string(),
+            object_store_concurrent_limit: 50,
+            object_store_max_timeout_secs: 512,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::io::Write;
     use tap::Pipe;
+    use tempfile::NamedTempFile;
 
     fn parse_args<'a, T>(args: impl IntoIterator<Item = &'a str>) -> Result<T, clap::error::Error>
     where
@@ -337,5 +446,130 @@ mod test {
 
         // fullnode rpc url must be present
         parse_args::<JsonRpcConfig>([]).unwrap_err();
+    }
+
+    #[test]
+    fn pruning_options_with_objects_history_override() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let toml_content = r#"
+        epochs_to_keep = 5
+
+        [overrides]
+        objects_history = 10
+        transactions = 20
+        "#;
+        temp_file.write_all(toml_content.as_bytes()).unwrap();
+        let temp_path: PathBuf = temp_file.path().to_path_buf();
+        let pruning_options = PruningOptions {
+            pruning_config_path: Some(temp_path.clone()),
+        };
+        let retention_config = pruning_options.load_from_file().unwrap();
+
+        // Assert the parsed values
+        assert_eq!(retention_config.epochs_to_keep, 5);
+        assert_eq!(
+            retention_config
+                .overrides
+                .get(&PrunableTable::ObjectsHistory)
+                .copied(),
+            Some(10)
+        );
+        assert_eq!(
+            retention_config
+                .overrides
+                .get(&PrunableTable::Transactions)
+                .copied(),
+            Some(20)
+        );
+        assert_eq!(retention_config.overrides.len(), 2);
+
+        let retention_policies = retention_config.retention_policies();
+
+        for table in PrunableTable::iter() {
+            let Some(retention) = retention_policies.get(&table).copied() else {
+                panic!("Expected a retention policy for table {:?}", table);
+            };
+
+            match table {
+                PrunableTable::ObjectsHistory => assert_eq!(retention, 10),
+                PrunableTable::Transactions => assert_eq!(retention, 20),
+                _ => assert_eq!(retention, 5),
+            };
+        }
+    }
+
+    #[test]
+    fn pruning_options_no_objects_history_override() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let toml_content = r#"
+        epochs_to_keep = 5
+
+        [overrides]
+        tx_affected_addresses = 10
+        transactions = 20
+        "#;
+        temp_file.write_all(toml_content.as_bytes()).unwrap();
+        let temp_path: PathBuf = temp_file.path().to_path_buf();
+        let pruning_options = PruningOptions {
+            pruning_config_path: Some(temp_path.clone()),
+        };
+        let retention_config = pruning_options.load_from_file().unwrap();
+
+        // Assert the parsed values
+        assert_eq!(retention_config.epochs_to_keep, 5);
+        assert_eq!(
+            retention_config
+                .overrides
+                .get(&PrunableTable::TxAffectedAddresses)
+                .copied(),
+            Some(10)
+        );
+        assert_eq!(
+            retention_config
+                .overrides
+                .get(&PrunableTable::Transactions)
+                .copied(),
+            Some(20)
+        );
+        assert_eq!(retention_config.overrides.len(), 2);
+
+        let retention_policies = retention_config.retention_policies();
+
+        for table in PrunableTable::iter() {
+            let Some(retention) = retention_policies.get(&table).copied() else {
+                panic!("Expected a retention policy for table {:?}", table);
+            };
+
+            match table {
+                PrunableTable::ObjectsHistory => {
+                    assert_eq!(retention, OBJECTS_HISTORY_EPOCHS_TO_KEEP)
+                }
+                PrunableTable::TxAffectedAddresses => assert_eq!(retention, 10),
+                PrunableTable::Transactions => assert_eq!(retention, 20),
+                _ => assert_eq!(retention, 5),
+            };
+        }
+    }
+
+    #[test]
+    fn test_invalid_pruning_config_file() {
+        let toml_str = r#"
+        epochs_to_keep = 5
+
+        [overrides]
+        objects_history = 10
+        transactions = 20
+        invalid_table = 30
+        "#;
+
+        let result = toml::from_str::<RetentionConfig>(toml_str);
+        assert!(result.is_err(), "Expected an error, but parsing succeeded");
+
+        if let Err(e) = result {
+            assert!(
+                e.to_string().contains("unknown variant `invalid_table`"),
+                "Error message doesn't mention the invalid table"
+            );
+        }
     }
 }

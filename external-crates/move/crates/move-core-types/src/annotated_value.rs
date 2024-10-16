@@ -4,7 +4,7 @@
 
 use crate::{
     account_address::AccountAddress,
-    annotated_visitor::{visit_struct, visit_value, Error as VError, Visitor},
+    annotated_visitor::{visit_struct, visit_value, Error as VError, ValueDriver, Visitor},
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     runtime_value::{self as R, MOVE_STRUCT_FIELDS, MOVE_STRUCT_TYPE},
@@ -19,6 +19,7 @@ use serde::{
 use std::{
     collections::BTreeMap,
     fmt::{self, Debug},
+    io::Cursor,
 };
 
 /// In the `WithTypes` configuration, a Move struct gets serialized into a Serde struct with this name
@@ -71,7 +72,7 @@ pub enum MoveValue {
     Variant(MoveVariant),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MoveFieldLayout {
     pub name: Identifier,
     pub layout: MoveTypeLayout,
@@ -83,14 +84,14 @@ impl MoveFieldLayout {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MoveStructLayout {
     /// An decorated representation with both types and human-readable field names
     pub type_: StructTag,
     pub fields: Box<Vec<MoveFieldLayout>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MoveEnumLayout {
     pub type_: StructTag,
     pub variants: BTreeMap<(Identifier, u16), Vec<MoveFieldLayout>>,
@@ -111,7 +112,7 @@ impl MoveDatatypeLayout {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MoveTypeLayout {
     #[serde(rename(serialize = "bool", deserialize = "bool"))]
     Bool,
@@ -166,19 +167,21 @@ impl MoveValue {
     ///
     /// Deserialization can fail because of an issue in the serialized format (data doesn't match
     /// layout, unexpected bytes or trailing bytes), or a custom error expressed by the visitor.
-    pub fn visit_deserialize<V: Visitor>(
-        mut blob: &[u8],
-        ty: &MoveTypeLayout,
+    pub fn visit_deserialize<'b, 'l, V: Visitor<'b, 'l>>(
+        blob: &'b [u8],
+        ty: &'l MoveTypeLayout,
         visitor: &mut V,
     ) -> AResult<V::Value>
     where
         V::Error: std::error::Error + Send + Sync + 'static,
     {
-        let res = visit_value(&mut blob, ty, visitor)?;
-        if blob.is_empty() {
+        let mut bytes = Cursor::new(blob);
+        let res = visit_value(&mut bytes, ty, visitor)?;
+        if bytes.position() as usize == blob.len() {
             Ok(res)
         } else {
-            Err(VError::TrailingBytes(blob.len()).into())
+            let remaining = blob.len() - bytes.position() as usize;
+            Err(VError::TrailingBytes(remaining).into())
         }
     }
 
@@ -231,19 +234,22 @@ impl MoveStruct {
     /// Like `MoveValue::visit_deserialize` (see for details), but specialized to visiting a struct
     /// (the `blob` is known to be a serialized Move struct, and the layout is a
     /// `MoveStructLayout`).
-    pub fn visit_deserialize<V: Visitor>(
-        mut blob: &[u8],
-        ty: &MoveStructLayout,
+    pub fn visit_deserialize<'b, 'l, V: Visitor<'b, 'l>>(
+        blob: &'b [u8],
+        ty: &'l MoveStructLayout,
         visitor: &mut V,
     ) -> AResult<V::Value>
     where
         V::Error: std::error::Error + Send + Sync + 'static,
     {
-        let res = visit_struct(&mut blob, ty, visitor)?;
-        if blob.is_empty() {
+        let mut bytes = Cursor::new(blob);
+        let driver = ValueDriver::new(&mut bytes, None);
+        let res = visit_struct(driver, ty, visitor)?;
+        if bytes.position() as usize == blob.len() {
             Ok(res)
         } else {
-            Err(VError::TrailingBytes(blob.len()).into())
+            let remaining = blob.len() - bytes.position() as usize;
+            Err(VError::TrailingBytes(remaining).into())
         }
     }
 

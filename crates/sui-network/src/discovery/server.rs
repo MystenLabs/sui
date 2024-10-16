@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Discovery, NodeInfo, State, MAX_PEERS_TO_SEND};
+use super::{Discovery, NodeInfo, SignedNodeInfo, State, MAX_PEERS_TO_SEND};
 use anemo::{Request, Response};
 use rand::seq::IteratorRandom;
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,12 @@ pub struct GetKnownPeersResponse {
     pub known_peers: Vec<NodeInfo>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetKnownPeersResponseV2 {
+    pub own_info: SignedNodeInfo,
+    pub known_peers: Vec<SignedNodeInfo>,
+}
+
 pub(super) struct Server {
     pub(super) state: Arc<RwLock<State>>,
 }
@@ -24,8 +30,23 @@ pub(super) struct Server {
 impl Discovery for Server {
     async fn get_known_peers(
         &self,
-        _request: Request<()>,
+        request: Request<()>,
     ) -> Result<Response<GetKnownPeersResponse>, anemo::rpc::Status> {
+        let resp = self.get_known_peers_v2(request).await?;
+        Ok(resp.map(|body| GetKnownPeersResponse {
+            own_info: body.own_info.into_data(),
+            known_peers: body
+                .known_peers
+                .into_iter()
+                .map(|e| e.into_data())
+                .collect(),
+        }))
+    }
+
+    async fn get_known_peers_v2(
+        &self,
+        _request: Request<()>,
+    ) -> Result<Response<GetKnownPeersResponseV2>, anemo::rpc::Status> {
         let state = self.state.read().unwrap();
         let own_info = state
             .our_info
@@ -33,7 +54,12 @@ impl Discovery for Server {
             .ok_or_else(|| anemo::rpc::Status::internal("own_info has not been initialized yet"))?;
 
         let known_peers = if state.known_peers.len() < MAX_PEERS_TO_SEND {
-            state.known_peers.values().cloned().collect()
+            state
+                .known_peers
+                .values()
+                .map(|e| e.inner())
+                .cloned()
+                .collect()
         } else {
             let mut rng = rand::thread_rng();
             // prefer returning peers that we are connected to as they are known-good
@@ -64,10 +90,14 @@ impl Discovery for Server {
                 }
             }
 
-            known_peers.into_values().cloned().collect()
+            known_peers
+                .into_values()
+                .map(|e| e.inner())
+                .cloned()
+                .collect()
         };
 
-        Ok(Response::new(GetKnownPeersResponse {
+        Ok(Response::new(GetKnownPeersResponseV2 {
             own_info,
             known_peers,
         }))

@@ -24,9 +24,9 @@ public macro fun assert_ref_eq<$T>($t1: &$T, $t2: &$T) {
     let t2 = $t2;
     let res = t1 == t2;
     if (!res) {
-        std::debug::print(&b"Assertion failed:");
+        std::debug::print(&b"Assertion failed:".to_string());
         std::debug::print(t1);
-        std::debug::print(&b"!=");
+        std::debug::print(&b"!=".to_string());
         std::debug::print(t2);
         assert!(false);
     }

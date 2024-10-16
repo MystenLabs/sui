@@ -1,28 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use itertools::Itertools;
-use tap::tap::TapFallible;
-use tokio::sync::watch;
+use sui_types::dynamic_field::DynamicFieldInfo;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::info;
 
-use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_data_ingestion_core::Worker;
-use sui_json_rpc_types::SuiMoveValue;
-use sui_package_resolver::{PackageStore, PackageStoreWithLruCache, Resolver};
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
-use sui_types::base_types::ObjectID;
-use sui_types::dynamic_field::DynamicFieldInfo;
-use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::{ObjectChange, TransactionEffectsAPI};
 use sui_types::event::SystemEpochInfoEvent;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
@@ -34,15 +27,14 @@ use sui_types::transaction::TransactionDataAPI;
 
 use crate::errors::IndexerError;
 use crate::handlers::committer::start_tx_checkpoint_commit_task;
-use crate::handlers::tx_processor::IndexingPackageBuffer;
 use crate::metrics::IndexerMetrics;
 use crate::models::display::StoredDisplay;
+use crate::models::epoch::{EndOfEpochUpdate, StartOfEpochUpdate};
 use crate::models::obj_indices::StoredObjectVersion;
-use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
-    EventIndex, IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent,
-    IndexedObject, IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
+    EventIndex, IndexedCheckpoint, IndexedDeletedObject, IndexedEvent, IndexedObject,
+    IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
 };
 
 use super::tx_processor::EpochEndIndexingObjectStore;
@@ -74,12 +66,10 @@ pub async fn new_handlers(
 
     let state_clone = state.clone();
     let metrics_clone = metrics.clone();
-    let (tx, package_tx) = watch::channel(None);
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
         metrics_clone,
         indexed_checkpoint_receiver,
-        tx,
         next_checkpoint_sequence_number,
         cancel.clone()
     ));
@@ -87,7 +77,6 @@ pub async fn new_handlers(
         state,
         metrics,
         indexed_checkpoint_sender,
-        package_tx,
     ))
 }
 
@@ -95,14 +84,11 @@ pub struct CheckpointHandler {
     state: PgIndexerStore,
     metrics: IndexerMetrics,
     indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
-    // buffers for packages that are being indexed but not committed to DB,
-    // they will be periodically GCed to avoid OOM.
-    package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
-    package_resolver: Arc<Resolver<PackageStoreWithLruCache<InterimPackageResolver>>>,
 }
 
 #[async_trait]
 impl Worker for CheckpointHandler {
+    type Result = ();
     async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
         let time_now_ms = chrono::Utc::now().timestamp_millis();
         let cp_download_lag = time_now_ms - checkpoint.checkpoint_summary.timestamp_ms as i64;
@@ -128,19 +114,9 @@ impl Worker for CheckpointHandler {
             checkpoint,
             Arc::new(self.metrics.clone()),
             Self::index_packages(std::slice::from_ref(checkpoint), &self.metrics),
-            self.package_resolver.clone(),
         )
         .await?;
         self.indexed_checkpoint_sender.send(checkpoint_data).await?;
-        Ok(())
-    }
-
-    fn preprocess_hook(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
-        let package_objects = Self::get_package_objects(std::slice::from_ref(checkpoint));
-        self.package_buffer
-            .lock()
-            .unwrap()
-            .insert_packages(package_objects);
         Ok(())
     }
 }
@@ -150,23 +126,11 @@ impl CheckpointHandler {
         state: PgIndexerStore,
         metrics: IndexerMetrics,
         indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
-        package_tx: watch::Receiver<Option<CheckpointSequenceNumber>>,
     ) -> Self {
-        let package_buffer = IndexingPackageBuffer::start(package_tx);
-        let package_db_resolver = IndexerStorePackageResolver::new(state.pool());
-        let in_mem_package_resolver = InterimPackageResolver::new(
-            package_db_resolver,
-            package_buffer.clone(),
-            metrics.clone(),
-        );
-        let cached_package_resolver = PackageStoreWithLruCache::new(in_mem_package_resolver);
-        let package_resolver = Arc::new(Resolver::new(cached_package_resolver));
         Self {
             state,
             metrics,
             indexed_checkpoint_sender,
-            package_buffer,
-            package_resolver,
         }
     }
 
@@ -189,12 +153,12 @@ impl CheckpointHandler {
                 get_sui_system_state(&checkpoint_object_store)?.into_sui_system_state_summary();
             return Ok(Some(EpochToCommit {
                 last_epoch: None,
-                new_epoch: IndexedEpochInfo::from_new_system_state_summary(
+                new_epoch: StartOfEpochUpdate::new(
                     system_state_summary,
                     0, //first_checkpoint_id
+                    0, // first_tx_sequence_number
                     None,
                 ),
-                network_total_transactions: 0,
             }));
         }
 
@@ -220,13 +184,9 @@ impl CheckpointHandler {
 
         let event = bcs::from_bytes::<SystemEpochInfoEvent>(&epoch_event.contents)?;
 
-        // Now we just entered epoch X, we want to calculate the diff between
-        // TotalTransactionsByEndOfEpoch(X-1) and TotalTransactionsByEndOfEpoch(X-2). Note that on
-        // the indexer's chain-reading side, this is not guaranteed to have the latest data. Rather
-        // than impose a wait on the reading side, however, we overwrite this on the persisting
-        // side, where we can guarantee that the previous epoch's checkpoints have been written to
-        // db.
-
+        // At some point while committing data in epoch X - 1, we will encounter a new epoch X. We
+        // want to retrieve X - 2's network total transactions to calculate the number of
+        // transactions that occurred in epoch X - 1.
         let network_tx_count_prev_epoch = match system_state_summary.epoch {
             // If first epoch change, this number is 0
             1 => Ok(0),
@@ -234,23 +194,28 @@ impl CheckpointHandler {
                 let last_epoch = system_state_summary.epoch - 2;
                 state
                     .get_network_total_transactions_by_end_of_epoch(last_epoch)
-                    .await
+                    .await?
+                    .ok_or_else(|| {
+                        IndexerError::PersistentStorageDataCorruptionError(format!(
+                            "Network total transactions for epoch {} not found",
+                            last_epoch
+                        ))
+                    })
             }
         }?;
 
         Ok(Some(EpochToCommit {
-            last_epoch: Some(IndexedEpochInfo::from_end_of_epoch_data(
-                system_state_summary.clone(),
+            last_epoch: Some(EndOfEpochUpdate::new(
                 checkpoint_summary,
                 &event,
                 network_tx_count_prev_epoch,
             )),
-            new_epoch: IndexedEpochInfo::from_new_system_state_summary(
+            new_epoch: StartOfEpochUpdate::new(
                 system_state_summary,
                 checkpoint_summary.sequence_number + 1, // first_checkpoint_id
+                checkpoint_summary.network_total_transactions,
                 Some(&event),
             ),
-            network_total_transactions: checkpoint_summary.network_total_transactions,
         }))
     }
 
@@ -280,7 +245,6 @@ impl CheckpointHandler {
         data: &CheckpointData,
         metrics: Arc<IndexerMetrics>,
         packages: Vec<IndexedPackage>,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<CheckpointDataToCommit, IndexerError> {
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         info!(checkpoint_seq, "Indexing checkpoint data blob");
@@ -290,9 +254,9 @@ impl CheckpointHandler {
 
         // Index Objects
         let object_changes: TransactionObjectChangesToCommit =
-            Self::index_objects(data, &metrics, package_resolver.clone()).await?;
+            Self::index_objects(data, &metrics).await?;
         let object_history_changes: TransactionObjectChangesToCommit =
-            Self::index_objects_history(data, package_resolver.clone()).await?;
+            Self::index_objects_history(data).await?;
         let object_versions = Self::derive_object_versions(&object_history_changes);
 
         let (checkpoint, db_transactions, db_events, db_tx_indices, db_event_indices, db_displays) = {
@@ -441,10 +405,7 @@ impl CheckpointHandler {
                     .map(|display| (display.object_type.clone(), display)),
             );
 
-            let objects = input_objects
-                .iter()
-                .chain(output_objects.iter())
-                .collect::<Vec<_>>();
+            let objects: Vec<_> = input_objects.iter().chain(output_objects.iter()).collect();
 
             let (balance_change, object_changes) =
                 TxChangesProcessor::new(&objects, metrics.clone())
@@ -477,14 +438,21 @@ impl CheckpointHandler {
                 .expect("committed txns have been validated")
                 .into_iter()
                 .map(|obj_kind| obj_kind.object_id())
-                .collect::<Vec<_>>();
+                .collect();
 
             // Changed Objects
             let changed_objects = fx
                 .all_changed_objects()
                 .into_iter()
                 .map(|(object_ref, _owner, _write_kind)| object_ref.0)
-                .collect::<Vec<_>>();
+                .collect();
+
+            // Affected Objects
+            let affected_objects = fx
+                .object_changes()
+                .into_iter()
+                .map(|ObjectChange { id, .. }| id)
+                .collect();
 
             // Payers
             let payers = vec![tx.gas_owner()];
@@ -501,13 +469,13 @@ impl CheckpointHandler {
                     _ => None,
                 })
                 .unique()
-                .collect::<Vec<_>>();
+                .collect();
 
             // Move Calls
             let move_calls = tx
                 .move_calls()
-                .iter()
-                .map(|(p, m, f)| (*<&ObjectID>::clone(p), m.to_string(), f.to_string()))
+                .into_iter()
+                .map(|(p, m, f)| (*p, m.to_string(), f.to_string()))
                 .collect();
 
             db_tx_indices.push(TxIndex {
@@ -516,6 +484,7 @@ impl CheckpointHandler {
                 checkpoint_sequence_number: *checkpoint_seq,
                 input_objects,
                 changed_objects,
+                affected_objects,
                 sender,
                 payers,
                 recipients,
@@ -535,7 +504,6 @@ impl CheckpointHandler {
     pub(crate) async fn index_objects(
         data: &CheckpointData,
         metrics: &IndexerMetrics,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<TransactionObjectChangesToCommit, IndexerError> {
         let _timer = metrics.indexing_objects_latency.start_timer();
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
@@ -552,25 +520,14 @@ impl CheckpointHandler {
             .collect();
 
         let latest_live_output_objects = data.latest_live_output_objects();
-        let latest_live_output_object_map = latest_live_output_objects
-            .clone()
-            .into_iter()
-            .map(|o| (o.id(), o.clone()))
-            .collect::<HashMap<_, _>>();
-        let move_struct_layout_map =
-            get_move_struct_layout_map(latest_live_output_objects.clone(), package_resolver)
-                .await?;
         let changed_objects = latest_live_output_objects
             .into_iter()
             .map(|o| {
-                let df_info = try_create_dynamic_field_info(
-                    o,
-                    &move_struct_layout_map,
-                    &latest_live_output_object_map,
-                );
-                df_info.map(|info| IndexedObject::from_object(checkpoint_seq, o.clone(), info))
+                try_extract_df_kind(o)
+                    .map(|df_kind| IndexedObject::from_object(checkpoint_seq, o.clone(), df_kind))
             })
             .collect::<Result<Vec<_>, _>>()?;
+
         Ok(TransactionObjectChangesToCommit {
             changed_objects,
             deleted_objects: indexed_eventually_removed_objects,
@@ -580,7 +537,6 @@ impl CheckpointHandler {
     // similar to index_objects, but objects_history keeps all versions of objects
     async fn index_objects_history(
         data: &CheckpointData,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<TransactionObjectChangesToCommit, IndexerError> {
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         let deleted_objects = data
@@ -597,31 +553,19 @@ impl CheckpointHandler {
             })
             .collect();
 
-        let latest_live_output_objects = data.latest_live_output_objects();
-        let latest_live_output_object_map = latest_live_output_objects
-            .clone()
-            .into_iter()
-            .map(|o| (o.id(), o.clone()))
-            .collect::<HashMap<_, _>>();
-
-        let output_objects = data
+        let output_objects: Vec<_> = data
             .transactions
             .iter()
             .flat_map(|tx| &tx.output_objects)
-            .collect::<Vec<_>>();
+            .collect();
+
         // TODO(gegaowp): the current df_info implementation is not correct,
         // but we have decided remove all df_* except df_kind.
-        let move_struct_layout_map =
-            get_move_struct_layout_map(output_objects.clone(), package_resolver).await?;
         let changed_objects = output_objects
             .into_iter()
             .map(|o| {
-                let df_info = try_create_dynamic_field_info(
-                    o,
-                    &move_struct_layout_map,
-                    &latest_live_output_object_map,
-                );
-                df_info.map(|info| IndexedObject::from_object(checkpoint_seq, o.clone(), info))
+                try_extract_df_kind(o)
+                    .map(|df_kind| IndexedObject::from_object(checkpoint_seq, o.clone(), df_kind))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -658,98 +602,13 @@ impl CheckpointHandler {
             })
             .collect()
     }
-
-    pub(crate) fn get_package_objects(
-        checkpoint_data: &[CheckpointData],
-    ) -> Vec<(IndexedPackage, Object)> {
-        checkpoint_data
-            .iter()
-            .flat_map(|data| {
-                let checkpoint_sequence_number = data.checkpoint_summary.sequence_number;
-                data.transactions
-                    .iter()
-                    .flat_map(|tx| &tx.output_objects)
-                    .filter_map(|o| {
-                        if let sui_types::object::Data::Package(p) = &o.data {
-                            let indexed_pkg = IndexedPackage {
-                                package_id: o.id(),
-                                move_package: p.clone(),
-                                checkpoint_sequence_number,
-                            };
-                            Some((indexed_pkg, o.clone()))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect()
-    }
 }
 
-async fn get_move_struct_layout_map(
-    objects: Vec<&Object>,
-    package_resolver: Arc<Resolver<impl PackageStore>>,
-) -> Result<HashMap<StructTag, MoveStructLayout>, IndexerError> {
-    let struct_tags = objects
-        .into_iter()
-        .filter_map(|o| {
-            let move_object = o.data.try_as_move().cloned();
-            move_object.map(|move_object| {
-                let struct_tag: StructTag = move_object.type_().clone().into();
-                struct_tag
-            })
-        })
-        .collect::<Vec<_>>();
-    let struct_tags = struct_tags.into_iter().unique().collect::<Vec<_>>();
-    info!(
-        "Resolving Move struct layouts for struct tags of size {}.",
-        struct_tags.len()
-    );
-    let move_struct_layout_futures = struct_tags
-        .into_iter()
-        .map(|struct_tag| {
-            let package_resolver_clone = package_resolver.clone();
-            async move {
-                let move_type_layout = package_resolver_clone
-                    .type_layout(TypeTag::Struct(Box::new(struct_tag.clone())))
-                    .await
-                    .map_err(|e| {
-                        IndexerError::DynamicFieldError(format!(
-                            "Fail to resolve struct layout for {:?} with {:?}.",
-                            struct_tag, e
-                        ))
-                    })?;
-                let move_struct_layout = match move_type_layout {
-                    MoveTypeLayout::Struct(s) => Ok(s),
-                    _ => Err(IndexerError::ResolveMoveStructError(
-                        "MoveTypeLayout is not Struct".to_string(),
-                    )),
-                }?;
-                Ok::<
-                    (
-                        move_core_types::language_storage::StructTag,
-                        move_core_types::annotated_value::MoveStructLayout,
-                    ),
-                    IndexerError,
-                >((struct_tag, *move_struct_layout))
-            }
-        })
-        .collect::<Vec<_>>();
-    let move_struct_layout_map = futures::future::try_join_all(move_struct_layout_futures)
-        .await?
-        .into_iter()
-        .collect::<HashMap<_, _>>();
-    Ok(move_struct_layout_map)
-}
-
-fn try_create_dynamic_field_info(
-    o: &Object,
-    struct_tag_to_move_struct_layout: &HashMap<StructTag, MoveStructLayout>,
-    latest_objects: &HashMap<ObjectID, Object>,
-) -> IndexerResult<Option<DynamicFieldInfo>> {
+/// If `o` is a dynamic `Field<K, V>`, determine whether it represents a Dynamic Field or a Dynamic
+/// Object Field based on its type.
+fn try_extract_df_kind(o: &Object) -> IndexerResult<Option<DynamicFieldType>> {
     // Skip if not a move object
-    let Some(move_object) = o.data.try_as_move().cloned() else {
+    let Some(move_object) = o.data.try_as_move() else {
         return Ok(None);
     };
 
@@ -757,60 +616,17 @@ fn try_create_dynamic_field_info(
         return Ok(None);
     }
 
-    let struct_tag: StructTag = move_object.type_().clone().into();
-    let move_struct_layout = struct_tag_to_move_struct_layout
-        .get(&struct_tag)
-        .cloned()
-        .ok_or_else(|| {
-            IndexerError::DynamicFieldError(format!(
-                "Cannot find struct layout in mapfor {:?}.",
-                struct_tag
-            ))
-        })?;
-    let move_struct = move_object.to_move_struct(&move_struct_layout)?;
-    let (move_value, type_, object_id) =
-        DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
-    let name_type = move_object.type_().try_extract_field_name(&type_)?;
-    let bcs_name = bcs::to_bytes(&move_value.clone().undecorate()).map_err(|e| {
-        IndexerError::SerdeError(format!(
-            "Failed to serialize dynamic field name {:?}: {e}",
-            move_value
-        ))
-    })?;
-    let name = DynamicFieldName {
-        type_: name_type,
-        value: SuiMoveValue::from(move_value).to_json_value(),
+    let type_: StructTag = move_object.type_().clone().into();
+    let [name, _] = type_.type_params.as_slice() else {
+        return Ok(None);
     };
-    Ok(Some(match type_ {
-        DynamicFieldType::DynamicObject => {
-            let object = latest_objects
-                .get(&object_id)
-                .ok_or(IndexerError::UncategorizedError(anyhow::anyhow!(
-                    "Failed to find object_id {:?} when trying to create dynamic field info",
-                    object_id
-                )))?;
-            let version = object.version();
-            let digest = object.digest();
-            let object_type = object.data.type_().unwrap().clone();
-            DynamicFieldInfo {
-                name,
-                bcs_name,
-                type_,
-                object_type: object_type.to_canonical_string(/* with_prefix */ true),
-                object_id,
-                version,
-                digest,
-            }
-        }
-        DynamicFieldType::DynamicField => DynamicFieldInfo {
-            name,
-            bcs_name,
-            type_,
-            object_type: move_object.into_type().into_type_params()[1]
-                .to_canonical_string(/* with_prefix */ true),
-            object_id: o.id(),
-            version: o.version(),
-            digest: o.digest(),
+
+    Ok(Some(
+        if matches!(name, TypeTag::Struct(s) if DynamicFieldInfo::is_dynamic_object_field_wrapper(s))
+        {
+            DynamicFieldType::DynamicObject
+        } else {
+            DynamicFieldType::DynamicField
         },
-    }))
+    ))
 }

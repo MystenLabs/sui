@@ -881,9 +881,10 @@ type DynamicField {
 	"""
 	name: MoveValue
 	"""
-	The actual data stored in the dynamic field.
-	The returned dynamic field is an object if its return type is MoveObject,
-	in which case it is also accessible off-chain via its address.
+	The returned dynamic field is an object if its return type is `MoveObject`,
+	in which case it is also accessible off-chain via its address. Its contents
+	will be from the latest version that is at most equal to its parent object's
+	version
 	"""
 	value: DynamicFieldValue
 }
@@ -3013,6 +3014,10 @@ type ServiceConfig {
 	"""
 	isEnabled(feature: Feature!): Boolean!
 	"""
+	List the available versions for this GraphQL service.
+	"""
+	availableVersions: [String!]!
+	"""
 	List of all features that are enabled on this GraphQL service.
 	"""
 	enabledFeatures: [Feature!]!
@@ -3051,7 +3056,14 @@ type ServiceConfig {
 	"""
 	maxPageSize: Int!
 	"""
-	Maximum time in milliseconds that will be spent to serve one request.
+	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a
+	a transaction to execute. Note that the transaction may still succeed even in the case of a
+	timeout. Transactions are idempotent, so a transaction that times out should be resubmitted
+	until the network returns a definite response (success or failure, not timeout).
+	"""
+	mutationTimeoutMs: Int!
+	"""
+	Maximum time in milliseconds that will be spent to serve one query request.
 	"""
 	requestTimeoutMs: Int!
 	"""
@@ -3103,6 +3115,20 @@ type SharedInput {
 	respect to each other.
 	"""
 	mutable: Boolean!
+}
+
+"""
+The transaction accpeted a shared object as input, but its execution was cancelled.
+"""
+type SharedObjectCancelled {
+	"""
+	ID of the shared object.
+	"""
+	address: SuiAddress!
+	"""
+	The assigned shared object version. It is a special version indicating transaction cancellation reason.
+	"""
+	version: Int!
 }
 
 """
@@ -3705,6 +3731,8 @@ type TransactionBlockEffects {
 	lamportVersion: Int!
 	"""
 	The reason for a transaction failure, if it did fail.
+	If the error is a Move abort, the error message will be resolved to a human-readable form if
+	possible, otherwise it will fall back to displaying the abort code and location.
 	"""
 	errors: String
 	"""
@@ -3871,7 +3899,7 @@ This information is considered part of the effects, because although the transac
 the shared object as input, consensus must schedule it and pick the version that is actually
 used.
 """
-union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete | SharedObjectCancelled
 
 type UnchangedSharedObjectConnection {
 	"""

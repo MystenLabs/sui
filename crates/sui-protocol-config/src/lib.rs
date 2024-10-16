@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 60;
+const MAX_PROTOCOL_VERSION: u64 = 64;
 
 // Record history of protocol version allocations here:
 //
@@ -180,7 +180,12 @@ const MAX_PROTOCOL_VERSION: u64 = 60;
 // Version 59: Enable round prober in consensus.
 // Version 60: Validation of public inputs for Groth16 verification.
 //             Enable configuration of maximum number of type nodes in a type layout.
-//             Switch to distributed vote scoring in consensus in testnet
+// Version 61: Switch to distributed vote scoring in consensus in testnet
+//             Further reduce minimum number of random beacon shares.
+//             Add feature flag for Mysticeti fastpath.
+// Version 62: Makes the event's sending module package upgrade-aware.
+// Version 63: Enable gas based congestion control in consensus commit.
+// Version 64: Switch to distributed vote scoring in consensus in mainnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -535,6 +540,14 @@ struct FeatureFlags {
     // Validate identifier inputs separately
     #[serde(skip_serializing_if = "is_false")]
     validate_identifier_inputs: bool,
+
+    // Enables Mysticeti fastpath.
+    #[serde(skip_serializing_if = "is_false")]
+    mysticeti_fastpath: bool,
+
+    // Makes the event's sending module version-aware.
+    #[serde(skip_serializing_if = "is_false")]
+    relocate_event_module: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -566,8 +579,9 @@ impl ConsensusTransactionOrdering {
 pub enum PerObjectCongestionControlMode {
     #[default]
     None, // No congestion control.
-    TotalGasBudget, // Use txn gas budget as execution cost.
-    TotalTxCount,   // Use total txn count as execution cost.
+    TotalGasBudget,        // Use txn gas budget as execution cost.
+    TotalTxCount,          // Use total txn count as execution cost.
+    TotalGasBudgetWithCap, // Use txn gas budget as execution cost with a cap.
 }
 
 impl PerObjectCongestionControlMode {
@@ -1254,6 +1268,11 @@ pub struct ProtocolConfig {
     /// Configures the garbage collection depth for consensus. When is unset or `0` then the garbage collection
     /// is disabled.
     consensus_gc_depth: Option<u32>,
+
+    /// Used to calculate the max transaction cost when using TotalGasBudgetWithCap as shard
+    /// object congestion control strategy. Basically the max transaction cost is calculated as
+    /// (num of input object + num of commands) * this factor.
+    gas_budget_based_txn_cost_cap_factor: Option<u64>,
 }
 
 // feature flags
@@ -1528,10 +1547,6 @@ impl ProtocolConfig {
         self.feature_flags.consensus_network
     }
 
-    pub fn mysticeti_leader_scoring_and_schedule(&self) -> bool {
-        self.feature_flags.mysticeti_leader_scoring_and_schedule
-    }
-
     pub fn reshare_at_same_initial_version(&self) -> bool {
         self.feature_flags.reshare_at_same_initial_version
     }
@@ -1601,8 +1616,17 @@ impl ProtocolConfig {
     pub fn validate_identifier_inputs(&self) -> bool {
         self.feature_flags.validate_identifier_inputs
     }
+
     pub fn gc_depth(&self) -> u32 {
         self.consensus_gc_depth.unwrap_or(0)
+    }
+
+    pub fn mysticeti_fastpath(&self) -> bool {
+        self.feature_flags.mysticeti_fastpath
+    }
+
+    pub fn relocate_event_module(&self) -> bool {
+        self.feature_flags.relocate_event_module
     }
 }
 
@@ -2119,6 +2143,8 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
 
             consensus_gc_depth: None,
+
+            gas_budget_based_txn_cost_cap_factor: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2782,12 +2808,35 @@ impl ProtocolConfig {
                 60 => {
                     cfg.max_type_to_layout_nodes = Some(512);
                     cfg.feature_flags.validate_identifier_inputs = true;
-
+                }
+                61 => {
                     if chain != Chain::Mainnet {
                         // Enable distributed vote scoring for testnet
                         cfg.feature_flags
                             .consensus_distributed_vote_scoring_strategy = true;
                     }
+                    // Further reduce minimum number of random beacon shares.
+                    cfg.random_beacon_reduction_lower_bound = Some(700);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Enable Mysticeti fastpath for devnet
+                        cfg.feature_flags.mysticeti_fastpath = true;
+                    }
+                }
+                62 => {
+                    cfg.feature_flags.relocate_event_module = true;
+                }
+                63 => {
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(18_500_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(240_000_000);
+                }
+                64 => {
+                    // Enable distributed vote scoring for mainnet
+                    cfg.feature_flags
+                        .consensus_distributed_vote_scoring_strategy = true;
                 }
                 // Use this template when making changes:
                 //
@@ -2925,12 +2974,9 @@ impl ProtocolConfig {
     pub fn set_zklogin_max_epoch_upper_bound_delta_for_testing(&mut self, val: Option<u64>) {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
     }
+
     pub fn set_disable_bridge_for_testing(&mut self) {
         self.feature_flags.bridge = false
-    }
-
-    pub fn set_mysticeti_leader_scoring_and_schedule_for_testing(&mut self, val: bool) {
-        self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
     }
 
     pub fn set_mysticeti_num_leaders_per_round_for_testing(&mut self, val: Option<usize>) {
@@ -3163,11 +3209,10 @@ mod test {
             .feature_flags
             .lookup_attr("some random string".to_owned())
             .is_none());
-        assert!(prot
+        assert!(!prot
             .feature_flags
             .attr_map()
-            .get("some random string")
-            .is_none());
+            .contains_key("some random string"));
 
         // Was false in v1
         assert!(

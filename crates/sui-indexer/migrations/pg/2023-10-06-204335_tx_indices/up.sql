@@ -18,7 +18,6 @@ CREATE TABLE tx_input_objects (
     sender                      BYTEA        NOT NULL,
     PRIMARY KEY(object_id, tx_sequence_number)
 );
-CREATE INDEX tx_input_objects_tx_sequence_number_index ON tx_input_objects (tx_sequence_number);
 CREATE INDEX tx_input_objects_sender ON tx_input_objects (sender, object_id, tx_sequence_number);
 
 CREATE TABLE tx_changed_objects (
@@ -27,7 +26,6 @@ CREATE TABLE tx_changed_objects (
     sender                      BYTEA        NOT NULL,
     PRIMARY KEY(object_id, tx_sequence_number)
 );
-CREATE INDEX tx_changed_objects_tx_sequence_number_index ON tx_changed_objects (tx_sequence_number);
 CREATE INDEX tx_changed_objects_sender ON tx_changed_objects (sender, object_id, tx_sequence_number);
 
 CREATE TABLE tx_calls_pkg (
@@ -61,7 +59,6 @@ CREATE TABLE tx_digests (
     tx_digest                   BYTEA        PRIMARY KEY,
     tx_sequence_number          BIGINT       NOT NULL
 );
-CREATE INDEX tx_digests_tx_sequence_number ON tx_digests (tx_sequence_number);
 
 CREATE TABLE tx_kinds (
     tx_sequence_number          BIGINT       NOT NULL,

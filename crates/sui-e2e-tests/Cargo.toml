@@ -64,6 +64,7 @@ sui-sdk.workspace = true
 sui-keys.workspace = true
 sui-rest-api.workspace = true
 shared-crypto.workspace = true
+sui-sdk-types.workspace = true
 
 passkey-types.workspace = true
 passkey-client.workspace = true

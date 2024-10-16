@@ -8,7 +8,7 @@ module sui_system::validator {
     use sui::balance::Balance;
     use sui::sui::SUI;
     use sui_system::validator_cap::{Self, ValidatorOperationCap};
-    use sui_system::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool};
+    use sui_system::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool, FungibleStakedSui};
     use std::string::String;
     use sui::url::Url;
     use sui::url;
@@ -160,6 +160,21 @@ module sui_system::validator {
         reward_amount: u64,
     }
 
+    /// Event emitted when a staked SUI is converted to a fungible staked SUI.
+    public struct ConvertingToFungibleStakedSuiEvent has copy, drop {
+        pool_id: ID,
+        stake_activation_epoch: u64,
+        staked_sui_principal_amount: u64,
+        fungible_staked_sui_amount: u64,
+    }
+
+    /// Event emitted when a fungible staked SUI is redeemed.
+    public struct RedeemingFungibleStakedSuiEvent has copy, drop {
+        pool_id: ID,
+        fungible_staked_sui_amount: u64,
+        sui_amount: u64,
+    }
+
     public(package) fun new_metadata(
         sui_address: address,
         protocol_pubkey_bytes: vector<u8>,
@@ -304,6 +319,48 @@ module sui_system::validator {
             }
         );
         staked_sui
+    }
+
+    public(package) fun convert_to_fungible_staked_sui(
+        self: &mut Validator,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext,
+    ) : FungibleStakedSui {
+        let stake_activation_epoch = staked_sui.stake_activation_epoch();
+        let staked_sui_principal_amount = staked_sui.staked_sui_amount();
+
+        let fungible_staked_sui = self.staking_pool.convert_to_fungible_staked_sui(staked_sui, ctx);
+
+        event::emit(
+            ConvertingToFungibleStakedSuiEvent {
+                pool_id: self.staking_pool_id(),
+                stake_activation_epoch,
+                staked_sui_principal_amount,
+                fungible_staked_sui_amount: fungible_staked_sui.value(),
+            }
+        );
+
+        fungible_staked_sui
+    }
+
+    public(package) fun redeem_fungible_staked_sui(
+        self: &mut Validator,
+        fungible_staked_sui: FungibleStakedSui,
+        ctx: &TxContext,
+    ) : Balance<SUI> {
+        let fungible_staked_sui_amount = fungible_staked_sui.value();
+
+        let sui = self.staking_pool.redeem_fungible_staked_sui(fungible_staked_sui, ctx);
+
+        event::emit(
+            RedeemingFungibleStakedSuiEvent {
+                pool_id: self.staking_pool_id(),
+                fungible_staked_sui_amount,
+                sui_amount: sui.value(),
+            }
+        );
+
+        sui
     }
 
     /// Request to add stake to the validator's staking pool at genesis

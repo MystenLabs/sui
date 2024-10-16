@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.35.0"
+    "version": "1.36.0"
   },
   "methods": [
     {
@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "60",
+              "maxSupportedProtocolVersion": "64",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1326,6 +1326,7 @@
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
+                "mysticeti_fastpath": false,
                 "mysticeti_leader_scoring_and_schedule": false,
                 "mysticeti_use_committed_subdag_digest": false,
                 "narwhal_certificate_v2": false,
@@ -1341,6 +1342,7 @@
                 "recompute_has_public_transfer_in_execution": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "reject_mutable_random_on_entry_functions": false,
+                "relocate_event_module": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
                 "rethrow_serialization_type_layout_errors": false,
@@ -1590,6 +1592,7 @@
                   "u64": "2"
                 },
                 "execution_version": null,
+                "gas_budget_based_txn_cost_cap_factor": null,
                 "gas_model_version": {
                   "u64": "5"
                 },
@@ -6105,6 +6108,36 @@
       "EventFilter": {
         "oneOf": [
           {
+            "description": "Return all events.",
+            "type": "object",
+            "required": [
+              "All"
+            ],
+            "properties": {
+              "All": {
+                "type": "array",
+                "maxItems": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events that match any of the given filters. Only supported on event subscriptions.",
+            "type": "object",
+            "required": [
+              "Any"
+            ],
+            "properties": {
+              "Any": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by sender address.",
             "type": "object",
             "required": [
@@ -6126,19 +6159,6 @@
             "properties": {
               "Transaction": {
                 "$ref": "#/components/schemas/TransactionDigest"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Return events emitted in a specified Package.",
-            "type": "object",
-            "required": [
-              "Package"
-            ],
-            "properties": {
-              "Package": {
-                "$ref": "#/components/schemas/ObjectID"
               }
             },
             "additionalProperties": false
@@ -6219,28 +6239,6 @@
             "additionalProperties": false
           },
           {
-            "type": "object",
-            "required": [
-              "MoveEventField"
-            ],
-            "properties": {
-              "MoveEventField": {
-                "type": "object",
-                "required": [
-                  "path",
-                  "value"
-                ],
-                "properties": {
-                  "path": {
-                    "type": "string"
-                  },
-                  "value": true
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
             "description": "Return events emitted in [start_time, end_time] interval",
             "type": "object",
             "required": [
@@ -6274,85 +6272,11 @@
               }
             },
             "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "All"
-            ],
-            "properties": {
-              "All": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EventFilter"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "Any"
-            ],
-            "properties": {
-              "Any": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EventFilter"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "And"
-            ],
-            "properties": {
-              "And": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "Or"
-            ],
-            "properties": {
-              "Or": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EventFilter"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
           }
         ]
       },
       "EventID": {
-        "description": "Unique ID of a Sui Event, the ID is a combination of tx seq number and event seq number, the ID is local to this particular fullnode and will be different from other fullnode.",
+        "description": "Unique ID of a Sui Event, the ID is a combination of transaction digest and event seq number.",
         "type": "object",
         "required": [
           "eventSeq",
@@ -10856,6 +10780,19 @@
             ],
             "properties": {
               "ChangedObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query for transactions that touch this object.",
+            "type": "object",
+            "required": [
+              "AffectedObject"
+            ],
+            "properties": {
+              "AffectedObject": {
                 "$ref": "#/components/schemas/ObjectID"
               }
             },

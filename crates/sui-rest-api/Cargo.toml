@@ -22,15 +22,18 @@ thiserror.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 itertools.workspace = true
-sui-sdk2.workspace = true
+sui-sdk-types.workspace = true
 prometheus.workspace = true
 openapiv3 = { git = "https://github.com/bmwill/openapiv3.git", rev = "ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963" }
 schemars.workspace = true
+documented = "0.6.0"
 
 fastcrypto.workspace = true
 sui-types.workspace = true
 mysten-network.workspace = true
 sui-protocol-config.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
 
 [dev-dependencies]
 diffy = "0.3"

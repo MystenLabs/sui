@@ -48,12 +48,12 @@ impl DependencyCache {
         match kind {
             DependencyKind::Local(_) => Ok(()),
 
-            DependencyKind::Custom(node_info) => {
+            DependencyKind::OnChain(info) => {
                 // check if a give dependency type has already been fetched
                 if !self.fetched_deps.insert(repository_path(kind)) {
                     return Ok(());
                 }
-                package_hooks::resolve_custom_dependency(dep_name, node_info)
+                package_hooks::resolve_on_chain_dependency(dep_name, info)
             }
 
             DependencyKind::Git(GitInfo {

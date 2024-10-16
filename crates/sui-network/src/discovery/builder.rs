@@ -7,11 +7,13 @@ use super::{
 use crate::discovery::TrustedPeerChangeEvent;
 use anemo::codegen::InboundRequestLayer;
 use anemo_tower::rate_limit;
+use fastcrypto::traits::KeyPair;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
 use sui_config::p2p::P2pConfig;
+use sui_types::crypto::NetworkKeyPair;
 use tap::Pipe;
 use tokio::{
     sync::{oneshot, watch},
@@ -117,7 +119,11 @@ pub struct UnstartedDiscovery {
 }
 
 impl UnstartedDiscovery {
-    pub(super) fn build(self, network: anemo::Network) -> (DiscoveryEventLoop, Handle) {
+    pub(super) fn build(
+        self,
+        network: anemo::Network,
+        keypair: NetworkKeyPair,
+    ) -> (DiscoveryEventLoop, Handle) {
         let Self {
             handle,
             config,
@@ -146,6 +152,7 @@ impl UnstartedDiscovery {
                 discovery_config: Arc::new(discovery_config),
                 allowlisted_peers,
                 network,
+                keypair,
                 tasks: JoinSet::new(),
                 pending_dials: Default::default(),
                 dial_seed_peers_task: None,
@@ -158,8 +165,9 @@ impl UnstartedDiscovery {
         )
     }
 
-    pub fn start(self, network: anemo::Network) -> Handle {
-        let (event_loop, handle) = self.build(network);
+    pub fn start(self, network: anemo::Network, keypair: NetworkKeyPair) -> Handle {
+        assert_eq!(network.peer_id().0, *keypair.public().0.as_bytes());
+        let (event_loop, handle) = self.build(network, keypair);
         tokio::spawn(event_loop.start());
 
         handle

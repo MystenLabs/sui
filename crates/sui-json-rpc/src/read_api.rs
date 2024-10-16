@@ -3,9 +3,12 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use backoff::future::retry;
+use backoff::ExponentialBackoff;
 use futures::future::join_all;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
@@ -195,6 +198,7 @@ impl ReadApi {
         Ok(checkpoints)
     }
 
+    #[instrument(skip_all)]
     async fn multi_get_transaction_blocks_internal(
         &self,
         digests: Vec<TransactionDigest>,
@@ -316,54 +320,96 @@ impl ReadApi {
 
         if opts.show_events {
             trace!("getting events");
-
-            let event_digests_list = temp_response
+            let events_digests_list = temp_response
                 .values()
                 .filter_map(|cache_entry| match &cache_entry.effects {
                     Some(eff) => eff.events_digest().cloned(),
                     None => None,
                 })
                 .collect::<Vec<TransactionEventsDigest>>();
+            // filter out empty events digest, as they do not have to be read from the DB
+            let empty_events_digest = TransactionEvents::default().digest();
+            let events_digests_list = events_digests_list
+                .into_iter()
+                .filter(|d| d != &empty_events_digest)
+                .collect::<Vec<_>>();
 
-            // fetch events from the DB
-            let events = self
-                .transaction_kv_store
-                .multi_get_events(&event_digests_list)
+            let mut events_digest_to_events = if events_digests_list.is_empty() {
+                HashMap::new()
+            } else {
+                // fetch events from the DB with retry, retry each 0.5s for 3s
+                let backoff = ExponentialBackoff {
+                    max_elapsed_time: Some(Duration::from_secs(3)),
+                    multiplier: 1.0,
+                    ..ExponentialBackoff::default()
+                };
+                let events = retry(backoff, || async {
+                    match self
+                        .transaction_kv_store
+                        .multi_get_events(&events_digests_list)
+                        .await
+                    {
+                        // Only return Ok when all the queried transaction events are found, otherwise retry
+                        // until timeout, then return Err.
+                        Ok(events) if !events.contains(&None) => Ok(events),
+                        Ok(_) => Err(backoff::Error::transient(Error::UnexpectedError(
+                            "Events not found, transaction execution may be incomplete.".into(),
+                        ))),
+                        Err(e) => Err(backoff::Error::permanent(Error::UnexpectedError(format!(
+                            "Failed to call multi_get_events: {e:?}"
+                        )))),
+                    }
+                })
                 .await
                 .map_err(|e| {
-                    Error::UnexpectedError(format!("Failed to call multi_get_events for transactions {digests:?} with event digests {event_digests_list:?}: {e:?}"))
+                    Error::UnexpectedError(format!(
+                    "Retrieving events with retry failed for events digests {events_digests_list:?}: {e:?}"
+                ))
                 })?
                 .into_iter();
 
-            // construct a hashmap of event digests -> events for fast lookup
-            let event_digest_to_events = event_digests_list
-                .into_iter()
-                .zip(events)
-                .collect::<HashMap<_, _>>();
+                // construct a hashmap of events digests -> events for fast lookup
+                let events_map = events_digests_list
+                    .into_iter()
+                    .zip(events)
+                    .collect::<HashMap<_, _>>();
+                // Double check that all events are `Some` and their digests match the key
+                for (events_digest, events) in events_map.iter() {
+                    if let Some(events) = events {
+                        if &events.digest() != events_digest {
+                            return Err(Error::UnexpectedError(format!(
+                                "Events digest {events_digest:?} does not match the key {:?}",
+                                events.digest()
+                            )));
+                        }
+                    } else {
+                        return Err(Error::UnexpectedError(format!(
+                            "Events of digest {events_digest:?} is None, but it should not be"
+                        )));
+                    }
+                }
+                events_map
+            };
+            events_digest_to_events.insert(empty_events_digest, Some(TransactionEvents::default()));
 
             // fill cache with the events
             for (_, cache_entry) in temp_response.iter_mut() {
                 let transaction_digest = cache_entry.digest;
-                let event_digest: Option<Option<TransactionEventsDigest>> = cache_entry
-                    .effects
-                    .as_ref()
-                    .map(|e| e.events_digest().cloned());
-                let event_digest = event_digest.flatten();
-                if event_digest.is_some() {
-                    // safe to unwrap because `is_some` is checked
-                    let event_digest = event_digest.as_ref().unwrap();
-                    let events= event_digest_to_events
-                        .get(event_digest)
+                if let Some(events_digest) =
+                    cache_entry.effects.as_ref().and_then(|e| e.events_digest())
+                {
+                    let events = events_digest_to_events
+                        .get(events_digest)
                         .cloned()
-                        .unwrap_or_else(|| panic!("Expect event digest {event_digest:?} to be found in cache for transaction {transaction_digest}"))
+                        .unwrap_or_else(|| panic!("Expect event digest {events_digest:?} to be found in cache for transaction {transaction_digest}"))
                         .map(|events| to_sui_transaction_events(self, cache_entry.digest, events));
                     match events {
                         Some(Ok(e)) => cache_entry.events = Some(e),
                         Some(Err(e)) => cache_entry.errors.push(e.to_string()),
                         None => {
-                            error!("Failed to fetch events with event digest {event_digest:?} for txn {transaction_digest}");
+                            error!("Failed to fetch events with event digest {events_digest:?} for txn {transaction_digest}");
                             cache_entry.errors.push(format!(
-                                "Failed to fetch events with event digest {event_digest:?}",
+                                "Failed to fetch events with event digest {events_digest:?}",
                             ))
                         }
                     }
@@ -429,6 +475,7 @@ impl ReadApi {
 
                 results.push(get_object_changes(
                     &object_cache,
+                    effects,
                     resp.transaction
                         .as_ref()
                         .ok_or_else(|| {
@@ -846,6 +893,7 @@ impl ReadApiServer for ReadApi {
                     let sender = input.data().intent_message().value.sender();
                     let object_changes = get_object_changes(
                         &object_cache,
+                        effects,
                         sender,
                         effects.modified_at_versions(),
                         effects.all_changed_objects(),
@@ -1061,6 +1109,7 @@ impl SuiRpcModule for ReadApi {
     }
 }
 
+#[instrument(skip_all)]
 fn to_sui_transaction_events(
     fullnode_api: &ReadApi,
     tx_digest: TransactionDigest,
@@ -1100,6 +1149,7 @@ pub enum ObjectDisplayError {
     StateReadError(#[from] StateReadError),
 }
 
+#[instrument(skip(fullnode_api, kv_store))]
 async fn get_display_fields(
     fullnode_api: &ReadApi,
     kv_store: &Arc<TransactionKeyValueStore>,
@@ -1124,6 +1174,7 @@ async fn get_display_fields(
     })
 }
 
+#[instrument(skip(kv_store, fullnode_api))]
 async fn get_display_object_by_type(
     kv_store: &Arc<TransactionKeyValueStore>,
     fullnode_api: &ReadApi,
@@ -1317,6 +1368,7 @@ fn get_value_from_move_struct(
     }
 }
 
+#[instrument(skip_all)]
 fn convert_to_response(
     cache: IntermediateTransactionResponse,
     opts: &SuiTransactionBlockResponseOptions,

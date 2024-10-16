@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB64 } from '@mysten/bcs';
+import { fromBase64, toBase64 } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../../src/bcs';
@@ -79,7 +79,7 @@ describe('Signature', () => {
 			sig3.signature,
 		]);
 
-		const decoded = parsePartialSignatures(bcs.MultiSig.parse(fromB64(multisig).slice(1)));
+		const decoded = parsePartialSignatures(bcs.MultiSig.parse(fromBase64(multisig).slice(1)));
 
 		const SerializeSignatureInput: SerializeSignatureInput[] = [
 			{
@@ -125,7 +125,7 @@ describe('Signature', () => {
 
 		const multisig = publicKey.combinePartialSignatures([sig1.signature]);
 
-		const decoded = parsePartialSignatures(bcs.MultiSig.parse(fromB64(multisig).slice(1)));
+		const decoded = parsePartialSignatures(bcs.MultiSig.parse(fromBase64(multisig).slice(1)));
 
 		const SerializeSignatureInput: SerializeSignatureInput[] = [
 			{
@@ -182,9 +182,9 @@ describe('Signature', () => {
 	it('`parseSerializedSignature()` should handle unsupported schemes', async () => {
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 		const sig1 = await k1.signPersonalMessage(data);
-		const bytes = fromB64(sig1.signature);
+		const bytes = fromBase64(sig1.signature);
 		bytes[0] = 0x06;
-		const invalidSignature = toB64(bytes);
+		const invalidSignature = toBase64(bytes);
 
 		expect(() => parseSerializedSignature(invalidSignature)).toThrowError();
 	});
