@@ -14,13 +14,13 @@ use eyre::format_err;
 use tidehunter::batch::WriteBatch;
 use tidehunter::config::Config;
 use tidehunter::db::{Db, DbError};
+use tidehunter::key_shape::{KeyShape, KeyShapeBuilder, KeySpace};
 use tidehunter::metrics::Metrics;
 use typed_store_error::TypedStoreError;
 
 pub struct ThDbMap<K, V> {
     db: Arc<Db>,
-    // kf_id, kf_id_bits, key_chop_off_bytes
-    kf_spec: (u8, u8, u8),
+    ks: KeySpace,
     _phantom: PhantomData<(K, V)>,
 }
 
@@ -34,11 +34,11 @@ where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    pub fn new(db: &Arc<Db>, kf_spec: (u8, u8, u8)) -> Self {
+    pub fn new(db: &Arc<Db>, ks: KeySpace) -> Self {
         let db = db.clone();
         Self {
             db,
-            kf_spec,
+            ks,
             _phantom: PhantomData,
         }
     }
@@ -55,19 +55,13 @@ where
         let to_included = self.serialize_key(to_included).into();
         let (key, value) = self
             .db
-            .last_in_range(&from_included, &to_included)
+            .last_in_range(self.ks, &from_included, &to_included)
             .unwrap()?;
         Some((self.deserialize_key(&key), self.deserialize_value(&value)))
     }
 
     fn serialize_key(&self, k: impl Borrow<K>) -> Vec<u8> {
-        let mut key = be_fix_int_ser(k.borrow()).unwrap();
-        let chop_key = self.kf_spec.2;
-        if chop_key > 0 {
-            key = key.split_off(chop_key as usize);
-        }
-        key.insert(0, self.kf_spec.0);
-        key
+        be_fix_int_ser(k.borrow()).unwrap()
     }
 
     fn serialize_value(&self, v: impl Borrow<V>) -> Vec<u8> {
@@ -75,26 +69,7 @@ where
     }
 
     fn deserialize_key(&self, k: &[u8]) -> K {
-        if self.kf_spec.2 == 0 {
-            deserialize_key(&k[1..])
-        } else if self.kf_spec.2 == 8 {
-            // we need to recover previously 'chopped off' key bytes
-            // todo this dirty fix only works for digest
-            let mut v = Vec::with_capacity(8 + k.len() - 1);
-            v.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 32]);
-            v.extend_from_slice(&k[1..]);
-            deserialize_key(&v)
-        } else {
-            panic!("deserialize_key is not supported with kf_spec {:?}", self.kf_spec)
-        }
-    }
-
-    fn checked_deserialize_key(&self, k: &[u8]) -> Option<K> {
-        if k[0] == self.kf_spec.0 {
-            Some(self.deserialize_key(k))
-        } else {
-            None
-        }
+        deserialize_key(k)
     }
 
     fn deserialize_value(&self, v: &[u8]) -> V {
@@ -118,7 +93,7 @@ impl ThDbBatch {
             "Cross db batch calls not allowed"
         );
         for (k, v) in new_vals {
-            self.batch.write(db.serialize_key(k), db.serialize_value(v));
+            self.batch.write(db.ks, db.serialize_key(k), db.serialize_value(v));
         }
         Ok(self)
     }
@@ -136,7 +111,7 @@ impl ThDbBatch {
             "Cross db batch calls not allowed"
         );
         for key in purged_vals {
-            self.batch.delete(db.serialize_key(key.borrow()));
+            self.batch.delete(db.ks, db.serialize_key(key.borrow()));
         }
         Ok(self)
     }
@@ -175,13 +150,13 @@ where
     fn contains_key(&self, key: &K) -> Result<bool, Self::Error> {
         let key = self.serialize_key(key);
         self.db
-            .exists(&key)
+            .exists(self.ks, &key)
             .map_err(typed_store_error_from_db_error)
     }
 
     fn get(&self, key: &K) -> Result<Option<V>, Self::Error> {
         let key = self.serialize_key(key);
-        let v = self.db.get(&key).map_err(typed_store_error_from_db_error)?;
+        let v = self.db.get(self.ks, &key).map_err(typed_store_error_from_db_error)?;
         if let Some(v) = v {
             Ok(Some(self.deserialize_value(&v)))
         } else {
@@ -191,7 +166,7 @@ where
 
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error> {
         let key = self.serialize_key(key);
-        let v = self.db.get(&key).map_err(typed_store_error_from_db_error)?;
+        let v = self.db.get(self.ks, &key).map_err(typed_store_error_from_db_error)?;
         Ok(v.map(|v| v.into_vec()))
     }
 
@@ -199,13 +174,13 @@ where
         let key = self.serialize_key(key);
         let value = self.serialize_value(value);
         self.db
-            .insert(key, value)
+            .insert(self.ks, key, value)
             .map_err(typed_store_error_from_db_error)
     }
 
     fn remove(&self, key: &K) -> Result<(), Self::Error> {
         let key = self.serialize_key(key);
-        self.db.remove(key).map_err(typed_store_error_from_db_error)
+        self.db.remove(self.ks, key).map_err(typed_store_error_from_db_error)
     }
 
     fn unsafe_clear(&self) -> Result<(), Self::Error> {
@@ -225,11 +200,11 @@ where
     }
 
     fn unbounded_iter(&'a self) -> Self::Iterator {
-        // todo this is not super efficient
-        Box::new(self.db.unordered_iterator().filter_map(|r| {
+        Box::new(self.db.unordered_iterator(self.ks).map(|r| {
             let (k, v) = r.unwrap();
-            let key = self.checked_deserialize_key(&k);
-            key.map(|key| (key, self.deserialize_value(&v)))
+            let key = self.deserialize_key(&k);
+            let value = self.deserialize_value(&v);
+            (key, value)
         }))
     }
 
@@ -273,12 +248,11 @@ where
         let start = self.serialize_key(start).into();
         let end = self.serialize_key(end).into();
 
-        Box::new(self.db.range_ordered_iterator(start..end).map(|r| {
+        Box::new(self.db.range_ordered_iterator(self.ks, start..end).map(|r| {
             let (k, v) = r.unwrap();
-            let Some(key) = self.checked_deserialize_key(&k) else {
-                panic!("Somehow got key from wrong key space, expected {}, got {}", self.kf_spec.0, k[0]);
-            };
-            Ok((key, self.deserialize_value(&v)))
+            let key = self.deserialize_key(&k);
+            let value = self.deserialize_value(&v);
+            Ok((key, value))
         }))
     }
 
@@ -308,19 +282,29 @@ fn deserialize_key<K: DeserializeOwned>(v: &[u8]) -> K {
         .unwrap()
 }
 
-pub fn open_thdb(path: &Path, registry: &Registry) -> Arc<Db> {
+pub fn open_thdb(path: &Path, key_shape: KeyShape, const_spaces: usize, registry: &Registry) -> Arc<Db> {
     fs::create_dir_all(path).unwrap();
     let metrics = Metrics::new_in(registry);
-    let mut config = Config::default();
-    modify_large_table_size(&mut config);
-    // run snapshot every 64 Gb written to wal
-    config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
-    config.max_dirty_keys = 2 * 1024;
+    let config = thdb_config(const_spaces);
     let config = Arc::new(config);
-    let db = Db::open(path, config, metrics).unwrap();
+    let db = Db::open(path, key_shape, config, metrics).unwrap();
     let db = Arc::new(db);
     db.start_periodic_snapshot();
     db
+}
+
+pub fn key_shape_builder(const_spaces: usize, frac_base: usize) -> KeyShapeBuilder {
+    KeyShapeBuilder::from_config(&thdb_config(const_spaces), frac_base)
+}
+
+fn thdb_config(const_spaces: usize) -> Config {
+    let mut config = Config::default();
+    modify_large_table_size(&mut config);
+    config.large_table_size += const_spaces;
+    // run snapshot every 64 Gb written to wal
+    config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
+    config.max_dirty_keys = 2 * 1024;
+    config
 }
 
 #[cfg(not(debug_assertions))]
