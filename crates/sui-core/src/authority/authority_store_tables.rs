@@ -5,12 +5,14 @@ use super::*;
 use crate::authority::authority_store::LockDetailsWrapperDeprecated;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use tidehunter::key_shape::KeySpaceConfig;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::storage::MarkerValue;
+use tidehunter::key_shape::KeySpaceConfig;
+use tidehunter::minibytes::Bytes;
+use tidehunter::wal::WalPosition;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
@@ -196,23 +198,31 @@ impl AuthorityPerpetualTables {
         let epoch_start_configuration = builder.const_key_space("epoch_start_configuration", 1);
         let pruned_checkpoint = builder.const_key_space("pruned_checkpoint", 1);
         let expected_network_sui_amount = builder.const_key_space("expected_network_sui_amount", 1);
-        let expected_storage_fund_imbalance = builder.const_key_space("expected_storage_fund_imbalance", 1);
+        let expected_storage_fund_imbalance =
+            builder.const_key_space("expected_storage_fund_imbalance", 1);
         // todo chop off too?
         // decide what to do with it - make it frac_key_space or get rid of?
         let indirect_move_objects = builder.const_key_space("indirect_move_objects", 1);
         // todo - this is very confusing - need to fix
         let const_spaces_round_up = builder.pad_const_space();
+
         // 8 frac key spaces
-        let objects = builder.frac_key_space("objects", 1);
+        let objects_config = KeySpaceConfig::new().with_compactor(Box::new(objects_compactor));
+        let objects = builder.frac_key_space_config("objects", 1, objects_config);
         let live_owned_object_markers = builder.frac_key_space("live_owned_object_markers", 1);
         let transactions = builder.frac_key_space("transactions", 1);
         let effects = builder.frac_key_space("effects", 1);
         let executed_effects = builder.frac_key_space("executed_effects", 1);
         let events = builder.frac_key_space("events", 1);
-        let executed_transactions_to_checkpoint = builder.frac_key_space("executed_transactions_to_checkpoint", 1);
+        let executed_transactions_to_checkpoint =
+            builder.frac_key_space("executed_transactions_to_checkpoint", 1);
 
         // key_offset is set to 8 to hash by object id rather then epoch
-        let object_per_epoch_marker_table = builder.frac_key_space_config("object_per_epoch_marker_table", 1, KeySpaceConfig::new_with_key_offset(8));
+        let object_per_epoch_marker_table = builder.frac_key_space_config(
+            "object_per_epoch_marker_table",
+            1,
+            KeySpaceConfig::new_with_key_offset(8),
+        );
 
         let key_shape = builder.build();
         let thdb = open_thdb(&path, key_shape, const_spaces_round_up, registry);
@@ -228,9 +238,17 @@ impl AuthorityPerpetualTables {
             live_owned_object_markers: ThDbMap::new(&thdb, live_owned_object_markers),
             transactions: ThDbMap::new_with_rm_prefix(&thdb, transactions, digest_prefix.clone()),
             effects: ThDbMap::new_with_rm_prefix(&thdb, effects, digest_prefix.clone()),
-            executed_effects: ThDbMap::new_with_rm_prefix(&thdb, executed_effects, digest_prefix.clone()),
+            executed_effects: ThDbMap::new_with_rm_prefix(
+                &thdb,
+                executed_effects,
+                digest_prefix.clone(),
+            ),
             events: ThDbMap::new_with_rm_prefix(&thdb, events, digest_prefix.clone()),
-            executed_transactions_to_checkpoint: ThDbMap::new_with_rm_prefix(&thdb, executed_transactions_to_checkpoint, digest_prefix.clone()),
+            executed_transactions_to_checkpoint: ThDbMap::new_with_rm_prefix(
+                &thdb,
+                executed_transactions_to_checkpoint,
+                digest_prefix.clone(),
+            ),
             root_state_hash_by_epoch: ThDbMap::new(&thdb, root_state_hash_by_epoch),
             epoch_start_configuration: ThDbMap::new(&thdb, epoch_start_configuration),
             pruned_checkpoint: ThDbMap::new(&thdb, pruned_checkpoint),
@@ -731,4 +749,43 @@ fn indirect_move_objects_table_config(mut db_options: DBOptions) -> DBOptions {
         .options
         .set_compaction_filter("empty filter", empty_compaction_filter);
     db_options
+}
+
+fn objects_compactor(index: &mut BTreeMap<Bytes, WalPosition>) {
+    let mut retain = HashSet::new();
+    let mut previous: Option<&[u8]> = None;
+    const OID_SIZE: usize = 32;
+    for (key, _) in index.iter().rev() {
+        if let Some(previous) = previous {
+            if previous == &key[..OID_SIZE] {
+                continue;
+            }
+        }
+        previous = Some(&key[..OID_SIZE]);
+        retain.insert(key.clone());
+    }
+    index.retain(|k, _| retain.contains(k));
+}
+
+#[cfg(test)]
+mod tests {
+    use typed_store::rocks::be_fix_int_ser;
+    use super::*;
+
+    #[test]
+    fn test_object_compactor() {
+        let o1 = ObjectID::new([1u8; 32]);
+        let k11 = ObjectKey(o1, SequenceNumber::from_u64(1));
+        let k12 = ObjectKey(o1, SequenceNumber::from_u64(5));
+        let k13 = ObjectKey(o1, SequenceNumber::from_u64(8));
+        let o2 = ObjectID::new([2u8; 32]);
+        let k22 = ObjectKey(o2, SequenceNumber::from_u64(3));
+        let mut data: BTreeMap<_, _> = [k11, k12, k13, k22].into_iter().map(|k| {
+            (Bytes::from(be_fix_int_ser(&k).unwrap()), WalPosition::INVALID)
+        }).collect();
+        objects_compactor(&mut data);
+        assert_eq!(data.len(), 2);
+        assert!(data.contains_key(&Bytes::from(be_fix_int_ser(&k13).unwrap())));
+        assert!(data.contains_key(&Bytes::from(be_fix_int_ser(&k22).unwrap())));
+    }
 }

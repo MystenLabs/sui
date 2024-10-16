@@ -1890,7 +1890,11 @@ impl AccumulatorStore for AuthorityStore {
         &self,
     ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, Accumulator))>> {
         // todo fix
-        Ok(self.perpetual_tables.root_state_hash_by_epoch.unbounded_iter().max_by_key(|(k, _)|*k))
+        Ok(self
+            .perpetual_tables
+            .root_state_hash_by_epoch
+            .unbounded_iter()
+            .max_by_key(|(k, _)| *k))
         // Ok(self
         //     .perpetual_tables
         //     .root_state_hash_by_epoch
