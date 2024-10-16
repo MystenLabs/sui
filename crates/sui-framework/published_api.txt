@@ -4285,10 +4285,10 @@ sha3_256
 UQ32_32
 	public struct
 	0x1::uq32_32
-from_rational
+from_quotient
 	public fun
 	0x1::uq32_32
-from_integer
+from_int
 	public fun
 	0x1::uq32_32
 add
@@ -4301,6 +4301,9 @@ mul
 	public fun
 	0x1::uq32_32
 div
+	public fun
+	0x1::uq32_32
+to_int
 	public fun
 	0x1::uq32_32
 int_mul
