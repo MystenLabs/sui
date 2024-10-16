@@ -124,7 +124,7 @@ mod tests {
         Mock::given(method("GET"))
             .and(path_regex(r"/\d+.chk"))
             .respond_with(response)
-            .mount(&server)
+            .mount(server)
             .await;
     }
 
