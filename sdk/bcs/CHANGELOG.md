@@ -266,4 +266,4 @@ Version history from v0.1.0 to this day.
 
 ## v0.1.0
 
-First version of libary published.
+First version of library published.
