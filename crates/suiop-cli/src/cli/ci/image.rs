@@ -369,16 +369,17 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                     println!("Requested query for repo: {}", repo_name.green());
                     let status_table = get_status_table(resp).await?.to_string();
                     println!("{}", status_table);
-                }
-                while *watch {
-                    print!("{}[2J", 27 as char);
-                    let req = generate_image_request(token, action);
+                } else {
+                    loop {
+                        print!("{}[2J", 27 as char);
+                        let req = generate_image_request(token, action);
 
-                    let resp = req.send().await?;
-                    let status_table = get_status_table(resp).await?.to_string();
-                    println!("{}", status_table);
-                    let half_sec = std::time::Duration::from_millis(500);
-                    std::thread::sleep(half_sec);
+                        let resp = req.send().await?;
+                        let status_table = get_status_table(resp).await?.to_string();
+                        println!("{}", status_table);
+                        let half_sec = std::time::Duration::from_millis(500);
+                        std::thread::sleep(half_sec);
+                    }
                 }
             }
             ImageAction::Status {
