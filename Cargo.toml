@@ -463,7 +463,7 @@ rustyline = "9.1.2"
 rustyline-derive = "0.7.0"
 schemars = { version = "0.8.21", features = ["either"] }
 scopeguard = "1.1"
-serde = { version = "1.0.144", features = ["derive", "rc"] }
+serde = { version = "1.0.210", features = ["derive", "rc"] }
 serde-env = "0.2.0"
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
