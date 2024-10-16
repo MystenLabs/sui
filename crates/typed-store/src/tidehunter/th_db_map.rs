@@ -317,6 +317,7 @@ pub fn key_shape_builder(const_spaces: usize, frac_base: usize) -> KeyShapeBuild
 fn thdb_config(const_spaces: usize) -> Config {
     let mut config = Config::default();
     modify_large_table_size(&mut config);
+    modify_frag_size(&mut config);
     config.large_table_size += const_spaces;
     // config.max_loaded_entries = config.large_table_size / 1024 / 2;
     // run snapshot every 64 Gb written to wal
@@ -333,4 +334,14 @@ fn modify_large_table_size(config: &mut Config) {
 #[cfg(debug_assertions)]
 fn modify_large_table_size(config: &mut Config) {
     config.large_table_size = 2 * 1024;
+}
+
+#[cfg(not(debug_assertions))]
+fn modify_frag_size(config: &mut Config) {
+    // Set frag size to 1Gb in prod
+    config.frag_size = 1024 * 1024 * 1024;
+}
+
+#[cfg(debug_assertions)]
+fn modify_frag_size(_config: &mut Config) {
 }
