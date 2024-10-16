@@ -135,7 +135,7 @@ pub async fn start_test_indexer_impl(
             ingestion_config.sources.data_ingestion_path = data_ingestion_path;
 
             tokio::spawn(async move {
-                Indexer::start_writer(
+                Indexer::start_writer_with_config(
                     &ingestion_config,
                     store_clone,
                     indexer_metrics,
@@ -261,13 +261,7 @@ pub async fn set_up(
     let (pg_store, pg_handle, _) = start_test_indexer(
         database.database().url().as_str().to_owned(),
         format!("http://{}", server_url),
-        ReaderWriterConfig::writer_mode(
-            Some(SnapshotLagConfig {
-                snapshot_min_lag: 5,
-                sleep_duration: 0,
-            }),
-            None,
-        ),
+        ReaderWriterConfig::writer_mode(None, None),
         data_ingestion_path,
     )
     .await;
@@ -292,26 +286,5 @@ pub async fn wait_for_checkpoint(
     })
     .await
     .expect("Timeout waiting for indexer to catchup to checkpoint");
-    Ok(())
-}
-
-/// Wait for the indexer to catch up to the given checkpoint sequence number for objects snapshot.
-pub async fn wait_for_objects_snapshot(
-    pg_store: &PgIndexerStore,
-    checkpoint_sequence_number: u64,
-) -> Result<(), IndexerError> {
-    tokio::time::timeout(Duration::from_secs(30), async {
-        while {
-            let cp_opt = pg_store
-                .get_latest_object_snapshot_checkpoint_sequence_number()
-                .await
-                .unwrap();
-            cp_opt.is_none() || (cp_opt.unwrap() < checkpoint_sequence_number)
-        } {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    })
-    .await
-    .expect("Timeout waiting for indexer to catchup to checkpoint for objects snapshot");
     Ok(())
 }
