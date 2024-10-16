@@ -21,13 +21,7 @@ cargo run --bin remote_reader
 ### Local Reader example
 The local reader example saves progress in a file called `/tmp/local_reader_progress` and monitors checkpoint files in the `chk` directory
 
-
-To test the local reader example, create the `/tmp/local_reader_progress` file first
-```sh
-echo "{\"local_reader\": 1}" > /tmp/local_reader_progress
-```
-
-then, create the `chk` directory in the same level as the `local_reader.rs` file
+To test the local reader example, create the `chk` directory in the same level as the `local_reader.rs` file
 ```sh
 mkdir -p chk
 ```
@@ -37,7 +31,14 @@ then, run the local reader example
 cargo run --bin local_reader
 ```
 
-Finally, copy the checkpoint files to the `chk` directory and the program should process the checkpoint files as they come in
+Finally, copy the checkpoint files to the `chk` directory and the program should process the checkpoint files as they come in.
 ```sh
 cp $YOUR_CHECKPOINT_FILE chk/
+```
+
+*NOTE*: The local indexer example will wait for the 0th checkpoint file to start processing by default.
+Copying non-0th checkpoint files will cause the indexer to wait until the 0th checkpoint file is copied.
+If you want the indexer to start processing the non-0th checkpoint files immediately, you can manually create a `/tmp/local_reader_progress` file
+```sh
+echo "{\"local_reader\": 1332}" > /tmp/local_reader_progress
 ```
