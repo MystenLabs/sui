@@ -524,6 +524,7 @@ mod tests {
         // send some gas to this address
         bridge_test_cluster
             .test_cluster
+            .inner
             .transfer_sui_must_exceed(sender_address, client_sui_address, 1000000000)
             .await;
 
@@ -600,6 +601,7 @@ mod tests {
         // send some gas to this address
         let gas_obj = bridge_test_cluster
             .test_cluster
+            .inner
             .transfer_sui_must_exceed(sender_address, client_sui_address, 1000000000)
             .await;
 
