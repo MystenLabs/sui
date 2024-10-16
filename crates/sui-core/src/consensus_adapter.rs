@@ -1,60 +1,56 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashMap,
-    future::Future,
-    ops::Deref,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Instant,
-};
-
 use arc_swap::{ArcSwap, ArcSwapOption};
-use consensus_core::ConnectionStatus;
-use dashmap::{try_result::TryResult, DashMap};
-use futures::{
-    future::{self, select, Either},
-    pin_mut,
-    stream::FuturesUnordered,
-    FutureExt, StreamExt,
-};
+use dashmap::try_result::TryResult;
+use dashmap::DashMap;
+use futures::future::{self, select, Either};
+use futures::stream::FuturesUnordered;
+use futures::FutureExt;
+use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
-use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
 use parking_lot::RwLockReadGuard;
+use prometheus::Histogram;
+use prometheus::HistogramVec;
+use prometheus::IntCounterVec;
+use prometheus::IntGauge;
+use prometheus::IntGaugeVec;
+use prometheus::Registry;
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, Histogram, HistogramVec, IntCounterVec, IntGauge,
-    IntGaugeVec, Registry,
+    register_int_gauge_with_registry,
 };
+use std::collections::HashMap;
+use std::future::Future;
+use std::ops::Deref;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::time::Instant;
+use sui_types::base_types::TransactionDigest;
+use sui_types::committee::Committee;
+use sui_types::error::{SuiError, SuiResult};
+
+use tokio::sync::{Semaphore, SemaphorePermit};
+use tokio::task::JoinHandle;
+use tokio::time::{self};
+
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
+use crate::consensus_throughput_calculator::{ConsensusThroughputProfiler, Level};
+use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
+use crate::metrics::LatencyObserver;
+use consensus_core::ConnectionStatus;
+use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
 use sui_protocol_config::ProtocolConfig;
 use sui_simulator::anemo::PeerId;
-use sui_types::{
-    base_types::{AuthorityName, TransactionDigest},
-    committee::Committee,
-    error::{SuiError, SuiResult},
-    fp_ensure,
-    messages_consensus::{ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind},
-};
-use tokio::{
-    sync::{Semaphore, SemaphorePermit},
-    task::JoinHandle,
-    time::{
-        Duration, {self},
-    },
-};
+use sui_types::base_types::AuthorityName;
+use sui_types::fp_ensure;
+use sui_types::messages_consensus::ConsensusTransactionKind;
+use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
+use tokio::time::Duration;
 use tracing::{debug, info, warn};
-
-use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    consensus_handler::{classify, SequencedConsensusTransactionKey},
-    consensus_throughput_calculator::{ConsensusThroughputProfiler, Level},
-    epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator},
-    metrics::LatencyObserver,
-};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -1155,22 +1151,20 @@ pub fn position_submit_certificate(
 
 #[cfg(test)]
 mod adapter_tests {
-    use std::{sync::Arc, time::Duration};
-
+    use super::position_submit_certificate;
+    use crate::consensus_adapter::{
+        ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
+    };
+    use crate::mysticeti_adapter::LazyMysticetiClient;
     use fastcrypto::traits::KeyPair;
-    use rand::{rngs::StdRng, Rng, SeedableRng};
+    use rand::Rng;
+    use rand::{rngs::StdRng, SeedableRng};
+    use std::sync::Arc;
+    use std::time::Duration;
     use sui_types::{
         base_types::TransactionDigest,
         committee::Committee,
         crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes},
-    };
-
-    use super::position_submit_certificate;
-    use crate::{
-        consensus_adapter::{
-            ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
-        },
-        mysticeti_adapter::LazyMysticetiClient,
     };
 
     fn test_committee(rng: &mut StdRng, size: usize) -> Committee {
