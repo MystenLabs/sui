@@ -43,9 +43,6 @@ pub mod eth_bridge_indexer;
 pub mod sui_bridge_indexer;
 pub mod sui_datasource;
 
-#[cfg(test)]
-pub mod integration_tests;
-
 #[derive(Clone)]
 pub enum ProcessedTxnData {
     TokenTransfer(TokenTransfer),

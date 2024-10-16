@@ -1,45 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use ethers::types::Address as EthAddress;
 
-use anyhow::anyhow;
 use diesel::associations::HasTable;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
-use ethers::contract::ContractCall;
-use ethers::prelude::U256;
-use move_core_types::ident_str;
 use prometheus::Registry;
-use std::collections::HashMap;
 use std::time::Duration;
-use sui_bridge::abi::{EthBridgeEvent, EthSuiBridge, EthSuiBridgeEvents};
-use sui_bridge::sui_client::SuiBridgeClient;
-use sui_bridge::types::BridgeActionStatus;
-use sui_bridge::utils::EthSigner;
+use sui_bridge::e2e_tests::test_utils::{
+    initiate_bridge_eth_to_sui, BridgeTestCluster, BridgeTestClusterBuilder,
+};
 use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::models::{GovernanceAction, TokenTransfer};
 use sui_bridge_indexer::postgres_manager::get_connection_pool;
 use sui_bridge_indexer::storage::PgBridgePersistent;
 use sui_bridge_indexer::{create_sui_indexer, schema};
-use sui_bridge_test_utils::test_utils::{
-    send_eth_tx_and_get_tx_receipt, BridgeTestCluster, BridgeTestClusterBuilder,
-};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer::database::Connection;
 use sui_indexer::tempdb::TempDb;
 use sui_indexer_builder::indexer_builder::IndexerProgressStore;
-use sui_json_rpc_types::SuiTransactionBlockResponse;
-use sui_sdk::wallet_context::WalletContext;
-use sui_sdk::SuiClient;
-use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::bridge::{BridgeChainId, BRIDGE_MODULE_NAME, TOKEN_ID_ETH};
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{ObjectArg, TransactionData};
-use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
-use tap::TapFallible;
-use tracing::info;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/migrations");
 
@@ -190,124 +170,4 @@ async fn setup_bridge_env(with_eth_env: bool) -> (IndexerConfig, BridgeTestClust
     };
 
     (config, bridge_test_cluster, db)
-}
-
-// TODO remove below functions when we can import bridge test utils
-pub async fn initiate_bridge_eth_to_sui(
-    bridge_test_cluster: &BridgeTestCluster,
-    amount: u64,
-    nonce: u64,
-) -> Result<(), anyhow::Error> {
-    info!("Depositing native Ether to Solidity contract, nonce: {nonce}, amount: {amount}");
-    let (eth_signer, eth_address) = bridge_test_cluster
-        .get_eth_signer_and_address()
-        .await
-        .unwrap();
-
-    let sui_address = bridge_test_cluster.sui_user_address();
-    let sui_chain_id = bridge_test_cluster.sui_chain_id();
-    let eth_chain_id = bridge_test_cluster.eth_chain_id();
-    let token_id = TOKEN_ID_ETH;
-
-    let sui_amount = (U256::from(amount) * U256::exp10(8)).as_u64(); // DP for Ether on Sui
-
-    let eth_tx = deposit_native_eth_to_sol_contract(
-        &eth_signer,
-        bridge_test_cluster.contracts().sui_bridge,
-        sui_address,
-        sui_chain_id,
-        amount,
-    )
-    .await;
-    let tx_receipt = send_eth_tx_and_get_tx_receipt(eth_tx).await;
-    let eth_bridge_event = tx_receipt
-        .logs
-        .iter()
-        .find_map(EthBridgeEvent::try_from_log)
-        .unwrap();
-    let EthBridgeEvent::EthSuiBridgeEvents(EthSuiBridgeEvents::TokensDepositedFilter(
-        eth_bridge_event,
-    )) = eth_bridge_event
-    else {
-        unreachable!();
-    };
-    // assert eth log matches
-    assert_eq!(eth_bridge_event.source_chain_id, eth_chain_id as u8);
-    assert_eq!(eth_bridge_event.nonce, nonce);
-    assert_eq!(eth_bridge_event.destination_chain_id, sui_chain_id as u8);
-    assert_eq!(eth_bridge_event.token_id, token_id);
-    assert_eq!(eth_bridge_event.sui_adjusted_amount, sui_amount);
-    assert_eq!(eth_bridge_event.sender_address, eth_address);
-    assert_eq!(eth_bridge_event.recipient_address, sui_address.to_vec());
-    info!(
-        "Deposited Eth to Solidity contract, block: {:?}",
-        tx_receipt.block_number
-    );
-
-    wait_for_transfer_action_status(
-        bridge_test_cluster.bridge_client(),
-        eth_chain_id,
-        nonce,
-        BridgeActionStatus::Claimed,
-    )
-    .await
-    .tap_ok(|_| {
-        info!("Eth to Sui bridge transfer claimed");
-    })
-}
-
-async fn wait_for_transfer_action_status(
-    sui_bridge_client: &SuiBridgeClient,
-    chain_id: BridgeChainId,
-    nonce: u64,
-    status: BridgeActionStatus,
-) -> Result<(), anyhow::Error> {
-    // Wait for the bridge action to be approved
-    let now = std::time::Instant::now();
-    info!(
-        "Waiting for onchain status {:?}. chain: {:?}, nonce: {nonce}",
-        status, chain_id as u8
-    );
-    loop {
-        let timer = std::time::Instant::now();
-        let res = sui_bridge_client
-            .get_token_transfer_action_onchain_status_until_success(chain_id as u8, nonce)
-            .await;
-        info!(
-            "get_token_transfer_action_onchain_status_until_success took {:?}, status: {:?}",
-            timer.elapsed(),
-            res
-        );
-
-        if res == status {
-            info!(
-                "detected on chain status {:?}. chain: {:?}, nonce: {nonce}",
-                status, chain_id as u8
-            );
-            return Ok(());
-        }
-        if now.elapsed().as_secs() > 60 {
-            return Err(anyhow!(
-                "Timeout waiting for token transfer action to be {:?}. chain_id: {chain_id:?}, nonce: {nonce}. Time elapsed: {:?}",
-                status,
-                now.elapsed(),
-            ));
-        }
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    }
-}
-
-pub(crate) async fn deposit_native_eth_to_sol_contract(
-    signer: &EthSigner,
-    contract_address: EthAddress,
-    sui_recipient_address: SuiAddress,
-    sui_chain_id: BridgeChainId,
-    amount: u64,
-) -> ContractCall<EthSigner, ()> {
-    let contract = EthSuiBridge::new(contract_address, signer.clone().into());
-    let sui_recipient_address = sui_recipient_address.to_vec().into();
-    let amount = U256::from(amount) * U256::exp10(18); // 1 ETH
-    contract
-        .bridge_eth(sui_recipient_address, sui_chain_id as u8)
-        .value(amount)
 }
