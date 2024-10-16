@@ -7,7 +7,7 @@ use anyhow::Result;
 use diesel_async::RunQueryDsl;
 use sui_types::{effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData};
 
-use crate::{db, models::transactions::StoredTxAffectedObjects, schema::tx_affected_objects};
+use crate::{db, models::transactions::StoredTxAffectedObject, schema::tx_affected_objects};
 
 use super::Handler;
 
@@ -21,7 +21,7 @@ impl Handler for TxAffectedObjects {
     const CHUNK_SIZE: usize = 1000;
     const MAX_PENDING_SIZE: usize = 10000;
 
-    type Value = StoredTxAffectedObjects;
+    type Value = StoredTxAffectedObject;
 
     fn handle(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
@@ -41,7 +41,7 @@ impl Handler for TxAffectedObjects {
                 tx.effects
                     .object_changes()
                     .iter()
-                    .map(|o| StoredTxAffectedObjects {
+                    .map(|o| StoredTxAffectedObject {
                         tx_sequence_number,
                         affected: o.id.to_vec(),
                         sender: sender.to_vec(),

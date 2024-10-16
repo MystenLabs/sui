@@ -34,7 +34,7 @@ pub struct StoredTransaction {
 
 #[derive(Insertable, Debug, Clone)]
 #[diesel(table_name = tx_affected_objects)]
-pub struct StoredTxAffectedObjects {
+pub struct StoredTxAffectedObject {
     pub tx_sequence_number: i64,
     pub affected: Vec<u8>,
     pub sender: Vec<u8>,
