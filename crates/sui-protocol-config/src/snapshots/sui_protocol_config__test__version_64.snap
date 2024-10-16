@@ -70,6 +70,7 @@ feature_flags:
   validate_identifier_inputs: true
   mysticeti_fastpath: true
   relocate_event_module: true
+  uncompressed_g1_group_elements: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -281,6 +282,11 @@ group_ops_bls12381_g1_msm_base_cost_per_input: 52
 group_ops_bls12381_g2_msm_base_cost_per_input: 52
 group_ops_bls12381_msm_max_len: 32
 group_ops_bls12381_pairing_cost: 52
+group_ops_bls12381_g1_to_uncompressed_g1_cost: 26
+group_ops_bls12381_uncompressed_g1_to_g1_cost: 52
+group_ops_bls12381_uncompressed_g1_sum_base_cost: 26
+group_ops_bls12381_uncompressed_g1_sum_cost_per_term: 13
+group_ops_bls12381_uncompressed_g1_sum_max_terms: 2000
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
