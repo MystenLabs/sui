@@ -36,6 +36,9 @@ pub struct StoredWatermark {
     /// be dropped. The pruner uses this column to determine whether to prune or wait long enough
     /// that all in-flight reads complete or timeout before it acts on an updated watermark.
     pub timestamp_ms: i64,
+    /// Column used by the pruner to track its true progress. Data at and below this watermark can
+    /// be immediately pruned.
+    pub pruner_lo: Option<i64>,
 }
 
 impl StoredWatermark {
