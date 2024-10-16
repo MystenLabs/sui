@@ -205,26 +205,32 @@ impl AuthorityPerpetualTables {
         // 8 frac key spaces
         let objects = builder.frac_key_space(1);
         let live_owned_object_markers = builder.frac_key_space(1);
-        let transactions = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
-        let effects = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
-        let executed_effects = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
-        let events = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
-        let executed_transactions_to_checkpoint = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
+        let transactions = builder.frac_key_space(1);
+        let effects = builder.frac_key_space(1);
+        let executed_effects = builder.frac_key_space(1);
+        let events = builder.frac_key_space(1);
+        let executed_transactions_to_checkpoint = builder.frac_key_space(1);
 
         // key_offset is set to 8 to hash by object id rather then epoch
         let object_per_epoch_marker_table = builder.frac_key_space_config(1, KeySpaceConfig::new_with_key_offset(8));
 
         let key_shape = builder.build();
         let thdb = open_thdb(&path, key_shape, const_spaces_round_up, registry);
+        // Effect digest, transaction digest and other keys derived from Digest are prefixed with
+        // [0, 0, ..., 32], which we can remove to reduce the size of thdb index.
+        // Smaller index means less write amplification, and
+        // the size of the prefix is 25% of the useful key length, so not negligible.
+        let mut digest_prefix = vec![0; 8];
+        digest_prefix[7] = 32;
         Self {
             objects: ThDbMap::new(&thdb, objects),
             indirect_move_objects: ThDbMap::new(&thdb, indirect_move_objects),
             live_owned_object_markers: ThDbMap::new(&thdb, live_owned_object_markers),
-            transactions: ThDbMap::new(&thdb, transactions),
-            effects: ThDbMap::new(&thdb, effects),
-            executed_effects: ThDbMap::new(&thdb, executed_effects),
-            events: ThDbMap::new(&thdb, events),
-            executed_transactions_to_checkpoint: ThDbMap::new(&thdb, executed_transactions_to_checkpoint),
+            transactions: ThDbMap::new_with_rm_prefix(&thdb, transactions, digest_prefix.clone()),
+            effects: ThDbMap::new_with_rm_prefix(&thdb, effects, digest_prefix.clone()),
+            executed_effects: ThDbMap::new_with_rm_prefix(&thdb, executed_effects, digest_prefix.clone()),
+            events: ThDbMap::new_with_rm_prefix(&thdb, events, digest_prefix.clone()),
+            executed_transactions_to_checkpoint: ThDbMap::new_with_rm_prefix(&thdb, executed_transactions_to_checkpoint, digest_prefix.clone()),
             root_state_hash_by_epoch: ThDbMap::new(&thdb, root_state_hash_by_epoch),
             epoch_start_configuration: ThDbMap::new(&thdb, epoch_start_configuration),
             pruned_checkpoint: ThDbMap::new(&thdb, pruned_checkpoint),

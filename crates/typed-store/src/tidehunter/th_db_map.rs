@@ -21,6 +21,7 @@ use typed_store_error::TypedStoreError;
 pub struct ThDbMap<K, V> {
     db: Arc<Db>,
     ks: KeySpace,
+    rm_prefix: Vec<u8>,
     _phantom: PhantomData<(K, V)>,
 }
 
@@ -35,10 +36,15 @@ where
     V: Serialize + DeserializeOwned,
 {
     pub fn new(db: &Arc<Db>, ks: KeySpace) -> Self {
+        Self::new_with_rm_prefix(db, ks, vec![])
+    }
+
+    pub fn new_with_rm_prefix(db: &Arc<Db>, ks: KeySpace, rm_prefix: Vec<u8>) -> Self {
         let db = db.clone();
         Self {
             db,
             ks,
+            rm_prefix,
             _phantom: PhantomData,
         }
     }
@@ -61,7 +67,11 @@ where
     }
 
     fn serialize_key(&self, k: impl Borrow<K>) -> Vec<u8> {
-        be_fix_int_ser(k.borrow()).unwrap()
+        // todo use bytes slice instead
+        let mut key = be_fix_int_ser(k.borrow()).unwrap();
+        let result = key.split_off(self.rm_prefix.len());
+        assert_eq!(key, self.rm_prefix, "Unexpected key prefix");
+        result
     }
 
     fn serialize_value(&self, v: impl Borrow<V>) -> Vec<u8> {
@@ -69,7 +79,14 @@ where
     }
 
     fn deserialize_key(&self, k: &[u8]) -> K {
-        deserialize_key(k)
+        if self.rm_prefix.is_empty() {
+            deserialize_key(k)
+        } else {
+            let mut v = Vec::with_capacity(k.len() + self.rm_prefix.len());
+            v.extend_from_slice(&self.rm_prefix);
+            v.extend_from_slice(k);
+            deserialize_key(&v)
+        }
     }
 
     fn deserialize_value(&self, v: &[u8]) -> V {
