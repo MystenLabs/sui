@@ -5,12 +5,15 @@
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::HashMap;
 use std::fs;
+use std::io::{stdout, IsTerminal};
 
 use anyhow::{anyhow, Context, Error};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFiles;
+use codespan_reporting::term;
 
 use move_binary_format::{
     compatibility::Compatibility,
@@ -336,13 +339,13 @@ impl CompatibilityMode for CliCompatibilityMode {
             });
     }
 
-    fn finish(&self, compatability: &Compatibility) -> Result<(), Self::Error> {
+    fn finish(self, compatability: &Compatibility) -> Result<(), Self::Error> {
         let errors: Vec<UpgradeCompatibilityModeError> = self
             .errors
-            .iter()
+            .into_iter()
             .filter(|e| e.breaks_compatibility(compatability))
-            .cloned()
             .collect();
+
         if !errors.is_empty() {
             return Err(errors);
         }
@@ -381,14 +384,13 @@ pub(crate) async fn check_compatibility(
         .collect::<Result<Vec<_>, _>>()
         .context("Unable to get existing package")?;
 
-    compare_packages(existing_modules, new_package, true)
+    compare_packages(existing_modules, new_package)
 }
 
 /// Collect all the errors into a single error message.
 fn compare_packages(
     existing_modules: Vec<CompiledModule>,
     new_package: CompiledPackage,
-    enable_colors: bool,
 ) -> Result<(), Error> {
     // create a map from the new modules
     let new_modules_map: HashMap<Identifier, CompiledModule> = new_package
@@ -428,34 +430,33 @@ fn compare_packages(
     }
 
     let mut files = SimpleFiles::new();
-    let config = codespan_reporting::term::Config::default();
+    let config = term::Config::default();
     let mut writer;
-    if enable_colors {
-        writer = codespan_reporting::term::termcolor::Buffer::ansi();
+
+    if stdout().is_terminal() {
+        writer = term::termcolor::Buffer::ansi();
     } else {
-        writer = codespan_reporting::term::termcolor::Buffer::no_color();
+        writer = term::termcolor::Buffer::no_color();
     }
     let mut file_id_map = HashMap::new();
 
     for (name, err) in errors {
         let compiled_unit_with_source = new_package
             .package
-            .get_module_by_name_from_root(&name.to_string())
+            .get_module_by_name_from_root(name.as_str())
             .context("Unable to get module")?;
 
-        let source_path = compiled_unit_with_source.source_path.to_string_lossy();
-        let file_id = match file_id_map.get(&source_path) {
-            Some(file_id) => *file_id,
-            None => {
+        let source_path = compiled_unit_with_source.source_path.as_path();
+        let file_id = match file_id_map.entry(source_path) {
+            Occupied(entry) => *entry.get(),
+            Vacant(entry) => {
                 let source = fs::read_to_string(&compiled_unit_with_source.source_path)
                     .context("Unable to read source file")?;
-                let file_id = files.add(source_path.clone(), source);
-                file_id_map.insert(source_path.clone(), file_id);
-                file_id
+                *entry.insert(files.add(source_path.to_string_lossy(), source))
             }
         };
 
-        codespan_reporting::term::emit(
+        term::emit(
             &mut writer,
             &config,
             &files,
@@ -464,7 +465,7 @@ fn compare_packages(
     }
 
     Err(anyhow!(
-        "Upgrade compatibility check failed:\n{}",
+        "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. It's upgrade policy is set to 'Compatible'.",
         String::from_utf8(writer.into_inner()).context("Unable to convert buffer to string")?
     ))
 }
@@ -476,30 +477,17 @@ fn diag_from_error(
     file_id: usize,
 ) -> Diagnostic<usize> {
     match error {
-        UpgradeCompatibilityModeError::StructMissing { name, .. } => missing_definition_diag(
-            "struct",
-            name.to_string(),
-            compiled_unit_with_source,
-            file_id,
-        ),
+        UpgradeCompatibilityModeError::StructMissing { name, .. } => {
+            missing_definition_diag("struct", &name, compiled_unit_with_source, file_id)
+        }
         UpgradeCompatibilityModeError::EnumMissing { name, .. } => {
-            missing_definition_diag("enum", name.to_string(), compiled_unit_with_source, file_id)
+            missing_definition_diag("enum", &name, compiled_unit_with_source, file_id)
         }
         UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
-            missing_definition_diag(
-                "public function",
-                name.to_string(),
-                compiled_unit_with_source,
-                file_id,
-            )
+            missing_definition_diag("public function", &name, compiled_unit_with_source, file_id)
         }
         UpgradeCompatibilityModeError::FunctionMissingEntry { name, .. } => {
-            missing_definition_diag(
-                "entry function",
-                name.to_string(),
-                compiled_unit_with_source,
-                file_id,
-            )
+            missing_definition_diag("entry function", &name, compiled_unit_with_source, file_id)
         }
         _ => todo!("Implement diag_from_error for {:?}", error),
     }
@@ -508,7 +496,7 @@ fn diag_from_error(
 /// Return a diagnostic for a missing definition.
 fn missing_definition_diag(
     declaration_kind: &str,
-    identifier_name: String,
+    identifier_name: &Identifier,
     compiled_unit_with_source: &CompiledUnitWithSource,
     file_id: usize,
 ) -> Diagnostic<usize> {
@@ -534,6 +522,6 @@ fn missing_definition_diag(
             ),
         )])
         .with_notes(vec![format!(
-            "The {declaration_kind} is missing in the new module, add the previously defined: '{identifier_name}'"
+            "{declaration_kind}s are part of a module's public interface and cannot be removed or changed during an upgrade, add back the {declaration_kind} '{identifier_name}'."
         )])
 }
