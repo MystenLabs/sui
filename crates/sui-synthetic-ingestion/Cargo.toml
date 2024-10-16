@@ -1,0 +1,15 @@
+[package]
+name = "sui-synthetic-ingestion"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+simulacrum.workspace = true
+sui-test-transaction-builder.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
