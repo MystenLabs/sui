@@ -7,8 +7,16 @@ use anyhow::Result;
 use chrono::{DateTime, Local, Utc};
 use clap::{Parser, ValueEnum};
 use colored::Colorize;
+use crossterm::{
+    cursor::MoveTo,
+    event::{Event, EventStream, KeyCode},
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
+    ExecutableCommand,
+};
+use futures::StreamExt;
+use futures::{select, FutureExt};
 use serde::{self, Deserialize, Serialize};
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, str::FromStr, time::Duration};
 use tabled::{settings::Style, Table, Tabled};
 use tracing::debug;
 
@@ -370,16 +378,47 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
                     let status_table = get_status_table(resp).await?.to_string();
                     println!("{}", status_table);
                 } else {
+                    enable_raw_mode()?;
                     loop {
-                        print!("{}[2J", 27 as char);
-                        let req = generate_image_request(token, action);
+                        let mut reader = EventStream::new();
+                        let mut delay = futures_timer::Delay::new(Duration::from_secs(1)).fuse();
+                        let mut event = reader.next().fuse();
 
-                        let resp = req.send().await?;
-                        let status_table = get_status_table(resp).await?.to_string();
-                        println!("{}", status_table);
-                        let half_sec = std::time::Duration::from_millis(500);
-                        std::thread::sleep(half_sec);
+                        select! {
+                            _ = delay => {
+                                let req = generate_image_request(token, action);
+
+                                let resp = req.send().await?;
+                                let status_table = get_status_table(resp).await?.to_string();
+                                std::io::stdout().execute(Clear(ClearType::All))?.execute(MoveTo(0,0))?;
+                                print!("press 'q' or 'esc' to quit");
+                                for (i, line )in status_table.lines().enumerate() {
+                                    std::io::stdout().execute(MoveTo(0,(i + 1) as u16))?;
+                                    println!("{}", line);
+                                }
+                            },
+                            maybe_event = event => {
+                                println!("checking event");
+                                match maybe_event {
+                                    Some(Ok(event)) => {
+                                        if event == Event::Key(KeyCode::Char('q').into()) {
+                                            std::io::stdout().execute(Clear(ClearType::All))?.execute(MoveTo(0,0))?;
+                                            println!("q pressed, quitting 🫡");
+                                            break
+                                        } else if event == Event::Key(KeyCode::Esc.into()) {
+                                            std::io::stdout().execute(Clear(ClearType::All))?.execute(MoveTo(0,0))?;
+                                            println!("esc pressed, quitting 🫡");
+                                            break;
+                                        }
+
+                                    }
+                                    Some(Err(e)) => println!("Error: {:?}\r", e),
+                                    None => println!("no event"),
+                                }
+                            }
+                        };
                     }
+                    disable_raw_mode()?;
                 }
             }
             ImageAction::Status {
