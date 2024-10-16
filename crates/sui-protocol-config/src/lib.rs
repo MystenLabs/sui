@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 64;
+const MAX_PROTOCOL_VERSION: u64 = 65;
 
 // Record history of protocol version allocations here:
 //
@@ -186,6 +186,9 @@ const MAX_PROTOCOL_VERSION: u64 = 64;
 // Version 62: Makes the event's sending module package upgrade-aware.
 // Version 63: Enable gas based congestion control in consensus commit.
 // Version 64: Switch to distributed vote scoring in consensus in mainnet
+// Version 65: Framework natives for transaction context and protocol config
+//             feature flag to turn it on/off
+
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -548,6 +551,10 @@ struct FeatureFlags {
     // Makes the event's sending module version-aware.
     #[serde(skip_serializing_if = "is_false")]
     relocate_event_module: bool,
+
+    // Make transaction context native and zero out the Move struct
+    #[serde(skip_serializing_if = "is_false")]
+    transaction_context_native: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1627,6 +1634,10 @@ impl ProtocolConfig {
 
     pub fn relocate_event_module(&self) -> bool {
         self.feature_flags.relocate_event_module
+    }
+
+    pub fn transaction_context_native(&self) -> bool {
+        self.feature_flags.transaction_context_native
     }
 }
 
@@ -2837,6 +2848,9 @@ impl ProtocolConfig {
                     // Enable distributed vote scoring for mainnet
                     cfg.feature_flags
                         .consensus_distributed_vote_scoring_strategy = true;
+                }
+                65 => {
+                    cfg.feature_flags.transaction_context_native = false;
                 }
                 // Use this template when making changes:
                 //

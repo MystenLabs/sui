@@ -971,12 +971,21 @@ impl TxContext {
         self.epoch
     }
 
+    pub fn epoch_timestamp_ms(&self) -> CheckpointTimestamp {
+        self.epoch_timestamp_ms
+    }
+
     /// Derive a globally unique object ID by hashing self.digest | self.ids_created
     pub fn fresh_id(&mut self) -> ObjectID {
         let id = ObjectID::derive_id(self.digest(), self.ids_created);
 
         self.ids_created += 1;
         id
+    }
+
+    /// Return the number of `ObjectID`'s generated during execution of the current transaction
+    pub fn ids_created(&self) -> u64 {
+        self.ids_created
     }
 
     /// Return the transaction digest, to include in new objects
@@ -997,16 +1006,34 @@ impl TxContext {
     /// serialize/deserialize and this is the reason why this method
     /// consumes the other context..
     pub fn update_state(&mut self, other: TxContext) -> Result<(), ExecutionError> {
-        if self.sender != other.sender
-            || self.digest != other.digest
-            || other.ids_created < self.ids_created
-        {
+        self.update_fresh_ids(&other.sender, &other.digest(), other.ids_created)
+        // TODO(dario): remove
+        // if self.sender != other.sender
+        //     || self.digest != other.digest
+        //     || other.ids_created < self.ids_created
+        // {
+        //     return Err(ExecutionError::new_with_source(
+        //         ExecutionErrorKind::InvariantViolation,
+        //         "Immutable fields for TxContext changed",
+        //     ));
+        // }
+        // self.ids_created = other.ids_created;
+        // Ok(())
+    }
+
+    pub fn update_fresh_ids(
+        &mut self,
+        sender: &AccountAddress,
+        digest: &TransactionDigest,
+        ids_created: u64,
+    ) -> Result<(), ExecutionError> {
+        if &self.sender != sender || &self.digest() != digest || self.ids_created > ids_created {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::InvariantViolation,
                 "Immutable fields for TxContext changed",
             ));
         }
-        self.ids_created = other.ids_created;
+        self.ids_created = ids_created;
         Ok(())
     }
 
