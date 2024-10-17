@@ -207,11 +207,16 @@ impl BridgeClient {
             .await?;
         if !resp.status().is_success() {
             let error_status = format!("{:?}", resp.error_for_status_ref());
-            return Err(BridgeError::RestAPIError(format!(
-                "request_sign_bridge_action failed with status {:?}: {:?}",
-                error_status,
-                resp.text().await?
-            )));
+            let resp_text = resp.text().await?;
+            return match resp_text {
+                text if text.contains(&format!("{:?}", BridgeError::TxNotFinalized)) => {
+                    Err(BridgeError::TxNotFinalized)
+                }
+                _ => Err(BridgeError::RestAPIError(format!(
+                    "request_sign_bridge_action failed with status {:?}: {:?}",
+                    error_status, resp_text
+                ))),
+            };
         }
         let signed_bridge_action = resp.json().await?;
         verify_signed_bridge_action(
