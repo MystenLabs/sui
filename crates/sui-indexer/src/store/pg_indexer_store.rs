@@ -288,7 +288,7 @@ impl PgIndexerStore {
             .context("Failed reading transaction range from PostgresDB")
     }
 
-    pub async fn get_latest_object_snapshot_checkpoint_sequence_number(
+    async fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
     ) -> Result<Option<u64>, IndexerError> {
         use diesel_async::RunQueryDsl;

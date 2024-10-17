@@ -16,6 +16,7 @@ use std::time::Duration;
 use sui_graphql_rpc_client::simple_client::SimpleClient;
 pub use sui_indexer::config::SnapshotLagConfig;
 use sui_indexer::errors::IndexerError;
+use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::tempdb::get_available_port;
 use sui_indexer::tempdb::TempDb;

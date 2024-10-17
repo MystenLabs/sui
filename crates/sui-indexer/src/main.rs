@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
             run_migrations(pool.dedicated_connection().await?).await?;
             let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
 
-            Indexer::start_writer(
+            Indexer::start_writer_with_config(
                 &ingestion_config,
                 store,
                 indexer_metrics,
