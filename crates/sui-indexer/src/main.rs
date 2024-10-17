@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use sui_indexer::backfill::backfill_runner::BackfillRunner;
+use sui_indexer::benchmark::run_benchmark;
 use sui_indexer::config::{Command, UploadOptions};
 use sui_indexer::database::ConnectionPool;
 use sui_indexer::db::{
@@ -97,6 +98,9 @@ async fn main() -> anyhow::Result<()> {
             let mut formal_restorer =
                 IndexerFormalSnapshotRestorer::new(store, restore_config).await?;
             formal_restorer.restore().await?;
+        }
+        Command::Benchmark(config) => {
+            run_benchmark(config, pool, indexer_metrics).await?;
         }
     }
 
