@@ -13767,6 +13767,7 @@ dependencies = [
  "sui-sdk",
  "sui-snapshot",
  "sui-storage",
+ "sui-synthetic-ingestion",
  "sui-test-transaction-builder",
  "sui-transaction-builder",
  "sui-types",
@@ -15020,6 +15021,19 @@ dependencies = [
  "sui-simulator",
  "sui-types",
  "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "sui-synthetic-ingestion"
+version = "1.36.0"
+dependencies = [
+ "async-trait",
+ "simulacrum",
+ "sui-test-transaction-builder",
+ "sui-types",
+ "tempfile",
+ "tokio",
  "tracing",
 ]
 

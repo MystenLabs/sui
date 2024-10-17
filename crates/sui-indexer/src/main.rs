@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use sui_indexer::backfill::backfill_runner::BackfillRunner;
+use sui_indexer::benchmark::run_indexer_benchmark;
 use sui_indexer::config::{Command, UploadOptions};
 use sui_indexer::database::ConnectionPool;
 use sui_indexer::db::{
@@ -55,12 +56,13 @@ async fn main() -> anyhow::Result<()> {
             let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
 
             Indexer::start_writer(
-                &ingestion_config,
+                ingestion_config,
                 store,
                 indexer_metrics,
                 snapshot_config,
                 retention_config,
                 CancellationToken::new(),
+                None,
             )
             .await?;
         }
@@ -97,6 +99,9 @@ async fn main() -> anyhow::Result<()> {
             let mut formal_restorer =
                 IndexerFormalSnapshotRestorer::new(store, restore_config).await?;
             formal_restorer.restore().await?;
+        }
+        Command::Benchmark(benchmark_config) => {
+            run_indexer_benchmark(benchmark_config, pool, indexer_metrics).await;
         }
     }
 
