@@ -5,10 +5,10 @@ use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 use reqwest::Url;
 use sui_sdk_types::types::Address;
-use sui_sdk_types::types::CheckpointData;
 use sui_sdk_types::types::CheckpointDigest;
 use sui_sdk_types::types::CheckpointSequenceNumber;
 use sui_sdk_types::types::EpochId;
+use sui_sdk_types::types::FullCheckpointData;
 use sui_sdk_types::types::Object;
 use sui_sdk_types::types::ObjectId;
 use sui_sdk_types::types::SignedCheckpointSummary;
@@ -341,7 +341,7 @@ impl Client {
     pub async fn get_full_checkpoint(
         &self,
         checkpoint_sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Response<CheckpointData>> {
+    ) -> Result<Response<FullCheckpointData>> {
         let url = self
             .url()
             .join(&format!("checkpoints/{checkpoint_sequence_number}/full"))?;
@@ -499,6 +499,18 @@ impl Client {
 
         let json = response.json().await?;
         Ok(Response::new(json, parts))
+    }
+
+    pub(super) async fn bytes(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<Response<axum::body::Bytes>> {
+        let (response, parts) = self.check_response(response).await?;
+
+        match response.bytes().await {
+            Ok(bytes) => Ok(Response::new(bytes, parts)),
+            Err(e) => Err(Error::from_error(e).with_parts(parts)),
+        }
     }
 
     pub(super) async fn bcs<T: serde::de::DeserializeOwned>(
