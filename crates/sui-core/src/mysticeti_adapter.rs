@@ -16,7 +16,7 @@ use tracing::{error, info, warn};
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
     consensus_adapter::{ConsensusClient, SubmitResponse},
-    consensus_handler::SequencedConsensusTransactionKey,
+    consensus_handler::{BlockStatusNotifier, SequencedConsensusTransactionKey},
 };
 
 /// Gets a client to submit transactions to Mysticeti, or waits for one to be available.
@@ -25,7 +25,7 @@ use crate::{
 // TODO: rename to LazyConsensusClient?
 #[derive(Default, Clone)]
 pub struct LazyMysticetiClient {
-    client: Arc<ArcSwapOption<TransactionClient>>,
+    client: Arc<ArcSwapOption<(Arc<TransactionClient>, Arc<BlockStatusNotifier>)>>,
 }
 
 impl LazyMysticetiClient {
@@ -35,7 +35,7 @@ impl LazyMysticetiClient {
         }
     }
 
-    async fn get(&self) -> Guard<Option<Arc<TransactionClient>>> {
+    async fn get(&self) -> Guard<Option<Arc<(Arc<TransactionClient>, Arc<BlockStatusNotifier>)>>> {
         let client = self.client.load();
         if client.is_some() {
             return client;
@@ -65,8 +65,13 @@ impl LazyMysticetiClient {
         }
     }
 
-    pub fn set(&self, client: Arc<TransactionClient>) {
-        self.client.store(Some(client));
+    pub fn set(
+        &self,
+        client: Arc<TransactionClient>,
+        block_status_notifier: Arc<BlockStatusNotifier>,
+    ) {
+        self.client
+            .store(Some(Arc::new((client, block_status_notifier))));
     }
 
     pub fn clear(&self) {
@@ -89,9 +94,10 @@ impl ConsensusClient for LazyMysticetiClient {
             .iter()
             .map(|t| bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail"))
             .collect::<Vec<_>>();
-        let (block_ref, status_waiter) = client
+        let block_ref = client
             .as_ref()
             .expect("Client should always be returned")
+            .0
             .submit(transactions_bytes)
             .await
             .tap_err(|err| {
@@ -127,6 +133,14 @@ impl ConsensusClient for LazyMysticetiClient {
             let transaction_key = SequencedConsensusTransactionKey::External(transactions[0].key());
             tracing::info!("Transaction {transaction_key:?} was included in {block_ref}",)
         };
-        Ok(SubmitResponse::WithStatusWaiter(status_waiter))
+
+        // Subscriber to the notifier for a status update
+        let subscription = client
+            .as_ref()
+            .expect("Client should always be returned")
+            .1
+            .subscribe(block_ref);
+
+        Ok(SubmitResponse::WithStatusWaiter(subscription))
     }
 }

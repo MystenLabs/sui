@@ -804,11 +804,12 @@ mod tests {
     use crate::{
         authority::test_authority_builder::TestAuthorityBuilder,
         consensus_adapter::{
-            BlockStatus, ConnectionMonitorStatusForTests, ConsensusAdapter,
-            ConsensusAdapterMetrics, MockConsensusClient, SubmitResponse,
+            ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
+            MockConsensusClient, SubmitResponse,
         },
         epoch::randomness::*,
     };
+    use consensus_core::BlockStatus;
     use std::num::NonZeroUsize;
     use sui_protocol_config::ProtocolConfig;
     use sui_protocol_config::{Chain, ProtocolVersion};

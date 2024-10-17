@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use arc_swap::{ArcSwap, ArcSwapOption};
+use consensus_core::{BlockRef, BlockStatus};
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{self, select, Either};
@@ -9,6 +10,7 @@ use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
+use mysten_common::sync::notify_read::RegistrationOwned;
 use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -32,7 +34,7 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 
-use tokio::sync::{oneshot, Semaphore, SemaphorePermit};
+use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
 use tokio::time::{self};
 
@@ -192,29 +194,16 @@ impl ConsensusAdapterMetrics {
     }
 }
 
-pub enum BlockStatus {
-    Sequenced,
-    GarbageCollected,
-}
-
 pub enum SubmitResponse {
     NoStatusWaiter(BlockStatus),
-    WithStatusWaiter(oneshot::Receiver<consensus_core::BlockStatus>),
+    WithStatusWaiter(RegistrationOwned<BlockRef, BlockStatus>),
 }
 
 impl SubmitResponse {
     pub async fn wait_for_status(self) -> SuiResult<BlockStatus> {
         match self {
             SubmitResponse::NoStatusWaiter(status) => Ok(status),
-            SubmitResponse::WithStatusWaiter(receiver) => match receiver.await {
-                Ok(status) => match status {
-                    consensus_core::BlockStatus::Sequenced(_) => Ok(BlockStatus::Sequenced),
-                    consensus_core::BlockStatus::GarbageCollected(_) => {
-                        Ok(BlockStatus::GarbageCollected)
-                    }
-                },
-                Err(e) => Err(SuiError::ConsensusConnectionBroken(format!("{:?}", e))),
-            },
+            SubmitResponse::WithStatusWaiter(receiver) => Ok(receiver.await),
         }
     }
 }
@@ -823,6 +812,9 @@ impl ConsensusAdapter {
                             time::sleep(RETRY_DELAY_STEP).await;
                             continue;
                         }
+                        Ok(BlockStatus::Certified) => {
+                            panic!("Certified block status is not expected to be received.");
+                        }
                         Err(_err) => {
                             warn!(
                                 "Error while waiting for status from consensus for transactions {transaction_keys:?}. Will be retried."
@@ -903,7 +895,7 @@ impl ConsensusAdapter {
         let ack_start = Instant::now();
         let mut retries: u32 = 0;
 
-        let submit_response = loop {
+        let response = loop {
             match self
                 .consensus_client
                 .submit(transactions, epoch_store)
@@ -933,8 +925,8 @@ impl ConsensusAdapter {
                         time::sleep(Duration::from_secs(10)).await;
                     };
                 }
-                Ok(status_waiter) => {
-                    break status_waiter;
+                Ok(response) => {
+                    break response;
                 }
             }
         };
@@ -955,7 +947,7 @@ impl ConsensusAdapter {
             .with_label_values(&[&bucket, tx_type])
             .observe(ack_start.elapsed().as_secs_f64());
 
-        submit_response
+        response
     }
 
     /// Waits for transactions to appear either to consensus output or been executed via a checkpoint (state sync).

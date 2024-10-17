@@ -8,6 +8,24 @@ use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, Unbou
 
 use crate::{CommitIndex, CommittedSubDag, TransactionIndex, VerifiedBlock};
 
+#[derive(Debug, Clone, PartialEq)]
+#[allow(unused)]
+pub enum BlockStatus {
+    /// The block has been certified. A vector of the rejected transaction indexes is also provided.
+    Certified,
+    /// The block has been sequenced as part of a committed sub dag. That means that any transaction that has been included in the block
+    /// has been committed as well.
+    Sequenced,
+    /// The block has been garbage collected and will never be committed. Any transactions that have been included in the block should also
+    /// be considered as impossible to be committed as part of this block and might need to be retried
+    GarbageCollected,
+}
+
+pub struct TransactionsOutput {
+    pub status: BlockStatus,
+    pub blocks_and_rejected_transactions: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
+}
+
 #[derive(Clone)]
 pub struct CommitConsumer {
     // A channel to output the committed sub dags.
@@ -17,7 +35,7 @@ pub struct CommitConsumer {
     // In each block, transactions that are not rejected are considered certified.
     // Batches of blocks are sent together, to improve efficiency.
     #[allow(unused)]
-    pub(crate) transaction_sender: UnboundedSender<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
+    pub(crate) transaction_sender: UnboundedSender<TransactionsOutput>,
     // Index of the last commit that the consumer has processed. This is useful for
     // crash/recovery so mysticeti can replay the commits from the next index.
     // First commit in the replayed sequence will have index last_processed_commit_index + 1.
@@ -33,7 +51,7 @@ impl CommitConsumer {
     ) -> (
         Self,
         UnboundedReceiver<CommittedSubDag>,
-        UnboundedReceiver<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
+        UnboundedReceiver<TransactionsOutput>,
     ) {
         let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
         let (transaction_sender, transaction_receiver) = unbounded_channel("consensus_certified");

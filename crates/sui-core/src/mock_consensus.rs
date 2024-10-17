@@ -4,8 +4,9 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
-use crate::consensus_adapter::{BlockStatus, ConsensusClient, SubmitResponse, SubmitToConsensus};
+use crate::consensus_adapter::{ConsensusClient, SubmitResponse, SubmitToConsensus};
 use crate::consensus_handler::SequencedConsensusTransaction;
+use consensus_core::BlockStatus;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
 use sui_types::error::{SuiError, SuiResult};

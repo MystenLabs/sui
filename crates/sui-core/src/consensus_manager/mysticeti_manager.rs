@@ -20,7 +20,8 @@ use tracing::info;
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
     consensus_handler::{
-        ConsensusHandlerInitializer, ConsensusTransactionHandler, MysticetiConsensusHandler,
+        BlockStatusNotifier, ConsensusHandlerInitializer, ConsensusTransactionHandler,
+        MysticetiConsensusHandler,
     },
     consensus_manager::{
         ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
@@ -146,6 +147,7 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
+        let block_status_notifier = Arc::new(BlockStatusNotifier::default());
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
         let (commit_consumer, commit_receiver, transaction_receiver) =
             CommitConsumer::new(consensus_handler.last_processed_subdag_index() as CommitIndex);
@@ -178,7 +180,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         self.authority.swap(Some(registered_authority.clone()));
 
         // Initialize the client to send transactions to this Mysticeti instance.
-        self.client.set(client);
+        self.client.set(client, block_status_notifier.clone());
 
         // spin up the new mysticeti consensus handler to listen for committed sub dags
         let consensus_transaction_handler = ConsensusTransactionHandler::new(
@@ -192,6 +194,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             commit_receiver,
             transaction_receiver,
             monitor,
+            block_status_notifier,
         );
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);

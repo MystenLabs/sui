@@ -10,8 +10,9 @@ use std::{
 
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
-use consensus_core::{CommitConsumerMonitor, TransactionIndex, VerifiedBlock};
+use consensus_core::{BlockRef, BlockStatus, CommitConsumerMonitor, TransactionsOutput};
 use lru::LruCache;
+use mysten_common::sync::notify_read::{NotifyRead, RegistrationOwned};
 use mysten_metrics::{
     monitored_future,
     monitored_mpsc::{self, UnboundedReceiver},
@@ -474,13 +475,29 @@ pub(crate) struct MysticetiConsensusHandler {
     tasks: JoinSet<()>,
 }
 
+#[derive(Default)]
+pub struct BlockStatusNotifier {
+    subscriptions: Arc<NotifyRead<BlockRef, BlockStatus>>,
+}
+
+impl BlockStatusNotifier {
+    pub fn subscribe(&self, block_ref: BlockRef) -> RegistrationOwned<BlockRef, BlockStatus> {
+        self.subscriptions.register_one_owned(&block_ref)
+    }
+
+    pub fn notify(&self, block_ref: &BlockRef, status: BlockStatus) -> usize {
+        self.subscriptions.notify(block_ref, &status)
+    }
+}
+
 impl MysticetiConsensusHandler {
     pub(crate) fn new(
         mut consensus_handler: ConsensusHandler<CheckpointService>,
         consensus_transaction_handler: ConsensusTransactionHandler,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
-        mut transaction_receiver: UnboundedReceiver<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
+        mut transaction_receiver: UnboundedReceiver<TransactionsOutput>,
         commit_consumer_monitor: Arc<CommitConsumerMonitor>,
+        block_status_notifier: Arc<BlockStatusNotifier>,
     ) -> Self {
         let mut tasks = JoinSet::new();
         tasks.spawn(monitored_future!(async move {
@@ -495,17 +512,33 @@ impl MysticetiConsensusHandler {
         }));
         if consensus_transaction_handler.enabled() {
             tasks.spawn(monitored_future!(async move {
-                while let Some(blocks_and_rejected_transactions) = transaction_receiver.recv().await
-                {
-                    let parsed_transactions = blocks_and_rejected_transactions
-                        .into_iter()
-                        .flat_map(|(block, rejected_transactions)| {
-                            parse_block_transactions(&block, &rejected_transactions)
-                        })
-                        .collect::<Vec<_>>();
-                    consensus_transaction_handler
-                        .handle_consensus_transactions(parsed_transactions)
-                        .await;
+                while let Some(transactions) = transaction_receiver.recv().await {
+                    match transactions.status {
+                        BlockStatus::Certified => {
+                            let parsed_transactions = transactions
+                                .blocks_and_rejected_transactions
+                                .into_iter()
+                                .flat_map(|(block, rejected_transactions)| {
+                                    parse_block_transactions(&block, &rejected_transactions)
+                                })
+                                .collect::<Vec<_>>();
+                            consensus_transaction_handler
+                                .handle_consensus_transactions(parsed_transactions)
+                                .await;
+                        }
+                        BlockStatus::Sequenced => {
+                            for (block, _) in transactions.blocks_and_rejected_transactions {
+                                block_status_notifier
+                                    .notify(&block.reference(), BlockStatus::Sequenced);
+                            }
+                        }
+                        BlockStatus::GarbageCollected => {
+                            for (block, _) in transactions.blocks_and_rejected_transactions {
+                                block_status_notifier
+                                    .notify(&block.reference(), BlockStatus::GarbageCollected);
+                            }
+                        }
+                    }
                 }
             }));
         }
@@ -958,7 +991,8 @@ impl ConsensusTransactionHandler {
 #[cfg(test)]
 mod tests {
     use consensus_core::{
-        BlockAPI, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction, VerifiedBlock,
+        BlockAPI, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction,
+        TransactionIndex, VerifiedBlock,
     };
     use prometheus::Registry;
     use sui_protocol_config::ConsensusTransactionOrdering;
