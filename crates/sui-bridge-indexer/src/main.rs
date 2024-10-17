@@ -15,6 +15,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::{new_metered_eth_provider, MeteredEthHttpProvier};
+use sui_bridge::sui_bridge_watchdog::Observable;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::utils::get_eth_contract_addresses;
 use sui_bridge_indexer::eth_bridge_indexer::EthFinalizedSyncDatasource;
@@ -28,6 +29,10 @@ use mysten_metrics::spawn_logged_monitored_task;
 use mysten_metrics::start_prometheus_server;
 
 use sui_bridge::metrics::BridgeMetrics;
+use sui_bridge::sui_bridge_watchdog::{
+    eth_bridge_status::EthBridgeStatus, eth_vault_balance::EthVaultBalance,
+    metrics::WatchdogMetrics, sui_bridge_status::SuiBridgeStatus, BridgeWatchDog,
+};
 use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::eth_bridge_indexer::EthDataMapper;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
@@ -37,10 +42,6 @@ use sui_bridge_indexer::sui_bridge_indexer::SuiBridgeDataMapper;
 use sui_bridge_indexer::sui_datasource::SuiCheckpointDatasource;
 use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
-use sui_bridge_watchdog::{
-    eth_bridge_status::EthBridgeStatus, eth_vault_balance::EthVaultBalance,
-    metrics::WatchdogMetrics, sui_bridge_status::SuiBridgeStatus, BridgeWatchDog,
-};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
 use sui_indexer_builder::progress::{
@@ -247,14 +248,12 @@ async fn start_watchdog(
 
     let sui_bridge_status =
         SuiBridgeStatus::new(sui_client, watchdog_metrics.sui_bridge_paused.clone());
-
-    BridgeWatchDog::new(vec![
-        Arc::new(eth_vault_balance),
-        Arc::new(eth_bridge_status),
-        Arc::new(sui_bridge_status),
-    ])
-    .run()
-    .await;
+    let observables: Vec<Box<dyn Observable + Send + Sync>> = vec![
+        Box::new(eth_vault_balance),
+        Box::new(eth_bridge_status),
+        Box::new(sui_bridge_status),
+    ];
+    BridgeWatchDog::new(observables).run().await;
     Ok(())
 }
 

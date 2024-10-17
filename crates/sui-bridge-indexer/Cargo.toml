@@ -36,7 +36,6 @@ backoff.workspace = true
 sui-config.workspace = true
 tempfile.workspace = true
 sui-indexer-builder.workspace = true
-sui-bridge-watchdog.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }

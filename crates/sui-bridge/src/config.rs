@@ -17,6 +17,7 @@ use ethers::types::Address as EthAddress;
 use futures::{future, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -119,6 +120,9 @@ pub struct BridgeNodeConfig {
     pub metrics_key_pair: NetworkKeyPair,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metrics: Option<MetricsConfig>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub watchdog_config: Option<WatchdogConfig>,
 }
 
 pub fn default_ed25519_key_pair() -> NetworkKeyPair {
@@ -131,6 +135,13 @@ pub struct MetricsConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub push_interval_seconds: Option<u64>,
     pub push_url: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct WatchdogConfig {
+    /// Total supplies to watch on Sui. Mapping from coin name to coin type tag
+    pub total_supplies: BTreeMap<String, String>,
 }
 
 impl Config for BridgeNodeConfig {}
@@ -197,6 +208,7 @@ impl BridgeNodeConfig {
         let bridge_server_config = BridgeServerConfig {
             key: bridge_authority_key,
             metrics_port: self.metrics_port,
+            eth_bridge_proxy_address: eth_contracts[0], // the first contract is bridge proxy
             server_listen_port: self.server_listen_port,
             sui_client: sui_client.clone(),
             eth_client: eth_client.clone(),
@@ -385,6 +397,7 @@ impl BridgeNodeConfig {
 pub struct BridgeServerConfig {
     pub key: BridgeAuthorityKeyPair,
     pub server_listen_port: u16,
+    pub eth_bridge_proxy_address: EthAddress,
     pub metrics_port: u16,
     pub sui_client: Arc<SuiClient<SuiSdkClient>>,
     pub eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
