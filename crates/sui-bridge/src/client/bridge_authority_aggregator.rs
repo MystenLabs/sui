@@ -217,12 +217,12 @@ async fn request_sign_bridge_action_into_certification(
                         Ok(result) => {
                             return Ok(result);
                         }
-                        // retyable errors
+                        // retryable errors
                         Err(BridgeError::TxNotFinalized) => {
                             warn!("Bridge authority {} observing transaction not yet finalized, retrying in {:?}", name.concise(), retry_interval);
                             tokio::time::sleep(retry_interval).await;
                         }
-                        // non-retriable errors
+                        // non-retryable errors
                         Err(e) => {
                             return Err(e);
                         }
