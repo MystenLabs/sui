@@ -34,7 +34,7 @@ impl ReadApi {
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
-        match self.inner.get_checkpoint(id).await {
+        match self.inner.get_rpc_checkpoint(id).await {
             Ok(Some(epoch_info)) => Ok(epoch_info),
             Ok(None) => Err(IndexerError::InvalidArgumentError(format!(
                 "Checkpoint {id:?} not found"
@@ -44,7 +44,7 @@ impl ReadApi {
     }
 
     async fn get_latest_checkpoint(&self) -> Result<Checkpoint, IndexerError> {
-        self.inner.get_latest_checkpoint().await
+        self.inner.get_latest_rpc_checkpoint().await
     }
 
     async fn get_chain_identifier(&self) -> RpcResult<ChainIdentifier> {
@@ -190,7 +190,7 @@ impl ReadApiServer for ReadApi {
 
         let mut checkpoints = self
             .inner
-            .get_checkpoints(cursor, limit + 1, descending_order)
+            .get_rpc_checkpoints(cursor, limit + 1, descending_order)
             .await?;
 
         let has_next_page = checkpoints.len() > limit;

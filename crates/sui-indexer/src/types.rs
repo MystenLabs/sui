@@ -44,7 +44,6 @@ pub struct IndexedCheckpoint {
     pub non_refundable_storage_fee: u64,
     pub checkpoint_commitments: Vec<CheckpointCommitment>,
     pub validator_signature: AggregateAuthoritySignature,
-    pub successful_tx_num: usize,
     pub end_of_epoch_data: Option<EndOfEpochData>,
     pub end_of_epoch: bool,
     pub min_tx_sequence_number: u64,
@@ -58,7 +57,6 @@ impl IndexedCheckpoint {
     pub fn from_sui_checkpoint(
         checkpoint: &CertifiedCheckpointSummary,
         contents: &CheckpointContents,
-        successful_tx_num: usize,
     ) -> Self {
         let total_gas_cost = checkpoint.epoch_rolling_gas_cost_summary.computation_cost as i64
             + checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64
@@ -83,7 +81,6 @@ impl IndexedCheckpoint {
             non_refundable_storage_fee: checkpoint
                 .epoch_rolling_gas_cost_summary
                 .non_refundable_storage_fee,
-            successful_tx_num,
             network_total_transactions: checkpoint.network_total_transactions,
             timestamp_ms: checkpoint.timestamp_ms,
             validator_signature: auth_sig.clone(),
