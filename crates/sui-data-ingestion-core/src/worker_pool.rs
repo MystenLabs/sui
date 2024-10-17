@@ -160,7 +160,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
 
         // Wait for all workers to finish
         for join_handle in join_handles {
-            join_handle.await.expect("worker thread panicked");
+            let _ = join_handle.await;
         }
     }
 }

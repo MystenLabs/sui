@@ -6,7 +6,7 @@ use std::env;
 
 use anyhow::Result;
 use prometheus::Registry;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -16,6 +16,7 @@ use mysten_metrics::spawn_monitored_task;
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, WorkerPool,
 };
+use sui_synthetic_ingestion::IndexerProgress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::build_json_rpc_server;
@@ -33,12 +34,13 @@ pub struct Indexer;
 
 impl Indexer {
     pub async fn start_writer(
-        config: &IngestionConfig,
+        config: IngestionConfig,
         store: PgIndexerStore,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
         retention_config: Option<RetentionConfig>,
         cancel: CancellationToken,
+        committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Writer (version {:?}) started...",
@@ -98,7 +100,14 @@ impl Indexer {
             2,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker = new_handlers(store, metrics, primary_watermark, cancel.clone()).await?;
+        let worker = new_handlers(
+            store,
+            metrics,
+            primary_watermark,
+            cancel.clone(),
+            committed_checkpoints_tx,
+        )
+        .await?;
         let worker_pool = WorkerPool::new(
             worker,
             "primary".to_string(),
