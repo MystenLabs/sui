@@ -45,6 +45,9 @@ env:
   RUST_BACKTRACE: short
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
+  # Set log level in CI to error. If you need more information to debug a CI
+  # failure, change this temporarily and rerun your tests
+  RUST_LOG: error
 
 jobs:
   diff:
