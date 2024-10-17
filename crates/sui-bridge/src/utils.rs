@@ -389,7 +389,7 @@ pub async fn wait_for_server_to_be_up(server_url: String, timeout_sec: u64) -> a
 /// If a validator is not in the Sui committee, we will use its base URL as the name.
 pub async fn get_committee_voting_power_by_name(
     bridge_committee: &Arc<BridgeCommittee>,
-    system_state: SuiSystemStateSummary,
+    system_state: &SuiSystemStateSummary,
 ) -> BTreeMap<String, StakeUnit> {
     let mut sui_committee: BTreeMap<_, _> = system_state
         .active_validators
@@ -405,6 +405,31 @@ pub async fn get_committee_voting_power_by_name(
                     .remove(&v.1.sui_address)
                     .unwrap_or(v.1.base_url.clone()),
                 v.1.voting_power,
+            )
+        })
+        .collect()
+}
+
+/// Return a mappping from validator pub keys to their names.
+/// If a validator is not in the Sui committee, we will use its base URL as the name.
+pub async fn get_validator_names_by_pub_keys(
+    bridge_committee: &Arc<BridgeCommittee>,
+    system_state: &SuiSystemStateSummary,
+) -> BTreeMap<BridgeAuthorityPublicKeyBytes, String> {
+    let mut sui_committee: BTreeMap<_, _> = system_state
+        .active_validators
+        .iter()
+        .map(|v| (v.sui_address, v.name.clone()))
+        .collect();
+    bridge_committee
+        .members()
+        .iter()
+        .map(|v| {
+            (
+                v.0.clone(),
+                sui_committee
+                    .remove(&v.1.sui_address)
+                    .unwrap_or(v.1.base_url.clone()),
             )
         })
         .collect()
