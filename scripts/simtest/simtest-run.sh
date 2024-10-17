@@ -42,26 +42,50 @@ echo "Running e2e simtests with $TEST_NUM iterations"
 echo "================================================"
 date
 
+# record the pre-existing environment variables to a file so we can filter them
+# out later
+BASE_ENV_FILE=$(mktemp)
+env > "$BASE_ENV_FILE"
+
+function run_simtest() {
+  LOG_FILE=$1
+  shift
+  # read remaining args into CMD array
+  CMD=("$@")
+  echo "COMMAND: ${CMD[@]}"
+
+  # run the command and log to the specified file
+  "${CMD[@]}" > "$LOG_FILE" 2>&1
+
+  # if the command failed, record repro command to the log file
+  if [ $? -ne 0 ]; then
+    # find the extra env vars the command was run with
+    ENV_VARS=$(env | grep -vf "$BASE_ENV_FILE" | xargs)
+    echo "To reproduce the failure, run:" >> "$LOG_FILE"
+    echo "$ENV_VARS ${CMD[@]}" >> "$LOG_FILE"
+  fi
+}
+
 # This command runs many different tests, so it already uses all CPUs fairly efficiently, and
 # don't need to be done inside of the for loop below.
-# TODO: this logs directly to stdout since it is not being run in parallel. is that ok?
 MSIM_TEST_SEED="$SEED" \
 MSIM_TEST_NUM=${TEST_NUM} \
 MSIM_WATCHDOG_TIMEOUT_MS=60000 \
-scripts/simtest/cargo-simtest simtest \
+run_simtest "$LOG_FILE" scripts/simtest/cargo-simtest simtest \
   --color always \
   --test-threads "$NUM_CPUS" \
   --package sui-core \
   --package sui-archival \
   --package sui-e2e-tests \
   --profile simtestnightly \
-  -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
+  -E "$TEST_FILTER"
 
 echo ""
 echo "============================================="
 echo "Running $NUM_CPUS stress simtests in parallel"
 echo "============================================="
 date
+
 
 for SUB_SEED in `seq 1 $NUM_CPUS`; do
   SEED="$SUB_SEED$DATE"
@@ -73,12 +97,11 @@ for SUB_SEED in `seq 1 $NUM_CPUS`; do
   MSIM_TEST_NUM=1 \
   MSIM_WATCHDOG_TIMEOUT_MS=60000 \
   SIM_STRESS_TEST_DURATION_SECS=300 \
-  scripts/simtest/cargo-simtest simtest \
+  run_simtest "$LOG_FILE" scripts/simtest/cargo-simtest simtest \
     --color always \
     --package sui-benchmark \
     --test-threads 1 \
-    --profile simtestnightly \
-    > "$LOG_FILE" 2>&1 &
+    --profile simtestnightly &
 
 done
 
@@ -99,12 +122,12 @@ MSIM_TEST_SEED="$SEED" \
 MSIM_TEST_NUM=1 \
 MSIM_WATCHDOG_TIMEOUT_MS=60000 \
 MSIM_TEST_CHECK_DETERMINISM=1
-scripts/simtest/cargo-simtest simtest \
+run_simtest "$LOG_FILE" scripts/simtest/cargo-simtest simtest \
   --color always \
   --test-threads "$NUM_CPUS" \
   --package sui-benchmark \
   --profile simtestnightly \
-  -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
+  -E "$TEST_FILTER"
 
 echo ""
 echo "============================================="
