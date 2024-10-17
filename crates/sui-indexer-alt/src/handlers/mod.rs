@@ -237,7 +237,11 @@ fn handler<H: Handler + 'static>(
             })
             .await
         {
-            Ok(()) | Err(Break::Cancel) => {
+            Ok(()) => {
+                info!(pipeline = H::NAME, "Checkpoints done, stopping handler");
+            }
+
+            Err(Break::Cancel) => {
                 info!(pipeline = H::NAME, "Shutdown received, stopping handler");
             }
 
