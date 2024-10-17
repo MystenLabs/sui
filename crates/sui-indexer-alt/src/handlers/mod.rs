@@ -605,6 +605,12 @@ fn committer<H: Handler + 'static>(
                         }
                     }
 
+                    // TODO (amnn): Test this behaviour (requires tempdb and migrations).
+                    if pending_rows == 0 && rx.is_closed() {
+                        info!(pipeline = H::NAME, "Handler closed channel, pending rows empty, stopping committer");
+                        break;
+                    }
+
                     cool.reset();
                 }
 
@@ -615,19 +621,14 @@ fn committer<H: Handler + 'static>(
                     poll.reset_immediately();
                 }
 
-                indexed = rx.recv(), if pending_rows < H::MAX_PENDING_SIZE => {
-                    if let Some(indexed) = indexed {
-                        metrics
-                            .total_committer_rows_received
-                            .with_label_values(&[H::NAME])
-                            .inc_by(indexed.values.len() as u64);
+                Some(indexed )= rx.recv(), if pending_rows < H::MAX_PENDING_SIZE => {
+                    metrics
+                        .total_committer_rows_received
+                        .with_label_values(&[H::NAME])
+                        .inc_by(indexed.values.len() as u64);
 
-                        pending_rows += indexed.values.len();
-                        pending.insert(indexed.cp_sequence_number, indexed);
-                    } else {
-                        info!(pipeline = H::NAME, "Handler closed channel, stopping committer");
-                        break;
-                    }
+                    pending_rows += indexed.values.len();
+                    pending.insert(indexed.cp_sequence_number, indexed);
                 }
             }
         }
