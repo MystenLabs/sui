@@ -10,8 +10,9 @@ use prometheus::{
     core::{Collector, Desc},
     proto::{Counter, Gauge, LabelPair, Metric, MetricFamily, MetricType, Summary},
     register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, Registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, Histogram, HistogramVec, IntCounter, IntCounterVec,
+    IntGaugeVec, Registry,
 };
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -79,6 +80,19 @@ pub struct IndexerMetrics {
     pub committer_gather_latency: HistogramVec,
     pub committer_commit_latency: HistogramVec,
     pub committer_batch_size: HistogramVec,
+
+    pub watermark_gather_latency: HistogramVec,
+    pub watermark_commit_latency: HistogramVec,
+
+    pub total_watermarks_out_of_order: IntCounterVec,
+
+    pub watermark_epoch: IntGaugeVec,
+    pub watermark_checkpoint: IntGaugeVec,
+    pub watermark_transaction: IntGaugeVec,
+
+    pub watermark_epoch_in_db: IntGaugeVec,
+    pub watermark_checkpoint_in_db: IntGaugeVec,
+    pub watermark_transaction_in_db: IntGaugeVec,
 }
 
 /// Collects information about the database connection pool.
@@ -277,6 +291,71 @@ impl IndexerMetrics {
                 "Number of rows in a batch written to the database by this committer",
                 &["pipeline"],
                 BATCH_SIZE_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            watermark_gather_latency: register_histogram_vec_with_registry!(
+                "indexer_watermark_gather_latency",
+                "Time taken to calculate the new high watermark after a write by this committer",
+                &["pipeline"],
+                PROCESSING_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            watermark_commit_latency: register_histogram_vec_with_registry!(
+                "indexer_watermark_commit_latency",
+                "Time taken to write the new high watermark to the database by this committer",
+                &["pipeline"],
+                DB_UPDATE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_watermarks_out_of_order: register_int_counter_vec_with_registry!(
+                "indexer_watermark_out_of_order",
+                "Number of times this committer encountered a batch for a checkpoint before its watermark",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_epoch: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_epoch",
+                "Current epoch high watermark for this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_checkpoint: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_checkpoint",
+                "Current checkpoint high watermark for this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_transaction: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_transaction",
+                "Current transaction high watermark for this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_epoch_in_db: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_epoch_in_db",
+                "Last epoch high watermark this committer wrote to the DB",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_checkpoint_in_db: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_checkpoint_in_db",
+                "Last checkpoint high watermark this committer wrote to the DB",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            watermark_transaction_in_db: register_int_gauge_vec_with_registry!(
+                "indexer_watermark_transaction_in_db",
+                "Last transaction high watermark this committer wrote to the DB",
+                &["pipeline"],
                 registry,
             )
             .unwrap(),
