@@ -89,6 +89,7 @@ fn setup_env(exit_sender: oneshot::Sender<()>) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    eprintln!("starting ingestion...");
     let (exit_sender, exit_receiver) = oneshot::channel();
     setup_env(exit_sender);
 
