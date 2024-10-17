@@ -14,6 +14,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_data_ingestion_core::Worker;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_synthetic_ingestion::IndexerProgress;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::{ObjectChange, TransactionEffectsAPI};
 use sui_types::event::SystemEpochInfoEvent;
@@ -24,6 +25,7 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::transaction::TransactionDataAPI;
+use tokio::sync::watch;
 
 use crate::errors::IndexerError;
 use crate::handlers::committer::start_tx_checkpoint_commit_task;
@@ -50,6 +52,7 @@ pub async fn new_handlers(
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
+    committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
 ) -> Result<CheckpointHandler, IndexerError> {
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
@@ -71,7 +74,8 @@ pub async fn new_handlers(
         metrics_clone,
         indexed_checkpoint_receiver,
         next_checkpoint_sequence_number,
-        cancel.clone()
+        cancel.clone(),
+        committed_checkpoints_tx
     ));
     Ok(CheckpointHandler::new(
         state,

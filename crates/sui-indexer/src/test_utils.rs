@@ -123,12 +123,13 @@ pub async fn start_indexer_writer_for_testing(
 
         tokio::spawn(async move {
             Indexer::start_writer(
-                &ingestion_config,
+                ingestion_config,
                 store_clone,
                 indexer_metrics,
                 snapshot_config,
                 retention_config,
                 token_clone,
+                None,
             )
             .await
         })
