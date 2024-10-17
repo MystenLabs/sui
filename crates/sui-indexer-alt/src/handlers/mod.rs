@@ -96,6 +96,10 @@ pub struct CommitterConfig {
         value_parser = |s: &str| s.parse().map(Duration::from_millis),
     )]
     commit_interval: Duration,
+
+    /// Avoid writing to the watermark table
+    #[arg(long)]
+    skip_watermark: bool,
 }
 
 /// A batch of processed values associated with a single checkpoint. This is an internal type used
@@ -540,7 +544,7 @@ fn committer<H: Handler + 'static>(
                         "Gathered watermarks",
                     );
 
-                    if watermark_needs_update {
+                    if !config.skip_watermark && watermark_needs_update {
                         let guard = metrics
                             .watermark_commit_latency
                             .with_label_values(&[H::NAME])
