@@ -3,17 +3,16 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use anemo::types::PeerEvent;
+use async_trait::async_trait;
 use dashmap::DashMap;
 use mysten_metrics::spawn_logged_monitored_task;
-use quinn_proto::ConnectionStats;
 use tokio::{
     sync::oneshot::{Receiver, Sender},
     task::JoinHandle,
     time,
 };
 
-use super::metrics::QuinnConnectionMetrics;
+use super::metrics::{QuinnConnectionMetrics, TcpConnectionMetrics};
 
 const CONNECTION_STAT_COLLECTION_INTERVAL: Duration = Duration::from_secs(60);
 
@@ -23,6 +22,7 @@ pub trait ConnectionMonitor {
     type PeerId;
     type PeerEvent;
     type ConnectionMetrics;
+    type ConnectionStats;
 
     fn spawn(
         network: Self::Network,
@@ -34,7 +34,7 @@ pub trait ConnectionMonitor {
 
     async fn handle_peer_event(&self, peer_event: Self::PeerEvent);
 
-    fn update_metrics_for_peer(&self, peer_id: &str, hostname: &str, stats: &ConnectionStats);
+    fn update_metrics_for_peer(&self, peer_id: &str, hostname: &str, stats: &Self::ConnectionStats);
 }
 
 pub struct ConnectionMonitorHandle<PeerId> {
@@ -73,8 +73,10 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
     type Network = anemo::NetworkRef;
     type PeerId = anemo::types::PeerId;
     type ConnectionMetrics = QuinnConnectionMetrics;
+    type PeerEvent = anemo::types::PeerEvent;
+    type ConnectionStats = quinn_proto::ConnectionStats;
 
-    pub fn spawn(
+    fn spawn(
         network: Self::Network,
         connection_metrics: Arc<Self::ConnectionMetrics>,
         known_peers: HashMap<Self::PeerId, String>,
@@ -124,7 +126,8 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
 
         // now report the connected peers
         for peer_id in connected_peers.iter() {
-            self.handle_peer_event(PeerEvent::NewPeer(*peer_id)).await;
+            self.handle_peer_event(Self::PeerEvent::NewPeer(*peer_id))
+                .await;
         }
 
         let mut connection_stat_collection_interval =
@@ -143,7 +146,7 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
                         for (peer_id, peer_label) in &self.known_peers {
                             if let Some(connection) = network.peer(*peer_id) {
                                 let stats = connection.connection_stats();
-                                self.update_quinn_metrics_for_peer(&format!("{peer_id}"), peer_label, &stats);
+                                self.update_metrics_for_peer(&format!("{peer_id}"), peer_label, &stats);
                             }
                         }
                     } else {
@@ -161,7 +164,7 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
         }
     }
 
-    async fn handle_peer_event(&self, peer_event: PeerEvent) {
+    async fn handle_peer_event(&self, peer_event: Self::PeerEvent) {
         if let Some(network) = self.network.upgrade() {
             self.connection_metrics
                 .network_peers
@@ -171,8 +174,8 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
         }
 
         let (peer_id, status, int_status) = match peer_event {
-            PeerEvent::NewPeer(peer_id) => (peer_id, ConnectionStatus::Connected, 1),
-            PeerEvent::LostPeer(peer_id, _) => (peer_id, ConnectionStatus::Disconnected, 0),
+            Self::PeerEvent::NewPeer(peer_id) => (peer_id, ConnectionStatus::Connected, 1),
+            Self::PeerEvent::LostPeer(peer_id, _) => (peer_id, ConnectionStatus::Disconnected, 0),
         };
         self.connection_statuses.insert(peer_id, status);
 
@@ -186,7 +189,7 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
                 .with_label_values(&[&peer_id_str, peer_label])
                 .set(int_status);
 
-            if let PeerEvent::LostPeer(_, reason) = peer_event {
+            if let Self::PeerEvent::LostPeer(_, reason) = peer_event {
                 self.connection_metrics
                     .network_peer_disconnects
                     .with_label_values(&[&peer_id_str, peer_label, &format!("{reason:?}")])
@@ -196,11 +199,11 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
     }
 
     // TODO: Replace this with ClosureMetric
-    fn update_quinn_metrics_for_peer(
+    fn update_metrics_for_peer(
         &self,
         peer_id: &str,
         peer_label: &str,
-        stats: &ConnectionStats,
+        stats: &Self::ConnectionStats,
     ) {
         // Update PathStats
         self.connection_metrics
@@ -280,6 +283,14 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
             .with_label_values(&[peer_id, peer_label, "received"])
             .set(stats.udp_rx.ios as i64);
     }
+}
+
+pub struct TonicConnectionMonitor {
+    network: Arc<Channel>,
+    connection_metrics: Arc<TcpConnectionMetrics>,
+    known_peers: HashMap<String, String>,
+    connection_statuses: Arc<DashMap<anemo::types::PeerId, ConnectionStatus>>,
+    stop: Receiver<()>,
 }
 
 #[cfg(test)]

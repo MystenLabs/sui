@@ -42,6 +42,7 @@ use crate::{
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
+    network::connection_monitor::ConnectionMonitor,
     CommitIndex, Round,
 };
 
@@ -465,7 +466,7 @@ pub(crate) struct AnemoManager {
     network_keypair: Option<NetworkKeyPair>,
     client: Arc<AnemoClient>,
     network: Arc<ArcSwapOption<anemo::Network>>,
-    connection_monitor_handle: Option<ConnectionMonitorHandle>,
+    connection_monitor_handle: Option<ConnectionMonitorHandle<PeerId>>,
 }
 
 impl AnemoManager {

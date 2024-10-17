@@ -51,7 +51,9 @@ pub use block::{TestBlock, Transaction, VerifiedBlock};
 pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
 pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
 pub use network::{
-    connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle, ConnectionStatus},
+    connection_monitor::{
+        AnemoConnectionMonitor, ConnectionMonitor, ConnectionMonitorHandle, ConnectionStatus,
+    },
     metrics::{MetricsMakeCallbackHandler, NetworkRouteMetrics, QuinnConnectionMetrics},
 };
 pub use transaction::{ClientError, TransactionClient, TransactionVerifier, ValidationError};
