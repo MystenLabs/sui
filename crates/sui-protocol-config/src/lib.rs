@@ -2863,14 +2863,14 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .consensus_distributed_vote_scoring_strategy = true;
 
-                    cfg.group_ops_bls12381_g1_to_uncompressed_g1_cost = Some(26);
-                    cfg.group_ops_bls12381_uncompressed_g1_to_g1_cost = Some(52);
-                    cfg.group_ops_bls12381_uncompressed_g1_sum_base_cost = Some(26);
-                    cfg.group_ops_bls12381_uncompressed_g1_sum_cost_per_term = Some(13);
-                    cfg.group_ops_bls12381_uncompressed_g1_sum_max_terms = Some(2000);
-
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
+
+                        cfg.group_ops_bls12381_g1_to_uncompressed_g1_cost = Some(26);
+                        cfg.group_ops_bls12381_uncompressed_g1_to_g1_cost = Some(52);
+                        cfg.group_ops_bls12381_uncompressed_g1_sum_base_cost = Some(26);
+                        cfg.group_ops_bls12381_uncompressed_g1_sum_cost_per_term = Some(13);
+                        cfg.group_ops_bls12381_uncompressed_g1_sum_max_terms = Some(2000);
                     }
                 }
                 // Use this template when making changes:
