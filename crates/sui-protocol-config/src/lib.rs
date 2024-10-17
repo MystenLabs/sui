@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 63;
+const MAX_PROTOCOL_VERSION: u64 = 64;
 
 // Record history of protocol version allocations here:
 //
@@ -2835,6 +2835,12 @@ impl ProtocolConfig {
                     cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
                     cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(18_500_000);
                     cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(240_000_000);
+                }
+                64 => {
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalTxCount;
+                    cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(40);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(3);
                 }
                 // Use this template when making changes:
                 //
