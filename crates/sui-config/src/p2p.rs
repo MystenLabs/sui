@@ -323,7 +323,7 @@ pub struct DiscoveryConfig {
     /// If true, Discovery will require all provided peer information to be signed
     /// by the originating peer.
     ///
-    /// If unspecified, this will default to false.
+    /// If unspecified, this will default to true.
     pub enable_node_info_signatures: Option<bool>,
 }
 
@@ -353,7 +353,7 @@ impl DiscoveryConfig {
     }
 
     pub fn enable_node_info_signatures(&self) -> bool {
-        self.enable_node_info_signatures.unwrap_or(false)
+        self.enable_node_info_signatures.unwrap_or(true)
     }
 }
 
