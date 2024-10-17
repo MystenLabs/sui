@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::{BridgeServerConfig, WatchdogConfig};
+use crate::config::WatchdogConfig;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::metered_eth_provider::MeteredEthHttpProvier;
 use crate::sui_bridge_watchdog::eth_bridge_status::EthBridgeStatus;
@@ -10,6 +10,7 @@ use crate::sui_bridge_watchdog::metrics::WatchdogMetrics;
 use crate::sui_bridge_watchdog::sui_bridge_status::SuiBridgeStatus;
 use crate::sui_bridge_watchdog::total_suppies::TotalSupplies;
 use crate::sui_bridge_watchdog::{BridgeWatchDog, Observable};
+use crate::sui_client::SuiBridgeClient;
 use crate::types::BridgeCommittee;
 use crate::utils::{
     get_committee_voting_power_by_name, get_eth_contract_addresses, get_validator_names_by_pub_keys,
@@ -85,15 +86,19 @@ pub async fn run_bridge_node(
             .await
             .expect("Failed to get committee"),
     );
+    let mut handles = vec![];
 
     // Start watchdog
-    start_watchdog(
+    let eth_provider = server_config.eth_client.provider();
+    let eth_bridge_proxy_address = server_config.eth_bridge_proxy_address;
+    let sui_client = server_config.sui_client.clone();
+    handles.push(spawn_logged_monitored_task!(start_watchdog(
         watchdog_config,
         &prometheus_registry,
-        server_config.eth_client.provider(),
-        &server_config,
-    )
-    .await?;
+        eth_provider,
+        eth_bridge_proxy_address,
+        sui_client
+    )));
 
     // Update voting right metrics
     // Before reconfiguration happens we only set it once when the node starts
@@ -105,19 +110,18 @@ pub async fn run_bridge_node(
         .await?;
 
     // Start Client
-    let _handles = if let Some(client_config) = client_config {
+    if let Some(client_config) = client_config {
         let committee_keys_to_names =
             Arc::new(get_validator_names_by_pub_keys(&committee, &sui_system).await);
-        start_client_components(
+        let client_components = start_client_components(
             client_config,
             committee.clone(),
             committee_keys_to_names,
             metrics.clone(),
         )
-        .await
-    } else {
-        Ok(vec![])
-    }?;
+        .await?;
+        handles.extend(client_components);
+    }
 
     let committee_name_mapping = get_committee_voting_power_by_name(&committee, &sui_system).await;
     for (name, voting_power) in committee_name_mapping.into_iter() {
@@ -150,11 +154,14 @@ async fn start_watchdog(
     watchdog_config: Option<WatchdogConfig>,
     registry: &prometheus::Registry,
     eth_provider: Arc<Provider<MeteredEthHttpProvier>>,
-    server_config: &BridgeServerConfig,
-) -> anyhow::Result<()> {
+    eth_bridge_proxy_address: EthAddress,
+    sui_client: Arc<SuiBridgeClient>,
+) {
     let watchdog_metrics = WatchdogMetrics::new(registry);
     let (_committee_address, _limiter_address, vault_address, _config_address, weth_address) =
-        get_eth_contract_addresses(server_config.eth_bridge_proxy_address, &eth_provider).await?;
+        get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider)
+            .await
+            .unwrap_or_else(|e| panic!("get_eth_contract_addresses should not fail: {}", e));
 
     let eth_vault_balance = EthVaultBalance::new(
         eth_provider.clone(),
@@ -165,12 +172,12 @@ async fn start_watchdog(
 
     let eth_bridge_status = EthBridgeStatus::new(
         eth_provider,
-        server_config.eth_bridge_proxy_address,
+        eth_bridge_proxy_address,
         watchdog_metrics.eth_bridge_paused.clone(),
     );
 
     let sui_bridge_status = SuiBridgeStatus::new(
-        server_config.sui_client.clone(),
+        sui_client.clone(),
         watchdog_metrics.sui_bridge_paused.clone(),
     );
 
@@ -182,7 +189,7 @@ async fn start_watchdog(
     if let Some(watchdog_config) = watchdog_config {
         if !watchdog_config.total_supplies.is_empty() {
             let total_supplies = TotalSupplies::new(
-                Arc::new(server_config.sui_client.sui_client().clone()),
+                Arc::new(sui_client.sui_client().clone()),
                 watchdog_config.total_supplies,
                 watchdog_metrics.total_supplies.clone(),
             );
@@ -190,8 +197,7 @@ async fn start_watchdog(
         }
     }
 
-    BridgeWatchDog::new(observables).run().await;
-    Ok(())
+    BridgeWatchDog::new(observables).run().await
 }
 
 // TODO: is there a way to clean up the overrides after it's stored in DB?
