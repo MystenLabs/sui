@@ -26,11 +26,11 @@ async fn main() -> Result<()> {
 
     let mut indexer = Indexer::new(args.indexer_config, cancel.clone()).await?;
 
-    indexer.pipeline::<KvCheckpoints>();
-    indexer.pipeline::<KvObjects>();
-    indexer.pipeline::<KvTransactions>();
-    indexer.pipeline::<TxAffectedObjects>();
-    indexer.pipeline::<TxBalanceChanges>();
+    indexer.pipeline::<KvCheckpoints>().await?;
+    indexer.pipeline::<KvObjects>().await?;
+    indexer.pipeline::<KvTransactions>().await?;
+    indexer.pipeline::<TxAffectedObjects>().await?;
+    indexer.pipeline::<TxBalanceChanges>().await?;
 
     let h_indexer = indexer.run().await.context("Failed to start indexer")?;
 
