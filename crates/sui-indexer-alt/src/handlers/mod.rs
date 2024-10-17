@@ -202,8 +202,13 @@ fn handler<H: Handler + 'static>(
                     let values = H::handle(&checkpoint)?;
                     let elapsed = guard.stop_and_record();
 
+                    let epoch = checkpoint.checkpoint_summary.epoch;
+                    let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
+                    let tx_hi = checkpoint.checkpoint_summary.network_total_transactions;
+
                     debug!(
                         pipeline = H::NAME,
+                        checkpoint = cp_sequence_number,
                         elapsed_ms = elapsed * 1000.0,
                         "Processed checkpoint",
                     );
@@ -217,10 +222,6 @@ fn handler<H: Handler + 'static>(
                         .total_handler_rows_created
                         .with_label_values(&[H::NAME])
                         .inc_by(values.len() as u64);
-
-                    let epoch = checkpoint.checkpoint_summary.epoch;
-                    let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
-                    let tx_hi = checkpoint.checkpoint_summary.network_total_transactions;
 
                     tx.send(Indexed {
                         epoch,
