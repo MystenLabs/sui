@@ -23,7 +23,7 @@ use crate::config::{IngestionConfig, JsonRpcConfig, RetentionConfig, SnapshotLag
 use crate::database::ConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
-use crate::handlers::objects_snapshot_handler::start_objects_snapshot_handler;
+use crate::handlers::objects_snapshot_processor::start_objects_snapshot_processor;
 use crate::handlers::pruner::Pruner;
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
@@ -61,7 +61,7 @@ impl Indexer {
         };
 
         // Start objects snapshot processor, which is a separate pipeline with its ingestion pipeline.
-        let (object_snapshot_worker, object_snapshot_watermark) = start_objects_snapshot_handler(
+        let (object_snapshot_worker, object_snapshot_watermark) = start_objects_snapshot_processor(
             store.clone(),
             metrics.clone(),
             snapshot_config,
