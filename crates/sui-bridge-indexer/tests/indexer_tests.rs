@@ -129,7 +129,7 @@ async fn wait_for_back_fill_to_finish(
     }
     // wait until all backfill task has completed
     while !storage
-        .get_ongoing_tasks(&task)
+        .get_ongoing_tasks(task)
         .await?
         .backfill_tasks_ordered_desc()
         .is_empty()
