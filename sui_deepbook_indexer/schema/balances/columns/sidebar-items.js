@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["amount","asset","balance_manager_id","checkpoint","deposit","digest","id","package","sender","star","timestamp"]};

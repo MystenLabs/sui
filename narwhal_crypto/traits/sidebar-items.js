@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["AggregateAuthenticator","AllowedRng","Authenticator","EncodeDecodeBase64","FromUniformBytes","Generate","InsecureDefault","KeyPair","RecoverableSignature","RecoverableSigner","Signer","SigningKey","ToFromBytes","VerifyRecoverable","VerifyingKey"]};
