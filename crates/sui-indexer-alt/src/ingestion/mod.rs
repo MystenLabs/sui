@@ -33,10 +33,6 @@ pub struct IngestionConfig {
     #[arg(long)]
     remote_store_url: Url,
 
-    /// First checkpoint to start ingestion from.
-    #[arg(long, default_value_t = 0)]
-    start_checkpoint: u64,
-
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     #[arg(long, default_value_t = 5000)]
     buffer_size: usize,
@@ -81,9 +77,9 @@ impl IngestionService {
 
     /// Start the ingestion service as a background task, consuming it in the process.
     ///
-    /// Checkpoints are fetched concurrently starting with the configured `start_checkpoint`, and
-    /// pushed to subscribers' channels (potentially out-of-order). Subscribers can communicate
-    /// with the ingestion service via their channels in the following ways:
+    /// Checkpoints are fetched concurrently from the `checkpoints` iterator, and pushed to
+    /// subscribers' channels (potentially out-of-order). Subscribers can communicate with the
+    /// ingestion service via their channels in the following ways:
     ///
     /// - If a subscriber is lagging (not receiving checkpoints fast enough), it will eventually
     ///   provide back-pressure to the ingestion service, which will stop fetching new checkpoints.
@@ -93,7 +89,11 @@ impl IngestionService {
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub async fn run(self) -> Result<JoinHandle<()>> {
+    pub async fn run<I>(self, checkpoints: I) -> Result<JoinHandle<()>>
+    where
+        I: IntoIterator<Item = u64> + Send + Sync + 'static,
+        I::IntoIter: Send + Sync + 'static,
+    {
         let IngestionService {
             config,
             client,
@@ -107,10 +107,9 @@ impl IngestionService {
         }
 
         Ok(spawn_monitored_task!(async move {
-            let start = config.start_checkpoint;
-            info!(start, "Starting ingestion service");
+            info!("Starting ingestion service");
 
-            match stream::iter(start..)
+            match stream::iter(checkpoints)
                 .map(Ok)
                 .try_for_each_concurrent(/* limit */ config.concurrency, |cp| {
                     let client = client.clone();
@@ -199,7 +198,6 @@ mod tests {
         IngestionService::new(
             IngestionConfig {
                 remote_store_url: Url::parse(&uri).unwrap(),
-                start_checkpoint: 0,
                 buffer_size,
                 concurrency,
                 retry_interval: Duration::from_millis(200),
@@ -245,7 +243,7 @@ mod tests {
         let cancel = CancellationToken::new();
         let ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
 
-        let err = ingestion_service.run().await.unwrap_err();
+        let err = ingestion_service.run(0..).await.unwrap_err();
         assert!(matches!(err, Error::NoSubscribers));
     }
 
@@ -267,7 +265,7 @@ mod tests {
 
         let rx = ingestion_service.subscribe();
         let subscriber_handle = test_subscriber(usize::MAX, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run().await.unwrap();
+        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancel();
         subscriber_handle.await.unwrap();
@@ -292,7 +290,7 @@ mod tests {
 
         let rx = ingestion_service.subscribe();
         let subscriber_handle = test_subscriber(1, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run().await.unwrap();
+        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
         subscriber_handle.await.unwrap();
@@ -313,7 +311,7 @@ mod tests {
 
         let rx = ingestion_service.subscribe();
         let subscriber_handle = test_subscriber(usize::MAX, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run().await.unwrap();
+        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
         subscriber_handle.await.unwrap();
@@ -344,7 +342,7 @@ mod tests {
 
         let rx = ingestion_service.subscribe();
         let subscriber_handle = test_subscriber(5, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run().await.unwrap();
+        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
         let seqs = subscriber_handle.await.unwrap();
@@ -376,7 +374,7 @@ mod tests {
 
         let rx = ingestion_service.subscribe();
         let subscriber_handle = test_subscriber(5, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run().await.unwrap();
+        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
 
         cancel.cancelled().await;
         let seqs = subscriber_handle.await.unwrap();
@@ -414,7 +412,7 @@ mod tests {
 
         let rx = ingestion_service.subscribe();
         let subscriber_handle = test_subscriber(5, rx, cancel.clone()).await;
-        let ingestion_handle = ingestion_service.run().await.unwrap();
+        let ingestion_handle = ingestion_service.run(0..).await.unwrap();
 
         // At this point, the service will have been able to pass 3 checkpoints to the non-lagging
         // subscriber, while the laggard's buffer fills up. Now the laggard will pull two
