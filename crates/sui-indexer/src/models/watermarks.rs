@@ -38,7 +38,7 @@ pub struct StoredWatermark {
     pub timestamp_ms: i64,
     /// Column used by the pruner to track its true progress. Data at and below this watermark can
     /// be immediately pruned.
-    pub pruner_lo: Option<i64>,
+    pub pruner_hi_inclusive: Option<i64>,
 }
 
 impl StoredWatermark {

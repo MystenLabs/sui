@@ -378,7 +378,7 @@ diesel::table! {
         tx_hi_inclusive -> Int8,
         reader_lo -> Int8,
         timestamp_ms -> Int8,
-        pruner_lo -> Nullable<Int8>,
+        pruner_hi_inclusive -> Nullable<Int8>,
     }
 }
 

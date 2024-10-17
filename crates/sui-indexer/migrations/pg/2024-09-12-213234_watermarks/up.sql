@@ -24,6 +24,6 @@ CREATE TABLE watermarks
     timestamp_ms                BIGINT        NOT NULL,
     -- Column used by the pruner to track its true progress. Data at and below this watermark can
     -- be immediately pruned.
-    pruner_lo                   BIGINT,
+    pruner_hi_inclusive         BIGINT,
     PRIMARY KEY (entity)
 );
