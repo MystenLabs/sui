@@ -153,12 +153,11 @@ impl Indexer {
     /// Ingestion will stop after consuming the configured `last_checkpoint`, if one is provided,
     /// or will continue until it tracks the tip of the network.
     pub async fn run(mut self) -> Result<JoinHandle<()>> {
-        self.handles.push(
-            self.metrics_service
-                .run()
-                .await
-                .context("Failed to start metrics service")?,
-        );
+        let metrics_handle = self
+            .metrics_service
+            .run()
+            .await
+            .context("Failed to start metrics service")?;
 
         // If an override has been provided, start ingestion from there, otherwise start ingestion
         // from just after the lowest committer watermark across all enabled pipelines.
@@ -177,6 +176,19 @@ impl Indexer {
                 .context("Failed to start ingestion service")?,
         );
 
-        Ok(tokio::spawn(graceful_shutdown(self.handles, self.cancel)))
+        let cancel = self.cancel.clone();
+        Ok(tokio::spawn(async move {
+            // Wait for the ingestion service and all its related tasks to wind down gracefully:
+            // If ingestion has been configured to only handle a specific range of checkpoints, we
+            // want to make sure that tasks are allowed to run to completion before shutting them
+            // down.
+            graceful_shutdown(self.handles, self.cancel).await;
+
+            info!("Indexing pipeline gracefully shut down");
+
+            // Pick off any stragglers (in this case, just the metrics service).
+            cancel.cancel();
+            metrics_handle.await.unwrap();
+        }))
     }
 }

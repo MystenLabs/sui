@@ -162,7 +162,10 @@ impl IngestionService {
                 })
                 .await
             {
-                Ok(()) => {}
+                Ok(()) => {
+                    info!("Checkpoints done, stopping ingestion service");
+                    // drop(subscribers);
+                }
 
                 Err(Error::Cancelled) => {
                     info!("Shutdown received, stopping ingestion service");
