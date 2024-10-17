@@ -178,20 +178,30 @@ impl ServerCertVerifier {
         Self { public_key, name }
     }
 
-    pub fn rustls_client_config(
+    pub fn rustls_client_config_with_client_auth(
         self,
         certificates: Vec<CertificateDer<'static>>,
         private_key: PrivateKeyDer<'static>,
     ) -> Result<rustls::ClientConfig, rustls::Error> {
-        let mut config = rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::ClientConfig::builder_with_provider(Arc::new(
             rustls::crypto::ring::default_provider(),
         ))
         .with_safe_default_protocol_versions()?
         .dangerous()
         .with_custom_certificate_verifier(std::sync::Arc::new(self))
-        .with_client_auth_cert(certificates, private_key)?;
-        config.alpn_protocols = vec![b"h2".to_vec()];
-        Ok(config)
+        .with_client_auth_cert(certificates, private_key)
+    }
+
+    pub fn rustls_client_config_with_no_client_auth(
+        self,
+    ) -> Result<rustls::ClientConfig, rustls::Error> {
+        Ok(rustls::ClientConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()?
+        .dangerous()
+        .with_custom_certificate_verifier(std::sync::Arc::new(self))
+        .with_no_client_auth())
     }
 }
 
