@@ -33,7 +33,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
     ));
     let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
 
-    let (checkpoint_service, _) = CheckpointService::spawn(
+    let (checkpoint_service, _, _) = CheckpointService::spawn(
         state.clone(),
         state.get_checkpoint_store().clone(),
         epoch_store.clone(),
