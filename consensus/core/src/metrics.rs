@@ -105,6 +105,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_block_ancestors_depth: HistogramVec,
     pub(crate) highest_verified_authority_round: IntGaugeVec,
     pub(crate) lowest_verified_authority_round: IntGaugeVec,
+    pub(crate) block_proposal_interval: Histogram,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
     pub(crate) block_proposal_leader_wait_count: IntCounterVec,
     pub(crate) block_timestamp_drift_wait_ms: IntCounterVec,
@@ -233,6 +234,12 @@ impl NodeMetrics {
                 "lowest_verified_authority_round",
                 "The lowest round of verified block for the corresponding authority",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            block_proposal_interval: register_histogram_with_registry!(
+                "block_proposal_interval",
+                "Intervals (in secs) between block proposals.",
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             block_proposal_leader_wait_ms: register_int_counter_vec_with_registry!(
