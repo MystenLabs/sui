@@ -171,7 +171,7 @@ impl Default for BoogieOptions {
             random_seed: 1,
             proc_cores: 4,
             vc_timeout: 40,
-            keep_artifacts: false,
+            keep_artifacts: true,
             eager_threshold: 100,
             lazy_threshold: 100,
             stable_test_output: false,

@@ -755,13 +755,14 @@ impl<'env> BoogieTranslator<'env> {
             })
             .flatten()
             .collect::<BTreeSet<_>>();
+        let empty_set = &BTreeSet::new();
         let ghost_global_type_instances = mono_info
             .funs
             .get(&(
                 ghost_global_fun_env.get_qualified_id(),
                 FunctionVariant::Baseline,
             ))
-            .unwrap();
+            .unwrap_or(empty_set);
 
         assert!(
             ghost_global_type_instances.is_subset(&ghost_declare_global_type_instances),
@@ -2031,6 +2032,27 @@ impl<'env> FunctionTranslator<'env> {
                             }
                         }
 
+                        if self
+                            .parent
+                            .targets
+                            .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
+                            == Some(&mid.qualified(*fid))
+                            && self.style == FunctionTranslationStyle::Opaque
+                        {
+                            emitln!(
+                                self.writer(),
+                                "call $abort_if_cond := {}({});",
+                                self.function_variant_name(FunctionTranslationStyle::Aborts),
+                                // boogie_function_name(
+                                //     &callee_env,
+                                //     inst,
+                                //     FunctionTranslationStyle::Aborts
+                                // ),
+                                args_str,
+                            );
+                            emitln!(self.writer(), "$abort_flag := !$abort_if_cond;");
+                        }
+
                         // regular path
                         if !processed {
                             let targeted = self.fun_target.module_env().is_target();
@@ -2234,23 +2256,6 @@ impl<'env> FunctionTranslator<'env> {
                                 );
                             }
                         };
-
-                        if *mid == self.fun_target.module_env().get_id()
-                            && *fid == self.fun_target.get_id()
-                            && self.style == FunctionTranslationStyle::Opaque
-                        {
-                            emitln!(
-                                self.writer(),
-                                "call $abort_flag := {}({});",
-                                self.function_variant_name(FunctionTranslationStyle::Aborts),
-                                // boogie_function_name(
-                                //     &callee_env,
-                                //     inst,
-                                //     FunctionTranslationStyle::Aborts
-                                // ),
-                                args_str
-                            );
-                        }
 
                         // Clear the last track location after function call, as the call inserted
                         // location tracks before it returns.
