@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use async_graphql::{connection::Connection, *};
 use fastcrypto::encoding::{Base64, Encoding};
 use move_core_types::account_address::AccountAddress;
 use serde::de::DeserializeOwned;
 use sui_json_rpc_types::DevInspectArgs;
 use sui_sdk::SuiClient;
-use sui_types::parse_sui_type_tag;
 use sui_types::transaction::{TransactionData, TransactionKind};
-use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI};
+use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
 use super::move_package::{
     self, MovePackage, MovePackageCheckpointFilter, MovePackageVersionFilter,
@@ -288,7 +289,7 @@ impl Query {
     /// Fetch a structured representation of a concrete type, including its layout information.
     /// Fails if the type is malformed.
     async fn type_(&self, type_: String) -> Result<MoveType> {
-        Ok(parse_sui_type_tag(&type_)
+        Ok(TypeTag::from_str(&type_)
             .map_err(|e| Error::Client(format!("Bad type: {e}")))
             .extend()?
             .into())

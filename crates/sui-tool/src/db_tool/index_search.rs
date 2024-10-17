@@ -5,7 +5,6 @@ use anyhow::anyhow;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{path::PathBuf, str::FromStr};
 use sui_types::digests::TransactionDigest;
-use sui_types::parse_sui_type_tag;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::Map;
 
@@ -308,7 +307,7 @@ fn from_addr_str_oid(s: &str) -> Result<(SuiAddress, String, ObjectID), anyhow::
         return Err(anyhow!("Invalid addr, type tag object id triplet"));
     }
     let address = SuiAddress::from_str(tokens[0].trim())?;
-    let tag: TypeTag = parse_sui_type_tag(tokens[1].trim())?;
+    let tag: TypeTag = TypeTag::from_str(tokens[1].trim())?;
     let oid: ObjectID = ObjectID::from_str(tokens[2].trim())?;
 
     Ok((address, tag.to_string(), oid))

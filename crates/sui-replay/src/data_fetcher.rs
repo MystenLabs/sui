@@ -6,6 +6,7 @@ use crate::types::EPOCH_CHANGE_STRUCT_TAG;
 use async_trait::async_trait;
 use futures::future::join_all;
 use lru::LruCache;
+use move_core_types::language_storage::StructTag;
 use parking_lot::RwLock;
 use rand::Rng;
 use std::collections::BTreeMap;
@@ -26,7 +27,6 @@ use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, SequenceNumber, VersionNumber};
 use sui_types::digests::TransactionDigest;
 use sui_types::object::Object;
-use sui_types::parse_sui_struct_tag;
 use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::{EndOfEpochTransactionKind, TransactionKind};
@@ -568,7 +568,7 @@ impl DataFetcher for RemoteFetcher {
         reverse: bool,
     ) -> Result<Vec<SuiEvent>, ReplayEngineError> {
         let struct_tag_str = EPOCH_CHANGE_STRUCT_TAG.to_string();
-        let struct_tag = parse_sui_struct_tag(&struct_tag_str)?;
+        let struct_tag = StructTag::from_str(&struct_tag_str)?;
 
         let mut epoch_change_events: Vec<SuiEvent> = vec![];
         let mut has_next_page = true;

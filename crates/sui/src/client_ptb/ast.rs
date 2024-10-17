@@ -3,11 +3,10 @@
 
 use std::fmt;
 
-use move_command_line_common::{
-    address::{NumericalAddress, ParsedAddress},
-    types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType},
+use move_command_line_common::address::{NumericalAddress, ParsedAddress};
+use move_core_types::{
+    account_address::AccountAddress, language_storage::StructTag, runtime_value::MoveValue,
 };
-use move_core_types::runtime_value::MoveValue;
 use sui_types::{
     base_types::{ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
     Identifier, TypeTag,
@@ -139,6 +138,27 @@ pub enum ParsedPTBCommand {
     Upgrade(Spanned<String>, Spanned<Argument>),
     WarnShadows,
     Preview,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParsedStructType {
+    pub fq_name: ModuleAccess,
+    pub type_args: Vec<ParsedType>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ParsedType {
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    U256,
+    Bool,
+    Address,
+    Signer,
+    Vector(Box<ParsedType>),
+    Struct(ParsedStructType),
 }
 
 /// An enum representing the parsed arguments of a PTB command.
@@ -298,6 +318,55 @@ impl Argument {
     }
 }
 
+impl ParsedType {
+    pub fn into_type_tag(
+        &self,
+        mapping: &impl Fn(&str) -> Option<AccountAddress>,
+    ) -> PTBResult<TypeTag> {
+        match self {
+            ParsedType::U8 => Ok(TypeTag::U8),
+            ParsedType::U16 => Ok(TypeTag::U16),
+            ParsedType::U32 => Ok(TypeTag::U32),
+            ParsedType::U64 => Ok(TypeTag::U64),
+            ParsedType::U128 => Ok(TypeTag::U128),
+            ParsedType::U256 => Ok(TypeTag::U256),
+            ParsedType::Bool => Ok(TypeTag::Bool),
+            ParsedType::Address => Ok(TypeTag::Address),
+            ParsedType::Signer => Ok(TypeTag::Signer),
+            ParsedType::Vector(inner) => {
+                Ok(TypeTag::Vector(Box::new(inner.into_type_tag(mapping)?)))
+            }
+            ParsedType::Struct(ParsedStructType { fq_name, type_args }) => {
+                let ty_args = type_args
+                    .iter()
+                    .map(|t| t.into_type_tag(mapping))
+                    .collect::<PTBResult<Vec<_>>>()?;
+                let ModuleAccess {
+                    address,
+                    module_name,
+                    function_name,
+                } = fq_name;
+                Ok(TypeTag::Struct(Box::new(StructTag {
+                    address: address
+                        .value
+                        .clone()
+                        .into_account_address(mapping)
+                        .map_err(|_| {
+                            err!(
+                                address.span,
+                                "Invalid address '{}' for type -- address name not in scope",
+                                address.value
+                            )
+                        })?,
+                    module: module_name.value.clone(),
+                    name: function_name.value.clone(),
+                    type_params: ty_args,
+                })))
+            }
+        }
+    }
+}
+
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -446,13 +515,18 @@ impl<'a> fmt::Display for TyDisplay<'a> {
             Vector(ty) => write!(f, "vector<{}>", TyDisplay(ty)),
             Struct(ParsedStructType {
                 fq_name:
-                    ParsedFqName {
-                        module: ParsedModuleId { address, name },
-                        name: struct_name,
+                    ModuleAccess {
+                        address,
+                        module_name,
+                        function_name,
                     },
                 type_args,
             }) => {
-                write!(f, "{address}::{name}::{struct_name}")?;
+                write!(
+                    f,
+                    "{}::{}::{}",
+                    address.value, module_name.value, function_name.value
+                )?;
                 if type_args.is_empty() {
                     Ok(())
                 } else {

@@ -9,14 +9,13 @@ use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     move_package::UpgradePolicy,
     object::{Object, Owner},
-    parse_sui_struct_tag,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ObjectStore,
     transaction::{Argument, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
-use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
+use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::execution_config_utils::to_binary_config;
@@ -1095,8 +1094,8 @@ async fn test_upgraded_types_in_one_txn() {
     assert!(effects.status().is_ok(), "{:#?}", effects.status());
 
     // verify that the types of events match
-    let e1_type = parse_sui_struct_tag(&format!("{package_v2}::base::BModEvent")).unwrap();
-    let e2_type = parse_sui_struct_tag(&format!("{package_v3}::base::CModEvent")).unwrap();
+    let e1_type = StructTag::from_str(&format!("{package_v2}::base::BModEvent")).unwrap();
+    let e2_type = StructTag::from_str(&format!("{package_v3}::base::CModEvent")).unwrap();
 
     let event_digest = effects.events_digest().unwrap();
     let mut events = runner

@@ -13,6 +13,7 @@ use std::{
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -805,7 +806,7 @@ impl SuiClientCommands {
                 }
 
                 fn canonicalize_type(type_: &str) -> Result<String, anyhow::Error> {
-                    Ok(parse_sui_type_tag(type_)
+                    Ok(TypeTag::from_str(type_)
                         .context("Cannot parse coin type")?
                         .to_canonical_string(/* with_prefix */ true))
                 }

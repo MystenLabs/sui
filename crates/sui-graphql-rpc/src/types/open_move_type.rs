@@ -284,18 +284,18 @@ pub(crate) fn abilities(set: AbilitySet) -> Vec<MoveAbility> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
 
     use super::*;
 
     use expect_test::expect;
-
+    use move_core_types::language_storage::StructTag;
     use sui_package_resolver::{DatatypeKey, DatatypeRef};
 
-    use sui_types::parse_sui_struct_tag;
     use OpenSignatureBody as S;
 
     fn struct_key(s: &str) -> DatatypeKey {
-        DatatypeRef::from(&parse_sui_struct_tag(s).unwrap()).as_key()
+        DatatypeRef::from(&StructTag::from_str(s).unwrap()).as_key()
     }
 
     #[test]

@@ -27,8 +27,7 @@ use fastcrypto::{
 };
 use std::sync::Arc;
 use std::{net::SocketAddr, str::FromStr};
-use sui_types::bridge::BridgeChainId;
-use sui_types::parse_sui_type_tag;
+use sui_types::{bridge::BridgeChainId, TypeTag};
 use tracing::{info, instrument};
 
 pub mod governance_verifier;
@@ -465,7 +464,7 @@ async fn handle_add_tokens_on_sui(
         let token_type_names = token_type_names
             .split(',')
             .map(|s| {
-                parse_sui_type_tag(s).map_err(|err| {
+                TypeTag::from_str(s).map_err(|err| {
                     BridgeError::InvalidBridgeClientRequest(format!(
                         "Invalid token type name: {:?}",
                         err
@@ -726,9 +725,9 @@ mod tests {
             native: false,
             token_ids: vec![100, 101, 102],
             token_type_names: vec![
-                parse_sui_type_tag("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1").unwrap(),
-                parse_sui_type_tag("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2").unwrap(),
-                parse_sui_type_tag("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3").unwrap(),
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1").unwrap(),
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2").unwrap(),
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3").unwrap(),
             ],
             token_prices: vec![100_000_0000, 200_000_0000, 300_000_0000],
         });

@@ -71,12 +71,13 @@ fn is_balance(s: &StructTag) -> Option<TypeTag> {
 mod tests {
     use std::str::FromStr;
 
-    use crate::{id::UID, parse_sui_struct_tag, parse_sui_type_tag};
+    use crate::id::UID;
 
     use super::*;
 
     use move_core_types::{
         account_address::AccountAddress, annotated_value as A, identifier::Identifier,
+        language_storage::StructTag,
     };
 
     #[test]
@@ -266,7 +267,7 @@ mod tests {
 
     /// Create a struct value for test purposes.
     fn value_(rep: &str, fields: Vec<(&str, A::MoveValue)>) -> A::MoveValue {
-        let type_ = parse_sui_struct_tag(rep).unwrap();
+        let type_ = StructTag::from_str(rep).unwrap();
         let fields = fields
             .into_iter()
             .map(|(name, value)| (Identifier::new(name).unwrap(), value))
@@ -277,12 +278,12 @@ mod tests {
 
     // Create a type tag for test purposes.
     fn type_(rep: &str) -> TypeTag {
-        parse_sui_type_tag(rep).unwrap()
+        TypeTag::from_str(rep).unwrap()
     }
 
     /// Create a struct layout for test purposes.
     fn layout_(rep: &str, fields: Vec<(&str, A::MoveTypeLayout)>) -> A::MoveTypeLayout {
-        let type_ = parse_sui_struct_tag(rep).unwrap();
+        let type_ = StructTag::from_str(rep).unwrap();
         let fields = fields
             .into_iter()
             .map(|(name, layout)| A::MoveFieldLayout::new(Identifier::new(name).unwrap(), layout))

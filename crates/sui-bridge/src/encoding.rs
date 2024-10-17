@@ -412,7 +412,7 @@ mod tests {
     use sui_types::bridge::BridgeChainId;
     use sui_types::bridge::TOKEN_ID_BTC;
     use sui_types::bridge::TOKEN_ID_USDC;
-    use sui_types::parse_sui_type_tag;
+    use sui_types::TypeTag;
 
     use super::*;
 
@@ -923,10 +923,10 @@ mod tests {
             native: false,
             token_ids: vec![1, 2, 3, 4],
             token_type_names: vec![
-                parse_sui_type_tag("0x9b5e13bcd0cb23ff25c07698e89d48056c745338d8c9dbd033a4172b87027073::btc::BTC").unwrap(),
-                parse_sui_type_tag("0x7970d71c03573f540a7157f0d3970e117effa6ae16cefd50b45c749670b24e6a::eth::ETH").unwrap(),
-                parse_sui_type_tag("0x500e429a24478405d5130222b20f8570a746b6bc22423f14b4d4e6a8ea580736::usdc::USDC").unwrap(),
-                parse_sui_type_tag("0x46bfe51da1bd9511919a92eb1154149b36c0f4212121808e13e3e5857d607a9c::usdt::USDT").unwrap(),
+                TypeTag::from_str("0x9b5e13bcd0cb23ff25c07698e89d48056c745338d8c9dbd033a4172b87027073::btc::BTC").unwrap(),
+                TypeTag::from_str("0x7970d71c03573f540a7157f0d3970e117effa6ae16cefd50b45c749670b24e6a::eth::ETH").unwrap(),
+                TypeTag::from_str("0x500e429a24478405d5130222b20f8570a746b6bc22423f14b4d4e6a8ea580736::usdc::USDC").unwrap(),
+                TypeTag::from_str("0x46bfe51da1bd9511919a92eb1154149b36c0f4212121808e13e3e5857d607a9c::usdt::USDT").unwrap(),
             ],
             token_prices: vec![
                 500_000_000u64,

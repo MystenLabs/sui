@@ -9,7 +9,6 @@ use clap::*;
 use move_command_line_common::{
     address::ParsedAddress,
     files::{MOVE_EXTENSION, MOVE_IR_EXTENSION},
-    types::ParsedType,
     values::{ParsableValue, ParsedValue},
 };
 use move_compiler::shared::NumericalAddress;
@@ -247,10 +246,9 @@ pub struct RunCommand<ExtraValueArgs: ParsableValue> {
     pub args: Vec<ParsedValue<ExtraValueArgs>>,
     #[clap(
         long = "type-args",
-        value_parser = ParsedType::parse,
         num_args(1..),
     )]
-    pub type_args: Vec<ParsedType>,
+    pub type_args: Vec<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
     #[clap(long = "syntax")]

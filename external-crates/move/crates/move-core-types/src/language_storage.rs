@@ -12,10 +12,7 @@ use once_cell::sync::Lazy;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::{Display, Formatter},
-    // str::FromStr,
-};
+use std::fmt::{Display, Formatter};
 
 pub const CODE_TAG: u8 = 0;
 pub const RESOURCE_TAG: u8 = 1;
@@ -132,14 +129,6 @@ impl TypeTag {
     }
 }
 
-// impl FromStr for TypeTag {
-//     type Err = anyhow::Error;
-//
-//     fn from_str(s: &str) -> Result<Self, Self::Err> {
-//         parse_type_tag(s)
-//     }
-// }
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
 pub struct StructTag {
     pub address: AccountAddress,
@@ -246,14 +235,6 @@ impl StructTag {
                 })
     }
 }
-
-// impl FromStr for StructTag {
-//     type Err = anyhow::Error;
-//
-//     fn from_str(s: &str) -> Result<Self, Self::Err> {
-//         parse_struct_tag(s)
-//     }
-// }
 
 /// Represents the initial key into global storage where we first index by the address, and then
 /// the struct tag

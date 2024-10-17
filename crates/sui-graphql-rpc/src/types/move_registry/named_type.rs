@@ -7,7 +7,7 @@ use std::str::FromStr;
 use async_graphql::Context;
 use futures::future;
 use regex::{Captures, Regex};
-use sui_types::{base_types::ObjectID, parse_sui_type_tag, TypeTag};
+use sui_types::{base_types::ObjectID, TypeTag};
 
 use crate::{data::package_resolver::PackageResolver, error::Error};
 
@@ -56,7 +56,7 @@ impl NamedType {
 
         let correct_type_tag: String = Self::replace_names(name, &name_package_id_mapping)?;
 
-        let tag = parse_sui_type_tag(&correct_type_tag)
+        let tag = TypeTag::from_str(&correct_type_tag)
             .map_err(|e| Error::Client(format!("bad type: {e}")))?;
 
         resolver
@@ -87,7 +87,7 @@ impl NamedType {
         // We attempt to parse the type_tag with these replacements, to make sure there are no other
         // errors in the type tag (apart from the move names). That protects us from unnecessary
         // queries to resolve .move names, for a type tag that will be invalid anyway.
-        parse_sui_type_tag(&struct_tag).map_err(|e| Error::Client(format!("bad type: {e}")))?;
+        TypeTag::from_str(&struct_tag).map_err(|e| Error::Client(format!("bad type: {e}")))?;
 
         Ok(names)
     }

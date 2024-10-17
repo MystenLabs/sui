@@ -23,13 +23,14 @@ use rand::{
 use serde_json::json;
 use std::collections::HashSet;
 use std::fs;
-use std::{convert::TryInto, env};
+use std::{convert::TryInto, env, str::FromStr};
 
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
 };
 use sui_macros::sim_test;
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_types::digests::Digest;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
@@ -57,7 +58,6 @@ use sui_types::{
     MOVE_STDLIB_PACKAGE_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
     SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use sui_types::{digests::Digest, parse_sui_type_tag};
 
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
@@ -3673,7 +3673,7 @@ async fn test_dynamic_field_struct_name_parsing() {
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
     assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
     assert_eq!(
-        parse_sui_type_tag("0x0::object_basics::Name").unwrap(),
+        TypeTag::from_str("0x0::object_basics::Name").unwrap(),
         fields[0].name.type_
     )
 }
@@ -3686,7 +3686,7 @@ async fn test_dynamic_field_bytearray_name_parsing() {
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
     assert_eq!(
-        parse_sui_type_tag("vector<u8>").unwrap(),
+        TypeTag::from_str("vector<u8>").unwrap(),
         fields[0].name.type_
     );
     assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
@@ -3699,7 +3699,7 @@ async fn test_dynamic_field_address_name_parsing() {
 
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(parse_sui_type_tag("address").unwrap(), fields[0].name.type_);
+    assert_eq!(TypeTag::from_str("address").unwrap(), fields[0].name.type_);
     assert_eq!(json!(sender), fields[0].name.value);
 }
 
@@ -3711,7 +3711,7 @@ async fn test_dynamic_object_field_struct_name_parsing() {
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
     assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
     assert_eq!(
-        parse_sui_type_tag("0x0::object_basics::Name").unwrap(),
+        TypeTag::from_str("0x0::object_basics::Name").unwrap(),
         fields[0].name.type_
     )
 }
@@ -3724,7 +3724,7 @@ async fn test_dynamic_object_field_bytearray_name_parsing() {
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
     assert_eq!(
-        parse_sui_type_tag("vector<u8>").unwrap(),
+        TypeTag::from_str("vector<u8>").unwrap(),
         fields[0].name.type_
     );
     assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
@@ -3737,7 +3737,7 @@ async fn test_dynamic_object_field_address_name_parsing() {
 
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
-    assert_eq!(parse_sui_type_tag("address").unwrap(), fields[0].name.type_);
+    assert_eq!(TypeTag::from_str("address").unwrap(), fields[0].name.type_);
     assert_eq!(json!(sender), fields[0].name.value);
 }
 

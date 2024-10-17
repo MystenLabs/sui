@@ -6,7 +6,7 @@ use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use pretty_assertions::assert_str_eq;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -30,7 +30,6 @@ use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
 use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
-use sui_types::parse_sui_struct_tag;
 use sui_types::transaction::{SenderSignedData, TransactionData};
 use sui_types::type_input::{StructInput, TypeInput};
 use sui_types::{
@@ -167,7 +166,7 @@ fn get_registry() -> Result<Registry> {
     let ccd = CheckpointContentsDigest::random();
     tracer.trace_value(&mut samples, &ccd).unwrap();
 
-    let struct_tag = parse_sui_struct_tag("0x2::coin::Coin<0x2::sui::SUI>").unwrap();
+    let struct_tag = StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap();
     tracer.trace_value(&mut samples, &struct_tag).unwrap();
 
     let ccd = CheckpointDigest::random();

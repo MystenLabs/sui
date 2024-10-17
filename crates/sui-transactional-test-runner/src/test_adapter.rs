@@ -761,9 +761,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     anyhow::anyhow!("Missing commands for programmable transaction")
                 })?;
                 let contents = std::fs::read_to_string(file.path())?;
-                let commands = ParsedCommand::parse_vec(&contents)?;
                 let staged = &self.staged_modules;
                 let state = &self.compiled_state;
+                let commands =
+                    ParsedCommand::parse_vec(&contents, &|s| Some(state.resolve_named_address(s)))?;
                 let commands = commands
                     .into_iter()
                     .map(|c| {

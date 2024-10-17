@@ -165,8 +165,7 @@ impl SuiEvent {
             package_id: ObjectID::random(),
             transaction_module: Identifier::from_str("random_for_testing").unwrap(),
             sender: SuiAddress::random_for_testing_only(),
-            type_: sui_types::parse_sui_struct_tag("0x6666::random_for_testing::RandomForTesting")
-                .unwrap(),
+            type_: StructTag::from_str("0x6666::random_for_testing::RandomForTesting").unwrap(),
             parsed_json: json!({}),
             bcs: vec![],
             timestamp_ms: None,

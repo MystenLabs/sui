@@ -783,7 +783,7 @@ mod tests {
             let error_object: ErrorObjectOwned = error_result.into();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
+            let expected = expect!["Invalid struct type '0x2::invalid::struct::tag': unexpected token '::', expected end of input"];
             expected.assert_eq(error_object.message());
         }
 
@@ -802,8 +802,8 @@ mod tests {
             let error_object: ErrorObjectOwned = error_result.into();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected =
-                expect!["Invalid struct type: 0x2::sui:🤵. Got error: unrecognized token: :🤵"];
+            let expected = expect!["Invalid struct type '0x2::sui:🤵': unrecognized token: :🤵"];
+
             expected.assert_eq(error_object.message());
         }
 
@@ -1086,7 +1086,7 @@ mod tests {
             let error_object: ErrorObjectOwned = error_result.into();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
+            let expected = expect!["Invalid struct type '0x2::invalid::struct::tag': unexpected token '::', expected end of input"];
             expected.assert_eq(error_object.message());
         }
 

@@ -30,7 +30,7 @@ use move_vm_types::{
     loaded_data::runtime_types::{CachedDatatype, DepthFormula, Type},
 };
 
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc, thread};
+use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc, thread};
 
 const DEFAULT_ACCOUNT: AccountAddress = {
     let mut address = [0u8; AccountAddress::LENGTH];
@@ -60,12 +60,6 @@ struct RelinkingStore {
     context: AccountAddress,
     linkage: BTreeMap<ModuleId, ModuleId>,
     type_origin: BTreeMap<(ModuleId, Identifier), ModuleId>,
-}
-
-fn parse_type_tag(s: &str) -> anyhow::Result<TypeTag> {
-    move_command_line_common::types::ParsedType::parse(s)
-        .unwrap()
-        .into_type_tag(&|_| None)
 }
 
 impl Adapter {
@@ -784,7 +778,7 @@ fn relink_type_identity() {
     let b1_modules = get_relinker_tests_modules_with_deps("b_v1", ["c_v1"]).unwrap();
 
     adapter.publish_modules(c0_modules);
-    let c0_s = adapter.load_type(&parse_type_tag("0x7::c::S").unwrap());
+    let c0_s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
 
     let mut adapter = adapter.relink(
         UPGRADE_ACCOUNT,
@@ -801,8 +795,8 @@ fn relink_type_identity() {
     adapter.publish_modules(c1_modules);
     adapter.publish_modules(b1_modules);
 
-    let c1_s = adapter.load_type(&parse_type_tag("0x7::c::S").unwrap());
-    let b1_s = adapter.load_type(&parse_type_tag("0x7::b::S").unwrap());
+    let c1_s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
+    let b1_s = adapter.load_type(&TypeTag::from_str("0x7::b::S").unwrap());
 
     assert_eq!(c0_s, c1_s);
     assert_ne!(c1_s, b1_s);
@@ -823,7 +817,7 @@ fn relink_defining_module_successive() {
     let c2_modules = get_relinker_tests_modules_with_deps("c_v2", []).unwrap();
 
     adapter.publish_modules(c0_modules);
-    let c0_s = adapter.load_type(&parse_type_tag("0x7::c::S").unwrap());
+    let c0_s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
 
     let mut adapter = adapter.relink(
         UPGRADE_ACCOUNT,
@@ -836,8 +830,8 @@ fn relink_defining_module_successive() {
     );
 
     adapter.publish_modules(c1_modules);
-    let c1_s = adapter.load_type(&parse_type_tag("0x7::c::S").unwrap());
-    let c1_r = adapter.load_type(&parse_type_tag("0x7::c::R").unwrap());
+    let c1_s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
+    let c1_r = adapter.load_type(&TypeTag::from_str("0x7::c::R").unwrap());
 
     let mut adapter = adapter.relink(
         UPGRADE_ACCOUNT_2,
@@ -851,9 +845,9 @@ fn relink_defining_module_successive() {
     );
 
     adapter.publish_modules(c2_modules);
-    let c2_s = adapter.load_type(&parse_type_tag("0x7::c::S").unwrap());
-    let c2_r = adapter.load_type(&parse_type_tag("0x7::c::R").unwrap());
-    let c2_q = adapter.load_type(&parse_type_tag("0x7::c::Q").unwrap());
+    let c2_s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
+    let c2_r = adapter.load_type(&TypeTag::from_str("0x7::c::R").unwrap());
+    let c2_q = adapter.load_type(&TypeTag::from_str("0x7::c::Q").unwrap());
 
     for s in &[c0_s, c1_s, c2_s] {
         let TypeTag::Struct(st) = adapter.get_type_tag(s) else {
@@ -905,9 +899,9 @@ fn relink_defining_module_oneshot() {
     );
 
     adapter.publish_modules(c2_modules);
-    let s = adapter.load_type(&parse_type_tag("0x7::c::S").unwrap());
-    let r = adapter.load_type(&parse_type_tag("0x7::c::R").unwrap());
-    let q = adapter.load_type(&parse_type_tag("0x7::c::Q").unwrap());
+    let s = adapter.load_type(&TypeTag::from_str("0x7::c::S").unwrap());
+    let r = adapter.load_type(&TypeTag::from_str("0x7::c::R").unwrap());
+    let q = adapter.load_type(&TypeTag::from_str("0x7::c::Q").unwrap());
 
     let TypeTag::Struct(s) = adapter.get_type_tag(&s) else {
         panic!("Not a struct: {s:?}")

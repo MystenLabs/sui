@@ -6,13 +6,12 @@ use std::iter::Peekable;
 use move_command_line_common::{
     address::{NumericalAddress, ParsedAddress},
     parser::{parse_u128, parse_u16, parse_u256, parse_u32, parse_u64, parse_u8},
-    types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType},
 };
 use sui_types::{base_types::ObjectID, Identifier};
 
 use crate::{
     client_ptb::{
-        ast::{all_keywords, COMMANDS},
+        ast::{all_keywords, ParsedStructType, ParsedType, COMMANDS},
         builder::{display_did_you_mean, find_did_you_means},
     },
     err, error, sp,
@@ -484,22 +483,12 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 
             L(T::Ident | T::Number | T::HexNumber, _) => 'fq: {
                 let sp!(_, module_access) = self.parse_module_access()?;
-                let sp!(_, address) = module_access.address;
-                let sp!(_, module_name) = module_access.module_name;
-                let sp!(fun_sp, function_name) = module_access.function_name;
-
-                let module = ParsedModuleId {
-                    address,
-                    name: module_name.to_string(),
-                };
-
-                let name = function_name.to_string();
-                let fq_name = ParsedFqName { module, name };
+                let sp!(fun_sp, _) = module_access.function_name;
 
                 let sp!(_, L(T::LAngle, _)) = self.peek() else {
                     let sp = sp.widen(fun_sp);
                     break 'fq sp.wrap(ParsedType::Struct(ParsedStructType {
-                        fq_name,
+                        fq_name: module_access,
                         type_args: vec![],
                     }));
                 };
@@ -507,7 +496,10 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 let sp!(tys_sp, type_args) = self.parse_type_args()?;
 
                 let sp = sp.widen(tys_sp);
-                sp.wrap(ParsedType::Struct(ParsedStructType { fq_name, type_args }))
+                sp.wrap(ParsedType::Struct(ParsedStructType {
+                    fq_name: module_access,
+                    type_args,
+                }))
             }
 
             unexpected => error!(

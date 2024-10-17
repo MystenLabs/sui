@@ -1784,7 +1784,6 @@ mod tests {
     use std::{path::PathBuf, str::FromStr, sync::RwLock};
     use sui_types::base_types::random_object_ref;
     use sui_types::transaction::ObjectArg;
-    use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 
     use move_compiler::compiled_unit::NamedCompiledModule;
     use sui_move_build::{BuildConfig, CompiledPackage};
@@ -3115,11 +3114,11 @@ mod tests {
     }
 
     fn type_(t: &str) -> TypeTag {
-        parse_sui_type_tag(t).unwrap()
+        TypeTag::from_str(t).unwrap()
     }
 
     fn key(t: &str) -> DatatypeKey {
-        let tag = parse_sui_struct_tag(t).unwrap();
+        let tag = StructTag::from_str(t).unwrap();
         DatatypeRef::from(&tag).as_key()
     }
 

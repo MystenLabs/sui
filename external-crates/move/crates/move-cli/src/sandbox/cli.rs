@@ -11,7 +11,7 @@ use crate::{
 };
 use anyhow::Result;
 use clap::Parser;
-use move_command_line_common::{types::ParsedType, values::ParsedValue};
+use move_command_line_common::values::ParsedValue;
 use move_core_types::{language_storage::TypeTag, transaction_argument::TransactionArgument};
 use move_package::compilation::package_layout::CompiledPackageLayout;
 use move_vm_test_utils::gas_schedule::CostTable;
@@ -19,10 +19,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-
-fn parse_type_tag(s: &str) -> Result<TypeTag> {
-    ParsedType::parse(s).and_then(|t| t.into_type_tag(&|_| None))
-}
 
 fn parse_transaction_argument(s: &str) -> Result<TransactionArgument> {
     let x: ParsedValue<()> = ParsedValue::parse(s)?;
@@ -93,7 +89,6 @@ pub enum SandboxCommand {
         /// `main<T>()`). Must match the type arguments kinds expected by `script_file`.
         #[clap(
             long = "type-args",
-            value_parser = parse_type_tag,
             num_args(1..),
             action = clap::ArgAction::Append,
         )]
@@ -164,7 +159,6 @@ pub struct StructLayoutOptions {
     /// Generate layout bindings for `struct` bound to these type arguments.
     #[clap(
         long = "type-args",
-        value_parser = parse_type_tag,
         requires="struct",
         action = clap::ArgAction::Append,
         num_args(1..),
