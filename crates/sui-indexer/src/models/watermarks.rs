@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    handlers::CommitterWatermark,
-    schema::watermarks::{self},
-};
+use std::str::FromStr;
+
 use diesel::prelude::*;
 
+use crate::{
+    handlers::{pruner::PrunableTable, CommitterWatermark},
+    schema::watermarks::{self},
+};
+
 /// Represents a row in the `watermarks` table.
-#[derive(Queryable, Insertable, Default, QueryableByName)]
+#[derive(Queryable, Insertable, Default, QueryableByName, Clone)]
 #[diesel(table_name = watermarks, primary_key(entity))]
 pub struct StoredWatermark {
     /// The table governed by this watermark, i.e `epochs`, `checkpoints`, `transactions`.
@@ -35,7 +38,7 @@ pub struct StoredWatermark {
     pub timestamp_ms: i64,
     /// Column used by the pruner to track its true progress. Data at and below this watermark can
     /// be immediately pruned.
-    pub pruner_lo: Option<i64>,
+    pub pruner_hi_inclusive: Option<i64>,
 }
 
 impl StoredWatermark {
@@ -46,6 +49,28 @@ impl StoredWatermark {
             checkpoint_hi_inclusive: watermark.cp as i64,
             tx_hi_inclusive: watermark.tx as i64,
             ..StoredWatermark::default()
+        }
+    }
+
+    pub fn from_lower_bound_update(entity: &str, epoch_lo: u64, reader_lo: u64) -> Self {
+        StoredWatermark {
+            entity: entity.to_string(),
+            epoch_lo: epoch_lo as i64,
+            reader_lo: reader_lo as i64,
+            ..StoredWatermark::default()
+        }
+    }
+
+    pub fn entity(&self) -> Option<PrunableTable> {
+        PrunableTable::from_str(&self.entity).ok()
+    }
+
+    /// Determine whether to set a new epoch lower bound based on the retention policy.
+    pub fn new_epoch_lo(&self, retention: u64) -> Option<u64> {
+        if self.epoch_lo as u64 + retention <= self.epoch_hi_inclusive as u64 {
+            Some((self.epoch_hi_inclusive as u64).saturating_sub(retention - 1))
+        } else {
+            None
         }
     }
 }
