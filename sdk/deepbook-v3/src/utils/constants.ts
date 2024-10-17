@@ -129,12 +129,12 @@ export const mainnetPools: PoolMap = {
 		quoteCoin: 'USDC',
 	},
 	WUSDT_USDC: {
-		address: `0x52f9bf16d9e7eff79da73d5e3dea39fe1ef8c77684bf4ec2c6566b41396404d0`,
+		address: `0x4e2ca3988246e1d50b9bf209abb9c1cbfec65bd95afdacc620a36c67bdb8452f`,
 		baseCoin: 'WUSDT',
 		quoteCoin: 'USDC',
 	},
 	WUSDC_USDC: {
-		address: `0xc69f7755fec146583e276a104bcf91e0c9f0cab91dcdb1c202e8d76a5a5a1101`,
+		address: `0xa0b9ebefb38c963fd115f52d71fa64501b79d1adcb5270563f92ce0442376545`,
 		baseCoin: 'WUSDC',
 		quoteCoin: 'USDC',
 	},
