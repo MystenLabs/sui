@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use anyhow::{Context, Result};
 use db::{Db, DbConfig};
@@ -45,6 +45,9 @@ pub struct Indexer {
     /// Optional override of the checkpoint upperbound.
     last_checkpoint: Option<u64>,
 
+    /// Optional override of enabled pipelines.
+    enabled_pipelines: BTreeSet<String>,
+
     /// Cancellation token shared among all continuous tasks in the service.
     cancel: CancellationToken,
 
@@ -79,6 +82,11 @@ pub struct IndexerConfig {
     #[arg(long)]
     last_checkpoint: Option<u64>,
 
+    /// Only run the following pipelines -- useful for backfills. If not provided, all pipelines
+    /// will be run.
+    #[arg(long, action = clap::ArgAction::Append)]
+    pipeline: Vec<String>,
+
     /// Address to serve Prometheus Metrics from.
     #[arg(long, default_value = "0.0.0.0:9184")]
     pub metrics_address: SocketAddr,
@@ -92,6 +100,7 @@ impl Indexer {
             committer_config,
             first_checkpoint,
             last_checkpoint,
+            pipeline,
             metrics_address,
         } = config;
 
@@ -112,6 +121,7 @@ impl Indexer {
             committer_config,
             first_checkpoint,
             last_checkpoint,
+            enabled_pipelines: pipeline.into_iter().collect(),
             cancel,
             first_checkpoint_from_watermark: u64::MAX,
             handles: vec![],
@@ -121,6 +131,11 @@ impl Indexer {
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     pub async fn pipeline<H: Handler + 'static>(&mut self) -> Result<()> {
+        if !self.enabled_pipelines.is_empty() && !self.enabled_pipelines.contains(H::NAME) {
+            info!("Skipping pipeline {}", H::NAME);
+            return Ok(());
+        }
+
         let mut conn = self.db.connect().await.context("Failed DB connection")?;
 
         let watermark = CommitterWatermark::get(&mut conn, H::NAME)
