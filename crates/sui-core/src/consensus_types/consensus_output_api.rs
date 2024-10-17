@@ -6,7 +6,7 @@ use consensus_core::{BlockAPI, CommitDigest, TransactionIndex, VerifiedBlock};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     digests::ConsensusCommitDigest,
-    messages_consensus::{AuthorityIndex, ConsensusTransaction, Round},
+    messages_consensus::{AuthorityIndex, ConsensusTransaction},
 };
 
 pub(crate) struct ParsedTransaction {
@@ -16,12 +16,6 @@ pub(crate) struct ParsedTransaction {
     pub(crate) rejected: bool,
     // Bytes length of the serialized transaction
     pub(crate) serialized_len: usize,
-    // Consensus round of the block containing the transaction.
-    pub(crate) round: Round,
-    // Authority index of the block containing the transaction.
-    pub(crate) authority: AuthorityIndex,
-    // Transaction index in the block.
-    pub(crate) transaction_index: TransactionIndex,
 }
 
 pub(crate) trait ConsensusCommitAPI: Display {
@@ -136,9 +130,6 @@ pub(crate) fn parse_block_transactions(
                 transaction,
                 rejected,
                 serialized_len: tx.data().len(),
-                round,
-                authority,
-                transaction_index: index as TransactionIndex,
             }
         })
         .collect()
