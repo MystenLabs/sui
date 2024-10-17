@@ -178,6 +178,7 @@ fn handler<H: Handler + 'static>(
     }
 
     spawn_monitored_task!(async move {
+        info!(pipeline = H::NAME, "Starting handler");
         match ReceiverStream::new(rx)
             .map(Ok)
             .try_for_each_concurrent(H::FANOUT, |checkpoint| {
