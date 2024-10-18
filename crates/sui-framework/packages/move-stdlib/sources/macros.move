@@ -84,6 +84,96 @@ public macro fun num_to_string($x: _): String {
     buffer.to_string()
 }
 
+public macro fun uq_from_quotient<$T, $U>(
+    $numerator: $T,
+    $denominator: $T,
+    $max_t: $T,
+    $t_bits: u8,
+    $fractional_bits: u8,
+    $abort_denominator: _,
+    $abort_quotient_too_small: _,
+    $abort_quotient_too_large: _,
+): $T {
+    let numerator = $numerator;
+    let denominator = $denominator;
+    if (denominator == 0) $abort_denominator;
+
+    // Scale the numerator to have 64 fractional bits and the denominator to have 32 fractional
+    // bits, so that the quotient will have 32 fractional bits.
+    let scaled_numerator = numerator as $U << $t_bits;
+    let scaled_denominator = denominator as $U << $fractional_bits;
+    let quotient = scaled_numerator / scaled_denominator;
+
+    // The quotient can only be zero if the numerator is also zero.
+    if (quotient == 0 && numerator != 0) $abort_quotient_too_small;
+
+    // Return the quotient as a fixed-point number. We first need to check whether the cast
+    // can succeed.
+    if (quotient > $max_t as $U) $abort_quotient_too_large;
+    quotient as $T
+}
+
+public macro fun uq_from_int<$T, $U>($integer: $T, $t_bits: u8): $U {
+    ($integer as $U) << $t_bits
+}
+
+public macro fun uq_add<$T, $U>($a: $T, $b: $T, $max_t: $T, $abort_overflow: _): $U {
+    let sum = $a as $U + ($b as $U);
+    if (sum > $max_t as $U) $abort_overflow;
+    sum as $T
+}
+
+public macro fun uq_sub<$T>($a: $T, $b: $T, $abort_overflow: _): $T {
+    let a = $a;
+    let b = $b;
+    if (a < b) $abort_overflow;
+    a - b
+}
+
+public macro fun uq_to_int<$T, $U>($a: $U, $fractional_bits: u8): $T {
+    ($a >> $fractional_bits) as $T
+}
+
+public macro fun uq_int_mul<$T, $U>(
+    $val: $T,
+    $multiplier: $T,
+    $max_t: $T,
+    $fractional_bits: u8,
+    $abort_overflow: _,
+): $T {
+    // The product of two $T bit values has $U bits, so perform the
+    // multiplication with u128 types and keep the full $U bit product
+    // to avoid losing accuracy.
+    let unscaled_product = $val as $U * ($multiplier as $U);
+    // The unscaled product has fractional_bitsfractional bits (from the multiplier)
+    // so rescale it by shifting away the low bits.
+    let product = unscaled_product >> $fractional_bits;
+    // Check whether the value is too large.
+    if (product > $max_t as $U) $abort_overflow;
+    product as $T
+}
+
+public macro fun int_div<$T, $U>(
+    $val: $T,
+    $divisor: $T,
+    $max_t: $T,
+    $fractional_bits: u8,
+    $abort_division_by_zero: _,
+    $abort_overflow: _,
+): u64 {
+    let val = $val;
+    let divisor = $divisor;
+    // Check for division by zero.
+    if (divisor == 0) $abort_division_by_zero;
+    // First convert to $U bits and then shift left to
+    // add $fractional_bits fractional zero bits to the dividend.
+    let scaled_value = val as $U << $fractional_bits;
+    let quotient = scaled_value / (divisor as $U);
+    // Check whether the value is too large.
+    if (quotient > $max_t as $U) $abort_overflow;
+    quotient as $T
+}
+
 public macro fun range_do($start: _, $stop: _, $f: |_|) {
     let mut i = $start;
     let stop = $stop;
