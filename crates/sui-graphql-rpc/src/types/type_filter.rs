@@ -260,7 +260,7 @@ impl FromStr for FqNameFilter {
             Ok(FqNameFilter::ByFqName(
                 SuiAddress::from(*module.address()),
                 module.name().to_string(),
-                name,
+                name.to_string(),
             ))
         } else if let Ok(filter) = ModuleFilter::from_str(s) {
             Ok(FqNameFilter::ByModule(filter))

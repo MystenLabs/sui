@@ -3,7 +3,6 @@
 
 use crate::{
     address::{NumericalAddress, ParsedAddress},
-    types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType, TypeToken},
     values::{ParsableValue, ParsedValue, ValueToken},
 };
 use anyhow::{anyhow, bail, Result};
@@ -13,9 +12,6 @@ use move_core_types::{
 };
 use num_bigint::BigUint;
 use std::{fmt::Display, iter::Peekable, num::ParseIntError};
-
-const MAX_TYPE_DEPTH: u64 = 128;
-const MAX_TYPE_NODE_COUNT: u64 = 256;
 
 pub trait Token: Display + Copy + Eq {
     fn is_whitespace(&self) -> bool;
@@ -31,37 +27,7 @@ pub trait Token: Display + Copy + Eq {
 }
 
 pub struct Parser<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> {
-    count: u64,
     it: Peekable<I>,
-}
-
-impl ParsedType {
-    pub fn parse(s: &str) -> Result<ParsedType> {
-        parse(s, |parser| parser.parse_type())
-    }
-}
-
-impl ParsedModuleId {
-    pub fn parse(s: &str) -> Result<ParsedModuleId> {
-        parse(s, |parser| parser.parse_module_id())
-    }
-}
-
-impl ParsedFqName {
-    pub fn parse(s: &str) -> Result<ParsedFqName> {
-        parse(s, |parser| parser.parse_fq_name())
-    }
-}
-
-impl ParsedStructType {
-    pub fn parse(s: &str) -> Result<ParsedStructType> {
-        let ty = parse(s, |parser| parser.parse_type())
-            .map_err(|e| anyhow!("Invalid struct type: {}. Got error: {}", s, e))?;
-        match ty {
-            ParsedType::Struct(s) => Ok(s),
-            _ => bail!("Invalid struct type: {}", s),
-        }
-    }
 }
 
 impl ParsedAddress {
@@ -95,7 +61,6 @@ fn parse<'a, Tok: Token, R>(
 impl<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> Parser<'a, Tok, I> {
     pub fn new<T: IntoIterator<Item = (Tok, &'a str), IntoIter = I>>(v: T) -> Self {
         Self {
-            count: 0,
             it: v.into_iter().peekable(),
         }
     }
@@ -144,95 +109,6 @@ impl<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> Parser<'a, Tok, I> {
             }
         }
         Ok(v)
-    }
-}
-
-impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
-    pub fn parse_module_id(&mut self) -> Result<ParsedModuleId> {
-        let (tok, contents) = self.advance_any()?;
-        self.parse_module_id_impl(tok, contents)
-    }
-
-    pub fn parse_fq_name(&mut self) -> Result<ParsedFqName> {
-        let (tok, contents) = self.advance_any()?;
-        self.parse_fq_name_impl(tok, contents)
-    }
-
-    pub fn parse_type(&mut self) -> Result<ParsedType> {
-        self.parse_type_impl(0)
-    }
-
-    pub fn parse_module_id_impl(
-        &mut self,
-        tok: TypeToken,
-        contents: &'a str,
-    ) -> Result<ParsedModuleId> {
-        let tok = match tok {
-            TypeToken::Ident => ValueToken::Ident,
-            TypeToken::AddressIdent => ValueToken::Number,
-            tok => bail!("unexpected token {tok}, expected address"),
-        };
-        let address = parse_address_impl(tok, contents)?;
-        self.advance(TypeToken::ColonColon)?;
-        let name = self.advance(TypeToken::Ident)?.to_owned();
-        Ok(ParsedModuleId { address, name })
-    }
-
-    pub fn parse_fq_name_impl(
-        &mut self,
-        tok: TypeToken,
-        contents: &'a str,
-    ) -> Result<ParsedFqName> {
-        let module = self.parse_module_id_impl(tok, contents)?;
-        self.advance(TypeToken::ColonColon)?;
-        let name = self.advance(TypeToken::Ident)?.to_owned();
-        Ok(ParsedFqName { module, name })
-    }
-
-    fn parse_type_impl(&mut self, depth: u64) -> Result<ParsedType> {
-        self.count += 1;
-
-        if depth > MAX_TYPE_DEPTH || self.count > MAX_TYPE_NODE_COUNT {
-            bail!("Type exceeds maximum nesting depth or node count")
-        }
-
-        Ok(match self.advance_any()? {
-            (TypeToken::Ident, "u8") => ParsedType::U8,
-            (TypeToken::Ident, "u16") => ParsedType::U16,
-            (TypeToken::Ident, "u32") => ParsedType::U32,
-            (TypeToken::Ident, "u64") => ParsedType::U64,
-            (TypeToken::Ident, "u128") => ParsedType::U128,
-            (TypeToken::Ident, "u256") => ParsedType::U256,
-            (TypeToken::Ident, "bool") => ParsedType::Bool,
-            (TypeToken::Ident, "address") => ParsedType::Address,
-            (TypeToken::Ident, "signer") => ParsedType::Signer,
-            (TypeToken::Ident, "vector") => {
-                self.advance(TypeToken::Lt)?;
-                let ty = self.parse_type_impl(depth + 1)?;
-                self.advance(TypeToken::Gt)?;
-                ParsedType::Vector(Box::new(ty))
-            }
-
-            (tok @ (TypeToken::Ident | TypeToken::AddressIdent), contents) => {
-                let fq_name = self.parse_fq_name_impl(tok, contents)?;
-                let type_args = match self.peek_tok() {
-                    Some(TypeToken::Lt) => {
-                        self.advance(TypeToken::Lt)?;
-                        let type_args = self.parse_list(
-                            |parser| parser.parse_type_impl(depth + 1),
-                            TypeToken::Comma,
-                            TypeToken::Gt,
-                            true,
-                        )?;
-                        self.advance(TypeToken::Gt)?;
-                        type_args
-                    }
-                    _ => vec![],
-                };
-                ParsedType::Struct(ParsedStructType { fq_name, type_args })
-            }
-            (tok, _) => bail!("unexpected token {tok}, expected type"),
-        })
     }
 }
 
@@ -462,12 +338,9 @@ pub fn parse_address_number(s: &str) -> Option<([u8; AccountAddress::LENGTH], Nu
 mod tests {
     use crate::{
         address::{NumericalAddress, ParsedAddress},
-        types::{ParsedStructType, ParsedType},
         values::ParsedValue,
     };
-    use move_core_types::{account_address::AccountAddress, identifier::Identifier, u256::U256};
-    use proptest::prelude::*;
-    use proptest::proptest;
+    use move_core_types::{account_address::AccountAddress, u256::U256};
 
     #[allow(clippy::unreadable_literal)]
     #[test]
@@ -610,136 +483,6 @@ mod tests {
                 "Unexpectedly succeeded in parsing: {}",
                 s
             )
-        }
-    }
-
-    #[test]
-    fn test_parse_type_negative() {
-        for s in &[
-            "_",
-            "_::_::_",
-            "0x1::_",
-            "0x1::__::_",
-            "0x1::_::__",
-            "0x1::_::foo",
-            "0x1::foo::_",
-            "0x1::_::_",
-            "0x1::bar::foo<0x1::_::foo>",
-        ] {
-            assert!(
-                ParsedType::parse(s).is_err(),
-                "Parsed type {s} but should have failed"
-            );
-        }
-    }
-
-    #[test]
-    fn test_parse_struct_negative() {
-        for s in &[
-            "_",
-            "_::_::_",
-            "0x1::_",
-            "0x1::__::_",
-            "0x1::_::__",
-            "0x1::_::foo",
-            "0x1::foo::_",
-            "0x1::_::_",
-            "0x1::bar::foo<0x1::_::foo>",
-        ] {
-            assert!(
-                ParsedStructType::parse(s).is_err(),
-                "Parsed type {s} but should have failed"
-            );
-        }
-    }
-
-    #[test]
-    fn test_type_type() {
-        for s in &[
-            "u64",
-            "bool",
-            "vector<u8>",
-            "vector<vector<u64>>",
-            "address",
-            "signer",
-            "0x1::M::S",
-            "0x2::M::S_",
-            "0x3::M_::S",
-            "0x4::M_::S_",
-            "0x00000000004::M::S",
-            "0x1::M::S<u64>",
-            "0x1::M::S<0x2::P::Q>",
-            "vector<0x1::M::S>",
-            "vector<0x1::M_::S_>",
-            "vector<vector<0x1::M_::S_>>",
-            "0x1::M::S<vector<u8>>",
-            "0x1::_bar::_BAR",
-            "0x1::__::__",
-            "0x1::_bar::_BAR<0x2::_____::______fooo______>",
-            "0x1::__::__<0x2::_____::______fooo______, 0xff::Bar____::_______foo>",
-        ] {
-            assert!(ParsedType::parse(s).is_ok(), "Failed to parse type {}", s);
-        }
-    }
-
-    #[test]
-    fn test_parse_valid_struct_type() {
-        let valid = vec![
-            "0x1::Foo::Foo",
-            "0x1::Foo_Type::Foo",
-            "0x1::Foo_::Foo",
-            "0x1::X_123::X32_",
-            "0x1::Foo::Foo_Type",
-            "0x1::Foo::Foo<0x1::ABC::ABC>",
-            "0x1::Foo::Foo<0x1::ABC::ABC_Type>",
-            "0x1::Foo::Foo<u8>",
-            "0x1::Foo::Foo<u16>",
-            "0x1::Foo::Foo<u32>",
-            "0x1::Foo::Foo<u64>",
-            "0x1::Foo::Foo<u128>",
-            "0x1::Foo::Foo<u256>",
-            "0x1::Foo::Foo<bool>",
-            "0x1::Foo::Foo<address>",
-            "0x1::Foo::Foo<signer>",
-            "0x1::Foo::Foo<vector<0x1::ABC::ABC>>",
-            "0x1::Foo::Foo<u8,bool>",
-            "0x1::Foo::Foo<u8,   bool>",
-            "0x1::Foo::Foo<u8  ,bool>",
-            "0x1::Foo::Foo<u8 , bool  ,    vector<u8>,address,signer>",
-            "0x1::Foo::Foo<vector<0x1::Foo::Struct<0x1::XYZ::XYZ>>>",
-            "0x1::Foo::Foo<0x1::Foo::Struct<vector<0x1::XYZ::XYZ>, 0x1::Foo::Foo<vector<0x1::Foo::Struct<0x1::XYZ::XYZ>>>>>",
-            "0x1::_bar::_BAR",
-            "0x1::__::__",
-            "0x1::_bar::_BAR<0x2::_____::______fooo______>",
-            "0x1::__::__<0x2::_____::______fooo______, 0xff::Bar____::_______foo>",
-        ];
-        for s in valid {
-            assert!(
-                ParsedStructType::parse(s).is_ok(),
-                "Failed to parse struct {}",
-                s
-            );
-        }
-    }
-
-    fn struct_type_gen() -> impl Strategy<Value = String> {
-        (
-            any::<AccountAddress>(),
-            any::<Identifier>(),
-            any::<Identifier>(),
-        )
-            .prop_map(|(address, module, name)| format!("0x{}::{}::{}", address, module, name))
-    }
-
-    proptest! {
-        #[test]
-        fn test_parse_valid_struct_type_proptest(s in struct_type_gen()) {
-            prop_assert!(ParsedStructType::parse(&s).is_ok());
-        }
-
-        #[test]
-        fn test_parse_valid_type_struct_only_proptest(s in struct_type_gen()) {
-            prop_assert!(ParsedStructType::parse(&s).is_ok());
         }
     }
 }
