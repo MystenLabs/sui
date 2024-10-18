@@ -30,6 +30,7 @@ pub mod pruner;
 pub mod tx_processor;
 
 pub(crate) const CHECKPOINT_COMMIT_BATCH_SIZE: usize = 100;
+pub(crate) const UNPROCESSED_CHECKPOINT_SIZE_LIMIT: usize = 1000;
 
 #[derive(Debug)]
 pub struct CheckpointDataToCommit {
@@ -116,17 +117,25 @@ impl<T> CommonHandler<T> {
             }
 
             // Try to fetch new data tuple from the stream
-            match stream.next().now_or_never() {
-                Some(Some(tuple_chunk)) => {
-                    if cancel.is_cancelled() {
-                        return Ok(());
+            if unprocessed.len() >= UNPROCESSED_CHECKPOINT_SIZE_LIMIT {
+                tracing::info!(
+                    "Unprocessed checkpoint size reached limit {}, skip reading from stream...",
+                    UNPROCESSED_CHECKPOINT_SIZE_LIMIT
+                );
+            } else {
+                // Try to fetch new data tuple from the stream
+                match stream.next().now_or_never() {
+                    Some(Some(tuple_chunk)) => {
+                        if cancel.is_cancelled() {
+                            return Ok(());
+                        }
+                        for tuple in tuple_chunk {
+                            unprocessed.insert(tuple.0.cp, tuple);
+                        }
                     }
-                    for tuple in tuple_chunk {
-                        unprocessed.insert(tuple.0.cp, tuple);
-                    }
+                    Some(None) => break, // Stream has ended
+                    None => {}           // No new data tuple available right now
                 }
-                Some(None) => break, // Stream has ended
-                None => {}           // No new data tuple available right now
             }
 
             // Process unprocessed checkpoints, even no new checkpoints from stream
