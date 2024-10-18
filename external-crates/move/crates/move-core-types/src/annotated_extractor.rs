@@ -6,11 +6,28 @@ use crate::{
     language_storage::TypeTag,
 };
 
+/// Elements are components of paths that select values from the sub-structure of other values.
+/// They are split into two categories:
+///
+/// - Selectors, which recurse into the sub-structure.
+/// - Filters, which check properties of the value at that position in the sub-structure.
 #[derive(Debug, Clone)]
 pub enum Element<'e> {
+    // Selectors
+    /// Select a named field, assuming the value in question is a struct or an enum variant.
     Field(&'e str),
+
+    /// Select a positional element. This can be the element of a vector, or it can be a positional
+    /// field in an enum or a struct.
     Index(u64),
+
+    // Filters
+    /// Confirm that the current value has a certain type.
     Type(&'e TypeTag),
+
+    /// Confirm that the current value is an enum and its variant has this name. Note that to
+    /// filter on both the enum type and the variant name, the path must contain the Type first,
+    /// and then the Variant. Otherwise the type filter will be assumed
     Variant(&'e str),
 }
 
