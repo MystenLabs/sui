@@ -2421,7 +2421,6 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn get_reconfig_state_write_lock_guard(&self) -> RwLockWriteGuard<ReconfigState> {
-        // the below is copy-pasted placeholder
         self.reconfig_state_mem.write()
     }
 
