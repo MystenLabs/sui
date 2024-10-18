@@ -190,7 +190,6 @@ async fn test_add_new_coins_on_sui_and_eth() {
         .with_num_validators(3)
         .build()
         .await;
-
     let bridge_arg = bridge_test_cluster.get_mut_bridge_arg().await.unwrap();
 
     // Register tokens on Sui
@@ -239,7 +238,7 @@ async fn test_add_new_coins_on_sui_and_eth() {
             .await
             .expect("Failed to get bridge committee"),
     );
-    let agg = BridgeAuthorityAggregator::new(bridge_committee);
+    let agg = BridgeAuthorityAggregator::new_for_testing(bridge_committee);
     let certified_sui_action = agg
         .request_committee_signatures(sui_action)
         .await
