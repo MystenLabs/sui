@@ -87,7 +87,7 @@ impl CoinIndexKey2 {
 }
 
 const CURRENT_DB_VERSION: u64 = 0;
-const CURRENT_COIN_INDEX_VERSION: u64 = 0;
+const CURRENT_COIN_INDEX_VERSION: u64 = 1;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
