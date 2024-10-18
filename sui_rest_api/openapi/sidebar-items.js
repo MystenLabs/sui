@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Api","OpenApiDocument","OpenApiExplorer","OpenApiJson","OpenApiYaml","OperationBuilder","RequestBodyBuilder","ResponseBuilder","RouteHandler"],"trait":["ApiEndpoint"]};
