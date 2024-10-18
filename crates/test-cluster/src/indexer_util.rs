@@ -9,11 +9,15 @@ use sui_indexer::tempdb::TempDb;
 use sui_indexer::test_utils::{
     start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
 };
+use sui_json_rpc_api::ReadApiClient;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use tempfile::TempDir;
 use tokio::time::sleep;
 
 pub(crate) struct IndexerHandle {
+    pub(crate) rpc_client: HttpClient,
+    pub(crate) sui_client: SuiClient,
+    pub(crate) rpc_url: String,
     #[allow(unused)]
     cancellation_tokens: Vec<tokio_util::sync::DropGuard>,
     #[allow(unused)]
@@ -22,13 +26,13 @@ pub(crate) struct IndexerHandle {
     database: TempDb,
 }
 
-// TODO: this only starts indexer writer, reader and jsonrpc server today.
+// TODO: this only starts indexer writer and reader (jsonrpc server) today.
 // Consider adding graphql server here as well.
 pub(crate) async fn setup_indexer_backed_rpc(
     fullnode_rpc_url: String,
     temp_data_ingestion_dir: Option<TempDir>,
     data_ingestion_path: PathBuf,
-) -> (HttpClient, SuiClient, String, Option<IndexerHandle>) {
+) -> IndexerHandle {
     let mut cancellation_tokens = vec![];
     let database = TempDb::new().unwrap();
     let pg_address = database.database().url().as_str().to_owned();
@@ -55,22 +59,27 @@ pub(crate) async fn setup_indexer_backed_rpc(
     .await;
     cancellation_tokens.push(reader_token.drop_guard());
 
-    // Give the indexer a few seconds to get started.
-    sleep(Duration::from_secs(2)).await;
-
     let rpc_address = format!("http://{}", indexer_jsonrpc_address);
 
     let rpc_client = HttpClientBuilder::default().build(&rpc_address).unwrap();
+
+    // Wait for the rpc client to be ready
+    while rpc_client.get_chain_identifier().await.is_err() {
+        sleep(Duration::from_millis(100)).await;
+    }
 
     let sui_client = SuiClientBuilder::default()
         .build(&rpc_address)
         .await
         .unwrap();
 
-    let indexer_handle = Some(IndexerHandle {
+    let indexer_handle = IndexerHandle {
+        rpc_client,
+        sui_client,
+        rpc_url: rpc_address.clone(),
         database,
         data_ingestion_dir: temp_data_ingestion_dir,
         cancellation_tokens,
-    });
-    (rpc_client, sui_client, rpc_address, indexer_handle)
+    };
+    indexer_handle
 }

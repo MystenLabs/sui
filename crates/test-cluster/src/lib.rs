@@ -92,32 +92,33 @@ pub struct TestCluster {
     pub swarm: Swarm,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
-
-    // The following clients might be different from those in fullnode_handle if
-    // the rpc is powered by indexer.
-    pub rpc_client: HttpClient,
-    pub sui_client: SuiClient,
-    pub rpc_url: String,
-
-    #[allow(unused)]
     indexer_handle: Option<indexer_util::IndexerHandle>,
 }
 
 impl TestCluster {
     pub fn rpc_client(&self) -> &HttpClient {
-        &self.rpc_client
+        self.indexer_handle
+            .as_ref()
+            .map(|h| &h.rpc_client)
+            .unwrap_or(&self.fullnode_handle.rpc_client)
     }
 
     pub fn sui_client(&self) -> &SuiClient {
-        &self.sui_client
+        self.indexer_handle
+            .as_ref()
+            .map(|h| &h.sui_client)
+            .unwrap_or(&self.fullnode_handle.sui_client)
+    }
+
+    pub fn rpc_url(&self) -> &str {
+        self.indexer_handle
+            .as_ref()
+            .map(|h| h.rpc_url.as_str())
+            .unwrap_or(&self.fullnode_handle.rpc_url)
     }
 
     pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
         self.sui_client().quorum_driver_api()
-    }
-
-    pub fn rpc_url(&self) -> &str {
-        &self.rpc_url
     }
 
     pub fn wallet(&mut self) -> &WalletContext {
@@ -1133,27 +1134,23 @@ impl TestClusterBuilder {
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 
-        let (rpc_client, sui_client, rpc_url, indexer_handle) = if self.indexer_backed_rpc {
-            indexer_util::setup_indexer_backed_rpc(
+        let (rpc_url, indexer_handle) = if self.indexer_backed_rpc {
+            let handle = indexer_util::setup_indexer_backed_rpc(
                 fullnode_handle.rpc_url.clone(),
                 temp_data_ingestion_dir,
                 data_ingestion_path.unwrap(),
             )
-            .await
+            .await;
+            (handle.rpc_url.clone(), Some(handle))
         } else {
-            (
-                fullnode_handle.rpc_client.clone(),
-                fullnode_handle.sui_client.clone(),
-                fullnode_handle.rpc_url.clone(),
-                None,
-            )
+            (fullnode_handle.rpc_url.clone(), None)
         };
 
         let mut wallet_conf: SuiClientConfig =
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
         wallet_conf.envs.push(SuiEnv {
             alias: "localnet".to_string(),
-            rpc: rpc_url.clone(),
+            rpc: rpc_url,
             ws: None,
             basic_auth: None,
         });
@@ -1171,9 +1168,6 @@ impl TestClusterBuilder {
             swarm,
             wallet,
             fullnode_handle,
-            rpc_client,
-            sui_client,
-            rpc_url,
             indexer_handle,
         }
     }
