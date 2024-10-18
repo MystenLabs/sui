@@ -342,6 +342,9 @@ fn committer<H: Handler + 'static>(
         loop {
             tokio::select! {
                 // Break ties in favour of operations that reduce the size of the buffer.
+                //
+                // TODO (experiment): Do we need this? It adds some complexity/subtlety to this
+                // work loop, so if we don't notice a big difference, we should get rid of it.
                 biased;
 
                 _ = cancel.cancelled() => {
@@ -390,7 +393,7 @@ fn committer<H: Handler + 'static>(
                         "Gathered batch",
                     );
 
-                    // TODO (optimization): Switch to COPY FROM, which should offer faster inserts?
+                    // TODO (experiment): Switch to COPY FROM, which should offer faster inserts?
                     //
                     // Note that COPY FROM cannot handle conflicts -- we need a way to gracefully
                     // fail over to `INSERT INTO ... ON CONFLICT DO NOTHING` if we encounter a
@@ -428,7 +431,7 @@ fn committer<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    // TODO (optimization): Parallelize batch writes?
+                    // TODO (experiment): Parallelize batch writes?
                     //
                     // Previous findings suggest that having about 5 parallel committers per table
                     // yields the best performance. Is that still true for this new architecture?
@@ -621,6 +624,10 @@ fn committer<H: Handler + 'static>(
                 // If there are enough pending rows, and we've expended the cooldown, reset the
                 // commit polling interval so that on the next iteration of the loop, we will write
                 // out another batch.
+                //
+                // TODO (experiment): Do we need this cooldown to deal with contention on the
+                // connection pool? It's possible that this is just going to eat into our
+                // throughput.
                 _ = cool.tick(), if pending_rows > H::BATCH_SIZE => {
                     poll.reset_immediately();
                 }
