@@ -44,7 +44,7 @@ pub enum Error {
     JsonParseError { source: serde_json::Error },
 
     #[error("Unexpected API Response")]
-    UnexpectedResponse { response: Object },
+    UnexpectedResponse { response: Box<Object> },
 
     #[error("API Error {}({}): {}", .error.code, .error.status, .error.message)]
     ApiError { error: ErrorResponse },
@@ -122,7 +122,9 @@ impl NotionApi {
 
         match self.make_json_request(builder).await? {
             Object::List { list } => Ok(list.expect_databases()?),
-            response => Err(Error::UnexpectedResponse { response }),
+            response => Err(Error::UnexpectedResponse {
+                response: Box::new(response),
+            }),
         }
     }
 
@@ -143,7 +145,9 @@ impl NotionApi {
 
         match result {
             Object::List { list } => Ok(list),
-            response => Err(Error::UnexpectedResponse { response }),
+            response => Err(Error::UnexpectedResponse {
+                response: Box::new(response),
+            }),
         }
     }
 
@@ -161,7 +165,9 @@ impl NotionApi {
 
         match result {
             Object::Database { database } => Ok(database),
-            response => Err(Error::UnexpectedResponse { response }),
+            response => Err(Error::UnexpectedResponse {
+                response: Box::new(response),
+            }),
         }
     }
 
@@ -176,7 +182,9 @@ impl NotionApi {
 
         match result {
             Object::Page { page } => Ok(page),
-            response => Err(Error::UnexpectedResponse { response }),
+            response => Err(Error::UnexpectedResponse {
+                response: Box::new(response),
+            }),
         }
     }
 
@@ -192,7 +200,9 @@ impl NotionApi {
 
         match result {
             Object::Page { page } => Ok(page),
-            response => Err(Error::UnexpectedResponse { response }),
+            response => Err(Error::UnexpectedResponse {
+                response: Box::new(response),
+            }),
         }
     }
 
@@ -218,7 +228,9 @@ impl NotionApi {
             .await?;
         match result {
             Object::List { list } => Ok(list.expect_pages()?),
-            response => Err(Error::UnexpectedResponse { response }),
+            response => Err(Error::UnexpectedResponse {
+                response: Box::new(response),
+            }),
         }
     }
 
@@ -235,7 +247,9 @@ impl NotionApi {
 
         match result {
             Object::List { list } => Ok(list.expect_blocks()?),
-            response => Err(Error::UnexpectedResponse { response }),
+            response => Err(Error::UnexpectedResponse {
+                response: Box::new(response),
+            }),
         }
     }
 }
