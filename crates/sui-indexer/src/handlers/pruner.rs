@@ -112,11 +112,7 @@ impl TablePruner {
 
             let (watermark, _) = self.store.get_watermark(self.table).await?;
 
-            let Some(pruner_hi) = watermark.pruner_hi else {
-                continue;
-            };
-
-            self.prune(0, pruner_hi as u64).await?;
+            self.prune(0, watermark.pruner_hi as u64).await?;
         }
     }
 
@@ -487,7 +483,7 @@ async fn update_pruner_watermark_task(
 ) -> IndexerResult<()> {
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     let (watermark, _) = store.get_watermark(table).await?;
-    let mut pruner_hi = watermark.pruner_upper_bound().unwrap();
+    let mut local_reader_lo = watermark.pruner_upper_bound().unwrap();
 
     loop {
         tokio::select! {
@@ -498,21 +494,22 @@ async fn update_pruner_watermark_task(
             _ = interval.tick() => {
                 let (watermark, latest_db_timestamp) = store.get_watermark(table).await?;
                 let reader_lo_timestamp = watermark.timestamp_ms;
-                let new_pruner_hi = watermark.pruner_upper_bound().unwrap();
+                let new_reader_lo = watermark.pruner_upper_bound().unwrap();
+                let should_update = new_reader_lo > local_reader_lo || local_reader_lo > watermark.pruner_hi as u64;
+                let update_value = if new_reader_lo > local_reader_lo { new_reader_lo } else { local_reader_lo };
 
-                // Only update if the new prune_max is greater than what we have locally
-                if new_pruner_hi > pruner_hi {
-                    // TODO: (wlmyng) use config value
+                if should_update {
                     let delay_duration = MAX_DELAY_MS.saturating_sub((latest_db_timestamp - reader_lo_timestamp) as u64);
 
                     if delay_duration > 0 {
                         tokio::time::sleep(Duration::from_millis(delay_duration)).await;
                     }
 
-                    if let Err(err) = store.update_pruner_watermark(table, new_pruner_hi).await {
+                    if let Err(err) = store.update_pruner_watermark(table, update_value).await {
                         error!("Failed to update pruner watermark: {}", err);
                     }
-                    pruner_hi = new_pruner_hi;
+
+                    local_reader_lo = update_value;
                 }
             }
         }
