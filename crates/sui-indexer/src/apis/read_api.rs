@@ -87,7 +87,11 @@ impl ReadApiServer for ReadApi {
             object_read_to_object_response(&self.inner, object_read, options.clone()).await
         });
 
-        futures::future::try_join_all(futures).await
+        let mut objects = futures::future::try_join_all(futures).await?;
+        // Resort the objects by the order of the object id.
+        objects.sort_by_key(|obj| obj.data.as_ref().map(|data| data.object_id));
+
+        Ok(objects)
     }
 
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {

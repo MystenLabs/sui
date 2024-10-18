@@ -78,6 +78,7 @@ dashmap.workspace = true
 [dev-dependencies]
 sui-keys.workspace = true
 sui-move-build.workspace = true
+sui-swarm-config.workspace = true
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 ntest.workspace = true
