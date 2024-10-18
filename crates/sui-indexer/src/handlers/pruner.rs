@@ -19,8 +19,8 @@ use crate::execute_delete_range_query;
 use crate::schema::{
     checkpoints, event_emit_module, event_emit_package, event_senders, event_struct_instantiation,
     event_struct_module, event_struct_name, event_struct_package, events, objects_history,
-    pruner_cp_watermark, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
-    tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
+    transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun, tx_calls_mod,
+    tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
 };
 use crate::store::pg_partition_manager::PgPartitionManager;
 use crate::store::PgIndexerStore;
@@ -79,7 +79,6 @@ pub enum PrunableTable {
     TxKinds,
 
     Checkpoints,
-    PrunerCpWatermark,
 }
 
 struct TablePruner {
@@ -113,11 +112,11 @@ impl TablePruner {
 
             let (watermark, _) = self.store.get_watermark(self.table).await?;
 
-            let Some(pruner_hi_inclusive) = watermark.pruner_hi_inclusive else {
+            let Some(pruner_hi) = watermark.pruner_hi else {
                 continue;
             };
 
-            self.prune(0, pruner_hi_inclusive as u64).await?;
+            self.prune(0, pruner_hi as u64).await?;
         }
     }
 
@@ -317,13 +316,6 @@ impl TablePruner {
                     prune_max
                 )
             }
-            PrunableTable::PrunerCpWatermark => execute_delete_range_query!(
-                &mut conn,
-                pruner_cp_watermark,
-                checkpoint_sequence_number,
-                prune_min,
-                prune_max
-            ),
         } {
             error!("Failed to prune table {}: {}", self.table, err);
         };
@@ -358,7 +350,6 @@ impl PrunableTable {
             PrunableTable::TxKinds => tx,
 
             PrunableTable::Checkpoints => cp,
-            PrunableTable::PrunerCpWatermark => cp,
         }
     }
 }
@@ -487,7 +478,7 @@ async fn update_watermarks_lower_bounds(
     Ok(())
 }
 
-/// Task to periodically update `pruner_hi_inclusive` to the local `reader_lo` if it sees a newer
+/// Task to periodically update `pruner_hi` to the local `reader_lo` if it sees a newer
 /// value for `reader_lo`.
 async fn update_pruner_watermark_task(
     store: PgIndexerStore,
@@ -511,10 +502,6 @@ async fn update_pruner_watermark_task(
 
                 // Only update if the new prune_max is greater than what we have locally
                 if new_pruner_hi > pruner_hi {
-                    let new_prune_max = new_pruner_hi.saturating_sub(1);
-                    if new_prune_max == 0 {
-                        continue;
-                    }
                     // TODO: (wlmyng) use config value
                     let delay_duration = MAX_DELAY_MS.saturating_sub((latest_db_timestamp - reader_lo_timestamp) as u64);
 
@@ -522,7 +509,7 @@ async fn update_pruner_watermark_task(
                         tokio::time::sleep(Duration::from_millis(delay_duration)).await;
                     }
 
-                    if let Err(err) = store.update_pruner_watermark(table, new_prune_max).await {
+                    if let Err(err) = store.update_pruner_watermark(table, new_pruner_hi).await {
                         error!("Failed to update pruner watermark: {}", err);
                     }
                     pruner_hi = new_pruner_hi;
