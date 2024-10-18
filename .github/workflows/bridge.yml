@@ -93,9 +93,11 @@ jobs:
         working-directory: bridge/evm
         run: |
           forge soldeer update
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: cargo test
         run: |
-          cargo nextest run --profile ci -E 'package(sui-bridge)'
+          cargo nextest run --profile ci -E 'package(sui-bridge) | package(sui-bridge-indexer)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
