@@ -497,12 +497,10 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-# NOTE: do not enable the `tls` feature on tonic. It will break custom TLS handling
-# for self signed certificates. Unit tests under consensus/core and other integration
-# tests will fail.
 tonic = { version = "0.12", features = ["transport"] }
 tonic-build = { version = "0.12", features = ["prost", "transport"] }
 tonic-health = "0.12"
+tonic-rustls = "0.1.0"
 tower = { version = "0.4.12", features = [
     "full",
     "util",
