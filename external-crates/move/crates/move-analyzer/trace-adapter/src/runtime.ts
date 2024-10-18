@@ -143,7 +143,7 @@ export class Runtime extends EventEmitter {
      */
     private filesMap = new Map<string, IFileInfo>();
 
-    /**
+    /**x
      * Map of stringified module info to source maps.
      */
     private sourceMapsMap = new Map<string, ISourceMap>();
@@ -556,6 +556,139 @@ export class Runtime extends EventEmitter {
             this.emit(event, ...args);
         }, 0);
     }
+
+    //
+    // Utility functions for testing and debugging.
+    //
+
+    /**
+     * Whitespace used for indentation in the string representation of the runtime.
+     */
+    private singleTab = '  ';
+
+    /**
+     * Returns a string representig the current state of the runtime.
+     *
+     * @returns string representation of the runtime.
+     */
+    public toString(): string {
+        let res = 'current frame stack:\n';
+        for (const frame of this.frameStack.frames) {
+            res += this.singleTab + 'function: ' + frame.name + ' (line ' + frame.line + ')\n';
+            for (let i = 0; i < frame.locals.length; i++) {
+                res += this.singleTab + this.singleTab + 'scope ' + i + ' :\n';
+                for (let j = 0; j < frame.locals[i].length; j++) {
+                    const local = frame.locals[i][j];
+                    if (local) {
+                        res += this.varToString(this.singleTab
+                            + this.singleTab
+                            + this.singleTab, local) + '\n';
+                    }
+                }
+            }
+        }
+        return res;
+    }
+    /**
+     * Returns a string representation of a runtime variable.
+     *
+     * @param variable runtime variable.
+     * @returns string representation of the variable.
+     */
+    private varToString(tabs: string, variable: IRuntimeVariable): string {
+        return this.valueToString(tabs, variable.value, variable.name, variable.type);
+    }
+
+    /**
+     * Returns a string representation of a runtime compound value.
+     *
+     * @param compoundValue runtime compound value.
+     * @returns string representation of the compound value.
+     */
+    private compoundValueToString(tabs: string, compoundValue: IRuntimeCompundValue): string {
+        const type = compoundValue.variantName
+            ? compoundValue.type + '::' + compoundValue.variantName
+            : compoundValue.type;
+        let res = '(' + type + ') {\n';
+        for (const [name, value] of compoundValue.fields) {
+            res += this.valueToString(tabs + this.singleTab, value, name);
+        }
+        res += tabs + '}\n';
+        return res;
+    }
+
+    /**
+     * Returns a string representation of a runtime reference value.
+     *
+     * @param refValue runtime reference value.
+     * @param name name of the variable containing reference value.
+     * @param type optional type of the variable containing reference value.
+     * @returns string representation of the reference value.
+     */
+    private refValueToString(
+        tabs: string,
+        refValue: IRuntimeRefValue,
+        name: string,
+        type?: string
+    ): string {
+        let res = '';
+        const frame = this.frameStack.frames.find(frame => frame.id === refValue.loc.frameID);
+        let local = undefined;
+        if (!frame) {
+            return res;
+        }
+        for (const scope of frame.locals) {
+            local = scope[refValue.loc.localIndex];
+            if (local) {
+                break;
+            }
+        }
+        if (!local) {
+            return res;
+        }
+        return this.valueToString(tabs, local.value, name, type);
+    }
+
+    /**
+     * Returns a string representation of a runtime value.
+     *
+     * @param value runtime value.
+     * @param name name of the variable containing the value.
+     * @param type optional type of the variable containing the value.
+     * @returns string representation of the value.
+     */
+    private valueToString(
+        tabs: string,
+        value: RuntimeValueType,
+        name: string,
+        type?: string
+    ): string {
+        let res = '';
+        if (typeof value === 'string') {
+            res += tabs + name + ' : ' + value + '\n';
+            if (type) {
+                res += tabs + 'type: ' + type + '\n';
+            }
+        } else if (Array.isArray(value)) {
+            res += tabs + name + ' : [\n';
+            for (let i = 0; i < value.length; i++) {
+                res += this.valueToString(tabs + this.singleTab, value[i], String(i));
+            }
+            res += tabs + ']\n';
+            if (type) {
+                res += tabs + 'type: ' + type + '\n';
+            }
+            return res;
+        } else if ('fields' in value) {
+            res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
+            if (type) {
+                res += tabs + 'type: ' + type + '\n';
+            }
+        } else {
+            res += this.refValueToString(tabs, value, name, type);
+        }
+        return res;
+    }
 }
 
 /**
@@ -698,3 +831,4 @@ function fileHash(fileContents: string): Uint8Array {
     const hash = crypto.createHash('sha256').update(fileContents).digest();
     return new Uint8Array(hash);
 }
+

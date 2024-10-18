@@ -299,9 +299,9 @@ export class MoveDebugSession extends LoggingDebugSession {
         }
         // a local will be in one of the scopes at a position corresponding to its local index
         let local = undefined;
-        for (let i = 0; i < frame.locals.length; i++) {
-            local = frame.locals[i][localIndex];
-            if (local !== undefined) {
+        for (const scope of frame.locals) {
+            local = scope[localIndex];
+            if (local) {
                 break;
             }
         }
