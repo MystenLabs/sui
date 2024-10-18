@@ -43,6 +43,9 @@ use tokio::task::{JoinHandle, JoinSet};
 use tokio::{time, time::Instant};
 use tracing::{debug, error, info, warn};
 
+use crate::workloads::workload::FailureType;
+use sui_types::utils::to_sender_signed_transaction;
+
 use super::Interval;
 use super::{BenchmarkStats, StressStats};
 pub struct BenchMetrics {
@@ -171,6 +174,7 @@ enum NextOp {
     },
     // The transaction failed and could not be retried
     Failure,
+    ExpectedFailure, // New variant
     Retry(RetryType),
 }
 
@@ -699,7 +703,7 @@ async fn run_bench_worker(
 
     let mut stat_start_time: Instant = Instant::now();
 
-    // Handles the transaction response when sent to proxy.
+    // Update the handle_execute_transaction_response function signature and its usage
     let handle_execute_transaction_response = |result: Result<ExecutionEffects>,
                                                start: Arc<Instant>,
                                                transaction: Transaction,
@@ -732,20 +736,41 @@ async fn run_bench_worker(
                 let num_commands =
                     transaction.data().transaction_data().kind().num_commands() as u16;
 
-                if effects.is_ok() {
-                    metrics_cloned
-                        .num_success
-                        .with_label_values(&[&payload.to_string()])
-                        .inc();
-                    metrics_cloned
-                        .num_success_cmds
-                        .with_label_values(&[&payload.to_string()])
-                        .inc_by(num_commands as u64);
-                } else {
-                    metrics_cloned
-                        .num_error
-                        .with_label_values(&[&payload.to_string(), "execution"])
-                        .inc();
+                let expected_failure = payload.get_failure_type().is_some();
+                let success = effects.is_ok();
+                match (success, expected_failure) {
+                    (true, true) => {
+                        // Transaction succeeded when it was expected to fail
+                        metrics_cloned
+                            .num_error
+                            .with_label_values(&[&payload.to_string(), "unexpected_success"])
+                            .inc();
+                        return NextOp::Failure;
+                    }
+                    (true, false) => {
+                        metrics_cloned
+                            .num_success
+                            .with_label_values(&[&payload.to_string()])
+                            .inc();
+                        metrics_cloned
+                            .num_success_cmds
+                            .with_label_values(&[&payload.to_string()])
+                            .inc_by(num_commands as u64);
+                    }
+                    (false, true) => {
+                        // Transaction failed as expected
+                        metrics_cloned
+                            .num_success
+                            .with_label_values(&[&payload.to_string()])
+                            .inc();
+                    }
+                    (false, false) => {
+                        metrics_cloned
+                            .num_error
+                            .with_label_values(&[&payload.to_string(), "execution"])
+                            .inc();
+                        return NextOp::Failure;
+                    }
                 }
 
                 if let Some(sig_info) = effects.quorum_sig() {
@@ -758,12 +783,12 @@ async fn run_bench_worker(
                 }
 
                 payload.make_new_payload(&effects);
-                NextOp::Response {
+                return NextOp::Response {
                     latency,
                     num_commands,
                     payload,
                     gas_used: effects.gas_used(),
-                }
+                };
             }
             Err(err) => {
                 error!("{}", err);
@@ -899,6 +924,11 @@ async fn run_bench_worker(
                     metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).inc();
                     metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
                     let tx = payload.make_transaction();
+                    let tx = if let Some(failure_type) = payload.get_failure_type() {
+                        apply_failure(tx, failure_type)
+                    } else {
+                        tx
+                    };
                     let start = Arc::new(Instant::now());
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
@@ -924,6 +954,16 @@ async fn run_bench_worker(
                         error!("Permanent failure to execute payload. May result in gas objects being leaked");
                         num_error_txes += 1;
                         // Update total benchmark progress
+                        if update_progress(1) {
+                            break;
+                        }
+                    }
+                    NextOp::ExpectedFailure => {
+                        // TODO(william) figure out this logic
+                        num_success_txes += 1; // Count expected failures as successes
+                        num_in_flight -= 1;
+                        free_pool.push_back(payload);
+                        // Update progress and check if benchmark is finished
                         if update_progress(1) {
                             break;
                         }
@@ -992,6 +1032,9 @@ async fn run_bench_worker(
                 payload,
             } => payload,
             NextOp::Retry(b) => b.1,
+            NextOp::ExpectedFailure => {
+                continue;
+            }
         };
         free_pool.push_back(p);
     }
@@ -1070,4 +1113,38 @@ fn stress_stats_collector(
             }
         }
     })
+}
+
+pub fn apply_failure(mut transaction: Transaction, failure_type: FailureType) -> Transaction {
+    let data = transaction.data().clone();
+
+    // TODO(william) make this work
+    match failure_type {
+        FailureType::InvalidSignature => {
+            let data = transaction.data().clone();
+            let invalid_keypair = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut OsRng));
+            let invalid_signature =
+                Signature::new_secure(data.intent_message().value.digest(), &invalid_keypair);
+            let new_data = SenderSignedData::new(
+                data.intent_message().clone(),
+                vec![invalid_signature],
+                data.gas().clone(),
+            );
+            to_sender_signed_transaction(new_data, transaction.tx_signatures()[0].as_ref())
+        }
+        FailureType::LowGasBudget => {
+            let data = transaction.data().clone();
+            let new_data = SenderSignedData::new(
+                data.intent_message().clone(),
+                data.tx_signatures().to_vec(),
+                GasData {
+                    payment: data.gas().payment.clone(),
+                    owner: data.gas().owner,
+                    price: data.gas().price,
+                    budget: 1, // Set to minimum possible value to ensure failure
+                },
+            );
+            to_sender_signed_transaction(new_data, transaction.tx_signatures()[0].as_ref())
+        }
+    }
 }
