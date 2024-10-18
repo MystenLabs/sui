@@ -5,14 +5,16 @@
 module sui_system::validator_set_tests {
     use sui::balance;
     use sui::coin;
-    use sui_system::staking_pool::StakedSui;
     use sui_system::validator::{Self, Validator, staking_pool_id};
-    use sui_system::validator_set::{Self, ValidatorSet, active_validator_addresses};
+    use sui_system::validator_set::{Self, ValidatorSet};
     use sui::test_scenario::{Self, Scenario};
     use sui::test_utils::{Self, assert_eq};
     use sui::vec_map;
 
     const MIST_PER_SUI: u64 = 1_000_000_000; // used internally for stakes.
+
+    // an epoch after which the min stake v2 (based on voting power rather than stake) logic will be in effect
+    const MIN_STAKE_V2_EPOCH: u64 = 1000;
 
     #[test]
     fun test_validator_set_flow() {
@@ -26,7 +28,8 @@ module sui_system::validator_set_tests {
         let validator4 = create_validator(@0x4, 4, 1, false, ctx);
 
         // Create a validator set with only the first validator in it.
-        let mut validator_set = validator_set::new(vector[validator1], ctx);
+        let mut validator_set = validator_set::new(vector[validator1], ctx);//
+        //scenario.set_epoch(MIN_STAKE_V2_EPOCH);
         assert!(validator_set.total_stake() == 100 * MIST_PER_SUI);
 
         // Add the other 3 validators one by one.
@@ -195,82 +198,66 @@ module sui_system::validator_set_tests {
 
     #[test]
     #[expected_failure(abort_code = validator_set::EMinJoiningStakeNotReached)]
-    fun test_add_validator_failure_below_min_stake() {
+    fun test_add_validator_failure_below_min_voting_power() {
         let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        let ctx = scenario.ctx();
 
-        // Create 2 validators, with stake 100 and 200.
-        let validator1 = create_validator(@0x1, 1, 1, true, ctx);
-        let validator2 = create_validator(@0x2, 2, 1, false, ctx);
-
-        // Create a validator set with only the first validator in it.
-        let mut validator_set = validator_set::new(vector[validator1], ctx);
-        assert_eq(validator_set.total_stake(), 100 * MIST_PER_SUI);
-        scenario_val.end();
-
-        let mut scenario_val = test_scenario::begin(@0x1);
-        let scenario = &mut scenario_val;
-        let ctx1 = scenario.ctx();
-        validator_set.request_add_validator_candidate(validator2, ctx1);
-
-        scenario.next_tx(@0x42);
-        {
-            let ctx = scenario.ctx();
-            let stake = validator_set.request_add_stake(
-                @0x2,
-                balance::create_for_testing(500 * MIST_PER_SUI),
-                ctx,
-            );
-            transfer::public_transfer(stake, @0x42);
-            // Adding stake to a preactive validator should not change total stake.
-            assert_eq(validator_set.total_stake(), 100 * MIST_PER_SUI);
-        };
-
+        // Create 2 validators, with voting power 9_998 and 2
+        let validator1 = create_validator_with_initial_stake(@0x1, 1, 9_998, true, scenario.ctx());
+        let insufficient_stake = 2; // need at least 3 voting power to join, won't work
+        let validator2 = create_validator_with_initial_stake(@0x2, 2, insufficient_stake, false, scenario.ctx());
+        scenario.set_epoch(MIN_STAKE_V2_EPOCH); // use the final values for voting power thresholds
+        // Create a validator set with only the first validator in it
+        let mut validator_set = validator_set::new(vector[validator1], scenario.ctx());
         scenario.next_tx(@0x2);
-        // Validator 2 now has 700 SUI in stake but that's not enough because we need 701.
-        validator_set.request_add_validator(701 * MIST_PER_SUI, scenario.ctx());
 
+        // Try to add a validator with less than the min voting power
+        validator_set.request_add_validator_candidate(validator2, scenario.ctx());
+        validator_set.request_add_validator(scenario.ctx());
         test_utils::destroy(validator_set);
         scenario_val.end();
     }
 
+
+    // get 10 validators with equal stake
+    fun get_10_validators(ctx: &mut TxContext): vector<Validator> {
+        vector[
+            create_validator_with_initial_stake(@0x1, 1, 1000, true, ctx),
+            create_validator_with_initial_stake(@0x2, 2, 1000, true, ctx),
+            create_validator_with_initial_stake(@0x3, 3, 1000, true, ctx),
+            create_validator_with_initial_stake(@0x4, 4, 1000, true, ctx),
+            create_validator_with_initial_stake(@0x5, 5, 1000, true, ctx),
+            create_validator_with_initial_stake(@0x6, 6, 1000, true, ctx),
+            create_validator_with_initial_stake(@0x7, 7, 1000, true, ctx),
+            create_validator_with_initial_stake(@0x8, 8, 1000, true, ctx),
+            create_validator_with_initial_stake(@0x9, 9, 1000, true, ctx),
+            create_validator_with_initial_stake(@0x10, 10, 1000, true, ctx),
+        ]
+    }
+
     #[test]
-    fun test_add_validator_with_nonzero_min_stake() {
+    fun test_add_validator_with_min_voting_power() {
         let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        let ctx = scenario.ctx();
 
-        // Create 2 validators, with stake 100 and 200.
-        let validator1 = create_validator(@0x1, 1, 1, true, ctx);
-        let validator2 = create_validator(@0x2, 2, 1, false, ctx);
-
-        // Create a validator set with only the first validator in it.
-        let mut validator_set = validator_set::new(vector[validator1], ctx);
-        assert_eq(validator_set.total_stake(), 100 * MIST_PER_SUI);
-        scenario_val.end();
-
-        let mut scenario_val = test_scenario::begin(@0x1);
-        let scenario = &mut scenario_val;
-        let ctx1 = scenario.ctx();
-        validator_set.request_add_validator_candidate(validator2, ctx1);
-
-        scenario.next_tx(@0x42);
-        {
-            let ctx = scenario.ctx();
-            let stake = validator_set.request_add_stake(
-                @0x2,
-                balance::create_for_testing(500 * MIST_PER_SUI),
-                ctx,
-            );
-            transfer::public_transfer(stake, @0x42);
-            // Adding stake to a preactive validator should not change total stake.
-            assert_eq(validator_set.total_stake(), 100 * MIST_PER_SUI);
-        };
-
+        // Create 2 validators, with stake 9_997 and stake 3
+        let validator1 = create_validator_with_initial_stake(@0x1, 1, 9_997, true, scenario.ctx());
+        let min_stake = 3; // need at least 3 voting power to join
+        let validator2 = create_validator_with_initial_stake(@0x2, 2, min_stake, false, scenario.ctx());
+        scenario.set_epoch(MIN_STAKE_V2_EPOCH); // use the final values for voting power thresholds
+        // Create a validator set with only the first validator in it
+        let mut validator_set = validator_set::new(vector[validator1], scenario.ctx());
         scenario.next_tx(@0x2);
-        // Validator 2 now has 700 SUI in stake and that's just enough.
-        validator_set.request_add_validator(700 * MIST_PER_SUI, scenario.ctx());
+
+        // Try to add a validator with the min voting power. it should work
+        validator_set.request_add_validator_candidate(validator2, scenario.ctx());
+        assert!(validator_set.is_validator_candidate(@0x2));
+
+        validator_set.request_add_validator(scenario.ctx());
+        advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
+        assert!(validator_set.is_active_validator(@0x1));
+        assert!(validator_set.is_active_validator(@0x2));
+        assert!(validator_set.total_stake() == 10_000 * MIST_PER_SUI);
 
         test_utils::destroy(validator_set);
         scenario_val.end();
@@ -313,90 +300,171 @@ module sui_system::validator_set_tests {
     }
 
     #[test]
-    fun test_low_stake_departure() {
+    #[expected_failure(abort_code = validator_set::ENotAValidator)]
+    fun test_request_add_then_pull_stake() {
+        // get enough stake to be added, then pull it before the epoch change
         let mut scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        let ctx = scenario.ctx();
-        // Create 4 validators.
-        let v1 = create_validator(@0x1, 1, 1, true, ctx); // 100 SUI of stake
-        let v2 = create_validator(@0x2, 4, 1, true, ctx); // 400 SUI of stake
-        let v3 = create_validator(@0x3, 10, 1, true, ctx); // 1000 SUI of stake
-        let v4 = create_validator(@0x4, 4, 1, true, ctx); // 400 SUI of stake
 
-        let mut validator_set = validator_set::new(vector[v1, v2, v3, v4], ctx);
-        scenario_val.end();
+        // Create 2 validators, with stake 9_997 and stake 3
+        let validator1 = create_validator_with_initial_stake(@0x1, 1, 9_997, true, scenario.ctx());
+        let new_v = create_validator_with_initial_stake(@0xA, 0, 0, false, scenario.ctx());
+        scenario.set_epoch(MIN_STAKE_V2_EPOCH); // use the final values for voting power thresholds
+        // Create a validator set with only the first validator in it
+        let mut validator_set = validator_set::new(vector[validator1], scenario.ctx());
+        scenario.next_tx(@0xA);
 
-        let mut scenario_val = test_scenario::begin(@0x1);
-        let scenario = &mut scenario_val;
-        assert_eq(active_validator_addresses(&validator_set), vector[@0x1, @0x2, @0x3, @0x4]);
+        validator_set.request_add_validator_candidate(new_v, scenario.ctx());
+        let stake = validator_set.request_add_stake(@0xA, balance::create_for_testing(3 * MIST_PER_SUI), scenario.ctx());
+        validator_set.request_add_validator(scenario.ctx()); // can be admitted
+        let bal = validator_set.request_withdraw_stake(stake, scenario.ctx()); // should fail here with ENotAValidator
+        advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
+        assert!(!validator_set.is_active_validator(@0xA));
 
-        advance_epoch_with_low_stake_params(
-            &mut validator_set, 500, 200, 3, scenario
-        );
-
-        // v1 is kicked out because their stake 100 is less than the very low stake threshold
-        // which is 200.
-        assert_eq(active_validator_addresses(&validator_set), vector[@0x2, @0x3, @0x4]);
-
-        advance_epoch_with_low_stake_params(
-            &mut validator_set, 500, 200, 3, scenario
-        );
-        assert_eq(active_validator_addresses(&validator_set), vector[@0x2, @0x3, @0x4]);
-
-        advance_epoch_with_low_stake_params(
-            &mut validator_set, 500, 200, 3, scenario
-        );
-        assert_eq(active_validator_addresses(&validator_set), vector[@0x2, @0x3, @0x4]);
-
-        // Add some stake to @0x4 to get her out of the danger zone.
-        scenario.next_tx(@0x42);
-        {
-            let ctx = scenario.ctx();
-            let stake = validator_set.request_add_stake(
-                @0x4,
-                balance::create_for_testing(500 * MIST_PER_SUI),
-                ctx,
-            );
-            transfer::public_transfer(stake, @0x42);
-        };
-
-        // So only @0x2 will be kicked out.
-        advance_epoch_with_low_stake_params(
-            &mut validator_set, 500, 200, 3, scenario
-        );
-        assert_eq(active_validator_addresses(&validator_set), vector[@0x3, @0x4]);
-
-        // Withdraw the stake from @0x4.
-        scenario.next_tx(@0x42);
-        {
-            let stake = scenario.take_from_sender<StakedSui>();
-            let ctx = scenario.ctx();
-            let withdrawn_balance = validator_set.request_withdraw_stake(
-                stake,
-                ctx,
-            );
-            transfer::public_transfer(withdrawn_balance.into_coin(ctx), @0x42);
-        };
-
-        // Now @0x4 gets kicked out after 3 grace days are used at the 4th epoch change.
-        advance_epoch_with_low_stake_params(
-            &mut validator_set, 500, 200, 3, scenario
-        );
-        assert_eq(active_validator_addresses(&validator_set), vector[@0x3, @0x4]);
-        advance_epoch_with_low_stake_params(
-            &mut validator_set, 500, 200, 3, scenario
-        );
-        assert_eq(active_validator_addresses(&validator_set), vector[@0x3, @0x4]);
-        advance_epoch_with_low_stake_params(
-            &mut validator_set, 500, 200, 3, scenario
-        );
-        assert_eq(active_validator_addresses(&validator_set), vector[@0x3, @0x4]);
-        advance_epoch_with_low_stake_params(
-            &mut validator_set, 500, 200, 3, scenario
-        );
-        // @0x4 was kicked out.
-        assert_eq(active_validator_addresses(&validator_set), vector[@0x3]);
         test_utils::destroy(validator_set);
+        test_utils::destroy(bal);
+        scenario_val.end();
+    }
+
+    #[test]
+    fun test_withdraw_all() {
+        let mut scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        // create 10 validators with equal-ish stake so we don't run up against max voting power limits
+        let init_validators = get_10_validators(scenario.ctx());
+        let new_v = create_validator_with_initial_stake(@0xA, 11, 0, false, scenario.ctx());
+        scenario.set_epoch(MIN_STAKE_V2_EPOCH); // use the final values for voting power thresholds
+        let mut validator_set = validator_set::new(init_validators, scenario.ctx());
+        scenario.next_tx(@0xA);
+
+        validator_set.request_add_validator_candidate(new_v, scenario.ctx());
+        let stake = validator_set.request_add_stake(@0xA, balance::create_for_testing(4 * MIST_PER_SUI), scenario.ctx());
+        validator_set.request_add_validator(scenario.ctx()); // can be admitted
+        advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
+        assert!(validator_set.is_active_validator(@0xA));
+        assert!(validator_set.find_for_testing(@0xA).voting_power() == 3);
+        // withdraw all the stake. validator will now have voting power 0 + must be kicked out immediately
+        let bal = validator_set.request_withdraw_stake(stake, scenario.ctx());
+        // use "low stake" grace period of 10 epochs to ensure that validator actually did hit the "very low stake" threshold
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, 10, scenario);
+        assert!(!validator_set.is_active_validator(@0xA));
+
+        test_utils::destroy(validator_set);
+        test_utils::destroy(bal);
+        scenario_val.end();
+    }
+
+    #[test]
+    fun test_very_low_voting_power_departure() {
+        let mut scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        // create 10 validators with equal-ish stake so we don't run up against max voting power limits
+        let init_validators = get_10_validators(scenario.ctx());
+        let new_v = create_validator_with_initial_stake(@0xA, 11, 0, false, scenario.ctx());
+        scenario.set_epoch(MIN_STAKE_V2_EPOCH); // use the final values for voting power thresholds
+        let mut validator_set = validator_set::new(init_validators, scenario.ctx());
+        scenario.next_tx(@0xA);
+
+        let grace_period = 3;
+        validator_set.request_add_validator_candidate(new_v, scenario.ctx());
+        let mut stake = validator_set.request_add_stake(@0xA, balance::create_for_testing(4 * MIST_PER_SUI), scenario.ctx());
+        validator_set.request_add_validator(scenario.ctx()); // can be admitted
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
+        assert!(validator_set.is_active_validator(@0xA));
+        assert!(validator_set.find_for_testing(@0xA).voting_power() == 3);
+        // withdraw most of the stake. validator will now have voting power 1 and will be kicked out immediately
+        let bal = validator_set.request_withdraw_stake(stake.split(2 * MIST_PER_SUI, scenario.ctx()), scenario.ctx());
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
+        assert!(!validator_set.is_active_validator(@0xA));
+
+        test_utils::destroy(validator_set);
+        test_utils::destroy(bal);
+        test_utils::destroy(stake);
+        scenario_val.end();
+    }
+
+    #[test]
+    fun test_low_voting_power_departure() {
+        let mut scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        // create 10 validators with equal-ish stake so we don't run up against max voting power limits
+        let init_validators = get_10_validators(scenario.ctx());
+        let new_v = create_validator_with_initial_stake(@0xA, 11, 0, false, scenario.ctx());
+        scenario.set_epoch(MIN_STAKE_V2_EPOCH); // use the final values for voting power thresholds
+        let mut validator_set = validator_set::new(init_validators, scenario.ctx());
+        scenario.next_tx(@0xA);
+
+        let grace_period = 3;
+        validator_set.request_add_validator_candidate(new_v, scenario.ctx());
+        let mut stake = validator_set.request_add_stake(@0xA, balance::create_for_testing(4 * MIST_PER_SUI), scenario.ctx());
+        validator_set.request_add_validator(scenario.ctx()); // can be admitted
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
+        assert!(validator_set.is_active_validator(@0xA));
+        assert!(validator_set.find_for_testing(@0xA).voting_power() == 3);
+        // withdraw part of the stake. validator will now have voting power 2 and is now at risk
+        let bal = validator_set.request_withdraw_stake(stake.split(1 * MIST_PER_SUI, scenario.ctx()), scenario.ctx());
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
+        assert!(validator_set.is_active_validator(@0xA));
+        assert!(validator_set.find_for_testing(@0xA).voting_power() == 2);
+        assert_eq(validator_set.find_for_testing(@0xA).voting_power(), 2);
+        assert!(validator_set.is_at_risk_validator(@0xA));
+
+        // ... 1 epoch goes by. still in the grace period
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
+        assert!(validator_set.is_active_validator(@0xA));
+        assert!(validator_set.is_at_risk_validator(@0xA));
+        assert!(validator_set.find_for_testing(@0xA).voting_power() == 2);
+        // ... 2 epochs go by. still in the grace period
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
+        assert!(validator_set.is_active_validator(@0xA));
+        assert!(validator_set.is_at_risk_validator(@0xA));
+        assert!(validator_set.find_for_testing(@0xA).voting_power() == 2);
+        // ... 3 epochs go by, grace period over. validator is kicked out
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
+        assert!(!validator_set.is_active_validator(@0xA));
+
+        test_utils::destroy(validator_set);
+        test_utils::destroy(bal);
+        test_utils::destroy(stake);
+        scenario_val.end();
+    }
+
+    #[test]
+    fun test_low_voting_power_recovery() {
+        // a validator drops below the low voting power threshold, then recovers as stake is added back
+        let mut scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        // create 10 validators with equal-ish stake so we don't run up against max voting power limits
+        let init_validators = get_10_validators(scenario.ctx());
+        let new_v = create_validator_with_initial_stake(@0xA, 11, 0, false, scenario.ctx());
+        scenario.set_epoch(MIN_STAKE_V2_EPOCH); // use the final values for voting power thresholds
+        let mut validator_set = validator_set::new(init_validators, scenario.ctx());
+        scenario.next_tx(@0xA);
+
+        let grace_period = 3;
+        validator_set.request_add_validator_candidate(new_v, scenario.ctx());
+        let mut stake1 = validator_set.request_add_stake(@0xA, balance::create_for_testing(4 * MIST_PER_SUI), scenario.ctx());
+        validator_set.request_add_validator(scenario.ctx()); // can be admitted
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
+        assert!(validator_set.is_active_validator(@0xA));
+        assert!(validator_set.find_for_testing(@0xA).voting_power() == 3);
+        // withdraw part of the stake. validator will now have voting power 2 and is now at risk
+        let bal = validator_set.request_withdraw_stake(stake1.split(1 * MIST_PER_SUI, scenario.ctx()), scenario.ctx());
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
+        assert!(validator_set.is_active_validator(@0xA));
+        assert!(validator_set.find_for_testing(@0xA).voting_power() == 2);
+        assert!(validator_set.is_at_risk_validator(@0xA));
+
+        // add back the stake and get the validator above the threshold. should no longer be at risk
+        let stake2 = validator_set.request_add_stake(@0xA, bal, scenario.ctx());
+        advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
+        assert!(validator_set.is_active_validator(@0xA));
+        assert!(validator_set.find_for_testing(@0xA).voting_power() == 3);
+        assert!(!validator_set.is_at_risk_validator(@0xA));
+
+        test_utils::destroy(validator_set);
+        test_utils::destroy(stake1);
+        test_utils::destroy(stake2);
         scenario_val.end();
     }
 
@@ -426,12 +494,37 @@ module sui_system::validator_set_tests {
         validator
     }
 
+    fun create_validator_with_initial_stake(addr: address, hint: u8, initial_stake: u64, is_initial_validator: bool, ctx: &mut TxContext): Validator {
+        let name = hint_to_ascii(hint);
+        let validator = validator::new_for_testing(
+            addr,
+            vector[hint],
+            vector[hint],
+            vector[hint],
+            vector[hint],
+            copy name,
+            copy name,
+            copy name,
+            name,
+            vector[hint],
+            vector[hint],
+            vector[hint],
+            vector[hint],
+            if (initial_stake != 0) { option::some(balance::create_for_testing(initial_stake * MIST_PER_SUI)) } else { option::none() },
+            1,
+            0,
+            is_initial_validator,
+            ctx
+        );
+        validator
+    }
+
     fun hint_to_ascii(hint: u8): vector<u8> {
         let ascii_bytes = vector[hint / 100 + 65, hint % 100 / 10 + 65, hint % 10 + 65];
         ascii_bytes.to_ascii_string().into_bytes()
     }
 
-    fun advance_epoch_with_dummy_rewards(validator_set: &mut ValidatorSet, scenario: &mut Scenario) {
+    fun advance_epoch_with_low_stake_grace_period(validator_set: &mut ValidatorSet, low_stake_grace_period: u64, scenario: &mut Scenario) {
         scenario.next_epoch(@0x0);
         let mut dummy_computation_reward = balance::zero();
         let mut dummy_storage_fund_reward = balance::zero();
@@ -441,33 +534,6 @@ module sui_system::validator_set_tests {
             &mut dummy_storage_fund_reward,
             &mut vec_map::empty(),
             0, // reward_slashing_rate
-            0, // low_stake_threshold
-            0, // very_low_stake_threshold
-            0, // low_stake_grace_period
-            scenario.ctx()
-        );
-
-        dummy_computation_reward.destroy_zero();
-        dummy_storage_fund_reward.destroy_zero();
-    }
-
-    fun advance_epoch_with_low_stake_params(
-        validator_set: &mut ValidatorSet,
-        low_stake_threshold: u64,
-        very_low_stake_threshold: u64,
-        low_stake_grace_period: u64,
-        scenario: &mut Scenario
-    ) {
-        scenario.next_epoch(@0x0);
-        let mut dummy_computation_reward = balance::zero();
-        let mut dummy_storage_fund_reward = balance::zero();
-        validator_set.advance_epoch(
-            &mut dummy_computation_reward,
-            &mut dummy_storage_fund_reward,
-            &mut vec_map::empty(),
-            0, // reward_slashing_rate
-            low_stake_threshold * MIST_PER_SUI,
-            very_low_stake_threshold * MIST_PER_SUI,
             low_stake_grace_period,
             scenario.ctx()
         );
@@ -476,10 +542,14 @@ module sui_system::validator_set_tests {
         dummy_storage_fund_reward.destroy_zero();
     }
 
+    fun advance_epoch_with_dummy_rewards(validator_set: &mut ValidatorSet, scenario: &mut Scenario) {
+        advance_epoch_with_low_stake_grace_period(validator_set, 0, scenario);
+    }
+
     fun add_and_activate_validator(validator_set: &mut ValidatorSet, validator: Validator, scenario: &mut Scenario) {
         scenario.next_tx(validator.sui_address());
         let ctx = scenario.ctx();
         validator_set.request_add_validator_candidate(validator, ctx);
-        validator_set.request_add_validator(0, ctx);
+        validator_set.request_add_validator(ctx);
     }
 }
