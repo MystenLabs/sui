@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { GetPublicKeyCommand, KMSClient, SignCommand } from '@aws-sdk/client-kms';
-import { Signer, toSerializedSignature } from '@mysten/sui/cryptography';
+import { Signer } from '@mysten/sui/cryptography';
 import { Secp256k1PublicKey } from '@mysten/sui/keypairs/secp256k1';
-import { fromBase64 } from '@mysten/sui/utils';
 import { ASN1Construction, ASN1TagClass, DERElement } from 'asn1-ts';
 
-import { compressPublicKeyClamped } from './utils.js';
+import { compressPublicKeyClamped, getConcatenatedSignature } from './utils.js';
 
 /**
  * TODO: Add comments :)
@@ -85,14 +84,9 @@ export class AWSKMSSigner extends Signer {
 		if (!signResponse.Signature) {
 			throw new Error('Signature not found in the response. Execution failed.');
 		}
+		const compactSignature = getConcatenatedSignature(signResponse.Signature);
 
-		const serializedSignature = await toSerializedSignature({
-			signatureScheme: this.getKeyScheme(),
-			signature: signResponse.Signature,
-			publicKey: this.#pubKey,
-		});
-
-		return fromBase64(serializedSignature);
+		return compactSignature;
 	}
 
 	signData(): never {
