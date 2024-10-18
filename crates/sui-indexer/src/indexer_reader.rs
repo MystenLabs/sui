@@ -974,10 +974,9 @@ impl IndexerReader {
                 )
                 .first::<i64>(&mut connection)
                 .await?;
-            (tx_seq, event_seq)
+            (tx_seq, event_seq as i64)
         } else if descending_order {
-            let max_tx_seq = u64::MAX as i64;
-            (max_tx_seq + 1, 0)
+            (i64::MAX, i64::MAX)
         } else {
             (-1, 0)
         };
