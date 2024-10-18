@@ -60,6 +60,6 @@ impl Observable for TotalSupplies {
     }
 
     fn interval(&self) -> Duration {
-        Duration::from_secs(20)
+        Duration::from_secs(5)
     }
 }

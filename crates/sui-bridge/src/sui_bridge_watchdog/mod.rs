@@ -16,7 +16,7 @@ pub mod eth_bridge_status;
 pub mod eth_vault_balance;
 pub mod metrics;
 pub mod sui_bridge_status;
-pub mod total_suppies;
+pub mod total_supplies;
 
 pub struct BridgeWatchDog {
     observables: Vec<Box<dyn Observable + Send + Sync>>,

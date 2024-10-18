@@ -8,7 +8,7 @@ use crate::sui_bridge_watchdog::eth_bridge_status::EthBridgeStatus;
 use crate::sui_bridge_watchdog::eth_vault_balance::EthVaultBalance;
 use crate::sui_bridge_watchdog::metrics::WatchdogMetrics;
 use crate::sui_bridge_watchdog::sui_bridge_status::SuiBridgeStatus;
-use crate::sui_bridge_watchdog::total_suppies::TotalSupplies;
+use crate::sui_bridge_watchdog::total_supplies::TotalSupplies;
 use crate::sui_bridge_watchdog::{BridgeWatchDog, Observable};
 use crate::sui_client::SuiBridgeClient;
 use crate::types::BridgeCommittee;
