@@ -210,6 +210,7 @@ pub enum Command {
     },
     /// Restore the database from formal snaphots.
     Restore(RestoreConfig),
+    Benchmark(BenchmarkConfig),
 }
 
 #[derive(Args, Default, Debug, Clone)]
@@ -376,6 +377,34 @@ impl Default for RestoreConfig {
             object_store_max_timeout_secs: 512,
         }
     }
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct BenchmarkConfig {
+    #[arg(
+        long,
+        default_value_t = 200,
+        help = "Number of transactions in a checkpoint."
+    )]
+    pub checkpoint_size: u64,
+    #[arg(
+        long,
+        default_value_t = 2000,
+        help = "Total number of synthetic checkpoints to generate."
+    )]
+    pub num_checkpoints: u64,
+    #[arg(
+        long,
+        default_value_t = 1,
+        help = "Customize the first checkpoint sequence number to be committed, must be non-zero."
+    )]
+    pub starting_checkpoint: u64,
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Whether to reset the database before running."
+    )]
+    pub reset_db: bool,
 }
 
 #[cfg(test)]
