@@ -298,7 +298,7 @@ async fn test_congestion_control_execution_cancellation() {
     // Initialize shared object queue so that any transaction touches shared_object_1 should result in congestion and cancellation.
     register_fail_point_arg("initial_congestion_tracker", move || {
         Some(SharedObjectCongestionTracker::new(
-            &[(shared_object_1.0, 10)],
+            [(shared_object_1.0, 10)],
             PerObjectCongestionControlMode::TotalGasBudget,
             Some(
                 test_setup

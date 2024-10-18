@@ -32,10 +32,11 @@ pub struct SharedObjectCongestionTracker {
 
 impl SharedObjectCongestionTracker {
     pub fn new(
-        initial_object_debts: &[(ObjectID, u64)],
+        initial_object_debts: impl IntoIterator<Item = (ObjectID, u64)>,
         mode: PerObjectCongestionControlMode,
         max_accumulated_txn_cost_per_object_in_commit: Option<u64>,
         gas_budget_based_txn_cost_cap_factor: Option<u64>,
+        // TODO-DNS Change this to a numeric overage cap, rather than a bool.
         allow_overage: bool,
     ) -> Self {
         let max_accumulated_txn_cost_per_object_in_commit =
@@ -47,7 +48,7 @@ impl SharedObjectCongestionTracker {
                 )
             };
         Self {
-            object_execution_cost: initial_object_debts.iter().cloned().collect(),
+            object_execution_cost: initial_object_debts.into_iter().collect(),
             mode,
             max_accumulated_txn_cost_per_object_in_commit,
             gas_budget_based_txn_cost_cap_factor,
@@ -102,10 +103,8 @@ impl SharedObjectCongestionTracker {
             if start_cost <= self.max_accumulated_txn_cost_per_object_in_commit {
                 return None;
             }
-        } else {
-            if start_cost + tx_cost <= self.max_accumulated_txn_cost_per_object_in_commit {
-                return None;
-            }
+        } else if start_cost + tx_cost <= self.max_accumulated_txn_cost_per_object_in_commit {
+            return None;
         }
 
         // Finds out the congested objects.
@@ -244,7 +243,7 @@ mod object_cost_tests {
         let object_id_2 = ObjectID::random();
 
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
-            &[(object_id_0, 5), (object_id_1, 10)],
+            [(object_id_0, 5), (object_id_1, 10)],
             PerObjectCongestionControlMode::TotalGasBudget,
             Some(0), // not part of this test
             None,
@@ -394,7 +393,7 @@ mod object_cost_tests {
                 // object 0:            |
                 // object 1:      |
                 SharedObjectCongestionTracker::new(
-                    &[(shared_obj_0, 10), (shared_obj_1, 1)],
+                    [(shared_obj_0, 10), (shared_obj_1, 1)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     None,
@@ -407,7 +406,7 @@ mod object_cost_tests {
                 // object 0:            |
                 // object 1:      |
                 SharedObjectCongestionTracker::new(
-                    &[(shared_obj_0, 2), (shared_obj_1, 1)],
+                    [(shared_obj_0, 2), (shared_obj_1, 1)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     None,
@@ -420,7 +419,7 @@ mod object_cost_tests {
                 // object 0:            |
                 // object 1:      |
                 SharedObjectCongestionTracker::new(
-                    &[(shared_obj_0, 10), (shared_obj_1, 1)],
+                    [(shared_obj_0, 10), (shared_obj_1, 1)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     Some(45), // Make the cap just less than the gas budget, there are 1 objects in tx.
@@ -484,7 +483,7 @@ mod object_cost_tests {
         let tx = build_transaction(&[(shared_obj_0, true)], 100);
 
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
-            &[],
+            [],
             mode,
             Some(0), // Make should_defer_due_to_object_congestion always defer transactions.
             Some(2),
@@ -607,7 +606,7 @@ mod object_cost_tests {
                 // object 0:            |
                 // object 1:      |
                 SharedObjectCongestionTracker::new(
-                    &[(shared_obj_0, 102), (shared_obj_1, 90)],
+                    [(shared_obj_0, 102), (shared_obj_1, 90)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     None,
@@ -620,7 +619,7 @@ mod object_cost_tests {
                 // object 0:            |
                 // object 1:      |
                 SharedObjectCongestionTracker::new(
-                    &[(shared_obj_0, 3), (shared_obj_1, 2)],
+                    [(shared_obj_0, 3), (shared_obj_1, 2)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     None,
@@ -633,7 +632,7 @@ mod object_cost_tests {
                 // object 0:            |
                 // object 1:      |
                 SharedObjectCongestionTracker::new(
-                    &[(shared_obj_0, 100), (shared_obj_1, 90)],
+                    [(shared_obj_0, 100), (shared_obj_1, 90)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     Some(45), // Make the cap just less than the gas budget, there are 1 objects in tx.
@@ -698,7 +697,7 @@ mod object_cost_tests {
         let cap_factor = Some(1);
 
         let mut shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
-            &[(object_id_0, 5), (object_id_1, 10)],
+            [(object_id_0, 5), (object_id_1, 10)],
             mode,
             Some(0), // not part of this test
             cap_factor,
@@ -712,7 +711,7 @@ mod object_cost_tests {
         assert_eq!(
             shared_object_congestion_tracker,
             SharedObjectCongestionTracker::new(
-                &[(object_id_0, 5), (object_id_1, 10)],
+                [(object_id_0, 5), (object_id_1, 10)],
                 mode,
                 Some(0), // not part of this test
                 cap_factor,
@@ -733,7 +732,7 @@ mod object_cost_tests {
         assert_eq!(
             shared_object_congestion_tracker,
             SharedObjectCongestionTracker::new(
-                &[(object_id_0, expected_object_0_cost), (object_id_1, 10)],
+                [(object_id_0, expected_object_0_cost), (object_id_1, 10)],
                 mode,
                 Some(0), // not part of this test
                 cap_factor,
@@ -764,7 +763,7 @@ mod object_cost_tests {
         assert_eq!(
             shared_object_congestion_tracker,
             SharedObjectCongestionTracker::new(
-                &[
+                [
                     (object_id_0, expected_object_cost),
                     (object_id_1, expected_object_cost),
                     (object_id_2, expected_object_cost)
@@ -800,7 +799,7 @@ mod object_cost_tests {
         assert_eq!(
             shared_object_congestion_tracker,
             SharedObjectCongestionTracker::new(
-                &[
+                [
                     (object_id_0, expected_object_cost),
                     (object_id_1, expected_object_cost),
                     (object_id_2, expected_object_cost)
@@ -848,7 +847,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget => {
                 // Starting with two objects with accumulated cost 80.
                 SharedObjectCongestionTracker::new(
-                    &[(shared_obj_0, 80), (shared_obj_1, 80)],
+                    [(shared_obj_0, 80), (shared_obj_1, 80)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     None,
@@ -858,7 +857,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
                 // Starting with two objects with accumulated cost 80.
                 SharedObjectCongestionTracker::new(
-                    &[(shared_obj_0, 80), (shared_obj_1, 80)],
+                    [(shared_obj_0, 80), (shared_obj_1, 80)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     Some(45),
@@ -868,7 +867,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalTxCount => {
                 // Starting with two objects with accumulated tx count 2.
                 SharedObjectCongestionTracker::new(
-                    &[(shared_obj_0, 2), (shared_obj_1, 2)],
+                    [(shared_obj_0, 2), (shared_obj_1, 2)],
                     mode,
                     Some(max_accumulated_txn_cost_per_object_in_commit),
                     None,
@@ -907,7 +906,7 @@ mod object_cost_tests {
         let object_id_2 = ObjectID::random();
 
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
-            &[(object_id_0, 5), (object_id_1, 10), (object_id_2, 100)],
+            [(object_id_0, 5), (object_id_1, 10), (object_id_2, 100)],
             PerObjectCongestionControlMode::TotalGasBudget,
             Some(100),
             None,

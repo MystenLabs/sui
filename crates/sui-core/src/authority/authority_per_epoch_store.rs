@@ -370,10 +370,6 @@ pub struct AuthorityPerEpochStore {
     /// State machine managing randomness DKG and generation.
     randomness_manager: OnceCell<tokio::sync::Mutex<RandomnessManager>>,
     randomness_reporter: OnceCell<RandomnessReporter>,
-
-    /// Accumulated per-object debts for congestion control.
-    congestion_control_object_debts: Mutex<Vec<(ObjectID, u64)>>,
-    congestion_control_randomness_object_debts: Mutex<Vec<(ObjectID, u64)>>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -601,10 +597,9 @@ pub struct AuthorityEpochTables {
     /// Holds the timestamp of the most recently generated round of randomness.
     pub(crate) randomness_last_round_timestamp: DBMap<u64, TimestampMs>,
 
-    /// Accumulated per-object debts for congestion control. Duplicates in-memory versions in
-    /// AuthorityPerEpochStore, for crash recovery.
-    pub(crate) congestion_control_object_debts: DBMap<u64, Vec<(ObjectID, u64)>>,
-    pub(crate) congestion_control_randomness_object_debts: DBMap<u64, Vec<(ObjectID, u64)>>,
+    /// Accumulated per-object debts for congestion control.
+    pub(crate) congestion_control_object_debts: DBMap<ObjectID, (Round, u64)>,
+    pub(crate) congestion_control_randomness_object_debts: DBMap<ObjectID, (Round, u64)>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -755,6 +750,49 @@ impl AuthorityEpochTables {
         batch.write()?;
         Ok(())
     }
+
+    pub fn load_initial_object_debts(
+        &self,
+        current_round: Round,
+        for_randomness: bool,
+        per_commit_budget: u64,
+        transactions: &[VerifiedSequencedConsensusTransaction],
+    ) -> SuiResult<impl IntoIterator<Item = (ObjectID, u64)>> {
+        let table = if for_randomness {
+            &self.congestion_control_randomness_object_debts
+        } else {
+            &self.congestion_control_object_debts
+        };
+        let shared_input_object_ids: BTreeSet<_> = transactions
+            .iter()
+            .filter_map(|tx| {
+                if let SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                    kind: ConsensusTransactionKind::CertifiedTransaction(tx),
+                    ..
+                }) = &tx.0.transaction
+                {
+                    Some(tx.shared_input_objects().map(|obj| obj.id))
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect();
+        Ok(table
+            .multi_get(shared_input_object_ids.iter())?
+            .into_iter()
+            .flatten()
+            .zip(shared_input_object_ids)
+            .map(move |((round, debt), object_id)| {
+                (
+                    object_id,
+                    // Stored debts already account for the budget of the round in which
+                    // they were accumulated. Application of budget from future rounds to
+                    // the debt is handled here.
+                    debt.saturating_sub(per_commit_budget * (current_round - round - 1)),
+                )
+            }))
+    }
 }
 
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
@@ -873,21 +911,6 @@ impl AuthorityPerEpochStore {
 
         let jwk_aggregator = Mutex::new(jwk_aggregator);
 
-        let congestion_control_object_debts = Mutex::new(
-            tables
-                .congestion_control_object_debts
-                .get(&SINGLETON_KEY)
-                .expect("table read must not fail")
-                .unwrap_or(vec![]),
-        );
-        let congestion_control_randomness_object_debts = Mutex::new(
-            tables
-                .congestion_control_randomness_object_debts
-                .get(&SINGLETON_KEY)
-                .expect("table read must not fail")
-                .unwrap_or(vec![]),
-        );
-
         let s = Arc::new(Self {
             name,
             committee,
@@ -920,8 +943,6 @@ impl AuthorityPerEpochStore {
             jwk_aggregator,
             randomness_manager: OnceCell::new(),
             randomness_reporter: OnceCell::new(),
-            congestion_control_object_debts,
-            congestion_control_randomness_object_debts,
         });
 
         if matches!(chain_identifier.chain(), Chain::Mainnet | Chain::Testnet) {
@@ -2679,7 +2700,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        let mut output = ConsensusCommitOutput::new();
+        let mut output = ConsensusCommitOutput::new(consensus_commit_info.round);
 
         // Load transactions deferred from previous commits.
         let deferred_txs: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)> = self
@@ -2806,7 +2827,6 @@ impl AuthorityPerEpochStore {
             })
             .collect();
 
-        // We always order transactions using randomness last.
         PostConsensusTxReorder::reorder(
             &mut sequenced_transactions,
             self.protocol_config.consensus_transaction_ordering(),
@@ -2815,6 +2835,48 @@ impl AuthorityPerEpochStore {
             &mut sequenced_randomness_transactions,
             self.protocol_config.consensus_transaction_ordering(),
         );
+
+        // We track transaction execution cost separately for regular transactions and transactions using randomness, since
+        // they will be in different PendingCheckpoints.
+        let tables = self.tables()?;
+        let per_commit_budget = self
+            .protocol_config()
+            .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
+            .unwrap_or(0);
+        let congestion_control_allow_overage = self
+            .protocol_config()
+            .congestion_control_allow_overage_as_option()
+            .unwrap_or(false);
+        let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
+            tables.load_initial_object_debts(
+                consensus_commit_info.round,
+                false,
+                per_commit_budget,
+                &sequenced_transactions,
+            )?,
+            self.protocol_config().per_object_congestion_control_mode(),
+            self.protocol_config()
+                .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
+            self.protocol_config()
+                .gas_budget_based_txn_cost_cap_factor_as_option(),
+            congestion_control_allow_overage,
+        );
+        let shared_object_using_randomness_congestion_tracker = SharedObjectCongestionTracker::new(
+            tables.load_initial_object_debts(
+                consensus_commit_info.round,
+                true,
+                per_commit_budget,
+                &sequenced_randomness_transactions,
+            )?,
+            self.protocol_config().per_object_congestion_control_mode(),
+            self.protocol_config()
+                .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
+            self.protocol_config()
+                .gas_budget_based_txn_cost_cap_factor_as_option(),
+            congestion_control_allow_overage,
+        );
+
+        // We always order transactions using randomness last.
         let consensus_transactions: Vec<_> = system_transactions
             .into_iter()
             .chain(sequenced_transactions)
@@ -2837,6 +2899,8 @@ impl AuthorityPerEpochStore {
                 consensus_commit_info,
                 &mut roots,
                 &mut randomness_roots,
+                shared_object_congestion_tracker,
+                shared_object_using_randomness_congestion_tracker,
                 previously_deferred_tx_digests,
                 randomness_manager.as_deref_mut(),
                 dkg_failed,
@@ -3097,7 +3161,7 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ObjectCacheRead,
         transactions: &[VerifiedExecutableTransaction],
     ) -> SuiResult {
-        let mut output = ConsensusCommitOutput::new();
+        let mut output = ConsensusCommitOutput::new(0);
         self.process_consensus_transaction_shared_object_versions(
             cache_reader,
             transactions,
@@ -3142,6 +3206,8 @@ impl AuthorityPerEpochStore {
         consensus_commit_info: &ConsensusCommitInfo,
         roots: &mut BTreeSet<TransactionKey>,
         randomness_roots: &mut BTreeSet<TransactionKey>,
+        mut shared_object_congestion_tracker: SharedObjectCongestionTracker,
+        mut shared_object_using_randomness_congestion_tracker: SharedObjectCongestionTracker,
         previously_deferred_tx_digests: HashMap<TransactionDigest, DeferralKey>,
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_failed: bool,
@@ -3165,32 +3231,6 @@ impl AuthorityPerEpochStore {
             BTreeMap::new();
         let mut cancelled_txns: BTreeMap<TransactionDigest, CancelConsensusCertificateReason> =
             BTreeMap::new();
-
-        // We track transaction execution cost separately for regular transactions and transactions using randomness, since
-        // they will be in different PendingCheckpoints.
-        let congestion_control_allow_overage = self
-            .protocol_config()
-            .congestion_control_allow_overage_as_option()
-            .unwrap_or(false);
-        let mut shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
-            &self.congestion_control_object_debts.lock(),
-            self.protocol_config().per_object_congestion_control_mode(),
-            self.protocol_config()
-                .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
-            self.protocol_config()
-                .gas_budget_based_txn_cost_cap_factor_as_option(),
-            congestion_control_allow_overage,
-        );
-        let mut shared_object_using_randomness_congestion_tracker =
-            SharedObjectCongestionTracker::new(
-                &self.congestion_control_randomness_object_debts.lock(),
-                self.protocol_config().per_object_congestion_control_mode(),
-                self.protocol_config()
-                    .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
-                self.protocol_config()
-                    .gas_budget_based_txn_cost_cap_factor_as_option(),
-                congestion_control_allow_overage,
-            );
 
         fail_point_arg!(
             "initial_congestion_tracker",
@@ -3304,19 +3344,12 @@ impl AuthorityPerEpochStore {
             .with_label_values(&["randomness_commit"])
             .set(shared_object_using_randomness_congestion_tracker.max_cost() as i64);
 
-        {
-            let mut congestion_control_object_debts = self.congestion_control_object_debts.lock();
-            let mut congestion_control_randomness_object_debts =
-                self.congestion_control_randomness_object_debts.lock();
-            *congestion_control_object_debts = shared_object_congestion_tracker.accumulated_debts();
-            *congestion_control_randomness_object_debts =
-                shared_object_using_randomness_congestion_tracker.accumulated_debts();
-            output.set_congestion_control_object_debts(congestion_control_object_debts.clone());
-            output.set_congestion_control_randomness_object_debts(
-                congestion_control_randomness_object_debts.clone(),
-            );
-            // drop locks so we can call 'await' below
-        }
+        output.set_congestion_control_object_debts(
+            shared_object_congestion_tracker.accumulated_debts(),
+        );
+        output.set_congestion_control_randomness_object_debts(
+            shared_object_using_randomness_congestion_tracker.accumulated_debts(),
+        );
 
         if randomness_state_updated {
             if let Some(randomness_manager) = randomness_manager.as_mut() {
@@ -4102,6 +4135,7 @@ impl AuthorityPerEpochStore {
 #[derive(Default)]
 pub(crate) struct ConsensusCommitOutput {
     // Consensus and reconfig state
+    consensus_round: Round,
     consensus_messages_processed: BTreeSet<SequencedConsensusTransactionKey>,
     end_of_publish: BTreeSet<AuthorityName>,
     reconfig_state: Option<ReconfigState>,
@@ -4137,8 +4171,11 @@ pub(crate) struct ConsensusCommitOutput {
 }
 
 impl ConsensusCommitOutput {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(consensus_round: Round) -> Self {
+        Self {
+            consensus_round,
+            ..Default::default()
+        }
     }
 
     fn insert_end_of_publish(&mut self, authority: AuthorityName) {
@@ -4342,14 +4379,15 @@ impl ConsensusCommitOutput {
 
         batch.insert_batch(
             &tables.congestion_control_object_debts,
-            [(SINGLETON_KEY, self.congestion_control_object_debts)],
+            self.congestion_control_object_debts
+                .into_iter()
+                .map(|(object_id, debt)| (object_id, (self.consensus_round, debt))),
         )?;
         batch.insert_batch(
             &tables.congestion_control_randomness_object_debts,
-            [(
-                SINGLETON_KEY,
-                self.congestion_control_randomness_object_debts,
-            )],
+            self.congestion_control_randomness_object_debts
+                .into_iter()
+                .map(|(object_id, debt)| (object_id, (self.consensus_round, debt))),
         )?;
 
         Ok(())
