@@ -21,7 +21,7 @@ use diffy::create_patch;
 use futures::future::{select, Either};
 use futures::FutureExt;
 use itertools::Itertools;
-use mysten_metrics::{monitored_scope, MonitoredFutureExt};
+use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use sui_macros::fail_point;
@@ -2271,9 +2271,9 @@ impl CheckpointService {
             max_checkpoint_size_bytes,
         );
         let epoch_store_clone = epoch_store.clone();
-        tasks.spawn(async move {
+        tasks.spawn(monitored_future!(async move {
             let _ = epoch_store_clone.within_alive_epoch(builder.run()).await;
-        });
+        }));
 
         let aggregator = CheckpointAggregator::new(
             checkpoint_store.clone(),
@@ -2284,7 +2284,7 @@ impl CheckpointService {
             state.clone(),
             metrics.clone(),
         );
-        tasks.spawn(aggregator.run());
+        tasks.spawn(monitored_future!(aggregator.run()));
 
         let last_signature_index = epoch_store
             .get_last_checkpoint_signature_index()

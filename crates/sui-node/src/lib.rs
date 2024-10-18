@@ -12,6 +12,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
+use mysten_common::debug_fatal;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -46,6 +47,7 @@ use tap::tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::sync::{broadcast, mpsc, watch, Mutex};
 use tokio::task::{JoinHandle, JoinSet};
+use tokio::time::timeout;
 use tower::ServiceBuilder;
 use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
@@ -1667,8 +1669,22 @@ impl SuiNode {
                 info!("Reconfiguring the validator.");
                 // Stop the old checkpoint service and wait for them to finish.
                 let _ = checkpoint_service_exit.send(());
-                while let Some(_result) = checkpoint_service_tasks.join_next().await {}
-                info!("Checkpoint service has shut down.");
+                let wait_result = timeout(Duration::from_secs(5), async move {
+                    while let Some(result) = checkpoint_service_tasks.join_next().await {
+                        if let Err(err) = result {
+                            if err.is_panic() {
+                                std::panic::resume_unwind(err.into_panic());
+                            }
+                            warn!("Error in checkpoint service task: {:?}", err);
+                        }
+                    }
+                })
+                .await;
+                if wait_result.is_err() {
+                    debug_fatal!("Timed out waiting for checkpoint service tasks to finish.");
+                } else {
+                    info!("Checkpoint service has shut down.");
+                }
 
                 consensus_manager.shutdown().await;
                 info!("Consensus has shut down.");
