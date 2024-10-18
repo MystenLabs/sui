@@ -70,7 +70,7 @@ async fn test_sui_bridge_paused() {
 
     // get pause bridge signatures from committee
     let bridge_committee = Arc::new(bridge_client.get_bridge_committee().await.unwrap());
-    let agg = BridgeAuthorityAggregator::new(bridge_committee);
+    let agg = BridgeAuthorityAggregator::new_for_testing(bridge_committee);
     let certified_action = agg
         .request_committee_signatures(pause_action)
         .await

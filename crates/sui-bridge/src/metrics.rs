@@ -113,6 +113,10 @@ pub struct BridgeMetrics {
 
     pub(crate) sui_rpc_errors: IntCounterVec,
     pub(crate) observed_governance_actions: IntCounterVec,
+    pub(crate) current_bridge_voting_rights: IntGaugeVec,
+
+    pub(crate) auth_agg_ok_responses: IntCounterVec,
+    pub(crate) auth_agg_bad_responses: IntCounterVec,
 }
 
 impl BridgeMetrics {
@@ -314,6 +318,27 @@ impl BridgeMetrics {
                 "bridge_observed_governance_actions",
                 "Total number of observed governance actions",
                 &["action_type", "chain_id"],
+                registry,
+            )
+            .unwrap(),
+            current_bridge_voting_rights: register_int_gauge_vec_with_registry!(
+                "current_bridge_voting_rights",
+                "Current voting power in the bridge committee",
+                &["authority"],
+                registry
+            )
+            .unwrap(),
+            auth_agg_ok_responses: register_int_counter_vec_with_registry!(
+                "bridge_auth_agg_ok_responses",
+                "Total number of ok respones from auth agg",
+                &["authority"],
+                registry,
+            )
+            .unwrap(),
+            auth_agg_bad_responses: register_int_counter_vec_with_registry!(
+                "bridge_auth_agg_bad_responses",
+                "Total number of bad respones from auth agg",
+                &["authority"],
                 registry,
             )
             .unwrap(),

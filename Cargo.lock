@@ -12923,7 +12923,6 @@ dependencies = [
  "serde_yaml 0.8.26",
  "strum_macros 0.24.3",
  "sui-bridge",
- "sui-bridge-watchdog",
  "sui-config",
  "sui-data-ingestion-core",
  "sui-indexer-builder",
@@ -12935,21 +12934,6 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "test-cluster",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "sui-bridge-watchdog"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "ethers",
- "futures",
- "mysten-metrics",
- "prometheus",
- "sui-bridge",
  "tokio",
  "tracing",
 ]
@@ -13274,7 +13258,6 @@ dependencies = [
  "serde_json",
  "shared-crypto",
  "sui",
- "sui-bridge",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -15616,7 +15599,6 @@ dependencies = [
  "move-binary-format",
  "prometheus",
  "rand 0.8.5",
- "sui-bridge",
  "sui-config",
  "sui-core",
  "sui-framework",
