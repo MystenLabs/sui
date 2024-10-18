@@ -35,6 +35,7 @@ module.exports = {
 		'storybook-static',
 		'.next',
 		'sdk/docs/public/typedoc',
+		'generated',
 	],
 	rules: {
 		'no-case-declarations': 'off',

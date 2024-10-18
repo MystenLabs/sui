@@ -1,9 +1,11 @@
 {
-	"name": "move-bytecode-template",
+	"name": "@mysten/move-bytecode-template",
 	"version": "0.1.0",
 	"description": "Move Binary Format implementation in WASM",
 	"type": "module",
 	"private": true,
+	"main": "pkg/move_bytecode_template.js",
+  	"types": "pkg/move_bytecode_template.d.ts",
 	"scripts": {
 		"build": "wasm-pack build --target nodejs --scope mysten",
 		"build:dev": "wasm-pack build --target nodejs --debug --scope mysten",
