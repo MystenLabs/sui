@@ -918,7 +918,7 @@ impl CheckpointBuilder {
         loop {
             self.maybe_build_checkpoints().await;
 
-            let _ = timeout(Duration::from_secs(1), self.notify.notified()).await;
+            self.notify.notified().await;
         }
     }
 
