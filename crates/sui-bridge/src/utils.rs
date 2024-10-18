@@ -424,12 +424,12 @@ pub async fn get_validator_names_by_pub_keys(
     bridge_committee
         .members()
         .iter()
-        .map(|v| {
+        .map(|(name, validator)| {
             (
-                v.0.clone(),
+                name.clone(),
                 sui_committee
-                    .remove(&v.1.sui_address)
-                    .unwrap_or(v.1.base_url.clone()),
+                    .remove(&validator.sui_address)
+                    .unwrap_or(validator.base_url.clone()),
             )
         })
         .collect()
