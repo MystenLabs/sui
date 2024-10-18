@@ -25,8 +25,9 @@ use sui_types::committee::StakeUnit;
 use sui_types::committee::TOTAL_VOTING_POWER;
 use tracing::{error, info, warn};
 
-const TOTAL_TIMEOUT_MS: u64 = 5000;
-const PREFETCH_TIMEOUT_MS: u64 = 1500;
+const TOTAL_TIMEOUT_MS: u64 = 5_000;
+const PREFETCH_TIMEOUT_MS: u64 = 1_500;
+const RETRY_INTERVAL_MS: u64 = 500;
 
 pub struct BridgeAuthorityAggregator {
     pub committee: Arc<BridgeCommittee>,
@@ -249,8 +250,29 @@ async fn request_sign_bridge_action_into_certification(
         clients,
         preference,
         state,
-        |_name, client| {
-            Box::pin(async move { client.request_sign_bridge_action(action.clone()).await })
+        |name, client| {
+            Box::pin(async move {
+                let start = std::time::Instant::now();
+                let timeout = Duration::from_millis(TOTAL_TIMEOUT_MS);
+                let retry_interval = Duration::from_millis(RETRY_INTERVAL_MS);
+                while start.elapsed() < timeout {
+                    match client.request_sign_bridge_action(action.clone()).await {
+                        Ok(result) => {
+                            return Ok(result);
+                        }
+                        // retryable errors
+                        Err(BridgeError::TxNotFinalized) => {
+                            warn!("Bridge authority {} observing transaction not yet finalized, retrying in {:?}", name.concise(), retry_interval);
+                            tokio::time::sleep(retry_interval).await;
+                        }
+                        // non-retryable errors
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    }
+                }
+                Err(BridgeError::TransientProviderError(format!("Bridge authority {} did not observe finalized transaction after {:?}", name.concise(), timeout)))
+            })
         },
         |mut state, name, stake, result| {
             Box::pin(async move {
@@ -293,7 +315,7 @@ async fn request_sign_bridge_action_into_certification(
                 }
             })
         },
-        Duration::from_secs(TOTAL_TIMEOUT_MS),
+        Duration::from_millis(TOTAL_TIMEOUT_MS),
     )
     .await
     .map_err(|state| {
