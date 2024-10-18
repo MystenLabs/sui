@@ -72,7 +72,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let past_object = sui
         .read_api()
-        .try_get_parsed_past_object(object_id, version, sui_data_options)
+        .try_get_parsed_past_object(object_id, version, sui_data_options.clone())
         .await?;
     println!(" *** Past Object *** ");
     println!("{:?}", past_object);
@@ -86,7 +86,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 object_id: sui_get_past_object_request.object_id,
                 version: sui_get_past_object_request.version,
             }],
-            sui_data_options,
+            sui_data_options.clone(),
         )
         .await?;
     println!(" *** Multi Past Object *** ");

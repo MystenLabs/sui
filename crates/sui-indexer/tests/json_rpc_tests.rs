@@ -22,7 +22,9 @@ async fn test_get_owned_objects() -> Result<(), anyhow::Error> {
     let objects = http_client
         .get_owned_objects(
             address,
-            Some(SuiObjectResponseQuery::new_with_options(data_option)),
+            Some(SuiObjectResponseQuery::new_with_options(
+                data_option.clone(),
+            )),
             None,
             None,
         )
@@ -33,7 +35,9 @@ async fn test_get_owned_objects() -> Result<(), anyhow::Error> {
         .rpc_client
         .get_owned_objects(
             address,
-            Some(SuiObjectResponseQuery::new_with_options(data_option)),
+            Some(SuiObjectResponseQuery::new_with_options(
+                data_option.clone(),
+            )),
             None,
             None,
         )
@@ -47,7 +51,7 @@ async fn test_get_owned_objects() -> Result<(), anyhow::Error> {
     for obj in &objects {
         let oref = obj.clone().into_object().unwrap();
         let result = http_client
-            .get_object(oref.object_id, Some(data_option))
+            .get_object(oref.object_id, Some(data_option.clone()))
             .await?;
         assert!(
             matches!(result, SuiObjectResponse { data: Some(object), .. } if oref.object_id == object.object_id && object.owner.unwrap().get_owner_address()? == address)

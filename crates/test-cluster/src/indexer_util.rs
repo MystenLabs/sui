@@ -73,13 +73,12 @@ pub(crate) async fn setup_indexer_backed_rpc(
         .await
         .unwrap();
 
-    let indexer_handle = IndexerHandle {
+    IndexerHandle {
         rpc_client,
         sui_client,
         rpc_url: rpc_address.clone(),
         database,
         data_ingestion_dir: temp_data_ingestion_dir,
         cancellation_tokens,
-    };
-    indexer_handle
+    }
 }
