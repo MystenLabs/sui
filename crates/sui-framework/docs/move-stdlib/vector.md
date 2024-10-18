@@ -314,7 +314,7 @@ Pushes all of the elements of the <code>other</code> vector into the <code>lhs</
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/vector.md#0x1_vector_append">append</a>&lt;Element&gt;(lhs: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Element&gt;, <b>mut</b> other: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Element&gt;) {
     other.<a href="../move-stdlib/vector.md#0x1_vector_reverse">reverse</a>();
-    <b>while</b> (!other.<a href="../move-stdlib/vector.md#0x1_vector_is_empty">is_empty</a>()) lhs.<a href="../move-stdlib/vector.md#0x1_vector_push_back">push_back</a>(other.<a href="../move-stdlib/vector.md#0x1_vector_pop_back">pop_back</a>());
+    <b>while</b> (other.<a href="../move-stdlib/vector.md#0x1_vector_length">length</a>() != 0) lhs.<a href="../move-stdlib/vector.md#0x1_vector_push_back">push_back</a>(other.<a href="../move-stdlib/vector.md#0x1_vector_pop_back">pop_back</a>());
     other.<a href="../move-stdlib/vector.md#0x1_vector_destroy_empty">destroy_empty</a>();
 }
 </code></pre>
@@ -504,7 +504,7 @@ Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/vector.md#0x1_vector_swap_remove">swap_remove</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Element&gt;, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): Element {
-    <b>assert</b>!(!v.<a href="../move-stdlib/vector.md#0x1_vector_is_empty">is_empty</a>(), <a href="../move-stdlib/vector.md#0x1_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>);
+    <b>assert</b>!(v.<a href="../move-stdlib/vector.md#0x1_vector_length">length</a>() != 0, <a href="../move-stdlib/vector.md#0x1_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>);
     <b>let</b> last_idx = v.<a href="../move-stdlib/vector.md#0x1_vector_length">length</a>() - 1;
     v.<a href="../move-stdlib/vector.md#0x1_vector_swap">swap</a>(i, last_idx);
     v.<a href="../move-stdlib/vector.md#0x1_vector_pop_back">pop_back</a>()
