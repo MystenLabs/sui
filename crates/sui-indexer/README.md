@@ -13,7 +13,8 @@ export LDFLAGS="-L/opt/homebrew/opt/postgresql@15/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/postgresql@15/include"
 export PATH="/opt/homebrew/opt/postgresql@15/bin:$PATH"
 ```
-- make sure you have libpq installed: `brew install libpq`, and in your profile, add `export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`. If this doesn't work, try `brew link --force libpq`.
+- make sure you have libpq installed: `brew install libpq`, and in your profile, add `export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`. If this doesn't work, try `brew link --force libpq`. 
+    - Note: Make sure that the `libpq` bin occurs after the `postgres` bin in your `PATH` variable. Otherwise you will get `initdb` errors.
 
 - install Diesel CLI with `cargo install diesel_cli --no-default-features --features postgres`, refer to [Diesel Getting Started guide](https://diesel.rs/guides/getting-started) for more details
 - [optional but handy] Postgres client like [Postico](https://eggerapps.at/postico2/), for local check, query execution etc.

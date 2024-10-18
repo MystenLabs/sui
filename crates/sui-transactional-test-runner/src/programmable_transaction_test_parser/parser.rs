@@ -3,15 +3,13 @@
 
 use std::{borrow::BorrowMut, marker::PhantomData, str::FromStr};
 
-use move_command_line_common::{
-    parser::{Parser, Token},
-    types::{ParsedType, TypeToken},
-};
+use move_command_line_common::parser::{Parser, Token};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use sui_types::{
     base_types::ObjectID,
     transaction::{Argument, Command, ProgrammableMoveCall},
     type_input::TypeInput,
+    TypeTag,
 };
 
 use crate::programmable_transaction_test_parser::token::{
@@ -38,7 +36,7 @@ pub struct ParsedMoveCall {
     pub package: Identifier,
     pub module: Identifier,
     pub function: Identifier,
-    pub type_arguments: Vec<ParsedType>,
+    pub type_arguments: Vec<String>,
     pub arguments: Vec<Argument>,
 }
 
@@ -48,7 +46,7 @@ pub enum ParsedCommand {
     TransferObjects(Vec<Argument>, Argument),
     SplitCoins(Argument, Vec<Argument>),
     MergeCoins(Argument, Vec<Argument>),
-    MakeMoveVec(Option<ParsedType>, Vec<Argument>),
+    MakeMoveVec(Option<String>, Vec<Argument>),
     Publish(String, Vec<String>),
     Upgrade(String, Vec<String>, String, Argument),
 }
@@ -144,7 +142,7 @@ where
                 ParsedCommand::MergeCoins(target, coins)
             }
             (Tok::Ident, MAKE_MOVE_VEC) => {
-                let type_opt = self.parse_type_arg_opt()?;
+                let type_opt = self.split_ty_arg_opt()?;
                 self.inner().advance(Tok::LParen)?;
                 let args = self.parse_command_args(Tok::LBracket, Tok::RBracket)?;
                 self.maybe_trailing_comma()?;
@@ -198,7 +196,7 @@ where
                 let module = Identifier::new(self.inner().advance(Tok::Ident)?)?;
                 self.inner().advance(Tok::ColonColon)?;
                 let function = Identifier::new(self.inner().advance(Tok::Ident)?)?;
-                let type_arguments = self.parse_type_args_opt()?.unwrap_or_default();
+                let type_arguments = self.split_ty_args_opt()?.unwrap_or_default();
                 let arguments = self.parse_command_args(Tok::LParen, Tok::RParen)?;
                 let call = ParsedMoveCall {
                     package,
@@ -273,8 +271,8 @@ where
         u16::from_str(contents).context("Expected u16 for Argument")
     }
 
-    pub fn parse_type_arg_opt(&mut self) -> Result<Option<ParsedType>> {
-        match self.parse_type_args_opt()? {
+    pub fn split_ty_arg_opt(&mut self) -> Result<Option<String>> {
+        match self.split_ty_args_opt()? {
             None => Ok(None),
             Some(v) if v.len() != 1 => bail!(
                 "unexpected multiple type arguments. Expected 1 type argument but got {}",
@@ -284,22 +282,41 @@ where
         }
     }
 
-    pub fn parse_type_args_opt(&mut self) -> Result<Option<Vec<ParsedType>>> {
+    pub fn split_ty_args_opt(&mut self) -> Result<Option<Vec<String>>> {
         if !matches!(self.inner().peek_tok(), Some(CommandToken::TypeArgString)) {
             return Ok(None);
         }
         let contents = self.inner().advance(CommandToken::TypeArgString)?;
-        let type_tokens: Vec<_> = TypeToken::tokenize(contents)?
-            .into_iter()
-            .filter(|(tok, _)| !tok.is_whitespace())
-            .collect();
-        let mut parser = Parser::new(type_tokens);
-        parser.advance(TypeToken::Lt)?;
-        let res = parser.parse_list(|p| p.parse_type(), TypeToken::Comma, TypeToken::Gt, true)?;
-        parser.advance(TypeToken::Gt)?;
-        if let Ok((_, contents)) = parser.advance_any() {
-            bail!("Expected end of token stream. Got: {}", contents)
+        let contents = contents
+            .strip_prefix('<')
+            .and_then(|x| x.strip_suffix('>'))
+            .ok_or_else(|| {
+                anyhow::anyhow!("Expected type argument string to start with '<' and end with '>'")
+            })?;
+
+        let mut res = vec![];
+        let mut open_pins = 0;
+        let mut start = 0;
+        for (i, c) in contents.char_indices() {
+            match c {
+                '<' => open_pins += 1,
+                '>' => open_pins -= 1,
+                ',' if open_pins == 0 => {
+                    res.push(contents[start..i].to_string());
+                    start = i + 1;
+                }
+                _ => {}
+            }
         }
+
+        if start != contents.len() {
+            res.push(contents[start..].to_string());
+        }
+
+        if open_pins != 0 {
+            bail!("Unbalanced type arguments")
+        }
+
         Ok(Some(res))
     }
 
@@ -338,7 +355,7 @@ impl ParsedCommand {
             ParsedCommand::MergeCoins(target, coins) => Command::MergeCoins(target, coins),
             ParsedCommand::MakeMoveVec(ty_opt, args) => Command::make_move_vec(
                 ty_opt
-                    .map(|t| t.into_type_tag(address_mapping))
+                    .map(|t| TypeTag::parse_with_address_resolver(&t, address_mapping))
                     .transpose()?,
                 args,
             ),
@@ -393,7 +410,7 @@ impl ParsedMoveCall {
         };
         let type_arguments = type_arguments
             .into_iter()
-            .map(|t| t.into_type_tag(address_mapping).map(TypeInput::from))
+            .map(|t| TypeTag::parse_with_address_resolver(&t, address_mapping).map(TypeInput::from))
             .collect::<Result<_>>()?;
         Ok(ProgrammableMoveCall {
             package: package.into(),

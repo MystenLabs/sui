@@ -13,5 +13,4 @@ pub mod files;
 pub mod interactive;
 pub mod parser;
 pub mod testing;
-pub mod types;
 pub mod values;
