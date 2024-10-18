@@ -300,7 +300,7 @@ impl PgIndexerStore {
 
         watermarks::table
             .select(watermarks::checkpoint_hi_inclusive)
-            .filter(watermarks::entity.eq("objects_snapshot"))
+            .filter(watermarks::pipeline.eq("objects_snapshot"))
             .first::<i64>(&mut connection)
             .await
             // Handle case where the watermark is not set yet
@@ -1525,13 +1525,13 @@ impl PgIndexerStore {
             async {
                 diesel::insert_into(watermarks::table)
                     .values(upper_bound_updates)
-                    .on_conflict(watermarks::entity)
+                    .on_conflict(watermarks::pipeline)
                     .do_update()
                     .set((
                         watermarks::epoch_hi_inclusive.eq(excluded(watermarks::epoch_hi_inclusive)),
                         watermarks::checkpoint_hi_inclusive
                             .eq(excluded(watermarks::checkpoint_hi_inclusive)),
-                        watermarks::tx_hi_inclusive.eq(excluded(watermarks::tx_hi_inclusive)),
+                        watermarks::tx_hi.eq(excluded(watermarks::tx_hi)),
                     ))
                     .execute(conn)
                     .await
@@ -1622,7 +1622,7 @@ impl PgIndexerStore {
 
                 diesel::insert_into(watermarks::table)
                     .values(lower_bound_updates)
-                    .on_conflict(watermarks::entity)
+                    .on_conflict(watermarks::pipeline)
                     .do_update()
                     .set((
                         watermarks::reader_lo.eq(excluded(watermarks::reader_lo)),
