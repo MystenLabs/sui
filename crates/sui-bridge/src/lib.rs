@@ -19,6 +19,7 @@ pub mod node;
 pub mod orchestrator;
 pub mod server;
 pub mod storage;
+pub mod sui_bridge_watchdog;
 pub mod sui_client;
 pub mod sui_syncer;
 pub mod sui_transaction_builder;

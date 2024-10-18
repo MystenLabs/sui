@@ -804,6 +804,7 @@ pub(crate) async fn start_bridge_cluster(
             },
             metrics_key_pair: default_ed25519_key_pair(),
             metrics: None,
+            watchdog_config: None,
         };
         // Spawn bridge node in memory
         handles.push(
