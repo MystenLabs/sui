@@ -33,7 +33,7 @@ use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 use sui_types::storage::error::Error as StorageError;
 use tokio::task::spawn_blocking;
-use tracing::{debug, info, instrument, trace};
+use tracing::{debug, info, trace};
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf,
 };
@@ -87,7 +87,7 @@ impl CoinIndexKey2 {
 }
 
 const CURRENT_DB_VERSION: u64 = 0;
-const CURRENT_COIN_INDEX_VERSION: u64 = 0;
+const CURRENT_COIN_INDEX_VERSION: u64 = 1;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
