@@ -339,7 +339,7 @@ impl NetworkClient for TonicClient {
 // Tonic channel wrapped with layers.
 type Channel = mysten_network::callback::Callback<
     tower_http::trace::Trace<
-        tonic::transport::Channel,
+        tonic_rustls::Channel,
         tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
     >,
     MetricsCallbackMaker,
@@ -381,7 +381,8 @@ impl ChannelPool {
         let address = format!("https://{address}");
         let config = &self.context.parameters.tonic;
         let buffer_size = config.connection_buffer_size;
-        let endpoint = tonic::transport::Channel::from_shared(address.clone())
+        let client_tls_config = create_rustls_client_config(&self.context, network_keypair, peer);
+        let endpoint = tonic_rustls::Channel::from_shared(address.clone())
             .unwrap()
             .connect_timeout(timeout)
             .initial_connection_window_size(Some(buffer_size as u32))
@@ -391,22 +392,14 @@ impl ChannelPool {
             .http2_keep_alive_interval(config.keepalive_interval)
             // tcp keepalive is probably unnecessary and is unsupported by msim.
             .user_agent("mysticeti")
+            .unwrap()
+            .tls_config(client_tls_config)
             .unwrap();
-
-        let client_tls_config = create_rustls_client_config(&self.context, network_keypair, peer);
-        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(client_tls_config)
-            .https_only()
-            .enable_http2()
-            .build();
 
         let deadline = tokio::time::Instant::now() + timeout;
         let channel = loop {
             trace!("Connecting to endpoint at {address}");
-            match endpoint
-                .connect_with_connector(https_connector.clone())
-                .await
-            {
+            match endpoint.connect().await {
                 Ok(channel) => break channel,
                 Err(e) => {
                     warn!("Failed to connect to endpoint at {address}: {e:?}");

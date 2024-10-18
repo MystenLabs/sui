@@ -179,7 +179,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.10",
- "tower",
+ "tower 0.4.13",
  "tracing",
  "x509-parser",
 ]
@@ -220,7 +220,7 @@ dependencies = [
  "dashmap",
  "rand 0.8.5",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tracing",
 ]
 
@@ -237,7 +237,7 @@ dependencies = [
  "nonzero_ext",
  "pin-project-lite",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tracing",
  "uuid 1.2.2",
 ]
@@ -1113,7 +1113,7 @@ dependencies = [
  "ring 0.16.20",
  "time",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tracing",
  "zeroize",
 ]
@@ -1378,7 +1378,7 @@ dependencies = [
  "pin-project-lite",
  "rustls 0.21.12",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tracing",
 ]
 
@@ -1428,7 +1428,7 @@ dependencies = [
  "http 0.2.9",
  "http-body 0.4.5",
  "pin-project-lite",
- "tower",
+ "tower 0.4.13",
  "tracing",
 ]
 
@@ -1550,7 +1550,7 @@ dependencies = [
  "rustversion",
  "serde",
  "sync_wrapper 0.1.2",
- "tower",
+ "tower 0.4.13",
  "tower-layer",
  "tower-service",
 ]
@@ -1587,7 +1587,7 @@ dependencies = [
  "sync_wrapper 1.0.1",
  "tokio",
  "tokio-tungstenite 0.21.0",
- "tower",
+ "tower 0.4.13",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -1648,7 +1648,7 @@ dependencies = [
  "mime",
  "pin-project-lite",
  "serde",
- "tower",
+ "tower 0.4.13",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -1685,7 +1685,7 @@ dependencies = [
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.0",
- "tower",
+ "tower 0.4.13",
  "tower-service",
 ]
 
@@ -2797,7 +2797,8 @@ dependencies = [
  "tokio-util 0.7.10",
  "tonic 0.12.3",
  "tonic-build",
- "tower",
+ "tonic-rustls",
+ "tower 0.4.13",
  "tower-http",
  "tracing",
  "typed-store",
@@ -5949,7 +5950,7 @@ dependencies = [
  "pin-project-lite",
  "socket2 0.5.6",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tower-service",
  "tracing",
 ]
@@ -6517,7 +6518,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.10",
- "tower",
+ "tower 0.4.13",
  "tracing",
 ]
 
@@ -8151,7 +8152,7 @@ dependencies = [
  "tokio-stream",
  "tonic 0.12.3",
  "tonic-health",
- "tower",
+ "tower 0.4.13",
  "tower-http",
  "tracing",
 ]
@@ -8169,7 +8170,7 @@ dependencies = [
  "simple-server-timing-header",
  "telemetry-subscribers",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tracing",
 ]
 
@@ -8314,7 +8315,7 @@ dependencies = [
  "rand 0.8.5",
  "sui-macros",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tracing",
 ]
 
@@ -8409,7 +8410,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "tower",
+ "tower 0.4.13",
  "tracing",
  "typed-store",
 ]
@@ -8548,7 +8549,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tonic 0.12.3",
- "tower",
+ "tower 0.4.13",
  "tracing",
  "typed-store",
 ]
@@ -12711,7 +12712,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml 0.7.4",
- "tower",
+ "tower 0.4.13",
  "tower-http",
  "tracing",
  "unescape",
@@ -13590,7 +13591,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tonic 0.12.3",
- "tower",
+ "tower 0.4.13",
  "tower-http",
  "tracing",
  "ttl_cache",
@@ -13775,7 +13776,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.10",
  "toml 0.7.4",
- "tower",
+ "tower 0.4.13",
  "tower-http",
  "tracing",
  "uuid 1.2.2",
@@ -13996,7 +13997,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.10",
- "tower",
+ "tower 0.4.13",
  "tower-http",
  "tracing",
  "typed-store-error",
@@ -14359,7 +14360,7 @@ dependencies = [
  "tokio",
  "tonic 0.12.3",
  "tonic-build",
- "tower",
+ "tower 0.4.13",
  "tracing",
 ]
 
@@ -14409,7 +14410,7 @@ dependencies = [
  "tap",
  "telemetry-subscribers",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tracing",
  "typed-store",
  "url",
@@ -14534,7 +14535,7 @@ dependencies = [
  "sui-types",
  "thiserror",
  "tokio",
- "tower",
+ "tower 0.4.13",
 ]
 
 [[package]]
@@ -14611,7 +14612,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tower-http",
  "tracing",
  "url",
@@ -14872,7 +14873,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
- "tower",
+ "tower 0.4.13",
  "tracing",
 ]
 
@@ -15002,7 +15003,7 @@ dependencies = [
  "test-cluster",
  "tokio",
  "toml 0.7.4",
- "tower",
+ "tower 0.4.13",
  "tower-http",
  "tracing",
  "url",
@@ -16427,7 +16428,7 @@ dependencies = [
  "prost 0.12.3",
  "tokio",
  "tokio-stream",
- "tower",
+ "tower 0.4.13",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -16457,7 +16458,7 @@ dependencies = [
  "socket2 0.5.6",
  "tokio",
  "tokio-stream",
- "tower",
+ "tower 0.4.13",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -16487,6 +16488,33 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.12.3",
+]
+
+[[package]]
+name = "tonic-rustls"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "803689f99cfc6de9c3b27aa86bf98553754c72c53b715913f1c14dcd3c030f77"
+dependencies = [
+ "async-stream",
+ "bytes",
+ "h2 0.4.5",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.4.1",
+ "hyper-timeout 0.5.1",
+ "hyper-util",
+ "pin-project",
+ "socket2 0.5.6",
+ "tokio",
+ "tokio-rustls 0.26.0",
+ "tokio-stream",
+ "tonic 0.12.3",
+ "tower 0.5.0",
+ "tower-layer",
+ "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -16524,6 +16552,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "tower"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36b837f86b25d7c0d7988f00a54e74739be6477f2aac6201b8f429a7569991b7"
+dependencies = [
+ "futures-core",
+ "futures-util",
+ "indexmap 2.2.6",
+ "pin-project-lite",
+ "slab",
+ "sync_wrapper 0.1.2",
+ "tokio",
+ "tokio-util 0.7.10",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
 name = "tower-http"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16547,7 +16594,7 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util 0.7.10",
- "tower",
+ "tower 0.4.13",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -16556,9 +16603,9 @@ dependencies = [
 
 [[package]]
 name = "tower-layer"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c20c8dbed6283a09604c3e69b4b7eeb54e298b8a600d4d5ecb5ad39de609f1d0"
+checksum = "121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e"
 
 [[package]]
 name = "tower-service"
