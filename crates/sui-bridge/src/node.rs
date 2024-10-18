@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::types::BridgeCommittee;
-use crate::utils::get_committee_voting_power_by_name;
+use crate::utils::{get_committee_voting_power_by_name, get_validator_names_by_pub_keys};
 use crate::{
     action_executor::BridgeActionExecutor,
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
@@ -19,6 +20,7 @@ use crate::{
 use arc_swap::ArcSwap;
 use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
+use std::collections::BTreeMap;
 use std::{
     collections::HashMap,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -71,12 +73,6 @@ pub async fn run_bridge_node(
             .await
             .expect("Failed to get committee"),
     );
-    // Start Client
-    let _handles = if let Some(client_config) = client_config {
-        start_client_components(client_config, committee.clone(), metrics.clone()).await
-    } else {
-        Ok(vec![])
-    }?;
 
     // Update voting right metrics
     // Before reconfiguration happens we only set it once when the node starts
@@ -86,7 +82,23 @@ pub async fn run_bridge_node(
         .governance_api()
         .get_latest_sui_system_state()
         .await?;
-    let committee_name_mapping = get_committee_voting_power_by_name(&committee, sui_system).await;
+
+    // Start Client
+    let _handles = if let Some(client_config) = client_config {
+        let committee_keys_to_names =
+            Arc::new(get_validator_names_by_pub_keys(&committee, &sui_system).await);
+        start_client_components(
+            client_config,
+            committee.clone(),
+            committee_keys_to_names,
+            metrics.clone(),
+        )
+        .await
+    } else {
+        Ok(vec![])
+    }?;
+
+    let committee_name_mapping = get_committee_voting_power_by_name(&committee, &sui_system).await;
     for (name, voting_power) in committee_name_mapping.into_iter() {
         metrics
             .current_bridge_voting_rights
@@ -117,6 +129,7 @@ pub async fn run_bridge_node(
 async fn start_client_components(
     client_config: BridgeClientConfig,
     committee: Arc<BridgeCommittee>,
+    committee_keys_to_names: Arc<BTreeMap<BridgeAuthorityPublicKeyBytes, String>>,
     metrics: Arc<BridgeMetrics>,
 ) -> anyhow::Result<Vec<JoinHandle<()>>> {
     let store: std::sync::Arc<BridgeOrchestratorTables> =
@@ -154,6 +167,8 @@ async fn start_client_components(
 
     let bridge_auth_agg = Arc::new(ArcSwap::from(Arc::new(BridgeAuthorityAggregator::new(
         committee,
+        metrics.clone(),
+        committee_keys_to_names,
     ))));
     // TODO: should we use one query instead of two?
     let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();

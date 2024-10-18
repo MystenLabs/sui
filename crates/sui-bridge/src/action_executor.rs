@@ -1513,9 +1513,9 @@ mod tests {
 
         let committee = BridgeCommittee::new(authorities).unwrap();
 
-        let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
-            Arc::new(committee),
-        ))));
+        let agg = Arc::new(ArcSwap::new(Arc::new(
+            BridgeAuthorityAggregator::new_for_testing(Arc::new(committee)),
+        )));
         let metrics = Arc::new(BridgeMetrics::new(&registry));
         let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
         let sui_token_type_tags = Arc::new(ArcSwap::new(Arc::new(sui_token_type_tags)));
