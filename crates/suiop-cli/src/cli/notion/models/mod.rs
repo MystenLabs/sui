@@ -126,7 +126,9 @@ impl ListResponse<Object> {
             .into_iter()
             .map(|object| match object {
                 Object::Database { database } => Ok(database),
-                response => Err(Error::UnexpectedResponse { response }),
+                response => Err(Error::UnexpectedResponse {
+                    response: Box::new(response),
+                }),
             })
             .collect();
 
@@ -143,7 +145,9 @@ impl ListResponse<Object> {
             .into_iter()
             .map(|object| match object {
                 Object::Page { page } => Ok(page),
-                response => Err(Error::UnexpectedResponse { response }),
+                response => Err(Error::UnexpectedResponse {
+                    response: Box::new(response),
+                }),
             })
             .collect();
 
@@ -160,7 +164,9 @@ impl ListResponse<Object> {
             .into_iter()
             .map(|object| match object {
                 Object::Block { block } => Ok(block),
-                response => Err(Error::UnexpectedResponse { response }),
+                response => Err(Error::UnexpectedResponse {
+                    response: Box::new(response),
+                }),
             })
             .collect();
 
