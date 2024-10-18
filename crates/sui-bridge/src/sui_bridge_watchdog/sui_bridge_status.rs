@@ -43,6 +43,6 @@ impl Observable for SuiBridgeStatus {
     }
 
     fn interval(&self) -> Duration {
-        Duration::from_secs(2)
+        Duration::from_secs(10)
     }
 }
