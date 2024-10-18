@@ -117,7 +117,7 @@ public macro fun uq_from_int<$T, $U>($integer: $T, $t_bits: u8): $U {
     ($integer as $U) << $t_bits
 }
 
-public macro fun uq_add<$T, $U>($a: $T, $b: $T, $max_t: $T, $abort_overflow: _): $U {
+public macro fun uq_add<$T, $U>($a: $T, $b: $T, $max_t: $T, $abort_overflow: _): $T {
     let sum = $a as $U + ($b as $U);
     if (sum > $max_t as $U) $abort_overflow;
     sum as $T
@@ -153,14 +153,14 @@ public macro fun uq_int_mul<$T, $U>(
     product as $T
 }
 
-public macro fun int_div<$T, $U>(
+public macro fun uq_int_div<$T, $U>(
     $val: $T,
     $divisor: $T,
     $max_t: $T,
     $fractional_bits: u8,
     $abort_division_by_zero: _,
     $abort_overflow: _,
-): u64 {
+): $T {
     let val = $val;
     let divisor = $divisor;
     // Check for division by zero.
