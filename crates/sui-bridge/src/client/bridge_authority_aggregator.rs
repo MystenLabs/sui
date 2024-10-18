@@ -24,13 +24,9 @@ use sui_types::committee::StakeUnit;
 use sui_types::committee::TOTAL_VOTING_POWER;
 use tracing::{error, info, warn};
 
-// const TOTAL_TIMEOUT_MS: u64 = 5_000;
-// const PREFETCH_TIMEOUT_MS: u64 = 1_500;
+const TOTAL_TIMEOUT_MS: u64 = 5_000;
+const PREFETCH_TIMEOUT_MS: u64 = 1_500;
 const RETRY_INTERVAL_MS: u64 = 500;
-
-// TESTING ONLY!!! THIS SHOULD BE REVERTED
-const PREFETCH_TIMEOUT_MS: u64 = 20_000;
-const TOTAL_TIMEOUT_MS: u64 = 30_000;
 
 pub struct BridgeAuthorityAggregator {
     pub committee: Arc<BridgeCommittee>,
@@ -211,7 +207,6 @@ async fn request_sign_bridge_action_into_certification(
                 let start = std::time::Instant::now();
                 let timeout = Duration::from_millis(TOTAL_TIMEOUT_MS);
                 let retry_interval = Duration::from_millis(RETRY_INTERVAL_MS);
-                
                 while start.elapsed() < timeout {
                     match client.request_sign_bridge_action(action.clone()).await {
                         Ok(result) => {
