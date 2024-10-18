@@ -68,7 +68,8 @@ fun add_wrap_buggy(x: u64, y: u64): u64 {
     x + y
 }
 
-fun add_wrap_buggy_no_verify_spec(x: u64, y: u64): u64 {
+#[ext(no_verify)]
+fun add_wrap_buggy_spec(x: u64, y: u64): u64 {
     let result = add_wrap_buggy(x, y);
     ensures(result == x.to_int().add(y.to_int()).to_u64());
     result
@@ -144,4 +145,30 @@ fun fresh_with_type_withness<T, U>(_: &T): U {
 
 fun fresh_with_type_withness_spec<T, U>(x: &T): U {
     fresh_with_type_withness(x)
+}
+
+fun add_no_asserts(x: u64, y: u64): u64 {
+    x + y
+}
+
+#[ext(no_asserts)]
+fun add_no_asserts_spec(x: u64, y: u64): u64 {
+    let result = add_no_asserts(x, y);
+
+    ensures(result.to_int() == x.to_int().add(y.to_int()));
+
+    result
+}
+
+fun double_no_asserts(x: u64): u64 {
+    add_no_asserts(x, x)
+}
+
+#[ext(no_asserts)]
+fun double_no_asserts_spec(x: u64): u64 {
+    let result = double_no_asserts(x);
+
+    ensures(result.to_int() == x.to_int().mul(2u64.to_int()));
+
+    result
 }

@@ -15,6 +15,7 @@ move-binary-format.workspace = true
 move-core-types.workspace = true
 move-command-line-common.workspace = true
 move-compiler.workspace = true
+move-symbol-pool.workspace = true
 
 bimap.workspace = true
 codespan.workspace = true

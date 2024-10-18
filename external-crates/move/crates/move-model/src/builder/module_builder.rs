@@ -24,7 +24,7 @@ use move_compiler::{
     parser::ast as PA,
     shared::{unique_map::UniqueMap, Name, TName},
 };
-use move_ir_types::{ast::ConstantName, location::Spanned};
+use move_ir_types::ast::ConstantName;
 
 use crate::{
     ast::{
@@ -3251,14 +3251,10 @@ ot in AST",
                 if let Some(entry) = self.parent.fun_table.get(&self.qualified_by_module(name)) {
                     let arg_names = project_1st(&entry.params);
                     let type_arg_names = project_1st(&entry.type_params);
-                    let res = function_infos
-                        .get(&PA::FunctionName(Spanned::unsafe_no_loc(move_symbol_pool::Symbol::from(name_str))))
-                        .map(|finfo| finfo.attributes.clone());
-                    let toplevel_attributes = if let Some(ta) = res {
-                        ta
-                    } else {
-                        expansion::ast::Attributes::default()
-                    };
+                    let toplevel_attributes = function_infos
+                        .get_(&move_symbol_pool::Symbol::from(name_str))
+                        .map(|finfo| finfo.attributes.clone())
+                        .unwrap_or_default();
                     Some((FunId::new(name), self.parent.env.create_function_data(
                         &module,
                         def_idx,

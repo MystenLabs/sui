@@ -500,7 +500,8 @@ module sui::kiosk {
         dof::exists_with_type<Item, T>(&self.id, Item { id })
     }
 
-    public fun has_item_with_type_no_verify_spec<T: key + store>(
+    #[ext(no_verify)]
+    public fun has_item_with_type_spec<T: key + store>(
         self: &Kiosk, id: ID
     ): bool {
         has_item_with_type<T>(self, id)
@@ -529,7 +530,8 @@ module sui::kiosk {
         object::id(self) == cap.`for`
     }
 
-    public fun has_access_no_verify_spec(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
+    #[ext(no_verify)]
+    public fun has_access_spec(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
         has_access(self, cap)
     }
 

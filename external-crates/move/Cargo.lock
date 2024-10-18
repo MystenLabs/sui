@@ -2335,6 +2335,7 @@ dependencies = [
  "move-model",
  "move-prover-test-utils",
  "move-stdlib",
+ "move-symbol-pool",
  "num",
  "paste",
  "petgraph",

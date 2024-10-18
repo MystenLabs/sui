@@ -148,12 +148,9 @@ module sui::random {
         RandomGenerator { seed, counter: 0, buffer: vector[] }
     }
 
-    fun new_generator_no_verify_spec(r: &Random, ctx: &mut TxContext): RandomGenerator {
-        let result = new_generator(r, ctx);
-        // prover::ensures(result.seed.len() == 32);
-        // prover::ensures(result.counter == 0);
-        // prover::ensures(result.buffer == vector[]);
-        result
+    #[ext(no_verify)]
+    fun new_generator_spec(r: &Random, ctx: &mut TxContext): RandomGenerator {
+        new_generator(r, ctx)
     }
 
     // Get the next block of random bytes.
@@ -258,7 +255,8 @@ module sui::random {
         min + (rand % range_size as u128)
     }
 
-    fun u128_in_range_no_verify_spec(g: &mut RandomGenerator, min: u128, max: u128, num_of_bytes: u8): u128 {
+    #[ext(no_verify)]
+    fun u128_in_range_spec(g: &mut RandomGenerator, min: u128, max: u128, num_of_bytes: u8): u128 {
         // prover::asserts(min <= max);
         let result = u128_in_range(g, min, max, num_of_bytes);
         // prover::ensures(result >= min);

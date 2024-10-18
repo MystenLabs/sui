@@ -1720,6 +1720,11 @@ impl<'env> FunctionTranslator<'env> {
                         .targets
                         .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
                         .is_some()
+                    && !self
+                        .parent
+                        .targets
+                        .no_asserts()
+                        .contains(&self.fun_target.func_env.get_qualified_id())
                 {
                     emitln!(
                         self.writer(),
@@ -2039,18 +2044,27 @@ impl<'env> FunctionTranslator<'env> {
                             == Some(&mid.qualified(*fid))
                             && self.style == FunctionTranslationStyle::Opaque
                         {
-                            emitln!(
-                                self.writer(),
-                                "call $abort_if_cond := {}({});",
-                                self.function_variant_name(FunctionTranslationStyle::Aborts),
-                                // boogie_function_name(
-                                //     &callee_env,
-                                //     inst,
-                                //     FunctionTranslationStyle::Aborts
-                                // ),
-                                args_str,
-                            );
-                            emitln!(self.writer(), "$abort_flag := !$abort_if_cond;");
+                            if self
+                                .parent
+                                .targets
+                                .no_asserts()
+                                .contains(&self.fun_target.func_env.get_qualified_id())
+                            {
+                                emitln!(self.writer(), "havoc $abort_flag;");
+                            } else {
+                                emitln!(
+                                    self.writer(),
+                                    "call $abort_if_cond := {}({});",
+                                    self.function_variant_name(FunctionTranslationStyle::Aborts),
+                                    // boogie_function_name(
+                                    //     &callee_env,
+                                    //     inst,
+                                    //     FunctionTranslationStyle::Aborts
+                                    // ),
+                                    args_str,
+                                );
+                                emitln!(self.writer(), "$abort_flag := !$abort_if_cond;");
+                            }
                         }
 
                         // regular path
@@ -3095,6 +3109,11 @@ impl<'env> FunctionTranslator<'env> {
                         .targets
                         .get_fun_by_opaque_spec(&self.fun_target.func_env.get_qualified_id())
                         .is_some()
+                    && !self
+                        .parent
+                        .targets
+                        .no_asserts()
+                        .contains(&self.fun_target.func_env.get_qualified_id())
                 {
                     emitln!(
                         self.writer(),

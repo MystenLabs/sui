@@ -9,7 +9,8 @@ fun inc(x: u64): u64 {
 
 public struct GhostStruct {}
 
-fun inc_no_verify_spec(x: u64): u64 {
+#[ext(no_verify)]
+fun inc_spec(x: u64): u64 {
     ghost::declare_global_mut<GhostStruct, bool>();
     requires(ghost::global<GhostStruct, _>() == false);
 

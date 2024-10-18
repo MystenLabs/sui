@@ -104,7 +104,8 @@ public struct SpecSum {}
 
 fun emit_u64(_x: u64) {}
 
-fun emit_u64_no_verify_spec(x: u64) {
+#[ext(no_verify)]
+fun emit_u64_spec(x: u64) {
     ghost::declare_global_mut<SpecSum, Integer>();
     let old_sum = *ghost::global<SpecSum, Integer>();
     emit_u64(x);
