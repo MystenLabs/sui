@@ -191,6 +191,7 @@ const MAX_PROTOCOL_VERSION: u64 = 68;
 //             Framework fix for fungible staking book-keeping.
 // Version 67: Re-enable distributed vote scoring in mainnet.
 // Version 68: Add G1Uncompressed group to group ops.
+//             Update to Move stdlib.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
