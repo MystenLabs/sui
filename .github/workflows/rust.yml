@@ -189,6 +189,9 @@ jobs:
       - name: Indexer schema
         run: |
           ./scripts/generate_indexer_schema.sh
+      - name: Indexer Alt schema
+        run: |
+          ./crates/sui-indexer-alt/generate_schema.sh
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
