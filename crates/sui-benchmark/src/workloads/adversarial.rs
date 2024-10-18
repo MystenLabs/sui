@@ -70,8 +70,7 @@ impl TryFrom<u32> for AdversarialPayloadType {
                 .nth(value as usize)
                 .ok_or_else(|| {
                     anyhow!(
-                        "Invalid adversarial workload specifier. Valid options are {} to {}",
-                        0,
+                        "Invalid adversarial workload specifier. Valid options are 0 to {}",
                         AdversarialPayloadType::COUNT
                     )
                 }),
