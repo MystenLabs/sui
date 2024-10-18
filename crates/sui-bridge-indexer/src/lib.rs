@@ -13,6 +13,7 @@ use crate::postgres_manager::PgPool;
 use crate::storage::PgBridgePersistent;
 use crate::sui_bridge_indexer::SuiBridgeDataMapper;
 use crate::sui_datasource::SuiCheckpointDatasource;
+use ethers::providers::{Http, Provider};
 use ethers::types::Address as EthAddress;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
@@ -21,6 +22,7 @@ use strum_macros::Display;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
+use sui_bridge::utils::get_eth_contract_addresses;
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, Indexer, IndexerBuilder};
 use sui_indexer_builder::progress::{
@@ -257,13 +259,25 @@ pub async fn create_eth_sync_indexer(
             tokio::time::Duration::from_secs(30),
         )),
     );
-    let bridge_addresses = vec![EthAddress::from_str(
-        &config.eth_sui_bridge_contract_address,
-    )?];
+
+    let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
+    let provider = Arc::new(
+        Provider::<Http>::try_from(&config.eth_rpc_url)?
+            .interval(std::time::Duration::from_millis(2000)),
+    );
+    let bridge_addresses = get_eth_contract_addresses(bridge_address, &provider).await?;
+    let bridge_addresses: Vec<EthAddress> = vec![
+        bridge_address,
+        bridge_addresses.0,
+        bridge_addresses.1,
+        bridge_addresses.2,
+        bridge_addresses.3,
+    ];
+
     // Start the eth sync data source
     let eth_sync_datasource = EthFinalizedSyncDatasource::new(
         bridge_addresses.clone(),
-        eth_client,
+        eth_client.clone(),
         config.eth_rpc_url.clone(),
         metrics.clone(),
         bridge_metrics.clone(),
@@ -274,7 +288,9 @@ pub async fn create_eth_sync_indexer(
     Ok(IndexerBuilder::new(
         "EthBridgeFinalizedSyncIndexer",
         eth_sync_datasource,
-        EthDataMapper { metrics },
+        EthDataMapper {
+            metrics: metrics.clone(),
+        },
         datastore,
     )
     .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 1000 })
@@ -295,9 +311,20 @@ pub async fn create_eth_subscription_indexer(
     );
 
     // Start the eth subscription indexer
-    let bridge_addresses = vec![EthAddress::from_str(
-        &config.eth_sui_bridge_contract_address,
-    )?];
+    let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
+    let provider = Arc::new(
+        Provider::<Http>::try_from(&config.eth_rpc_url)?
+            .interval(std::time::Duration::from_millis(2000)),
+    );
+    let bridge_addresses = get_eth_contract_addresses(bridge_address, &provider).await?;
+    let bridge_addresses: Vec<EthAddress> = vec![
+        bridge_address,
+        bridge_addresses.0,
+        bridge_addresses.1,
+        bridge_addresses.2,
+        bridge_addresses.3,
+    ];
+
     // Start the eth subscription indexer
     let eth_subscription_datasource = EthSubscriptionDatasource::new(
         bridge_addresses.clone(),
@@ -307,7 +334,6 @@ pub async fn create_eth_subscription_indexer(
         config.eth_bridge_genesis_block,
     )
     .await?;
-
     Ok(IndexerBuilder::new(
         "EthBridgeSubscriptionIndexer",
         eth_subscription_datasource,
