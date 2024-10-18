@@ -512,7 +512,7 @@ async fn update_pruner_watermark_task(
                 // Only update if the new prune_max is greater than what we have locally
                 if new_pruner_hi > pruner_hi {
                     let new_prune_max = new_pruner_hi.saturating_sub(1);
-                    if new_prune_max <= 0 {
+                    if new_prune_max == 0 {
                         continue;
                     }
                     // TODO: (wlmyng) use config value
