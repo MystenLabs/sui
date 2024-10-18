@@ -80,18 +80,15 @@ macro_rules! chunk {
 }
 
 #[macro_export]
-macro_rules! delete_range {
-    ($table:ident, $column:ident, $min:expr, $max:expr) => {
-        diesel::delete($table::table.filter($table::$column.between($min as i64, $max as i64)))
-    };
-}
-
-#[macro_export]
 macro_rules! execute_delete_range_query {
     ($conn:expr, $table:ident, $column:ident, $min:expr, $max:expr) => {
-        diesel::delete($table::table.filter($table::$column.between($min as i64, $max as i64)))
-            .execute($conn)
-            .await
+        diesel::delete(
+            $table::table
+                .filter($table::$column.ge($min as i64))
+                .filter($table::$column.lt($max as i64)),
+        )
+        .execute($conn)
+        .await
     };
 }
 
@@ -1266,129 +1263,6 @@ impl PgIndexerStore {
         Ok(())
     }
 
-    pub async fn prune_checkpoints_table(&self, min: u64, max: u64) -> Result<(), IndexerError> {
-        use diesel_async::RunQueryDsl;
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                delete_range!(checkpoints, sequence_number, min, max)
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed to prune checkpoints table")?;
-
-                Ok::<(), IndexerError>(())
-            }
-            .scope_boxed()
-        })
-        .await
-    }
-
-    pub async fn prune_event_indices_table(&self, min: u64, max: u64) -> Result<(), IndexerError> {
-        use diesel_async::RunQueryDsl;
-
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                delete_range!(event_emit_package, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(event_emit_module, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(event_senders, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(event_struct_instantiation, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(event_struct_module, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(event_struct_name, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(event_struct_package, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                Ok(())
-            }
-            .scope_boxed()
-        })
-        .await
-    }
-
-    pub async fn prune_tx_indices_table(&self, min: u64, max: u64) -> Result<(), IndexerError> {
-        use diesel_async::RunQueryDsl;
-
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                delete_range!(tx_affected_addresses, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(tx_affected_objects, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(tx_input_objects, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(tx_changed_objects, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(tx_calls_pkg, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(tx_calls_mod, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(tx_calls_fun, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                delete_range!(tx_digests, tx_sequence_number, min, max)
-                    .execute(conn)
-                    .await?;
-
-                Ok(())
-            }
-            .scope_boxed()
-        })
-        .await
-    }
-
-    pub async fn prune_cp_tx_table(&self, start: u64, end: u64) -> Result<(), IndexerError> {
-        use diesel_async::RunQueryDsl;
-
-        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
-            async {
-                diesel::delete(
-                    pruner_cp_watermark::table.filter(
-                        pruner_cp_watermark::checkpoint_sequence_number
-                            .between(start as i64, end as i64),
-                    ),
-                )
-                .execute(conn)
-                .await
-                .map_err(IndexerError::from)
-                .context("Failed to prune pruner_cp_watermark table")?;
-                Ok(())
-            }
-            .scope_boxed()
-        })
-        .await
-    }
-
     async fn get_network_total_transactions_by_end_of_epoch(
         &self,
         epoch: u64,
@@ -1581,11 +1455,11 @@ impl PgIndexerStore {
                 diesel::update(watermarks::table)
                     .filter(watermarks::entity.eq(table.as_ref()))
                     .filter(
-                        watermarks::pruner_hi_inclusive
+                        watermarks::pruner_hi
                             .lt(latest_pruned as i64)
-                            .or(watermarks::pruner_hi_inclusive.is_null()),
+                            .or(watermarks::pruner_hi.is_null()),
                     )
-                    .set((watermarks::pruner_hi_inclusive.eq(latest_pruned as i64),))
+                    .set((watermarks::pruner_hi.eq(latest_pruned as i64),))
                     .execute(conn)
                     .await?;
 
