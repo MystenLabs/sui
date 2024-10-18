@@ -21,7 +21,7 @@ use diffy::create_patch;
 use futures::future::{select, Either};
 use futures::FutureExt;
 use itertools::Itertools;
-use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
+use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use sui_macros::fail_point;
@@ -65,6 +65,7 @@ use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::transaction::{TransactionDataAPI, TransactionKey, TransactionKind};
 use tokio::{
     sync::{watch, Notify},
+    task::JoinSet,
     time::timeout,
 };
 use tracing::{debug, error, info, instrument, warn};
@@ -2240,7 +2241,11 @@ impl CheckpointService {
         metrics: Arc<CheckpointMetrics>,
         max_transactions_per_checkpoint: usize,
         max_checkpoint_size_bytes: usize,
-    ) -> (Arc<Self>, watch::Sender<()> /* The exit sender */) {
+    ) -> (
+        Arc<Self>,
+        watch::Sender<()>, /* The exit sender */
+        JoinSet<()>,       /* Handle to tasks */
+    ) {
         info!(
             "Starting checkpoint service with {max_transactions_per_checkpoint} max_transactions_per_checkpoint and {max_checkpoint_size_bytes} max_checkpoint_size_bytes"
         );
@@ -2248,6 +2253,8 @@ impl CheckpointService {
         let notify_aggregator = Arc::new(Notify::new());
 
         let (exit_snd, exit_rcv) = watch::channel(());
+
+        let mut tasks = JoinSet::new();
 
         let builder = CheckpointBuilder::new(
             state.clone(),
@@ -2263,9 +2270,10 @@ impl CheckpointService {
             max_transactions_per_checkpoint,
             max_checkpoint_size_bytes,
         );
-
         let epoch_store_clone = epoch_store.clone();
-        spawn_monitored_task!(epoch_store_clone.within_alive_epoch(builder.run()));
+        tasks.spawn(monitored_future!(async move {
+            let _ = epoch_store_clone.within_alive_epoch(builder.run()).await;
+        }));
 
         let aggregator = CheckpointAggregator::new(
             checkpoint_store.clone(),
@@ -2276,8 +2284,7 @@ impl CheckpointService {
             state.clone(),
             metrics.clone(),
         );
-
-        spawn_monitored_task!(aggregator.run());
+        tasks.spawn(monitored_future!(aggregator.run()));
 
         let last_signature_index = epoch_store
             .get_last_checkpoint_signature_index()
@@ -2291,7 +2298,8 @@ impl CheckpointService {
             last_signature_index,
             metrics,
         });
-        (service, exit_snd)
+
+        (service, exit_snd, tasks)
     }
 
     #[cfg(test)]
@@ -2535,7 +2543,7 @@ mod tests {
             &epoch_store,
         ));
 
-        let (checkpoint_service, _exit) = CheckpointService::spawn(
+        let (checkpoint_service, _exit_sender, _tasks) = CheckpointService::spawn(
             state.clone(),
             checkpoint_store,
             epoch_store.clone(),
