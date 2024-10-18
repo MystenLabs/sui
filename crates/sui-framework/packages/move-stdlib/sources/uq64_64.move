@@ -41,42 +41,39 @@ public struct UQ64_64(u128) has copy, drop, store;
 /// than 2^{-64}.
 /// Aborts if the input is too large, e.g. larger than or equal to 2^64.
 public fun from_quotient(numerator: u128, denominator: u128): UQ64_64 {
-    assert!(denominator != 0, EDenominator);
-
-    // Scale the numerator to have 128 fractional bits and the denominator to have 64 fractional
-    // bits, so that the quotient will have 64 fractional bits.
-    let scaled_numerator = numerator as u256 << 128;
-    let scaled_denominator = denominator as u256 << 64;
-    let quotient = scaled_numerator / scaled_denominator;
-
-    // The quotient can only be zero if the numerator is also zero.
-    assert!(quotient != 0 || numerator == 0, EQuotientTooSmall);
-
-    // Return the quotient as a fixed-point number. We first need to check whether the cast
-    // can succeed.
-    assert!(quotient <= std::u128::max_value!() as u256, EQuotientTooLarge);
-    UQ64_64(quotient as u128)
+    UQ64_64(std::macros::uq_from_quotient!<u128, u256>(
+        numerator,
+        denominator,
+        std::u128::max_value!(),
+        128,
+        64,
+        abort EDenominator,
+        abort EQuotientTooSmall,
+        abort EQuotientTooLarge,
+    ))
 }
 
 /// Create a fixed-point value from an integer.
 /// `from_int` and `from_quotient` should be preferred over using `from_raw`.
 public fun from_int(integer: u64): UQ64_64 {
-    UQ64_64((integer as u128) << 64)
+    UQ64_64(std::macros::uq_from_int!(integer, 64))
 }
 
 /// Add two fixed-point numbers, `a + b`.
 /// Aborts if the sum overflows.
 public fun add(a: UQ64_64, b: UQ64_64): UQ64_64 {
-    let sum = a.0 as u256 + (b.0 as u256);
-    assert!(sum <= std::u128::max_value!() as u256, EOverflow);
-    UQ64_64(sum as u128)
+    UQ64_64(std::macros::uq_add!<u128, u256>(
+        a.0,
+        b.0,
+        std::u128::max_value!(),
+        abort EOverflow,
+    ))
 }
 
 /// Subtract two fixed-point numbers, `a - b`.
 /// Aborts if `a < b`.
 public fun sub(a: UQ64_64, b: UQ64_64): UQ64_64 {
-    assert!(a.0 >= b.0, EOverflow);
-    UQ64_64(a.0 - b.0)
+    UQ64_64(std::macros::uq_sub!(a.0, b.0, abort EOverflow))
 }
 
 /// Multiply two fixed-point numbers, truncating any fractional part of the product.
@@ -94,37 +91,33 @@ public fun div(a: UQ64_64, b: UQ64_64): UQ64_64 {
 
 /// Convert a fixed-point number to an integer, truncating any fractional part.
 public fun to_int(a: UQ64_64): u64 {
-    (a.0 >> 64) as u64
+    std::macros::uq_to_int!(a.0, 64)
 }
 
 /// Multiply a `u128` integer by a fixed-point number, truncating any fractional part of the product.
 /// Aborts if the product overflows.
 public fun int_mul(val: u128, multiplier: UQ64_64): u128 {
-    // The product of two 128 bit values has 256 bits, so perform the
-    // multiplication with u256 types and keep the full 256 bit product
-    // to avoid losing accuracy.
-    let unscaled_product = val as u256 * (multiplier.0 as u256);
-    // The unscaled product has 64 fractional bits (from the multiplier)
-    // so rescale it by shifting away the low bits.
-    let product = unscaled_product >> 64;
-    // Check whether the value is too large.
-    assert!(product <= std::u128::max_value!() as u256, EOverflow);
-    product as u128
+    std::macros::uq_int_mul!<u128, u256>(
+        val,
+        multiplier.0,
+        std::u128::max_value!(),
+        64,
+        abort EOverflow,
+    )
 }
 
 /// Divide a `u128` integer by a fixed-point number, truncating any fractional part of the quotient.
 /// Aborts if the divisor is zero.
 /// Aborts if the quotient overflows.
 public fun int_div(val: u128, divisor: UQ64_64): u128 {
-    // Check for division by zero.
-    assert!(divisor.0 != 0, EDivisionByZero);
-    // First convert to 256 bits and then shift left to
-    // add 64 fractional zero bits to the dividend.
-    let scaled_value = val as u256 << 64;
-    let quotient = scaled_value / (divisor.0 as u256);
-    // Check whether the value is too large.
-    assert!(quotient <= std::u128::max_value!() as u256, EOverflow);
-    quotient as u128
+    std::macros::uq_int_div!<u128, u256>(
+        val,
+        divisor.0,
+        std::u128::max_value!(),
+        64,
+        abort EDivisionByZero,
+        abort EOverflow,
+    )
 }
 
 /// Less than or equal to. Returns `true` if and only if `a <= a`.
