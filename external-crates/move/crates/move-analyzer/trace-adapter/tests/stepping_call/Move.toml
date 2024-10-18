@@ -1,0 +1,10 @@
+[package]
+name = "stepping_call"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+stepping_call = "0x0"
+std = "0x1"
