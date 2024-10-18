@@ -3,7 +3,6 @@
 
 use anyhow::anyhow;
 use anyhow::Result;
-use diesel::query_builder::BoxedSqlQuery;
 use diesel::BoolExpressionMethods;
 use diesel::{
     dsl::sql, sql_types::Bool, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
@@ -924,7 +923,6 @@ impl IndexerReader {
         &self,
         tx_digest: TransactionDigest,
         cursor: Option<EventID>,
-        cursor_tx_seq: i64,
         limit: usize,
         descending_order: bool,
     ) -> IndexerResult<Vec<SuiEvent>> {
@@ -934,6 +932,8 @@ impl IndexerReader {
 
         let mut query = events::table.into_boxed();
 
+        // If cursor is provided, check that it matches the tx digest, and use event sequence number
+        // as ordering condition
         if let Some(cursor) = cursor {
             if cursor.tx_digest != tx_digest {
                 return Err(IndexerError::InvalidArgumentError(
@@ -945,10 +945,6 @@ impl IndexerReader {
             } else {
                 query = query.filter(events::event_sequence_number.gt(cursor.event_seq as i64));
             }
-        } else if descending_order {
-            query = query.filter(events::event_sequence_number.le(i64::MAX));
-        } else {
-            query = query.filter(events::event_sequence_number.ge(0));
         };
 
         if descending_order {
@@ -957,19 +953,12 @@ impl IndexerReader {
             query = query.order(events::event_sequence_number.asc());
         }
 
-        // If the cursor is provided and matches tx_digest, we've already fetched the
-        // tx_sequence_number and can query events table directly. Otherwise, we can just consult
-        // the tx_digests table for the tx_sequence_number to key into events table.
-        if cursor.is_some() {
-            query = query.filter(events::tx_sequence_number.eq(cursor_tx_seq));
-        } else {
-            query = query.filter(
-                events::tx_sequence_number.nullable().eq(tx_digests::table
-                    .select(tx_digests::tx_sequence_number)
-                    .filter(tx_digests::tx_digest.eq(tx_digest.into_inner().to_vec()))
-                    .single_value()),
-            );
-        }
+        query = query.filter(
+            events::tx_sequence_number.nullable().eq(tx_digests::table
+                .select(tx_digests::tx_sequence_number)
+                .filter(tx_digests::tx_digest.eq(tx_digest.into_inner().to_vec()))
+                .single_value()),
+        );
 
         let stored_events = query
             .limit(limit as i64)
@@ -1027,27 +1016,53 @@ impl IndexerReader {
             None
         };
 
-        if let EventFilter::Sender(sender) = &filter {
-            let lookup = apply_event_query_clauses!(
-                event_senders::table.filter(event_senders::sender.eq(sender.to_vec())),
-                event_senders,
-                cursor_seq_num,
-                descending_order,
-                limit
-            );
+        let stored_events = if let EventFilter::All([]) = &filter {
+            let mut query = events::table.into_boxed();
+            if descending_order {
+                query = query.order(events::event_sequence_number.desc());
+                if let Some((tx, ev)) = cursor_seq_num {
+                    query = query.filter(
+                        events::tx_sequence_number
+                            .lt(tx)
+                            .or(events::tx_sequence_number
+                                .eq(tx)
+                                .and(events::event_sequence_number.lt(ev as i64))),
+                    );
+                }
+            } else {
+                query = query.order(events::event_sequence_number.asc());
+                if let Some((tx, ev)) = cursor_seq_num {
+                    query = query.filter(
+                        events::tx_sequence_number
+                            .gt(tx)
+                            .or(events::tx_sequence_number
+                                .eq(tx)
+                                .and(events::event_sequence_number.gt(ev as i64))),
+                    );
+                }
+            }
+            query = query.limit(limit as i64);
+
+            query.load::<StoredEvent>(&mut connection).await?
         } else if let EventFilter::Transaction(tx_digest) = filter {
-            // TODO: (wlmyng)
             return self
-                .query_events_by_tx_digest(tx_digest, cursor, 0, limit, descending_order)
+                .query_events_by_tx_digest(tx_digest, cursor, limit, descending_order)
                 .await;
         } else {
-            let main_where_clause = match filter {
-                EventFilter::All([]) => {
-                    // No filter
-                    let a = "1 = 1".to_string();
+            let lookups = match filter {
+                EventFilter::Sender(sender) => {
+                    apply_event_query_clauses!(
+                        event_senders::table.filter(event_senders::sender.eq(sender.to_vec())),
+                        event_senders,
+                        cursor_seq_num,
+                        descending_order,
+                        limit
+                    )
+                    .load::<(i64, i64)>(&mut connection)
+                    .await?
                 }
                 EventFilter::MoveModule { package, module } => {
-                    let lookup = apply_event_query_clauses!(
+                    apply_event_query_clauses!(
                         event_emit_module::table
                             .filter(event_emit_module::package.eq(package.to_vec()))
                             .filter(event_emit_module::module.eq(module.to_string())),
@@ -1055,10 +1070,12 @@ impl IndexerReader {
                         cursor_seq_num,
                         descending_order,
                         limit
-                    );
+                    )
+                    .load::<(i64, i64)>(&mut connection)
+                    .await?
                 }
                 EventFilter::MoveEventModule { package, module } => {
-                    let lookup = apply_event_query_clauses!(
+                    apply_event_query_clauses!(
                         event_struct_module::table.filter(
                             event_struct_module::package
                                 .eq(package.to_vec())
@@ -1068,7 +1085,9 @@ impl IndexerReader {
                         cursor_seq_num,
                         descending_order,
                         limit
-                    );
+                    )
+                    .load::<(i64, i64)>(&mut connection)
+                    .await?
                 }
                 EventFilter::MoveEventType(struct_tag) => {
                     let package = struct_tag.address;
@@ -1079,7 +1098,7 @@ impl IndexerReader {
                         .collect::<Vec<_>>()[2]
                         .to_string();
 
-                    let lookup = apply_event_query_clauses!(
+                    apply_event_query_clauses!(
                         event_struct_instantiation::table.filter(
                             event_struct_instantiation::package
                                 .eq(package.to_vec())
@@ -1093,9 +1112,11 @@ impl IndexerReader {
                         cursor_seq_num,
                         descending_order,
                         limit
-                    );
+                    )
+                    .load::<(i64, i64)>(&mut connection)
+                    .await?
                 }
-                EventFilter::Sender(_) => {
+                EventFilter::All([]) => {
                     // Processed above
                     unreachable!()
                 }
@@ -1109,12 +1130,42 @@ impl IndexerReader {
                     ));
                 }
             };
-        };
 
-        debug!("query events: {}", query);
-        let stored_events = diesel::sql_query(query)
-            .load::<StoredEvent>(&mut connection)
-            .await?;
+            if lookups.is_empty() {
+                return Ok(vec![]);
+            }
+
+            // Postgres is quite bad at handling `OR` filters, and when given a list of tuples to filter
+            // against a composite key, it will resort to doing sequential scans. A query using `UNION
+            //  ALL` allows us to leverage the index on the composite key.
+            let events_query = lookups.iter().map(|&(tx, ev)| {
+                format!("SELECT * FROM events WHERE tx_sequence_number = {} AND event_sequence_number = {}", tx, ev)
+                })
+                .collect::<Vec<String>>()
+                .join(" UNION ALL ");
+
+            debug!("query events: {}", events_query);
+            let mut stored_events = diesel::sql_query(events_query)
+                .load::<StoredEvent>(&mut connection)
+                .await?;
+
+            // UNION ALL does not guarantee order, so we need to sort the results per the descending
+            // bool.
+            stored_events.sort_by(|a, b| {
+                let cmp = a
+                    .tx_sequence_number
+                    .cmp(&b.tx_sequence_number)
+                    .then_with(|| a.event_sequence_number.cmp(&b.event_sequence_number));
+
+                if descending_order {
+                    cmp.reverse()
+                } else {
+                    cmp
+                }
+            });
+
+            stored_events
+        };
 
         let mut sui_event_futures = vec![];
         for stored_event in stored_events {
