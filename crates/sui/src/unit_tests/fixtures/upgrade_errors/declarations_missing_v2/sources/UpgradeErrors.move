@@ -5,7 +5,9 @@
 
 #[allow(unused_field)]
 module upgrades::upgrades {
-    // struct missing
+    // removed declarations
     // public struct StructToBeRemoved {}
+    // public enum EnumToBeRemoved {}
+    // public fun fun_to_be_removed() {}
 }
 
