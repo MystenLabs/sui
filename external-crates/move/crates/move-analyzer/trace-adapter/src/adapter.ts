@@ -18,9 +18,9 @@ import {
     RuntimeEvents,
     RuntimeValueType,
     IRuntimeVariableScope,
-    CompoundType
+    CompoundType,
+    IRuntimeRefValue
 } from './runtime';
-import { run } from 'node:test';
 
 const enum LogLevel {
     Log = 'log',
@@ -229,14 +229,15 @@ export class MoveDebugSession extends LoggingDebugSession {
     /**
      * Gets the scopes for a given frame.
      *
-     * @param frameId identifier of the frame scopes are requested for.
+     * @param frameID identifier of the frame scopes are requested for.
      * @returns an array of scopes.
+     * @throws Error with a descriptive error message if scopes cannot be retrieved.
      */
-    private getScopes(frameId: number): DebugProtocol.Scope[] {
+    private getScopes(frameID: number): DebugProtocol.Scope[] {
         const runtimeStack = this.runtime.stack();
-        const frame = runtimeStack.frames.find(frame => frame.id === frameId);
+        const frame = runtimeStack.frames.find(frame => frame.id === frameID);
         if (!frame) {
-            throw new Error(`No frame found for id: ${frameId}`);
+            throw new Error(`No frame found for id: ${frameID} when getting scopes`);
         }
         const scopes: DebugProtocol.Scope[] = [];
         if (frame.locals.length > 0) {
@@ -273,6 +274,48 @@ export class MoveDebugSession extends LoggingDebugSession {
     }
 
     /**
+     * Converts a runtime reference value to a DAP variable.
+     *
+     * @param value reference value.
+     * @param name name of variable containing the reference value.
+     * @param type optional type of the variable containing the reference value.
+     * @returns a DAP variable.
+     * @throws Error with a descriptive error message if conversion fails.
+     */
+    private convertRefValue(
+        value: IRuntimeRefValue,
+        name: string,
+        type?: string
+    ): DebugProtocol.Variable {
+        const frameID = value.loc.frameID;
+        const localIndex = value.loc.localIndex;
+        const runtimeStack = this.runtime.stack();
+        const frame = runtimeStack.frames.find(frame => frame.id === frameID);
+        if (!frame) {
+            throw new Error('No frame found for id '
+                + frameID
+                + ' when converting ref value for local index '
+                + localIndex);
+        }
+        // a local will be in one of the scopes at a position corresponding to its local index
+        let local = undefined;
+        for (const scope of frame.locals) {
+            local = scope[localIndex];
+            if (local) {
+                break;
+            }
+        }
+        if (!local) {
+            throw new Error('No local found for index '
+                + localIndex
+                + ' when converting ref value for frame id '
+                + frameID);
+        }
+
+        return this.convertRuntimeValue(local.value, name, type);
+    }
+
+    /**
      * Converts a runtime value to a DAP variable.
      *
      * @param value variable value
@@ -300,21 +343,28 @@ export class MoveDebugSession extends LoggingDebugSession {
                 value: '(' + value.length + ')[...]',
                 variablesReference: compoundValueReference
             };
-        } else {
+        } else if ('fields' in value) {
             const compoundValueReference = this.variableHandles.create(value);
-            const accessChainParts = value.type.split('::');
+            // use type if available as it will have information about whether
+            // it's a reference or not (e.g., `&mut 0x42::mod::SomeStruct`),
+            // as opposed to the type that come with the value
+            // (e.g., `0x42::mod::SomeStruct`)
+            const actualType = type ? type : value.type;
+            const accessChainParts = actualType.split('::');
             const datatypeName = accessChainParts[accessChainParts.length - 1];
             return {
                 name,
                 type: value.variantName
-                    ? value.type + '::' + value.variantName
-                    : value.type,
+                    ? actualType + '::' + value.variantName
+                    : actualType,
                 value: (value.variantName
                     ? datatypeName + '::' + value.variantName
                     : datatypeName
                 ) + '{...}',
                 variablesReference: compoundValueReference
             };
+        } else {
+            return this.convertRefValue(value, name, type);
         }
     }
 

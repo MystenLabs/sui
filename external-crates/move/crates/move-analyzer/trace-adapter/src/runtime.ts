@@ -7,7 +7,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import toml from 'toml';
 import { ISourceMap, IFileInfo, readAllSourceMaps } from './source_map_utils';
-import { TraceEffectKind, TraceEvent, TraceEventKind, TraceInstructionKind, TraceLocKind, TraceValKind, TraceValue, readTrace } from './trace_utils';
+import {
+    TraceEffectKind,
+    TraceEvent,
+    TraceEventKind,
+    TraceInstructionKind,
+    readTrace
+} from './trace_utils';
 import { ModuleInfo } from './utils';
 
 /**
@@ -30,8 +36,27 @@ export type CompoundType = RuntimeValueType[] | IRuntimeCompundValue;
  * - boolean, number, string (converted to string)
  * - compound type (vector, struct, enum)
  */
-export type RuntimeValueType = string | CompoundType;
+export type RuntimeValueType = string | CompoundType | IRuntimeRefValue;
 
+/**
+ * Locaction of a local variable in the runtime.
+ */
+export interface IRuntimeVariableLoc {
+    frameID: number;
+    localIndex: number;
+}
+
+/**
+ * Value of a reference in the runtime.
+ */
+export interface IRuntimeRefValue {
+    mutable: boolean;
+    loc: IRuntimeVariableLoc
+}
+
+/**
+ * Information about a runtime compound value (struct/enum).
+ */
 export interface IRuntimeCompundValue {
     fields: [string, RuntimeValueType][];
     type: string;
@@ -118,7 +143,7 @@ export class Runtime extends EventEmitter {
      */
     private filesMap = new Map<string, IFileInfo>();
 
-    /**
+    /**x
      * Map of stringified module info to source maps.
      */
     private sourceMapsMap = new Map<string, ISourceMap>();
@@ -325,16 +350,18 @@ export class Runtime extends EventEmitter {
         } else if (currentEvent.type === TraceEventKind.Effect) {
             const effect = currentEvent.effect;
             if (effect.type === TraceEffectKind.Write) {
-                const stackHeight = this.frameStack.frames.length;
-                if (stackHeight <= 0) {
-                    throw new Error('No frame on the stack when processing a write');
-                }
-                const currentFrame = this.frameStack.frames[stackHeight - 1];
-                const traceLocation = effect.location;
+                const traceLocation = effect.loc;
                 const traceValue = effect.value;
-                if (traceLocation.type === TraceLocKind.Local) {
-                    localWrite(currentFrame, traceLocation.localIndex, traceValue);
+                const frame = this.frameStack.frames.find(
+                    frame => frame.id === traceLocation.frameID
+                );
+                if (!frame) {
+                    throw new Error('Cannot find frame with ID: '
+                        + traceLocation.frameID
+                        + ' when processing Write effect for local variable at index: '
+                        + traceLocation.localIndex);
                 }
+                localWrite(frame, traceLocation.localIndex, traceValue);
             }
             return this.step(next, stopAtCloseFrame);
         } else {
@@ -529,53 +556,177 @@ export class Runtime extends EventEmitter {
             this.emit(event, ...args);
         }, 0);
     }
+
+    //
+    // Utility functions for testing and debugging.
+    //
+
+    /**
+     * Whitespace used for indentation in the string representation of the runtime.
+     */
+    private singleTab = '  ';
+
+    /**
+     * Returns a string representig the current state of the runtime.
+     *
+     * @returns string representation of the runtime.
+     */
+    public toString(): string {
+        let res = 'current frame stack:\n';
+        for (const frame of this.frameStack.frames) {
+            res += this.singleTab + 'function: ' + frame.name + ' (line ' + frame.line + ')\n';
+            for (let i = 0; i < frame.locals.length; i++) {
+                res += this.singleTab + this.singleTab + 'scope ' + i + ' :\n';
+                for (let j = 0; j < frame.locals[i].length; j++) {
+                    const local = frame.locals[i][j];
+                    if (local) {
+                        res += this.varToString(this.singleTab
+                            + this.singleTab
+                            + this.singleTab, local) + '\n';
+                    }
+                }
+            }
+        }
+        return res;
+    }
+    /**
+     * Returns a string representation of a runtime variable.
+     *
+     * @param variable runtime variable.
+     * @returns string representation of the variable.
+     */
+    private varToString(tabs: string, variable: IRuntimeVariable): string {
+        return this.valueToString(tabs, variable.value, variable.name, variable.type);
+    }
+
+    /**
+     * Returns a string representation of a runtime compound value.
+     *
+     * @param compoundValue runtime compound value.
+     * @returns string representation of the compound value.
+     */
+    private compoundValueToString(tabs: string, compoundValue: IRuntimeCompundValue): string {
+        const type = compoundValue.variantName
+            ? compoundValue.type + '::' + compoundValue.variantName
+            : compoundValue.type;
+        let res = '(' + type + ') {\n';
+        for (const [name, value] of compoundValue.fields) {
+            res += this.valueToString(tabs + this.singleTab, value, name);
+        }
+        res += tabs + '}\n';
+        return res;
+    }
+
+    /**
+     * Returns a string representation of a runtime reference value.
+     *
+     * @param refValue runtime reference value.
+     * @param name name of the variable containing reference value.
+     * @param type optional type of the variable containing reference value.
+     * @returns string representation of the reference value.
+     */
+    private refValueToString(
+        tabs: string,
+        refValue: IRuntimeRefValue,
+        name: string,
+        type?: string
+    ): string {
+        let res = '';
+        const frame = this.frameStack.frames.find(frame => frame.id === refValue.loc.frameID);
+        let local = undefined;
+        if (!frame) {
+            return res;
+        }
+        for (const scope of frame.locals) {
+            local = scope[refValue.loc.localIndex];
+            if (local) {
+                break;
+            }
+        }
+        if (!local) {
+            return res;
+        }
+        return this.valueToString(tabs, local.value, name, type);
+    }
+
+    /**
+     * Returns a string representation of a runtime value.
+     *
+     * @param value runtime value.
+     * @param name name of the variable containing the value.
+     * @param type optional type of the variable containing the value.
+     * @returns string representation of the value.
+     */
+    private valueToString(
+        tabs: string,
+        value: RuntimeValueType,
+        name: string,
+        type?: string
+    ): string {
+        let res = '';
+        if (typeof value === 'string') {
+            res += tabs + name + ' : ' + value + '\n';
+            if (type) {
+                res += tabs + 'type: ' + type + '\n';
+            }
+        } else if (Array.isArray(value)) {
+            res += tabs + name + ' : [\n';
+            for (let i = 0; i < value.length; i++) {
+                res += this.valueToString(tabs + this.singleTab, value[i], String(i));
+            }
+            res += tabs + ']\n';
+            if (type) {
+                res += tabs + 'type: ' + type + '\n';
+            }
+            return res;
+        } else if ('fields' in value) {
+            res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
+            if (type) {
+                res += tabs + 'type: ' + type + '\n';
+            }
+        } else {
+            res += this.refValueToString(tabs, value, name, type);
+        }
+        return res;
+    }
 }
 
 /**
- * Handles a write to a local variable in the current frame.
+ * Handles a write to a local variable in a stack frame.
  *
- * @param currentFrame current frame.
+ * @param frame stack frame frame.
  * @param localIndex variable index in the frame.
  * @param runtimeValue variable value.
  */
 function localWrite(
-    currentFrame: IRuntimeStackFrame,
+    frame: IRuntimeStackFrame,
     localIndex: number,
-    traceValue: TraceValue
+    value: RuntimeValueType
 ): void {
-    if (traceValue.type !== TraceValKind.Runtime) {
-        throw new Error('Expected a RuntimeValue when writing local variable at index: '
-            + localIndex
-            + ' in function: '
-            + currentFrame.name
-            + ' but got: '
-            + traceValue.type);
-    }
-    const type = currentFrame.localsTypes[localIndex];
+    const type = frame.localsTypes[localIndex];
     if (!type) {
         throw new Error('Cannot find type for local variable at index: '
             + localIndex
             + ' in function: '
-            + currentFrame.name);
+            + frame.name);
     }
-    const value = traceValue.value;
-    const funEntry = currentFrame.sourceMap.functions.get(currentFrame.name);
+    const funEntry = frame.sourceMap.functions.get(frame.name);
     if (!funEntry) {
         throw new Error('Cannot find function entry in source map for function: '
-            + currentFrame.name);
+            + frame.name);
     }
     const name = funEntry.localsNames[localIndex];
     if (!name) {
         throw new Error('Cannot find local variable at index: '
             + localIndex
             + ' in function: '
-            + currentFrame.name);
+            + frame.name);
     }
 
-    const scopesCount = currentFrame.locals.length;
+    const scopesCount = frame.locals.length;
     if (scopesCount <= 0) {
         throw new Error("There should be at least one variable scope in functon"
-            + currentFrame.name);
+            + frame.name);
     }
     // If a variable has the same name but a different index (it is shadowed)
     // it has to be put in a different scope (e.g., locals[1], locals[2], etc.).
@@ -583,7 +734,7 @@ function localWrite(
     // the outermost one
     let existingVarScope = -1;
     for (let i = scopesCount - 1; i >= 0; i--) {
-        const existingVarIndex = currentFrame.locals[i].findIndex(runtimeVar => {
+        const existingVarIndex = frame.locals[i].findIndex(runtimeVar => {
             return runtimeVar && runtimeVar.name === name;
         });
         if (existingVarIndex !== -1 && existingVarIndex !== localIndex) {
@@ -592,14 +743,14 @@ function localWrite(
         }
     }
     if (existingVarScope >= 0) {
-        const shadowedScope = currentFrame.locals[existingVarScope + 1];
+        const shadowedScope = frame.locals[existingVarScope + 1];
         if (!shadowedScope) {
-            currentFrame.locals.push([]);
+            frame.locals.push([]);
         }
-        currentFrame.locals[existingVarScope + 1][localIndex] = { name, value, type };
+        frame.locals[existingVarScope + 1][localIndex] = { name, value, type };
     } else {
         // put variable in the "main" locals scope
-        currentFrame.locals[0][localIndex] = { name, value, type };
+        frame.locals[0][localIndex] = { name, value, type };
     }
 }
 
@@ -680,3 +831,4 @@ function fileHash(fileContents: string): Uint8Array {
     const hash = crypto.createHash('sha256').update(fileContents).digest();
     return new Uint8Array(hash);
 }
+
