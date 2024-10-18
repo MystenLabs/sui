@@ -25,6 +25,7 @@ import {
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
 import { FEATURES, growthbook } from '_src/shared/experimentation/features';
+import { isDisconnectApp } from '_src/shared/messaging/messages/payloads/permissions/DisconnectApp';
 import { isQredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
 import {
 	isSignMessageRequest,
@@ -151,6 +152,8 @@ export class ContentScriptConnection extends Connection {
 					throw new Error('This feature is not implemented yet.');
 				}
 				await requestUserApproval(payload.args, this, msg);
+			} else if (isDisconnectApp(payload)) {
+				await Permissions.delete(this.origin);
 			} else {
 				throw new Error(`Unknown message, ${JSON.stringify(msg.payload)}`);
 			}
