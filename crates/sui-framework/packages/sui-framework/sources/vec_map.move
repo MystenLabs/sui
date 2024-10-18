@@ -58,7 +58,7 @@ public fun remove<K: copy, V>(self: &mut VecMap<K, V>, key: &K): (K, V) {
 
 /// Pop the most recently inserted entry from the map. Aborts if the map is empty.
 public fun pop<K: copy, V>(self: &mut VecMap<K, V>): (K, V) {
-    assert!(!self.contents.is_empty(), EMapEmpty);
+    assert!(self.contents.length() != 0, EMapEmpty);
     let Entry { key, value } = self.contents.pop_back();
     (key, value)
 }
@@ -144,7 +144,7 @@ public fun from_keys_values<K: copy, V>(mut keys: vector<K>, mut values: vector<
     keys.reverse();
     values.reverse();
     let mut map = empty();
-    while (!keys.is_empty()) map.insert(keys.pop_back(), values.pop_back());
+    while (keys.length() != 0) map.insert(keys.pop_back(), values.pop_back());
     keys.destroy_empty();
     values.destroy_empty();
     map

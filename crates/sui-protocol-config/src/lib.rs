@@ -188,6 +188,7 @@ const MAX_PROTOCOL_VERSION: u64 = 66;
 // Version 64: Switch to distributed vote scoring in consensus in mainnet
 // Version 65: Enable distributed vote scoring for mainnet
 // Version 66: Add G1Uncompressed group to group ops.
+//             Update to Move stdlib.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
