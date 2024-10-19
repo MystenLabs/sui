@@ -3,6 +3,7 @@
 
 use crate::authority::transaction_deferral::DeferralKey;
 use narwhal_types::Round;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::base_types::{ObjectID, TransactionDigest};
@@ -210,6 +211,23 @@ impl SharedObjectCongestionTracker {
             * self
                 .gas_budget_based_txn_cost_cap_factor
                 .expect("cap factor must be set if TotalGasBudgetWithCap mode is used.")
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CongestionPerObjectDebt {
+    V1(Round, u64),
+}
+
+impl CongestionPerObjectDebt {
+    pub fn new(round: Round, debt: u64) -> Self {
+        Self::V1(round, debt)
+    }
+
+    pub fn into_v1(self) -> (Round, u64) {
+        match self {
+            Self::V1(round, debt) => (round, debt),
+        }
     }
 }
 

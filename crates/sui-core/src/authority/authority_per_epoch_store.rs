@@ -48,7 +48,9 @@ use typed_store::{
 
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::epoch_start_configuration::EpochStartConfigTrait;
-use super::shared_object_congestion_tracker::SharedObjectCongestionTracker;
+use super::shared_object_congestion_tracker::{
+    CongestionPerObjectDebt, SharedObjectCongestionTracker,
+};
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::AuthorityMetrics;
@@ -598,8 +600,8 @@ pub struct AuthorityEpochTables {
     pub(crate) randomness_last_round_timestamp: DBMap<u64, TimestampMs>,
 
     /// Accumulated per-object debts for congestion control.
-    pub(crate) congestion_control_object_debts: DBMap<ObjectID, (Round, u64)>,
-    pub(crate) congestion_control_randomness_object_debts: DBMap<ObjectID, (Round, u64)>,
+    pub(crate) congestion_control_object_debts: DBMap<ObjectID, CongestionPerObjectDebt>,
+    pub(crate) congestion_control_randomness_object_debts: DBMap<ObjectID, CongestionPerObjectDebt>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -783,7 +785,8 @@ impl AuthorityEpochTables {
             .into_iter()
             .flatten()
             .zip(shared_input_object_ids)
-            .map(move |((round, debt), object_id)| {
+            .map(move |(debt, object_id)| {
+                let (round, debt) = debt.into_v1();
                 (
                     object_id,
                     // Stored debts already account for the budget of the round in which
@@ -4381,13 +4384,23 @@ impl ConsensusCommitOutput {
             &tables.congestion_control_object_debts,
             self.congestion_control_object_debts
                 .into_iter()
-                .map(|(object_id, debt)| (object_id, (self.consensus_round, debt))),
+                .map(|(object_id, debt)| {
+                    (
+                        object_id,
+                        CongestionPerObjectDebt::new(self.consensus_round, debt),
+                    )
+                }),
         )?;
         batch.insert_batch(
             &tables.congestion_control_randomness_object_debts,
             self.congestion_control_randomness_object_debts
                 .into_iter()
-                .map(|(object_id, debt)| (object_id, (self.consensus_round, debt))),
+                .map(|(object_id, debt)| {
+                    (
+                        object_id,
+                        CongestionPerObjectDebt::new(self.consensus_round, debt),
+                    )
+                }),
         )?;
 
         Ok(())
