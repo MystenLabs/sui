@@ -25,6 +25,12 @@ use crate::{
     models::watermarks::{CommitterWatermark, Ordering},
 };
 
+pub mod ev_emit_mod;
+pub mod ev_emit_pkg;
+pub mod ev_struct_inst;
+pub mod ev_struct_mod;
+pub mod ev_struct_name;
+pub mod ev_struct_pkg;
 pub mod kv_checkpoints;
 pub mod kv_objects;
 pub mod kv_transactions;
