@@ -248,19 +248,20 @@ async fn commit_checkpoints<S>(
         elapsed,
         "Checkpoint {}-{} committed with {} transactions.",
         first_checkpoint_seq,
-        committer_watermark.cp,
+        committer_watermark.checkpoint_hi_inclusive,
         tx_count,
     );
     metrics
         .latest_tx_checkpoint_sequence_number
-        .set(committer_watermark.cp as i64);
+        .set(committer_watermark.checkpoint_hi_inclusive as i64);
     metrics
         .total_tx_checkpoint_committed
         .inc_by(checkpoint_num as u64);
     metrics.total_transaction_committed.inc_by(tx_count as u64);
-    metrics
-        .transaction_per_checkpoint
-        .observe(tx_count as f64 / (committer_watermark.cp - first_checkpoint_seq + 1) as f64);
+    metrics.transaction_per_checkpoint.observe(
+        tx_count as f64
+            / (committer_watermark.checkpoint_hi_inclusive - first_checkpoint_seq + 1) as f64,
+    );
     // 1000.0 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
     // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
     metrics
