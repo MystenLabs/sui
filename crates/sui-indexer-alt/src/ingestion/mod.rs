@@ -3,8 +3,10 @@
 
 use std::{sync::Arc, time::Duration};
 
+use crate::ingestion::client::IngestionClient;
+use crate::ingestion::error::{Error, Result};
+use crate::metrics::IndexerMetrics;
 use backoff::backoff::Constant;
-use client::IngestionClient;
 use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use mysten_metrics::spawn_monitored_task;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -13,11 +15,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 use url::Url;
 
-use crate::ingestion::error::{Error, Result};
-use crate::metrics::IndexerMetrics;
-
 mod client;
 pub mod error;
+mod remote_client;
 
 pub struct IngestionService {
     config: IngestionConfig,
@@ -57,9 +57,11 @@ impl IngestionService {
         metrics: Arc<IndexerMetrics>,
         cancel: CancellationToken,
     ) -> Result<Self> {
+        let client = IngestionClient::new_remote(config.remote_store_url.clone(), metrics.clone())?;
+        let subscribers = Vec::new();
         Ok(Self {
-            client: IngestionClient::new(config.remote_store_url.clone(), metrics.clone())?,
-            subscribers: Vec::new(),
+            client,
+            subscribers,
             config,
             metrics,
             cancel,
@@ -83,7 +85,7 @@ impl IngestionService {
     ///
     /// - If a subscriber is lagging (not receiving checkpoints fast enough), it will eventually
     ///   provide back-pressure to the ingestion service, which will stop fetching new checkpoints.
-    /// - If a subscriber closes its channel, the ingestion service will intepret that as a signal
+    /// - If a subscriber closes its channel, the ingestion service will interpret that as a signal
     ///   to shutdown as well.
     ///
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
@@ -187,7 +189,7 @@ mod tests {
     use reqwest::StatusCode;
     use wiremock::{MockServer, Request};
 
-    use crate::ingestion::client::tests::{respond_with, status, test_checkpoint_data};
+    use crate::ingestion::remote_client::tests::{respond_with, status, test_checkpoint_data};
     use crate::metrics::tests::test_metrics;
 
     use super::*;
