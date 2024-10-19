@@ -12,46 +12,11 @@ diesel::table! {
 }
 
 diesel::table! {
-    ev_emit_pkg (package, tx_sequence_number) {
-        package -> Bytea,
-        tx_sequence_number -> Int8,
-        sender -> Bytea,
-    }
-}
-
-diesel::table! {
-    ev_struct_inst (package, module, instantiation, tx_sequence_number) {
-        package -> Bytea,
-        module -> Text,
-        name -> Nullable<Text>,
-        instantiation -> Bytea,
-        tx_sequence_number -> Int8,
-        sender -> Bytea,
-    }
-}
-
-diesel::table! {
-    ev_struct_mod (package, module, tx_sequence_number) {
-        package -> Bytea,
-        module -> Text,
-        tx_sequence_number -> Int8,
-        sender -> Bytea,
-    }
-}
-
-diesel::table! {
-    ev_struct_name (package, module, name, tx_sequence_number) {
+    ev_struct_inst (package, module, name, instantiation, tx_sequence_number) {
         package -> Bytea,
         module -> Text,
         name -> Text,
-        tx_sequence_number -> Int8,
-        sender -> Bytea,
-    }
-}
-
-diesel::table! {
-    ev_struct_pkg (package, tx_sequence_number) {
-        package -> Bytea,
+        instantiation -> Bytea,
         tx_sequence_number -> Int8,
         sender -> Bytea,
     }
@@ -114,11 +79,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     ev_emit_mod,
-    ev_emit_pkg,
     ev_struct_inst,
-    ev_struct_mod,
-    ev_struct_name,
-    ev_struct_pkg,
     kv_checkpoints,
     kv_objects,
     kv_transactions,
