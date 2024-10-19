@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 65;
+const MAX_PROTOCOL_VERSION: u64 = 66;
 
 // Record history of protocol version allocations here:
 //
@@ -186,7 +186,8 @@ const MAX_PROTOCOL_VERSION: u64 = 65;
 // Version 62: Makes the event's sending module package upgrade-aware.
 // Version 63: Enable gas based congestion control in consensus commit.
 // Version 64: Switch to distributed vote scoring in consensus in mainnet
-//             Add G1Uncompressed group to group ops.
+// Version 65: Enable distributed vote scoring for mainnet
+// Version 66: Add G1Uncompressed group to group ops.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2862,7 +2863,8 @@ impl ProtocolConfig {
                     // Enable distributed vote scoring for mainnet
                     cfg.feature_flags
                         .consensus_distributed_vote_scoring_strategy = true;
-
+                }
+                66 => {
                     cfg.group_ops_bls12381_g1_to_uncompressed_g1_cost = Some(26);
                     cfg.group_ops_bls12381_uncompressed_g1_to_g1_cost = Some(52);
                     cfg.group_ops_bls12381_uncompressed_g1_sum_base_cost = Some(26);
