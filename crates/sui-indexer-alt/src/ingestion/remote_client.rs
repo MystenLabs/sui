@@ -105,32 +105,15 @@ impl IngestionClientTrait for RemoteIngestionClient {
 pub(crate) mod tests {
     use super::*;
     use crate::ingestion::client::IngestionClient;
+    use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
     use axum::http::StatusCode;
-    use rand::{rngs::StdRng, SeedableRng};
     use std::sync::Mutex;
-    use sui_storage::blob::{Blob, BlobEncoding};
-    use sui_types::full_checkpoint_content::CheckpointData;
-    use sui_types::{
-        crypto::KeypairTraits,
-        gas::GasCostSummary,
-        messages_checkpoint::{
-            CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
-            SignedCheckpointSummary,
-        },
-        supported_protocol_versions::ProtocolConfig,
-        utils::make_committee_key,
-    };
     use tokio_util::sync::CancellationToken;
     use wiremock::{
         matchers::{method, path_regex},
         Mock, MockServer, Request, Respond, ResponseTemplate,
     };
-
-    const RNG_SEED: [u8; 32] = [
-        21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130,
-        157, 179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
-    ];
 
     pub(crate) async fn respond_with(server: &MockServer, response: impl Respond + 'static) {
         Mock::given(method("GET"))
@@ -142,43 +125,6 @@ pub(crate) mod tests {
 
     pub(crate) fn status(code: StatusCode) -> ResponseTemplate {
         ResponseTemplate::new(code.as_u16())
-    }
-
-    pub(crate) fn test_checkpoint_data(cp: u64) -> Vec<u8> {
-        let mut rng = StdRng::from_seed(RNG_SEED);
-        let (keys, committee) = make_committee_key(&mut rng);
-        let contents = CheckpointContents::new_with_digests_only_for_tests(vec![]);
-        let summary = CheckpointSummary::new(
-            &ProtocolConfig::get_for_max_version_UNSAFE(),
-            0,
-            cp,
-            0,
-            &contents,
-            None,
-            GasCostSummary::default(),
-            None,
-            0,
-            Vec::new(),
-        );
-
-        let sign_infos: Vec<_> = keys
-            .iter()
-            .map(|k| {
-                let name = k.public().into();
-                SignedCheckpointSummary::sign(committee.epoch, &summary, k, name)
-            })
-            .collect();
-
-        let checkpoint_data = CheckpointData {
-            checkpoint_summary: CertifiedCheckpointSummary::new(summary, sign_infos, &committee)
-                .unwrap(),
-            checkpoint_contents: contents,
-            transactions: vec![],
-        };
-
-        Blob::encode(&checkpoint_data, BlobEncoding::Bcs)
-            .unwrap()
-            .to_bytes()
     }
 
     fn remote_test_client(uri: String) -> IngestionClient {

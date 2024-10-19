@@ -34,7 +34,7 @@ impl IngestionClientTrait for LocalIngestionClient {
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::ingestion::client::IngestionClient;
-    use crate::ingestion::remote_client::tests::test_checkpoint_data;
+    use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
     use std::sync::Arc;
     use sui_storage::blob::{Blob, BlobEncoding};

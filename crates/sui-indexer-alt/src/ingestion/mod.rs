@@ -19,6 +19,8 @@ mod client;
 pub mod error;
 mod local_client;
 mod remote_client;
+#[cfg(test)]
+mod test_utils;
 
 pub struct IngestionService {
     config: IngestionConfig,
@@ -202,7 +204,8 @@ mod tests {
     use reqwest::StatusCode;
     use wiremock::{MockServer, Request};
 
-    use crate::ingestion::remote_client::tests::{respond_with, status, test_checkpoint_data};
+    use crate::ingestion::remote_client::tests::{respond_with, status};
+    use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
 
     use super::*;
