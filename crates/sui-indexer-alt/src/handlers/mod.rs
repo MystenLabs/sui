@@ -352,8 +352,8 @@ fn committer<H: Handler + 'static>(
                     break;
                 }
 
-                // Time to write out another batch of rows, if there are any.
-                _ = poll.tick(), if pending_rows > 0 => {
+                // Time to write out another batch of rows, and update the watermark, if we can.
+                _ = poll.tick() => {
                     let Ok(mut conn) = db.connect().await else {
                         warn!(pipeline = H::NAME, "Failed to get connection for DB");
                         cool.reset();
@@ -438,24 +438,28 @@ fn committer<H: Handler + 'static>(
                     // If we go down this route, we should consider factoring that work out into a
                     // separate task that also handles the watermark.
 
-                    let affected = match H::commit(&batch_values, &mut conn).await {
-                        Ok(affected) => affected,
+                    let affected = if batch_values.is_empty() {
+                        0
+                    } else {
+                        match H::commit(&batch_values, &mut conn).await {
+                            Ok(affected) => affected,
 
-                        Err(e) => {
-                            let elapsed = guard.stop_and_record();
+                            Err(e) => {
+                                let elapsed = guard.stop_and_record();
 
-                            error!(
-                                pipeline = H::NAME,
-                                elapsed_ms = elapsed * 1000.0,
-                                attempt,
-                                committed = batch_values.len(),
-                                pending = pending_rows,
-                                "Error writing batch: {e}",
-                            );
+                                error!(
+                                    pipeline = H::NAME,
+                                    elapsed_ms = elapsed * 1000.0,
+                                    attempt,
+                                    committed = batch_values.len(),
+                                    pending = pending_rows,
+                                    "Error writing batch: {e}",
+                                );
 
-                            cool.reset_after(RETRY_INTERVAL);
-                            attempt += 1;
-                            continue;
+                                cool.reset_after(RETRY_INTERVAL);
+                                attempt += 1;
+                                continue;
+                            }
                         }
                     };
 
@@ -632,14 +636,21 @@ fn committer<H: Handler + 'static>(
                     poll.reset_immediately();
                 }
 
-                Some(indexed )= rx.recv(), if pending_rows < H::MAX_PENDING_SIZE => {
+                Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_SIZE => {
                     metrics
                         .total_committer_rows_received
                         .with_label_values(&[H::NAME])
                         .inc_by(indexed.values.len() as u64);
 
-                    pending_rows += indexed.values.len();
-                    pending.insert(indexed.cp_sequence_number, indexed);
+                    if indexed.values.is_empty() {
+                        // If the handler sends an empty batch, short-circuit the commit, and add
+                        // it directly to the pre-commit list.
+                        let (watermark, _) = indexed.into_batch();
+                        precommitted.insert(watermark);
+                    } else {
+                        pending_rows += indexed.values.len();
+                        pending.insert(indexed.cp_sequence_number, indexed);
+                    }
                 }
             }
         }
