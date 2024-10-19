@@ -61,7 +61,7 @@ use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{error, info};
 
-mod indexer_util;
+mod test_indexer_handle;
 
 const NUM_VALIDATOR: usize = 4;
 
@@ -92,7 +92,7 @@ pub struct TestCluster {
     pub swarm: Swarm,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
-    indexer_handle: Option<indexer_util::IndexerHandle>,
+    indexer_handle: Option<test_indexer_handle::IndexerHandle>,
 }
 
 impl TestCluster {
@@ -1135,7 +1135,7 @@ impl TestClusterBuilder {
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 
         let (rpc_url, indexer_handle) = if self.indexer_backed_rpc {
-            let handle = indexer_util::setup_indexer_backed_rpc(
+            let handle = test_indexer_handle::IndexerHandle::new(
                 fullnode_handle.rpc_url.clone(),
                 temp_data_ingestion_dir,
                 data_ingestion_path.unwrap(),
