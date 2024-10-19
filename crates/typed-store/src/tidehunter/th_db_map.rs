@@ -354,7 +354,7 @@ fn thdb_config(const_spaces: usize) -> Config {
 
 #[cfg(not(debug_assertions))]
 fn modify_large_table_size(config: &mut Config) {
-    config.large_table_size = 512 * 1024;
+    config.large_table_size = 256 * 1024;
 }
 
 #[cfg(debug_assertions)]
