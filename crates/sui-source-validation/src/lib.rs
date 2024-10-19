@@ -269,7 +269,7 @@ impl ValidationMode {
             &package
                 .root_compiled_units
                 .iter()
-                .map(|u| ("root".into(), u.clone()))
+                .map(|u| ("root".into(), u.clone())) // XXX: root should be corresponding package name if we can find it
                 .collect(),
         )
         .map_err(|e| Error::CannotCheckLocalModules {

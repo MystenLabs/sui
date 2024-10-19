@@ -28,6 +28,7 @@ move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
+move-ir-types.workspace = true
 move-symbol-pool.workspace = true
 
 tar.workspace = true

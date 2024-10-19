@@ -13,19 +13,16 @@ use std::{
 use anyhow::{anyhow, bail, ensure};
 use colored::Colorize;
 use move_binary_format::CompiledModule;
-use move_bytecode_source_map::utils::source_map_from_file;
 use move_command_line_common::{
     env::MOVE_HOME,
-    files::{
-        extension_equals, find_filenames, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
-        SOURCE_MAP_EXTENSION,
-    },
+    files::{extension_equals, find_filenames, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION},
 };
 use move_compiler::{
     compiled_unit::NamedCompiledModule,
     editions::{Edition, Flavor},
     shared::{files::FileName, NumericalAddress},
 };
+use move_ir_types::location::Loc;
 use move_package::{
     compilation::{
         compiled_package::CompiledUnitWithSource, package_layout::CompiledPackageLayout,
@@ -182,8 +179,15 @@ fn download_and_compile(
     install_dir: &TempDir,
     ToolchainVersion {
         compiler_version,
-        edition,
-        flavor,
+        edition: _, // TODO: this value was previously used to set the default edition via
+        // command line flag, but that isn't sufficient: the default doesn't override
+        // the Move.toml values, and if the Move.toml values are set (e.g., to a later edition)
+        // then that edition will be used instead of the edition we find in the Move.lock
+        // toolchain version info. So: a package using a previous edition should either have
+        // its Move.toml patched to use this value (since that appears to be the only way to
+        // feed edition into the build directly), or we need a new facility in the CLI
+        // that will actually use this edition (and override it).
+        flavor: _, // TODO similar to above.
     }: &ToolchainVersion,
     dep_name: &Symbol,
 ) -> anyhow::Result<()> {
@@ -260,10 +264,8 @@ fn download_and_compile(
     }
 
     debug!(
-        "{} move build --default-move-edition {} --default-move-flavor {} -p {} --install-dir {}",
+        "{} move build -p {} --install-dir {}",
         dest_canonical_binary.display(),
-        edition.to_string().as_str(),
-        flavor.to_string().as_str(),
         root.display(),
         install_dir.path().display(),
     );
@@ -279,10 +281,6 @@ fn download_and_compile(
         .args([
             OsStr::new("move"),
             OsStr::new("build"),
-            OsStr::new("--default-move-edition"),
-            OsStr::new(edition.to_string().as_str()),
-            OsStr::new("--default-move-flavor"),
-            OsStr::new(flavor.to_string().as_str()),
             OsStr::new("--silence-warnings"),
             OsStr::new("-p"),
             OsStr::new(root.as_path()),
@@ -360,12 +358,6 @@ fn decode_bytecode_file(
     let bytecode_path = Path::new(bytecode_path_str);
     let path_to_file = CompiledPackageLayout::path_to_file_after_category(bytecode_path);
     let bytecode_bytes = std::fs::read(bytecode_path)?;
-    let source_map = source_map_from_file(
-        &root_path
-            .join(CompiledPackageLayout::SourceMaps.path())
-            .join(&path_to_file)
-            .with_extension(SOURCE_MAP_EXTENSION),
-    )?;
     let source_path = &root_path
         .join(CompiledPackageLayout::Sources.path())
         .join(path_to_file)
@@ -384,6 +376,8 @@ fn decode_bytecode_file(
         let module_name = FileName::from(id.name().as_str());
         (parsed_addr, module_name)
     };
+    let source_map =
+        move_bytecode_source_map::source_map::SourceMap::dummy_from_view(&module, Loc::invalid())?;
     let unit = NamedCompiledModule {
         package_name: package_name_opt,
         address: address_bytes,
