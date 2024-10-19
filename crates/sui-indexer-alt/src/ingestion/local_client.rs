@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ingestion::client::IngestionClientTrait;
-use crate::ingestion::Error as IngestionError;
+use crate::ingestion::client::{FetchError, FetchResult, IngestionClientTrait};
 use axum::body::Bytes;
 use std::path::PathBuf;
 
@@ -18,13 +17,16 @@ impl LocalIngestionClient {
 
 #[async_trait::async_trait]
 impl IngestionClientTrait for LocalIngestionClient {
-    async fn fetch(&self, checkpoint: u64) -> Result<Bytes, backoff::Error<IngestionError>> {
+    async fn fetch(&self, checkpoint: u64) -> FetchResult {
         let path = self.path.join(format!("{}.chk", checkpoint));
         let bytes = tokio::fs::read(path).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                backoff::Error::permanent(IngestionError::NotFound(checkpoint))
+                FetchError::NotFound
             } else {
-                backoff::Error::transient(IngestionError::IoError(e))
+                FetchError::Transient {
+                    reason: "IO error",
+                    error: e.into(),
+                }
             }
         })?;
         Ok(Bytes::from(bytes))

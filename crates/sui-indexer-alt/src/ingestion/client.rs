@@ -23,18 +23,35 @@ const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 
 #[async_trait::async_trait]
 pub(crate) trait IngestionClientTrait: Send + Sync {
-    async fn fetch(&self, checkpoint: u64) -> Result<Bytes, BE<IngestionError>>;
+    async fn fetch(&self, checkpoint: u64) -> FetchResult;
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum FetchError {
+    #[error("Checkpoint not found")]
+    NotFound,
+    #[error("Failed to fetch checkpoint due to permanent error: {0}")]
+    Permanent(#[from] anyhow::Error),
+    #[error("Failed to fetch checkpoint due to {reason}: {error}")]
+    Transient {
+        reason: &'static str,
+        #[source]
+        error: anyhow::Error,
+    },
+}
+
+pub type FetchResult = Result<Bytes, FetchError>;
 
 #[derive(Clone)]
 pub(crate) struct IngestionClient {
     client: Arc<dyn IngestionClientTrait>,
+    /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
     metrics: Arc<IndexerMetrics>,
 }
 
 impl IngestionClient {
     pub(crate) fn new_remote(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
-        let client = Arc::new(RemoteIngestionClient::new(url, metrics.clone())?);
+        let client = Arc::new(RemoteIngestionClient::new(url)?);
         Ok(IngestionClient { client, metrics })
     }
 
@@ -61,7 +78,17 @@ impl IngestionClient {
                     return Err(BE::permanent(IngestionError::Cancelled));
                 }
 
-                let bytes = client.fetch(checkpoint).await?;
+                let bytes = client.fetch(checkpoint).await.map_err(|err| match err {
+                    FetchError::NotFound => BE::permanent(IngestionError::NotFound(checkpoint)),
+                    FetchError::Permanent(error) => {
+                        BE::permanent(IngestionError::FetchError(checkpoint, error))
+                    }
+                    FetchError::Transient { reason, error } => self.metrics.inc_retry(
+                        checkpoint,
+                        reason,
+                        IngestionError::FetchError(checkpoint, error),
+                    ),
+                })?;
 
                 self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
                 let data: CheckpointData = Blob::from_bytes(&bytes).map_err(|e| {

@@ -1,30 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ingestion::client::IngestionClientTrait;
-use crate::ingestion::Error;
+use crate::ingestion::client::{FetchError, FetchResult, IngestionClientTrait};
+use crate::ingestion::remote_client::HttpError::Http;
 use crate::ingestion::Result as IngestionResult;
-use crate::metrics::IndexerMetrics;
-use axum::body::Bytes;
-use backoff::Error as BE;
 use reqwest::{Client, StatusCode};
-use std::sync::Arc;
 use tracing::{debug, error};
 use url::Url;
 
 pub(crate) struct RemoteIngestionClient {
     url: Url,
     client: Client,
-    /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
-    metrics: Arc<IndexerMetrics>,
 }
 
 impl RemoteIngestionClient {
-    pub(crate) fn new(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
+    pub(crate) fn new(url: Url) -> IngestionResult<Self> {
         Ok(Self {
             url,
             client: Client::builder().build()?,
-            metrics,
         })
     }
 }
@@ -40,17 +33,22 @@ impl IngestionClientTrait for RemoteIngestionClient {
     /// - rate limiting,
     /// - server errors (5xx),
     /// - issues getting a full response and deserializing it as [CheckpointData].
-    async fn fetch(&self, checkpoint: u64) -> Result<Bytes, BE<Error>> {
+    async fn fetch(&self, checkpoint: u64) -> FetchResult {
         // SAFETY: The path being joined is statically known to be valid.
         let url = self
             .url
             .join(&format!("/{checkpoint}.chk"))
             .expect("Unexpected invalid URL");
 
-        let response = self.client.get(url).send().await.map_err(|e| {
-            self.metrics
-                .inc_retry(checkpoint, "request", Error::ReqwestError(e))
-        })?;
+        let response = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| FetchError::Transient {
+                reason: "request",
+                error: e.into(),
+            })?;
 
         match response.status() {
             code if code.is_success() => {
@@ -58,57 +56,65 @@ impl IngestionClientTrait for RemoteIngestionClient {
                 // checkpoint from them is considered a transient error -- the store being
                 // fetched from needs to be corrected, and ingestion will keep retrying it
                 // until it is.
-                response.bytes().await.map_err(|e| {
-                    self.metrics
-                        .inc_retry(checkpoint, "bytes", Error::ReqwestError(e))
+                response.bytes().await.map_err(|e| FetchError::Transient {
+                    reason: "bytes",
+                    error: e.into(),
                 })
             }
 
             // Treat 404s as a special case so we can match on this error type.
             code @ StatusCode::NOT_FOUND => {
                 debug!(checkpoint, %code, "Checkpoint not found");
-                Err(BE::permanent(Error::NotFound(checkpoint)))
+                Err(FetchError::NotFound)
             }
 
             // Timeouts are a client error but they are usually transient.
-            code @ StatusCode::REQUEST_TIMEOUT => Err(self.metrics.inc_retry(
-                checkpoint,
-                "timeout",
-                Error::HttpError(checkpoint, code),
-            )),
+            code @ StatusCode::REQUEST_TIMEOUT => Err(FetchError::Transient {
+                reason: "timeout",
+                error: status_code_to_error(code),
+            }),
 
             // Rate limiting is also a client error, but the backoff will eventually widen the
             // interval appropriately.
-            code @ StatusCode::TOO_MANY_REQUESTS => Err(self.metrics.inc_retry(
-                checkpoint,
-                "too_many_requests",
-                Error::HttpError(checkpoint, code),
-            )),
+            code @ StatusCode::TOO_MANY_REQUESTS => Err(FetchError::Transient {
+                reason: "too_many_requests",
+                error: status_code_to_error(code),
+            }),
 
             // Assume that if the server is facing difficulties, it will recover eventually.
-            code if code.is_server_error() => Err(self.metrics.inc_retry(
-                checkpoint,
-                "server_error",
-                Error::HttpError(checkpoint, code),
-            )),
+            code if code.is_server_error() => Err(FetchError::Transient {
+                reason: "server_error",
+                error: status_code_to_error(code),
+            }),
 
             // For everything else, assume it's a permanent error and don't retry.
             code => {
                 error!(checkpoint, %code, "Permanent error, giving up!");
-                Err(BE::permanent(Error::HttpError(checkpoint, code)))
+                Err(FetchError::Permanent(status_code_to_error(code)))
             }
         }
     }
+}
+
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+pub enum HttpError {
+    #[error("HTTP error with status code: {0}")]
+    Http(StatusCode),
+}
+
+fn status_code_to_error(code: StatusCode) -> anyhow::Error {
+    Http(code).into()
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
     use crate::ingestion::client::IngestionClient;
+    use crate::ingestion::error::Error;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
     use axum::http::StatusCode;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
     use tokio_util::sync::CancellationToken;
     use wiremock::{
         matchers::{method, path_regex},
@@ -129,6 +135,17 @@ pub(crate) mod tests {
 
     fn remote_test_client(uri: String) -> IngestionClient {
         IngestionClient::new_remote(Url::parse(&uri).unwrap(), Arc::new(test_metrics())).unwrap()
+    }
+
+    fn assert_http_error(error: Error, checkpoint: u64, code: StatusCode) {
+        let Error::FetchError(c, inner) = error else {
+            panic!("Expected FetchError, got: {:?}", error);
+        };
+        assert_eq!(c, checkpoint);
+        let Some(http_error) = inner.downcast_ref::<HttpError>() else {
+            panic!("Expected HttpError, got: {:?}", inner);
+        };
+        assert_eq!(http_error, &Http(code));
     }
 
     #[tokio::test]
@@ -156,10 +173,7 @@ pub(crate) mod tests {
             .await
             .unwrap_err();
 
-        assert!(matches!(
-            error,
-            Error::HttpError(42, StatusCode::IM_A_TEAPOT)
-        ));
+        assert_http_error(error, 42, StatusCode::IM_A_TEAPOT);
     }
 
     /// Even if the server is repeatedly returning transient errors, it is possible to cancel the
@@ -224,10 +238,7 @@ pub(crate) mod tests {
             .await
             .unwrap_err();
 
-        assert!(
-            matches!(error, Error::HttpError(42, StatusCode::IM_A_TEAPOT),),
-            "{error}"
-        );
+        assert_http_error(error, 42, StatusCode::IM_A_TEAPOT);
     }
 
     /// Assume that certain errors will recover by themselves, and keep retrying with an
@@ -255,10 +266,7 @@ pub(crate) mod tests {
             .await
             .unwrap_err();
 
-        assert!(matches!(
-            error,
-            Error::HttpError(42, StatusCode::IM_A_TEAPOT)
-        ));
+        assert_http_error(error, 42, StatusCode::IM_A_TEAPOT);
     }
 
     /// Treat deserialization failure as another kind of transient error -- all checkpoint data
