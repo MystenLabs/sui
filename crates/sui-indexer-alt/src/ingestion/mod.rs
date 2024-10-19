@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
-
 use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
 use crate::metrics::IndexerMetrics;
 use backoff::backoff::Constant;
 use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use mysten_metrics::spawn_monitored_task;
+use std::path::PathBuf;
+use std::{sync::Arc, time::Duration};
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -17,6 +17,7 @@ use url::Url;
 
 mod client;
 pub mod error;
+mod local_client;
 mod remote_client;
 
 pub struct IngestionService {
@@ -31,7 +32,11 @@ pub struct IngestionService {
 pub struct IngestionConfig {
     /// Remote Store to fetch checkpoints from.
     #[arg(long)]
-    remote_store_url: Url,
+    remote_store_url: Option<Url>,
+
+    /// Path to the local ingestion directory.
+    #[arg(long)]
+    local_ingestion_path: Option<PathBuf>,
 
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     #[arg(long, default_value_t = 5000)]
@@ -57,7 +62,14 @@ impl IngestionService {
         metrics: Arc<IndexerMetrics>,
         cancel: CancellationToken,
     ) -> Result<Self> {
-        let client = IngestionClient::new_remote(config.remote_store_url.clone(), metrics.clone())?;
+        // TODO: Potentially support a hybrid mode where we can fetch from both local and remote.
+        let client = if let Some(url) = config.remote_store_url.as_ref() {
+            IngestionClient::new_remote(url.clone(), metrics.clone())?
+        } else if let Some(path) = config.local_ingestion_path.as_ref() {
+            IngestionClient::new_local(path.clone(), metrics.clone())
+        } else {
+            panic!("Either remote_store_url or local_ingestion_path must be provided");
+        };
         let subscribers = Vec::new();
         Ok(Self {
             client,
@@ -202,7 +214,8 @@ mod tests {
     ) -> IngestionService {
         IngestionService::new(
             IngestionConfig {
-                remote_store_url: Url::parse(&uri).unwrap(),
+                remote_store_url: Some(Url::parse(&uri).unwrap()),
+                local_ingestion_path: None,
                 buffer_size,
                 concurrency,
                 retry_interval: Duration::from_millis(200),

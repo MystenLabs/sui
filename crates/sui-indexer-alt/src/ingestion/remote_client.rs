@@ -32,11 +32,7 @@ impl RemoteIngestionClient {
 
 #[async_trait::async_trait]
 impl IngestionClientTrait for RemoteIngestionClient {
-    /// Fetch a checkpoint from the remote store. Repeatedly retries transient errors with an
-    /// exponential backoff (up to [MAX_RETRY_INTERVAL]), but will immediately return on:
-    ///
-    /// - non-transient errors, which include all client errors, except timeouts and rate limiting.
-    /// - cancellation of the supplied `cancel` token.
+    /// Fetch a checkpoint from the remote store.
     ///
     /// Transient errors include:
     ///
@@ -108,12 +104,14 @@ impl IngestionClientTrait for RemoteIngestionClient {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use std::sync::Mutex;
-
+    use super::*;
     use crate::ingestion::client::IngestionClient;
     use crate::metrics::tests::test_metrics;
+    use axum::http::StatusCode;
     use rand::{rngs::StdRng, SeedableRng};
-    use sui_storage::blob::BlobEncoding;
+    use std::sync::Mutex;
+    use sui_storage::blob::{Blob, BlobEncoding};
+    use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::{
         crypto::KeypairTraits,
         gas::GasCostSummary,
@@ -124,12 +122,11 @@ pub(crate) mod tests {
         supported_protocol_versions::ProtocolConfig,
         utils::make_committee_key,
     };
+    use tokio_util::sync::CancellationToken;
     use wiremock::{
         matchers::{method, path_regex},
         Mock, MockServer, Request, Respond, ResponseTemplate,
     };
-
-    use super::*;
 
     const RNG_SEED: [u8; 32] = [
         21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130,
@@ -185,7 +182,7 @@ pub(crate) mod tests {
             .to_bytes()
     }
 
-    fn test_client(uri: String) -> IngestionClient {
+    fn remote_test_client(uri: String) -> IngestionClient {
         IngestionClient::new_remote(Url::parse(&uri).unwrap(), Arc::new(test_metrics())).unwrap()
     }
 
@@ -194,7 +191,7 @@ pub(crate) mod tests {
         let server = MockServer::start().await;
         respond_with(&server, status(StatusCode::NOT_FOUND)).await;
 
-        let client = test_client(server.uri());
+        let client = remote_test_client(server.uri());
         let error = client
             .fetch(42, &CancellationToken::new())
             .await
@@ -208,7 +205,7 @@ pub(crate) mod tests {
         let server = MockServer::start().await;
         respond_with(&server, status(StatusCode::IM_A_TEAPOT)).await;
 
-        let client = test_client(server.uri());
+        let client = remote_test_client(server.uri());
         let error = client
             .fetch(42, &CancellationToken::new())
             .await
@@ -243,7 +240,7 @@ pub(crate) mod tests {
         })
         .await;
 
-        let client = test_client(server.uri());
+        let client = remote_test_client(server.uri());
         let error = client.fetch(42, &cancel.clone()).await.unwrap_err();
 
         assert!(matches!(error, Error::Cancelled));
@@ -276,7 +273,7 @@ pub(crate) mod tests {
         })
         .await;
 
-        let client = test_client(server.uri());
+        let client = remote_test_client(server.uri());
         let error = client
             .fetch(42, &CancellationToken::new())
             .await
@@ -307,7 +304,7 @@ pub(crate) mod tests {
         })
         .await;
 
-        let client = test_client(server.uri());
+        let client = remote_test_client(server.uri());
         let error = client
             .fetch(42, &CancellationToken::new())
             .await
@@ -336,7 +333,7 @@ pub(crate) mod tests {
         })
         .await;
 
-        let client = test_client(server.uri());
+        let client = remote_test_client(server.uri());
         let checkpoint = client.fetch(42, &CancellationToken::new()).await.unwrap();
         assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
     }

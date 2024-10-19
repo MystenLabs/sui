@@ -24,4 +24,7 @@ pub enum Error {
 
     #[error("Shutdown signal received, stopping ingestion service")]
     Cancelled,
+
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 }

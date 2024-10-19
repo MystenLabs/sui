@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::ingestion::local_client::LocalIngestionClient;
 use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::ingestion::Error as IngestionError;
 use crate::ingestion::Result as IngestionResult;
 use crate::metrics::IndexerMetrics;
 use backoff::Error as BE;
 use backoff::ExponentialBackoff;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_storage::blob::Blob;
@@ -40,6 +42,16 @@ impl IngestionClient {
         Ok(IngestionClient { client, metrics })
     }
 
+    pub(crate) fn new_local(path: PathBuf, metrics: Arc<IndexerMetrics>) -> Self {
+        let client = Arc::new(LocalIngestionClient::new(path));
+        IngestionClient { client, metrics }
+    }
+
+    /// Repeatedly retries transient errors with an
+    /// exponential backoff (up to [MAX_RETRY_INTERVAL]), but will immediately return on:
+    ///
+    /// - non-transient errors, which include all client errors, except timeouts and rate limiting.
+    /// - cancellation of the supplied `cancel` token.
     pub(crate) async fn fetch(
         &self,
         checkpoint: CheckpointSequenceNumber,
