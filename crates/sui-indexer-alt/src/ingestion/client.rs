@@ -13,7 +13,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_storage::blob::Blob;
 use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio_util::bytes::Bytes;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -24,10 +23,7 @@ const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 
 #[async_trait::async_trait]
 pub(crate) trait IngestionClientTrait: Send + Sync {
-    async fn fetch(
-        &self,
-        checkpoint: CheckpointSequenceNumber,
-    ) -> Result<Bytes, BE<IngestionError>>;
+    async fn fetch(&self, checkpoint: u64) -> Result<Bytes, BE<IngestionError>>;
 }
 
 #[derive(Clone)]
@@ -54,7 +50,7 @@ impl IngestionClient {
     /// - cancellation of the supplied `cancel` token.
     pub(crate) async fn fetch(
         &self,
-        checkpoint: CheckpointSequenceNumber,
+        checkpoint: u64,
         cancel: &CancellationToken,
     ) -> IngestionResult<Arc<CheckpointData>> {
         let client = self.client.clone();

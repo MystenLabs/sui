@@ -5,7 +5,6 @@ use crate::ingestion::client::IngestionClientTrait;
 use crate::ingestion::Error as IngestionError;
 use axum::body::Bytes;
 use std::path::PathBuf;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 pub struct LocalIngestionClient {
     path: PathBuf,
@@ -19,10 +18,7 @@ impl LocalIngestionClient {
 
 #[async_trait::async_trait]
 impl IngestionClientTrait for LocalIngestionClient {
-    async fn fetch(
-        &self,
-        checkpoint: CheckpointSequenceNumber,
-    ) -> Result<Bytes, backoff::Error<IngestionError>> {
+    async fn fetch(&self, checkpoint: u64) -> Result<Bytes, backoff::Error<IngestionError>> {
         let path = self.path.join(format!("{}.chk", checkpoint));
         let bytes = tokio::fs::read(path).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {

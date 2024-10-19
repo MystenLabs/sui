@@ -9,7 +9,6 @@ use axum::body::Bytes;
 use backoff::Error as BE;
 use reqwest::{Client, StatusCode};
 use std::sync::Arc;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tracing::{debug, error};
 use url::Url;
 
@@ -41,7 +40,7 @@ impl IngestionClientTrait for RemoteIngestionClient {
     /// - rate limiting,
     /// - server errors (5xx),
     /// - issues getting a full response and deserializing it as [CheckpointData].
-    async fn fetch(&self, checkpoint: CheckpointSequenceNumber) -> Result<Bytes, BE<Error>> {
+    async fn fetch(&self, checkpoint: u64) -> Result<Bytes, BE<Error>> {
         // SAFETY: The path being joined is statically known to be valid.
         let url = self
             .url
