@@ -110,70 +110,66 @@ async fn main() -> Result<()> {
     );
     let eth_bridge_proxy_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
     let mut tasks = vec![];
-    if Some(true) == config.disable_eth {
-        info!("Eth indexer is disabled");
-    } else {
-        // Start the eth subscription indexer
-        let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
-        let provider = Arc::new(
-            Provider::<Http>::try_from(&config.eth_rpc_url)?
-                .interval(std::time::Duration::from_millis(2000)),
-        );
-        let bridge_addresses = get_eth_contract_addresses(bridge_address, &provider).await?;
-        let bridge_addresses: Vec<EthAddress> = vec![
-            bridge_address,
-            bridge_addresses.0,
-            bridge_addresses.1,
-            bridge_addresses.2,
-            bridge_addresses.3,
-        ];
+    // Start the eth subscription indexer
+    let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
+    let provider = Arc::new(
+        Provider::<Http>::try_from(&config.eth_rpc_url)?
+            .interval(std::time::Duration::from_millis(2000)),
+    );
+    let bridge_addresses = get_eth_contract_addresses(bridge_address, &provider).await?;
+    let bridge_addresses: Vec<EthAddress> = vec![
+        bridge_address,
+        bridge_addresses.0,
+        bridge_addresses.1,
+        bridge_addresses.2,
+        bridge_addresses.3,
+    ];
 
-        // Start the eth subscription indexer
-        let eth_subscription_datasource = EthSubscriptionDatasource::new(
-            bridge_addresses.clone(),
-            eth_client.clone(),
-            config.eth_ws_url.clone(),
-            indexer_meterics.clone(),
-            config.eth_bridge_genesis_block,
-        )
-        .await?;
-        let eth_subscription_indexer = IndexerBuilder::new(
-            "EthBridgeSubscriptionIndexer",
-            eth_subscription_datasource,
-            EthDataMapper {
-                metrics: indexer_meterics.clone(),
-            },
-            datastore.clone(),
-        )
-        .with_backfill_strategy(BackfillStrategy::Disabled)
-        .build();
-        tasks.push(spawn_logged_monitored_task!(
-            eth_subscription_indexer.start()
-        ));
+    // Start the eth subscription indexer
+    let eth_subscription_datasource = EthSubscriptionDatasource::new(
+        bridge_addresses.clone(),
+        eth_client.clone(),
+        config.eth_ws_url.clone(),
+        indexer_meterics.clone(),
+        config.eth_bridge_genesis_block,
+    )
+    .await?;
+    let eth_subscription_indexer = IndexerBuilder::new(
+        "EthBridgeSubscriptionIndexer",
+        eth_subscription_datasource,
+        EthDataMapper {
+            metrics: indexer_meterics.clone(),
+        },
+        datastore.clone(),
+    )
+    .with_backfill_strategy(BackfillStrategy::Disabled)
+    .build();
+    tasks.push(spawn_logged_monitored_task!(
+        eth_subscription_indexer.start()
+    ));
 
-        // Start the eth sync data source
-        let eth_sync_datasource = EthFinalizedSyncDatasource::new(
-            bridge_addresses.clone(),
-            eth_client.clone(),
-            config.eth_rpc_url.clone(),
-            indexer_meterics.clone(),
-            bridge_metrics.clone(),
-            config.eth_bridge_genesis_block,
-        )
-        .await?;
+    // Start the eth sync data source
+    let eth_sync_datasource = EthFinalizedSyncDatasource::new(
+        bridge_addresses.clone(),
+        eth_client.clone(),
+        config.eth_rpc_url.clone(),
+        indexer_meterics.clone(),
+        bridge_metrics.clone(),
+        config.eth_bridge_genesis_block,
+    )
+    .await?;
 
-        let eth_sync_indexer = IndexerBuilder::new(
-            "EthBridgeFinalizedSyncIndexer",
-            eth_sync_datasource,
-            EthDataMapper {
-                metrics: indexer_meterics.clone(),
-            },
-            datastore,
-        )
-        .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 1000 })
-        .build();
-        tasks.push(spawn_logged_monitored_task!(eth_sync_indexer.start()));
-    }
+    let eth_sync_indexer = IndexerBuilder::new(
+        "EthBridgeFinalizedSyncIndexer",
+        eth_sync_datasource,
+        EthDataMapper {
+            metrics: indexer_meterics.clone(),
+        },
+        datastore,
+    )
+    .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 1000 })
+    .build();
+    tasks.push(spawn_logged_monitored_task!(eth_sync_indexer.start()));
 
     let sui_client = Arc::new(
         SuiClientBuilder::default()
