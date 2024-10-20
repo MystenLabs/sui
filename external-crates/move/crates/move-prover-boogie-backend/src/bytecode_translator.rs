@@ -49,6 +49,7 @@ use move_stackless_bytecode::{
         AbortAction, BorrowEdge, BorrowNode, Bytecode, Constant, HavocKind, IndexEdgeKind,
         Operation, PropKind,
     },
+    verification_analysis,
 };
 
 use crate::{
@@ -343,6 +344,9 @@ impl<'env> BoogieTranslator<'env> {
                     self.translate_function_style(fun_env, FunctionTranslationStyle::Opaque);
                 } else {
                     let fun_target = self.targets.get_target(fun_env, &FunctionVariant::Baseline);
+                    if !verification_analysis::get_info(&fun_target).inlined {
+                        continue;
+                    }
 
                     if let Some(spec_qid) = self
                         .targets
@@ -532,6 +536,9 @@ impl<'env> BoogieTranslator<'env> {
             return;
         }
         let spec_fun_target = self.targets.get_target(&fun_env, &variant);
+        if !variant.is_verified() && !verification_analysis::get_info(&spec_fun_target).inlined {
+            return;
+        }
 
         let mut builder =
             FunctionDataBuilder::new(spec_fun_target.func_env, spec_fun_target.data.clone());
@@ -1401,7 +1408,13 @@ impl<'env> FunctionTranslator<'env> {
         for i in num_args..fun_target.get_local_count() {
             let num_oper = global_state
                 .get_temp_index_oper(mid, fid, i, baseline_flag)
-                .unwrap();
+                .unwrap_or_else(|| {
+                    panic!(
+                        "missing number operation info for function={}, temp {}",
+                        self.fun_target.func_env.get_full_name_str(),
+                        i
+                    )
+                });
             let local_type = &self.get_local_type(i);
             emitln!(
                 writer,
