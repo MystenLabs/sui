@@ -8,7 +8,7 @@ use tracing::info;
 
 pub(crate) struct TpsTracker {
     start_time: Instant,
-    starting_state: Option<IndexerProgress>,
+    starting_state: IndexerProgress,
 
     prev_time: Instant,
     prev_timed_state: Option<IndexerProgress>,
@@ -22,11 +22,14 @@ pub(crate) struct TpsTracker {
 }
 
 impl TpsTracker {
-    pub fn new(log_frequency: Duration) -> Self {
+    pub fn new(start_checkpoint: u64, log_frequency: Duration) -> Self {
         let start_time = Instant::now();
         Self {
             start_time,
-            starting_state: None,
+            starting_state: IndexerProgress {
+                checkpoint: start_checkpoint,
+                network_total_transactions: 0,
+            },
             prev_time: start_time,
             prev_timed_state: None,
             cur_state: None,
@@ -36,13 +39,11 @@ impl TpsTracker {
     }
 
     pub fn update(&mut self, cur_state: IndexerProgress) {
-        self.cur_state = Some(cur_state.clone());
         let cur_time = Instant::now();
+        self.cur_state = Some(cur_state.clone());
         let Some(prev_timed_state) = self.prev_timed_state.clone() else {
             self.prev_time = cur_time;
             self.prev_timed_state = Some(cur_state.clone());
-            self.start_time = cur_time;
-            self.starting_state = Some(cur_state);
             return;
         };
         let elapsed = cur_time - self.prev_time;
@@ -66,7 +67,7 @@ impl TpsTracker {
     pub fn finish(&mut self) -> CheckpointSequenceNumber {
         let elapsed = Instant::now() - self.start_time;
         let cur_state = self.cur_state.clone().unwrap();
-        let starting_state = self.starting_state.clone().unwrap();
+        let starting_state = self.starting_state.clone();
         let tps = (cur_state.network_total_transactions - starting_state.network_total_transactions)
             as f64
             / elapsed.as_secs_f64();

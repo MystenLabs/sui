@@ -41,21 +41,21 @@ pub struct IngestionService {
 #[derive(clap::Args, Debug, Clone)]
 pub struct IngestionConfig {
     /// Remote Store to fetch checkpoints from.
-    #[arg(long, required = true, group = "source")]
-    remote_store_url: Option<Url>,
+    #[arg(long)]
+    pub remote_store_url: Option<Url>,
 
     /// Path to the local ingestion directory.
     /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
-    #[arg(long, required = true, group = "source")]
-    local_ingestion_path: Option<PathBuf>,
+    #[arg(long)]
+    pub local_ingestion_path: Option<PathBuf>,
 
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
-    #[arg(long, default_value_t = 5000)]
-    checkpoint_buffer_size: usize,
+    #[arg(long, default_value_t = Self::DEFAULT_CHECKPOINT_BUFFER_SIZE)]
+    pub checkpoint_buffer_size: usize,
 
     /// Maximum number of checkpoints to attempt to fetch concurrently.
-    #[arg(long, default_value_t = 200)]
-    ingest_concurrency: usize,
+    #[arg(long, default_value_t = Self::DEFAULT_INGEST_CONCURRENCY)]
+    pub ingest_concurrency: usize,
 
     /// Polling interval to retry fetching checkpoints that do not exist.
     #[arg(
@@ -64,7 +64,13 @@ pub struct IngestionConfig {
         value_name = "MILLISECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_millis)
     )]
-    retry_interval: Duration,
+    pub retry_interval: Duration,
+}
+
+impl IngestionConfig {
+    pub const DEFAULT_CHECKPOINT_BUFFER_SIZE: usize = 5000;
+    pub const DEFAULT_INGEST_CONCURRENCY: usize = 200;
+    pub const DEFAULT_RETRY_INTERVAL: Duration = Duration::from_millis(200);
 }
 
 impl IngestionService {

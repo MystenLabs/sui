@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::benchmark::BenchmarkConfig;
 use crate::db::DbConfig;
 use crate::IndexerConfig;
 use clap::Subcommand;
@@ -25,4 +26,6 @@ pub enum Command {
         #[clap(long, default_value_t = false)]
         skip_migrations: bool,
     },
+    /// Run the benchmark.
+    Benchmark(BenchmarkConfig),
 }

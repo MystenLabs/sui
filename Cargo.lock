@@ -13915,6 +13915,7 @@ dependencies = [
  "reqwest 0.12.5",
  "serde",
  "sui-storage",
+ "sui-synthetic-ingestion",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",

@@ -3,6 +3,14 @@
 
 use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
+use crate::handlers::ev_emit_mod::EvEmitMod;
+use crate::handlers::ev_struct_inst::EvStructInst;
+use crate::handlers::kv_checkpoints::KvCheckpoints;
+use crate::handlers::kv_objects::KvObjects;
+use crate::handlers::kv_transactions::KvTransactions;
+use crate::handlers::sum_obj_types::SumObjTypes;
+use crate::handlers::tx_affected_objects::TxAffectedObjects;
+use crate::handlers::tx_balance_changes::TxBalanceChanges;
 use anyhow::{Context, Result};
 use db::{Db, DbConfig};
 use ingestion::{IngestionConfig, IngestionService};
@@ -15,6 +23,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub mod args;
+pub mod benchmark;
 pub mod db;
 pub mod handlers;
 pub mod ingestion;
@@ -73,21 +82,25 @@ pub struct IndexerConfig {
     /// ingestion will start just after the lowest checkpoint watermark across all active
     /// pipelines.
     #[arg(long)]
-    first_checkpoint: Option<u64>,
+    pub first_checkpoint: Option<u64>,
 
     /// Override for the checkpoint to end ingestion at (inclusive) -- useful for backfills. By
     /// default, ingestion will not stop, and will continue to poll for new checkpoints.
     #[arg(long)]
-    last_checkpoint: Option<u64>,
+    pub last_checkpoint: Option<u64>,
 
     /// Only run the following pipelines -- useful for backfills. If not provided, all pipelines
     /// will be run.
     #[arg(long, action = clap::ArgAction::Append)]
-    pipeline: Vec<String>,
+    pub pipeline: Vec<String>,
 
     /// Address to serve Prometheus Metrics from.
-    #[arg(long, default_value = "0.0.0.0:9184")]
+    #[arg(long, default_value = Self::DEFAULT_METRICS_ADDRESS)]
     pub metrics_address: SocketAddr,
+}
+
+impl IndexerConfig {
+    pub const DEFAULT_METRICS_ADDRESS: &'static str = "0.0.0.0:9184";
 }
 
 impl Indexer {
@@ -192,6 +205,22 @@ impl Indexer {
         self.handles.push(committer);
 
         Ok(())
+    }
+
+    pub async fn register_pipelines(&mut self) -> Result<()> {
+        self.concurrent_pipeline::<EvEmitMod>().await?;
+        self.concurrent_pipeline::<EvStructInst>().await?;
+        self.concurrent_pipeline::<KvCheckpoints>().await?;
+        self.concurrent_pipeline::<KvObjects>().await?;
+        self.concurrent_pipeline::<KvTransactions>().await?;
+        self.concurrent_pipeline::<TxAffectedObjects>().await?;
+        self.concurrent_pipeline::<TxBalanceChanges>().await?;
+        self.sequential_pipeline::<SumObjTypes>().await?;
+        Ok(())
+    }
+
+    pub fn get_first_checkpoint_from_watermark(&self) -> u64 {
+        self.first_checkpoint_from_watermark
     }
 
     /// Start ingesting checkpoints. Ingestion either starts from the configured

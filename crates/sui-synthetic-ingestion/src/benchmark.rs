@@ -39,7 +39,7 @@ pub async fn run_benchmark<I: BenchmarkableIndexer>(
     }
 
     let mut rx = indexer.subscribe_to_committed_checkpoints();
-    let mut tps_tracker = TpsTracker::new(Duration::from_secs(1));
+    let mut tps_tracker = TpsTracker::new(config.starting_checkpoint - 1, Duration::from_secs(1));
     info!("Starting benchmark...");
     indexer.start().await;
 
