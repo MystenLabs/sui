@@ -152,7 +152,7 @@ impl Indexer {
             watermark,
             self.committer_config.clone(),
             self.db.clone(),
-            self.ingestion_service.subscribe(),
+            self.ingestion_service.subscribe().0,
             self.metrics.clone(),
             self.cancel.clone(),
         );
@@ -184,12 +184,14 @@ impl Indexer {
 
         info!(first_checkpoint, last_checkpoint = ?self.last_checkpoint, "Ingestion range");
 
-        self.handles.push(
-            self.ingestion_service
-                .run(first_checkpoint..=last_checkpoint)
-                .await
-                .context("Failed to start ingestion service")?,
-        );
+        let (regulator_handle, broadcaster_handle) = self
+            .ingestion_service
+            .run(first_checkpoint..=last_checkpoint)
+            .await
+            .context("Failed to start ingestion service")?;
+
+        self.handles.push(regulator_handle);
+        self.handles.push(broadcaster_handle);
 
         let cancel = self.cancel.clone();
         Ok(tokio::spawn(async move {
