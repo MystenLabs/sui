@@ -1245,9 +1245,9 @@ pub struct ProtocolConfig {
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
 
-    /// If true, congestion control will allow up to one transaction per object to exceed
-    /// the configured maximum accumulated cost.
-    congestion_control_allow_overage: Option<bool>,
+    /// If >0, congestion control will allow up to one transaction per object to exceed
+    /// the configured maximum accumulated cost by the given amount.
+    max_txn_cost_overage_per_object_in_commit: Option<u64>,
 
     /// Minimum interval of commit timestamps between consecutive checkpoints.
     min_checkpoint_interval_ms: Option<u64>,
@@ -2137,7 +2137,7 @@ impl ProtocolConfig {
 
             max_deferral_rounds_for_congestion_control: None,
 
-            congestion_control_allow_overage: None,
+            max_txn_cost_overage_per_object_in_commit: None,
 
             min_checkpoint_interval_ms: None,
 

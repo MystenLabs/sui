@@ -2846,10 +2846,10 @@ impl AuthorityPerEpochStore {
             .protocol_config()
             .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
             .unwrap_or(0);
-        let congestion_control_allow_overage = self
+        let max_txn_cost_overage_per_object_in_commit = self
             .protocol_config()
-            .congestion_control_allow_overage_as_option()
-            .unwrap_or(false);
+            .max_txn_cost_overage_per_object_in_commit_as_option()
+            .unwrap_or(0);
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
             tables.load_initial_object_debts(
                 consensus_commit_info.round,
@@ -2862,7 +2862,7 @@ impl AuthorityPerEpochStore {
                 .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
             self.protocol_config()
                 .gas_budget_based_txn_cost_cap_factor_as_option(),
-            congestion_control_allow_overage,
+            max_txn_cost_overage_per_object_in_commit,
         );
         let shared_object_using_randomness_congestion_tracker = SharedObjectCongestionTracker::new(
             tables.load_initial_object_debts(
@@ -2876,7 +2876,7 @@ impl AuthorityPerEpochStore {
                 .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
             self.protocol_config()
                 .gas_budget_based_txn_cost_cap_factor_as_option(),
-            congestion_control_allow_overage,
+            max_txn_cost_overage_per_object_in_commit,
         );
 
         // We always order transactions using randomness last.

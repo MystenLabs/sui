@@ -462,7 +462,7 @@ mod test {
         let txn_count_limit; // When using transaction count as congestion control mode, the limit of transactions per object per commit.
         let max_deferral_rounds;
         let cap_factor_denominator;
-        let allow_overage;
+        let allow_overage_factor;
         {
             let mut rng = thread_rng();
             mode = if rng.gen_bool(0.33) {
@@ -481,7 +481,11 @@ mod test {
             } else {
                 rng.gen_range(1000..10000) // Large deferral round (testing liveness)
             };
-            allow_overage = rng.gen_bool(0.5);
+            allow_overage_factor = if rng.gen_bool(0.5) {
+                0
+            } else {
+                rng.gen_range(1..100)
+            };
 
             cap_factor_denominator = rng.gen_range(1..100);
         }
@@ -522,7 +526,9 @@ mod test {
                 },
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
-            config.set_congestion_control_allow_overage_for_testing(allow_overage);
+            config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
+                allow_overage_factor * total_gas_limit,
+            );
             config
         });
 
