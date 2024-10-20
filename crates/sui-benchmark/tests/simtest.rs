@@ -494,17 +494,17 @@ mod test {
             "test_simulated_load_shared_object_congestion_control setup.
              mode: {mode:?}, checkpoint_budget_factor: {checkpoint_budget_factor:?},
              max_deferral_rounds: {max_deferral_rounds:?},
-             txn_count_limit: {txn_count_limit:?}, allow_overage: {allow_overage:?}",
+             txn_count_limit: {txn_count_limit:?}, allow_overage_factor: {allow_overage_factor:?}",
         );
 
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
+            let total_gas_limit = checkpoint_budget_factor
+                * DEFAULT_VALIDATOR_GAS_PRICE
+                * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
             config.set_per_object_congestion_control_mode_for_testing(mode);
             match mode {
                 PerObjectCongestionControlMode::None => panic!("Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"),
                 PerObjectCongestionControlMode::TotalGasBudget => {
-                    let total_gas_limit = checkpoint_budget_factor
-                        * DEFAULT_VALIDATOR_GAS_PRICE
-                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
                 },
@@ -517,9 +517,6 @@ mod test {
                     );
                 },
                 PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
-                    let total_gas_limit = checkpoint_budget_factor
-                        * DEFAULT_VALIDATOR_GAS_PRICE
-                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
                     config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit/cap_factor_denominator);
