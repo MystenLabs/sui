@@ -100,7 +100,7 @@ impl IngestionService {
     ///
     /// The ingestion service can optionally receive checkpoint high watermarks from its
     /// subscribers. If a subscriber provides a watermark, the ingestion service will commit to not
-    /// run ahead of the watermark by more than the [IngestionConfig::buffer_size].
+    /// run ahead of the watermark by more than the config's buffer_size.
     ///
     /// Returns the channel to receive checkpoints from and the channel to accept watermarks from.
     pub fn subscribe(
