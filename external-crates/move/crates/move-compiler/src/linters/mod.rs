@@ -15,10 +15,10 @@ pub mod abort_constant;
 pub mod constant_naming;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
-pub mod needless_else;
 pub mod redundant_ref_deref;
 pub mod self_assignment;
 pub mod unnecessary_conditional;
+pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
 
