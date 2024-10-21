@@ -114,6 +114,15 @@ CheckpointData:
     - transactions:
         SEQ:
           TYPENAME: CheckpointTransaction
+CheckpointDataV2:
+  STRUCT:
+    - checkpoint_summary:
+        TYPENAME: "sui_types::message_envelope::Envelope<sui_types::messages_checkpoint::CheckpointSummary, sui_types::crypto::AuthorityQuorumSignInfo<true>>"
+    - checkpoint_contents:
+        TYPENAME: CheckpointContents
+    - transactions:
+        SEQ:
+          TYPENAME: CheckpointTransactionV2
 CheckpointDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -142,6 +151,21 @@ CheckpointTransaction:
   STRUCT:
     - transaction:
         TYPENAME: "sui_types::message_envelope::Envelope<sui_types::transaction::SenderSignedData, sui_types::crypto::EmptySignInfo>"
+    - effects:
+        TYPENAME: TransactionEffects
+    - events:
+        OPTION:
+          TYPENAME: TransactionEvents
+    - input_objects:
+        SEQ:
+          TYPENAME: Object
+    - output_objects:
+        SEQ:
+          TYPENAME: Object
+CheckpointTransactionV2:
+  STRUCT:
+    - transaction:
+        TYPENAME: TransactionData
     - effects:
         TYPENAME: TransactionEffects
     - events:
@@ -535,6 +559,12 @@ FullCheckpointContents:
         SEQ:
           SEQ:
             TYPENAME: GenericSignature
+FullCheckpointData:
+  ENUM:
+    0:
+      V2:
+        NEWTYPE:
+          TYPENAME: CheckpointDataV2
 GasCostSummary:
   STRUCT:
     - computationCost: U64

@@ -10,7 +10,7 @@ use crate::transactions::ExecuteTransactionQueryParameters;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::{CheckpointData, FullCheckpointData};
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
@@ -42,6 +42,26 @@ impl Client {
             .and_then(|checkpoint| checkpoint.try_into().map_err(Into::into))
     }
 
+    pub async fn get_full_checkpoint_data(
+        &self,
+        checkpoint_sequence_number: CheckpointSequenceNumber,
+    ) -> Result<FullCheckpointData> {
+        let url = self
+            .inner
+            .url()
+            .join(&format!("checkpoints/{checkpoint_sequence_number}/full"))?;
+
+        let response = self
+            .inner
+            .client()
+            .get(url)
+            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
+            .send()
+            .await?;
+
+        self.inner.bcs(response).await.map(Response::into_inner)
+    }
+
     pub async fn get_full_checkpoint(
         &self,
         checkpoint_sequence_number: CheckpointSequenceNumber,
@@ -59,7 +79,13 @@ impl Client {
             .send()
             .await?;
 
-        self.inner.bcs(response).await.map(Response::into_inner)
+        let bytes = self.inner.bytes(response).await.map(Response::into_inner)?;
+
+        // For compatibility reasons, while we're rolling out this change, try both formats
+        bcs::from_bytes::<FullCheckpointData>(&bytes)
+            .map(Into::into)
+            .or_else(|_| bcs::from_bytes::<CheckpointData>(&bytes))
+            .map_err(Into::into)
     }
 
     pub async fn get_checkpoint_summary(
