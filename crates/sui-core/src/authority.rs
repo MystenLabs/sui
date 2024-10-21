@@ -1219,7 +1219,13 @@ impl AuthorityState {
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
         }
 
-        self.notify_read_effects(*certificate.digest()).await
+        // tx could be reverted when epoch ends, so we must be careful not to return a result
+        // here after the epoch ends.
+        epoch_store
+            .within_alive_epoch(self.notify_read_effects(*certificate.digest()))
+            .await
+            .map_err(|_| SuiError::EpochEnded(epoch_store.epoch()))
+            .and_then(|r| r)
     }
 
     /// Awaits the effects of executing a user transaction.
@@ -1228,12 +1234,20 @@ impl AuthorityState {
     pub async fn await_transaction_effects(
         &self,
         digest: TransactionDigest,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<TransactionEffects> {
         let _metrics_guard = self.metrics.await_transaction_latency.start_timer();
         debug!("await_transaction");
 
         // TODO(fastpath): Add handling for transactions rejected by Mysticeti fast path.
-        self.notify_read_effects(digest).await
+        // TODO(fastpath): Can an MFP transaction be reverted after epoch ends? If so,
+        // same warning as above applies: We must be careful not to return a result
+        // here after the epoch ends.
+        epoch_store
+            .within_alive_epoch(self.notify_read_effects(digest))
+            .await
+            .map_err(|_| SuiError::EpochEnded(epoch_store.epoch()))
+            .and_then(|r| r)
     }
 
     /// Internal logic to execute a certificate.
@@ -3164,6 +3178,9 @@ impl AuthorityState {
 
         self.committee_store.insert_new_committee(&new_committee)?;
         let mut execution_lock = self.execution_lock_for_reconfiguration().await;
+
+        cur_epoch_store.epoch_terminated().await;
+
         // TODO: revert_uncommitted_epoch_transactions will soon be unnecessary -
         // clear_state_end_of_epoch() can simply drop all uncommitted transactions
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
@@ -5177,7 +5194,6 @@ impl AuthorityState {
             cur_epoch_store.get_chain_identifier(),
         );
         self.epoch_store.store(new_epoch_store.clone());
-        cur_epoch_store.epoch_terminated().await;
         Ok(new_epoch_store)
     }
 
