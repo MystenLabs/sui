@@ -898,18 +898,6 @@ impl AuthorityPerEpochStore {
             randomness_reporter: OnceCell::new(),
         });
 
-        if matches!(chain_identifier.chain(), Chain::Mainnet | Chain::Testnet) {
-            // If we disable randomness, and if the release in which it was disabled did not have
-            // the commit that added this comment, we will need to revert this commit. This is
-            // because the previous release will have been writing to the deprecated
-            // assigned_shared_object_versions table.
-            //
-            // If we disable randomness *after* this commit has been shipped to all networks, then
-            // we can simply remove this assert, as we will no longer switch back and forth between
-            // the two tables.
-            assert!(s.randomness_state_enabled());
-        }
-
         s.update_buffer_stake_metric();
         s
     }
