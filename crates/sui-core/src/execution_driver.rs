@@ -108,35 +108,58 @@ pub async fn execution_process(
 
         // Certificate execution can take significant time, so run it in a separate task.
         let epoch_store_clone = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
-            let _scope = monitored_scope("ExecutionDriver::task");
-            let _guard = permit;
-            if let Ok(true) = authority.is_tx_already_executed(&digest) {
-                return;
-            }
-            let mut attempts = 0;
-            loop {
-                fail_point_async!("transaction_execution_delay");
-                attempts += 1;
-                let res = authority
-                    .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store_clone)
-                    .await;
-                if let Err(e) = res {
-                    if attempts == EXECUTION_MAX_ATTEMPTS {
-                        panic!("Failed to execute certified transaction {digest:?} after {attempts} attempts! error={e} certificate={certificate:?}");
-                    }
-                    // Assume only transient failure can happen. Permanent failure is probably
-                    // a bug. There is nothing that can be done to recover from permanent failures.
-                    error!(tx_digest=?digest, "Failed to execute certified transaction {digest:?}! attempt {attempts}, {e}");
-                    sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
-                } else {
-                    break;
+        spawn_monitored_task!(epoch_store.within_alive_epoch(
+            async move {
+                let _scope = monitored_scope("ExecutionDriver::task");
+                let _guard = permit;
+                if let Ok(true) = authority.is_tx_already_executed(&digest) {
+                    return;
                 }
+
+                fail_point_async!("delay");
+                authority
+                    .try_execute_immediately(
+                        &certificate,
+                        expected_effects_digest,
+                        &epoch_store_clone,
+                    )
+                    .await
+                    .expect("Failed to execute certified transaction");
+
+                /*
+                if cfg!(debug_assertions) {
+                    authority
+                        .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store_clone)
+                        .await
+                        .expect("Failed to execute certified transaction");
+                } else {
+                    let mut attempts = 0;
+                    loop {
+                        fail_point_async!("transaction_execution_delay");
+                        attempts += 1;
+                        let res = authority
+                            .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store_clone)
+                            .await;
+                        if let Err(e) = res {
+                            if attempts == EXECUTION_MAX_ATTEMPTS {
+                                panic!("Failed to execute certified transaction {digest:?} after {attempts} attempts! error={e} certificate={certificate:?}");
+                            }
+                            // Assume only transient failure can happen. Permanent failure is probably
+                            // a bug. There is nothing that can be done to recover from permanent failures.
+                            error!(tx_digest=?digest, "Failed to execute certified transaction {digest:?}! attempt {attempts}, {e}");
+                            sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                */
+                authority
+                    .metrics
+                    .execution_driver_executed_transactions
+                    .inc();
             }
-            authority
-                .metrics
-                .execution_driver_executed_transactions
-                .inc();
-        }.instrument(error_span!("execution_driver", tx_digest = ?digest))));
+            .instrument(error_span!("execution_driver", tx_digest = ?digest))
+        ));
     }
 }

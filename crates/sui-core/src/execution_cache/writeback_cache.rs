@@ -468,6 +468,15 @@ impl WritebackCache {
             .entry(*object_id)
             .or_default()
             .insert(version, object.clone());
+
+        fail_point_async!("write_object_entry");
+
+        // with 5% probability, sleep the current thread for 50µs
+        if rand::random::<f64>() < 0.05 {
+            std::thread::sleep(std::time::Duration::from_micros(50));
+        }
+
+        // YYY insert cache
         self.cached.object_by_id_cache.insert(
             *object_id,
             Arc::new(Mutex::new(LatestObjectCacheEntry::Object(version, object))),
@@ -574,6 +583,8 @@ impl WritebackCache {
     ) -> CacheResult<(SequenceNumber, ObjectEntry)> {
         self.metrics
             .record_cache_request(request_type, "object_by_id");
+
+        // YYY read cache
         let entry = self.cached.object_by_id_cache.get(object_id);
 
         if cfg!(debug_assertions) {
@@ -1074,6 +1085,8 @@ impl WritebackCache {
     fn cache_latest_object_by_id(&self, object_id: &ObjectID, object: LatestObjectCacheEntry) {
         trace!("caching object by id: {:?} {:?}", object_id, object);
         self.metrics.record_cache_write("object_by_id");
+
+        // YYY insert
         // Warning: tricky code!
         let entry = self
             .cached
@@ -1410,6 +1423,7 @@ impl ObjectCacheRead for WritebackCache {
         // if we have the latest version cached, and it is within the bound, we are done
         self.metrics
             .record_cache_request("object_lt_or_eq_version", "object_by_id");
+        // YYY read
         if let Some(latest) = self.cached.object_by_id_cache.get(&object_id) {
             let latest = latest.lock();
             match &*latest {
