@@ -1,6 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Allow use of `unbounded_channel` in `ingestion` -- it is used by the regulator task to receive
+// feedback. Traffic through this task should be minimal, but if a bound is applied to it and that
+// bound is hit, the indexer could deadlock.
+#![allow(clippy::disallowed_methods)]
+
 use std::{sync::Arc, time::Duration};
 
 use broadcaster::broadcaster;
