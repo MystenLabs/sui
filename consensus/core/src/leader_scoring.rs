@@ -129,6 +129,10 @@ impl ReputationScores {
         }
     }
 
+    pub(crate) fn highest_score(&self) -> u64 {
+        *self.scores_per_authority.iter().max().unwrap_or(&0)
+    }
+
     // Returns the authorities index with score tuples.
     pub(crate) fn authorities_by_score(&self, context: Arc<Context>) -> Vec<(AuthorityIndex, u64)> {
         self.scores_per_authority
@@ -258,17 +262,9 @@ impl ScoringSubdag {
     }
 
     // Iterate through votes and calculate scores for each authority based on
-    // scoring strategy that is used. (Vote or CertifiedVote)
-    pub(crate) fn calculate_scores(&self) -> ReputationScores {
-        let _s = self
-            .context
-            .metrics
-            .node_metrics
-            .scope_processing_time
-            .with_label_values(&["ScoringSubdag::calculate_scores"])
-            .start_timer();
-
-        let scores_per_authority = self.score_distributed_votes();
+    // distributed vote scoring strategy.
+    pub(crate) fn calculate_distributed_vote_scores(&self) -> ReputationScores {
+        let scores_per_authority = self.distributed_votes_scores();
 
         // TODO: Normalize scores
         ReputationScores::new(
@@ -283,7 +279,15 @@ impl ScoringSubdag {
     /// Instead of only giving one point for each vote that is included in 2f+1
     /// blocks. We give a score equal to the amount of stake of all blocks that
     /// included the vote.
-    fn score_distributed_votes(&self) -> Vec<u64> {
+    fn distributed_votes_scores(&self) -> Vec<u64> {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["ScoringSubdag::score_distributed_votes"])
+            .start_timer();
+
         let num_authorities = self.context.committee.size();
         let mut scores_per_authority = vec![0_u64; num_authorities];
 
@@ -295,29 +299,6 @@ impl ScoringSubdag {
                 self.context.own_index,
             );
             scores_per_authority[authority.value()] += stake;
-        }
-        scores_per_authority
-    }
-
-    /// This scoring strategy gives points equal to the amount of stake in blocks
-    /// that include the authority's vote, if that amount of total_stake > 2f+1.
-    /// We consider this a certified vote.
-    // TODO: This will be used for ancestor selection
-    #[allow(unused)]
-    fn score_certified_votes(&self) -> Vec<u64> {
-        let num_authorities = self.context.committee.size();
-        let mut scores_per_authority = vec![0_u64; num_authorities];
-
-        for (vote, stake_agg) in self.votes.iter() {
-            let authority = vote.author;
-            if stake_agg.reached_threshold(&self.context.committee) {
-                let stake = stake_agg.stake();
-                tracing::trace!(
-                    "[{}] scores +{stake} reputation for {authority}!",
-                    self.context.own_index,
-                );
-                scores_per_authority[authority.value()] += stake;
-            }
         }
         scores_per_authority
     }
@@ -555,39 +536,9 @@ mod tests {
             scoring_subdag.add_subdags(vec![sub_dag]);
         }
 
-        let scores = scoring_subdag.calculate_scores();
+        let scores = scoring_subdag.calculate_distributed_vote_scores();
         assert_eq!(scores.scores_per_authority, vec![5, 5, 5, 5]);
         assert_eq!(scores.commit_range, (1..=4).into());
-    }
-
-    #[tokio::test]
-    async fn test_certified_vote_scoring_subdag() {
-        telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4).0);
-
-        // Populate fully connected test blocks for round 0 ~ 3, authorities 0 ~ 3.
-        let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder.layers(1..=3).build();
-        // Build round 4 but with just the leader block
-        dag_builder
-            .layer(4)
-            .authorities(vec![
-                AuthorityIndex::new_for_test(1),
-                AuthorityIndex::new_for_test(2),
-                AuthorityIndex::new_for_test(3),
-            ])
-            .skip_block()
-            .build();
-
-        let mut scoring_subdag = ScoringSubdag::new(context.clone());
-
-        for (sub_dag, _commit) in dag_builder.get_sub_dag_and_commits(1..=4) {
-            scoring_subdag.add_subdags(vec![sub_dag]);
-        }
-
-        let scores_per_authority = scoring_subdag.score_certified_votes();
-        assert_eq!(scores_per_authority, vec![4, 4, 4, 4]);
-        assert_eq!(scoring_subdag.commit_range.unwrap(), (1..=4).into());
     }
 
     // TODO: Remove all tests below this when DistributedVoteScoring is enabled.
