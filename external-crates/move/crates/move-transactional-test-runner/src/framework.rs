@@ -18,7 +18,6 @@ use move_command_line_common::{
     env::read_bool_env_var,
     files::{MOVE_EXTENSION, MOVE_IR_EXTENSION},
     testing::{add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT},
-    types::ParsedType,
     values::{ParsableValue, ParsedValue},
 };
 use move_compiler::{
@@ -87,10 +86,12 @@ impl CompiledState {
             .collect()
     }
 
-    pub fn resolve_type_args(&self, type_args: Vec<ParsedType>) -> Result<Vec<TypeTag>> {
+    pub fn resolve_type_args(&self, type_args: Vec<String>) -> Result<Vec<TypeTag>> {
         type_args
             .into_iter()
-            .map(|arg| arg.into_type_tag(&|s| Some(self.resolve_named_address(s))))
+            .map(|arg| {
+                TypeTag::parse_with_address_resolver(&arg, &|s| Some(self.resolve_named_address(s)))
+            })
             .collect()
     }
 }

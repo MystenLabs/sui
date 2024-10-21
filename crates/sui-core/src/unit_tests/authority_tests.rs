@@ -11,7 +11,6 @@ use move_binary_format::{
 };
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
-use move_core_types::parser::parse_type_tag;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
@@ -24,7 +23,7 @@ use rand::{
 use serde_json::json;
 use std::collections::HashSet;
 use std::fs;
-use std::{convert::TryInto, env};
+use std::{convert::TryInto, env, str::FromStr};
 
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
@@ -3674,7 +3673,7 @@ async fn test_dynamic_field_struct_name_parsing() {
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
     assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
     assert_eq!(
-        parse_type_tag("0x0::object_basics::Name").unwrap(),
+        TypeTag::from_str("0x0::object_basics::Name").unwrap(),
         fields[0].name.type_
     )
 }
@@ -3686,7 +3685,10 @@ async fn test_dynamic_field_bytearray_name_parsing() {
 
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(parse_type_tag("vector<u8>").unwrap(), fields[0].name.type_);
+    assert_eq!(
+        TypeTag::from_str("vector<u8>").unwrap(),
+        fields[0].name.type_
+    );
     assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
 }
 
@@ -3697,7 +3699,7 @@ async fn test_dynamic_field_address_name_parsing() {
 
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(parse_type_tag("address").unwrap(), fields[0].name.type_);
+    assert_eq!(TypeTag::from_str("address").unwrap(), fields[0].name.type_);
     assert_eq!(json!(sender), fields[0].name.value);
 }
 
@@ -3709,7 +3711,7 @@ async fn test_dynamic_object_field_struct_name_parsing() {
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
     assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
     assert_eq!(
-        parse_type_tag("0x0::object_basics::Name").unwrap(),
+        TypeTag::from_str("0x0::object_basics::Name").unwrap(),
         fields[0].name.type_
     )
 }
@@ -3721,7 +3723,10 @@ async fn test_dynamic_object_field_bytearray_name_parsing() {
 
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
-    assert_eq!(parse_type_tag("vector<u8>").unwrap(), fields[0].name.type_);
+    assert_eq!(
+        TypeTag::from_str("vector<u8>").unwrap(),
+        fields[0].name.type_
+    );
     assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
 }
 
@@ -3732,7 +3737,7 @@ async fn test_dynamic_object_field_address_name_parsing() {
 
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
-    assert_eq!(parse_type_tag("address").unwrap(), fields[0].name.type_);
+    assert_eq!(TypeTag::from_str("address").unwrap(), fields[0].name.type_);
     assert_eq!(json!(sender), fields[0].name.value);
 }
 

@@ -141,7 +141,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Bad type: unexpected token Name(\"not_a_type\"), expected type tag",
+      "message": "Bad type: Invalid type tag 'not_a_type': Unbound named address: 'not_a_type'",
       "locations": [
         {
           "line": 3,
