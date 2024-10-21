@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB58 } from '@mysten/bcs';
+import { toBase58 } from '@mysten/bcs';
 import { describe, expect, it } from 'vitest';
 
 import { Transaction } from '../../src/transactions';
@@ -17,7 +17,7 @@ describe('Transaction inputs', () => {
 				tx.receivingRef({
 					objectId: '1',
 					version: '123',
-					digest: toB58(new Uint8Array(32).fill(0x1)),
+					digest: toBase58(new Uint8Array(32).fill(0x1)),
 				}),
 				tx.sharedObjectRef({
 					objectId: '2',
@@ -27,7 +27,7 @@ describe('Transaction inputs', () => {
 				tx.objectRef({
 					objectId: '3',
 					version: '123',
-					digest: toB58(new Uint8Array(32).fill(0x1)),
+					digest: toBase58(new Uint8Array(32).fill(0x1)),
 				}),
 				tx.pure.address('0x2'),
 				tx.object.system(),

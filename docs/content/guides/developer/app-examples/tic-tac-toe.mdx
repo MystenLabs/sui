@@ -1,10 +1,11 @@
 ---
 title: Tic-Tac-Toe
+effort: small
 ---
 
 This guide covers three different implementations of the game tic-tac-toe on Sui. The first example utilizes a centralized admin that marks the board on the users’ behalf. The second example utilizes a shared object that both users can mutate. And the third example utilizes a multisig, where instead of sharing the game board, it's in a 1-of-2 multisig of both users’ accounts.
 
-## owned.move ([source](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/move/sources/owned.move))
+## owned.move
 
 In this first example of tic-tac-toe, the game object, including the game board, is controlled by a game admin.
 
@@ -33,12 +34,12 @@ An alternative version of this game, shared tic-tac-toe, uses shared objects for
 
 <details>
 <summary>
-Toggle full source code
+`owned.move`
 </summary>
 {@inject: examples/tic-tac-toe/move/sources/owned.move}
 </details>
 
-## shared.move ([source](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/move/sources/shared.move))
+## shared.move
 
 In the previous version, the admin owned the game object, preventing players from directly changing the gameboard, as well as requiring two transactions for each marker placement. In this version, the game object is a shared object, allowing both players to access and modify it directly, enabling them to place markers in just one transaction. However, using a shared object generally incurs extra costs because Sui needs to sequence the operations from different transactions. In the context of this game, where players are expected to take turns, this shouldn't significantly impact performance. Overall, this shared object approach simplifies the implementation compared to the previous method.
 
@@ -56,7 +57,7 @@ Instead of the game being sent to the game admin, it is instantiated as a shared
 
 <details>
 <summary>
-Toggle full source code
+`shared.move`
 </summary>
 {@inject: examples/tic-tac-toe/move/sources/shared.move}
 </details>
@@ -67,7 +68,7 @@ Multisig tic-tac-toe uses the same Move code as the owned version of the game, b
 
 In this implementation of the game, the game is in a 1-of-2 multisig account that acts as the game admin. In this particular case, because there are only two players, the previous example is a more convenient use case. However, this example illustrates that in some cases, a multisig can replace shared objects, thus allowing transactions to bypass consensus when using such an implementation.
 
-### Creating a multisig account ([source](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui/src/MultiSig.ts))
+### Creating a multisig account
 
 A multisig account is defined by the public keys of its constituent keypairs, their relative weights, and the threshold -- a signature is valid if the sum of weights of constituent keys having signed the signature exceeds the threshold. In our case, there are at most two constituent keypairs, they each have a weight of 1 and the threshold is also 1. A multisig cannot mention the same public key twice, so keys are deduplicated before the multisig is formed to deal with the case where a player is playing themselves:
 
@@ -89,7 +90,7 @@ export function multiSigPublicKey(keys: PublicKey[]): MultiSigPublicKey {
 
 <details>
 <summary>
-Toggle full source code
+`MultiSig.ts`
 </summary>
 {@inject: examples/tic-tac-toe/ui/src/MultiSig.ts}
 </details>
@@ -122,12 +123,12 @@ newMultiSigGame(player: PublicKey, opponent: PublicKey): Transaction {
 
 <details>
 <summary>
-Toggle full source code
+`useTransactions.ts`
 </summary>
 {@inject: examples/tic-tac-toe/ui/src/hooks/useTransactions.ts}
 </details>
 
-### Placing a mark ([source](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui/src/pages/Game.tsx))
+### Placing a mark
 
 Placing a mark requires two transactions, just like the owned example, but they are both driven by one of the players. The first transaction is executed by the player as themselves, to send the mark to the game, and the second is executed by the player acting as the admin to place the mark they just sent. In the React frontend, this is performed as follows:
 
@@ -198,7 +199,7 @@ function OwnedGame({
 
 <details>
 <summary>
-Toggle full source code
+`Game.tsx`
 </summary>
 {@inject: examples/tic-tac-toe/ui/src/pages/Game.tsx}
 </details>

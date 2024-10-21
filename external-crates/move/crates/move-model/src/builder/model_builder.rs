@@ -74,6 +74,7 @@ pub(crate) struct ConstEntry {
     pub loc: Loc,
     pub ty: Type,
     pub value: Value,
+    pub attributes: Vec<Attribute>,
 }
 
 impl<'env> ModelBuilder<'env> {

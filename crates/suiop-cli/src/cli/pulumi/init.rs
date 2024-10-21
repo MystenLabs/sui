@@ -12,6 +12,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, warn};
 
+#[derive(clap::Subcommand, Clone, Debug)]
 pub enum ProjectType {
     App,
     Service,
@@ -295,11 +296,10 @@ fn create_basic_project(
     );
     fs::create_dir_all(project_dir).context("failed to create project directory")?;
     // initialize pulumi project
-    run_pulumi_new(project_name, project_dir_str, project_opts).map_err(|e| {
+    run_pulumi_new(project_name, project_dir_str, project_opts).inspect_err(|_| {
         remove_project_dir(project_dir).unwrap();
         let backend = get_current_backend().unwrap();
         remove_stack(&backend, project_name, "mysten/dev").unwrap();
-        e
     })?;
     // run go mod tidy to make sure all dependencies are installed
     run_go_mod_tidy(project_dir_str)?;
@@ -323,11 +323,10 @@ fn create_mysten_k8s_project(
     fs::create_dir_all(project_dir).context("failed to create project directory")?;
     // initialize pulumi project
     run_pulumi_new_from_template(project_name, project_dir_str, project_type, project_opts)
-        .map_err(|e| {
+        .inspect_err(|_| {
             remove_project_dir(project_dir).unwrap();
             let backend = get_current_backend().unwrap();
             remove_stack(&backend, project_name, "mysten/dev").unwrap();
-            e
         })?;
     // run go mod tidy to make sure all dependencies are installed
     run_go_mod_tidy(project_dir_str)?;
@@ -360,12 +359,11 @@ fn get_encryption_key_id(project_name: &str) -> Result<String> {
         ],
         None,
     )
-    .map_err(|e| {
+    .inspect_err(|_| {
         error!(
             "Cannot list KMS keys, please add your Google account to {}",
             "pulumi/meta/gcp-iam-automation/config.toml".bright_yellow()
         );
-        e
     })?;
     let stdout_str = String::from_utf8(output.stdout)?;
     let keys: Vec<KMSKey> = serde_json::from_str(&stdout_str)?;

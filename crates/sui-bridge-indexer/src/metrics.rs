@@ -17,11 +17,11 @@ pub struct BridgeIndexerMetrics {
     pub(crate) total_eth_bridge_transactions: IntCounter,
     pub(crate) total_eth_token_deposited: IntCounter,
     pub(crate) total_eth_token_transfer_claimed: IntCounter,
-    pub(crate) total_eth_bridge_txn_other: IntCounter,
     pub(crate) last_committed_sui_checkpoint: IntGauge,
     pub(crate) backfill_tasks_remaining_checkpoints: IntGaugeVec,
     pub(crate) tasks_processed_checkpoints: IntCounterVec,
-    pub(crate) tasks_current_checkpoints: IntGaugeVec,
+    pub(crate) tasks_latest_retrieved_checkpoints: IntGaugeVec,
+    pub(crate) inflight_live_tasks: IntGaugeVec,
 }
 
 impl BridgeIndexerMetrics {
@@ -75,12 +75,6 @@ impl BridgeIndexerMetrics {
                 registry,
             )
             .unwrap(),
-            total_eth_bridge_txn_other: register_int_counter_with_registry!(
-                "bridge_indexer_total_eth_bridge_txn_other",
-                "Total number of other eth bridge transactions",
-                registry,
-            )
-            .unwrap(),
             last_committed_sui_checkpoint: register_int_gauge_with_registry!(
                 "bridge_indexer_last_committed_sui_checkpoint",
                 "The latest sui checkpoint that indexer committed to DB",
@@ -101,10 +95,17 @@ impl BridgeIndexerMetrics {
                 registry,
             )
             .unwrap(),
-            tasks_current_checkpoints: register_int_gauge_vec_with_registry!(
-                "bridge_indexer_tasks_current_checkpoints",
-                "Current checkpoint for each task",
+            tasks_latest_retrieved_checkpoints: register_int_gauge_vec_with_registry!(
+                "bridge_indexer_tasks_latest_retrieved_checkpoints",
+                "latest retrieved checkpoint for each task",
                 &["task_name", "task_type"],
+                registry,
+            )
+            .unwrap(),
+            inflight_live_tasks: register_int_gauge_vec_with_registry!(
+                "bridge_indexer_inflight_live_tasks",
+                "Number of inflight live tasks",
+                &["task_name"],
                 registry,
             )
             .unwrap(),

@@ -60,7 +60,7 @@ module Test::M1 {
 # [2, 3, 4, 5, 6, 7, 8, 9, 10, 11] <- tx_sequence_number
 # [B, A, B, A, B, A, A, A, B, B]
 {
-  transactionBlocks(first: 50 filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 50 filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -89,7 +89,7 @@ module Test::M1 {
 # The cursor for the node will have `is_scan_limited` flag set to false, because we know for sure there is
 # a corresponding element for the cursor in the result set.
 {
-  transactionBlocks(first: 2 scanLimit: 2 filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 scanLimit: 2 filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -115,7 +115,7 @@ module Test::M1 {
 # Still paginating with `scanLimit`, both the start and end cursors should have `is_scan_limited` flag to true
 # because of the scanLimit of 4, startCursor = endCursor = 4
 {
-  transactionBlocks(first: 1 scanLimit: 1 after: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 1 scanLimit: 1 after: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -143,7 +143,7 @@ module Test::M1 {
 # instead of wrapping around the result set, the boundary cursors are pushed out
 # to the first and last transaction scanned in this query
 {
-  transactionBlocks(first: 3 scanLimit: 3 after: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 3 scanLimit: 3 after: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -171,7 +171,7 @@ module Test::M1 {
 # instead of returninng None, we set the boundary cursors
 # to the first and last transaction scanned in this query
 {
-  transactionBlocks(first: 2 scanLimit: 2 after: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 scanLimit: 2 after: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -198,7 +198,7 @@ module Test::M1 {
 # startCursor at 10, endCursor at 11
 # correctly detects we've reached the end of the upper bound
 {
-  transactionBlocks(first: 2 scanLimit: 2 after: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 2 scanLimit: 2 after: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -230,7 +230,7 @@ module Test::M1 {
 # regardless of the specified scanLimit
 # correctly detects we've reached the end of the upper bound
 {
-  transactionBlocks(first: 2 scanLimit: 2 after: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 5}) {
+  transactionBlocks(first: 2 scanLimit: 2 after: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 5}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -259,7 +259,7 @@ module Test::M1 {
 # there is a next page, which is the 12th tx, which should yield an empty set
 # per the filtering criteria
 {
-  transactionBlocks(last: 2 scanLimit: 2 before: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 5}) {
+  transactionBlocks(last: 2 scanLimit: 2 before: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 5}) {
     pageInfo {
       hasPreviousPage
       hasNextPage

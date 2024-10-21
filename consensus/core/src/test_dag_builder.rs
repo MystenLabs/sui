@@ -16,10 +16,11 @@ use crate::{
         genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot, TestBlock,
         VerifiedBlock,
     },
-    commit::{sort_sub_dag_blocks, CommitDigest, TrustedCommit, DEFAULT_WAVE_LENGTH},
+    commit::{CommitDigest, TrustedCommit, DEFAULT_WAVE_LENGTH},
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
+    linearizer::{BlockStoreAPI, Linearizer},
     CommittedSubDag,
 };
 
@@ -83,6 +84,9 @@ pub(crate) struct DagBuilder {
     // All blocks created by dag builder. Will be used to pretty print or to be
     // retrieved for testing/persiting to dag state.
     pub(crate) blocks: BTreeMap<BlockRef, VerifiedBlock>,
+    // All the committed sub dags created by the dag builder.
+    pub(crate) committed_sub_dags: Vec<(CommittedSubDag, TrustedCommit)>,
+    pub(crate) last_committed_rounds: Vec<Round>,
 
     wave_length: Round,
     number_of_leaders: u32,
@@ -100,6 +104,7 @@ impl DagBuilder {
             .collect();
         let last_ancestors = genesis.keys().cloned().collect();
         Self {
+            last_committed_rounds: vec![0; context.committee.size()],
             context,
             leader_schedule,
             wave_length: DEFAULT_WAVE_LENGTH,
@@ -108,6 +113,7 @@ impl DagBuilder {
             genesis,
             last_ancestors,
             blocks: BTreeMap::new(),
+            committed_sub_dags: vec![],
         }
     }
 
@@ -123,64 +129,108 @@ impl DagBuilder {
             .collect::<Vec<VerifiedBlock>>()
     }
 
-    // TODO: reuse logic from Linearizer.
-    pub(crate) fn get_sub_dag_and_commit(
-        &self,
-        leader_block: VerifiedBlock,
-        last_committed_rounds: Vec<Round>,
-        commit_index: u32,
-    ) -> (CommittedSubDag, TrustedCommit) {
-        let mut to_commit = Vec::new();
-        let mut committed = HashSet::new();
+    pub(crate) fn all_blocks(&self) -> Vec<VerifiedBlock> {
+        assert!(
+            !self.blocks.is_empty(),
+            "No blocks have been created, please make sure that you have called build method"
+        );
+        self.blocks.values().cloned().collect()
+    }
 
-        let timestamp_ms = leader_block.timestamp_ms();
-        let leader_block_ref = leader_block.reference();
-        let mut buffer = vec![leader_block];
-        assert!(committed.insert(leader_block_ref));
-        while let Some(x) = buffer.pop() {
-            to_commit.push(x.clone());
+    pub(crate) fn get_sub_dag_and_commits(
+        &mut self,
+        leader_rounds: RangeInclusive<Round>,
+    ) -> Vec<(CommittedSubDag, TrustedCommit)> {
+        let (last_leader_round, mut last_commit_index, mut last_timestamp_ms) =
+            if let Some((sub_dag, _)) = self.committed_sub_dags.last() {
+                (
+                    sub_dag.leader.round,
+                    sub_dag.commit_ref.index,
+                    sub_dag.timestamp_ms,
+                )
+            } else {
+                (0, 0, 0)
+            };
 
-            let ancestors = self.get_blocks(
-                &x.ancestors()
+        // Create any remaining committed sub dags
+        for leader_block in self
+            .leader_blocks(last_leader_round + 1..=*leader_rounds.end())
+            .into_iter()
+            .flatten()
+        {
+            let leader_block_ref = leader_block.reference();
+            last_commit_index += 1;
+            last_timestamp_ms = leader_block.timestamp_ms().max(last_timestamp_ms);
+
+            struct FooStorage {
+                gc_round: Round,
+                context: Arc<Context>,
+                blocks: BTreeMap<BlockRef, VerifiedBlock>,
+            }
+            impl BlockStoreAPI for FooStorage {
+                fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
+                    refs.iter()
+                        .map(|block_ref| self.blocks.get(block_ref).cloned())
+                        .collect()
+                }
+
+                fn gc_round(&self) -> Round {
+                    self.gc_round
+                }
+
+                fn gc_enabled(&self) -> bool {
+                    self.context.protocol_config.gc_depth() > 0
+                }
+            }
+            let storage = FooStorage {
+                context: self.context.clone(),
+                blocks: self.blocks.clone(),
+                gc_round: leader_block
+                    .round()
+                    .saturating_sub(1)
+                    .saturating_sub(self.context.protocol_config.gc_depth()),
+            };
+
+            let (to_commit, rejected_transactions) = Linearizer::linearize_sub_dag(
+                leader_block,
+                self.last_committed_rounds.clone(),
+                storage,
+            );
+
+            // Update the last committed rounds
+            for block in &to_commit {
+                self.last_committed_rounds[block.author()] =
+                    self.last_committed_rounds[block.author()].max(block.round());
+            }
+
+            let commit = TrustedCommit::new_for_test(
+                last_commit_index,
+                CommitDigest::MIN,
+                last_timestamp_ms,
+                leader_block_ref,
+                to_commit
                     .iter()
-                    .copied()
-                    .filter(|ancestor| {
-                        // We skip the block if we already committed it or we reached a
-                        // round that we already committed.
-                        !committed.contains(ancestor)
-                            && last_committed_rounds[ancestor.author] < ancestor.round
-                    })
+                    .map(|block| block.reference())
                     .collect::<Vec<_>>(),
             );
 
-            for ancestor in ancestors {
-                buffer.push(ancestor.clone());
-                assert!(committed.insert(ancestor.reference()));
-            }
+            let sub_dag = CommittedSubDag::new(
+                leader_block_ref,
+                to_commit,
+                rejected_transactions,
+                last_timestamp_ms,
+                commit.reference(),
+                vec![],
+            );
+
+            self.committed_sub_dags.push((sub_dag, commit));
         }
 
-        sort_sub_dag_blocks(&mut to_commit);
-
-        let commit = TrustedCommit::new_for_test(
-            commit_index,
-            CommitDigest::MIN,
-            timestamp_ms,
-            leader_block_ref,
-            to_commit
-                .iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        );
-
-        let sub_dag = CommittedSubDag::new(
-            leader_block_ref,
-            to_commit,
-            timestamp_ms,
-            commit.reference(),
-            vec![],
-        );
-
-        (sub_dag, commit)
+        self.committed_sub_dags
+            .clone()
+            .into_iter()
+            .filter(|(sub_dag, _)| leader_rounds.contains(&sub_dag.leader.round))
+            .collect()
     }
 
     pub(crate) fn leader_blocks(

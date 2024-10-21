@@ -37,7 +37,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlocks(filter: { signAddress: "@{A}" }) {
+  transactionBlocks(filter: { sentAddress: "@{A}" }) {
     nodes {
       effects{
         events {
@@ -46,8 +46,10 @@ module Test::M1 {
               sendingModule {
                 name
               }
-              json
-              bcs
+              contents {
+                json
+                bcs
+              }
             }
           }
         }
@@ -63,15 +65,17 @@ module Test::M1 {
       sendingModule {
         name
       }
-      json
-      bcs
+      contents {
+        json
+        bcs
+      }
     }
   }
 }
 
 //# run-graphql
 {
-  transactionBlocks(first: 1, filter: { signAddress: "@{A}" }) {
+  transactionBlocks(first: 1, filter: { sentAddress: "@{A}" }) {
     nodes {
       effects {
         events(last: 1) {
@@ -80,8 +84,10 @@ module Test::M1 {
               sendingModule {
                 name
               }
-              json
-              bcs
+              contents {
+                json
+                bcs
+              }
             }
           }
         }
@@ -92,7 +98,7 @@ module Test::M1 {
 
 //# run-graphql --cursors {"i":0,"c":1}
 {
-  transactionBlocks(last: 1, filter: { signAddress: "@{A}" }) {
+  transactionBlocks(last: 1, filter: { sentAddress: "@{A}" }) {
     nodes {
       effects {
         events(first: 2, after: "@{cursor_0}") {
@@ -101,8 +107,28 @@ module Test::M1 {
               sendingModule {
                 name
               }
-              json
-              bcs
+              contents {
+                json
+                bcs
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  transactionBlocks {
+    nodes {
+      digest
+      effects {
+        events {
+          nodes {
+            transactionBlock {
+              digest
             }
           }
         }

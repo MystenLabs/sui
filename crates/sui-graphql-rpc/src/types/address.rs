@@ -28,23 +28,10 @@ pub(crate) struct Address {
 /// The possible relationship types for a transaction block: sent, or received.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum AddressTransactionBlockRelationship {
-    /// Transactions this address has sent. NOTE: this input filter has been deprecated in favor of
-    /// `SENT` which behaves identically but is named more clearly. Both filters restrict
-    /// transactions by their sender, only, not signers in general.
-    ///
-    /// This filter will be removed with 1.36.0 (2024-10-14).
-    Sign,
     /// Transactions this address has sent.
     Sent,
-    /// Transactions that sent objects to this address. NOTE: this input filter has been deprecated
-    /// in favor of `AFFECTED`, which offers an easier to understand behavior.
-    ///
-    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-    /// `AFFECTED` is introduced, whichever is later.
-    Recv,
     /// Transactions that this address was involved in, either as the sender, sponsor, or as the
     /// owner of some object that was created, modified or transfered.
-    #[cfg(feature = "staging")]
     Affected,
 }
 
@@ -186,17 +173,11 @@ impl Address {
 
         let Some(filter) = filter.unwrap_or_default().intersect(match relation {
             // Relationship defaults to "sent" if none is supplied.
-            Some(R::Sign) | Some(R::Sent) | None => TransactionBlockFilter {
+            Some(R::Sent) | None => TransactionBlockFilter {
                 sent_address: Some(self.address),
                 ..Default::default()
             },
 
-            Some(R::Recv) => TransactionBlockFilter {
-                recv_address: Some(self.address),
-                ..Default::default()
-            },
-
-            #[cfg(feature = "staging")]
             Some(R::Affected) => TransactionBlockFilter {
                 affected_address: Some(self.address),
                 ..Default::default()

@@ -1,10 +1,23 @@
+import React, { useState, useEffect } from "react";
 import { useLocation } from "@docusaurus/router";
 import useGlobalData from '@docusaurus/useGlobalData';
 import Link from '@docusaurus/Link';
 
 export function DBV() {
+  const [showNotice, setShowNotice] = useState(false);
   const location = useLocation();
   const isV3 = location.pathname.includes("v3");
+  useEffect(() => {
+    const currentDate = new Date();
+    const endDate = new Date("2024-10-31T23:59:59");
+    // Don't show after October; remove if still here
+    if (currentDate <= endDate) {
+      setShowNotice(true);
+    } else {
+      setShowNotice(false);
+    }
+  }, []);
+  
 
   function DBLink() {
     return <Link href={isV3 ? "/standards/deepbookv2" : "/standards/deepbookv3"}>DeepBook{isV3 ? "V2" : "V3"} docs</Link>
@@ -12,7 +25,9 @@ export function DBV() {
 
   return (
     <>
-      This documentation is for <b>version {isV3 ? "3" : "2"}</b> of DeepBook. DeepBook{isV3 ? "V3" : "V2"} is currently available in {isV3 ? "Devnet and Testnet" : "Mainnet"}. For documentation on version {isV3 ? "2" : "3"} of DeepBook, see <DBLink />.  
+      { showNotice ? <p>DeepBookV3 is now available on Mainnet!</p> : "" }
+      <p>This documentation is for <b>version {isV3 ? "3" : "2"}</b> of DeepBook. For documentation on version {isV3 ? "2" : "3"} of DeepBook, see <DBLink />.
+      </p> 
     </>
   )
 

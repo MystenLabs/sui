@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Transaction } from '@mysten/sui/transactions';
-import { toB64 } from '@mysten/sui/utils';
+import { toBase64 } from '@mysten/sui/utils';
 import type {
 	SuiSignAndExecuteTransactionInput,
 	SuiSignAndExecuteTransactionOutput,
@@ -100,7 +100,7 @@ export function useSignAndExecuteTransaction<
 			return {
 				digest,
 				rawEffects,
-				effects: toB64(new Uint8Array(rawEffects!)),
+				effects: toBase64(new Uint8Array(rawEffects!)),
 				bytes,
 				signature,
 			};
@@ -153,7 +153,7 @@ export function useSignAndExecuteTransaction<
 			if ('effects' in result && result.effects?.bcs) {
 				effects = result.effects.bcs;
 			} else if ('rawEffects' in result) {
-				effects = toB64(new Uint8Array(result.rawEffects!));
+				effects = toBase64(new Uint8Array(result.rawEffects!));
 			} else {
 				throw new Error('Could not parse effects from transaction result.');
 			}

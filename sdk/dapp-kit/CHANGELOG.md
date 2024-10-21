@@ -1,5 +1,57 @@
 # @mysten/dapp-kit
 
+## 0.14.27
+
+### Patch Changes
+
+- Updated dependencies [477d2a4]
+  - @mysten/sui@1.13.0
+  - @mysten/wallet-standard@0.13.8
+  - @mysten/zksend@0.11.8
+
+## 0.14.26
+
+### Patch Changes
+
+- Updated dependencies [af39b6a]
+  - @mysten/zksend@0.11.7
+
+## 0.14.25
+
+### Patch Changes
+
+- Updated dependencies [5436a90]
+- Updated dependencies [5436a90]
+  - @mysten/sui@1.12.0
+  - @mysten/wallet-standard@0.13.7
+  - @mysten/zksend@0.11.6
+
+## 0.14.24
+
+### Patch Changes
+
+- Updated dependencies [489f421]
+- Updated dependencies [489f421]
+  - @mysten/sui@1.11.0
+  - @mysten/wallet-standard@0.13.6
+  - @mysten/zksend@0.11.5
+
+## 0.14.23
+
+### Patch Changes
+
+- 640b757: Add `getSuiClientQuery` to get the `queryOptions` config for usage with the `QueryClient`
+  outside of React hooks. Added `useSuiClientSuspenseQuery` to support suspense-based data fetching.
+
+## 0.14.22
+
+### Patch Changes
+
+- Updated dependencies [830b8d8]
+  - @mysten/sui@1.10.0
+  - @mysten/wallet-standard@0.13.5
+  - @mysten/zksend@0.11.4
+
 ## 0.14.21
 
 ### Patch Changes

@@ -1,0 +1,35 @@
+---
+source: crates/sui-package-resolver/src/lib.rs
+expression: "fmt(struct_layout, enum_layout)"
+---
+struct:
+struct 0xa0::m::T0 {
+    b: bool,
+    v: vector<struct 0xa0::m::T1<0xa0::m::T2, u128> {
+        a: address,
+        p: struct 0xa0::m::T2 {
+            x: u8,
+        },
+        q: vector<u128>,
+    }>,
+}
+
+enum:
+enum 0xa0::m::E0 {
+    V {
+        b: bool,
+        v: vector<enum 0xa0::m::E1<0xa0::m::T1<0xa0::m::T2, u128>, u128> {
+            V {
+                a: address,
+                p: struct 0xa0::m::T1<0xa0::m::T2, u128> {
+                    a: address,
+                    p: struct 0xa0::m::T2 {
+                        x: u8,
+                    },
+                    q: vector<u128>,
+                },
+                q: vector<u128>,
+            },
+        }>,
+    },
+}

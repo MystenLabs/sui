@@ -3,8 +3,10 @@
 
 use std::sync::Arc;
 
-use sui_sdk2::types::{CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee};
-use sui_sdk2::types::{Object, ObjectId, Version};
+use sui_sdk_types::types::{
+    CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee,
+};
+use sui_sdk_types::types::{Object, ObjectId, Version};
 use sui_types::storage::error::{Error as StorageError, Result};
 use sui_types::storage::ObjectStore;
 use sui_types::storage::RestStateReader;
@@ -62,11 +64,11 @@ impl StateReader {
 
     pub fn get_transaction(
         &self,
-        digest: sui_sdk2::types::TransactionDigest,
+        digest: sui_sdk_types::types::TransactionDigest,
     ) -> crate::Result<(
-        sui_sdk2::types::SignedTransaction,
-        sui_sdk2::types::TransactionEffects,
-        Option<sui_sdk2::types::TransactionEvents>,
+        sui_sdk_types::types::SignedTransaction,
+        sui_sdk_types::types::TransactionEffects,
+        Option<sui_sdk_types::types::TransactionEvents>,
     )> {
         use super::transactions::TransactionNotFoundError;
         use sui_types::effects::TransactionEffectsAPI;
@@ -101,7 +103,7 @@ impl StateReader {
 
     pub fn get_transaction_response(
         &self,
-        digest: sui_sdk2::types::TransactionDigest,
+        digest: sui_sdk_types::types::TransactionDigest,
     ) -> crate::Result<super::transactions::TransactionResponse> {
         let (
             SignedTransaction {

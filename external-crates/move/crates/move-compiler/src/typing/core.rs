@@ -941,7 +941,7 @@ impl ast_debug::AstDebug for Subst {
             let mut tvars = tvars.iter().collect::<Vec<_>>();
             tvars.sort_by_key(|(v, _)| *v);
             for (tvar, bt) in tvars {
-                w.write(&format!("{:?} => ", tvar));
+                w.write(format!("{:?} => ", tvar));
                 bt.ast_debug(w);
                 w.new_line();
             }
@@ -951,7 +951,7 @@ impl ast_debug::AstDebug for Subst {
             let mut num_vars = num_vars.keys().collect::<Vec<_>>();
             num_vars.sort();
             for tvar in num_vars {
-                w.writeln(&format!("{:?}", tvar))
+                w.writeln(format!("{:?}", tvar))
             }
         })
     }

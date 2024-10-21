@@ -5,7 +5,7 @@ use anyhow::bail;
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
-    annotated_visitor::{self, StructDriver, VecDriver, Visitor},
+    annotated_visitor::{self, StructDriver, ValueDriver, VecDriver, Visitor},
     language_storage::TypeTag,
     u256::U256,
 };
@@ -146,49 +146,85 @@ impl BoundedVisitor {
     }
 }
 
-impl Visitor for BoundedVisitor {
+impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
     type Value = A::MoveValue;
     type Error = Error;
 
-    fn visit_u8(&mut self, value: u8) -> Result<Self::Value, Self::Error> {
+    fn visit_u8(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u8,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U8(value))
     }
 
-    fn visit_u16(&mut self, value: u16) -> Result<Self::Value, Self::Error> {
+    fn visit_u16(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u16,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U16(value))
     }
 
-    fn visit_u32(&mut self, value: u32) -> Result<Self::Value, Self::Error> {
+    fn visit_u32(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u32,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U32(value))
     }
 
-    fn visit_u64(&mut self, value: u64) -> Result<Self::Value, Self::Error> {
+    fn visit_u64(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u64,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U64(value))
     }
 
-    fn visit_u128(&mut self, value: u128) -> Result<Self::Value, Self::Error> {
+    fn visit_u128(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u128,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U128(value))
     }
 
-    fn visit_u256(&mut self, value: U256) -> Result<Self::Value, Self::Error> {
+    fn visit_u256(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: U256,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U256(value))
     }
 
-    fn visit_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error> {
+    fn visit_bool(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: bool,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Bool(value))
     }
 
-    fn visit_address(&mut self, value: AccountAddress) -> Result<Self::Value, Self::Error> {
+    fn visit_address(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: AccountAddress,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Address(value))
     }
 
-    fn visit_signer(&mut self, value: AccountAddress) -> Result<Self::Value, Self::Error> {
+    fn visit_signer(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: AccountAddress,
+    ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::Signer(value))
     }
 
     fn visit_vector(
         &mut self,
-        driver: &mut VecDriver<'_, '_, '_>,
+        driver: &mut VecDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         let mut elems = vec![];
         while let Some(elem) = driver.next_element(self)? {
@@ -200,7 +236,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_struct(
         &mut self,
-        driver: &mut StructDriver<'_, '_, '_>,
+        driver: &mut StructDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         let tag = driver.struct_layout().type_.clone().into();
 
@@ -226,7 +262,7 @@ impl Visitor for BoundedVisitor {
 
     fn visit_variant(
         &mut self,
-        driver: &mut annotated_visitor::VariantDriver<'_, '_, '_>,
+        driver: &mut annotated_visitor::VariantDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         let type_ = driver.enum_layout().type_.clone().into();
 
@@ -262,7 +298,7 @@ impl Default for BoundedVisitor {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::str::FromStr;
 
     use super::*;
@@ -450,29 +486,77 @@ mod tests {
         expect.assert_eq(&err.to_string());
     }
 
+    type Variant<'s> = (&'s str, u16);
+    type FieldLayout<'s> = (&'s str, A::MoveTypeLayout);
+
+    fn ident_(name: &str) -> Identifier {
+        Identifier::new(name).unwrap()
+    }
+
     /// Create a struct value for test purposes.
-    fn value_(rep: &str, fields: Vec<(&str, A::MoveValue)>) -> A::MoveValue {
+    pub(crate) fn value_(rep: &str, fields: Vec<(&str, A::MoveValue)>) -> A::MoveValue {
         let type_ = StructTag::from_str(rep).unwrap();
         let fields = fields
             .into_iter()
-            .map(|(name, value)| (Identifier::new(name).unwrap(), value))
+            .map(|(name, value)| (ident_(name), value))
             .collect();
 
         A::MoveValue::Struct(A::MoveStruct::new(type_, fields))
     }
 
     /// Create a struct layout for test purposes.
-    fn layout_(rep: &str, fields: Vec<(&str, A::MoveTypeLayout)>) -> A::MoveTypeLayout {
+    pub(crate) fn layout_(rep: &str, fields: Vec<FieldLayout<'_>>) -> A::MoveTypeLayout {
         let type_ = StructTag::from_str(rep).unwrap();
         let fields = fields
             .into_iter()
-            .map(|(name, layout)| A::MoveFieldLayout::new(Identifier::new(name).unwrap(), layout))
+            .map(|(name, layout)| A::MoveFieldLayout::new(ident_(name), layout))
             .collect();
 
         A::MoveTypeLayout::Struct(Box::new(A::MoveStructLayout {
             type_,
             fields: Box::new(fields),
         }))
+    }
+
+    /// Create a variant value for test purposes.
+    pub(crate) fn variant_(
+        rep: &str,
+        name: &str,
+        tag: u16,
+        fields: Vec<(&str, A::MoveValue)>,
+    ) -> A::MoveValue {
+        let type_ = StructTag::from_str(rep).unwrap();
+        let fields = fields
+            .into_iter()
+            .map(|(name, value)| (ident_(name), value))
+            .collect();
+
+        A::MoveValue::Variant(A::MoveVariant {
+            type_,
+            variant_name: ident_(name),
+            tag,
+            fields,
+        })
+    }
+
+    /// Create an enum layout for test purposes.
+    pub(crate) fn enum_(
+        rep: &str,
+        variants: Vec<(Variant<'_>, Vec<FieldLayout<'_>>)>,
+    ) -> A::MoveTypeLayout {
+        let type_ = StructTag::from_str(rep).unwrap();
+        let variants = variants
+            .into_iter()
+            .map(|((name, tag), fields)| {
+                let fields = fields
+                    .into_iter()
+                    .map(|(name, layout)| A::MoveFieldLayout::new(ident_(name), layout))
+                    .collect();
+                ((ident_(name), tag), fields)
+            })
+            .collect();
+
+        A::MoveTypeLayout::Enum(Box::new(A::MoveEnumLayout { type_, variants }))
     }
 
     /// BCS encode Move value.

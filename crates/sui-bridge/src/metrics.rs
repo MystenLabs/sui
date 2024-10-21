@@ -78,6 +78,7 @@ pub fn start_metrics_push_task(
 pub struct BridgeMetrics {
     pub(crate) err_build_sui_transaction: IntCounter,
     pub(crate) err_signature_aggregation: IntCounter,
+    pub(crate) err_signature_aggregation_too_many_failures: IntCounter,
     pub(crate) err_sui_transaction_submission: IntCounter,
     pub(crate) err_sui_transaction_submission_too_many_failures: IntCounter,
     pub(crate) err_sui_transaction_execution: IntCounter,
@@ -86,9 +87,9 @@ pub struct BridgeMetrics {
     pub(crate) err_requests: IntCounterVec,
     pub(crate) requests_inflight: IntGaugeVec,
 
-    pub last_synced_sui_checkpoint: IntGauge,
+    pub(crate) last_synced_sui_checkpoints: IntGaugeVec,
     pub(crate) last_finalized_eth_block: IntGauge,
-    pub(crate) last_synced_eth_block: IntGauge,
+    pub(crate) last_synced_eth_blocks: IntGaugeVec,
 
     pub(crate) sui_watcher_received_events: IntCounter,
     pub(crate) sui_watcher_received_actions: IntCounter,
@@ -112,6 +113,10 @@ pub struct BridgeMetrics {
 
     pub(crate) sui_rpc_errors: IntCounterVec,
     pub(crate) observed_governance_actions: IntCounterVec,
+    pub(crate) current_bridge_voting_rights: IntGaugeVec,
+
+    pub(crate) auth_agg_ok_responses: IntCounterVec,
+    pub(crate) auth_agg_bad_responses: IntCounterVec,
 }
 
 impl BridgeMetrics {
@@ -126,6 +131,12 @@ impl BridgeMetrics {
             err_signature_aggregation: register_int_counter_with_registry!(
                 "bridge_err_signature_aggregation",
                 "Total number of errors of aggregating validators signatures",
+                registry,
+            )
+            .unwrap(),
+            err_signature_aggregation_too_many_failures: register_int_counter_with_registry!(
+                "bridge_err_signature_aggregation_too_many_failures",
+                "Total number of continuous failures during validator signature aggregation",
                 registry,
             )
             .unwrap(),
@@ -262,21 +273,23 @@ impl BridgeMetrics {
                 registry,
             )
             .unwrap(),
-            last_synced_sui_checkpoint: register_int_gauge_with_registry!(
-                "last_synced_sui_checkpoint",
-                "The latest sui checkpoint that indexer synced",
+            last_synced_sui_checkpoints: register_int_gauge_vec_with_registry!(
+                "bridge_last_synced_sui_checkpoints",
+                "The latest sui checkpoints synced for each module",
+                &["module_name"],
                 registry,
             )
             .unwrap(),
-            last_synced_eth_block: register_int_gauge_with_registry!(
-                "bridge_last_synced_eth_block",
-                "The latest finalized eth block that indexer synced",
+            last_synced_eth_blocks: register_int_gauge_vec_with_registry!(
+                "bridge_last_synced_eth_blocks",
+                "The latest synced eth blocks synced for each contract",
+                &["contract_address"],
                 registry,
             )
             .unwrap(),
             last_finalized_eth_block: register_int_gauge_with_registry!(
                 "bridge_last_finalized_eth_block",
-                "The latest finalized eth block that indexer observed",
+                "The latest finalized eth block observed",
                 registry,
             )
             .unwrap(),
@@ -305,6 +318,27 @@ impl BridgeMetrics {
                 "bridge_observed_governance_actions",
                 "Total number of observed governance actions",
                 &["action_type", "chain_id"],
+                registry,
+            )
+            .unwrap(),
+            current_bridge_voting_rights: register_int_gauge_vec_with_registry!(
+                "current_bridge_voting_rights",
+                "Current voting power in the bridge committee",
+                &["authority"],
+                registry
+            )
+            .unwrap(),
+            auth_agg_ok_responses: register_int_counter_vec_with_registry!(
+                "bridge_auth_agg_ok_responses",
+                "Total number of ok respones from auth agg",
+                &["authority"],
+                registry,
+            )
+            .unwrap(),
+            auth_agg_bad_responses: register_int_counter_vec_with_registry!(
+                "bridge_auth_agg_bad_responses",
+                "Total number of bad respones from auth agg",
+                &["authority"],
                 registry,
             )
             .unwrap(),

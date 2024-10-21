@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB64 } from '@mysten/sui/utils';
+import { fromBase64, toBase64 } from '@mysten/sui/utils';
 
 /**
  * An interface
@@ -63,9 +63,9 @@ export function createDefaultEncryption(): Encryption {
 			);
 
 			return JSON.stringify({
-				payload: toB64(new Uint8Array(payload)),
-				iv: toB64(iv),
-				salt: toB64(salt),
+				payload: toBase64(new Uint8Array(payload)),
+				iv: toBase64(iv),
+				salt: toBase64(salt),
 			} satisfies EncryptedJSON);
 		},
 		async decrypt(password, data) {
@@ -74,15 +74,15 @@ export function createDefaultEncryption(): Encryption {
 				throw new Error('Invalid encrypted data');
 			}
 
-			const { derivedKey } = await keyFromPassword(password, fromB64(parsed.salt));
+			const { derivedKey } = await keyFromPassword(password, fromBase64(parsed.salt));
 
 			const decryptedContent = await crypto.subtle.decrypt(
 				{
 					name: 'AES-GCM',
-					iv: fromB64(parsed.iv),
+					iv: fromBase64(parsed.iv),
 				},
 				derivedKey,
-				fromB64(parsed.payload),
+				fromBase64(parsed.payload),
 			);
 
 			return new TextDecoder().decode(decryptedContent);

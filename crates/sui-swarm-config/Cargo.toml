@@ -30,6 +30,7 @@ sui-macros.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 sui-genesis-builder.workspace = true
+sui-rest-api.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

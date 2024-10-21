@@ -68,7 +68,7 @@ impl From<IndexedObject> for StoredObject {
         let IndexedObject {
             checkpoint_sequence_number: _,
             object,
-            df_info,
+            df_kind,
         } = o;
         let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
         let coin_type = object
@@ -94,7 +94,7 @@ impl From<IndexedObject> for StoredObject {
             serialized_object: bcs::to_bytes(&object).unwrap(),
             coin_type,
             coin_balance: coin_balance.map(|b| b as i64),
-            df_kind: df_info.as_ref().map(|k| match k.type_ {
+            df_kind: df_kind.map(|k| match k {
                 DynamicFieldType::DynamicField => 0,
                 DynamicFieldType::DynamicObject => 1,
             }),
@@ -143,7 +143,7 @@ impl From<IndexedObject> for StoredObjectSnapshot {
         let IndexedObject {
             checkpoint_sequence_number,
             object,
-            df_info,
+            df_kind,
         } = o;
         let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
         let coin_type = object
@@ -172,7 +172,7 @@ impl From<IndexedObject> for StoredObjectSnapshot {
             serialized_object: Some(bcs::to_bytes(&object).unwrap()),
             coin_type,
             coin_balance: coin_balance.map(|b| b as i64),
-            df_kind: df_info.as_ref().map(|k| match k.type_ {
+            df_kind: df_kind.map(|k| match k {
                 DynamicFieldType::DynamicField => 0,
                 DynamicFieldType::DynamicObject => 1,
             }),
@@ -227,7 +227,7 @@ impl From<IndexedObject> for StoredHistoryObject {
         let IndexedObject {
             checkpoint_sequence_number,
             object,
-            df_info,
+            df_kind,
         } = o;
         let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
         let coin_type = object
@@ -256,7 +256,7 @@ impl From<IndexedObject> for StoredHistoryObject {
             serialized_object: Some(bcs::to_bytes(&object).unwrap()),
             coin_type,
             coin_balance: coin_balance.map(|b| b as i64),
-            df_kind: df_info.as_ref().map(|k| match k.type_ {
+            df_kind: df_kind.map(|k| match k {
                 DynamicFieldType::DynamicField => 0,
                 DynamicFieldType::DynamicObject => 1,
             }),

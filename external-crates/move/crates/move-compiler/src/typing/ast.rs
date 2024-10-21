@@ -83,6 +83,7 @@ pub struct Function {
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
+    pub loc: Loc,
     /// The original, declared visibility as defined in the source file
     pub visibility: Visibility,
     /// We sometimes change the visibility of functions, e.g. `entry` is marked as `public` in
@@ -413,7 +414,7 @@ impl AstDebug for Program {
         let Program { modules, info: _ } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
-            w.write(&format!("module {}", m));
+            w.write(format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));
             w.new_line();
         }
@@ -441,7 +442,7 @@ impl AstDebug for ModuleDefinition {
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
-            w.writeln(&format!("{}", n))
+            w.writeln(format!("{}", n))
         }
         attributes.ast_debug(w);
         w.writeln(match target_kind {
@@ -453,20 +454,20 @@ impl AstDebug for ModuleDefinition {
             } => "dependency module",
             TargetKind::External => "external module",
         });
-        w.writeln(&format!("dependency order #{}", dependency_order));
+        w.writeln(format!("dependency order #{}", dependency_order));
         for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
-            w.write(&format!("{mident} is"));
+            w.write(format!("{mident} is"));
             neighbor.ast_debug(w);
             w.writeln(";");
         }
         for addr in used_addresses {
-            w.write(&format!("uses address {};", addr));
+            w.write(format!("uses address {};", addr));
             w.new_line()
         }
         use_funs.ast_debug(w);
         syntax_methods.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
-            w.write(&format!("friend {};", mident));
+            w.write(format!("friend {};", mident));
             w.new_line();
         }
         for sdef in structs.key_cloned_iter() {
@@ -496,6 +497,7 @@ impl AstDebug for (FunctionName, &Function) {
                 warning_filter,
                 index,
                 attributes,
+                loc: _,
                 visibility,
                 compiled_visibility,
                 entry,
@@ -512,15 +514,15 @@ impl AstDebug for (FunctionName, &Function) {
         compiled_visibility.ast_debug(w);
         w.write(") ");
         if entry.is_some() {
-            w.write(&format!("{} ", ENTRY_MODIFIER));
+            w.write(format!("{} ", ENTRY_MODIFIER));
         }
         if macro_.is_some() {
-            w.write(&format!("{} ", MACRO_MODIFIER));
+            w.write(format!("{} ", MACRO_MODIFIER));
         }
         if let FunctionBody_::Native = &body.value {
-            w.write(&format!("{} ", NATIVE_MODIFIER));
+            w.write(format!("{} ", NATIVE_MODIFIER));
         }
-        w.write(&format!("fun#{index} {name}"));
+        w.write(format!("fun#{index} {name}"));
         signature.ast_debug(w);
         body.ast_debug(w);
     }
@@ -551,7 +553,7 @@ impl AstDebug for (ConstantName, &Constant) {
         ) = self;
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
-        w.write(&format!("const#{index} {name}:"));
+        w.write(format!("const#{index} {name}:"));
         signature.ast_debug(w);
         w.write(" = ");
         value.ast_debug(w);
@@ -632,7 +634,7 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("use@");
                 v.ast_debug(w)
             }
-            E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
+            E::Constant(m, c) => w.write(format!("{}::{}", m, c)),
             E::ModuleCall(mcall) => {
                 mcall.ast_debug(w);
             }
@@ -652,14 +654,14 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("]");
             }
             E::Pack(m, s, tys, fields) => {
-                w.write(&format!("{}::{}", m, s));
+                w.write(format!("{}::{}", m, s));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_bt_e)| {
                     let (idx, (bt, e)) = idx_bt_e;
-                    w.write(&format!("({}#{}:", idx, f));
+                    w.write(format!("({}#{}:", idx, f));
                     bt.ast_debug(w);
                     w.write("): ");
                     e.ast_debug(w);
@@ -667,14 +669,14 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("}");
             }
             E::PackVariant(m, e, v, tys, fields) => {
-                w.write(&format!("{}::{}::{}", m, e, v));
+                w.write(format!("{}::{}::{}", m, e, v));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_bt_e)| {
                     let (idx, (bt, e)) = idx_bt_e;
-                    w.write(&format!("({}#{}:", idx, f));
+                    w.write(format!("({}#{}:", idx, f));
                     bt.ast_debug(w);
                     w.write("): ");
                     e.ast_debug(w);
@@ -806,7 +808,7 @@ impl AstDebug for UnannotatedExp_ {
                     w.write("mut ");
                 }
                 e.ast_debug(w);
-                w.write(&format!(".{}", f));
+                w.write(format!(".{}", f));
             }
             E::TempBorrow(mut_, e) => {
                 w.write("&");
@@ -843,7 +845,7 @@ impl AstDebug for UnannotatedExp_ {
             } => {
                 w.write("ErrorConstant");
                 if let Some(c) = error_constant {
-                    w.write(&format!("({})", c))
+                    w.write(format!("({})", c))
                 }
             }
         }
@@ -867,7 +869,7 @@ impl AstDebug for ModuleCall {
             arguments,
             method_name: _,
         } = self;
-        w.write(&format!("{}::{}", module, name));
+        w.write(format!("{}::{}", module, name));
         if !parameter_types.is_empty() {
             w.write("[");
             if !parameter_types.is_empty() {
@@ -941,28 +943,28 @@ impl AstDebug for UnannotatedPat_ {
                 if *mut_ {
                     w.write("mut ");
                 }
-                w.write(&format!("{}::{}::{}", m, e, v));
+                w.write(format!("{}::{}::{}", m, e, v));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_bt_a)| {
                     let (idx, (bt, a)) = idx_bt_a;
-                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.annotate(|w| w.write(format!("{}#{}", idx, f)), bt);
                     w.write(": ");
                     a.ast_debug(w);
                 });
                 w.write("}");
             }
             UnannotatedPat_::Variant(m, e, v, tys, fields) => {
-                w.write(&format!("{}::{}::{}", m, e, v));
+                w.write(format!("{}::{}::{}", m, e, v));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_bt_a)| {
                     let (idx, (bt, a)) = idx_bt_a;
-                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.annotate(|w| w.write(format!("{}#{}", idx, f)), bt);
                     w.write(": ");
                     a.ast_debug(w);
                 });
@@ -973,35 +975,35 @@ impl AstDebug for UnannotatedPat_ {
                 if *mut_ {
                     w.write("mut ");
                 }
-                w.write(&format!("{}::{}", m, s));
+                w.write(format!("{}::{}", m, s));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_bt_a)| {
                     let (idx, (bt, a)) = idx_bt_a;
-                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.annotate(|w| w.write(format!("{}#{}", idx, f)), bt);
                     w.write(": ");
                     a.ast_debug(w);
                 });
                 w.write("}");
             }
             UnannotatedPat_::Struct(m, e, tys, fields) => {
-                w.write(&format!("{}::{}", m, e));
+                w.write(format!("{}::{}", m, e));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_bt_a)| {
                     let (idx, (bt, a)) = idx_bt_a;
-                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.annotate(|w| w.write(format!("{}#{}", idx, f)), bt);
                     w.write(": ");
                     a.ast_debug(w);
                 });
                 w.write("}");
             }
             UnannotatedPat_::Constant(m, c) => {
-                w.write(&format!("{}::{}", m, c));
+                w.write(format!("{}::{}", m, c));
             }
             UnannotatedPat_::Or(lhs, rhs) => {
                 w.write("(");
@@ -1071,14 +1073,14 @@ impl AstDebug for LValue_ {
                 st,
             ),
             L::Unpack(m, s, tys, fields) => {
-                w.write(&format!("{}::{}", m, s));
+                w.write(format!("{}::{}", m, s));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_bt_a)| {
                     let (idx, (bt, a)) = idx_bt_a;
-                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.annotate(|w| w.write(format!("{}#{}", idx, f)), bt);
                     w.write(": ");
                     a.ast_debug(w);
                 });
@@ -1089,28 +1091,28 @@ impl AstDebug for LValue_ {
                 if *mut_ {
                     w.write("mut ");
                 }
-                w.write(&format!("{}::{}", m, s));
+                w.write(format!("{}::{}", m, s));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_bt_a)| {
                     let (idx, (bt, a)) = idx_bt_a;
-                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.annotate(|w| w.write(format!("{}#{}", idx, f)), bt);
                     w.write(": ");
                     a.ast_debug(w);
                 });
                 w.write("}");
             }
             L::UnpackVariant(m, e, v, tys, fields) => {
-                w.write(&format!("{}::{}::{}", m, e, v));
+                w.write(format!("{}::{}::{}", m, e, v));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_bt_a)| {
                     let (idx, (bt, a)) = idx_bt_a;
-                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.annotate(|w| w.write(format!("{}#{}", idx, f)), bt);
                     w.write(": ");
                     a.ast_debug(w);
                 });
@@ -1121,14 +1123,14 @@ impl AstDebug for LValue_ {
                 if *mut_ {
                     w.write("mut ");
                 }
-                w.write(&format!("{}::{}::{}", m, e, v));
+                w.write(format!("{}::{}::{}", m, e, v));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_bt_a)| {
                     let (idx, (bt, a)) = idx_bt_a;
-                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.annotate(|w| w.write(format!("{}#{}", idx, f)), bt);
                     w.write(": ");
                     a.ast_debug(w);
                 });

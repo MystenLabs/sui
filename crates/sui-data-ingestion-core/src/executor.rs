@@ -108,6 +108,14 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         }
         Ok(self.progress_store.stats())
     }
+
+    pub async fn update_watermark(
+        &mut self,
+        task_name: String,
+        watermark: CheckpointSequenceNumber,
+    ) -> Result<()> {
+        self.progress_store.save(task_name, watermark).await
+    }
 }
 
 pub async fn setup_single_workflow<W: Worker + 'static>(

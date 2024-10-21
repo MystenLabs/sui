@@ -247,7 +247,10 @@ Create a new Display<T> object with a set of fields.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_new_with_fields">new_with_fields</a>&lt;T: key&gt;(
-    pub: &Publisher, fields: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;String&gt;, values: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;String&gt;, ctx: &<b>mut</b> TxContext
+    pub: &Publisher,
+    fields: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;String&gt;,
+    values: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;String&gt;,
+    ctx: &<b>mut</b> TxContext,
 ): <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt; {
     <b>let</b> len = fields.length();
     <b>assert</b>!(len == values.length(), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
@@ -283,7 +286,7 @@ Create a new empty Display<T> object and keep it.
 <summary>Implementation</summary>
 
 
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
     <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx), ctx.sender())
 }
 </code></pre>
@@ -308,9 +311,7 @@ Manually bump the version and emit an event with the updated version's contents.
 <summary>Implementation</summary>
 
 
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_update_version">update_version</a>&lt;T: key&gt;(
-    <a href="display.md#0x2_display">display</a>: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;
-) {
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_update_version">update_version</a>&lt;T: key&gt;(<a href="display.md#0x2_display">display</a>: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;) {
     <a href="display.md#0x2_display">display</a>.version = <a href="display.md#0x2_display">display</a>.version + 1;
     <a href="event.md#0x2_event_emit">event::emit</a>(<a href="display.md#0x2_display_VersionUpdated">VersionUpdated</a>&lt;T&gt; {
         version: <a href="display.md#0x2_display">display</a>.version,
@@ -340,7 +341,7 @@ Sets a custom <code>name</code> field with the <code>value</code>.
 <summary>Implementation</summary>
 
 
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_add">add</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_add">add</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
     self.<a href="display.md#0x2_display_add_internal">add_internal</a>(name, value)
 }
 </code></pre>
@@ -365,8 +366,10 @@ Sets multiple <code>fields</code> with <code>values</code>.
 <summary>Implementation</summary>
 
 
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_add_multiple">add_multiple</a>&lt;T: key&gt;(
-    self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, fields: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;String&gt;, values: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;String&gt;
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_add_multiple">add_multiple</a>&lt;T: key&gt;(
+    self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;,
+    fields: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;String&gt;,
+    values: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;String&gt;,
 ) {
     <b>let</b> len = fields.length();
     <b>assert</b>!(len == values.length(), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
@@ -400,7 +403,7 @@ TODO (long run): version changes;
 <summary>Implementation</summary>
 
 
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_edit">edit</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_edit">edit</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
     <b>let</b> (_, _) = self.fields.<a href="display.md#0x2_display_remove">remove</a>(&name);
     self.<a href="display.md#0x2_display_add_internal">add_internal</a>(name, value)
 }
@@ -426,7 +429,7 @@ Remove the key from the Display.
 <summary>Implementation</summary>
 
 
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_remove">remove</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String) {
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_remove">remove</a>&lt;T: key&gt;(self: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String) {
     self.fields.<a href="display.md#0x2_display_remove">remove</a>(&name);
 }
 </code></pre>
@@ -530,7 +533,7 @@ Internal function to create a new <code><a href="display.md#0x2_display_Display"
     <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
 
     <a href="event.md#0x2_event_emit">event::emit</a>(<a href="display.md#0x2_display_DisplayCreated">DisplayCreated</a>&lt;T&gt; {
-        id: uid.to_inner()
+        id: uid.to_inner(),
     });
 
     <a href="display.md#0x2_display_Display">Display</a> {

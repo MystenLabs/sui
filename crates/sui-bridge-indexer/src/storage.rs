@@ -12,7 +12,6 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
 
-use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::PgPool;
 use crate::schema::progress_store::{columns, dsl};
 use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
@@ -27,19 +26,13 @@ use sui_indexer_builder::{
 pub struct PgBridgePersistent {
     pool: PgPool,
     save_progress_policy: ProgressSavingPolicy,
-    indexer_metrics: BridgeIndexerMetrics,
 }
 
 impl PgBridgePersistent {
-    pub fn new(
-        pool: PgPool,
-        save_progress_policy: ProgressSavingPolicy,
-        indexer_metrics: BridgeIndexerMetrics,
-    ) -> Self {
+    pub fn new(pool: PgPool, save_progress_policy: ProgressSavingPolicy) -> Self {
         Self {
             pool,
             save_progress_policy,
-            indexer_metrics,
         }
     }
 }
@@ -128,6 +121,13 @@ impl Persistent<ProcessedTxnData> for PgBridgePersistent {
                                         .await?;
                                 }
                             }
+                            ProcessedTxnData::GovernanceAction(a) => {
+                                diesel::insert_into(schema::governance_actions::table)
+                                    .values(&a.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
                             ProcessedTxnData::Error(e) => {
                                 diesel::insert_into(sui_error_transactions::table)
                                     .values(&e.to_db())
@@ -169,8 +169,6 @@ impl IndexerProgressStore for PgBridgePersistent {
             return Ok(None);
         }
         let task_name = task.task_name.clone();
-        let task_name_prefix = task.name_prefix();
-        let task_type_label = task.type_str();
         if let Some(checkpoint_to_save) = self
             .save_progress_policy
             .cache_progress(task, checkpoint_numbers)
@@ -193,10 +191,6 @@ impl IndexerProgressStore for PgBridgePersistent {
                 ))
                 .execute(&mut conn)
                 .await?;
-            self.indexer_metrics
-                .tasks_current_checkpoints
-                .with_label_values(&[task_name_prefix, task_type_label])
-                .set(checkpoint_to_save as i64);
             return Ok(Some(checkpoint_to_save));
         }
         Ok(None)

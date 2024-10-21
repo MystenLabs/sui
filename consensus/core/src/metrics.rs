@@ -155,6 +155,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_manager_missing_blocks: IntGauge,
     pub(crate) block_manager_missing_blocks_by_authority: IntCounterVec,
     pub(crate) block_manager_missing_ancestors_by_authority: IntCounterVec,
+    pub(crate) block_manager_gc_unsuspended_blocks: IntCounterVec,
+    pub(crate) block_manager_skipped_blocks: IntCounterVec,
     pub(crate) threshold_clock_round: IntGauge,
     pub(crate) subscriber_connection_attempts: IntCounterVec,
     pub(crate) subscribed_to: IntGaugeVec,
@@ -173,6 +175,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetch_once_latency: Histogram,
     pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
     pub(crate) round_prober_quorum_round_gaps: IntGaugeVec,
+    pub(crate) round_prober_low_quorum_round: IntGaugeVec,
     pub(crate) round_prober_current_round_gaps: IntGaugeVec,
     pub(crate) round_prober_propagation_delays: Histogram,
     pub(crate) round_prober_last_propagation_delay: IntGauge,
@@ -365,7 +368,7 @@ impl NodeMetrics {
             invalid_blocks: register_int_counter_vec_with_registry!(
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
-                &["authority", "source"],
+                &["authority", "source", "error"],
                 registry,
             ).unwrap(),
             rejected_blocks: register_int_counter_vec_with_registry!(
@@ -514,6 +517,18 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
+            block_manager_gc_unsuspended_blocks: register_int_counter_vec_with_registry!(
+                "block_manager_gc_unsuspended_blocks",
+                "The number of blocks unsuspended because their missing ancestors are garbage collected by the block manager, counted by block's source authority",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            block_manager_skipped_blocks: register_int_counter_vec_with_registry!(
+                "block_manager_skipped_blocks",
+                "The number of blocks skipped by the block manager due to block round being <= gc_round",
+                &["authority"],
+                registry,
+            ).unwrap(),
             threshold_clock_round: register_int_gauge_with_registry!(
                 "threshold_clock_round",
                 "The current threshold clock round. We only advance to a new round when a quorum of parents have been synced.",
@@ -602,12 +617,18 @@ impl NodeMetrics {
             commit_sync_fetch_once_errors: register_int_counter_vec_with_registry!(
                 "commit_sync_fetch_once_errors",
                 "Number of errors when attempting to fetch commits and blocks from single authority during commit sync.",
-                &["error"],
+                &["authority", "error"],
                 registry
             ).unwrap(),
             round_prober_quorum_round_gaps: register_int_gauge_vec_with_registry!(
                 "round_prober_quorum_round_gaps",
                 "Round gaps among peers for blocks proposed from each authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_low_quorum_round: register_int_gauge_vec_with_registry!(
+                "round_prober_low_quorum_round",
+                "Low quorum round among peers for blocks proposed from each authority",
                 &["authority"],
                 registry
             ).unwrap(),

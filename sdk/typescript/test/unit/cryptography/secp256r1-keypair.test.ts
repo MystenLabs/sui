@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB58, toB64 } from '@mysten/bcs';
+import { fromBase64, toBase58, toBase64 } from '@mysten/bcs';
 import { secp256r1 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
 import { describe, expect, it } from 'vitest';
@@ -61,7 +61,7 @@ describe('secp256r1-keypair', () => {
 	it('create keypair from secret key', () => {
 		const secret_key = new Uint8Array(VALID_SECP256R1_SECRET_KEY);
 		const pub_key = new Uint8Array(VALID_SECP256R1_PUBLIC_KEY);
-		let pub_key_base64 = toB64(pub_key);
+		let pub_key_base64 = toBase64(pub_key);
 		const keypair = Secp256r1Keypair.fromSecretKey(secret_key);
 		expect(keypair.getPublicKey().toRawBytes()).toEqual(new Uint8Array(pub_key));
 		expect(keypair.getPublicKey().toBase64()).toEqual(pub_key_base64);
@@ -69,8 +69,8 @@ describe('secp256r1-keypair', () => {
 
 	it('creating keypair from invalid secret key throws error', () => {
 		const secret_key = new Uint8Array(INVALID_SECP256R1_SECRET_KEY);
-		let secret_key_base64 = toB64(secret_key);
-		const secretKey = fromB64(secret_key_base64);
+		let secret_key_base64 = toBase64(secret_key);
+		const secretKey = fromBase64(secret_key_base64);
 		expect(() => {
 			Secp256r1Keypair.fromSecretKey(secretKey);
 		}).toThrow('private key must be 32 bytes, hex or bigint, not object');
@@ -164,7 +164,7 @@ describe('secp256r1-keypair', () => {
 			{
 				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
 				version: String((Math.random() * 10000).toFixed(0)),
-				digest: toB58(
+				digest: toBase58(
 					new Uint8Array([
 						0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8,
 						9, 1, 2,

@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    source_package::parsed_manifest::{CustomDepInfo, DependencyKind, GitInfo},
+    source_package::parsed_manifest::{DependencyKind, GitInfo, OnChainInfo},
     BuildConfig,
 };
 
@@ -93,23 +93,12 @@ fn repository_path(kind: &DependencyKind) -> PathBuf {
         .iter()
         .collect(),
 
-        // Downloaded packages are of the form <sanitized_node_url>_<address>_<package>
-        DependencyKind::Custom(CustomDepInfo {
-            node_url,
-            package_address,
-            package_name,
-            subdir: _,
-        }) => [
-            &*MOVE_HOME,
-            &format!(
-                "{}_{}_{}",
-                url_to_file_name(node_url.as_str()),
-                package_address.as_str(),
-                package_name.as_str(),
-            ),
-        ]
-        .iter()
-        .collect(),
+        // Downloaded packages are of the form <id>
+        DependencyKind::OnChain(OnChainInfo { id }) => {
+            [&*MOVE_HOME, &url_to_file_name(id.as_str()).to_string()]
+                .iter()
+                .collect()
+        }
     }
 }
 
@@ -117,9 +106,7 @@ fn repository_path(kind: &DependencyKind) -> PathBuf {
 fn local_path(kind: &DependencyKind) -> PathBuf {
     let mut repo_path = repository_path(kind);
 
-    if let DependencyKind::Git(GitInfo { subdir, .. })
-    | DependencyKind::Custom(CustomDepInfo { subdir, .. }) = kind
-    {
+    if let DependencyKind::Git(GitInfo { subdir, .. }) = kind {
         repo_path.push(subdir);
     }
 

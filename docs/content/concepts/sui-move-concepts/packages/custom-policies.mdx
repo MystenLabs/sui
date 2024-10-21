@@ -338,7 +338,7 @@ sui client publish --gas-budget 100000000
 
 <details>
   <summary>
-  Toggle output
+  Console output
   </summary>
 
 A successful publish returns the following:
@@ -436,7 +436,7 @@ sui client call --gas-budget 10000000 \
 
 <details>
   <summary>
-  Toggle output
+  Console output
   </summary>
 
 A successful call returns the following:
@@ -523,9 +523,8 @@ The instruction that follows publishes this example package and then upgrades it
 
 Create a new directory to store a Node.js project. You can use the `npm init` function to create the `package.json`, or manually create the file. Depending on your approach to creating `package.json`, populate or add the following JSON to it:
 
-```JSON
+```json
 { "type": "module" }
-
 ```
 
 Open a terminal or console to the root of your Node.js project. Run the following command to add the Sui TypeScript SDK as a dependency:
@@ -554,7 +553,7 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { fromB64 } from '@mysten/sui/utils';
+import { fromBase64 } from '@mysten/sui/utils';
 
 const sender = execSync(`${SUI} client active-address`, { encoding: 'utf8' }).trim();
 const signer = (() => {
@@ -563,7 +562,7 @@ const signer = (() => {
 	);
 
 	for (const priv of keystore) {
-		const raw = fromB64(priv);
+		const raw = fromBase64(priv);
 		if (raw[0] !== 0) {
 			continue;
 		}
@@ -637,10 +636,8 @@ console.log(result);
 
 <details>
   <summary>
-  Toggle complete script
+  `publish.js`
   </summary>
-
-The complete `publish.js` script follows:
 
 ```js
 import { execSync } from 'child_process';
@@ -651,7 +648,7 @@ import { fileURLToPath } from 'url';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import { fromB64 } from '@mysten/sui/utils';
+import { fromBase64 } from '@mysten/sui/utils';
 
 const SUI = 'sui';
 const POLICY_PACKAGE_ID = '<POLICY-PACKAGE>';
@@ -662,7 +659,7 @@ const signer = (() => {
 	);
 
 	for (const priv of keystore) {
-		const raw = fromB64(priv);
+		const raw = fromBase64(priv);
 		if (raw[0] !== 0) {
 			continue;
 		}
@@ -720,7 +717,7 @@ node publish.js
 
 <details>
   <summary>
-  Toggle output
+  Console output
   </summary>
 
 If the script is successful, the console prints the following response:
@@ -803,7 +800,7 @@ sui client call --gas-budget 10000000 \
 
 <details>
   <summary>
-  Toggle output
+  Console output
   </summary>
 
 A successful call responds with the following:
@@ -891,7 +888,7 @@ import { fileURLToPath } from 'url';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction, UpgradePolicy } from '@mysten/sui/transactions';
-import { fromB64 } from '@mysten/sui/utils';
+import { fromBase64 } from '@mysten/sui/utils';
 
 const SUI = 'sui';
 const POLICY_PACKAGE_ID = '<POLICY-PACKAGE>';
@@ -904,7 +901,7 @@ const signer = (() => {
 	);
 
 	for (const priv of keystore) {
-		const raw = fromB64(priv);
+		const raw = fromBase64(priv);
 		if (raw[0] !== 0) {
 			continue;
 		}
@@ -967,7 +964,7 @@ node upgrade.js
 
 <details>
   <summary>
-  Toggle output
+  Console output
   </summary>
 
 If the script is successful (and today is Tuesday), your console displays the following response:
@@ -1046,7 +1043,7 @@ sui client call --gas-budget 10000000 \
 
 <details>
   <summary>
-  Toggle output
+  Console output
   </summary>
 
 If successful, the console prints the following response:
@@ -1126,8 +1123,8 @@ If you attempt the first upgrade before Tuesday or you change the constant again
 ```bash
 ...
 status: {
-        status: 'failure',
-        error: 'MoveAbort(MoveLocation { module: ModuleId { address: <POLICY-PACKAGE>, name: Identifier("day_of_week") }, function: 1, instruction: 11, function_name: Some("authorize_upgrade") }, 2) in command 0'
-      },
+  status: 'failure',
+  error: 'MoveAbort(MoveLocation { module: ModuleId { address: <POLICY-PACKAGE>, name: Identifier("day_of_week") }, function: 1, instruction: 11, function_name: Some("authorize_upgrade") }, 2) in command 0'
+},
 ...
 ```

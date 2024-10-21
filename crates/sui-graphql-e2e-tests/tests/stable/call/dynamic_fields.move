@@ -60,23 +60,56 @@ module Test::m {
 //# create-checkpoint
 
 //# run-graphql
-{
+{ # Initially, the parent object should be accessible directly and as an
+  # "Owner".
   object(address: "@{obj_2_0}") {
     dynamicFields {
       nodes {
         name {
-          type {
-            repr
-          }
+          type { repr }
           data
           bcs
         }
         value {
-          ... on MoveObject {
-            __typename
-          }
+          __typename
           ... on MoveValue {
-            __typename
+            type { repr }
+            bcs
+            data
+          }
+          ... on MoveObject {
+            contents {
+              type { repr }
+              bcs
+              data
+            }
+          }
+        }
+      }
+    }
+  }
+
+  owner(address: "@{obj_2_0}") {
+    dynamicFields {
+      nodes {
+        name {
+          type { repr }
+          data
+          bcs
+        }
+        value {
+          __typename
+          ... on MoveValue {
+            type { repr }
+            bcs
+            data
+          }
+          ... on MoveObject {
+            contents {
+              type { repr }
+              bcs
+              data
+            }
           }
         }
       }
@@ -89,50 +122,56 @@ module Test::m {
 //# create-checkpoint
 
 //# run-graphql
-{
+{ # After it is wrapped, we can no longer fetch its latest version via `object`
+  # but we can still refer to it as an "Owner" and fetch its dynamic fields.
   object(address: "@{obj_2_0}") {
     dynamicFields {
       nodes {
         name {
-          type {
-            repr
-          }
+          type { repr }
           data
           bcs
         }
         value {
-          ... on MoveObject {
-            __typename
-          }
+          __typename
           ... on MoveValue {
-            __typename
+            type { repr }
+            bcs
+            data
+          }
+          ... on MoveObject {
+            contents {
+              type { repr }
+              bcs
+              data
+            }
           }
         }
       }
     }
   }
-}
 
-//# run-graphql
-{
   owner(address: "@{obj_2_0}") {
     dynamicFields {
       nodes {
         name {
-          type {
-            repr
-          }
+          type { repr }
           data
           bcs
         }
         value {
-          ... on MoveObject {
-            __typename
-          }
+          __typename
           ... on MoveValue {
+            type { repr }
             bcs
             data
-            __typename
+          }
+          ... on MoveObject {
+            contents {
+              type { repr }
+              bcs
+              data
+            }
           }
         }
       }
@@ -145,15 +184,14 @@ module Test::m {
   owner(address: "@{obj_2_0}") {
     dynamicField(name: {type: "u64", bcs: "AAAAAAAAAAA="}) {
       name {
-        type {
-          repr
-        }
+        type { repr }
         data
         bcs
       }
       value {
         ... on MoveValue {
           __typename
+          type { repr }
           bcs
           data
         }
@@ -169,6 +207,11 @@ module Test::m {
       value {
         ... on MoveObject {
           __typename
+          contents {
+            type { repr }
+            bcs
+            data
+          }
         }
       }
     }

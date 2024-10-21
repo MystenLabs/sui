@@ -17,28 +17,28 @@ EOF
 # Print lock file
 cat <<EOF
 [move]
-version = 0
+version = 3
 manifest_digest = "42"
 deps_digest = "7"
 $TYPE = [
-    { name = "$PACKAGE" },
+    { id = "$PACKAGE", name = "$PACKAGE" },
 ]
 
 [[move.package]]
-name = "$PACKAGE"
+id = "$PACKAGE"
 source = { local = "./deps_only/$PACKAGE" }
 dependencies = [
-    { name = "${PACKAGE}Dep" },
+    { id = "${PACKAGE}Dep", name = "${PACKAGE}Dep" },
 ]
 
 [[move.package]]
-name = "${PACKAGE}Dep"
+id = "${PACKAGE}Dep"
 source = { local = "./deps_only/${PACKAGE}Dep" }
 dependencies = [
-    { name = "${PACKAGE}DepOther" },
+    { id = "${PACKAGE}DepOther", name = "${PACKAGE}DepOther" },
 ]
 
 [[move.package]]
-name = "${PACKAGE}DepOther"
+id = "${PACKAGE}DepOther"
 source = { local = "./deps_only/${PACKAGE}DepOther" }
 EOF

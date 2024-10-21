@@ -9,9 +9,8 @@ use indexmap::{IndexMap, IndexSet};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::{MoveStruct, MoveValue, MoveVariant},
-    identifier::Identifier,
-    language_storage::StructTag,
+    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout, MoveValue},
+    annotated_visitor as AV,
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_functions::NativeContext;
@@ -632,108 +631,105 @@ fn pack_option(opt: Option<Value>) -> Value {
     )]))
 }
 
-fn find_all_wrapped_objects<'a>(
+fn find_all_wrapped_objects<'a, 'i>(
     context: &NativeContext,
-    ids: &mut BTreeSet<ObjectID>,
+    ids: &'i mut BTreeSet<ObjectID>,
     new_object_values: impl IntoIterator<Item = (&'a ObjectID, &'a Type, impl Borrow<Value>)>,
 ) {
-    for (_id, ty, value) in new_object_values {
-        let layout = match context.type_to_type_layout(ty) {
-            Ok(Some(layout)) => layout,
-            _ => {
-                debug_assert!(false);
-                continue;
-            }
-        };
-        let annotated_layout = match context.type_to_fully_annotated_layout(ty) {
-            Ok(Some(layout)) => layout,
-            _ => {
-                debug_assert!(false);
-                continue;
-            }
-        };
-        let blob = value.borrow().simple_serialize(&layout).unwrap();
-        // TODO (annotated-visitor): Replace with a custom visitor.
-        let move_value = MoveValue::simple_deserialize(&blob, &annotated_layout).unwrap();
-        let uid = UID::type_();
-        visit_structs(&move_value, |depth, tag, fields| {
-            if tag != &uid {
-                return if depth == 0 {
-                    debug_assert!(!fields.is_empty());
-                    // all object values so the first field is a UID that should be skipped
-                    &fields[1..]
-                } else {
-                    fields
-                };
-            }
-            debug_assert!(fields.len() == 1);
-            let id = &fields[0].1;
-            let addr_field = match &id {
-                MoveValue::Struct(MoveStruct { fields, .. }) => {
-                    debug_assert!(fields.len() == 1);
-                    &fields[0].1
-                }
-                v => unreachable!("Not reachable via Move type system: {:?}", v),
-            };
-            let addr = match addr_field {
-                MoveValue::Address(a) => *a,
-                v => unreachable!("Not reachable via Move type system: {:?}", v),
-            };
-            ids.insert(addr.into());
-            fields
-        })
+    #[derive(Copy, Clone)]
+    enum LookingFor {
+        Wrapped,
+        Uid,
+        Address,
     }
-}
 
-fn visit_structs<FVisitTypes>(move_value: &MoveValue, mut visit_with_types: FVisitTypes)
-where
-    for<'a> FVisitTypes: FnMut(
-        /* value depth */ usize,
-        &StructTag,
-        &'a Vec<(Identifier, MoveValue)>,
-    ) -> &'a [(Identifier, MoveValue)],
-{
-    visit_structs_impl(move_value, &mut visit_with_types, 0)
-}
+    struct Traversal<'i, 'u> {
+        state: LookingFor,
+        ids: &'i mut BTreeSet<ObjectID>,
+        uid: &'u MoveStructLayout,
+    }
 
-fn visit_structs_impl<FVisitTypes>(
-    move_value: &MoveValue,
-    visit_with_types: &mut FVisitTypes,
-    depth: usize,
-) where
-    for<'a> FVisitTypes: FnMut(
-        /* value depth */ usize,
-        &StructTag,
-        &'a Vec<(Identifier, MoveValue)>,
-    ) -> &'a [(Identifier, MoveValue)],
-{
-    let next_depth = depth + 1;
-    match move_value {
-        MoveValue::U8(_)
-        | MoveValue::U16(_)
-        | MoveValue::U32(_)
-        | MoveValue::U64(_)
-        | MoveValue::U128(_)
-        | MoveValue::U256(_)
-        | MoveValue::Bool(_)
-        | MoveValue::Address(_)
-        | MoveValue::Signer(_) => (),
-        MoveValue::Vector(vs) => {
-            for v in vs {
-                visit_structs_impl(v, visit_with_types, next_depth)
+    impl<'i, 'u, 'b, 'l> AV::Traversal<'b, 'l> for Traversal<'i, 'u> {
+        type Error = AV::Error;
+
+        fn traverse_struct(
+            &mut self,
+            driver: &mut AV::StructDriver<'_, 'b, 'l>,
+        ) -> Result<(), Self::Error> {
+            match self.state {
+                // We're at the top-level of the traversal, looking for an object to recurse into.
+                // We can unconditionally switch to looking for UID fields at the level below,
+                // because we know that all the top-level values are objects.
+                LookingFor::Wrapped => {
+                    while driver
+                        .next_field(&mut Traversal {
+                            state: LookingFor::Uid,
+                            ids: self.ids,
+                            uid: self.uid,
+                        })?
+                        .is_some()
+                    {}
+                }
+
+                // We are looking for UID fields. If we find one (which we confirm by checking its
+                // layout), switch to looking for addresses in its sub-structure.
+                LookingFor::Uid => {
+                    while let Some(MoveFieldLayout { name: _, layout }) = driver.peek_field() {
+                        if matches!(layout, MoveTypeLayout::Struct(s) if s.as_ref() == self.uid) {
+                            driver.next_field(&mut Traversal {
+                                state: LookingFor::Address,
+                                ids: self.ids,
+                                uid: self.uid,
+                            })?;
+                        } else {
+                            driver.next_field(self)?;
+                        }
+                    }
+                }
+
+                // When looking for addresses, recurse through structs, as the address is nested
+                // within the UID.
+                LookingFor::Address => while driver.next_field(self)?.is_some() {},
             }
+
+            Ok(())
         }
-        MoveValue::Struct(MoveStruct { type_, fields }) => {
-            let fields = visit_with_types(depth, type_, fields);
-            for (_, v) in fields {
-                visit_structs_impl(v, visit_with_types, next_depth)
+
+        fn traverse_address(
+            &mut self,
+            _: &AV::ValueDriver<'_, 'b, 'l>,
+            address: AccountAddress,
+        ) -> Result<(), Self::Error> {
+            // If we're looking for addresses, and we found one, then save it.
+            if matches!(self.state, LookingFor::Address) {
+                self.ids.insert(address.into());
             }
+            Ok(())
         }
-        MoveValue::Variant(MoveVariant { type_, fields, .. }) => {
-            let fields = visit_with_types(depth, type_, fields);
-            for (_, v) in fields {
-                visit_structs_impl(v, visit_with_types, next_depth)
-            }
-        }
+    }
+
+    let uid = UID::layout();
+    for (_id, ty, value) in new_object_values {
+        let Ok(Some(layout)) = context.type_to_type_layout(ty) else {
+            debug_assert!(false);
+            continue;
+        };
+
+        let Ok(Some(annotated_layout)) = context.type_to_fully_annotated_layout(ty) else {
+            debug_assert!(false);
+            continue;
+        };
+
+        let blob = value.borrow().simple_serialize(&layout).unwrap();
+        MoveValue::visit_deserialize(
+            &blob,
+            &annotated_layout,
+            &mut Traversal {
+                state: LookingFor::Wrapped,
+                ids,
+                uid: &uid,
+            },
+        )
+        .unwrap();
     }
 }

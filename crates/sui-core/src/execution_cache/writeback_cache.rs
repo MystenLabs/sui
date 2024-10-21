@@ -460,7 +460,7 @@ impl WritebackCache {
         version: SequenceNumber,
         object: ObjectEntry,
     ) {
-        debug!(?object_id, ?version, ?object, "inserting object entry");
+        trace!(?object_id, ?version, ?object, "inserting object entry");
         fail_point_async!("write_object_entry");
         self.metrics.record_cache_write("object");
         self.dirty
@@ -1146,14 +1146,31 @@ impl WritebackCache {
                 self.packages.invalidate(object_id);
             }
             self.cached.object_by_id_cache.invalidate(object_id);
+            self.cached.object_cache.invalidate(object_id);
         }
 
         for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
             self.cached.object_by_id_cache.invalidate(object_id);
+            self.cached.object_cache.invalidate(object_id);
         }
 
         // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
         Ok(())
+    }
+
+    fn bulk_insert_genesis_objects_impl(&self, objects: &[Object]) -> SuiResult {
+        self.store.bulk_insert_genesis_objects(objects)?;
+        for obj in objects {
+            self.cached.object_cache.invalidate(&obj.id());
+            self.cached.object_by_id_cache.invalidate(&obj.id());
+        }
+        Ok(())
+    }
+
+    fn insert_genesis_object_impl(&self, object: Object) -> SuiResult {
+        self.cached.object_by_id_cache.invalidate(&object.id());
+        self.cached.object_cache.invalidate(&object.id());
+        self.store.insert_genesis_object(object)
     }
 
     pub fn clear_caches_and_assert_empty(&self) {

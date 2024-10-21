@@ -18,6 +18,8 @@ title: Module `0x3::validator_set`
 -  [Function `request_remove_validator`](#0x3_validator_set_request_remove_validator)
 -  [Function `request_add_stake`](#0x3_validator_set_request_add_stake)
 -  [Function `request_withdraw_stake`](#0x3_validator_set_request_withdraw_stake)
+-  [Function `convert_to_fungible_staked_sui`](#0x3_validator_set_convert_to_fungible_staked_sui)
+-  [Function `redeem_fungible_staked_sui`](#0x3_validator_set_redeem_fungible_staked_sui)
 -  [Function `request_set_commission_rate`](#0x3_validator_set_request_set_commission_rate)
 -  [Function `advance_epoch`](#0x3_validator_set_advance_epoch)
 -  [Function `update_and_process_low_stake_departures`](#0x3_validator_set_update_and_process_low_stake_departures)
@@ -944,6 +946,85 @@ the stake and any rewards corresponding to it will be immediately processed.
             wrapper.load_validator_maybe_upgrade()
         };
     <a href="validator.md#0x3_validator">validator</a>.<a href="validator_set.md#0x3_validator_set_request_withdraw_stake">request_withdraw_stake</a>(staked_sui, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_set_convert_to_fungible_staked_sui"></a>
+
+## Function `convert_to_fungible_staked_sui`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_convert_to_fungible_staked_sui">convert_to_fungible_staked_sui</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, staked_sui: <a href="staking_pool.md#0x3_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="staking_pool.md#0x3_staking_pool_FungibleStakedSui">staking_pool::FungibleStakedSui</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_convert_to_fungible_staked_sui">convert_to_fungible_staked_sui</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
+    staked_sui: StakedSui,
+    ctx: &<b>mut</b> TxContext,
+) : FungibleStakedSui {
+    <b>let</b> staking_pool_id = pool_id(&staked_sui);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> =
+        <b>if</b> (self.staking_pool_mappings.contains(staking_pool_id)) { // This is an active <a href="validator.md#0x3_validator">validator</a>.
+            <b>let</b> validator_address = self.staking_pool_mappings[staking_pool_id];
+            <a href="validator_set.md#0x3_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self, validator_address)
+        } <b>else</b> { // This is an inactive pool.
+            <b>assert</b>!(self.inactive_validators.contains(staking_pool_id), <a href="validator_set.md#0x3_validator_set_ENoPoolFound">ENoPoolFound</a>);
+            <b>let</b> wrapper = &<b>mut</b> self.inactive_validators[staking_pool_id];
+            wrapper.load_validator_maybe_upgrade()
+        };
+
+    <a href="validator.md#0x3_validator">validator</a>.<a href="validator_set.md#0x3_validator_set_convert_to_fungible_staked_sui">convert_to_fungible_staked_sui</a>(staked_sui, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_set_redeem_fungible_staked_sui"></a>
+
+## Function `redeem_fungible_staked_sui`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, fungible_staked_sui: <a href="staking_pool.md#0x3_staking_pool_FungibleStakedSui">staking_pool::FungibleStakedSui</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
+    fungible_staked_sui: FungibleStakedSui,
+    ctx: &TxContext,
+) : Balance&lt;SUI&gt; {
+    <b>let</b> staking_pool_id = fungible_staked_sui_pool_id(&fungible_staked_sui);
+
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> =
+        <b>if</b> (self.staking_pool_mappings.contains(staking_pool_id)) { // This is an active <a href="validator.md#0x3_validator">validator</a>.
+            <b>let</b> validator_address = self.staking_pool_mappings[staking_pool_id];
+            <a href="validator_set.md#0x3_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self, validator_address)
+        } <b>else</b> { // This is an inactive pool.
+            <b>assert</b>!(self.inactive_validators.contains(staking_pool_id), <a href="validator_set.md#0x3_validator_set_ENoPoolFound">ENoPoolFound</a>);
+            <b>let</b> wrapper = &<b>mut</b> self.inactive_validators[staking_pool_id];
+            wrapper.load_validator_maybe_upgrade()
+        };
+
+    <a href="validator.md#0x3_validator">validator</a>.<a href="validator_set.md#0x3_validator_set_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(fungible_staked_sui, ctx)
 }
 </code></pre>
 

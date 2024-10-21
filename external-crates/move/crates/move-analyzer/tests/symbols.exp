@@ -1,11 +1,11 @@
 == M1.move ========================================================
 -- test 0 -------------------
 use line: 3, use_ndx: 0
-Use: 'SomeStruct', start: 11, end: 21
-Def: 'SomeStruct', line: 2, def char: 11
-TypeDef: 'SomeStruct', line: 2, char: 11
+Use: 'SomeStruct', start: 18, end: 28
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M1::SomeStruct has drop, store, key {
+public struct Symbols::M1::SomeStruct has drop, store {
 	some_field: u64
 }
 
@@ -23,33 +23,35 @@ Use: 'unpack', start: 8, end: 14
 Def: 'unpack', line: 9, def char: 8
 TypeDef: no info
 On Hover:
-fun Symbols::M1::unpack(s: Symbols::M1::SomeStruct): u64
+fun Symbols::M1::unpack(
+	s: Symbols::M1::SomeStruct
+): u64
 
 -- test 3 -------------------
 use line: 10, use_ndx: 1
 Use: 's', start: 15, end: 16
 Def: 's', line: 9, def char: 15
-TypeDef: 'SomeStruct', line: 2, char: 11
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
 s: Symbols::M1::SomeStruct
 
 -- test 4 -------------------
 use line: 10, use_ndx: 2
 Use: 'SomeStruct', start: 18, end: 28
-Def: 'SomeStruct', line: 2, def char: 11
-TypeDef: 'SomeStruct', line: 2, char: 11
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M1::SomeStruct has drop, store, key {
+public struct Symbols::M1::SomeStruct has drop, store {
 	some_field: u64
 }
 
 -- test 5 -------------------
 use line: 11, use_ndx: 0
 Use: 'SomeStruct', start: 12, end: 22
-Def: 'SomeStruct', line: 2, def char: 11
-TypeDef: 'SomeStruct', line: 2, char: 11
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M1::SomeStruct has drop, store, key {
+public struct Symbols::M1::SomeStruct has drop, store {
 	some_field: u64
 }
 
@@ -74,7 +76,7 @@ value: u64
 use line: 11, use_ndx: 3
 Use: 's', start: 47, end: 48
 Def: 's', line: 9, def char: 15
-TypeDef: 'SomeStruct', line: 2, char: 11
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
 s: Symbols::M1::SomeStruct
 
@@ -89,20 +91,20 @@ value: u64
 -- test 10 -------------------
 use line: 20, use_ndx: 1
 Use: 'SomeStruct', start: 16, end: 26
-Def: 'SomeStruct', line: 2, def char: 11
-TypeDef: 'SomeStruct', line: 2, char: 11
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M1::SomeStruct has drop, store, key {
+public struct Symbols::M1::SomeStruct has drop, store {
 	some_field: u64
 }
 
 -- test 11 -------------------
 use line: 21, use_ndx: 1
 Use: 'SomeStruct', start: 18, end: 28
-Def: 'SomeStruct', line: 2, def char: 11
-TypeDef: 'SomeStruct', line: 2, char: 11
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M1::SomeStruct has drop, store, key {
+public struct Symbols::M1::SomeStruct has drop, store {
 	some_field: u64
 }
 
@@ -126,10 +128,10 @@ const Symbols::M1::SOME_CONST: u64 = 42
 -- test 14 -------------------
 use line: 25, use_ndx: 2
 Use: 'SomeOtherStruct', start: 41, end: 56
-Def: 'SomeOtherStruct', line: 2, def char: 11
-TypeDef: 'SomeOtherStruct', line: 2, char: 11
+Def: 'SomeOtherStruct', line: 2, def char: 18
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M2::SomeOtherStruct has drop {
+public struct Symbols::M2::SomeOtherStruct has drop {
 	some_field: u64
 }
 
@@ -139,7 +141,9 @@ Use: 'some_other_struct', start: 21, end: 38
 Def: 'some_other_struct', line: 6, def char: 15
 TypeDef: no info
 On Hover:
-public fun Symbols::M2::some_other_struct(v: u64): Symbols::M2::SomeOtherStruct
+public fun Symbols::M2::some_other_struct(
+	v: u64
+): Symbols::M2::SomeOtherStruct
 
 -- test 16 -------------------
 use line: 26, use_ndx: 2
@@ -152,10 +156,10 @@ const Symbols::M1::SOME_CONST: u64 = 42
 -- test 17 -------------------
 use line: 31, use_ndx: 1
 Use: 'SomeOtherStruct', start: 35, end: 50
-Def: 'SomeOtherStruct', line: 2, def char: 11
-TypeDef: 'SomeOtherStruct', line: 2, char: 11
+Def: 'SomeOtherStruct', line: 2, def char: 18
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M2::SomeOtherStruct has drop {
+public struct Symbols::M2::SomeOtherStruct has drop {
 	some_field: u64
 }
 
@@ -165,7 +169,9 @@ Use: 'acq', start: 8, end: 11
 Def: 'acq', line: 34, def char: 8
 TypeDef: no info
 On Hover:
-fun Symbols::M1::acq(uint: u64): u64
+fun Symbols::M1::acq(
+	uint: u64
+): u64
 
 -- test 19 -------------------
 use line: 41, use_ndx: 2
@@ -194,20 +200,20 @@ fun Symbols::M1::vec(): vector<Symbols::M1::SomeStruct>
 -- test 22 -------------------
 use line: 46, use_ndx: 0
 Use: 'SomeStruct', start: 15, end: 25
-Def: 'SomeStruct', line: 2, def char: 11
-TypeDef: 'SomeStruct', line: 2, char: 11
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M1::SomeStruct has drop, store, key {
+public struct Symbols::M1::SomeStruct has drop, store {
 	some_field: u64
 }
 
 -- test 23 -------------------
 use line: 46, use_ndx: 1
 Use: 'SomeStruct', start: 27, end: 37
-Def: 'SomeStruct', line: 2, def char: 11
-TypeDef: 'SomeStruct', line: 2, char: 11
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M1::SomeStruct has drop, store, key {
+public struct Symbols::M1::SomeStruct has drop, store {
 	some_field: u64
 }
 
@@ -224,17 +230,17 @@ some_field: u64
 use line: 46, use_ndx: 3
 Use: 's', start: 57, end: 58
 Def: 's', line: 44, def char: 12
-TypeDef: 'SomeStruct', line: 2, char: 11
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
 let s: Symbols::M1::SomeStruct
 
 -- test 26 -------------------
 use line: 57, use_ndx: 1
 Use: 'tmp', start: 21, end: 24
-Def: 'tmp', line: 55, def char: 12
+Def: 'tmp', line: 55, def char: 16
 TypeDef: no info
 On Hover:
-let tmp: u64
+let mut tmp: u64
 
 -- test 27 -------------------
 use line: 58, use_ndx: 0
@@ -258,7 +264,10 @@ Use: 'ret', start: 8, end: 11
 Def: 'ret', line: 61, def char: 8
 TypeDef: no info
 On Hover:
-fun Symbols::M1::ret(p1: bool, p2: u64): u64
+fun Symbols::M1::ret(
+	p1: bool,
+	p2: u64
+): u64
 
 -- test 30 -------------------
 use line: 64, use_ndx: 0
@@ -312,7 +321,7 @@ const Symbols::M1::SOME_CONST: u64 = 42
 use line: 95, use_ndx: 0
 Use: 'outer', start: 8, end: 13
 Def: 'outer', line: 93, def char: 12
-TypeDef: 'OuterStruct', line: 87, char: 11
+TypeDef: 'OuterStruct', line: 87, char: 18
 On Hover:
 let outer: Symbols::M1::OuterStruct
 
@@ -320,7 +329,7 @@ let outer: Symbols::M1::OuterStruct
 use line: 95, use_ndx: 1
 Use: 'some_struct', start: 14, end: 25
 Def: 'some_struct', line: 88, def char: 8
-TypeDef: 'SomeStruct', line: 2, char: 11
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
 Symbols::M1::OuterStruct
 some_struct: Symbols::M1::SomeStruct
@@ -338,7 +347,7 @@ some_field: u64
 use line: 103, use_ndx: 0
 Use: 'some_struct', start: 10, end: 21
 Def: 'some_struct', line: 88, def char: 8
-TypeDef: 'SomeStruct', line: 2, char: 11
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
 Symbols::M1::OuterStruct
 some_struct: Symbols::M1::SomeStruct
@@ -347,7 +356,7 @@ some_struct: Symbols::M1::SomeStruct
 use line: 109, use_ndx: 1
 Use: 'outer', start: 17, end: 22
 Def: 'outer', line: 107, def char: 12
-TypeDef: 'OuterStruct', line: 87, char: 11
+TypeDef: 'OuterStruct', line: 87, char: 18
 On Hover:
 let outer: Symbols::M1::OuterStruct
 
@@ -355,7 +364,7 @@ let outer: Symbols::M1::OuterStruct
 use line: 109, use_ndx: 2
 Use: 'some_struct', start: 23, end: 34
 Def: 'some_struct', line: 88, def char: 8
-TypeDef: 'SomeStruct', line: 2, char: 11
+TypeDef: 'SomeStruct', line: 2, char: 18
 On Hover:
 Symbols::M1::OuterStruct
 some_struct: Symbols::M1::SomeStruct
@@ -389,7 +398,7 @@ const Symbols::M1::SOME_CONST: u64 = 42
 use line: 123, use_ndx: 1
 Use: 'p', start: 21, end: 22
 Def: 'p', line: 122, def char: 21
-TypeDef: 'SomeOtherStruct', line: 2, char: 11
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
 On Hover:
 p: Symbols::M2::SomeOtherStruct
 
@@ -397,7 +406,7 @@ p: Symbols::M2::SomeOtherStruct
 use line: 124, use_ndx: 0
 Use: 'INVALID USE IDENT', start: 8, end: 9
 Def: 'p', line: 122, def char: 21
-TypeDef: 'SomeOtherStruct', line: 2, char: 11
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
 On Hover:
 p: Symbols::M2::SomeOtherStruct
 
@@ -405,7 +414,7 @@ p: Symbols::M2::SomeOtherStruct
 use line: 128, use_ndx: 0
 Use: 'tmp', start: 12, end: 15
 Def: 'tmp', line: 127, def char: 12
-TypeDef: 'SomeOtherStruct', line: 2, char: 11
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
 On Hover:
 let tmp: Symbols::M2::SomeOtherStruct
 
@@ -413,15 +422,15 @@ let tmp: Symbols::M2::SomeOtherStruct
 use line: 130, use_ndx: 0
 Use: 'INVALID USE IDENT', start: 12, end: 15
 Def: 'tmp', line: 127, def char: 12
-TypeDef: 'SomeOtherStruct', line: 2, char: 11
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
 On Hover:
 let tmp: Symbols::M2::SomeOtherStruct
 
 == M3.move ========================================================
 -- test 0 -------------------
 use line: 3, use_ndx: 1
-Use: 'T', start: 23, end: 24
-Def: 'T', line: 2, def char: 23
+Use: 'T', start: 30, end: 31
+Def: 'T', line: 2, def char: 30
 TypeDef: no info
 On Hover:
 T
@@ -429,7 +438,7 @@ T
 -- test 1 -------------------
 use line: 4, use_ndx: 1
 Use: 'T', start: 20, end: 21
-Def: 'T', line: 2, def char: 23
+Def: 'T', line: 2, def char: 30
 TypeDef: no info
 On Hover:
 T
@@ -486,7 +495,7 @@ T
 use line: 12, use_ndx: 0
 Use: 'INVALID USE IDENT', start: 8, end: 13
 Def: 'param', line: 10, def char: 33
-TypeDef: 'ParamStruct', line: 2, char: 11
+TypeDef: 'ParamStruct', line: 2, char: 18
 On Hover:
 param: Symbols::M3::ParamStruct<T>
 
@@ -501,17 +510,17 @@ T
 -- test 10 -------------------
 use line: 24, use_ndx: 1
 Use: 'ParamStruct', start: 20, end: 31
-Def: 'ParamStruct', line: 2, def char: 11
-TypeDef: 'ParamStruct', line: 2, char: 11
+Def: 'ParamStruct', line: 2, def char: 18
+TypeDef: 'ParamStruct', line: 2, char: 18
 On Hover:
-struct Symbols::M3::ParamStruct<T> {
+public struct Symbols::M3::ParamStruct<T> {
 	some_field: T
 }
 
 -- test 11 -------------------
 use line: 24, use_ndx: 2
 Use: 'T', start: 32, end: 33
-Def: 'T', line: 22, def char: 30
+Def: 'T', line: 22, def char: 37
 TypeDef: no info
 On Hover:
 T
@@ -552,18 +561,18 @@ let tmp: u64
 -- test 4 -------------------
 use line: 21, use_ndx: 0
 Use: 'tmp', start: 15, end: 18
-Def: 'tmp', line: 18, def char: 12
+Def: 'tmp', line: 18, def char: 16
 TypeDef: no info
 On Hover:
-let tmp: u64
+let mut tmp: u64
 
 -- test 5 -------------------
 use line: 24, use_ndx: 1
 Use: 'tmp', start: 26, end: 29
-Def: 'tmp', line: 18, def char: 12
+Def: 'tmp', line: 18, def char: 16
 TypeDef: no info
 On Hover:
-let tmp: u64
+let mut tmp: u64
 
 -- test 6 -------------------
 use line: 25, use_ndx: 1
@@ -576,10 +585,10 @@ let tmp: u64
 -- test 7 -------------------
 use line: 27, use_ndx: 0
 Use: 'tmp', start: 12, end: 15
-Def: 'tmp', line: 18, def char: 12
+Def: 'tmp', line: 18, def char: 16
 TypeDef: no info
 On Hover:
-let tmp: u64
+let mut tmp: u64
 
 -- test 8 -------------------
 use line: 41, use_ndx: 1
@@ -592,10 +601,10 @@ let tmp: u64
 -- test 9 -------------------
 use line: 44, use_ndx: 0
 Use: 'tmp', start: 16, end: 19
-Def: 'tmp', line: 34, def char: 12
+Def: 'tmp', line: 34, def char: 16
 TypeDef: no info
 On Hover:
-let tmp: u64
+let mut tmp: u64
 
 -- test 10 -------------------
 use line: 56, use_ndx: 0
@@ -604,4 +613,92 @@ Def: 'SOME_CONST', line: 55, def char: 10
 TypeDef: no info
 On Hover:
 const Symbols::M5::SOME_CONST: u64 = 7
+
+-- test 11 -------------------
+use line: 58, use_ndx: 0
+Use: 'long_param_list', start: 15, end: 30
+Def: 'long_param_list', line: 57, def char: 15
+TypeDef: no info
+On Hover:
+public fun Symbols::M5::long_param_list(
+	foo: u64,
+	bar: u64,
+	baz: u64,
+	qux: u64
+)
+
+-- test 12 -------------------
+use line: 60, use_ndx: 0
+Use: 'short_type_param_list', start: 15, end: 36
+Def: 'short_type_param_list', line: 59, def char: 15
+TypeDef: no info
+On Hover:
+public fun Symbols::M5::short_type_param_list<TYPE1, TYPE2>()
+
+-- test 13 -------------------
+use line: 62, use_ndx: 0
+Use: 'long_type_param_list', start: 15, end: 35
+Def: 'long_type_param_list', line: 61, def char: 15
+TypeDef: no info
+On Hover:
+public fun Symbols::M5::long_type_param_list<
+	TYPE1,
+	TYPE2,
+	TYPE3
+>()
+
+-- test 14 -------------------
+use line: 64, use_ndx: 0
+Use: 'combined_short_type_param_list', start: 15, end: 45
+Def: 'combined_short_type_param_list', line: 63, def char: 15
+TypeDef: no info
+On Hover:
+public fun Symbols::M5::combined_short_type_param_list<TYPE1, TYPE2>(
+	foo: u64,
+	bar: u64,
+	baz: u64,
+	qux: u64
+)
+
+-- test 15 -------------------
+use line: 68, use_ndx: 0
+Use: 'combined_long_type_param_list', start: 15, end: 44
+Def: 'combined_long_type_param_list', line: 67, def char: 15
+TypeDef: no info
+On Hover:
+public fun Symbols::M5::combined_long_type_param_list<
+	TYPE1,
+	TYPE2,
+	TYPE3
+>(
+	foo: u64,
+	bar: u64,
+	baz: u64,
+	qux: u64
+)
+
+-- test 16 -------------------
+use line: 75, use_ndx: 2
+Use: 'extract', start: 37, end: 44
+Def: 'extract', line: 80, def char: 15
+TypeDef: no info
+On Hover:
+public fun option::extract<Element>(
+	t: &mut Option<Element>
+): Element
+
+ Convert a `some` option to a `none` by removing and returning the value stored inside `t`
+ Aborts if `t` does not hold a value
+
+-- test 17 -------------------
+use line: 78, use_ndx: 1
+Use: 'singleton', start: 21, end: 30
+Def: 'singleton', line: 64, def char: 15
+TypeDef: no info
+On Hover:
+public fun vector::singleton<Element>(
+	e: Element
+): vector<Element>
+
+ Return an vector of size one containing element `e`.
 

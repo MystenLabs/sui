@@ -1,5 +1,47 @@
 # @mysten/sui.js
 
+## 1.13.0
+
+### Minor Changes
+
+- 477d2a4: Add new errors to ExecutionFailureStatus enum
+
+## 1.12.0
+
+### Minor Changes
+
+- 5436a90: Update GraphQL schemas
+- 5436a90: add deriveDynamicFieldID util
+
+## 1.11.0
+
+### Minor Changes
+
+- 489f421: Updated hex, base64, and base58 utility names for better consistency
+
+  All existing methods will continue to work, but the following methods have been deprecated and
+  replaced with methods with improved names:
+
+  - `toHEX` -> `toHEX`
+  - `fromHEX` -> `fromHex`
+  - `toB64` -> `toBase64`
+  - `fromB64` -> `fromBase64`
+  - `toB58` -> `toBase58`
+  - `fromB58` -> `fromBase58`
+
+- 489f421: support Bech32 secrets in the Keypair.fromSecretKey methods
+
+### Patch Changes
+
+- Updated dependencies [489f421]
+  - @mysten/bcs@1.1.0
+
+## 1.10.0
+
+### Minor Changes
+
+- 830b8d8: Introduce new naming scheme for named packages plugin
+
 ## 1.9.0
 
 ### Minor Changes

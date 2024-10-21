@@ -88,7 +88,6 @@ pub fn program(
         info: Arc::new(module_info),
     };
     for v in &compilation_env.visitors().typing {
-        let mut v = v.borrow_mut();
         v.visit(compilation_env, &prog);
     }
     prog
@@ -283,6 +282,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         warning_filter,
         index,
         attributes,
+        loc,
         visibility,
         entry,
         macro_,
@@ -315,6 +315,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         warning_filter,
         index,
         attributes,
+        loc,
         compiled_visibility,
         visibility,
         entry,

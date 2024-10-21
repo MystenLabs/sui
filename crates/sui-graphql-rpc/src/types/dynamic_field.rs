@@ -4,17 +4,15 @@
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use diesel_async::scoped_futures::ScopedFutureExt;
-use move_core_types::annotated_value::{self as A, MoveStruct};
 use move_core_types::language_storage::TypeTag;
 use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::types::OwnerType;
-use sui_types::dynamic_field::{
-    derive_dynamic_field_id, extract_id_value, DynamicFieldInfo, DynamicFieldType,
-};
+use sui_types::dynamic_field::visitor::{Field, FieldVisitor};
+use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
 use super::available_range::AvailableRange;
 use super::cursor::{Page, Target};
-use super::object::{self, deserialize_move_struct, Object, ObjectKind};
+use super::object::{self, Object, ObjectKind};
 use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
@@ -28,7 +26,6 @@ use crate::raw_query::RawQuery;
 
 pub(crate) struct DynamicField {
     pub super_: MoveObject,
-    pub df_kind: DynamicFieldType,
 }
 
 #[derive(Union)]
@@ -61,40 +58,28 @@ impl DynamicField {
     /// The string type, data, and serialized value of the DynamicField's 'name' field.
     /// This field is used to uniquely identify a child of the parent object.
     async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
-        let resolver: &PackageResolver = ctx
-            .data()
-            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
-            .extend()?;
+        let resolver: &PackageResolver = ctx.data_unchecked();
 
-        let (struct_tag, move_struct) = deserialize_move_struct(&self.super_.native, resolver)
-            .await
-            .extend()?;
+        let type_ = TypeTag::from(self.super_.native.type_().clone());
+        let layout = resolver.type_layout(type_.clone()).await.map_err(|e| {
+            Error::Internal(format!(
+                "Error fetching layout for type {}: {e}",
+                type_.to_canonical_display(/* with_prefix */ true)
+            ))
+        })?;
 
-        // Get TypeTag of the DynamicField name from StructTag of the MoveStruct
-        let type_tag = DynamicFieldInfo::try_extract_field_name(&struct_tag, &self.df_kind)
+        let Field {
+            name_layout,
+            name_bytes,
+            ..
+        } = FieldVisitor::deserialize(self.super_.native.contents(), &layout)
             .map_err(|e| Error::Internal(e.to_string()))
             .extend()?;
 
-        let name_move_value = extract_field_from_move_struct(move_struct, "name").extend()?;
-
-        let undecorated = if self.df_kind == DynamicFieldType::DynamicObject {
-            let inner_name_move_value = match name_move_value {
-                A::MoveValue::Struct(inner_struct) => {
-                    extract_field_from_move_struct(inner_struct, "name")
-                }
-                _ => Err(Error::Internal("Expected a wrapper struct".to_string())),
-            }
-            .extend()?;
-            inner_name_move_value.undecorate()
-        } else {
-            name_move_value.undecorate()
-        };
-
-        let bcs = bcs::to_bytes(&undecorated)
-            .map_err(|e| Error::Internal(format!("Failed to serialize object: {e}")))
-            .extend()?;
-
-        Ok(Some(MoveValue::new(type_tag, Base64::from(bcs))))
+        Ok(Some(MoveValue::new(
+            name_layout.into(),
+            Base64::from(name_bytes.to_owned()),
+        )))
     }
 
     /// The returned dynamic field is an object if its return type is `MoveObject`,
@@ -104,30 +89,31 @@ impl DynamicField {
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
         let resolver: &PackageResolver = ctx.data_unchecked();
 
-        // TODO(annotated-visitor): Use custom visitors to extract just the value.
-        let (struct_tag, move_struct) = deserialize_move_struct(&self.super_.native, resolver)
-            .await
+        let type_ = TypeTag::from(self.super_.native.type_().clone());
+        let layout = resolver.type_layout(type_.clone()).await.map_err(|e| {
+            Error::Internal(format!(
+                "Error fetching layout for type {}: {e}",
+                type_.to_canonical_display(/* with_prefix */ true)
+            ))
+        })?;
+
+        let Field {
+            kind,
+            value_layout,
+            value_bytes,
+            ..
+        } = FieldVisitor::deserialize(self.super_.native.contents(), &layout)
+            .map_err(|e| Error::Internal(e.to_string()))
             .extend()?;
 
-        let value_move_value = extract_field_from_move_struct(move_struct, "value").extend()?;
-
-        if self.df_kind == DynamicFieldType::DynamicObject {
-            // If `df_kind` is a DynamicObject, the object we are currently on is the field object,
-            // and we must resolve one more level down to the value object.
-            let df_object_id = extract_id_value(&value_move_value)
-                .ok_or_else(|| {
-                    Error::Internal(format!(
-                        "Couldn't find ID of dynamic object field value: {value_move_value:#?}"
-                    ))
-                })
+        if kind == DynamicFieldType::DynamicObject {
+            let df_object_id: SuiAddress = bcs::from_bytes(value_bytes)
+                .map_err(|e| Error::Internal(format!("Failed to deserialize object ID: {e}")))
                 .extend()?;
 
-            // Because we only have checkpoint-level granularity, we may end up reading a later
-            // version of the value object. Thus, we use the version of the field object to bound
-            // the value object at the correct version.
             let obj = MoveObject::query(
                 ctx,
-                df_object_id.into(),
+                df_object_id,
                 Object::under_parent(self.root_version(), self.super_.super_.checkpoint_viewed_at),
             )
             .await
@@ -135,19 +121,9 @@ impl DynamicField {
 
             Ok(obj.map(DynamicFieldValue::MoveObject))
         } else {
-            // Get TypeTag of the DynamicField value from StructTag of the MoveStruct
-            let type_tag = DynamicFieldInfo::try_extract_field_value(&struct_tag)
-                .map_err(|e| Error::Internal(e.to_string()))
-                .extend()?;
-
-            let undecorated = value_move_value.undecorate();
-            let bcs = bcs::to_bytes(&undecorated)
-                .map_err(|e| Error::Internal(format!("Failed to serialize object: {e}")))
-                .extend()?;
-
             Ok(Some(DynamicFieldValue::MoveValue(MoveValue::new(
-                type_tag,
-                Base64::from(bcs),
+                value_layout.into(),
+                Base64::from(value_bytes.to_owned()),
             ))))
         }
     }
@@ -277,12 +253,6 @@ impl TryFrom<MoveObject> for DynamicField {
             ObjectKind::NotIndexed(native) | ObjectKind::Indexed(native, _) => native.clone(),
             ObjectKind::Serialized(bytes) => bcs::from_bytes(bytes)
                 .map_err(|e| Error::Internal(format!("Failed to deserialize object: {e}")))?,
-
-            ObjectKind::WrappedOrDeleted => {
-                return Err(Error::Internal(
-                    "DynamicField is wrapped or deleted.".to_string(),
-                ));
-            }
         };
 
         let Some(object) = native.data.try_as_move() else {
@@ -297,41 +267,8 @@ impl TryFrom<MoveObject> for DynamicField {
             return Err(Error::Internal("Wrong type for DynamicField".to_string()));
         }
 
-        let Some(name) = tag.type_params.first() else {
-            return Err(Error::Internal("No type for DynamicField name".to_string()));
-        };
-
-        let df_kind = if matches!(
-            name,
-            TypeTag::Struct(s) if DynamicFieldInfo::is_dynamic_object_field_wrapper(s)
-        ) {
-            DynamicFieldType::DynamicObject
-        } else {
-            DynamicFieldType::DynamicField
-        };
-
-        Ok(DynamicField {
-            super_: stored,
-            df_kind,
-        })
+        Ok(DynamicField { super_: stored })
     }
-}
-
-pub fn extract_field_from_move_struct(
-    move_struct: MoveStruct,
-    field_name: &str,
-) -> Result<A::MoveValue, Error> {
-    move_struct
-        .fields
-        .into_iter()
-        .find_map(|(id, value)| {
-            if id.to_string() == field_name {
-                Some(value)
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| Error::Internal(format!("Field '{}' not found", field_name)))
 }
 
 /// Builds the `RawQuery` for fetching dynamic fields attached to a parent object. If

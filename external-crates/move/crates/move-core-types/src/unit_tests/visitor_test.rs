@@ -10,7 +10,8 @@ use crate::{
         MoveVariant,
     },
     annotated_visitor::{
-        self, NullTraversal, StructDriver, Traversal, VariantDriver, VecDriver, Visitor,
+        self, NullTraversal, StructDriver, Traversal, ValueDriver, VariantDriver, VecDriver,
+        Visitor,
     },
     identifier::Identifier,
     language_storage::StructTag,
@@ -18,89 +19,284 @@ use crate::{
     VARIANT_COUNT_MAX,
 };
 
+#[derive(Default)]
+pub(crate) struct CountingTraversal(usize);
+
+#[derive(Default)]
+pub(crate) struct PrintVisitor {
+    depth: usize,
+    pub output: String,
+}
+
+impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
+    type Error = annotated_visitor::Error;
+
+    fn traverse_u8(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: u8,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        Ok(())
+    }
+
+    fn traverse_u16(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: u16,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        Ok(())
+    }
+
+    fn traverse_u32(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: u32,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        Ok(())
+    }
+
+    fn traverse_u64(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: u64,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        Ok(())
+    }
+
+    fn traverse_u128(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: u128,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        Ok(())
+    }
+
+    fn traverse_u256(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: U256,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        Ok(())
+    }
+
+    fn traverse_bool(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: bool,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        Ok(())
+    }
+
+    fn traverse_address(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: AccountAddress,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        Ok(())
+    }
+
+    fn traverse_signer(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: AccountAddress,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        Ok(())
+    }
+
+    fn traverse_vector(&mut self, driver: &mut VecDriver<'_, 'b, 'l>) -> Result<(), Self::Error> {
+        self.0 += 1;
+        while driver.next_element(self)?.is_some() {}
+        Ok(())
+    }
+
+    fn traverse_struct(
+        &mut self,
+        driver: &mut StructDriver<'_, 'b, 'l>,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        while driver.next_field(self)?.is_some() {}
+        Ok(())
+    }
+
+    fn traverse_variant(
+        &mut self,
+        driver: &mut VariantDriver<'_, 'b, 'l>,
+    ) -> Result<(), Self::Error> {
+        self.0 += 1;
+        while driver.next_field(self)?.is_some() {}
+        Ok(())
+    }
+}
+
+impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
+    type Value = MoveValue;
+    type Error = annotated_visitor::Error;
+
+    fn visit_u8(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u8,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: u8", self.depth).unwrap();
+        Ok(MoveValue::U8(value))
+    }
+
+    fn visit_u16(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u16,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: u16", self.depth).unwrap();
+        Ok(MoveValue::U16(value))
+    }
+
+    fn visit_u32(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u32,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: u32", self.depth).unwrap();
+        Ok(MoveValue::U32(value))
+    }
+
+    fn visit_u64(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u64,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: u64", self.depth).unwrap();
+        Ok(MoveValue::U64(value))
+    }
+
+    fn visit_u128(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: u128,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: u128", self.depth).unwrap();
+        Ok(MoveValue::U128(value))
+    }
+
+    fn visit_u256(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: U256,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: u256", self.depth).unwrap();
+        Ok(MoveValue::U256(value))
+    }
+
+    fn visit_bool(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: bool,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: bool", self.depth).unwrap();
+        Ok(MoveValue::Bool(value))
+    }
+
+    fn visit_address(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: AccountAddress,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: address", self.depth).unwrap();
+        Ok(MoveValue::Address(value))
+    }
+
+    fn visit_signer(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: AccountAddress,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: signer", self.depth).unwrap();
+        Ok(MoveValue::Signer(value))
+    }
+
+    fn visit_vector(
+        &mut self,
+        driver: &mut VecDriver<'_, 'b, 'l>,
+    ) -> Result<Self::Value, Self::Error> {
+        let layout = driver.element_layout();
+        write!(self.output, "\n[{}] vector<{layout:#}>", self.depth).unwrap();
+
+        let mut elems = vec![];
+        let mut elem_visitor = Self {
+            depth: self.depth + 1,
+            output: std::mem::take(&mut self.output),
+        };
+
+        while let Some(elem) = driver.next_element(&mut elem_visitor)? {
+            elems.push(elem)
+        }
+
+        self.output = elem_visitor.output;
+        Ok(MoveValue::Vector(elems))
+    }
+
+    fn visit_struct(
+        &mut self,
+        driver: &mut StructDriver<'_, 'b, 'l>,
+    ) -> Result<Self::Value, Self::Error> {
+        let layout = driver.struct_layout();
+        write!(self.output, "\n[{}] {layout:#}", self.depth).unwrap();
+
+        let mut fields = vec![];
+        let mut field_visitor = Self {
+            depth: self.depth + 1,
+            output: std::mem::take(&mut self.output),
+        };
+
+        while let Some((field, value)) = driver.next_field(&mut field_visitor)? {
+            fields.push((field.name.clone(), value));
+        }
+
+        self.output = field_visitor.output;
+        let type_ = driver.struct_layout().type_.clone();
+        Ok(MoveValue::Struct(MoveStruct { type_, fields }))
+    }
+
+    fn visit_variant(
+        &mut self,
+        driver: &mut VariantDriver<'_, 'b, 'l>,
+    ) -> Result<Self::Value, Self::Error> {
+        let layout = driver.enum_layout();
+        write!(self.output, "\n[{}] {layout:#}", self.depth).unwrap();
+
+        let mut fields = vec![];
+        let mut field_visitor = Self {
+            depth: self.depth + 1,
+            output: std::mem::take(&mut self.output),
+        };
+
+        while let Some((field, value)) = driver.next_field(&mut field_visitor)? {
+            fields.push((field.name.clone(), value));
+        }
+
+        self.output = field_visitor.output;
+        let type_ = driver.enum_layout().type_.clone();
+        Ok(MoveValue::Variant(MoveVariant {
+            type_,
+            variant_name: driver.variant_name().to_owned(),
+            tag: driver.tag(),
+            fields,
+        }))
+    }
+}
+
 #[test]
 fn traversal() {
     use MoveTypeLayout as T;
     use MoveValue as V;
-
-    #[derive(Default)]
-    struct CountingTraversal(usize);
-
-    impl Traversal for CountingTraversal {
-        type Error = annotated_visitor::Error;
-
-        fn traverse_u8(&mut self, _: u8) -> Result<(), Self::Error> {
-            self.0 += 1;
-            Ok(())
-        }
-
-        fn traverse_u16(&mut self, _: u16) -> Result<(), Self::Error> {
-            self.0 += 1;
-            Ok(())
-        }
-
-        fn traverse_u32(&mut self, _: u32) -> Result<(), Self::Error> {
-            self.0 += 1;
-            Ok(())
-        }
-
-        fn traverse_u64(&mut self, _: u64) -> Result<(), Self::Error> {
-            self.0 += 1;
-            Ok(())
-        }
-
-        fn traverse_u128(&mut self, _: u128) -> Result<(), Self::Error> {
-            self.0 += 1;
-            Ok(())
-        }
-
-        fn traverse_u256(&mut self, _: U256) -> Result<(), Self::Error> {
-            self.0 += 1;
-            Ok(())
-        }
-
-        fn traverse_bool(&mut self, _: bool) -> Result<(), Self::Error> {
-            self.0 += 1;
-            Ok(())
-        }
-
-        fn traverse_address(&mut self, _: AccountAddress) -> Result<(), Self::Error> {
-            self.0 += 1;
-            Ok(())
-        }
-
-        fn traverse_signer(&mut self, _: AccountAddress) -> Result<(), Self::Error> {
-            self.0 += 1;
-            Ok(())
-        }
-
-        fn traverse_vector(
-            &mut self,
-            driver: &mut VecDriver<'_, '_, '_>,
-        ) -> Result<(), Self::Error> {
-            self.0 += 1;
-            while driver.next_element(self)?.is_some() {}
-            Ok(())
-        }
-
-        fn traverse_struct(
-            &mut self,
-            driver: &mut StructDriver<'_, '_, '_>,
-        ) -> Result<(), Self::Error> {
-            self.0 += 1;
-            while driver.next_field(self)?.is_some() {}
-            Ok(())
-        }
-
-        fn traverse_variant(
-            &mut self,
-            driver: &mut VariantDriver<'_, '_, '_>,
-        ) -> Result<(), Self::Error> {
-            self.0 += 1;
-            while driver.next_field(self)?.is_some() {}
-            Ok(())
-        }
-    }
 
     let type_layout = struct_layout_(
         "0x0::foo::Bar",
@@ -297,132 +493,6 @@ fn nested_datatype_visit() {
     use MoveTypeLayout as T;
     use MoveValue as V;
 
-    #[derive(Default)]
-    struct PrintVisitor {
-        depth: usize,
-        output: String,
-    }
-
-    impl Visitor for PrintVisitor {
-        type Value = MoveValue;
-        type Error = annotated_visitor::Error;
-
-        fn visit_u8(&mut self, value: u8) -> Result<Self::Value, Self::Error> {
-            write!(self.output, "\n[{}] {value}: u8", self.depth).unwrap();
-            Ok(V::U8(value))
-        }
-
-        fn visit_u16(&mut self, value: u16) -> Result<Self::Value, Self::Error> {
-            write!(self.output, "\n[{}] {value}: u16", self.depth).unwrap();
-            Ok(V::U16(value))
-        }
-
-        fn visit_u32(&mut self, value: u32) -> Result<Self::Value, Self::Error> {
-            write!(self.output, "\n[{}] {value}: u32", self.depth).unwrap();
-            Ok(V::U32(value))
-        }
-
-        fn visit_u64(&mut self, value: u64) -> Result<Self::Value, Self::Error> {
-            write!(self.output, "\n[{}] {value}: u64", self.depth).unwrap();
-            Ok(V::U64(value))
-        }
-
-        fn visit_u128(&mut self, value: u128) -> Result<Self::Value, Self::Error> {
-            write!(self.output, "\n[{}] {value}: u128", self.depth).unwrap();
-            Ok(V::U128(value))
-        }
-
-        fn visit_u256(&mut self, value: U256) -> Result<Self::Value, Self::Error> {
-            write!(self.output, "\n[{}] {value}: u256", self.depth).unwrap();
-            Ok(V::U256(value))
-        }
-
-        fn visit_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error> {
-            write!(self.output, "\n[{}] {value}: bool", self.depth).unwrap();
-            Ok(V::Bool(value))
-        }
-
-        fn visit_address(&mut self, value: AccountAddress) -> Result<Self::Value, Self::Error> {
-            write!(self.output, "\n[{}] {value}: address", self.depth).unwrap();
-            Ok(V::Address(value))
-        }
-
-        fn visit_signer(&mut self, value: AccountAddress) -> Result<Self::Value, Self::Error> {
-            write!(self.output, "\n[{}] {value}: signer", self.depth).unwrap();
-            Ok(V::Signer(value))
-        }
-
-        fn visit_vector(
-            &mut self,
-            driver: &mut VecDriver<'_, '_, '_>,
-        ) -> Result<Self::Value, Self::Error> {
-            let layout = driver.element_layout();
-            write!(self.output, "\n[{}] vector<{layout:#}>", self.depth).unwrap();
-
-            let mut elems = vec![];
-            let mut elem_visitor = Self {
-                depth: self.depth + 1,
-                output: std::mem::take(&mut self.output),
-            };
-
-            while let Some(elem) = driver.next_element(&mut elem_visitor)? {
-                elems.push(elem)
-            }
-
-            self.output = elem_visitor.output;
-            Ok(V::Vector(elems))
-        }
-
-        fn visit_struct(
-            &mut self,
-            driver: &mut StructDriver<'_, '_, '_>,
-        ) -> Result<Self::Value, Self::Error> {
-            let layout = driver.struct_layout();
-            write!(self.output, "\n[{}] {layout:#}", self.depth).unwrap();
-
-            let mut fields = vec![];
-            let mut field_visitor = Self {
-                depth: self.depth + 1,
-                output: std::mem::take(&mut self.output),
-            };
-
-            while let Some((field, value)) = driver.next_field(&mut field_visitor)? {
-                fields.push((field.name.clone(), value));
-            }
-
-            self.output = field_visitor.output;
-            let type_ = driver.struct_layout().type_.clone();
-            Ok(V::Struct(MoveStruct { type_, fields }))
-        }
-
-        fn visit_variant(
-            &mut self,
-            driver: &mut VariantDriver<'_, '_, '_>,
-        ) -> Result<Self::Value, Self::Error> {
-            let layout = driver.enum_layout();
-            write!(self.output, "\n[{}] {layout:#}", self.depth).unwrap();
-
-            let mut fields = vec![];
-            let mut field_visitor = Self {
-                depth: self.depth + 1,
-                output: std::mem::take(&mut self.output),
-            };
-
-            while let Some((field, value)) = driver.next_field(&mut field_visitor)? {
-                fields.push((field.name.clone(), value));
-            }
-
-            self.output = field_visitor.output;
-            let type_ = driver.enum_layout().type_.clone();
-            Ok(V::Variant(MoveVariant {
-                type_,
-                variant_name: driver.variant_name().to_owned(),
-                tag: driver.tag(),
-                fields,
-            }))
-        }
-    }
-
     let type_layout = struct_layout_(
         "0x0::foo::Bar",
         vec![
@@ -520,17 +590,21 @@ fn peek_field_test() {
         fields: &'f [&'f str],
     }
 
-    impl<'f> Visitor for PeekU64Visitor<'f> {
+    impl<'b, 'l, 'f> Visitor<'b, 'l> for PeekU64Visitor<'f> {
         type Value = Option<u64>;
         type Error = annotated_visitor::Error;
 
-        fn visit_u64(&mut self, value: u64) -> Result<Self::Value, Self::Error> {
+        fn visit_u64(
+            &mut self,
+            _driver: &ValueDriver<'_, 'b, 'l>,
+            value: u64,
+        ) -> Result<Self::Value, Self::Error> {
             Ok(self.fields.is_empty().then_some(value))
         }
 
         fn visit_struct(
             &mut self,
-            driver: &mut StructDriver<'_, '_, '_>,
+            driver: &mut StructDriver<'_, 'b, 'l>,
         ) -> Result<Self::Value, Self::Error> {
             let [field, fields @ ..] = self.fields else {
                 return Ok(None);
@@ -551,7 +625,7 @@ fn peek_field_test() {
 
         fn visit_variant(
             &mut self,
-            driver: &mut VariantDriver<'_, '_, '_>,
+            driver: &mut VariantDriver<'_, 'b, 'l>,
         ) -> Result<Self::Value, Self::Error> {
             let [field, fields @ ..] = self.fields else {
                 return Ok(None);
@@ -572,35 +646,67 @@ fn peek_field_test() {
 
         // === Empty/default cases ===
 
-        fn visit_u8(&mut self, _: u8) -> Result<Self::Value, Self::Error> {
+        fn visit_u8(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: u8,
+        ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
 
-        fn visit_u16(&mut self, _: u16) -> Result<Self::Value, Self::Error> {
+        fn visit_u16(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: u16,
+        ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
 
-        fn visit_u32(&mut self, _: u32) -> Result<Self::Value, Self::Error> {
+        fn visit_u32(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: u32,
+        ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
 
-        fn visit_u128(&mut self, _: u128) -> Result<Self::Value, Self::Error> {
+        fn visit_u128(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: u128,
+        ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
 
-        fn visit_u256(&mut self, _: U256) -> Result<Self::Value, Self::Error> {
+        fn visit_u256(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: U256,
+        ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
 
-        fn visit_bool(&mut self, _: bool) -> Result<Self::Value, Self::Error> {
+        fn visit_bool(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: bool,
+        ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
 
-        fn visit_address(&mut self, _: AccountAddress) -> Result<Self::Value, Self::Error> {
+        fn visit_address(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: AccountAddress,
+        ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
 
-        fn visit_signer(&mut self, _: AccountAddress) -> Result<Self::Value, Self::Error> {
+        fn visit_signer(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: AccountAddress,
+        ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
 
@@ -608,7 +714,7 @@ fn peek_field_test() {
         /// under here.
         fn visit_vector(
             &mut self,
-            _: &mut VecDriver<'_, '_, '_>,
+            _: &mut VecDriver<'_, 'b, 'l>,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
@@ -670,8 +776,286 @@ fn peek_field_test() {
     assert_eq!(visit_struct(&["f", "h"]), Some(46));
 }
 
+#[test]
+fn byte_offset_test() {
+    use MoveTypeLayout as T;
+    use MoveValue as V;
+
+    #[derive(Default)]
+    struct ByteOffsetVisitor(String);
+
+    impl<'b, 'l> Traversal<'b, 'l> for ByteOffsetVisitor {
+        type Error = annotated_visitor::Error;
+
+        fn traverse_u8(
+            &mut self,
+            driver: &ValueDriver<'_, 'b, 'l>,
+            value: u8,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {value}: u8",
+                driver.start(),
+                driver.position()
+            )
+            .unwrap();
+            Ok(())
+        }
+
+        fn traverse_u16(
+            &mut self,
+            driver: &ValueDriver<'_, 'b, 'l>,
+            value: u16,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {value}: u16",
+                driver.start(),
+                driver.position()
+            )
+            .unwrap();
+            Ok(())
+        }
+
+        fn traverse_u32(
+            &mut self,
+            driver: &ValueDriver<'_, 'b, 'l>,
+            value: u32,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {value}: u32",
+                driver.start(),
+                driver.position()
+            )
+            .unwrap();
+            Ok(())
+        }
+
+        fn traverse_u64(
+            &mut self,
+            driver: &ValueDriver<'_, 'b, 'l>,
+            value: u64,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {value}: u64",
+                driver.start(),
+                driver.position()
+            )
+            .unwrap();
+            Ok(())
+        }
+
+        fn traverse_u128(
+            &mut self,
+            driver: &ValueDriver<'_, 'b, 'l>,
+            value: u128,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {value}: u128",
+                driver.start(),
+                driver.position()
+            )
+            .unwrap();
+            Ok(())
+        }
+
+        fn traverse_u256(
+            &mut self,
+            driver: &ValueDriver<'_, 'b, 'l>,
+            value: U256,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {value}: u256",
+                driver.start(),
+                driver.position()
+            )
+            .unwrap();
+            Ok(())
+        }
+
+        fn traverse_bool(
+            &mut self,
+            driver: &ValueDriver<'_, 'b, 'l>,
+            value: bool,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {value}: bool",
+                driver.start(),
+                driver.position()
+            )
+            .unwrap();
+            Ok(())
+        }
+
+        fn traverse_address(
+            &mut self,
+            driver: &ValueDriver<'_, 'b, 'l>,
+            value: AccountAddress,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {}: address",
+                driver.start(),
+                driver.position(),
+                value.to_canonical_display(/* with_prefix */ true),
+            )
+            .unwrap();
+            Ok(())
+        }
+
+        fn traverse_signer(
+            &mut self,
+            driver: &ValueDriver<'_, 'b, 'l>,
+            value: AccountAddress,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {}: address",
+                driver.start(),
+                driver.position(),
+                value.to_canonical_display(/* with_prefix */ true),
+            )
+            .unwrap();
+            Ok(())
+        }
+
+        fn traverse_vector(
+            &mut self,
+            driver: &mut VecDriver<'_, 'b, 'l>,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] vector<{:#}>",
+                driver.start(),
+                driver.position(),
+                driver.element_layout(),
+            )
+            .unwrap();
+            while driver.next_element(self)?.is_some() {}
+            Ok(())
+        }
+
+        fn traverse_struct(
+            &mut self,
+            driver: &mut StructDriver<'_, 'b, 'l>,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {:#}",
+                driver.start(),
+                driver.position(),
+                driver.struct_layout(),
+            )
+            .unwrap();
+
+            while let Some((_, ())) = driver.next_field(self)? {}
+            Ok(())
+        }
+
+        fn traverse_variant(
+            &mut self,
+            driver: &mut VariantDriver<'_, 'b, 'l>,
+        ) -> Result<(), Self::Error> {
+            write!(
+                &mut self.0,
+                "\n[{:>3} .. {:>3}] {:#}",
+                driver.start(),
+                driver.position(),
+                driver.enum_layout(),
+            )
+            .unwrap();
+
+            while let Some((_, ())) = driver.next_field(self)? {}
+            Ok(())
+        }
+    }
+
+    let type_layout = struct_layout_(
+        "0x0::foo::Bar",
+        vec![
+            (
+                "inner",
+                struct_layout_(
+                    "0x0::baz::Qux",
+                    vec![("f", T::U64), ("g", T::Vector(Box::new(T::U32)))],
+                ),
+            ),
+            (
+                "last",
+                enum_layout_("0x0::foo::Baz", vec![("e", vec![("h", T::U64)])]),
+            ),
+        ],
+    );
+
+    let T::Struct(struct_layout) = &type_layout else {
+        panic!("Not a struct layout");
+    };
+
+    let bytes = serialize(struct_value_(
+        "0x0::foo::Bar",
+        vec![
+            (
+                "inner",
+                struct_value_(
+                    "0x0::baz::Qux",
+                    vec![
+                        ("f", V::U64(7)),
+                        ("g", V::Vector(vec![V::U32(1), V::U32(2), V::U32(3)])),
+                    ],
+                ),
+            ),
+            (
+                "last",
+                variant_value_("0x0::foo::Baz", "e", 0, vec![("h", V::U64(4))]),
+            ),
+        ],
+    ));
+
+    let mut value_visitor = ByteOffsetVisitor::default();
+    MoveValue::visit_deserialize(&bytes, &type_layout, &mut value_visitor).unwrap();
+
+    let mut struct_visitor = ByteOffsetVisitor::default();
+    MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_visitor).unwrap();
+
+    let expected_output = r#"
+[  0 ..   0] struct 0x0::foo::Bar {
+    inner: struct 0x0::baz::Qux {
+        f: u64,
+        g: vector<u32>,
+    },
+    last: enum 0x0::foo::Baz {
+        e {
+            h: u64,
+        },
+    },
+}
+[  0 ..   0] struct 0x0::baz::Qux {
+    f: u64,
+    g: vector<u32>,
+}
+[  0 ..   8] 7: u64
+[  8 ..   9] vector<u32>
+[  9 ..  13] 1: u32
+[ 13 ..  17] 2: u32
+[ 17 ..  21] 3: u32
+[ 21 ..  22] enum 0x0::foo::Baz {
+    e {
+        h: u64,
+    },
+}
+[ 22 ..  30] 4: u64"#;
+
+    assert_eq!(value_visitor.0, expected_output);
+    assert_eq!(struct_visitor.0, expected_output);
+}
+
 /// Create a struct value for test purposes.
-fn struct_value_(rep: &str, fields: Vec<(&str, MoveValue)>) -> MoveValue {
+pub(crate) fn struct_value_(rep: &str, fields: Vec<(&str, MoveValue)>) -> MoveValue {
     let type_ = StructTag::from_str(rep).unwrap();
     let fields = fields
         .into_iter()
@@ -682,7 +1066,7 @@ fn struct_value_(rep: &str, fields: Vec<(&str, MoveValue)>) -> MoveValue {
 }
 
 /// Create a struct layout for test purposes.
-fn struct_layout_(rep: &str, fields: Vec<(&str, MoveTypeLayout)>) -> MoveTypeLayout {
+pub(crate) fn struct_layout_(rep: &str, fields: Vec<(&str, MoveTypeLayout)>) -> MoveTypeLayout {
     let type_ = StructTag::from_str(rep).unwrap();
     let fields = fields
         .into_iter()
@@ -696,7 +1080,12 @@ fn struct_layout_(rep: &str, fields: Vec<(&str, MoveTypeLayout)>) -> MoveTypeLay
 }
 
 /// Create a variant value for test purposes.
-fn variant_value_(rep: &str, name: &str, tag: u16, fields: Vec<(&str, MoveValue)>) -> MoveValue {
+pub(crate) fn variant_value_(
+    rep: &str,
+    name: &str,
+    tag: u16,
+    fields: Vec<(&str, MoveValue)>,
+) -> MoveValue {
     let type_ = StructTag::from_str(rep).unwrap();
     let fields = fields
         .into_iter()
@@ -712,7 +1101,10 @@ fn variant_value_(rep: &str, name: &str, tag: u16, fields: Vec<(&str, MoveValue)
 }
 
 /// Create an enum layout for test purposes.
-fn enum_layout_(rep: &str, variants: Vec<(&str, Vec<(&str, MoveTypeLayout)>)>) -> MoveTypeLayout {
+pub(crate) fn enum_layout_(
+    rep: &str,
+    variants: Vec<(&str, Vec<(&str, MoveTypeLayout)>)>,
+) -> MoveTypeLayout {
     let type_ = StructTag::from_str(rep).unwrap();
     let variants = variants
         .into_iter()
@@ -730,6 +1122,6 @@ fn enum_layout_(rep: &str, variants: Vec<(&str, Vec<(&str, MoveTypeLayout)>)>) -
 }
 
 /// BCS encode Move value.
-fn serialize(value: MoveValue) -> Vec<u8> {
+pub(crate) fn serialize(value: MoveValue) -> Vec<u8> {
     value.clone().undecorate().simple_serialize().unwrap()
 }

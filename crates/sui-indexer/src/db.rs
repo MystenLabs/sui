@@ -3,14 +3,17 @@
 
 use crate::database::Connection;
 use crate::errors::IndexerError;
+use crate::handlers::pruner::PrunableTable;
 use clap::Args;
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
+use diesel::prelude::QueryableByName;
 use diesel::table;
-use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use std::collections::{BTreeSet, HashSet};
 use std::time::Duration;
+use strum::IntoEnumIterator;
 use tracing::info;
 
 table! {
@@ -111,27 +114,75 @@ async fn check_db_migration_consistency_impl(
     // Unfortunately we cannot call applied_migrations() directly on the connection,
     // since it implicitly creates the __diesel_schema_migrations table if it doesn't exist,
     // which is a write operation that we don't want to do in this function.
-    let applied_migrations: Vec<MigrationVersion> = __diesel_schema_migrations::table
-        .select(__diesel_schema_migrations::version)
-        .order(__diesel_schema_migrations::version.asc())
-        .load(conn)
-        .await?;
+    let applied_migrations: BTreeSet<MigrationVersion<'_>> = BTreeSet::from_iter(
+        __diesel_schema_migrations::table
+            .select(__diesel_schema_migrations::version)
+            .load(conn)
+            .await?,
+    );
 
-    // We check that the local migrations is a prefix of the applied migrations.
-    if local_migrations.len() > applied_migrations.len() {
-        return Err(IndexerError::DbMigrationError(format!(
-            "The number of local migrations is greater than the number of applied migrations. Local migrations: {:?}, Applied migrations: {:?}",
-            local_migrations, applied_migrations
-        )));
+    // We check that the local migrations is a subset of the applied migrations.
+    let unapplied_migrations: Vec<_> = local_migrations
+        .into_iter()
+        .filter(|m| !applied_migrations.contains(m))
+        .collect();
+
+    if unapplied_migrations.is_empty() {
+        return Ok(());
     }
-    for (local_migration, applied_migration) in local_migrations.iter().zip(&applied_migrations) {
-        if local_migration != applied_migration {
-            return Err(IndexerError::DbMigrationError(format!(
-                "The next applied migration `{:?}` diverges from the local migration `{:?}`",
-                applied_migration, local_migration
+
+    Err(IndexerError::DbMigrationError(format!(
+        "This binary expected the following migrations to have been run, and they were not: {:?}",
+        unapplied_migrations
+    )))
+}
+
+/// Check that prunable tables exist in the database.
+pub async fn check_prunable_tables_valid(conn: &mut Connection<'_>) -> Result<(), IndexerError> {
+    info!("Starting compatibility check");
+
+    use diesel_async::RunQueryDsl;
+
+    let select_parent_tables = r#"
+    SELECT c.relname AS table_name
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    LEFT JOIN pg_partitioned_table pt ON pt.partrelid = c.oid
+    WHERE c.relkind IN ('r', 'p')  -- 'r' for regular tables, 'p' for partitioned tables
+        AND n.nspname = 'public'
+        AND (
+            pt.partrelid IS NOT NULL  -- This is a partitioned (parent) table
+            OR NOT EXISTS (  -- This is not a partition (child table)
+                SELECT 1
+                FROM pg_inherits i
+                WHERE i.inhrelid = c.oid
+            )
+        );
+    "#;
+
+    #[derive(QueryableByName)]
+    struct TableName {
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        table_name: String,
+    }
+
+    let result: Vec<TableName> = diesel::sql_query(select_parent_tables)
+        .load(conn)
+        .await
+        .map_err(|e| IndexerError::DbMigrationError(format!("Failed to fetch tables: {e}")))?;
+
+    let parent_tables_from_db: HashSet<_> = result.into_iter().map(|t| t.table_name).collect();
+
+    for key in PrunableTable::iter() {
+        if !parent_tables_from_db.contains(key.as_ref()) {
+            return Err(IndexerError::GenericError(format!(
+                "Invalid retention policy override provided for table {}: does not exist in the database",
+                key
             )));
         }
     }
+
+    info!("Compatibility check passed");
     Ok(())
 }
 
@@ -310,6 +361,34 @@ mod tests {
         local_migrations.pop();
         // Local migrations is one record less than the applied migrations.
         // This should pass the consistency check since it's still a prefix.
+        check_db_migration_consistency_impl(&mut pool.get().await.unwrap(), local_migrations)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn db_migration_consistency_subset_test() {
+        let database = TempDb::new().unwrap();
+        let pool = ConnectionPool::new(
+            database.database().url().to_owned(),
+            ConnectionPoolConfig {
+                pool_size: 2,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        reset_database(pool.dedicated_connection().await.unwrap())
+            .await
+            .unwrap();
+
+        let migrations: Vec<Box<dyn Migration<Pg>>> = MIGRATIONS.migrations().unwrap();
+        let mut local_migrations: Vec<_> = migrations.iter().map(|m| m.name().version()).collect();
+        local_migrations.remove(2);
+
+        // Local migrations are missing one record compared to the applied migrations, which should
+        // still be okay.
         check_db_migration_consistency_impl(&mut pool.get().await.unwrap(), local_migrations)
             .await
             .unwrap();

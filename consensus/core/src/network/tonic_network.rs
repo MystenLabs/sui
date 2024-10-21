@@ -14,7 +14,7 @@ use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use futures::{stream, Stream, StreamExt as _};
-use hyper_util::rt::tokio::TokioIo;
+use hyper_util::rt::{tokio::TokioIo, TokioTimer};
 use hyper_util::service::TowerToHyperService;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_metrics::monitored_future;
@@ -31,7 +31,7 @@ use tokio::{
 };
 use tokio_rustls::TlsAcceptor;
 use tokio_stream::{iter, Iter};
-use tonic::{transport::Server, Request, Response, Streaming};
+use tonic::{Request, Response, Streaming};
 use tower_http::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
     ServiceBuilderExt,
@@ -339,7 +339,7 @@ impl NetworkClient for TonicClient {
 // Tonic channel wrapped with layers.
 type Channel = mysten_network::callback::Callback<
     tower_http::trace::Trace<
-        tonic::transport::Channel,
+        tonic_rustls::Channel,
         tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
     >,
     MetricsCallbackMaker,
@@ -381,7 +381,8 @@ impl ChannelPool {
         let address = format!("https://{address}");
         let config = &self.context.parameters.tonic;
         let buffer_size = config.connection_buffer_size;
-        let endpoint = tonic::transport::Channel::from_shared(address.clone())
+        let client_tls_config = create_rustls_client_config(&self.context, network_keypair, peer);
+        let endpoint = tonic_rustls::Channel::from_shared(address.clone())
             .unwrap()
             .connect_timeout(timeout)
             .initial_connection_window_size(Some(buffer_size as u32))
@@ -391,22 +392,14 @@ impl ChannelPool {
             .http2_keep_alive_interval(config.keepalive_interval)
             // tcp keepalive is probably unnecessary and is unsupported by msim.
             .user_agent("mysticeti")
+            .unwrap()
+            .tls_config(client_tls_config)
             .unwrap();
-
-        let client_tls_config = create_rustls_client_config(&self.context, network_keypair, peer);
-        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(client_tls_config)
-            .https_only()
-            .enable_http2()
-            .build();
 
         let deadline = tokio::time::Instant::now() + timeout;
         let channel = loop {
             trace!("Connecting to endpoint at {address}");
-            match endpoint
-                .connect_with_connector(https_connector.clone())
-                .await
-            {
+            match endpoint.connect().await {
                 Ok(channel) => break channel,
                 Err(e) => {
                     warn!("Failed to connect to endpoint at {address}: {e:?}");
@@ -710,31 +703,30 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         let service = TonicServiceProxy::new(self.context.clone(), service);
         let config = &self.context.parameters.tonic;
 
-        let consensus_service = Server::builder()
-            .layer(
-                TraceLayer::new_for_grpc()
-                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
-                    .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
-            )
-            .initial_connection_window_size(64 << 20)
-            .initial_stream_window_size(32 << 20)
-            .http2_keepalive_interval(Some(config.keepalive_interval))
-            .http2_keepalive_timeout(Some(config.keepalive_interval))
-            // tcp keepalive is unsupported by msim
-            .add_service(
-                ConsensusServiceServer::new(service)
-                    .max_encoding_message_size(config.message_size_limit)
-                    .max_decoding_message_size(config.message_size_limit),
-            )
-            .into_router();
+        let consensus_service = tonic::service::Routes::new(
+            ConsensusServiceServer::new(service)
+                .max_encoding_message_size(config.message_size_limit)
+                .max_decoding_message_size(config.message_size_limit),
+        )
+        .into_axum_router();
 
         let inbound_metrics = self.context.metrics.network_metrics.inbound.clone();
         let excessive_message_size = self.context.parameters.tonic.excessive_message_size;
 
-        let http =
-            hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
-                .http2_only();
-        let http = Arc::new(http);
+        let http = {
+            let mut builder =
+                hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
+                    .http2_only();
+            builder
+                .http2()
+                .timer(TokioTimer::new())
+                .initial_connection_window_size(64 << 20)
+                .initial_stream_window_size(32 << 20)
+                .keep_alive_interval(Some(config.keepalive_interval))
+                .keep_alive_timeout(config.keepalive_interval);
+
+            Arc::new(builder)
+        };
 
         let tls_server_config =
             create_rustls_server_config(&self.context, self.network_keypair.clone());
@@ -830,7 +822,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                         match result {
                             Ok(Ok(())) => {},
                             Ok(Err(e)) => {
-                                warn!("Error serving connection: {e:?}");
+                                debug!("Error serving connection: {e:?}");
                             },
                             Err(e) => {
                                 debug!("Connection task error, likely shutting down: {e:?}");
@@ -907,7 +899,12 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                             inbound_metrics,
                             excessive_message_size,
                         )))
-                        .service(consensus_service.clone());
+                        .layer(
+                            TraceLayer::new_for_grpc()
+                                .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
+                                .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
+                        )
+                        .service(consensus_service);
 
                     pin! {
                         let connection = http.serve_connection(TokioIo::new(tls_stream), TowerToHyperService::new(svc));

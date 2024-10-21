@@ -2,7 +2,7 @@
 	"name": "@mysten/deepbook-v3",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui Deepbook SDK",
-	"version": "0.6.0",
+	"version": "0.12.1",
 	"license": "Apache-2.0",
 	"type": "commonjs",
 	"main": "./dist/cjs/index.js",

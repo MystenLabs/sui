@@ -40,7 +40,7 @@ use tracing::{debug, info};
 
 pub(crate) const CURRENT_COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
 const LEGACY_COMPILER_VERSION: &str = CURRENT_COMPILER_VERSION; // TODO: update this when Move 2024 is released
-const PRE_TOOLCHAIN_MOVE_LOCK_VERSION: u64 = 0; // Used to detect lockfiles pre-toolchain versioning support
+const PRE_TOOLCHAIN_MOVE_LOCK_VERSION: u16 = 0; // Used to detect lockfiles pre-toolchain versioning support
 const CANONICAL_UNIX_BINARY_NAME: &str = "sui";
 const CANONICAL_WIN_BINARY_NAME: &str = "sui.exe";
 
@@ -249,9 +249,9 @@ fn download_and_compile(
         let mut dest_binary = dest_version.clone();
         dest_binary.extend(["target", "release"]);
         if platform == "windows-x86_64" {
-            dest_binary.push(&format!("sui-{platform}.exe"));
+            dest_binary.push(format!("sui-{platform}.exe"));
         } else {
-            dest_binary.push(&format!("sui-{platform}"));
+            dest_binary.push(format!("sui-{platform}"));
         }
         let dest_binary_os = OsStr::new(dest_binary.as_path());
         set_executable_permission(dest_binary_os)?;

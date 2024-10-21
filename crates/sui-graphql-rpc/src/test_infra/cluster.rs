@@ -14,14 +14,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_graphql_rpc_client::simple_client::SimpleClient;
+pub use sui_indexer::config::RetentionConfig;
 pub use sui_indexer::config::SnapshotLagConfig;
 use sui_indexer::errors::IndexerError;
-use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::tempdb::get_available_port;
 use sui_indexer::tempdb::TempDb;
-use sui_indexer::test_utils::start_test_indexer_impl;
-use sui_indexer::test_utils::ReaderWriterConfig;
+use sui_indexer::test_utils::start_indexer_writer_for_testing;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_types::storage::RestStateReader;
 use tempfile::tempdir;
@@ -115,8 +114,9 @@ pub async fn start_network_cluster() -> NetworkCluster {
         host: "127.0.0.1".to_owned(),
         db_url: database.database().url().as_str().to_owned(),
         db_pool_size: 5,
-        prom_url: "127.0.0.1".to_owned(),
+        prom_host: "127.0.0.1".to_owned(),
         prom_port: get_available_port(),
+        skip_migration_consistency_check: false,
     };
     let data_ingestion_path = tempfile::tempdir().unwrap();
     let db_url = graphql_connection_config.db_url.clone();
@@ -126,12 +126,12 @@ pub async fn start_network_cluster() -> NetworkCluster {
     let val_fn = start_validator_with_fullnode(data_ingestion_path.path().to_path_buf()).await;
 
     // Starts indexer
-    let (pg_store, pg_handle) = start_test_indexer_impl(
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
         db_url,
-        val_fn.rpc_url().to_string(),
-        ReaderWriterConfig::writer_mode(None, None),
+        None,
+        None,
         Some(data_ingestion_path.path().to_path_buf()),
-        cancellation_token.clone(),
+        Some(cancellation_token.clone()),
     )
     .await;
 
@@ -151,7 +151,7 @@ pub async fn start_network_cluster() -> NetworkCluster {
 pub async fn serve_executor(
     executor: Arc<dyn RestStateReader + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
-    epochs_to_keep: Option<u64>,
+    retention_config: Option<RetentionConfig>,
     data_ingestion_path: PathBuf,
 ) -> ExecutorCluster {
     let database = TempDb::new().unwrap();
@@ -160,8 +160,9 @@ pub async fn serve_executor(
         host: "127.0.0.1".to_owned(),
         db_url: database.database().url().as_str().to_owned(),
         db_pool_size: 5,
-        prom_url: "127.0.0.1".to_owned(),
+        prom_host: "127.0.0.1".to_owned(),
         prom_port: get_available_port(),
+        skip_migration_consistency_check: false,
     };
     let db_url = graphql_connection_config.db_url.clone();
     // Creates a cancellation token and adds this to the ExecutorCluster, so that we can send a
@@ -178,12 +179,14 @@ pub async fn serve_executor(
             .await;
     });
 
-    let (pg_store, pg_handle) = start_test_indexer_impl(
+    let snapshot_config = snapshot_config.unwrap_or_default();
+
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
         db_url,
-        format!("http://{}", executor_server_url),
-        ReaderWriterConfig::writer_mode(snapshot_config.clone(), epochs_to_keep),
+        Some(snapshot_config.clone()),
+        retention_config,
         Some(data_ingestion_path),
-        cancellation_token.clone(),
+        Some(cancellation_token.clone()),
     )
     .await;
 
@@ -210,7 +213,7 @@ pub async fn serve_executor(
         indexer_join_handle: pg_handle,
         graphql_server_join_handle: graphql_server_handle,
         graphql_client: client,
-        snapshot_config: snapshot_config.unwrap_or_default(),
+        snapshot_config,
         graphql_connection_config,
         cancellation_token,
         database,
@@ -369,6 +372,56 @@ pub async fn wait_for_graphql_checkpoint_catchup(
     .expect("Timeout waiting for graphql to catchup to checkpoint");
 }
 
+/// Ping the GraphQL server until its background task has updated the checkpoint watermark to the
+/// desired checkpoint.
+pub async fn wait_for_graphql_epoch_catchup(
+    client: &SimpleClient,
+    epoch: u64,
+    base_timeout: Duration,
+) {
+    info!(
+        "Waiting for graphql to catchup to epoch {}, base time out is {}",
+        epoch,
+        base_timeout.as_secs()
+    );
+    let query = r#"
+    {
+        epoch {
+            epochId
+        }
+    }"#;
+
+    let timeout = base_timeout.mul_f64(epoch.max(1) as f64);
+
+    tokio::time::timeout(timeout, async {
+        loop {
+            let resp = client
+                .execute_to_graphql(query.to_string(), false, vec![], vec![])
+                .await
+                .unwrap()
+                .response_body_json();
+
+            let latest_epoch = resp["data"]["epoch"].get("epochId");
+            info!("Latest epoch: {:?}", latest_epoch);
+            // Indexer has not picked up any epochs yet
+            let Some(latest_epoch) = latest_epoch else {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                continue;
+            };
+
+            // Indexer has picked up an epoch, but it's not the one we're waiting for
+            let latest_epoch = latest_epoch.as_u64().unwrap();
+            if latest_epoch < epoch {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            } else {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("Timeout waiting for graphql to catchup to epoch");
+}
+
 /// Ping the GraphQL server for a checkpoint until an empty response is returned, indicating that
 /// the checkpoint has been pruned.
 pub async fn wait_for_graphql_checkpoint_pruned(
@@ -418,6 +471,12 @@ impl Cluster {
     /// service's background task to update the checkpoint watermark to the given checkpoint.
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         wait_for_graphql_checkpoint_catchup(&self.graphql_client, checkpoint, base_timeout).await
+    }
+
+    /// Waits for the indexer to index up to the given epoch, then waits for the graphql service's
+    /// background task to update the corresponding watermark.
+    pub async fn wait_for_epoch_catchup(&self, epoch: u64, base_timeout: Duration) {
+        wait_for_graphql_epoch_catchup(&self.graphql_client, epoch, base_timeout).await
     }
 
     /// Waits for the indexer to prune a given checkpoint.

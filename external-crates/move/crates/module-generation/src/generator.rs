@@ -113,13 +113,12 @@ impl<'a> ModuleGenerator<'a> {
         if !structs.is_empty() {
             end += 1;
         };
-
-        match self.index(end) {
-            0 => Type::Address,
-            1 => Type::U8,
-            2 => Type::U64,
-            3 => Type::U128,
-            4 => Type::Bool,
+        let type_ = match self.index(end) {
+            0 => Type_::Address,
+            1 => Type_::U8,
+            2 => Type_::U64,
+            3 => Type_::U128,
+            4 => Type_::Bool,
             5 if !structs.is_empty() => {
                 let index = self.index(structs.len());
                 let struct_def = structs[index].value.clone();
@@ -133,17 +132,18 @@ impl<'a> ModuleGenerator<'a> {
                     let module_name = ModuleName::module_self();
                     QualifiedDatatypeIdent::new(module_name, struct_name)
                 };
-                Type::Datatype(struct_ident, ty_instants)
+                Type_::Datatype(struct_ident, ty_instants)
             }
-            6 => Type::U16,
-            7 => Type::U32,
-            8 => Type::U256,
+            6 => Type_::U16,
+            7 => Type_::U32,
+            8 => Type_::U256,
             _ => {
                 let index = self.index(ty_param_context.len());
                 let ty_var = ty_param_context[index].value.clone();
-                Type::TypeParameter(ty_var)
+                Type_::TypeParameter(ty_var)
             }
-        }
+        };
+        Spanned::unsafe_no_loc(type_)
     }
 
     fn typ(&mut self, ty_param_context: &[(TypeVar, BTreeSet<Ability>)]) -> Type {
@@ -158,7 +158,7 @@ impl<'a> ModuleGenerator<'a> {
         // if typ.is_nominal_resource { .... }
         if self.options.references_allowed && self.gen.gen_bool(0.25) {
             let is_mutable = self.gen.gen_bool(0.25);
-            Type::Reference(is_mutable, Box::new(typ))
+            Spanned::unsafe_no_loc(Type_::Reference(is_mutable, Box::new(typ)))
         } else {
             typ
         }
@@ -209,7 +209,7 @@ impl<'a> ModuleGenerator<'a> {
                 .iter()
                 .map(|(ty_var_, _)| {
                     let param_name = Spanned::unsafe_no_loc(Var_(self.identifier().into()));
-                    let ty = Type::TypeParameter(ty_var_.value.clone());
+                    let ty = Spanned::unsafe_no_loc(Type_::TypeParameter(ty_var_.value.clone()));
                     (param_name, ty)
                 })
                 .collect();

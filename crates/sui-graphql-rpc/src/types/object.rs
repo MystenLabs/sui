@@ -51,6 +51,7 @@ use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
 };
 use sui_types::TypeTag;
+
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
     pub address: SuiAddress,
@@ -85,9 +86,6 @@ pub(crate) enum ObjectKind {
     Indexed(NativeObject, StoredHistoryObject),
     /// An object in the bcs serialized form.
     Serialized(Vec<u8>),
-    /// The object is wrapped or deleted and only partial information can be loaded from the
-    /// indexer.
-    WrappedOrDeleted,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
@@ -98,9 +96,6 @@ pub enum ObjectStatus {
     NotIndexed,
     /// The object is fetched from the index.
     Indexed,
-    /// The object is deleted or wrapped and only partial information can be loaded from the
-    /// indexer.
-    WrappedOrDeleted,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, InputObject)]
@@ -169,11 +164,13 @@ pub(crate) struct Shared {
 }
 
 /// If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
-/// the dynamic field, or the intermediate Field object itself). Also note that if the owner
-/// is a parent, then it's guaranteed to be an object.
+/// the dynamic field, or the intermediate Field object itself), and it is owned by another object.
+///
+/// Although its owner is guaranteed to be an object, it is exposed as an Owner, as the parent
+/// object could be wrapped and therefore not directly accessible.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct Parent {
-    parent: Option<Object>,
+    parent: Option<Owner>,
 }
 
 /// An address-owned object is owned by a specific 32-byte address that is
@@ -445,8 +442,8 @@ impl Object {
 
     /// The owner type of this object: Immutable, Shared, Parent, Address
     /// Immutable and Shared Objects do not have owners.
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
-        ObjectImpl(self).owner(ctx).await
+    pub(crate) async fn owner(&self) -> Option<ObjectOwner> {
+        ObjectImpl(self).owner().await
     }
 
     /// The transaction block that created this version of the object.
@@ -586,7 +583,7 @@ impl ObjectImpl<'_> {
             .map(|native| native.digest().base58_encode())
     }
 
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
+    pub(crate) async fn owner(&self) -> Option<ObjectOwner> {
         use NativeOwner as O;
 
         let native = self.0.native_impl()?;
@@ -604,16 +601,14 @@ impl ObjectImpl<'_> {
             }
             O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
             O::ObjectOwner(address) => {
-                let parent = Object::query(
-                    ctx,
-                    address.into(),
-                    Object::latest_at(self.0.checkpoint_viewed_at),
-                )
-                .await
-                .ok()
-                .flatten();
-
-                Some(ObjectOwner::Parent(Parent { parent }))
+                let address = SuiAddress::from(address);
+                Some(ObjectOwner::Parent(Parent {
+                    parent: Some(Owner {
+                        address,
+                        checkpoint_viewed_at: self.0.checkpoint_viewed_at,
+                        root_version: Some(self.0.root_version()),
+                    }),
+                }))
             }
             O::Shared {
                 initial_shared_version,
@@ -632,9 +627,12 @@ impl ObjectImpl<'_> {
         };
         let digest = native.previous_transaction;
 
-        TransactionBlock::query(ctx, digest.into(), self.0.checkpoint_viewed_at)
-            .await
-            .extend()
+        TransactionBlock::query(
+            ctx,
+            TransactionBlock::by_digest(digest.into(), self.0.checkpoint_viewed_at),
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn storage_rebate(&self) -> Option<BigInt> {
@@ -658,9 +656,6 @@ impl ObjectImpl<'_> {
         let Some(filter) = filter
             .unwrap_or_default()
             .intersect(TransactionBlockFilter {
-                #[cfg(not(feature = "staging"))]
-                recv_address: Some(self.0.address),
-                #[cfg(feature = "staging")]
                 affected_address: Some(self.0.address),
                 ..Default::default()
             })
@@ -676,12 +671,7 @@ impl ObjectImpl<'_> {
     pub(crate) async fn bcs(&self) -> Result<Option<Base64>> {
         use ObjectKind as K;
         Ok(match &self.0.kind {
-            K::WrappedOrDeleted => None,
-            // WrappedOrDeleted objects are also read from the historical objects table, and they do
-            // not have a serialized object, so the column is also nullable for stored historical
-            // objects.
             K::Indexed(_, stored) => stored.serialized_object.as_ref().map(Base64::from),
-
             K::NotIndexed(native) => {
                 let bytes = bcs::to_bytes(native)
                     .map_err(|e| {
@@ -764,24 +754,14 @@ impl Object {
         serialized: Option<Vec<u8>>,
         checkpoint_viewed_at: u64,
         root_version: u64,
-    ) -> Self {
-        if let Some(bytes) = serialized {
-            Self {
-                address: object_id,
-                version,
-                kind: ObjectKind::Serialized(bytes),
-                checkpoint_viewed_at,
-                root_version,
-            }
-        } else {
-            Self {
-                address: object_id,
-                version,
-                kind: ObjectKind::WrappedOrDeleted,
-                checkpoint_viewed_at,
-                root_version: version,
-            }
-        }
+    ) -> Option<Self> {
+        serialized.map(|bytes| Self {
+            address: object_id,
+            version,
+            kind: ObjectKind::Serialized(bytes),
+            checkpoint_viewed_at,
+            root_version,
+        })
     }
 
     pub(crate) fn native_impl(&self) -> Option<NativeObject> {
@@ -790,7 +770,6 @@ impl Object {
         match &self.kind {
             K::NotIndexed(native) | K::Indexed(native, _) => Some(native.clone()),
             K::Serialized(bytes) => bcs::from_bytes(bytes).ok(),
-            K::WrappedOrDeleted => None,
         }
     }
 
@@ -1016,13 +995,9 @@ impl Object {
                     root_version,
                 })
             }
-            NativeObjectStatus::WrappedOrDeleted => Ok(Self {
-                address,
-                version: history_object.object_version as u64,
-                kind: ObjectKind::WrappedOrDeleted,
-                checkpoint_viewed_at,
-                root_version: history_object.object_version as u64,
-            }),
+            NativeObjectStatus::WrappedOrDeleted => Err(Error::Internal(
+                "Wrapped or deleted objects should not be loaded from DB.".to_string(),
+            )),
         }
     }
 }
@@ -1265,6 +1240,10 @@ impl Loader<HistoricalKey> for Db {
     async fn load(&self, keys: &[HistoricalKey]) -> Result<HashMap<HistoricalKey, Object>, Error> {
         use objects_version::dsl as v;
 
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         let id_versions: BTreeSet<_> = keys
             .iter()
             .map(|key| (key.id.into_vec(), key.version as i64))
@@ -1280,6 +1259,9 @@ impl Loader<HistoricalKey> for Db {
                             .into_boxed();
 
                         for (id, version) in id_versions.iter().cloned() {
+                            // TODO: consider using something other than `or_filter` to avoid returning
+                            // all results when `id_versions` is empty. It is mitigated today by the
+                            // early return above.
                             query = query
                                 .or_filter(v::object_id.eq(id).and(v::object_version.eq(version)));
                         }
@@ -1318,16 +1300,14 @@ impl Loader<HistoricalKey> for Db {
             .zip(point_lookup_keys)
             .filter_map(|(hist_key, lookup_key)| {
                 let object = objects.get(&lookup_key)?;
-                Some((
-                    *hist_key,
-                    Object::new_serialized(
-                        lookup_key.id,
-                        lookup_key.version,
-                        object.clone(),
-                        hist_key.checkpoint_viewed_at,
-                        lookup_key.version,
-                    ),
-                ))
+                let hist_obj = Object::new_serialized(
+                    lookup_key.id,
+                    lookup_key.version,
+                    object.clone(),
+                    hist_key.checkpoint_viewed_at,
+                    lookup_key.version,
+                );
+                hist_obj.map(|obj| (*hist_key, obj))
             })
             .collect();
         Ok(results)
@@ -1428,18 +1408,16 @@ impl Loader<ParentVersionKey> for Db {
             .zip(point_lookup_keys)
             .filter_map(|(parent_key, lookup_key)| {
                 let object = objects.get(&lookup_key)?;
-                Some((
-                    parent_key,
-                    Object::new_serialized(
-                        parent_key.id,
-                        lookup_key.version,
-                        object.clone(),
-                        parent_key.checkpoint_viewed_at,
-                        // If `ParentVersionKey::parent_version` is set, it must have been correctly
-                        // propagated from the `Object::root_version` of some object.
-                        parent_key.parent_version,
-                    ),
-                ))
+                let hist_obj = Object::new_serialized(
+                    parent_key.id,
+                    lookup_key.version,
+                    object.clone(),
+                    parent_key.checkpoint_viewed_at,
+                    // If `ParentVersionKey::parent_version` is set, it must have been correctly
+                    // propagated from the `Object::root_version` of some object.
+                    parent_key.parent_version,
+                );
+                hist_obj.map(|obj| (parent_key, obj))
             })
             .collect();
 
@@ -1538,6 +1516,10 @@ impl Loader<PointLookupKey> for Db {
     ) -> Result<HashMap<PointLookupKey, Option<Vec<u8>>>, Error> {
         use full_objects_history::dsl as f;
 
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         let id_versions: BTreeSet<_> = keys
             .iter()
             .map(|key| (key.id.into_vec(), key.version as i64))
@@ -1551,6 +1533,9 @@ impl Loader<PointLookupKey> for Db {
                             .into_boxed();
 
                         for (id, version) in id_versions.iter() {
+                            // TODO: consider using something other than `or_filter` to avoid returning
+                            // all results when `id_versions` is empty. It is mitigated today by the
+                            // early return above.
                             query = query.or_filter(
                                 f::object_id
                                     .eq(id.clone())
@@ -1594,7 +1579,6 @@ impl From<&ObjectKind> for ObjectStatus {
         match kind {
             ObjectKind::NotIndexed(_) => ObjectStatus::NotIndexed,
             ObjectKind::Indexed(_, _) | ObjectKind::Serialized(_) => ObjectStatus::Indexed,
-            ObjectKind::WrappedOrDeleted => ObjectStatus::WrappedOrDeleted,
         }
     }
 }

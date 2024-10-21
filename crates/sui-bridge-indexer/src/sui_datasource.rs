@@ -5,6 +5,7 @@ use anyhow::Error;
 use async_trait::async_trait;
 use mysten_metrics::{metered_channel, spawn_monitored_task};
 use prometheus::IntCounterVec;
+use prometheus::IntGauge;
 use prometheus::IntGaugeVec;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -85,7 +86,11 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
             ingestion_reader_batch_size
         );
         let mut executor = IndexerExecutor::new(progress_store, 1, self.metrics.clone());
-        let worker = IndexerWorker::new(data_sender);
+        let progress_metric = self
+            .indexer_metrics
+            .tasks_latest_retrieved_checkpoints
+            .with_label_values(&[task.name_prefix(), task.type_str()]);
+        let worker = IndexerWorker::new(data_sender, progress_metric);
         let worker_pool = WorkerPool::new(worker, task.task_name.clone(), self.concurrency);
         executor.register(worker_pool).await?;
         let checkpoint_path = self.checkpoint_path.clone();
@@ -125,6 +130,10 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
+    }
+
+    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.inflight_live_tasks
     }
 }
 
@@ -168,11 +177,18 @@ impl ProgressStore for PerTaskInMemProgressStore {
 
 pub struct IndexerWorker<T> {
     data_sender: metered_channel::Sender<(u64, Vec<T>)>,
+    progress_metric: IntGauge,
 }
 
 impl<T> IndexerWorker<T> {
-    pub fn new(data_sender: metered_channel::Sender<(u64, Vec<T>)>) -> Self {
-        Self { data_sender }
+    pub fn new(
+        data_sender: metered_channel::Sender<(u64, Vec<T>)>,
+        progress_metric: IntGauge,
+    ) -> Self {
+        Self {
+            data_sender,
+            progress_metric,
+        }
     }
 }
 
@@ -180,6 +196,8 @@ pub type CheckpointTxnData = (CheckpointTransaction, u64, u64);
 
 #[async_trait]
 impl Worker for IndexerWorker<CheckpointTxnData> {
+    type Result = ();
+
     async fn process_checkpoint(&self, checkpoint: &SuiCheckpointData) -> anyhow::Result<()> {
         tracing::trace!(
             "Received checkpoint [{}] {}: {}",
@@ -196,9 +214,10 @@ impl Worker for IndexerWorker<CheckpointTxnData> {
             .into_iter()
             .map(|tx| (tx, checkpoint_num, timestamp_ms))
             .collect();
-        Ok(self
-            .data_sender
+        self.data_sender
             .send((checkpoint_num, transactions))
-            .await?)
+            .await?;
+        self.progress_metric.set(checkpoint_num as i64);
+        Ok(())
     }
 }

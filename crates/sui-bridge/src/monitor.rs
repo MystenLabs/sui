@@ -162,9 +162,12 @@ where
                     Duration::from_secs(10),
                 )
                 .await;
-                bridge_auth_agg.store(Arc::new(BridgeAuthorityAggregator::new(Arc::new(
-                    new_committee,
-                ))));
+                let committee_names = bridge_auth_agg.load().committee_keys_to_names.clone();
+                bridge_auth_agg.store(Arc::new(BridgeAuthorityAggregator::new(
+                    Arc::new(new_committee),
+                    bridge_metrics.clone(),
+                    committee_names,
+                )));
                 info!("Committee updated with CommitteeMemberUrlUpdateEvent");
             }
 
@@ -180,9 +183,12 @@ where
                     Duration::from_secs(10),
                 )
                 .await;
-                bridge_auth_agg.store(Arc::new(BridgeAuthorityAggregator::new(Arc::new(
-                    new_committee,
-                ))));
+                let committee_names = bridge_auth_agg.load().committee_keys_to_names.clone();
+                bridge_auth_agg.store(Arc::new(BridgeAuthorityAggregator::new(
+                    Arc::new(new_committee),
+                    bridge_metrics.clone(),
+                    committee_names,
+                )));
                 info!("Committee updated with BlocklistValidatorEvent");
             }
 
@@ -926,9 +932,9 @@ mod tests {
             bridge_metrics,
         ) = setup();
         let old_committee = BridgeCommittee::new(authorities.clone()).unwrap();
-        let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
-            Arc::new(old_committee),
-        ))));
+        let agg = Arc::new(ArcSwap::new(Arc::new(
+            BridgeAuthorityAggregator::new_for_testing(Arc::new(old_committee)),
+        )));
         let sui_token_type_tags = Arc::new(ArcSwap::from(Arc::new(HashMap::new())));
         let _handle = tokio::task::spawn(
             BridgeMonitor::new(
@@ -985,9 +991,9 @@ mod tests {
             bridge_metrics,
         ) = setup();
         let old_committee = BridgeCommittee::new(authorities.clone()).unwrap();
-        let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
-            Arc::new(old_committee),
-        ))));
+        let agg = Arc::new(ArcSwap::new(Arc::new(
+            BridgeAuthorityAggregator::new_for_testing(Arc::new(old_committee)),
+        )));
         let sui_token_type_tags = Arc::new(ArcSwap::from(Arc::new(HashMap::new())));
         let _handle = tokio::task::spawn(
             BridgeMonitor::new(
@@ -1045,9 +1051,9 @@ mod tests {
             frozen: !*bridge_pause_tx.borrow(), // toggle the bridge pause status
         };
         let committee = BridgeCommittee::new(authorities.clone()).unwrap();
-        let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
-            Arc::new(committee),
-        ))));
+        let agg = Arc::new(ArcSwap::new(Arc::new(
+            BridgeAuthorityAggregator::new_for_testing(Arc::new(committee)),
+        )));
         let sui_token_type_tags = Arc::new(ArcSwap::from(Arc::new(HashMap::new())));
         let _handle = tokio::task::spawn(
             BridgeMonitor::new(
@@ -1095,9 +1101,9 @@ mod tests {
             notional_value: 100000000,
         };
         let committee = BridgeCommittee::new(authorities.clone()).unwrap();
-        let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
-            Arc::new(committee),
-        ))));
+        let agg = Arc::new(ArcSwap::new(Arc::new(
+            BridgeAuthorityAggregator::new_for_testing(Arc::new(committee)),
+        )));
         let sui_token_type_tags = Arc::new(ArcSwap::from(Arc::new(HashMap::new())));
         let sui_token_type_tags_clone = sui_token_type_tags.clone();
         let _handle = tokio::task::spawn(

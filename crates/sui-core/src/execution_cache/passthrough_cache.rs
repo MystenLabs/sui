@@ -76,6 +76,14 @@ impl PassthroughCache {
             })
             .ok();
     }
+
+    fn bulk_insert_genesis_objects_impl(&self, objects: &[Object]) -> SuiResult {
+        self.store.bulk_insert_genesis_objects(objects)
+    }
+
+    fn insert_genesis_object_impl(&self, object: Object) -> SuiResult {
+        self.store.insert_genesis_object(object)
+    }
 }
 
 impl ObjectCacheRead for PassthroughCache {

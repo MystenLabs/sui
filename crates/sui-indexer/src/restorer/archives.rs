@@ -21,14 +21,12 @@ pub struct RestoreCheckpointInfo {
 }
 
 pub async fn read_restore_checkpoint_info(
-    cred_path: String,
     archive_bucket: Option<String>,
     epoch: u64,
 ) -> IndexerResult<RestoreCheckpointInfo> {
     let archive_store_config = ObjectStoreConfig {
         object_store: Some(ObjectStoreType::GCS),
         bucket: archive_bucket,
-        google_service_account: Some(cred_path.clone()),
         object_store_connection_limit: 50,
         no_sign_request: false,
         ..Default::default()

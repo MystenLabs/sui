@@ -33,6 +33,15 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
+                .name("transaction_v2")
+                .route_name("TransactionV2")
+                .input_type("sui_types::messages_grpc::HandleTransactionRequestV2")
+                .output_type("sui_types::messages_grpc::HandleTransactionResponseV2")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
                 .name("handle_certificate_v2")
                 .route_name("CertifiedTransactionV2")
                 .input_type("sui_types::transaction::CertifiedTransaction")
@@ -134,10 +143,10 @@ fn build_anemo_services(out_dir: &Path) {
         .package("sui")
         .method(
             anemo_build::manual::Method::builder()
-                .name("get_known_peers")
-                .route_name("GetKnownPeers")
+                .name("get_known_peers_v2")
+                .route_name("GetKnownPeersV2")
                 .request_type("()")
-                .response_type("crate::discovery::GetKnownPeersResponse")
+                .response_type("crate::discovery::GetKnownPeersResponseV2")
                 .codec_path(codec_path)
                 .build(),
         )

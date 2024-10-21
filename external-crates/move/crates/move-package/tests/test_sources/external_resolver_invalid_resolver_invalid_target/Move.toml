@@ -1,0 +1,5 @@
+[package]
+name = "Root"
+
+[dependencies]
+B = { r.foo.bar = "baz" }

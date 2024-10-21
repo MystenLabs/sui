@@ -33,7 +33,9 @@ use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
 use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, SimpleFaucet};
-use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
+use sui_indexer::test_utils::{
+    start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
+};
 
 use sui_graphql_rpc::{
     config::{ConnectionConfig, ServiceConfig},
@@ -427,8 +429,8 @@ impl SuiCommand {
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path, None, None)?;
                 if let Some(cmd) = cmd {
+                    let mut context = WalletContext::new(&config_path, None, None)?;
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
@@ -631,7 +633,7 @@ async fn start(
         swarm_builder = swarm_builder.with_epoch_duration_ms(epoch_duration_ms);
     } else {
         if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
-            genesis(None, None, None, false, epoch_duration_ms, None, false).await?;
+            genesis(None, None, None, false, epoch_duration_ms, None, false).await.map_err(|_| anyhow!("Cannot run genesis with non-empty Sui config directory: {}.\n\nIf you are trying to run a local network without persisting the data (so a new genesis that is randomly generated and will not be saved once the network is shut down), use --force-regenesis flag.\nIf you are trying to persist the network data and start from a new genesis, use sui genesis --help to see how to generate a new genesis.", sui_config_dir().unwrap().display()))?;
         }
 
         // Load the config of the Sui authority.
@@ -704,20 +706,20 @@ async fn start(
             .map_err(|_| anyhow!("Invalid indexer host and port"))?;
         info!("Starting the indexer service at {indexer_address}");
         // Start in reader mode
-        start_test_indexer(
+        start_indexer_jsonrpc_for_testing(
             pg_address.clone(),
             fullnode_url.clone(),
-            ReaderWriterConfig::reader_mode(indexer_address.to_string()),
-            data_ingestion_path.clone(),
+            indexer_address.to_string(),
+            None,
         )
         .await;
         info!("Indexer started in reader mode");
-        // Start in writer mode
-        start_test_indexer(
+        start_indexer_writer_for_testing(
             pg_address.clone(),
-            fullnode_url.clone(),
-            ReaderWriterConfig::writer_mode(None, None),
-            data_ingestion_path.clone(),
+            None,
+            None,
+            Some(data_ingestion_path.clone()),
+            None,
         )
         .await;
         info!("Indexer started in writer mode");
@@ -727,14 +729,13 @@ async fn start(
         let graphql_address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
             .map_err(|_| anyhow!("Invalid graphql host and port"))?;
         tracing::info!("Starting the GraphQL service at {graphql_address}");
-        let graphql_connection_config = ConnectionConfig::new(
-            Some(graphql_address.port()),
-            Some(graphql_address.ip().to_string()),
-            Some(pg_address),
-            None,
-            None,
-            None,
-        );
+        let graphql_connection_config = ConnectionConfig {
+            port: graphql_address.port(),
+            host: graphql_address.ip().to_string(),
+            db_url: pg_address,
+            ..Default::default()
+        };
+
         start_graphql_server_with_fn_rpc(
             graphql_connection_config,
             Some(fullnode_url.clone()),

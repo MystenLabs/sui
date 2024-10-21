@@ -10,6 +10,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::RandomnessManager;
 use crate::execution_cache::build_execution_cache;
+use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::rest_index::RestIndexStore;
@@ -30,7 +31,6 @@ use sui_config::ExecutionCacheConfig;
 use sui_macros::nondeterministic;
 use sui_network::randomness;
 use sui_protocol_config::ProtocolConfig;
-use sui_storage::IndexStore;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
@@ -270,6 +270,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
                 false,
+                &authority_store,
             )))
         };
         let rest_index = if self.disable_indexer {
@@ -359,6 +360,12 @@ impl<'a> TestAuthorityBuilder<'a> {
                 None,
                 &state.epoch_store_for_testing(),
             )
+            .await
+            .unwrap();
+
+        state
+            .get_cache_commit()
+            .commit_transaction_outputs(epoch_store.epoch(), &[*genesis.transaction().digest()])
             .await
             .unwrap();
 

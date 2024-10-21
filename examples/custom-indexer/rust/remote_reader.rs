@@ -10,6 +10,7 @@ struct CustomWorker;
 
 #[async_trait]
 impl Worker for CustomWorker {
+    type Result = ();
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()> {
         // custom processing logic
         // print out the checkpoint number

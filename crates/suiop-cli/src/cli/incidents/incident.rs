@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use super::pd::PagerDutyIncident;
 use super::pd::Priority;
-use crate::cli::slack::{Channel, User};
+use super::user::User;
+use crate::cli::slack::Channel;
 
 const DATE_FORMAT_IN: &str = "%Y-%m-%dT%H:%M:%SZ";
 const DATE_FORMAT_OUT: &str = "%m/%d/%Y %H:%M";
@@ -22,7 +23,7 @@ pub struct Incident {
     pub created_at: Option<String>,
     pub resolved_at: Option<String>,
     pub html_url: String,
-    /// The slack users responsible for reporting
+    /// The users responsible for reporting
     #[serde(skip_deserializing)]
     pub poc_users: Option<Vec<User>>,
     pub priority: Option<Priority>,
@@ -143,7 +144,11 @@ impl Incident {
                 || "".to_string(),
                 |u| u
                     .iter()
-                    .map(|u| { format!("<@{}>", u.id) })
+                    .map(|u| {
+                        u.slack_user
+                            .as_ref()
+                            .map_or("".to_owned(), |su| format!("<@{}>", su.id))
+                    })
                     .collect::<Vec<_>>()
                     .join(", ")
             )

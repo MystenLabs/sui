@@ -24,6 +24,7 @@ base64.workspace = true
 chrono.workspace = true
 clap.workspace = true
 colored.workspace = true
+crossterm = { workspace = true, features = ["event-stream"] }
 dirs.workspace = true
 docker-api.workspace = true
 field_names.workspace = true
@@ -52,7 +53,10 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 once_cell.workspace = true
 futures.workspace = true
+thiserror.workspace = true
 strsim = "0.11.1"
+futures-timer = "3.0.3"
+
 
 [dev-dependencies]
 tempfile.workspace = true

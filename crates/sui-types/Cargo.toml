@@ -76,7 +76,7 @@ proptest-derive.workspace = true
 better_any.workspace = true
 lru.workspace = true
 
-sui-sdk2.workspace = true
+sui-sdk-types.workspace = true
 
 [dev-dependencies]
 bincode.workspace = true
@@ -103,7 +103,6 @@ default = []
 test-utils = []
 gas-profiler = [
     "move-vm-profiler/gas-profiler",
-    "move-vm-types/gas-profiler",
     "move-vm-test-utils/gas-profiler",
 ]
 fuzzing = ["move-core-types/fuzzing"]

@@ -37,38 +37,7 @@ jobs:
         uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # pin@v1.0.3
         with:
           command: build
-          args: --all-targets --all-features --release --profile=release
-
-  # This job seems to be consistently producing false-positives, lets disable for now
-  # cargo-udeps:
-  #   runs-on: [ubuntu-ghcloud]
-  #   steps:
-  #     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
-  #     # Enable caching of the 'librocksdb-sys' crate by additionally caching the
-  #     # 'librocksdb-sys' src directory which is managed by cargo
-  #     - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-  #       with:
-  #         path: ~/.cargo/registry/src/**/librocksdb-sys-*
-  #     - name: Install cargo-udeps, and cache the binary
-  #       uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
-  #       with:
-  #         crate: cargo-udeps
-  #         locked: true
-  #     - name: Install cargo-hakari, and cache the binary
-  #       uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
-  #       with:
-  #         crate: cargo-hakari
-  #         locked: true
-  #     # Normally running cargo-udeps requires use of a nightly compiler
-  #     # In order to have a more stable and less noisy experience, lets instead
-  #     # opt to use the stable toolchain specified via the 'rust-toolchain' file
-  #     # and instead enable nightly features via 'RUSTC_BOOTSTRAP'
-  #     - name: run cargo-udeps
-  #       run: |
-  #         # First we need to disable the workspace-hack package
-  #         cargo hakari disable
-  #         cargo hakari remove-deps -y
-  #         RUSTC_BOOTSTRAP=1 cargo udeps
+          args: --all-targets --all-features --release
 
   report-status:
     name: Report Status

@@ -1,0 +1,18 @@
+# Filter on signing address
+{
+  transactionBlocks(
+    filter: {
+      sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ) {
+    nodes {
+      sender {
+        address
+      }
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::database::ConnectionPool;
-use crate::handlers::tx_processor::IndexingPackageBuffer;
-use crate::metrics::IndexerMetrics;
 use crate::schema::objects;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -14,7 +12,6 @@ use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use move_core_types::account_address::AccountAddress;
 use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore};
-use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
 
 /// A package resolver that reads packages from the database.
@@ -57,46 +54,5 @@ impl IndexerStorePackageResolver {
         let object = bcs::from_bytes::<Object>(&bcs)?;
         Package::read_from_object(&object)
             .map_err(|e| anyhow!("Failed parsing object to package: {e}"))
-    }
-}
-
-pub struct InterimPackageResolver {
-    package_db_resolver: IndexerStorePackageResolver,
-    package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
-    metrics: IndexerMetrics,
-}
-
-impl InterimPackageResolver {
-    pub fn new(
-        package_db_resolver: IndexerStorePackageResolver,
-        package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
-        metrics: IndexerMetrics,
-    ) -> Self {
-        Self {
-            package_db_resolver,
-            package_buffer,
-            metrics,
-        }
-    }
-}
-
-#[async_trait]
-impl PackageStore for InterimPackageResolver {
-    async fn fetch(&self, addr: AccountAddress) -> Result<Arc<Package>, PackageResolverError> {
-        let package_id = ObjectID::from(addr);
-        let maybe_obj = {
-            let buffer_guard = self.package_buffer.lock().unwrap();
-            buffer_guard.get_package(&package_id)
-        };
-        if let Some(obj) = maybe_obj {
-            self.metrics.indexing_package_resolver_in_mem_hit.inc();
-            let pkg = Package::read_from_object(&obj).map_err(|e| PackageResolverError::Store {
-                store: "InMemoryPackageBuffer",
-                error: e.to_string(),
-            })?;
-            Ok(Arc::new(pkg))
-        } else {
-            self.package_db_resolver.fetch(addr).await
-        }
     }
 }

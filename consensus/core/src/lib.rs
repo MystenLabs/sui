@@ -46,9 +46,12 @@ mod test_dag_parser;
 /// Exported consensus API.
 pub use authority_node::ConsensusAuthority;
 pub use block::{BlockAPI, Round, TransactionIndex};
-pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
-pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
-pub use transaction::{ClientError, TransactionClient, TransactionVerifier, ValidationError};
-
 /// Exported API for testing.
 pub use block::{TestBlock, Transaction, VerifiedBlock};
+pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
+pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
+pub use network::{
+    connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle, ConnectionStatus},
+    metrics::{MetricsMakeCallbackHandler, NetworkRouteMetrics, QuinnConnectionMetrics},
+};
+pub use transaction::{ClientError, TransactionClient, TransactionVerifier, ValidationError};

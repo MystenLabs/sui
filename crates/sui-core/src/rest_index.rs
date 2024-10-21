@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
+use crate::par_index_live_object_set::LiveObjectIndexer;
+use crate::par_index_live_object_set::ParMakeLiveObjectIndexer;
 use move_core_types::language_storage::StructTag;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
@@ -20,7 +21,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
+use sui_types::dynamic_field::visitor as DFV;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -223,40 +224,19 @@ impl IndexStoreTables {
 
         let coin_index = Mutex::new(HashMap::new());
 
-        info!("Indexing Live Object Set");
-        let start_time = Instant::now();
-        std::thread::scope(|s| -> Result<(), StorageError> {
-            let mut threads = Vec::new();
-            const BITS: u8 = 5;
-            for index in 0u8..(1 << BITS) {
-                let this = &self;
-                let coin_index = &coin_index;
-                threads.push(s.spawn(move || {
-                    this.live_object_set_index_task(
-                        index,
-                        BITS,
-                        authority_store,
-                        coin_index,
-                        epoch_store,
-                        package_store,
-                    )
-                }));
-            }
+        let make_live_object_indexer = RestParLiveObjectSetIndexer {
+            tables: self,
+            coin_index: &coin_index,
+            epoch_store,
+            package_store,
+        };
 
-            // join threads
-            for thread in threads {
-                thread.join().unwrap()?;
-            }
-
-            Ok(())
-        })?;
+        crate::par_index_live_object_set::par_index_live_object_set(
+            authority_store,
+            &make_live_object_indexer,
+        )?;
 
         self.coin.multi_insert(coin_index.into_inner().unwrap())?;
-
-        info!(
-            "Indexing Live Object Set took {} seconds",
-            start_time.elapsed().as_secs()
-        );
 
         self.meta.insert(
             &(),
@@ -267,92 +247,6 @@ impl IndexStoreTables {
 
         info!("Finished initializing REST indexes");
 
-        Ok(())
-    }
-
-    fn live_object_set_index_task(
-        &self,
-        task_id: u8,
-        bits: u8,
-        authority_store: &AuthorityStore,
-        coin_index: &Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
-        epoch_store: &AuthorityPerEpochStore,
-        package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
-    ) -> Result<(), StorageError> {
-        let mut id_bytes = [0; ObjectID::LENGTH];
-        id_bytes[0] = task_id << (8 - bits);
-        let start_id = ObjectID::new(id_bytes);
-
-        id_bytes[0] |= (1 << (8 - bits)) - 1;
-        for element in id_bytes.iter_mut().skip(1) {
-            *element = u8::MAX;
-        }
-        let end_id = ObjectID::new(id_bytes);
-
-        let mut resolver = epoch_store
-            .executor()
-            .type_layout_resolver(Box::new(package_store));
-        let mut batch = self.owner.batch();
-        let mut object_scanned: u64 = 0;
-        for object in authority_store
-            .perpetual_tables
-            .range_iter_live_object_set(Some(start_id), Some(end_id), false)
-            .filter_map(LiveObject::to_normal)
-        {
-            object_scanned += 1;
-            if object_scanned % 2_000_000 == 0 {
-                info!(
-                    "[Index] Task {}: object scanned: {}",
-                    task_id, object_scanned
-                );
-            }
-            match object.owner {
-                // Owner Index
-                Owner::AddressOwner(owner) => {
-                    let owner_key = OwnerIndexKey::new(owner, object.id());
-                    let owner_info = OwnerIndexInfo::new(&object);
-                    batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
-                }
-
-                // Dynamic Field Index
-                Owner::ObjectOwner(parent) => {
-                    if let Some(field_info) =
-                        try_create_dynamic_field_info(&object, resolver.as_mut())?
-                    {
-                        let field_key = DynamicFieldKey::new(parent, object.id());
-
-                        batch.insert_batch(&self.dynamic_field, [(field_key, field_info)])?;
-                    }
-                }
-
-                Owner::Shared { .. } | Owner::Immutable => {}
-            }
-
-            // Look for CoinMetadata<T> and TreasuryCap<T> objects
-            if let Some((key, value)) = try_create_coin_index_info(&object) {
-                use std::collections::hash_map::Entry;
-
-                match coin_index.lock().unwrap().entry(key) {
-                    Entry::Occupied(o) => {
-                        let (key, v) = o.remove_entry();
-                        let value = value.merge(v);
-                        batch.insert_batch(&self.coin, [(key, value)])?;
-                    }
-                    Entry::Vacant(v) => {
-                        v.insert(value);
-                    }
-                }
-            }
-
-            // If the batch size grows to greater that 256MB then write out to the DB so that the
-            // data we need to hold in memory doesn't grown unbounded.
-            if batch.size_in_bytes() >= 1 << 28 {
-                batch.write()?;
-                batch = self.owner.batch();
-            }
-        }
-
-        batch.write()?;
         Ok(())
     }
 
@@ -671,45 +565,26 @@ fn try_create_dynamic_field_info(
         return Ok(None);
     }
 
-    let (name_value, dynamic_field_type, object_id) = {
-        let layout = sui_types::layout_resolver::into_struct_layout(
-            resolver
-                .get_annotated_layout(&move_object.type_().clone().into())
-                .map_err(StorageError::custom)?,
-        )
+    let layout = resolver
+        .get_annotated_layout(&move_object.type_().clone().into())
+        .map_err(StorageError::custom)?
+        .into_layout();
+
+    let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)
         .map_err(StorageError::custom)?;
 
-        let move_struct = move_object
-            .to_move_struct(&layout)
-            .map_err(StorageError::serialization)?;
+    let value_metadata = field.value_metadata().map_err(StorageError::custom)?;
 
-        // SAFETY: move struct has already been validated to be of type DynamicField
-        DynamicFieldInfo::parse_move_object(&move_struct).unwrap()
-    };
-
-    let name_type = move_object
-        .type_()
-        .try_extract_field_name(&dynamic_field_type)
-        .expect("object is of type Field");
-
-    let name_value = name_value
-        .undecorate()
-        .simple_serialize()
-        .expect("serialization cannot fail");
-
-    let dynamic_object_id = match dynamic_field_type {
-        DynamicFieldType::DynamicObject => Some(object_id),
-        DynamicFieldType::DynamicField => None,
-    };
-
-    let field_info = DynamicFieldIndexInfo {
-        name_type,
-        name_value,
-        dynamic_field_type,
-        dynamic_object_id,
-    };
-
-    Ok(Some(field_info))
+    Ok(Some(DynamicFieldIndexInfo {
+        name_type: field.name_layout.into(),
+        name_value: field.name_bytes.to_owned(),
+        dynamic_field_type: field.kind,
+        dynamic_object_id: if let DFV::ValueMetadata::DynamicObjectField(id) = value_metadata {
+            Some(id)
+        } else {
+            None
+        },
+    }))
 }
 
 fn try_create_coin_index_info(object: &Object) -> Option<(CoinIndexKey, CoinIndexInfo)> {
@@ -745,4 +620,91 @@ fn try_create_coin_index_info(object: &Object) -> Option<(CoinIndexKey, CoinInde
                         })
                 })
         })
+}
+
+struct RestParLiveObjectSetIndexer<'a> {
+    tables: &'a IndexStoreTables,
+    coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
+    epoch_store: &'a AuthorityPerEpochStore,
+    package_store: &'a Arc<dyn BackingPackageStore + Send + Sync>,
+}
+
+struct RestLiveObjectIndexer<'a> {
+    tables: &'a IndexStoreTables,
+    batch: typed_store::rocks::DBBatch,
+    coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
+    resolver: Box<dyn LayoutResolver + 'a>,
+}
+
+impl<'a> ParMakeLiveObjectIndexer for RestParLiveObjectSetIndexer<'a> {
+    type ObjectIndexer = RestLiveObjectIndexer<'a>;
+
+    fn make_live_object_indexer(&self) -> Self::ObjectIndexer {
+        RestLiveObjectIndexer {
+            tables: self.tables,
+            batch: self.tables.owner.batch(),
+            coin_index: self.coin_index,
+            resolver: self
+                .epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(self.package_store)),
+        }
+    }
+}
+
+impl<'a> LiveObjectIndexer for RestLiveObjectIndexer<'a> {
+    fn index_object(&mut self, object: Object) -> Result<(), StorageError> {
+        match object.owner {
+            // Owner Index
+            Owner::AddressOwner(owner) => {
+                let owner_key = OwnerIndexKey::new(owner, object.id());
+                let owner_info = OwnerIndexInfo::new(&object);
+                self.batch
+                    .insert_batch(&self.tables.owner, [(owner_key, owner_info)])?;
+            }
+
+            // Dynamic Field Index
+            Owner::ObjectOwner(parent) => {
+                if let Some(field_info) =
+                    try_create_dynamic_field_info(&object, self.resolver.as_mut())?
+                {
+                    let field_key = DynamicFieldKey::new(parent, object.id());
+
+                    self.batch
+                        .insert_batch(&self.tables.dynamic_field, [(field_key, field_info)])?;
+                }
+            }
+
+            Owner::Shared { .. } | Owner::Immutable => {}
+        }
+
+        // Look for CoinMetadata<T> and TreasuryCap<T> objects
+        if let Some((key, value)) = try_create_coin_index_info(&object) {
+            use std::collections::hash_map::Entry;
+
+            match self.coin_index.lock().unwrap().entry(key) {
+                Entry::Occupied(o) => {
+                    let (key, v) = o.remove_entry();
+                    let value = value.merge(v);
+                    self.batch.insert_batch(&self.tables.coin, [(key, value)])?;
+                }
+                Entry::Vacant(v) => {
+                    v.insert(value);
+                }
+            }
+        }
+
+        // If the batch size grows to greater that 128MB then write out to the DB so that the
+        // data we need to hold in memory doesn't grown unbounded.
+        if self.batch.size_in_bytes() >= 1 << 27 {
+            std::mem::replace(&mut self.batch, self.tables.owner.batch()).write()?;
+        }
+
+        Ok(())
+    }
+
+    fn finish(self) -> Result<(), StorageError> {
+        self.batch.write()?;
+        Ok(())
+    }
 }

@@ -51,7 +51,7 @@ module 0x0::template {
 To update the identifiers, you can use the `update_identifiers` function.
 
 ```ts
-import { fromHEX, update_identifiers } from '@mysten/move-bytecode-template';
+import { fromHex, update_identifiers } from '@mysten/move-bytecode-template';
 
 let bytecode = /* ... */;
 let updated = update_identifiers(bytecode, {
@@ -113,7 +113,7 @@ await init('path/to/move_binary_format_bg.wasm');
 // alternatively initSync(...);
 
 let version = template.version();
-let json = template.deserialize(fromHEX('a11ceb0b06....'));
+let json = template.deserialize(fromHex('a11ceb0b06....'));
 let bytes = template.serialize(json);
 
 console.assert(json == bytes, '(de)serialization failed!');
@@ -138,7 +138,7 @@ Lastly, once the package is initialized, you can use the functions as described 
 section.
 
 ```ts
-const templateBytecode = fromHEX('a11ceb0b06....');
+const templateBytecode = fromHex('a11ceb0b06....');
 
 template.deserialize(templateBytecode);
 template.version();

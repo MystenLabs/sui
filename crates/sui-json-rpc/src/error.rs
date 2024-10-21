@@ -252,7 +252,7 @@ impl From<Error> for RpcError {
                             error_list.push(format!("- {}", err));
                         }
 
-                        let error_msg = format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again:\n{}", error_list.join("\n"));
+                        let error_msg = format!("Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again:\n{}", error_list.join("\n"));
 
                         let error_object = ErrorObject::owned(
                             TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
@@ -516,7 +516,7 @@ mod tests {
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message =
-                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again:\n- Balance of gas object 10 is lower than the needed amount: 100\n- Object ID 0x0000000000000000000000000000000000000000000000000000000000000000 Version 0x0 Digest 11111111111111111111111111111111 is not available for consumption, current version: 0xa"];
+                expect!["Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again:\n- Balance of gas object 10 is lower than the needed amount: 100\n- Object ID 0x0000000000000000000000000000000000000000000000000000000000000000 Version 0x0 Digest 11111111111111111111111111111111 is not available for consumption, current version: 0xa"];
             expected_message.assert_eq(error_object.message());
         }
 
@@ -548,14 +548,15 @@ mod tests {
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message =
-                expect!["Transaction execution failed due to issues with transaction inputs, please review the errors and try again:\n- Could not find the referenced object 0x0000000000000000000000000000000000000000000000000000000000000000 at version None"];
+                expect!["Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again:\n- Could not find the referenced object 0x0000000000000000000000000000000000000000000000000000000000000000 at version None"];
             expected_message.assert_eq(error_object.message());
         }
 
         #[test]
         fn test_quorum_driver_internal_error() {
-            let quorum_driver_error =
-                QuorumDriverError::QuorumDriverInternalError(SuiError::UnexpectedMessage);
+            let quorum_driver_error = QuorumDriverError::QuorumDriverInternalError(
+                SuiError::UnexpectedMessage("test".to_string()),
+            );
 
             let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
 
@@ -570,7 +571,7 @@ mod tests {
         fn test_system_overload() {
             let quorum_driver_error = QuorumDriverError::SystemOverload {
                 overloaded_stake: 10,
-                errors: vec![(SuiError::UnexpectedMessage, 0, vec![])],
+                errors: vec![(SuiError::UnexpectedMessage("test".to_string()), 0, vec![])],
             };
 
             let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();

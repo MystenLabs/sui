@@ -5,7 +5,7 @@
   "publisher": "mysten",
   "icon": "images/move.png",
   "license": "Apache-2.0",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "preview": true,
   "repository": {
     "url": "https://github.com/MystenLabs/sui.git",
@@ -124,13 +124,13 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "sui.serverVersion"
+          "command": "move.serverVersion"
         },
         {
-          "command": "sui.build"
+          "command": "move.build"
         },
         {
-          "command": "sui.test"
+          "command": "move.test"
         }
       ]
     }

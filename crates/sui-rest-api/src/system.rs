@@ -15,7 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use sui_protocol_config::{ProtocolConfig, ProtocolConfigValue, ProtocolVersion};
-use sui_sdk2::types::{Address, ObjectId};
+use sui_sdk_types::types::{Address, ObjectId};
 
 pub struct GetSystemStateSummary;
 
@@ -236,9 +236,9 @@ pub struct SystemStateSummary {
 pub struct ValidatorSummary {
     // Metadata
     pub address: Address,
-    pub protocol_public_key: sui_sdk2::types::Bls12381PublicKey,
-    pub network_public_key: sui_sdk2::types::Ed25519PublicKey,
-    pub worker_public_key: sui_sdk2::types::Ed25519PublicKey,
+    pub protocol_public_key: sui_sdk_types::types::Bls12381PublicKey,
+    pub network_public_key: sui_sdk_types::types::Ed25519PublicKey,
+    pub worker_public_key: sui_sdk_types::types::Ed25519PublicKey,
     #[serde_as(as = "fastcrypto::encoding::Base64")]
     #[schemars(with = "String")]
     pub proof_of_possession_bytes: Vec<u8>,
@@ -250,9 +250,9 @@ pub struct ValidatorSummary {
     pub p2p_address: String,
     pub primary_address: String,
     pub worker_address: String,
-    pub next_epoch_protocol_public_key: Option<sui_sdk2::types::Bls12381PublicKey>,
-    pub next_epoch_network_public_key: Option<sui_sdk2::types::Ed25519PublicKey>,
-    pub next_epoch_worker_public_key: Option<sui_sdk2::types::Ed25519PublicKey>,
+    pub next_epoch_protocol_public_key: Option<sui_sdk_types::types::Bls12381PublicKey>,
+    pub next_epoch_network_public_key: Option<sui_sdk_types::types::Ed25519PublicKey>,
+    pub next_epoch_worker_public_key: Option<sui_sdk_types::types::Ed25519PublicKey>,
     #[serde_as(as = "Option<fastcrypto::encoding::Base64>")]
     #[schemars(with = "Option<String>")]
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
@@ -374,14 +374,18 @@ impl From<sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSum
 
         Self {
             address: sui_address.into(),
-            protocol_public_key: sui_sdk2::types::Bls12381PublicKey::from_bytes(
+            protocol_public_key: sui_sdk_types::types::Bls12381PublicKey::from_bytes(
                 protocol_pubkey_bytes,
             )
             .unwrap(),
-            network_public_key: sui_sdk2::types::Ed25519PublicKey::from_bytes(network_pubkey_bytes)
-                .unwrap(),
-            worker_public_key: sui_sdk2::types::Ed25519PublicKey::from_bytes(worker_pubkey_bytes)
-                .unwrap(),
+            network_public_key: sui_sdk_types::types::Ed25519PublicKey::from_bytes(
+                network_pubkey_bytes,
+            )
+            .unwrap(),
+            worker_public_key: sui_sdk_types::types::Ed25519PublicKey::from_bytes(
+                worker_pubkey_bytes,
+            )
+            .unwrap(),
             proof_of_possession_bytes,
             name,
             description,
@@ -392,11 +396,11 @@ impl From<sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSum
             primary_address,
             worker_address,
             next_epoch_protocol_public_key: next_epoch_protocol_pubkey_bytes
-                .map(|bytes| sui_sdk2::types::Bls12381PublicKey::from_bytes(bytes).unwrap()),
+                .map(|bytes| sui_sdk_types::types::Bls12381PublicKey::from_bytes(bytes).unwrap()),
             next_epoch_network_public_key: next_epoch_network_pubkey_bytes
-                .map(|bytes| sui_sdk2::types::Ed25519PublicKey::from_bytes(bytes).unwrap()),
+                .map(|bytes| sui_sdk_types::types::Ed25519PublicKey::from_bytes(bytes).unwrap()),
             next_epoch_worker_public_key: next_epoch_worker_pubkey_bytes
-                .map(|bytes| sui_sdk2::types::Ed25519PublicKey::from_bytes(bytes).unwrap()),
+                .map(|bytes| sui_sdk_types::types::Ed25519PublicKey::from_bytes(bytes).unwrap()),
             next_epoch_proof_of_possession,
             next_epoch_net_address,
             next_epoch_p2p_address,

@@ -9,7 +9,7 @@ use crate::{
     RestService, Result,
 };
 use axum::extract::{Path, State};
-use sui_sdk2::types::{EpochId, ValidatorCommittee};
+use sui_sdk_types::types::{EpochId, ValidatorCommittee};
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 

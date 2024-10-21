@@ -9,7 +9,7 @@ use codespan::{ByteIndex, Span};
 use itertools::Itertools;
 use move_compiler::parser::keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS};
 use move_model::{
-    ast::ModuleName,
+    ast::{Attribute, ModuleName, Value},
     code_writer::{CodeWriter, CodeWriterLabel},
     emit, emitln,
     model::{
@@ -947,14 +947,29 @@ impl<'env> Docgen<'env> {
     /// Generates declaration for named constant
     fn named_constant_display(&self, const_env: &NamedConstantEnv<'_>) -> String {
         let name = self.name_string(const_env.get_name());
+        let is_error_const = const_env.get_attributes().iter().any(|attr|
+            matches!(attr, Attribute::Apply(_, sym, _) if self.name_string(*sym).to_string() == *"error")
+        );
+        let rendered_value = match (is_error_const, const_env.get_value()) {
+            (true, Value::ByteArray(bytes)) => {
+                if let Ok(s) = std::str::from_utf8(&bytes) {
+                    format!("b\"{s}\"")
+                } else {
+                    format!("{bytes:?}")
+                }
+            }
+            (_, value) => value.to_string(),
+        };
+        let error_const_annot = if is_error_const { "#[error]\n" } else { "" };
         format!(
-            "const {}: {} = {};",
+            "{}const {}: {} = {};",
+            error_const_annot,
             name,
             const_env.get_type().display(&TypeDisplayContext::WithEnv {
                 env: self.env,
                 type_param_names: None,
             }),
-            const_env.get_value(),
+            rendered_value,
         )
     }
 

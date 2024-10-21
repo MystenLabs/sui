@@ -374,7 +374,7 @@ contract BridgeConfigTest is BridgeBaseTest {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), chainID, supportedTokens, tokenPrices, _supportedChains)
+                (address(committee), chainID, supportedTokens, tokenPrices, tokenIds, suiDecimals, _supportedDestinationChains)
             ),
             opts
         );
@@ -463,7 +463,7 @@ contract BridgeConfigTest is BridgeBaseTest {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), 12, supportedTokens, tokenPrices, _supportedDestinationChains)
+                (address(committee), 12, supportedTokens, tokenPrices, tokenIds, suiDecimals, _supportedDestinationChains)
             ),
             opts
         );

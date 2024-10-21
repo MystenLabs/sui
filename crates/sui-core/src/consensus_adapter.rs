@@ -2,15 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use arc_swap::{ArcSwap, ArcSwapOption};
-use bytes::Bytes;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
-use futures::future::{select, Either};
+use futures::future::{self, select, Either};
 use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
-use narwhal_types::{TransactionProto, TransactionsClient};
 use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -34,7 +32,6 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 
-use tap::prelude::*;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
 use tokio::time::{self};
@@ -44,10 +41,10 @@ use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
 use crate::consensus_throughput_calculator::{ConsensusThroughputProfiler, Level};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 use crate::metrics::LatencyObserver;
+use consensus_core::ConnectionStatus;
 use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
 use sui_protocol_config::ProtocolConfig;
 use sui_simulator::anemo::PeerId;
-use sui_simulator::narwhal_network::connectivity::ConnectionStatus;
 use sui_types::base_types::AuthorityName;
 use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusTransactionKind;
@@ -127,7 +124,7 @@ impl ConsensusAdapterMetrics {
             sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
-                &["position", "tx_type"],
+                &["position", "tx_type", "processed_method"],
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
@@ -196,36 +193,6 @@ pub trait SubmitToConsensus: Sync + Send + 'static {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult;
 }
-
-#[async_trait::async_trait]
-impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Channel> {
-    async fn submit_to_consensus(
-        &self,
-        transactions: &[ConsensusTransaction],
-        _epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
-        let transactions_bytes = transactions
-            .iter()
-            .map(|t| {
-                let serialized =
-                    bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail");
-                Bytes::from(serialized)
-            })
-            .collect::<Vec<_>>();
-        self.clone()
-            .submit_transaction(TransactionProto {
-                transactions: transactions_bytes,
-            })
-            .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
-            .tap_err(|r| {
-                // Will be logged by caller as well.
-                warn!("Submit transaction failed with: {:?}", r);
-            })?;
-        Ok(())
-    }
-}
-
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
@@ -361,6 +328,12 @@ impl ConsensusAdapter {
         committee: &Committee,
         transactions: &[ConsensusTransaction],
     ) -> (impl Future<Output = ()>, usize, usize, usize) {
+        if transactions.iter().any(|tx| tx.is_user_transaction()) {
+            // UserTransactions are generally sent to just one validator and should
+            // be submitted to consensus without delay.
+            return (tokio::time::sleep(Duration::ZERO), 0, 0, 0);
+        }
+
         // Use the minimum digest to compute submit delay.
         let min_digest = transactions
             .iter()
@@ -580,8 +553,8 @@ impl ConsensusAdapter {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<JoinHandle<()>> {
         if transactions.len() > 1 {
-            // In soft bundle, we need to check if all transactions are of UserTransaction kind.
-            // The check is required because we assume this in submit_and_wait_inner.
+            // In soft bundle, we need to check if all transactions are of CertifiedTransaction
+            // kind. The check is required because we assume this in submit_and_wait_inner.
             for transaction in transactions {
                 fp_ensure!(
                     matches!(
@@ -811,13 +784,14 @@ impl ConsensusAdapter {
                     .with_label_values(&[&bucket, tx_type])
                     .observe(ack_start.elapsed().as_secs_f64());
             };
-            match select(processed_waiter, submit_inner.boxed()).await {
-                Either::Left((processed, _submit_inner)) => processed,
+
+            guard.processed_method = match select(processed_waiter, submit_inner.boxed()).await {
+                Either::Left((observed_via_consensus, _submit_inner)) => observed_via_consensus,
                 Either::Right(((), processed_waiter)) => {
                     debug!("Submitted {transaction_keys:?} to consensus");
                     processed_waiter.await
                 }
-            }
+            };
         }
         debug!("{transaction_keys:?} processed by consensus");
 
@@ -870,11 +844,12 @@ impl ConsensusAdapter {
     }
 
     /// Waits for transactions to appear either to consensus output or been executed via a checkpoint (state sync).
+    /// Returns the processed method, whether the transactions have been processed via consensus, or have been synced via checkpoint.
     async fn await_consensus_or_checkpoint(
         self: &Arc<Self>,
         transaction_keys: Vec<SequencedConsensusTransactionKey>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
+    ) -> ProcessedMethod {
         let notifications = FuturesUnordered::new();
         for transaction_key in transaction_keys {
             let transaction_digests = if let SequencedConsensusTransactionKey::External(
@@ -886,6 +861,17 @@ impl ConsensusAdapter {
                 vec![]
             };
 
+            let checkpoint_synced_future = if let SequencedConsensusTransactionKey::External(
+                ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number),
+            ) = transaction_key
+            {
+                // If the transaction is a checkpoint signature, we can also wait to get notified when a checkpoint with equal or higher sequence
+                // number has been already synced. This way we don't try to unnecessarily sequence the signature for an already verified checkpoint.
+                Either::Left(epoch_store.synced_checkpoint_notify(checkpoint_sequence_number))
+            } else {
+                Either::Right(future::pending())
+            };
+
             // We wait for each transaction individually to be processed by consensus or executed in a checkpoint. We could equally just
             // get notified in aggregate when all transactions are processed, but with this approach can get notified in a more fine-grained way
             // as transactions can be marked as processed in different ways. This is mostly a concern for the soft-bundle transactions.
@@ -894,16 +880,28 @@ impl ConsensusAdapter {
                     processed = epoch_store.consensus_messages_processed_notify(vec![transaction_key]) => {
                         processed.expect("Storage error when waiting for consensus message processed");
                         self.metrics.sequencing_certificate_processed.with_label_values(&["consensus"]).inc();
+                        return ProcessedMethod::Consensus;
                     },
                     processed = epoch_store.transactions_executed_in_checkpoint_notify(transaction_digests), if !transaction_digests.is_empty() => {
                         processed.expect("Storage error when waiting for transaction executed in checkpoint");
                         self.metrics.sequencing_certificate_processed.with_label_values(&["checkpoint"]).inc();
                     }
+                    processed = checkpoint_synced_future => {
+                        processed.expect("Error when waiting for checkpoint sequence number");
+                        self.metrics.sequencing_certificate_processed.with_label_values(&["synced_checkpoint"]).inc();
+                    }
                 }
+                ProcessedMethod::Checkpoint
             });
         }
 
-        notifications.collect::<Vec<()>>().await;
+        let processed_methods = notifications.collect::<Vec<ProcessedMethod>>().await;
+        for method in processed_methods {
+            if method == ProcessedMethod::Checkpoint {
+                return ProcessedMethod::Checkpoint;
+            }
+        }
+        ProcessedMethod::Consensus
     }
 }
 
@@ -1029,6 +1027,13 @@ struct InflightDropGuard<'a> {
     positions_moved: Option<usize>,
     preceding_disconnected: Option<usize>,
     tx_type: &'static str,
+    processed_method: ProcessedMethod,
+}
+
+#[derive(PartialEq, Eq)]
+enum ProcessedMethod {
+    Consensus,
+    Checkpoint,
 }
 
 impl<'a> InflightDropGuard<'a> {
@@ -1053,6 +1058,7 @@ impl<'a> InflightDropGuard<'a> {
             positions_moved: None,
             preceding_disconnected: None,
             tx_type,
+            processed_method: ProcessedMethod::Consensus,
         }
     }
 }
@@ -1093,10 +1099,14 @@ impl<'a> Drop for InflightDropGuard<'a> {
         };
 
         let latency = self.start.elapsed();
+        let processed_method = match self.processed_method {
+            ProcessedMethod::Consensus => "processed_via_consensus",
+            ProcessedMethod::Checkpoint => "processed_via_checkpoint",
+        };
         self.adapter
             .metrics
             .sequencing_certificate_latency
-            .with_label_values(&[&position, self.tx_type])
+            .with_label_values(&[&position, self.tx_type, processed_method])
             .observe(latency.as_secs_f64());
 
         // Only sample latency after consensus quorum is up. Otherwise, the wait for consensus
@@ -1110,7 +1120,8 @@ impl<'a> Drop for InflightDropGuard<'a> {
                 self.tx_type,
                 "shared_certificate" | "owned_certificate" | "checkpoint_signature" | "soft_bundle"
             );
-            if sampled {
+            // if tx has been processed by checkpoint state sync, then exclude from the latency calculations as this can introduce to misleading results.
+            if sampled && self.processed_method == ProcessedMethod::Consensus {
                 self.adapter.latency_observer.report(latency);
             }
         }

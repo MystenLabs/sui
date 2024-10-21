@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { bcs, fromB64 } from './../src/index';
+import { bcs, fromBase64 } from './../src/index';
 
 describe('BCS: Primitives', () => {
 	it('should support growing size', () => {
@@ -22,7 +22,7 @@ describe('BCS: Primitives', () => {
 
 		const setBytes = Coin.serialize(expected, { initialSize: 1, maxSize: 1024 });
 
-		expect(Coin.parse(fromB64(rustBcs))).toEqual(expected);
+		expect(Coin.parse(fromBase64(rustBcs))).toEqual(expected);
 		expect(setBytes.toBase64()).toEqual(rustBcs);
 	});
 

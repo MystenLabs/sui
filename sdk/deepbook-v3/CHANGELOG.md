@@ -1,5 +1,93 @@
 # @mysten/deepbook-v3
 
+## 0.12.1
+
+### Patch Changes
+
+- Updated dependencies [477d2a4]
+  - @mysten/sui@1.13.0
+
+## 0.12.0
+
+### Minor Changes
+
+- 60f96ee: New stablecoin pool params
+
+## 0.11.0
+
+### Minor Changes
+
+- 7b8e8ad: Mainnet pool packages
+
+## 0.10.0
+
+### Minor Changes
+
+- 23c3a3a: DEEP Mainnet Redeploy
+
+## 0.9.0
+
+### Minor Changes
+
+- 89f2e59: Mainnet packages
+
+## 0.8.5
+
+### Patch Changes
+
+- c0fb6d6: Patch ID and bug fix
+
+## 0.8.4
+
+### Patch Changes
+
+- 5df4e5e: Test Mainnet Packages
+
+## 0.8.3
+
+### Patch Changes
+
+- Updated dependencies [5436a90]
+- Updated dependencies [5436a90]
+  - @mysten/sui@1.12.0
+
+## 0.8.2
+
+### Patch Changes
+
+- f026ec6: Deepbook Package Upgrade
+
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies [489f421]
+- Updated dependencies [489f421]
+  - @mysten/sui@1.11.0
+
+## 0.8.0
+
+### Minor Changes
+
+- 0d17307: Update deepbook sdk
+
+## 0.7.1
+
+### Patch Changes
+
+- 37d259a: Locked balance feature
+
+## 0.7.0
+
+### Minor Changes
+
+- 7923ed5: Newest deepbook package constants
+
+### Patch Changes
+
+- Updated dependencies [830b8d8]
+  - @mysten/sui@1.10.0
+
 ## 0.6.0
 
 ### Minor Changes

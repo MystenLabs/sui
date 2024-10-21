@@ -16,6 +16,8 @@ pub mod constant_naming;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
 pub mod needless_else;
+pub mod redundant_ref_deref;
+pub mod self_assignment;
 pub mod unnecessary_conditional;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
@@ -141,11 +143,23 @@ lints!(
         "'if' expression can be removed"
     ),
     (
-        NeedlessElse,
+        SelfAssignment,
+        LinterDiagnosticCategory::Suspicious,
+        "self_assignment",
+        "assignment preserves the same value"
+    ),
+    (
+        RedundantRefDeref,
+        LinterDiagnosticCategory::Complexity,
+        "redundant_ref_deref",
+        "redundant reference/dereference"
+    ),
+    (
+        UnnecessaryUnit,
         LinterDiagnosticCategory::Style,
-        "needless_else",
-        "'else' block can be removed"
-    )
+        "unnecessary_unit",
+        "empty unit `()` expression can be removed or simplified"
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -174,13 +188,11 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
         LintLevel::All => {
             vec![
                 constant_naming::ConstantNamingVisitor.visitor(),
-                unnecessary_while_loop::WhileTrueToLoop.visitor(),
                 meaningless_math_operation::MeaninglessMathOperation.visitor(),
-                unneeded_return::UnneededReturnVisitor.visitor(),
                 abort_constant::AssertAbortNamedConstants.visitor(),
                 loop_without_exit::LoopWithoutExit.visitor(),
-                unnecessary_conditional::UnnecessaryConditional.visitor(),
-                needless_else::EmptyElseBranch.visitor(),
+                self_assignment::SelfAssignmentVisitor.visitor(),
+                redundant_ref_deref::RedundantRefDerefVisitor.visitor(),
             ]
         }
     }

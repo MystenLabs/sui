@@ -10,6 +10,7 @@ use move_binary_format::{
     errors::*,
     file_format::{Constant, SignatureToken, VariantTag},
 };
+use move_core_types::annotated_value as A;
 use move_core_types::{
     account_address::AccountAddress,
     effects::Op,
@@ -4202,5 +4203,142 @@ impl ValueImpl {
 impl Value {
     pub fn as_move_value(&self, layout: &MoveTypeLayout) -> MoveValue {
         self.0.as_move_value(layout)
+    }
+
+    pub fn as_annotated_move_value_for_tracing_only(
+        &self,
+        layout: &A::MoveTypeLayout,
+    ) -> Option<A::MoveValue> {
+        self.0.as_annotated_move_value(layout)
+    }
+}
+
+impl ValueImpl {
+    /// Converts the value to an annotated move value. This is only needed for tracing and care
+    /// should be taken when using this function as it can possibly inflate the size of the value.
+    fn as_annotated_move_value(&self, layout: &A::MoveTypeLayout) -> Option<A::MoveValue> {
+        use move_core_types::annotated_value::MoveTypeLayout as L;
+        use move_core_types::annotated_value::MoveValue;
+        Some(match (layout, self) {
+            (L::U8, ValueImpl::U8(x)) => MoveValue::U8(*x),
+            (L::U16, ValueImpl::U16(x)) => MoveValue::U16(*x),
+            (L::U32, ValueImpl::U32(x)) => MoveValue::U32(*x),
+            (L::U64, ValueImpl::U64(x)) => MoveValue::U64(*x),
+            (L::U128, ValueImpl::U128(x)) => MoveValue::U128(*x),
+            (L::U256, ValueImpl::U256(x)) => MoveValue::U256(*x),
+            (L::Bool, ValueImpl::Bool(x)) => MoveValue::Bool(*x),
+            (L::Address, ValueImpl::Address(x)) => MoveValue::Address(*x),
+            (l, ValueImpl::Container(c)) => return c.as_annotated_move_value(l),
+            (
+                _,
+                ValueImpl::ContainerRef(
+                    ContainerRef::Local(c) | ContainerRef::Global { container: c, .. },
+                ),
+            ) => return c.as_annotated_move_value(layout),
+            (
+                _,
+                ValueImpl::IndexedRef(IndexedRef {
+                    container_ref:
+                        ContainerRef::Local(c) | ContainerRef::Global { container: c, .. },
+                    idx,
+                }),
+            ) => {
+                use Container::*;
+                let idx = *idx;
+                let res = match c {
+                    Locals(r) | Vec(r) | Struct(r) => r.borrow()[idx].copy_value().unwrap(),
+                    Variant(r) => r.borrow().1[idx].copy_value().unwrap(),
+                    VecU8(r) => ValueImpl::U8(r.borrow()[idx]),
+                    VecU16(r) => ValueImpl::U16(r.borrow()[idx]),
+                    VecU32(r) => ValueImpl::U32(r.borrow()[idx]),
+                    VecU64(r) => ValueImpl::U64(r.borrow()[idx]),
+                    VecU128(r) => ValueImpl::U128(r.borrow()[idx]),
+                    VecU256(r) => ValueImpl::U256(r.borrow()[idx]),
+                    VecBool(r) => ValueImpl::Bool(r.borrow()[idx]),
+                    VecAddress(r) => ValueImpl::Address(r.borrow()[idx]),
+                };
+                return res.as_annotated_move_value(layout);
+            }
+            (_layout, _val) => return None,
+        })
+    }
+}
+
+impl Container {
+    fn as_annotated_move_value(&self, layout: &A::MoveTypeLayout) -> Option<A::MoveValue> {
+        use move_core_types::annotated_value::MoveTypeLayout as L;
+        Some(match (layout, self) {
+            (L::Enum(e_layout), Container::Variant(r)) => {
+                let A::MoveEnumLayout { type_, variants } = e_layout.as_ref();
+                let (tag, values) = &*r.borrow();
+                let tag = *tag;
+                let ((name, _), field_layouts) =
+                    variants.iter().find(|((_, t), _)| *t == tag).unwrap();
+                let mut fields = vec![];
+                for (v, field_layout) in values.iter().zip(field_layouts) {
+                    fields.push((
+                        field_layout.name.clone(),
+                        v.as_annotated_move_value(&field_layout.layout)?,
+                    ));
+                }
+                A::MoveValue::Variant(A::MoveVariant {
+                    tag,
+                    fields,
+                    type_: type_.clone(),
+                    variant_name: name.clone(),
+                })
+            }
+            (L::Struct(struct_layout), Container::Struct(r)) => {
+                let mut fields = vec![];
+                for (v, field_layout) in r.borrow().iter().zip(struct_layout.fields.iter()) {
+                    fields.push((
+                        field_layout.name.clone(),
+                        v.as_annotated_move_value(&field_layout.layout)?,
+                    ));
+                }
+                A::MoveValue::Struct(A::MoveStruct::new(struct_layout.type_.clone(), fields))
+            }
+
+            (L::Vector(inner_layout), c) => A::MoveValue::Vector(match c {
+                Container::VecU8(r) => r.borrow().iter().map(|u| A::MoveValue::U8(*u)).collect(),
+                Container::VecU16(r) => r.borrow().iter().map(|u| A::MoveValue::U16(*u)).collect(),
+                Container::VecU32(r) => r.borrow().iter().map(|u| A::MoveValue::U32(*u)).collect(),
+                Container::VecU64(r) => r.borrow().iter().map(|u| A::MoveValue::U64(*u)).collect(),
+                Container::VecU128(r) => {
+                    r.borrow().iter().map(|u| A::MoveValue::U128(*u)).collect()
+                }
+                Container::VecU256(r) => {
+                    r.borrow().iter().map(|u| A::MoveValue::U256(*u)).collect()
+                }
+                Container::VecBool(r) => {
+                    r.borrow().iter().map(|u| A::MoveValue::Bool(*u)).collect()
+                }
+                Container::VecAddress(r) => r
+                    .borrow()
+                    .iter()
+                    .map(|u| A::MoveValue::Address(*u))
+                    .collect(),
+                Container::Vec(r) => r
+                    .borrow()
+                    .iter()
+                    .map(|v| v.as_annotated_move_value(inner_layout))
+                    .collect::<Option<_>>()?,
+                Container::Struct(_) | Container::Variant { .. } | Container::Locals(_) => {
+                    return None
+                }
+            }),
+
+            (L::Signer, Container::Struct(r)) => {
+                let v = r.borrow();
+                if v.len() != 1 {
+                    return None;
+                }
+                match &v[0] {
+                    ValueImpl::Address(a) => A::MoveValue::Signer(*a),
+                    _ => return None,
+                }
+            }
+            (_layout, _val) => return None,
+        })
     }
 }

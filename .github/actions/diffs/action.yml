@@ -22,13 +22,16 @@ outputs:
   isMoveAutoFormatter:
     description: True when changes happened in MoveAutoFormatter code
     value: "${{ steps.diff.outputs.isMoveAutoFormatter }}"
+  isExamples:
+    description: True when changes happened in examples/ directory
+    value: "${{ steps.diff.outputs.isExamples }}"
 
 runs:
   using: composite
   steps:
   - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
   - name: Detect Changes
-    uses: dorny/paths-filter@v2.10.2
+    uses: dorny/paths-filter@v3
     id: diff
     with:
       filters: |
@@ -76,3 +79,5 @@ runs:
           - 'sui-execution/**'
         isMoveAutoFormatter:
           - 'external-crates/move/crates/move-analyzer/prettier-plugin/**'
+        isExamples:
+          - 'examples/**'

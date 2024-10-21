@@ -52,7 +52,6 @@ const concepts = [
 						},
 						items: ['concepts/transfers/custom-rules', 'concepts/transfers/transfer-to-object'],
 					},
-					'concepts/events',
 					'concepts/versioning',
 				],
 			},
@@ -179,6 +178,7 @@ const concepts = [
 			'concepts/tokenomics/gas-in-sui',
 		],
 	},
+	'concepts/sui-bridge',
 	'concepts/research-papers',
 ];
 module.exports = concepts;

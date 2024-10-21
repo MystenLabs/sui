@@ -1212,13 +1212,13 @@ impl AstDebug for WarningFilters {
         for (prefix, filters) in &self.filters {
             let prefix_str = prefix.unwrap_or(known_attributes::DiagnosticAttribute::ALLOW);
             match filters {
-                UnprefixedWarningFilters::All => w.write(&format!(
+                UnprefixedWarningFilters::All => w.write(format!(
                     "#[{}({})]",
                     prefix_str,
                     WarningFilter::All(*prefix).to_str().unwrap(),
                 )),
                 UnprefixedWarningFilters::Specified { categories, codes } => {
-                    w.write(&format!("#[{}(", prefix_str));
+                    w.write(format!("#[{}(", prefix_str));
                     let items = categories
                         .iter()
                         .map(|(cat, n)| WarningFilter::Category {

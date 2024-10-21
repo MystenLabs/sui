@@ -22,7 +22,7 @@ use jsonrpsee::types::{ErrorObject, Id, InvalidRequest, Params, Request};
 use jsonrpsee::{core::server::rpc_module::Methods, server::logger::Logger};
 use serde_json::value::RawValue;
 use sui_core::traffic_controller::{
-    metrics::TrafficControllerMetrics, policies::TrafficTally, TrafficController,
+    metrics::TrafficControllerMetrics, parse_ip, policies::TrafficTally, TrafficController,
 };
 use sui_json_rpc_api::TRANSACTION_EXECUTION_CLIENT_ERROR_CODE;
 use sui_types::traffic_control::ClientIdSource;
@@ -63,7 +63,7 @@ impl<L> JsonRpcService<L> {
             logger,
             id_provider: Arc::new(RandomIntegerIdProvider),
             traffic_controller: policy_config.clone().map(|policy| {
-                Arc::new(TrafficController::spawn(
+                Arc::new(TrafficController::init(
                     policy,
                     traffic_controller_metrics,
                     remote_fw_config,
@@ -183,17 +183,7 @@ async fn process_raw_request<L: Logger>(
                             );
                         return None;
                     };
-                    client_ip.parse::<IpAddr>().ok().or_else(|| {
-                        client_ip.parse::<SocketAddr>().ok().map(|socket_addr| socket_addr.ip()).or_else(|| {
-                                error!(
-                                    "Failed to parse x-forwarded-for header value of {:?} to ip address or socket. \
-                                    Please ensure that your proxy is configured to resolve client domains to an \
-                                    IP address before writing header",
-                                    client_ip,
-                                );
-                                None
-                            })
-                        })
+                    parse_ip(client_ip)
                 }
                 Err(e) => {
                     error!("Invalid UTF-8 in x-forwarded-for header: {:?}", e);

@@ -68,6 +68,10 @@ pub struct Test {
     /// The number of iterations to run each test that uses generated values (only used with #[random_test]).
     #[clap(name = "rand-num-iters", long = "rand-num-iters")]
     pub rand_num_iters: Option<u64>,
+
+    // Enable tracing for tests
+    #[clap(long = "trace-execution", value_name = "PATH")]
+    pub trace_execution: Option<Option<String>>,
 }
 
 impl Test {
@@ -108,6 +112,7 @@ impl Test {
             compute_coverage: _,
             seed,
             rand_num_iters,
+            trace_execution,
         } = self;
         UnitTestingConfig {
             gas_limit,
@@ -118,6 +123,7 @@ impl Test {
             verbose: verbose_mode,
             seed,
             rand_num_iters,
+            trace_execution,
             ..UnitTestingConfig::default_with_bound(None)
         }
     }

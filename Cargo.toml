@@ -113,6 +113,7 @@ members = [
     "crates/sui-graphql-rpc-client",
     "crates/sui-graphql-rpc-headers",
     "crates/sui-indexer",
+    "crates/sui-indexer-alt",
     "crates/sui-indexer-builder",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -153,6 +154,7 @@ members = [
     "crates/sui-surfer",
     "crates/sui-swarm",
     "crates/sui-swarm-config",
+    "crates/sui-synthetic-ingestion",
     "crates/sui-telemetry",
     "crates/sui-test-transaction-builder",
     "crates/sui-test-validator",
@@ -202,7 +204,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.35.0"
+version = "1.37.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -264,6 +266,7 @@ aws-sdk-s3 = "0.29.0"
 aws-smithy-http = "0.56"
 aws-smithy-runtime-api = "0.56"
 axum = { version = "0.7", default-features = false, features = [
+    "macros",
     "tokio",
     "http1",
     "http2",
@@ -386,8 +389,8 @@ moka = { version = "0.12", default-features = false, features = [
     "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "b320996d8dfb99b273fe31c0222c659332283c99", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "b320996d8dfb99b273fe31c0222c659332283c99", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9c6636c399d5c60a1759f1670b1c07b3d408799a", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9c6636c399d5c60a1759f1670b1c07b3d408799a", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
@@ -494,12 +497,10 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-# NOTE: do not enable the `tls` feature on tonic. It will break custom TLS handling
-# for self signed certificates. Unit tests under consensus/core and other integration
-# tests will fail.
 tonic = { version = "0.12", features = ["transport"] }
 tonic-build = { version = "0.12", features = ["prost", "transport"] }
 tonic-health = "0.12"
+tonic-rustls = "0.1.0"
 tower = { version = "0.4.12", features = [
     "full",
     "util",
@@ -538,6 +539,7 @@ webpki = { version = "0.102", package = "rustls-webpki", features = [
     "alloc",
     "std",
 ] }
+wiremock = "0.5"
 x509-parser = "0.14.0"
 zstd = "0.12.3"
 zeroize = "1.6.0"
@@ -572,10 +574,10 @@ move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3366c26a746b72707572c4f3f05915e20d5c16c2" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3366c26a746b72707572c4f3f05915e20d5c16c2" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3366c26a746b72707572c4f3f05915e20d5c16c2", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3366c26a746b72707572c4f3f05915e20d5c16c2", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2f502fd8570fe4e9cff36eea5bbd6fef22002898" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2f502fd8570fe4e9cff36eea5bbd6fef22002898" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2f502fd8570fe4e9cff36eea5bbd6fef22002898", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2f502fd8570fe4e9cff36eea5bbd6fef22002898", features = [
     "experimental",
 ] }
 passkey-types = { version = "0.2.0" }
@@ -591,11 +593,8 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697e
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
 
 # core-types with json format for REST api
-sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "bd233b6879b917fb95e17f21927c198e7a60c924", features = [
-    "hash",
-    "serde",
-    "schemars",
-] }
+# sui-sdk-types = { version = "0.0.1", features = ["hash", "serde", "schemars"] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "31bd9da32a8057edc45da8f5e6a8f25b83919b93", features = ["hash", "serde", "schemars"] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -669,6 +668,7 @@ sui-storage = { path = "crates/sui-storage" }
 sui-surfer = { path = "crates/sui-surfer" }
 sui-swarm = { path = "crates/sui-swarm" }
 sui-swarm-config = { path = "crates/sui-swarm-config" }
+sui-synthetic-ingestion = { path = "crates/sui-synthetic-ingestion" }
 sui-telemetry = { path = "crates/sui-telemetry" }
 sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }

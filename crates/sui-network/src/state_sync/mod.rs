@@ -296,13 +296,18 @@ impl PeerBalancer {
             .unwrap()
             .peers_on_same_chain()
             // Filter out any peers who we aren't connected with.
-            .filter_map(|(peer_id, info)| network.peer(*peer_id).map(|peer| (peer, *info)))
+            .filter_map(|(peer_id, info)| {
+                network
+                    .peer(*peer_id)
+                    .map(|peer| (peer.connection_rtt(), peer, *info))
+            })
             .collect();
-        peers.sort_by(|(peer_a, _), (peer_b, _)| {
-            peer_a.connection_rtt().cmp(&peer_b.connection_rtt())
-        });
+        peers.sort_by(|(rtt_a, _, _), (rtt_b, _, _)| rtt_a.cmp(rtt_b));
         Self {
-            peers: peers.into(),
+            peers: peers
+                .into_iter()
+                .map(|(_, peer, info)| (peer, info))
+                .collect(),
             requested_checkpoint: None,
             request_type,
         }

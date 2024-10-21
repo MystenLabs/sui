@@ -9,6 +9,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
+//docs::#mutationlock
 /**
  * Builds and executes the PTB to lock an object.
  */
@@ -34,7 +35,9 @@ export function useLockObjectMutation() {
     },
   });
 }
+//docs::/#mutationlock
 
+//docs::#mutationunlock
 /**
  * Builds and executes the PTB to unlock an object.
  */
@@ -97,3 +100,4 @@ export function useUnlockMutation() {
     },
   });
 }
+//docs::/#mutationunlock

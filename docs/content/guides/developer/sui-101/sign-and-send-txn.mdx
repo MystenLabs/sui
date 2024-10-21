@@ -40,7 +40,7 @@ The following examples demonstrate how to sign and execute transactions using Ru
 There are various ways to instantiate a key pair and to derive its public key and Sui address using the Sui TypeScript SDK.
 
 ```tsx
-import { fromHEX } from '@mysten/bcs';
+import { fromHex } from '@mysten/bcs';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { type Keypair } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -238,7 +238,7 @@ sui keytool import "$MNEMONICS" secp256k1
 sui keytool import "$MNEMONICS" secp256r1
 ```
 
-Create a transfer transaction in CLI. Set the $SUI_ADDRESS to the one corresponding to the keypair used to sign. $GAS_COIN_ID refers to the object ID that is owned by the sender to be used as gas. $GAS_BUDGET refers to the budget used to execute transaction. Then sign with the private key corresponding to the sender address. $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, e.g. "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
+Create a transfer transaction in the CLI. Set the `$SUI_ADDRESS` to the one corresponding to the keypair used to sign. `$GAS_COIN_ID` refers to the object ID that is owned by the sender to be used as gas. `$GAS_BUDGET` refers to the budget used to execute transaction. Then sign with the private key corresponding to the sender address. `$MNEMONICS` refers to 12/15/18/21/24 words from the wordlist, e.g. "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
 
 {@include: ../../../snippets/info-gas-budget.mdx}
 

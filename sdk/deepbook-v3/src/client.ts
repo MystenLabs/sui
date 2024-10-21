@@ -567,4 +567,34 @@ export class DeepBookClient {
 			},
 		};
 	}
+
+	/**
+	 * @description Get the locked balances for a pool and balance manager
+	 * @param {string} poolKey Key of the pool
+	 * @param {string} managerKey The key of the BalanceManager
+	 * @returns {Promise<{ base: number, quote: number, deep: number }>}
+	 * An object with base, quote, and deep locked for the balance manager in the pool
+	 */
+	async lockedBalance(poolKey: string, balanceManagerKey: string) {
+		const tx = new Transaction();
+		const pool = this.#config.getPool(poolKey);
+		const baseScalar = this.#config.getCoin(pool.baseCoin).scalar;
+		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
+
+		tx.add(this.deepBook.lockedBalance(poolKey, balanceManagerKey));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const baseLocked = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const quoteLocked = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const deepLocked = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
+
+		return {
+			base: Number((baseLocked / baseScalar).toFixed(9)),
+			quote: Number((quoteLocked / quoteScalar).toFixed(9)),
+			deep: Number((deepLocked / DEEP_SCALAR).toFixed(9)),
+		};
+	}
 }

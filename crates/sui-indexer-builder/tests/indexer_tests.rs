@@ -22,8 +22,9 @@ async fn indexer_simple_backfill_task_test() {
         data: data.clone(),
         live_task_starting_checkpoint: 5,
         genesis_checkpoint: 0,
-        gauge_metric: new_gauge_vec(&registry),
+        gauge_metric: new_gauge_vec(&registry, "foo"),
         counter_metric: new_counter_vec(&registry),
+        inflight_live_tasks: new_gauge_vec(&registry, "bar"),
     };
     let persistent = InMemoryPersistent::new();
     let mut indexer = IndexerBuilder::new(
@@ -63,8 +64,9 @@ async fn indexer_partitioned_backfill_task_test() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 0,
-        gauge_metric: new_gauge_vec(&registry),
+        gauge_metric: new_gauge_vec(&registry, "foo"),
         counter_metric: new_counter_vec(&registry),
+        inflight_live_tasks: new_gauge_vec(&registry, "bar"),
     };
     let persistent = InMemoryPersistent::new();
     let mut indexer = IndexerBuilder::new(
@@ -110,8 +112,9 @@ async fn indexer_partitioned_task_with_data_already_in_db_test1() {
         data: data.clone(),
         live_task_starting_checkpoint: 31,
         genesis_checkpoint: 0,
-        gauge_metric: new_gauge_vec(&registry),
+        gauge_metric: new_gauge_vec(&registry, "foo"),
         counter_metric: new_counter_vec(&registry),
+        inflight_live_tasks: new_gauge_vec(&registry, "bar"),
     };
     let persistent = InMemoryPersistent::new();
     persistent.data.lock().await.append(&mut (0..=30).collect());
@@ -162,8 +165,9 @@ async fn indexer_partitioned_task_with_data_already_in_db_test2() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 0,
-        gauge_metric: new_gauge_vec(&registry),
+        gauge_metric: new_gauge_vec(&registry, "foo"),
         counter_metric: new_counter_vec(&registry),
+        inflight_live_tasks: new_gauge_vec(&registry, "bar"),
     };
     let persistent = InMemoryPersistent::new();
     persistent.data.lock().await.append(&mut (0..=30).collect());
@@ -216,8 +220,9 @@ async fn indexer_partitioned_task_with_data_already_in_db_test3() {
         data: data.clone(),
         live_task_starting_checkpoint: 28,
         genesis_checkpoint: 0,
-        gauge_metric: new_gauge_vec(&registry),
+        gauge_metric: new_gauge_vec(&registry, "foo"),
         counter_metric: new_counter_vec(&registry),
+        inflight_live_tasks: new_gauge_vec(&registry, "bar"),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
@@ -274,8 +279,9 @@ async fn indexer_partitioned_task_with_data_already_in_db_test4() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 0,
-        gauge_metric: new_gauge_vec(&registry),
+        gauge_metric: new_gauge_vec(&registry, "foo"),
         counter_metric: new_counter_vec(&registry),
+        inflight_live_tasks: new_gauge_vec(&registry, "bar"),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
@@ -336,8 +342,9 @@ async fn indexer_with_existing_live_task1() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 10,
-        gauge_metric: new_gauge_vec(&registry),
+        gauge_metric: new_gauge_vec(&registry, "foo"),
         counter_metric: new_counter_vec(&registry),
+        inflight_live_tasks: new_gauge_vec(&registry, "bar"),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
@@ -382,8 +389,9 @@ async fn indexer_with_existing_live_task2() {
         data: data.clone(),
         live_task_starting_checkpoint: 25,
         genesis_checkpoint: 10,
-        gauge_metric: new_gauge_vec(&registry),
+        gauge_metric: new_gauge_vec(&registry, "foo"),
         counter_metric: new_counter_vec(&registry),
+        inflight_live_tasks: new_gauge_vec(&registry, "bar"),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
@@ -438,8 +446,9 @@ async fn resume_test() {
         data: data.clone(),
         live_task_starting_checkpoint: 31,
         genesis_checkpoint: 0,
-        gauge_metric: new_gauge_vec(&registry),
+        gauge_metric: new_gauge_vec(&registry, "foo"),
         counter_metric: new_counter_vec(&registry),
+        inflight_live_tasks: new_gauge_vec(&registry, "bar"),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
@@ -478,9 +487,8 @@ async fn resume_test() {
     assert_eq!((10..=50u64).collect::<Vec<_>>(), recorded_data);
 }
 
-fn new_gauge_vec(registry: &Registry) -> IntGaugeVec {
-    register_int_gauge_vec_with_registry!("whatever_gauge", "whatever", &["whatever"], registry,)
-        .unwrap()
+fn new_gauge_vec(registry: &Registry, name: &str) -> IntGaugeVec {
+    register_int_gauge_vec_with_registry!(name, "whatever", &["whatever"], registry,).unwrap()
 }
 
 fn new_counter_vec(registry: &Registry) -> IntCounterVec {
