@@ -6,7 +6,8 @@ use clap::Parser;
 use sui_indexer_alt::{
     args::Args,
     handlers::{
-        kv_checkpoints::KvCheckpoints, kv_objects::KvObjects, kv_transactions::KvTransactions,
+        ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
+        kv_objects::KvObjects, kv_transactions::KvTransactions,
         tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     },
     Indexer,
@@ -26,6 +27,8 @@ async fn main() -> Result<()> {
 
     let mut indexer = Indexer::new(args.indexer_config, cancel.clone()).await?;
 
+    indexer.pipeline::<EvEmitMod>().await?;
+    indexer.pipeline::<EvStructInst>().await?;
     indexer.pipeline::<KvCheckpoints>().await?;
     indexer.pipeline::<KvObjects>().await?;
     indexer.pipeline::<KvTransactions>().await?;

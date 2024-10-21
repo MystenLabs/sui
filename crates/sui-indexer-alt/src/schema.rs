@@ -3,6 +3,26 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    ev_emit_mod (package, module, tx_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        tx_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    ev_struct_inst (package, module, name, instantiation, tx_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        name -> Text,
+        instantiation -> Bytea,
+        tx_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
     kv_checkpoints (sequence_number) {
         sequence_number -> Int8,
         certified_checkpoint -> Bytea,
@@ -58,6 +78,8 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
+    ev_emit_mod,
+    ev_struct_inst,
     kv_checkpoints,
     kv_objects,
     kv_transactions,
