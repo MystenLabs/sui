@@ -1256,6 +1256,10 @@ pub struct ProtocolConfig {
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
 
+    /// If >0, congestion control will allow up to one transaction per object to exceed
+    /// the configured maximum accumulated cost by the given amount.
+    max_txn_cost_overage_per_object_in_commit: Option<u64>,
+
     /// Minimum interval of commit timestamps between consecutive checkpoints.
     min_checkpoint_interval_ms: Option<u64>,
 
@@ -1271,7 +1275,8 @@ pub struct ProtocolConfig {
     bridge_should_try_to_finalize_committee: Option<bool>,
 
     /// The max accumulated txn execution cost per object in a mysticeti. Transactions
-    /// in a commit will be deferred once their touch shared objects hit this limit.
+    /// in a commit will be deferred once their touch shared objects hit this limit,
+    /// unless the selected congestion control mode allows overage.
     /// This config plays the same role as `max_accumulated_txn_cost_per_object_in_narwhal_commit`
     /// but for mysticeti commits due to that mysticeti has higher commit rate.
     max_accumulated_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
@@ -2151,6 +2156,8 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
             max_deferral_rounds_for_congestion_control: None,
+
+            max_txn_cost_overage_per_object_in_commit: None,
 
             min_checkpoint_interval_ms: None,
 

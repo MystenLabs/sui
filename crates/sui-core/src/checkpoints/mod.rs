@@ -2259,7 +2259,7 @@ impl CheckpointService {
     ) -> SuiResult {
         use crate::authority::authority_per_epoch_store::ConsensusCommitOutput;
 
-        let mut output = ConsensusCommitOutput::new();
+        let mut output = ConsensusCommitOutput::new(0);
         epoch_store.write_pending_checkpoint(&mut output, &checkpoint)?;
         let mut batch = epoch_store.db_batch_for_test();
         output.write_to_batch(epoch_store, &mut batch)?;
