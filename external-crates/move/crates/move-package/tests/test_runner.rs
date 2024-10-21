@@ -161,7 +161,7 @@ impl Test<'_> {
                         target_filter: None,
                     },
                 )
-                .build_model()?;
+                .build_model(Flags::empty())?;
                 "Built model\n".to_string()
             }
 

@@ -4,8 +4,9 @@
 use crate::manage_package::resolve_lock_file_path;
 use clap::Parser;
 use move_cli::base;
-use move_prover::run_boogie_gen;
+use move_compiler::Flags;
 use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
+use move_prover::run_boogie_gen;
 use serde_json::json;
 use std::{fs, path::Path};
 use sui_move_build::{check_invalid_dependencies, check_unpublished_dependencies, BuildConfig};
@@ -60,7 +61,7 @@ impl Build {
 
     pub fn execute_internal(
         rerooted_path: &Path,
-        config: MoveBuildConfig,
+        mut config: MoveBuildConfig,
         with_unpublished_deps: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
@@ -68,12 +69,15 @@ impl Build {
         chain_id: Option<String>,
     ) -> anyhow::Result<()> {
         if generate_boogie {
-            let model = config.move_model_for_package(
+            config.verify_mode = true;
+
+            let model = config.move_model_with_flags_for_package(
                 rerooted_path,
                 ModelConfig {
                     all_files_as_targets: false,
-                    target_filter: None
-                }
+                    target_filter: None,
+                },
+                Flags::verifying(),
             )?;
             let mut options = move_prover::cli::Options::default();
             // don't spawn async tasks when running Boogie--causes a crash if we do
@@ -81,7 +85,7 @@ impl Build {
             options.backend.use_array_theory = true;
             options.backend.vc_timeout = 3000;
             run_boogie_gen(&model, options)?;
-            return Ok(())
+            return Ok(());
         }
 
         let pkg = BuildConfig {
