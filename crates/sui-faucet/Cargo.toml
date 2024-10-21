@@ -10,6 +10,7 @@ publish = false
 anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
+bin-version.workspace = true
 clap.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }

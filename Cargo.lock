@@ -13551,6 +13551,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "axum 0.7.5",
+ "bin-version",
  "clap",
  "eyre",
  "futures",
