@@ -15,6 +15,7 @@ use simulacrum::SimulatorStore;
 use simulator_persisted_store::PersistedStore;
 use std::path::Path;
 use std::sync::Arc;
+use sui_core::authority::authority_per_epoch_store::CertLockGuard;
 use sui_core::authority::authority_test_utils::send_and_confirm_transaction_with_execution_error;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc::authority_state::StateRead;
@@ -142,7 +143,11 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         );
 
         let epoch_store = self.validator.load_epoch_store_one_call_per_task().clone();
-        self.validator.read_objects_for_execution(&tx, &epoch_store)
+        self.validator.read_objects_for_execution(
+            &CertLockGuard::dummy_for_tests(),
+            &tx,
+            &epoch_store,
+        )
     }
 
     fn prepare_txn(

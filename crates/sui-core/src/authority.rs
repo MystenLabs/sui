@@ -11,6 +11,7 @@ use crate::verify_indexes::verify_indexes;
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use async_trait::async_trait;
+use authority_per_epoch_store::CertLockGuard;
 use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
@@ -1273,7 +1274,22 @@ impl AuthorityState {
         debug!("execute_certificate_internal");
 
         let tx_digest = certificate.digest();
-        let input_objects = self.read_objects_for_execution(certificate, epoch_store)?;
+
+        // prevent concurrent executions of the same tx.
+        let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
+
+        // The cert could have been processed by a concurrent attempt of the same cert, so check if
+        // the effects have already been written.
+        if let Some(effects) = self
+            .get_transaction_cache_reader()
+            .get_executed_effects(tx_digest)?
+        {
+            tx_guard.release();
+            return Ok((effects, None));
+        }
+
+        let input_objects =
+            self.read_objects_for_execution(tx_guard.as_lock_guard(), certificate, epoch_store)?;
 
         if expected_effects_digest.is_none() {
             // We could be re-executing a previously executed but uncommitted transaction, perhaps after
@@ -1282,12 +1298,6 @@ impl AuthorityState {
             // TODO: read from cache instead of DB
             expected_effects_digest = epoch_store.get_signed_effects_digest(tx_digest)?;
         }
-
-        // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
-        // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
-        // very common to receive the same tx multiple times simultaneously due to gossip, so we
-        // may as well hold the lock and save the cpu time for other requests.
-        let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
         self.process_certificate(
             tx_guard,
@@ -1302,6 +1312,7 @@ impl AuthorityState {
 
     pub fn read_objects_for_execution(
         &self,
+        tx_lock: &CertLockGuard,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<InputObjects> {
@@ -1314,6 +1325,7 @@ impl AuthorityState {
         self.input_loader.read_objects_for_execution(
             epoch_store.as_ref(),
             &certificate.key(),
+            tx_lock,
             input_objects,
             epoch_store.epoch(),
         )
@@ -1403,15 +1415,6 @@ impl AuthorityState {
             }
         });
 
-        // The cert could have been processed by a concurrent attempt of the same cert, so check if
-        // the effects have already been written.
-        if let Some(effects) = self
-            .get_transaction_cache_reader()
-            .get_executed_effects(&digest)?
-        {
-            tx_guard.release();
-            return Ok((effects, None));
-        }
         let execution_guard = self
             .execution_lock_for_executable_transaction(certificate)
             .await;
@@ -5081,7 +5084,7 @@ impl AuthorityState {
         );
 
         fail_point_async!("change_epoch_tx_delay");
-        let _tx_lock = epoch_store.acquire_tx_lock(tx_digest).await;
+        let tx_lock = epoch_store.acquire_tx_lock(tx_digest).await;
 
         // The tx could have been executed by state sync already - if so simply return an error.
         // The checkpoint builder will shortly be terminated by reconfiguration anyway.
@@ -5109,7 +5112,8 @@ impl AuthorityState {
             )
             .await?;
 
-        let input_objects = self.read_objects_for_execution(&executable_tx, epoch_store)?;
+        let input_objects =
+            self.read_objects_for_execution(&tx_lock, &executable_tx, epoch_store)?;
 
         let (temporary_store, effects, _execution_error_opt) =
             self.prepare_certificate(&execution_guard, &executable_tx, input_objects, epoch_store)?;
