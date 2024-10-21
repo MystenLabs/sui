@@ -348,7 +348,7 @@ fn thdb_config(const_spaces: usize) -> Config {
     config.large_table_size += const_spaces;
     // run snapshot every 64 Gb written to wal
     config.snapshot_written_bytes = 64 * 1024 * 1024 * 1024;
-    config.max_dirty_keys = 2 * 1024;
+    config.max_dirty_keys = 1024;
     config
 }
 
