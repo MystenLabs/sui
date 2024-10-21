@@ -47,7 +47,6 @@ pub use generated::{
     discovery_client::DiscoveryClient,
     discovery_server::{Discovery, DiscoveryServer},
 };
-pub use server::GetKnownPeersResponse;
 pub use server::GetKnownPeersResponseV2;
 
 use self::metrics::Metrics;
@@ -268,7 +267,6 @@ impl DiscoveryEventLoop {
                     // Query the new node for any peers
                     self.tasks.spawn(query_peer_for_their_known_peers(
                         peer,
-                        self.discovery_config.clone(),
                         self.state.clone(),
                         self.metrics.clone(),
                         self.allowlisted_peers.clone(),
@@ -424,7 +422,6 @@ async fn try_to_connect_to_seed_peers(
 
 async fn query_peer_for_their_known_peers(
     peer: Peer,
-    config: Arc<DiscoveryConfig>,
     state: Arc<RwLock<State>>,
     metrics: Metrics,
     allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
@@ -432,50 +429,24 @@ async fn query_peer_for_their_known_peers(
     let mut client = DiscoveryClient::new(peer);
 
     let request = Request::new(()).with_timeout(TIMEOUT);
-    let found_peers = if config.enable_node_info_signatures() {
-        client
-            .get_known_peers_v2(request)
-            .await
-            .ok()
-            .map(Response::into_inner)
-            .map(
-                |GetKnownPeersResponseV2 {
-                     own_info,
-                     mut known_peers,
-                 }| {
-                    if !own_info.addresses.is_empty() {
-                        known_peers.push(own_info)
-                    }
-                    known_peers
-                },
-            )
-    } else {
-        client
-            .get_known_peers(request)
-            .await
-            .ok()
-            .map(Response::into_inner)
-            .map(
-                |GetKnownPeersResponse {
-                     own_info,
-                     mut known_peers,
-                 }| {
-                    if !own_info.addresses.is_empty() {
-                        known_peers.push(own_info)
-                    }
-                    known_peers
-                        .into_iter()
-                        .map(|info| {
-                            // SignedNodeInfo with fake default signatures will only work if
-                            // signature verification is disabled.
-                            SignedNodeInfo::new_from_data_and_sig(info, Ed25519Signature::default())
-                        })
-                        .collect()
-                },
-            )
-    };
+    let found_peers = client
+        .get_known_peers_v2(request)
+        .await
+        .ok()
+        .map(Response::into_inner)
+        .map(
+            |GetKnownPeersResponseV2 {
+                 own_info,
+                 mut known_peers,
+             }| {
+                if !own_info.addresses.is_empty() {
+                    known_peers.push(own_info)
+                }
+                known_peers
+            },
+        );
     if let Some(found_peers) = found_peers {
-        update_known_peers(config, state, metrics, found_peers, allowlisted_peers);
+        update_known_peers(state, metrics, found_peers, allowlisted_peers);
     }
 }
 
@@ -494,57 +465,27 @@ async fn query_connected_peers_for_their_known_peers(
         .flat_map(|id| network.peer(id))
         .choose_multiple(&mut rand::thread_rng(), config.peers_to_query());
 
-    let enable_node_info_signatures = config.enable_node_info_signatures();
     let found_peers = peers_to_query
         .into_iter()
         .map(DiscoveryClient::new)
         .map(|mut client| async move {
             let request = Request::new(()).with_timeout(TIMEOUT);
-            if enable_node_info_signatures {
-                client
-                    .get_known_peers_v2(request)
-                    .await
-                    .ok()
-                    .map(Response::into_inner)
-                    .map(
-                        |GetKnownPeersResponseV2 {
-                             own_info,
-                             mut known_peers,
-                         }| {
-                            if !own_info.addresses.is_empty() {
-                                known_peers.push(own_info)
-                            }
-                            known_peers
-                        },
-                    )
-            } else {
-                client
-                    .get_known_peers(request)
-                    .await
-                    .ok()
-                    .map(Response::into_inner)
-                    .map(
-                        |GetKnownPeersResponse {
-                             own_info,
-                             mut known_peers,
-                         }| {
-                            if !own_info.addresses.is_empty() {
-                                known_peers.push(own_info)
-                            }
-                            known_peers
-                                .into_iter()
-                                .map(|info| {
-                                    // SignedNodeInfo with fake default signatures will only work if
-                                    // signature verification is disabled.
-                                    SignedNodeInfo::new_from_data_and_sig(
-                                        info,
-                                        Ed25519Signature::default(),
-                                    )
-                                })
-                                .collect()
-                        },
-                    )
-            }
+            client
+                .get_known_peers_v2(request)
+                .await
+                .ok()
+                .map(Response::into_inner)
+                .map(
+                    |GetKnownPeersResponseV2 {
+                         own_info,
+                         mut known_peers,
+                     }| {
+                        if !own_info.addresses.is_empty() {
+                            known_peers.push(own_info)
+                        }
+                        known_peers
+                    },
+                )
         })
         .pipe(futures::stream::iter)
         .buffer_unordered(config.peers_to_query())
@@ -553,11 +494,10 @@ async fn query_connected_peers_for_their_known_peers(
         .collect::<Vec<_>>()
         .await;
 
-    update_known_peers(config, state, metrics, found_peers, allowlisted_peers);
+    update_known_peers(state, metrics, found_peers, allowlisted_peers);
 }
 
 fn update_known_peers(
-    config: Arc<DiscoveryConfig>,
     state: Arc<RwLock<State>>,
     metrics: Metrics,
     found_peers: Vec<SignedNodeInfo>,
@@ -602,24 +542,22 @@ fn update_known_peers(
         {
             continue;
         }
-        if config.enable_node_info_signatures() {
-            let Ok(public_key) = Ed25519PublicKey::from_bytes(&peer_info.peer_id.0) else {
-                debug_fatal!(
-                    // This should never happen.
-                    "Failed to convert anemo PeerId {:?} to Ed25519PublicKey",
-                    peer_info.peer_id
-                );
-                continue;
-            };
-            let msg = bcs::to_bytes(peer_info.data()).expect("BCS serialization should not fail");
-            if let Err(e) = public_key.verify(&msg, peer_info.auth_sig()) {
-                info!(
-                    "Discovery failed to verify signature for NodeInfo for peer {:?}: {e:?}",
-                    peer_info.peer_id
-                );
-                // TODO: consider denylisting the source of bad NodeInfo from future requests.
-                continue;
-            }
+        let Ok(public_key) = Ed25519PublicKey::from_bytes(&peer_info.peer_id.0) else {
+            debug_fatal!(
+                // This should never happen.
+                "Failed to convert anemo PeerId {:?} to Ed25519PublicKey",
+                peer_info.peer_id
+            );
+            continue;
+        };
+        let msg = bcs::to_bytes(peer_info.data()).expect("BCS serialization should not fail");
+        if let Err(e) = public_key.verify(&msg, peer_info.auth_sig()) {
+            info!(
+                "Discovery failed to verify signature for NodeInfo for peer {:?}: {e:?}",
+                peer_info.peer_id
+            );
+            // TODO: consider denylisting the source of bad NodeInfo from future requests.
+            continue;
         }
         let peer = VerifiedSignedNodeInfo::new_from_verified(peer_info);
 

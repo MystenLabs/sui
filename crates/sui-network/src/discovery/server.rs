@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Discovery, NodeInfo, SignedNodeInfo, State, MAX_PEERS_TO_SEND};
+use super::{Discovery, SignedNodeInfo, State, MAX_PEERS_TO_SEND};
 use anemo::{Request, Response};
 use rand::seq::IteratorRandom;
 use serde::{Deserialize, Serialize};
@@ -9,12 +9,6 @@ use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetKnownPeersResponse {
-    pub own_info: NodeInfo,
-    pub known_peers: Vec<NodeInfo>,
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetKnownPeersResponseV2 {
@@ -28,21 +22,6 @@ pub(super) struct Server {
 
 #[anemo::async_trait]
 impl Discovery for Server {
-    async fn get_known_peers(
-        &self,
-        request: Request<()>,
-    ) -> Result<Response<GetKnownPeersResponse>, anemo::rpc::Status> {
-        let resp = self.get_known_peers_v2(request).await?;
-        Ok(resp.map(|body| GetKnownPeersResponse {
-            own_info: body.own_info.into_data(),
-            known_peers: body
-                .known_peers
-                .into_iter()
-                .map(|e| e.into_data())
-                .collect(),
-        }))
-    }
-
     async fn get_known_peers_v2(
         &self,
         _request: Request<()>,
