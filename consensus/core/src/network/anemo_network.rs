@@ -42,7 +42,6 @@ use crate::{
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
-    network::connection_monitor::ConnectionMonitor,
     CommitIndex, Round,
 };
 

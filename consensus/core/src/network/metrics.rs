@@ -49,6 +49,19 @@ pub(crate) struct TcpConnectionMetrics {
     pub(crate) socket_send_buffer_max_size: IntGauge,
     /// Max receive buffer size of TCP socket.
     pub(crate) socket_recv_buffer_max_size: IntGauge,
+
+    /// The connection status of known peers. 0 if not connected, 1 if connected.
+    pub network_peer_connected: IntGaugeVec,
+    /// The number of connected peers.
+    pub network_peers: IntGauge,
+    /// Number of disconnect events per peer.
+    pub network_peer_disconnects: IntCounterVec,
+    /// RTT for a peer connection (simulated, in ms).
+    pub network_peer_rtt: IntGaugeVec,
+    /// Total number of bytes sent for a peer connection.
+    pub network_peer_sent_bytes: IntGaugeVec,
+    /// Total number of retransmits for a peer connection.
+    pub network_peer_retransmits: IntGaugeVec,
 }
 
 impl TcpConnectionMetrics {
@@ -75,6 +88,47 @@ impl TcpConnectionMetrics {
             socket_recv_buffer_max_size: register_int_gauge_with_registry!(
                 "tcp_socket_recv_buffer_max_size",
                 "Max receive buffer size of TCP socket.",
+                registry
+            )
+            .unwrap(),
+            network_peer_connected: register_int_gauge_vec_with_registry!(
+                format!("tcp_network_peer_connected"),
+                "The connection status of a peer. 0 if not connected, 1 if connected",
+                &["peer_id", "peer_label"],
+                registry
+            )
+            .unwrap(),
+            network_peers: register_int_gauge_with_registry!(
+                "tcp_network_peers",
+                "The number of connected peers.",
+                registry
+            )
+            .unwrap(),
+            network_peer_disconnects: register_int_counter_vec_with_registry!(
+                format!("tcp_network_peer_disconnects"),
+                "Number of disconnect events per peer.",
+                &["peer_id", "peer_label", "reason"],
+                registry
+            )
+            .unwrap(),
+            network_peer_rtt: register_int_gauge_vec_with_registry!(
+                format!("tcp_network_peer_rtt"),
+                "RTT for a peer connection (simulated, in ms).",
+                &["peer_id", "peer_label"],
+                registry
+            )
+            .unwrap(),
+            network_peer_sent_bytes: register_int_gauge_vec_with_registry!(
+                format!("tcp_network_peer_sent_bytes"),
+                "Total number of bytes sent for a peer connection.",
+                &["peer_id", "peer_label"],
+                registry
+            )
+            .unwrap(),
+            network_peer_retransmits: register_int_gauge_vec_with_registry!(
+                format!("tcp_network_peer_retransmits"),
+                "Total number of retransmits for a peer connection.",
+                &["peer_id", "peer_label"],
                 registry
             )
             .unwrap(),
@@ -254,7 +308,7 @@ impl QuinnConnectionMetrics {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct NetworkRouteMetrics {
     /// Counter of requests by route
     pub requests: IntCounterVec,

@@ -20,7 +20,7 @@ use crate::{
     Round,
 };
 
-trait ManagerBuilder {
+pub(crate) trait ManagerBuilder {
     fn build(
         &self,
         context: Arc<Context>,
@@ -40,7 +40,7 @@ impl ManagerBuilder for AnemoManagerBuilder {
     }
 }
 
-struct TonicManagerBuilder {}
+pub(crate) struct TonicManagerBuilder {}
 
 impl ManagerBuilder for TonicManagerBuilder {
     fn build(
@@ -56,7 +56,7 @@ fn block_for_round(round: Round) -> Bytes {
     Bytes::from(vec![round as u8; 16])
 }
 
-fn service_with_own_blocks() -> Arc<Mutex<TestService>> {
+pub(crate) fn service_with_own_blocks() -> Arc<Mutex<TestService>> {
     let service = Arc::new(Mutex::new(TestService::new()));
     {
         let mut service = service.lock();

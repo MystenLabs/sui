@@ -21,7 +21,7 @@ pub(crate) trait SizedResponse {
     fn error_type(&self) -> Option<String>;
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct MetricsCallbackMaker {
     metrics: Arc<NetworkRouteMetrics>,
     /// Size in bytes above which a request or response message is considered excessively large

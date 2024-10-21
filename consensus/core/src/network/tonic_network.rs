@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     pin::Pin,
     sync::Arc,
@@ -25,9 +25,7 @@ use mysten_network::{
 };
 use parking_lot::RwLock;
 use tokio::{
-    pin,
-    task::JoinSet,
-    time::{timeout, Instant},
+    pin, task::JoinSet, time::{timeout, Instant}
 };
 use tokio_rustls::TlsAcceptor;
 use tokio_stream::{iter, Iter};
@@ -48,15 +46,9 @@ use super::{
     BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
-    block::{BlockRef, VerifiedBlock},
-    commit::CommitRange,
-    context::Context,
-    error::{ConsensusError, ConsensusResult},
-    network::{
-        tonic_gen::consensus_service_server::ConsensusServiceServer,
-        tonic_tls::create_rustls_server_config,
-    },
-    CommitIndex, Round,
+    block::{BlockRef, VerifiedBlock}, commit::CommitRange, context::Context, error::{ConsensusError, ConsensusResult}, network::{
+        connection_monitor::TonicConnectionMonitor, tonic_gen::consensus_service_server::ConsensusServiceServer, tonic_tls::create_rustls_server_config
+    }, CommitIndex, ConnectionMonitorHandle, Round
 };
 
 // Maximum bytes size in a single fetch_blocks()response.
@@ -90,7 +82,7 @@ impl TonicClient {
         }
     }
 
-    async fn get_client(
+    pub(crate) async fn get_client(
         &self,
         peer: AuthorityIndex,
         timeout: Duration,
@@ -103,6 +95,10 @@ impl TonicClient {
         Ok(ConsensusServiceClient::new(channel)
             .max_encoding_message_size(config.message_size_limit)
             .max_decoding_message_size(config.message_size_limit))
+    }
+
+    pub(crate) fn num_channels(&self) -> usize {
+        self.channel_pool.channels.read().len()
     }
 }
 
@@ -662,6 +658,7 @@ pub(crate) struct TonicManager {
     network_keypair: NetworkKeyPair,
     client: Arc<TonicClient>,
     server: JoinSet<()>,
+    connection_monitor_handle: Option<ConnectionMonitorHandle<AuthorityIndex>>,
     shutdown_notif: Arc<NotifyOnce>,
 }
 
@@ -672,6 +669,7 @@ impl TonicManager {
             network_keypair: network_keypair.clone(),
             client: Arc::new(TonicClient::new(context, network_keypair)),
             server: JoinSet::new(),
+            connection_monitor_handle: None,
             shutdown_notif: Arc::new(NotifyOnce::new()),
         }
     }
@@ -706,6 +704,18 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         } else {
             authority.address.with_zero_ip()
         };
+
+        let known_peers = self.context
+                            .committee
+                            .authorities().filter(|(idx, _)| *idx != self.context.own_index)
+                            .map(|(idx, auth)| (idx, auth.hostname.clone()))
+                            .collect::<HashMap<_,_>>();
+        let (connection_monitor_handle, peer_event_sender) = TonicConnectionMonitor::spawn(
+            self.client.clone(),
+            self.context.metrics.network_metrics.tcp_connection_metrics.clone(),
+            known_peers,
+        );
+        self.connection_monitor_handle = Some(connection_monitor_handle);
         let own_address = to_socket_addr(&own_address).unwrap();
         let service = TonicServiceProxy::new(self.context.clone(), service);
         let config = &self.context.parameters.tonic;
@@ -856,6 +866,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                 let http = http.clone();
                 let connections_info = connections_info.clone();
                 let shutdown_notif = shutdown_notif.clone();
+                let peer_event_sender = peer_event_sender.clone();
 
                 connection_handlers.spawn(async move {
                     let tls_stream = tls_acceptor.accept(tcp_stream).await.map_err(|e| {
@@ -898,6 +909,9 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                         error!("{}", msg);
                         return Err(ConsensusError::NetworkServerConnection(msg));
                     };
+
+                    let _ = peer_event_sender.send(PeerEvent::Connected(authority_index));
+                    
                     let svc = tower::ServiceBuilder::new()
                         // NOTE: the PeerInfo extension is copied to every request served.
                         // If PeerInfo starts to contain complex values, it should be wrapped in an Arc<>.
@@ -925,10 +939,12 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                                 match result {
                                     Ok(()) => {
                                         trace!("Connection closed for {peer_addr:?}");
+                                        let _ = peer_event_sender.send(PeerEvent::Disconnected(authority_index, "closed".to_string()));
                                         break;
                                     },
                                     Err(e) => {
                                         let msg = format!("Connection error serving {peer_addr:?}: {e:?}");
+                                        let _ = peer_event_sender.send(PeerEvent::Disconnected(authority_index, e.to_string()));                                    
                                         trace!(msg);
                                         return Err(ConsensusError::NetworkServerConnection(msg));
                                     },
@@ -960,6 +976,10 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             .network_type
             .with_label_values(&["tonic"])
             .set(0);
+
+        if let Some(connection_monitor_handle) = self.connection_monitor_handle.take() {
+            connection_monitor_handle.stop().await;
+        }
     }
 }
 
@@ -1026,6 +1046,19 @@ fn create_socket(address: &SocketAddr) -> tokio::net::TcpSocket {
         info!("Failed to set SO_REUSEADDR: {e:?}");
     }
     socket
+}
+
+pub(crate) struct TcpStats {
+    pub(crate) rtt: u64,
+    pub(crate) sent_bytes: u64,
+    pub(crate) retransmits: u64,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum PeerEvent {
+    Connected(AuthorityIndex),
+    // Provide disconnect reason along side peer id
+    Disconnected(AuthorityIndex, String),
 }
 
 /// Looks up authority index by authority public key.

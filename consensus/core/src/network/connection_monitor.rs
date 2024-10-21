@@ -3,39 +3,24 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use async_trait::async_trait;
+use consensus_config::AuthorityIndex;
 use dashmap::DashMap;
 use mysten_metrics::spawn_logged_monitored_task;
 use tokio::{
-    sync::oneshot::{Receiver, Sender},
+    sync::{
+        broadcast,
+        oneshot::{Receiver, Sender},
+    },
     task::JoinHandle,
     time,
 };
 
-use super::metrics::{QuinnConnectionMetrics, TcpConnectionMetrics};
+use super::{
+    metrics::{QuinnConnectionMetrics, TcpConnectionMetrics},
+    tonic_network::{PeerEvent, TcpStats, TonicClient},
+};
 
 const CONNECTION_STAT_COLLECTION_INTERVAL: Duration = Duration::from_secs(60);
-
-#[async_trait]
-pub trait ConnectionMonitor {
-    type Network;
-    type PeerId;
-    type PeerEvent;
-    type ConnectionMetrics;
-    type ConnectionStats;
-
-    fn spawn(
-        network: Self::Network,
-        connection_metrics: Arc<Self::ConnectionMetrics>,
-        known_peers: HashMap<Self::PeerId, String>,
-    ) -> ConnectionMonitorHandle<Self::PeerId>;
-
-    async fn run(self);
-
-    async fn handle_peer_event(&self, peer_event: Self::PeerEvent);
-
-    fn update_metrics_for_peer(&self, peer_id: &str, hostname: &str, stats: &Self::ConnectionStats);
-}
 
 pub struct ConnectionMonitorHandle<PeerId> {
     handle: JoinHandle<()>,
@@ -68,19 +53,12 @@ pub struct AnemoConnectionMonitor {
     stop: Receiver<()>,
 }
 
-#[async_trait]
-impl ConnectionMonitor for AnemoConnectionMonitor {
-    type Network = anemo::NetworkRef;
-    type PeerId = anemo::types::PeerId;
-    type ConnectionMetrics = QuinnConnectionMetrics;
-    type PeerEvent = anemo::types::PeerEvent;
-    type ConnectionStats = quinn_proto::ConnectionStats;
-
-    fn spawn(
-        network: Self::Network,
-        connection_metrics: Arc<Self::ConnectionMetrics>,
-        known_peers: HashMap<Self::PeerId, String>,
-    ) -> ConnectionMonitorHandle<Self::PeerId> {
+impl AnemoConnectionMonitor {
+    pub fn spawn(
+        network: anemo::NetworkRef,
+        connection_metrics: Arc<QuinnConnectionMetrics>,
+        known_peers: HashMap<anemo::types::PeerId, String>,
+    ) -> ConnectionMonitorHandle<anemo::types::PeerId> {
         let connection_statuses_outer = Arc::new(DashMap::new());
         let connection_statuses = connection_statuses_outer.clone();
         let (stop_sender, stop) = tokio::sync::oneshot::channel();
@@ -126,7 +104,7 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
 
         // now report the connected peers
         for peer_id in connected_peers.iter() {
-            self.handle_peer_event(Self::PeerEvent::NewPeer(*peer_id))
+            self.handle_peer_event(anemo::types::PeerEvent::NewPeer(*peer_id))
                 .await;
         }
 
@@ -164,7 +142,7 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
         }
     }
 
-    async fn handle_peer_event(&self, peer_event: Self::PeerEvent) {
+    async fn handle_peer_event(&self, peer_event: anemo::types::PeerEvent) {
         if let Some(network) = self.network.upgrade() {
             self.connection_metrics
                 .network_peers
@@ -174,8 +152,10 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
         }
 
         let (peer_id, status, int_status) = match peer_event {
-            Self::PeerEvent::NewPeer(peer_id) => (peer_id, ConnectionStatus::Connected, 1),
-            Self::PeerEvent::LostPeer(peer_id, _) => (peer_id, ConnectionStatus::Disconnected, 0),
+            anemo::types::PeerEvent::NewPeer(peer_id) => (peer_id, ConnectionStatus::Connected, 1),
+            anemo::types::PeerEvent::LostPeer(peer_id, _) => {
+                (peer_id, ConnectionStatus::Disconnected, 0)
+            }
         };
         self.connection_statuses.insert(peer_id, status);
 
@@ -189,7 +169,7 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
                 .with_label_values(&[&peer_id_str, peer_label])
                 .set(int_status);
 
-            if let Self::PeerEvent::LostPeer(_, reason) = peer_event {
+            if let anemo::types::PeerEvent::LostPeer(_, reason) = peer_event {
                 self.connection_metrics
                     .network_peer_disconnects
                     .with_label_values(&[&peer_id_str, peer_label, &format!("{reason:?}")])
@@ -203,7 +183,7 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
         &self,
         peer_id: &str,
         peer_label: &str,
-        stats: &Self::ConnectionStats,
+        stats: &quinn_proto::ConnectionStats,
     ) {
         // Update PathStats
         self.connection_metrics
@@ -286,11 +266,133 @@ impl ConnectionMonitor for AnemoConnectionMonitor {
 }
 
 pub struct TonicConnectionMonitor {
-    network: Arc<Channel>,
+    client: Arc<TonicClient>,
     connection_metrics: Arc<TcpConnectionMetrics>,
-    known_peers: HashMap<String, String>,
-    connection_statuses: Arc<DashMap<anemo::types::PeerId, ConnectionStatus>>,
+    known_peers: HashMap<AuthorityIndex, String>,
+    connection_statuses: Arc<DashMap<AuthorityIndex, ConnectionStatus>>,
+    peer_event_receiver: broadcast::Receiver<PeerEvent>,
     stop: Receiver<()>,
+}
+
+impl TonicConnectionMonitor {
+    pub(crate) fn spawn(
+        network: Arc<TonicClient>,
+        connection_metrics: Arc<TcpConnectionMetrics>,
+        known_peers: HashMap<AuthorityIndex, String>,
+    ) -> (
+        ConnectionMonitorHandle<AuthorityIndex>,
+        broadcast::Sender<PeerEvent>,
+    ) {
+        let connection_statuses_outer = Arc::new(DashMap::new());
+        let connection_statuses = connection_statuses_outer.clone();
+        let (stop_sender, stop) = tokio::sync::oneshot::channel();
+
+        let (peer_event_sender, peer_event_receiver) = broadcast::channel(100);
+
+        let handle = tokio::spawn(async move {
+            TonicConnectionMonitor {
+                client: network,
+                connection_metrics,
+                known_peers,
+                connection_statuses,
+                peer_event_receiver,
+                stop,
+            }
+            .run()
+            .await;
+        });
+        (
+            ConnectionMonitorHandle {
+                handle,
+                stop: stop_sender,
+                connection_statuses: connection_statuses_outer,
+            },
+            peer_event_sender,
+        )
+    }
+
+    async fn run(mut self) {
+        // TODO: Simulated RTT interval and metric collection, similar to Anemo
+        let mut connection_stat_collection_interval =
+            time::interval(CONNECTION_STAT_COLLECTION_INTERVAL);
+
+        // we report first all the known peers as disconnected - so we can see
+        // their labels in the metrics reporting tool
+        for (peer_id, peer_label) in &self.known_peers {
+            self.connection_metrics
+                .network_peer_connected
+                .with_label_values(&[&format!("{peer_id}"), peer_label])
+                .set(0)
+        }
+
+        loop {
+            tokio::select! {
+                _ = connection_stat_collection_interval.tick() => {
+                    // Collect TCP metrics such as RTT, bytes sent, etc.
+                    // self.collect_tcp_metrics().await;
+                }
+                Ok(peer_event) = self.peer_event_receiver.recv() => {
+                    println!("{peer_event:?}");
+                    // Handle peer events (connected/disconnected)
+                    self.handle_peer_event(peer_event).await;
+                }
+                _ = &mut self.stop => {
+                    tracing::debug!("Stop signal has been received, now shutting down");
+                    return;
+                }
+            }
+        }
+    }
+
+    async fn handle_peer_event(&self, peer_event: PeerEvent) {
+        match peer_event {
+            PeerEvent::Connected(peer_id) => {
+                self.connection_metrics.network_peers.inc();
+                self.connection_statuses
+                    .insert(peer_id, ConnectionStatus::Connected);
+
+                if let Some(peer_label) = self.known_peers.get(&peer_id) {
+                    println!("Set network peer connected {peer_id:?} {peer_label:?}");
+                    self.connection_metrics
+                        .network_peer_connected
+                        .with_label_values(&[&format!("{peer_id}"), peer_label])
+                        .set(1);
+                }
+            }
+            PeerEvent::Disconnected(peer_id, reason) => {
+                self.connection_metrics.network_peers.dec();
+                self.connection_statuses
+                    .insert(peer_id, ConnectionStatus::Disconnected);
+
+                if let Some(peer_label) = self.known_peers.get(&peer_id) {
+                    self.connection_metrics
+                        .network_peer_connected
+                        .with_label_values(&[&format!("{peer_id}"), peer_label])
+                        .set(0);
+                    self.connection_metrics
+                        .network_peer_disconnects
+                        .with_label_values(&[&format!("{peer_id}"), peer_label, &reason])
+                        .inc();
+                }
+            }
+        }
+    }
+
+    fn update_metrics_for_peer(&self, peer_id: &str, _hostname: &str, stats: &TcpStats) {
+        // Here, simulate RTT and gather TCP-level metrics
+        self.connection_metrics
+            .network_peer_rtt
+            .with_label_values(&[peer_id])
+            .set(stats.rtt as i64);
+        self.connection_metrics
+            .network_peer_sent_bytes
+            .with_label_values(&[peer_id])
+            .set(stats.sent_bytes as i64);
+        self.connection_metrics
+            .network_peer_retransmits
+            .with_label_values(&[peer_id])
+            .set(stats.retransmits as i64);
+    }
 }
 
 #[cfg(test)]
@@ -303,14 +405,19 @@ mod tests {
     use tokio::time::{sleep, timeout};
     use tower::util::BoxCloneService;
 
+    use crate::{
+        context::Context,
+        network::network_tests::{service_with_own_blocks, TonicManagerBuilder},
+    };
+
     use super::*;
 
     #[tokio::test]
-    async fn test_connectivity() {
+    async fn test_anemo_connectivity() {
         // GIVEN
-        let network_1 = build_network().unwrap();
-        let network_2 = build_network().unwrap();
-        let network_3 = build_network().unwrap();
+        let network_1 = build_anemo_network().unwrap();
+        let network_2 = build_anemo_network().unwrap();
+        let network_3 = build_anemo_network().unwrap();
 
         let registry = Registry::new();
         let metrics = Arc::new(QuinnConnectionMetrics::new("consensus", &registry));
@@ -328,7 +435,7 @@ mod tests {
         let connection_statuses = handle.connection_statuses();
 
         // THEN peer 2 should be already connected
-        assert_network_peers(&metrics, 1).await;
+        assert_anemo_network_peers(&metrics, 1).await;
 
         // AND we should have collected connection stats
         let mut labels = HashMap::new();
@@ -352,7 +459,7 @@ mod tests {
         let peer_3 = network_1.connect(network_3.local_addr()).await.unwrap();
 
         // THEN
-        assert_network_peers(&metrics, 2).await;
+        assert_anemo_network_peers(&metrics, 2).await;
         assert_eq!(
             *connection_statuses.get(&peer_3).unwrap().value(),
             ConnectionStatus::Connected
@@ -362,7 +469,7 @@ mod tests {
         network_1.disconnect(peer_2).unwrap();
 
         // THEN
-        assert_network_peers(&metrics, 1).await;
+        assert_anemo_network_peers(&metrics, 1).await;
         assert_eq!(
             *connection_statuses.get(&peer_2).unwrap().value(),
             ConnectionStatus::Disconnected
@@ -372,16 +479,128 @@ mod tests {
         network_1.disconnect(peer_3).unwrap();
 
         // THEN
-        assert_network_peers(&metrics, 0).await;
+        assert_anemo_network_peers(&metrics, 0).await;
         assert_eq!(
             *connection_statuses.get(&peer_3).unwrap().value(),
             ConnectionStatus::Disconnected
         );
     }
 
-    async fn assert_network_peers(metrics: &QuinnConnectionMetrics, value: i64) {
+    #[tokio::test]
+    async fn test_tonic_connectivity() {
+        // GIVEN
+        let registry = Registry::new();
+        let metrics = Arc::new(TcpConnectionMetrics::new(&registry));
+        let (context, keys) = Context::new_for_test(4);
+        let context_0 = Arc::new(
+            context
+                .clone()
+                .with_authority_index(context.committee.to_authority_index(0).unwrap()),
+        );
+
+        // TODO finish tests
+        // let tonic_manager_builder = TonicManagerBuilder {};
+        // let mut manager_0 = tonic_manager_builder.build(context_0.clone(), keys[0].0.clone());
+        // let client_0 = manager_0.client();
+        // let service_0 = service_with_own_blocks();
+        // manager_0.install_service(service_0.clone()).await;
+
+        // let context = Arc::new(context);
+        // let own_index = context.own_index;
+        // println!("own_index: {:?}", own_index);
+        // let known_peers = context
+        //     .committee
+        //     .authorities()
+        //     .filter(|(idx, _)| *idx != own_index)
+        //     .map(|(idx, auth)| (idx, auth.hostname.clone()))
+        //     .collect::<HashMap<_, _>>();
+
+        // let tonic_client = Arc::new(TonicClient::new(context, keys[own_index].0.clone()));
+        // let (handle, peer_event_sender) =
+        //     TonicConnectionMonitor::spawn(tonic_client.clone(), metrics.clone(), known_peers);
+        // let connection_statuses = handle.connection_statuses();
+        // println!("connection_statuses: {:?}", connection_statuses);
+
+        // // AND all peers should be disconnected
+        // assert_tonic_network_peers(&metrics, 0).await;
+
+        // // AND we connect to peer 2
+        // let peer_2 = AuthorityIndex::new_for_test(1);
+        // let _ = peer_event_sender.send(PeerEvent::Connected(peer_2));
+        // let resp = tonic_client
+        //     .get_client(peer_2, Duration::from_millis(100))
+        //     .await;
+        // println!("{resp:?}");
+        // sleep(Duration::from_millis(100)).await;
+
+        // println!("num channels connected: {}", tonic_client.num_channels());
+        // println!("connection_statuses: {:?}", connection_statuses);
+        // assert_eq!(
+        //     *connection_statuses.get(&peer_2).unwrap().value(),
+        //     ConnectionStatus::Connected
+        // );
+        // assert_tonic_network_peers(&metrics, 1).await;
+
+        // let mut known_peers = HashMap::new();
+        // known_peers.insert(network_2.peer_id(), "peer_2".to_string());
+        // known_peers.insert(network_3.peer_id(), "peer_3".to_string());
+
+        // // WHEN bring up the monitor
+        // let handle =
+        //     AnemoConnectionMonitor::spawn(network_1.downgrade(), metrics.clone(), known_peers);
+
+        // // THEN peer 2 should be already connected
+        // assert_anemo_network_peers(&metrics, 1).await;
+
+        // // AND we should have collected connection stats
+        // let mut labels = HashMap::new();
+        // let peer_2_str = format!("{peer_2}");
+        // labels.insert("peer_id", peer_2_str.as_str());
+        // labels.insert("peer_label", "peer_2");
+        // assert_ne!(
+        //     metrics
+        //         .network_peer_rtt
+        //         .get_metric_with(&labels)
+        //         .unwrap()
+        //         .get(),
+        //     0
+        // );
+
+        // // WHEN connect to peer 3
+        // let peer_3 = network_1.connect(network_3.local_addr()).await.unwrap();
+
+        // // THEN
+        // assert_anemo_network_peers(&metrics, 2).await;
+        // assert_eq!(
+        //     *connection_statuses.get(&peer_3).unwrap().value(),
+        //     ConnectionStatus::Connected
+        // );
+
+        // // AND disconnect peer 2
+        // network_1.disconnect(peer_2).unwrap();
+
+        // // THEN
+        // assert_anemo_network_peers(&metrics, 1).await;
+        // assert_eq!(
+        //     *connection_statuses.get(&peer_2).unwrap().value(),
+        //     ConnectionStatus::Disconnected
+        // );
+
+        // // AND disconnect peer 3
+        // network_1.disconnect(peer_3).unwrap();
+
+        // // THEN
+        // assert_anemo_network_peers(&metrics, 0).await;
+        // assert_eq!(
+        //     *connection_statuses.get(&peer_3).unwrap().value(),
+        //     ConnectionStatus::Disconnected
+        // );
+    }
+
+    async fn assert_tonic_network_peers(metrics: &TcpConnectionMetrics, value: i64) {
         timeout(Duration::from_secs(5), async move {
             while metrics.network_peers.get() != value {
+                println!("{:?}", metrics.network_peers.get());
                 sleep(Duration::from_millis(500)).await;
             }
         })
@@ -396,7 +615,25 @@ mod tests {
         assert_eq!(metrics.network_peers.get(), value);
     }
 
-    fn build_network() -> anyhow::Result<Network> {
+    async fn assert_anemo_network_peers(metrics: &QuinnConnectionMetrics, value: i64) {
+        timeout(Duration::from_secs(5), async move {
+            while metrics.network_peers.get() != value {
+                println!("{:?}", metrics.network_peers.get());
+                sleep(Duration::from_millis(500)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Timeout while waiting for connectivity results for value {}",
+                value
+            )
+        });
+
+        assert_eq!(metrics.network_peers.get(), value);
+    }
+
+    fn build_anemo_network() -> anyhow::Result<Network> {
         let network = Network::bind("localhost:0")
             .private_key(random_private_key())
             .server_name("test")
