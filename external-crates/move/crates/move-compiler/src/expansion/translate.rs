@@ -2536,7 +2536,6 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 if let Some(name) = &en_opt {
                     // TODO: make this check nicer
                     if name.access.to_string().ends_with("::prover::invariant") {
-                        println!("Ignoring invariant call: {:?}", name.access.to_string());
                         return Box::new(sp(loc, EE::Unit { trailing: false }));
                     }
                 }
