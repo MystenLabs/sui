@@ -35,6 +35,7 @@ impl GraphqlResponse {
         })
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn graphql_version(&self) -> Result<String, ClientError> {
         Ok(self
             .headers
@@ -85,6 +86,7 @@ impl GraphqlResponse {
         self.full_response.errors.clone()
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn usage(&self) -> Result<Option<BTreeMap<String, u64>>, ClientError> {
         Ok(match self.full_response.extensions.get("usage").cloned() {
             Some(Value::Object(obj)) => Some(
