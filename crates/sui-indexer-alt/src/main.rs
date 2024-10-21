@@ -11,8 +11,9 @@ use sui_indexer_alt::{
         ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
         kv_objects::KvObjects, kv_transactions::KvTransactions, obj_versions::ObjVersions,
         sum_coin_balances::SumCoinBalances, sum_obj_types::SumObjTypes,
-        tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
-        wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
+        tx_affected_addresses::TxAffectedAddress, tx_affected_objects::TxAffectedObjects,
+        tx_balance_changes::TxBalanceChanges, tx_calls_fun::TxCallsFun, tx_digests::TxDigests,
+        tx_kinds::TxKinds, wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
     },
     Indexer,
 };
@@ -42,8 +43,13 @@ async fn main() -> Result<()> {
             indexer.concurrent_pipeline::<KvObjects>().await?;
             indexer.concurrent_pipeline::<KvTransactions>().await?;
             indexer.concurrent_pipeline::<ObjVersions>().await?;
+            indexer.concurrent_pipeline::<TxAffectedAddress>().await?;
             indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
             indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
+            indexer.concurrent_pipeline::<TxCallsFun>().await?;
+            indexer.concurrent_pipeline::<TxDigests>().await?;
+            indexer.concurrent_pipeline::<TxKinds>().await?;
+            indexer.concurrent_pipeline::<TxKinds>().await?;
             indexer.concurrent_pipeline::<WalCoinBalances>().await?;
             indexer.concurrent_pipeline::<WalObjTypes>().await?;
             indexer.sequential_pipeline::<SumCoinBalances>(lag).await?;

@@ -82,6 +82,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    tx_affected_addresses (affected, tx_sequence_number) {
+        affected -> Bytea,
+        tx_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
     tx_affected_objects (affected, tx_sequence_number) {
         tx_sequence_number -> Int8,
         affected -> Bytea,
@@ -93,6 +101,30 @@ diesel::table! {
     tx_balance_changes (tx_sequence_number) {
         tx_sequence_number -> Int8,
         balance_changes -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_calls_fun (package, module, func, tx_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        func -> Text,
+        tx_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_digests (tx_digest) {
+        tx_digest -> Bytea,
+        tx_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    tx_kinds (tx_kind, tx_sequence_number) {
+        tx_kind -> Int2,
+        tx_sequence_number -> Int8,
     }
 }
 
@@ -144,8 +176,12 @@ diesel::allow_tables_to_appear_in_same_query!(
     obj_versions,
     sum_coin_balances,
     sum_obj_types,
+    tx_affected_addresses,
     tx_affected_objects,
     tx_balance_changes,
+    tx_calls_fun,
+    tx_digests,
+    tx_kinds,
     wal_coin_balances,
     wal_obj_types,
     watermarks,
