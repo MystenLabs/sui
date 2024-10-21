@@ -3128,6 +3128,7 @@ impl<'env> FunctionTranslator<'env> {
                         .no_asserts()
                         .contains(&self.fun_target.func_env.get_qualified_id())
                 {
+                    emitln!(self.writer(), "$abort_flag := false;");
                     emitln!(
                         self.writer(),
                         "call $abort_if_cond := {}({});",
