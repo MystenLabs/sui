@@ -4,6 +4,9 @@
 import { useCurrentAccount, useSignTransaction, useSuiClientContext } from '@mysten/dapp-kit';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
+import { fromBase64, toBase64, toHex } from '@mysten/sui/utils';
+
+import { fromBase58 } from '@mysten/bcs';
 import { useMutation } from '@tanstack/react-query';
 import { AlertCircle, Terminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -15,6 +18,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+
+import { blake2b } from '@noble/hashes/blake2b'; 
 
 export default function OfflineSigner() {
 	const currentAccount = useCurrentAccount();
@@ -70,6 +75,30 @@ export default function OfflineSigner() {
 		},
 	});
 
+	// Step 3: Add state for the blake2b hash
+	const [blakeHash, setBlakeHash] = useState<string>('');
+
+	// Step 4: Create a function to compute the blake2b hash
+	const computeBlakeHash = async () => {
+		try {
+			// Assuming 'bytes' is a base64 string. Convert it to a Uint8Array.
+			const transactionJson = await Transaction.from(bytes).toJSON();
+			//console.log(transactionJson);
+			const transactionJSONHash = blake2b(transactionJson, { dkLen: 32 });
+			console.log(toHex(transactionJSONHash));
+			const transaction = Transaction.from(bytes);
+			const digest = await transaction.getDigest();
+			const digestBytes = fromBase58(digest);
+			const digestHex = toHex(digestBytes);
+			console.log(digestHex);
+
+			setBlakeHash(digestHex);
+		} catch (error) {
+			console.error('Error computing blake2b hash:', error);
+			setBlakeHash('Error computing hash');
+		}
+	};
+
 	return (
 		<div className="flex flex-col gap-4">
 			<h2 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
@@ -110,14 +139,22 @@ export default function OfflineSigner() {
 								<Button disabled={!currentAccount || !bytes || isPending} onClick={() => mutate()}>
 									Sign Transaction
 								</Button>
+								{/* Step 5: Add a new button for blake2b hash */}
+								<Button
+									variant="secondary"
+									disabled={!bytes}
+									onClick={computeBlakeHash}
+								>
+									Show blake2b Hash
+								</Button>
 							</div>
 
 							<div className="justify-between md:justify-end flex gap-5">
 								<Button
-									variant="outline"
-									className="flex-shrink-0 max-md:w-1/2 h-full"
-									disabled={!dryRunNetwork || !bytes || dryRunLoading}
-									onClick={() => dryRun()}
+										variant="outline"
+										className="flex-shrink-0 max-md:w-1/2 h-full"
+										disabled={!dryRunNetwork || !bytes || dryRunLoading}
+										onClick={() => dryRun()}
 								>
 									Preview Effects
 								</Button>
@@ -144,6 +181,12 @@ export default function OfflineSigner() {
 							<DryRunProvider network={dryRunNetwork}>
 								<EffectsPreview output={dryRunData} network={dryRunNetwork} />
 							</DryRunProvider>
+						)}
+
+						{blakeHash && (
+							<div className="border text-mono break-all rounded p-4">
+								{blakeHash}
+							</div>
 						)}
 					</div>
 				</TabsContent>
