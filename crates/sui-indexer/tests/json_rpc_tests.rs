@@ -230,5 +230,14 @@ async fn test_events() -> Result<(), anyhow::Error> {
     assert_eq!(2, result.data.len());
     assert_eq!(backward_paginated_events[1..], result.data[..]);
 
+    // check that the forward and backward paginated events are in reverse order
+    assert_eq!(
+        forward_paginated_events
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>(),
+        backward_paginated_events
+    );
+
     Ok(())
 }
