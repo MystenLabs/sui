@@ -253,7 +253,7 @@ pub async fn create_eth_sync_indexer(
     config: &IndexerConfig,
     eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
 ) -> Result<Indexer<PgBridgePersistent, EthFinalizedSyncDatasource, EthDataMapper>, anyhow::Error> {
-    let bridge_addresses = get_eth_bridge_contract_addresses(&config).await?;
+    let bridge_addresses = get_eth_bridge_contract_addresses(config).await?;
     // Start the eth sync data source
     let eth_sync_datasource = EthFinalizedSyncDatasource::new(
         bridge_addresses,
@@ -282,7 +282,7 @@ pub async fn create_eth_subscription_indexer(
     eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
 ) -> Result<Indexer<PgBridgePersistent, EthSubscriptionDatasource, EthDataMapper>, anyhow::Error> {
     // Start the eth subscription indexer
-    let bridge_addresses = get_eth_bridge_contract_addresses(&config).await?;
+    let bridge_addresses = get_eth_bridge_contract_addresses(config).await?;
     // Start the eth subscription indexer
     let eth_subscription_datasource = EthSubscriptionDatasource::new(
         bridge_addresses.clone(),
