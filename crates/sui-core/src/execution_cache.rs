@@ -591,9 +591,10 @@ pub trait TransactionCacheRead: Send + Sync {
     /// Wait until the effects of the given transactions are available and return them.
     /// WARNING: If calling this on a transaction that could be reverted, you must be
     /// sure that this function cannot be called during reconfiguration. The best way to
-    /// do this is to wrap your future in EpochStore::within_alien_epoch. Holding an
-    /// ExecutionLockReadGuard is dangerous, as it could prevent reconfiguration from
-    /// ever occurring!
+    /// do this is to wrap your future in EpochStore::within_alive_epoch. Holding an
+    /// ExecutionLockReadGuard would also prevent reconfig from happening while waiting,
+    /// but this is very dangerous, as it could prevent reconfiguration from ever
+    /// occurring!
     fn notify_read_executed_effects<'a>(
         &'a self,
         digests: &'a [TransactionDigest],

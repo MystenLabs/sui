@@ -3177,9 +3177,15 @@ impl AuthorityState {
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
+
+        // Wait until no transactions are being executed.
         let mut execution_lock = self.execution_lock_for_reconfiguration().await;
 
+        // Terminate all epoch-specific tasks (those started with within_alive_epoch).
         cur_epoch_store.epoch_terminated().await;
+
+        // Safe to being reconfiguration now. No transactions are being executed,
+        // and no epoch-specific tasks are running.
 
         // TODO: revert_uncommitted_epoch_transactions will soon be unnecessary -
         // clear_state_end_of_epoch() can simply drop all uncommitted transactions
