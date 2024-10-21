@@ -42,10 +42,9 @@ impl FilterContext for Context<'_> {
     // An AST element should be removed if:
     // * It is annotated #[verify_only] and verify mode is not set
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
-        if !self.env.flags().is_verifying() {
-            return true;
+        if self.env.flags().is_verifying() {
+            return false;
         }
-
         use known_attributes::VerificationAttribute;
         let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
         let is_verify_only_loc = flattened_attrs
