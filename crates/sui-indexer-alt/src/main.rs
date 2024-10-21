@@ -3,13 +3,14 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use std::{fs, path::PathBuf};
 use sui_indexer_alt::{
     args::Args,
     handlers::{
         kv_checkpoints::KvCheckpoints, kv_objects::KvObjects, kv_transactions::KvTransactions,
         tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     },
-    Indexer,
+    Indexer, IndexerConfig,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -24,7 +25,9 @@ async fn main() -> Result<()> {
 
     let cancel = CancellationToken::new();
 
-    let mut indexer = Indexer::new(args.indexer_config, cancel.clone()).await?;
+    let indexer_config = indexer_config(args.config_path);
+
+    let mut indexer = Indexer::new(indexer_config, cancel.clone()).await?;
 
     indexer.pipeline::<KvCheckpoints>().await?;
     indexer.pipeline::<KvObjects>().await?;
@@ -38,4 +41,13 @@ async fn main() -> Result<()> {
     let _ = h_indexer.await;
 
     Ok(())
+}
+
+fn indexer_config(path: Option<PathBuf>) -> IndexerConfig {
+    let Some(path) = path else {
+        return IndexerConfig::default();
+    };
+
+    let contents = fs::read_to_string(path).expect("Reading configuration");
+    IndexerConfig::read(&contents).expect("Deserializing configuration")
 }

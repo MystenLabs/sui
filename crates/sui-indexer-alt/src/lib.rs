@@ -9,6 +9,7 @@ use handlers::{pipeline, CommitterConfig, Handler};
 use ingestion::{IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
+use serde::{Deserialize, Serialize};
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -60,7 +61,7 @@ pub struct Indexer {
     handles: Vec<JoinHandle<()>>,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
 pub struct IndexerConfig {
     #[command(flatten)]
     pub ingestion_config: IngestionConfig,
@@ -90,6 +91,26 @@ pub struct IndexerConfig {
     /// Address to serve Prometheus Metrics from.
     #[arg(long, default_value = "0.0.0.0:9184")]
     pub metrics_address: SocketAddr,
+}
+
+impl Default for IndexerConfig {
+    fn default() -> Self {
+        Self {
+            ingestion_config: Default::default(),
+            db_config: Default::default(),
+            committer_config: Default::default(),
+            first_checkpoint: None,
+            last_checkpoint: None,
+            pipeline: Vec::new(),
+            metrics_address: default_metrics_address(),
+        }
+    }
+}
+
+impl IndexerConfig {
+    pub fn read(contents: &str) -> Result<Self, toml::de::Error> {
+        toml::de::from_str::<Self>(contents)
+    }
 }
 
 impl Indexer {
@@ -205,5 +226,27 @@ impl Indexer {
             cancel.cancel();
             metrics_handle.await.unwrap();
         }))
+    }
+}
+
+fn default_metrics_address() -> SocketAddr {
+    "0.0.0.0:9184".parse().unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let config = IndexerConfig::default();
+        assert_eq!(config.metrics_address, default_metrics_address());
+    }
+
+    #[test]
+    fn indexer_template() {
+        const TEMPLATE: &str = include_str!("../fixtures/config/indexer-config.toml");
+
+        let _template: IndexerConfig = toml::from_str(TEMPLATE).unwrap();
     }
 }

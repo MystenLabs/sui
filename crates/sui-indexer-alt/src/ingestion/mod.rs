@@ -7,6 +7,8 @@ use crate::metrics::IndexerMetrics;
 use backoff::backoff::Constant;
 use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use mysten_metrics::spawn_monitored_task;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::path::PathBuf;
 use std::{sync::Arc, time::Duration};
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -14,7 +16,6 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 use url::Url;
-
 mod client;
 pub mod error;
 mod local_client;
@@ -30,33 +31,47 @@ pub struct IngestionService {
     cancel: CancellationToken,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[serde_as]
+#[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
 pub struct IngestionConfig {
     /// Remote Store to fetch checkpoints from.
     #[arg(long, required = true, group = "source")]
-    remote_store_url: Option<Url>,
+    pub remote_store_url: Option<Url>,
 
     /// Path to the local ingestion directory.
     /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
     #[arg(long, required = true, group = "source")]
-    local_ingestion_path: Option<PathBuf>,
+    pub local_ingestion_path: Option<PathBuf>,
 
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     #[arg(long, default_value_t = 5000)]
-    buffer_size: usize,
+    pub buffer_size: usize,
 
     /// Maximum number of checkpoint to attempt to fetch concurrently.
     #[arg(long, default_value_t = 200)]
-    concurrency: usize,
+    pub concurrency: usize,
 
     /// Polling interval to retry fetching checkpoints that do not exist.
+    #[serde_as(as = "serde_with::DurationMilliSeconds<u64>")]
     #[arg(
         long,
         default_value = "200",
         value_name = "MILLISECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_millis)
     )]
-    retry_interval: Duration,
+    pub retry_interval: Duration,
+}
+
+impl Default for IngestionConfig {
+    fn default() -> Self {
+        Self {
+            remote_store_url: None,
+            local_ingestion_path: None,
+            buffer_size: 5000,
+            concurrency: 200,
+            retry_interval: Duration::from_millis(200),
+        }
+    }
 }
 
 impl IngestionService {

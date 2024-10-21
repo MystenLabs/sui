@@ -1,0 +1,18 @@
+pipeline = []
+metrics_address = "127.0.0.1:9000"
+
+[ingestion_config]
+remote_store_url = "https://example.com/remote-store"
+local_ingestion_path = "/path/to/ingestion"
+buffer_size = 5000
+concurrency = 200
+retry_interval = 200
+
+[db_config]
+database_url = "postgres://postgres:postgres@localhost:5432/local_indexer"
+connection_pool_size = 100
+connection_timeout = 60
+
+[committer_config]
+commit_interval = 500
+skip_watermark = false

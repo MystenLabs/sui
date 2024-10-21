@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::time::Duration;
 
 use diesel_async::{
@@ -17,24 +19,40 @@ pub struct Db {
     pool: Pool<AsyncPgConnection>,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[serde_as]
+#[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
 pub struct DbConfig {
     /// The URL of the database to connect to.
     #[arg(long)]
-    database_url: Url,
+    pub database_url: Url,
 
     /// Number of connections to keep in the pool.
     #[arg(long, default_value_t = 100)]
-    connection_pool_size: u32,
+    pub connection_pool_size: u32,
 
     /// Time spent waiting for a connection from the pool to become available.
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     #[arg(
         long,
         default_value = "60",
         value_name = "SECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_secs)
     )]
-    connection_timeout: Duration,
+    pub connection_timeout: Duration,
+}
+
+impl Default for DbConfig {
+    fn default() -> Self {
+        Self {
+            database_url: default_database_url(),
+            connection_pool_size: 100,
+            connection_timeout: Duration::from_secs(60),
+        }
+    }
+}
+
+fn default_database_url() -> Url {
+    "postgresql://localhost:5432/sui_indexer".parse().unwrap()
 }
 
 pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;

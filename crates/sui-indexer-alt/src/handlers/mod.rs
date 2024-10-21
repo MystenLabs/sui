@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::TryStreamExt;
+use mysten_metrics::spawn_monitored_task;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
     time::Duration,
 };
-
-use futures::TryStreamExt;
-use mysten_metrics::spawn_monitored_task;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{
     sync::mpsc,
@@ -86,20 +87,31 @@ pub trait Handler {
         -> anyhow::Result<usize>;
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[serde_as]
+#[derive(clap::Args, Debug, Clone, Serialize, Deserialize)]
 pub struct CommitterConfig {
     /// Committer will check for pending data at least this often
+    #[serde_as(as = "serde_with::DurationMilliSeconds<u64>")]
     #[arg(
         long,
         default_value = "500",
         value_name = "MILLISECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_millis),
     )]
-    commit_interval: Duration,
+    pub commit_interval: Duration,
 
     /// Avoid writing to the watermark table
     #[arg(long)]
-    skip_watermark: bool,
+    pub skip_watermark: bool,
+}
+
+impl Default for CommitterConfig {
+    fn default() -> Self {
+        Self {
+            commit_interval: Duration::from_millis(500),
+            skip_watermark: false,
+        }
+    }
 }
 
 /// A batch of processed values associated with a single checkpoint. This is an internal type used
