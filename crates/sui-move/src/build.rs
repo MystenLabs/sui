@@ -4,7 +4,6 @@
 use crate::manage_package::resolve_lock_file_path;
 use clap::Parser;
 use move_cli::base;
-use move_compiler::Flags;
 use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
 use move_prover::run_boogie_gen;
 use serde_json::json;
@@ -71,13 +70,12 @@ impl Build {
         if generate_boogie {
             config.verify_mode = true;
 
-            let model = config.move_model_with_flags_for_package(
+            let model = config.move_model_for_package(
                 rerooted_path,
                 ModelConfig {
                     all_files_as_targets: false,
                     target_filter: None,
                 },
-                Flags::verifying(),
             )?;
             let mut options = move_prover::cli::Options::default();
             // don't spawn async tasks when running Boogie--causes a crash if we do

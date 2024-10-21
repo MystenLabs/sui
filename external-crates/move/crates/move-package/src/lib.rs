@@ -254,23 +254,17 @@ impl BuildConfig {
         path: &Path,
         model_config: ModelConfig,
     ) -> Result<GlobalEnv> {
-        // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
-        // vector as the writer
-        let resolved_graph = self.resolution_graph_for_package(path, None, &mut Vec::new())?;
-        let _mutx = PackageLock::lock(); // held until function returns
-        ModelBuilder::create(resolved_graph, model_config).build_model(Flags::empty())
-    }
+        let flags = if self.verify_mode {
+            Flags::verifying()
+        } else {
+            Flags::empty()
+        };
 
-    pub fn move_model_with_flags_for_package(
-        self,
-        path: &Path,
-        model_config: ModelConfig,
-        flags: Flags,
-    ) -> Result<GlobalEnv> {
         // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
         // vector as the writer
         let resolved_graph = self.resolution_graph_for_package(path, None, &mut Vec::new())?;
         let _mutx = PackageLock::lock(); // held until function returns
+
         ModelBuilder::create(resolved_graph, model_config).build_model(flags)
     }
 

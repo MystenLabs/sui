@@ -53,25 +53,7 @@ impl FilterContext for Context<'_> {
                 (loc, VerificationAttribute::VerifyOnly) => loc,
             })
             .next();
-        let should_remove = is_verify_only_loc.is_some();
-        // TODO this is a bit of a hack
-        // but we don't have a better way of suppressing this unless the filtering was done after
-        // expansion
-        // Ideally we would just have a warning filter scope here
-        // (but again, need expansion for that)
-        let silence_warning =
-            !self.is_source_def || self.env.package_config(self.current_package).is_dependency;
-        if !silence_warning {
-            if let Some(loc) = is_verify_only_loc {
-                let msg = format!(
-                    "The '{}' attribute has been deprecated along with specification blocks",
-                    VerificationAttribute::VERIFY_ONLY
-                );
-                self.env
-                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)));
-            }
-        }
-        should_remove
+        is_verify_only_loc.is_some()
     }
 }
 
