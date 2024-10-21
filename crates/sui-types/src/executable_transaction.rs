@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::messages_checkpoint::CheckpointSequenceNumber;
-use crate::messages_consensus::{AuthorityIndex, Round, TransactionIndex};
 use crate::{committee::EpochId, crypto::AuthorityStrongQuorumSignInfo};
 
 use crate::message_envelope::{Envelope, TrustedEnvelope, VerifiedEnvelope};
@@ -26,7 +25,7 @@ pub enum CertificateProof {
     SystemTransaction(EpochId),
     /// Validity was proven through consensus. Round, authority and transaction index indicate
     /// the position of the transaction in the consensus DAG for debugging.
-    Consensus(EpochId, Round, AuthorityIndex, TransactionIndex),
+    Consensus(EpochId),
 }
 
 impl CertificateProof {
@@ -42,13 +41,8 @@ impl CertificateProof {
         Self::SystemTransaction(epoch)
     }
 
-    pub fn new_from_consensus(
-        epoch: EpochId,
-        round: Round,
-        authority: AuthorityIndex,
-        transaction_index: TransactionIndex,
-    ) -> Self {
-        Self::Consensus(epoch, round, authority, transaction_index)
+    pub fn new_from_consensus(epoch: EpochId) -> Self {
+        Self::Consensus(epoch)
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -56,7 +50,7 @@ impl CertificateProof {
             Self::Checkpoint(epoch, _)
             | Self::QuorumExecuted(epoch)
             | Self::SystemTransaction(epoch)
-            | Self::Consensus(epoch, _, _, _) => *epoch,
+            | Self::Consensus(epoch) => *epoch,
             Self::Certified(sig) => sig.epoch,
         }
     }
