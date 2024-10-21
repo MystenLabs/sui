@@ -33,19 +33,16 @@ use sui_bridge::sui_bridge_watchdog::{
 use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
-use sui_bridge_indexer::storage::PgBridgePersistent;
-use sui_bridge_indexer::sui_bridge_indexer::SuiBridgeDataMapper;
-use sui_bridge_indexer::sui_datasource::SuiCheckpointDatasource;
 use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
-use sui_bridge_indexer::{create_eth_subscription_indexer, create_eth_sync_indexer};
+use sui_bridge_indexer::{
+    create_eth_subscription_indexer, create_eth_sync_indexer, create_sui_indexer,
+};
 use sui_bridge_watchdog::{
     eth_bridge_status::EthBridgeStatus, eth_vault_balance::EthVaultBalance,
     metrics::WatchdogMetrics, sui_bridge_status::SuiBridgeStatus, BridgeWatchDog,
 };
 use sui_data_ingestion_core::DataIngestionMetrics;
-use sui_indexer_builder::indexer_builder::IndexerBuilder;
-use sui_indexer_builder::progress::{OutOfOrderSaveAfterDurationPolicy, ProgressSavingPolicy};
 use sui_sdk::SuiClientBuilder;
 
 #[derive(Parser, Clone, Debug)]
@@ -88,13 +85,6 @@ async fn main() -> Result<()> {
     let db_url = config.db_url.clone();
     let pool = get_connection_pool(db_url.clone()).await;
 
-    let datastore_with_out_of_order_source = PgBridgePersistent::new(
-        pool.clone(),
-        ProgressSavingPolicy::OutOfOrderSaveAfterDuration(OutOfOrderSaveAfterDurationPolicy::new(
-            tokio::time::Duration::from_secs(30),
-        )),
-    );
-
     let eth_client: Arc<EthClient<MeteredEthHttpProvier>> = Arc::new(
         EthClient::<MeteredEthHttpProvier>::new(
             &config.eth_rpc_url,
@@ -119,7 +109,7 @@ async fn main() -> Result<()> {
 
     // Start the eth sync data source
     let eth_sync_indexer = create_eth_sync_indexer(
-        pool,
+        pool.clone(),
         indexer_meterics.clone(),
         bridge_metrics.clone(),
         &config,
@@ -128,33 +118,7 @@ async fn main() -> Result<()> {
     .await?;
     tasks.push(spawn_logged_monitored_task!(eth_sync_indexer.start()));
 
-    let sui_client = Arc::new(
-        SuiClientBuilder::default()
-            .build(config.sui_rpc_url.clone())
-            .await?,
-    );
-    let sui_checkpoint_datasource = SuiCheckpointDatasource::new(
-        config.remote_store_url.clone(),
-        sui_client,
-        config.concurrency as usize,
-        config
-            .checkpoints_path
-            .clone()
-            .map(|p| p.into())
-            .unwrap_or(tempfile::tempdir()?.into_path()),
-        config.sui_bridge_genesis_checkpoint,
-        ingestion_metrics.clone(),
-        indexer_meterics.clone(),
-    );
-    let indexer = IndexerBuilder::new(
-        "SuiBridgeIndexer",
-        sui_checkpoint_datasource,
-        SuiBridgeDataMapper {
-            metrics: indexer_meterics.clone(),
-        },
-        datastore_with_out_of_order_source,
-    )
-    .build();
+    let indexer = create_sui_indexer(pool, indexer_meterics, ingestion_metrics, &config).await?;
     tasks.push(spawn_logged_monitored_task!(indexer.start()));
 
     let sui_bridge_client =

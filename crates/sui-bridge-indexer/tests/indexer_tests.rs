@@ -66,6 +66,8 @@ async fn test_indexing_transfer() {
         .load::<GovernanceAction>(&mut pool.get().await.unwrap())
         .await
         .unwrap();
+
+    // 8 governance actions in total, token registration and approval events for ETH USDC, USDT and BTC.
     assert_eq!(8, data.len());
 
     // transfer eth to sui
@@ -127,7 +129,7 @@ async fn wait_for_back_fill_to_finish(
     while storage.get_ongoing_tasks(task).await?.live_task().is_none() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    // wait until all backfill task has completed
+    // wait until all backfill tasks have completed
     while !storage
         .get_ongoing_tasks(task)
         .await?
