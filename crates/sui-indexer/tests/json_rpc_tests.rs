@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
 use sui_json_rpc_api::{CoinReadApiClient, IndexerApiClient, ReadApiClient};
 use sui_json_rpc_types::{
-    CoinPage, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    CoinPage, EventFilter, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
 };
 use sui_swarm_config::genesis_config::DEFAULT_GAS_AMOUNT;
+use sui_test_transaction_builder::publish_package;
+use sui_types::{event::EventID, transaction::CallArg};
 use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
@@ -136,6 +140,104 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
         .await?;
     assert_eq!(0, result.data.len(), "{:?}", result);
     assert!(!result.has_next_page);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_events() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new()
+        .with_indexer_backed_rpc()
+        .build()
+        .await;
+
+    // publish package
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("tests/move_test_code");
+    let move_package = publish_package(&cluster.wallet, path).await.0;
+
+    // execute a transaction to generate events
+    let function = "emit_3";
+    let arguments = vec![CallArg::Pure(bcs::to_bytes(&5u64).unwrap())];
+    let transaction = cluster
+        .test_transaction_builder()
+        .await
+        .move_call(move_package, "events_queries", function, arguments)
+        .build();
+    let signed_transaction = cluster.wallet.sign_transaction(&transaction);
+    cluster.execute_transaction(signed_transaction).await;
+
+    // query for events
+    let http_client = cluster.rpc_client();
+
+    // start with ascending order
+    let event_filter = EventFilter::All([]);
+    let mut cursor: Option<EventID> = None;
+    let mut limit = None;
+    let mut descending_order = Some(false);
+    let result = http_client
+        .query_events(event_filter.clone(), cursor, limit, descending_order)
+        .await?;
+    assert_eq!(3, result.data.len());
+    assert!(!result.has_next_page);
+    let forward_paginated_events = result.data;
+
+    // Fetch the initial event
+    limit = Some(1);
+    let result = http_client
+        .query_events(event_filter.clone(), cursor, limit, descending_order)
+        .await?;
+    assert_eq!(1, result.data.len());
+    assert!(result.has_next_page);
+    assert_eq!(forward_paginated_events[0], result.data[0]);
+
+    // Fetch remaining events
+    cursor = result.next_cursor;
+    limit = None;
+    let result = http_client
+        .query_events(event_filter.clone(), cursor, limit, descending_order)
+        .await?;
+    assert_eq!(2, result.data.len());
+    assert_eq!(forward_paginated_events[1..], result.data[..]);
+
+    // now descending order - make sure to reset parameters
+    cursor = None;
+    descending_order = Some(true);
+    limit = None;
+    let result = http_client
+        .query_events(event_filter.clone(), cursor, limit, descending_order)
+        .await?;
+    assert_eq!(3, result.data.len());
+    assert!(!result.has_next_page);
+    let backward_paginated_events = result.data;
+
+    // Fetch the initial event
+    limit = Some(1);
+    let result = http_client
+        .query_events(event_filter.clone(), cursor, limit, descending_order)
+        .await?;
+    assert_eq!(1, result.data.len());
+    assert!(result.has_next_page);
+    assert_eq!(backward_paginated_events[0], result.data[0]);
+    assert_eq!(forward_paginated_events[2], result.data[0]);
+
+    // Fetch remaining events
+    cursor = result.next_cursor;
+    limit = None;
+    let result = http_client
+        .query_events(event_filter.clone(), cursor, limit, descending_order)
+        .await?;
+    assert_eq!(2, result.data.len());
+    assert_eq!(backward_paginated_events[1..], result.data[..]);
+
+    // check that the forward and backward paginated events are in reverse order
+    assert_eq!(
+        forward_paginated_events
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>(),
+        backward_paginated_events
+    );
 
     Ok(())
 }
