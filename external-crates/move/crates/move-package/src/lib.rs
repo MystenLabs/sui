@@ -56,6 +56,10 @@ pub struct BuildConfig {
     #[clap(name = "test-mode", long = "test", global = true)]
     pub test_mode: bool,
 
+    /// Compile in 'verification' mode. Extends 'test' mode with verification code.
+    #[clap(name = "verify-mode", long = "verify", global = true)]
+    pub verify_mode: bool,
+
     /// Generate documentation for packages
     #[clap(name = "generate-docs", long = "doc", global = true)]
     pub generate_docs: bool,
@@ -254,7 +258,20 @@ impl BuildConfig {
         // vector as the writer
         let resolved_graph = self.resolution_graph_for_package(path, None, &mut Vec::new())?;
         let _mutx = PackageLock::lock(); // held until function returns
-        ModelBuilder::create(resolved_graph, model_config).build_model()
+        ModelBuilder::create(resolved_graph, model_config).build_model(Flags::empty())
+    }
+
+    pub fn move_model_with_flags_for_package(
+        self,
+        path: &Path,
+        model_config: ModelConfig,
+        flags: Flags,
+    ) -> Result<GlobalEnv> {
+        // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
+        // vector as the writer
+        let resolved_graph = self.resolution_graph_for_package(path, None, &mut Vec::new())?;
+        let _mutx = PackageLock::lock(); // held until function returns
+        ModelBuilder::create(resolved_graph, model_config).build_model(flags)
     }
 
     pub fn download_deps_for_package<W: Write>(&self, path: &Path, writer: &mut W) -> Result<()> {
@@ -324,7 +341,9 @@ impl BuildConfig {
     }
 
     pub fn compiler_flags(&self) -> Flags {
-        let flags = if self.test_mode {
+        let flags = if self.verify_mode {
+            Flags::verifying()
+        } else if self.test_mode {
             Flags::testing()
         } else {
             Flags::empty()
