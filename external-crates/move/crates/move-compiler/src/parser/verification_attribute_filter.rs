@@ -43,7 +43,7 @@ impl FilterContext for Context<'_> {
     // * It is annotated #[verify_only] and verify mode is not set
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
         if !self.env.flags().is_verifying() {
-            return false;
+            return true;
         }
 
         use known_attributes::VerificationAttribute;
