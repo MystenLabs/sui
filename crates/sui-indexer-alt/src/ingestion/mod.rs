@@ -1,23 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
-
+use crate::ingestion::client::IngestionClient;
+use crate::ingestion::error::{Error, Result};
+use crate::metrics::IndexerMetrics;
 use backoff::backoff::Constant;
-use client::IngestionClient;
 use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use mysten_metrics::spawn_monitored_task;
+use std::path::PathBuf;
+use std::{sync::Arc, time::Duration};
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 use url::Url;
 
-use crate::ingestion::error::{Error, Result};
-use crate::metrics::IndexerMetrics;
-
 mod client;
 pub mod error;
+mod local_client;
+mod remote_client;
+#[cfg(test)]
+mod test_utils;
 
 pub struct IngestionService {
     config: IngestionConfig,
@@ -30,8 +33,13 @@ pub struct IngestionService {
 #[derive(clap::Args, Debug, Clone)]
 pub struct IngestionConfig {
     /// Remote Store to fetch checkpoints from.
-    #[arg(long)]
-    remote_store_url: Url,
+    #[arg(long, required = true, group = "source")]
+    remote_store_url: Option<Url>,
+
+    /// Path to the local ingestion directory.
+    /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
+    #[arg(long, required = true, group = "source")]
+    local_ingestion_path: Option<PathBuf>,
 
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     #[arg(long, default_value_t = 5000)]
@@ -57,9 +65,18 @@ impl IngestionService {
         metrics: Arc<IndexerMetrics>,
         cancel: CancellationToken,
     ) -> Result<Self> {
+        // TODO: Potentially support a hybrid mode where we can fetch from both local and remote.
+        let client = if let Some(url) = config.remote_store_url.as_ref() {
+            IngestionClient::new_remote(url.clone(), metrics.clone())?
+        } else if let Some(path) = config.local_ingestion_path.as_ref() {
+            IngestionClient::new_local(path.clone(), metrics.clone())
+        } else {
+            panic!("Either remote_store_url or local_ingestion_path must be provided");
+        };
+        let subscribers = Vec::new();
         Ok(Self {
-            client: IngestionClient::new(config.remote_store_url.clone(), metrics.clone())?,
-            subscribers: Vec::new(),
+            client,
+            subscribers,
             config,
             metrics,
             cancel,
@@ -83,7 +100,7 @@ impl IngestionService {
     ///
     /// - If a subscriber is lagging (not receiving checkpoints fast enough), it will eventually
     ///   provide back-pressure to the ingestion service, which will stop fetching new checkpoints.
-    /// - If a subscriber closes its channel, the ingestion service will intepret that as a signal
+    /// - If a subscriber closes its channel, the ingestion service will interpret that as a signal
     ///   to shutdown as well.
     ///
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
@@ -187,7 +204,8 @@ mod tests {
     use reqwest::StatusCode;
     use wiremock::{MockServer, Request};
 
-    use crate::ingestion::client::tests::{respond_with, status, test_checkpoint_data};
+    use crate::ingestion::remote_client::tests::{respond_with, status};
+    use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
 
     use super::*;
@@ -200,7 +218,8 @@ mod tests {
     ) -> IngestionService {
         IngestionService::new(
             IngestionConfig {
-                remote_store_url: Url::parse(&uri).unwrap(),
+                remote_store_url: Some(Url::parse(&uri).unwrap()),
+                local_ingestion_path: None,
                 buffer_size,
                 concurrency,
                 retry_interval: Duration::from_millis(200),
