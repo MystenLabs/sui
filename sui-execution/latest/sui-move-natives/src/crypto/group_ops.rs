@@ -101,7 +101,7 @@ pub struct GroupOpsCostParams {
     pub bls12381_uncompressed_g1_sum_base_cost: Option<InternalGas>,
     pub bls12381_uncompressed_g1_sum_cost_per_term: Option<InternalGas>,
     // limit the number of terms in a sum
-    pub bls12381_uncompressed_g1_sum_max_terms: Option<u32>,
+    pub bls12381_uncompressed_g1_sum_max_terms: Option<u64>,
 }
 
 macro_rules! native_charge_gas_early_exit_option {
@@ -874,7 +874,7 @@ pub fn internal_sum(
                         .with_message("Max number of terms is not set".to_string())
                 })?;
 
-            if length > max_terms as u64 {
+            if length > max_terms {
                 return Ok(NativeResult::err(cost, INPUT_TOO_LONG_ERROR));
             }
 
