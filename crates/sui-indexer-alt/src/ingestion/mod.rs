@@ -1,6 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Allow use of `unbounded_channel` in `ingestion` -- it is used by the regulator task to receive
+// feedback. Traffic through this task should be minimal, but if a bound is applied to it and that
+// bound is hit, the indexer could deadlock.
+#![allow(clippy::disallowed_methods)]
+
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -8,7 +13,7 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-use crate::ingestion::broadcaster::brodcaster;
+use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
 use crate::ingestion::regulator::regulator;
