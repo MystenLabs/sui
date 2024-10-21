@@ -38,10 +38,6 @@ use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
 use sui_bridge_indexer::{
     create_eth_subscription_indexer, create_eth_sync_indexer, create_sui_indexer,
 };
-use sui_bridge_watchdog::{
-    eth_bridge_status::EthBridgeStatus, eth_vault_balance::EthVaultBalance,
-    metrics::WatchdogMetrics, sui_bridge_status::SuiBridgeStatus, BridgeWatchDog,
-};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_sdk::SuiClientBuilder;
 
