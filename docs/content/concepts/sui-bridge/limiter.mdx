@@ -1,0 +1,34 @@
+---
+title: Limiter And Transfer Limit
+draft: true
+---
+
+## Global Limiter {#global-limiter}
+
+A limiter protects the user's fund by constraining the total value of assets leaving Bridge in any 24 hours window. It tracks total value hourly and aggregates values from trailing 24 hours. Therefore, when the limiter cools down, it refreshes every hour.
+The limit applies globally and varies per direction. For example, the amount may be different between Ethereum to Sui and Sui to Ethereum.
+The limit also impacts the maximal amount of single transfer. Simply put, in one bridge transfer, you cannot move assets worth more than the limit. The bridge front end may apply stricter restrictions to protect user assets.
+
+The limit per route is governed by the validator committee through voting.
+
+As of writing, the global limits is $8MM from Ethereum to Sui and $5MM from Sui to Etheruem every 24 hours.
+
+## Asset Price
+
+Sui Bridge v1 uses static pricing to calculate limits. The price for ETH is configured at $2600. Namely, bridging 1 ETH will consume $2600 USD in limit calculation.
+
+The pricing is governed by validator committee through voting. It works together with the global limiter to protect user funds.
+
+## Transfer Limit
+There is no minimal limit for tranfer but a tiny fraction may be rounded down. Particularly for native Ethereum (ETH) and Wrapped Ethereum (wETH) because of reduced precision of 8 decimal places, the value of 10.0000000000000001 (w)ETH will be rounded down to 10 w(ETH).
+
+**Minimal ETH Value**
+* 0.00000001 ETH
+(8 decimal places of precision)
+
+
+**Minimal wETH Value**
+* 0.00000001 ETH
+(8 decimal places of precision)
+
+The maximum limit per transfer is the global limit in USD value. Namely a user cannot claim assets on the destination chain if the USD value is higher than the global limit. See the [Global Limiter section](#global-limiter) for details.
