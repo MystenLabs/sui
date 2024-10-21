@@ -24,7 +24,7 @@ impl IngestionClientTrait for LocalIngestionClient {
                 FetchError::NotFound
             } else {
                 FetchError::Transient {
-                    reason: "IO error",
+                    reason: "io_error",
                     error: e.into(),
                 }
             }

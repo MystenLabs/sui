@@ -60,10 +60,13 @@ impl IngestionClient {
         IngestionClient { client, metrics }
     }
 
-    /// Repeatedly retries transient errors with an
-    /// exponential backoff (up to [MAX_RETRY_INTERVAL]), but will immediately return on:
-    ///
-    /// - non-transient errors, which include all client errors, except timeouts and rate limiting.
+    /// Repeatedly retries transient errors with an exponential backoff (up to [MAX_RETRY_INTERVAL]).
+    /// Transient errors are either defined by the client implementation that
+    /// returns a `FetchError::Transient` error variant, or within this function
+    /// if we fail to deserialize the result as [CheckpointData].
+    /// The function will immediately return on:
+    /// - non-transient errors determined by the client implementation,
+    ///   This includes both the FetcherError::NotFound and FetcherError::Permanent variants.
     /// - cancellation of the supplied `cancel` token.
     pub(crate) async fn fetch(
         &self,

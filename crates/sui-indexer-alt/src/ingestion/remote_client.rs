@@ -2,11 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ingestion::client::{FetchError, FetchResult, IngestionClientTrait};
-use crate::ingestion::remote_client::HttpError::Http;
 use crate::ingestion::Result as IngestionResult;
 use reqwest::{Client, StatusCode};
 use tracing::{debug, error};
 use url::Url;
+
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+pub enum HttpError {
+    #[error("HTTP error with status code: {0}")]
+    Http(StatusCode),
+}
+
+fn status_code_to_error(code: StatusCode) -> anyhow::Error {
+    HttpError::Http(code).into()
+}
 
 pub(crate) struct RemoteIngestionClient {
     url: Url,
@@ -32,7 +41,7 @@ impl IngestionClientTrait for RemoteIngestionClient {
     /// - request timeouts,
     /// - rate limiting,
     /// - server errors (5xx),
-    /// - issues getting a full response and deserializing it as [CheckpointData].
+    /// - issues getting a full response.
     async fn fetch(&self, checkpoint: u64) -> FetchResult {
         // SAFETY: The path being joined is statically known to be valid.
         let url = self
@@ -96,16 +105,6 @@ impl IngestionClientTrait for RemoteIngestionClient {
     }
 }
 
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
-pub enum HttpError {
-    #[error("HTTP error with status code: {0}")]
-    Http(StatusCode),
-}
-
-fn status_code_to_error(code: StatusCode) -> anyhow::Error {
-    Http(code).into()
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -145,7 +144,7 @@ pub(crate) mod tests {
         let Some(http_error) = inner.downcast_ref::<HttpError>() else {
             panic!("Expected HttpError, got: {:?}", inner);
         };
-        assert_eq!(http_error, &Http(code));
+        assert_eq!(http_error, &HttpError::Http(code));
     }
 
     #[tokio::test]
