@@ -3,7 +3,6 @@
 
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::compatibility::Compatibility;
-use move_binary_format::file_format::{Ability, AbilitySet};
 use move_binary_format::CompiledModule;
 use move_core_types::gas_algebra::InternalGas;
 use once_cell::sync::Lazy;
@@ -223,23 +222,7 @@ pub async fn compare_system_package<S: ObjectStore>(
         return Some(cur_ref);
     }
 
-    let compatibility = Compatibility {
-        check_datatype_and_pub_function_linking: true,
-        check_datatype_layout: true,
-        check_friend_linking: false,
-        // Checking `entry` linkage is required because system packages are updated in-place, and a
-        // transaction that was rolled back to make way for reconfiguration should still be runnable
-        // after a reconfiguration that upgraded the framework.
-        //
-        // A transaction that calls a system function that was previously `entry` and is now private
-        // will fail because its entrypoint became no longer callable. A transaction that calls a
-        // system function that was previously `public entry` and is now just `public` could also
-        // fail if one of its mutable inputs was being used in another private `entry` function.
-        check_private_entry_linking: true,
-        disallowed_new_abilities: AbilitySet::singleton(Ability::Key),
-        disallow_change_datatype_type_params: true,
-        disallow_new_variants: true,
-    };
+    let compatibility = Compatibility::framework_upgrade_check();
 
     let new_pkg = new_object
         .data

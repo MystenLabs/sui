@@ -16,7 +16,7 @@ const ListCreatedLinksQuery = graphql(`
 		transactionBlocks(
 			last: 10
 			before: $cursor
-			filter: { signAddress: $address, function: $function, kind: PROGRAMMABLE_TX }
+			filter: { sentAddress: $address, function: $function, kind: PROGRAMMABLE_TX }
 		) {
 			pageInfo {
 				startCursor

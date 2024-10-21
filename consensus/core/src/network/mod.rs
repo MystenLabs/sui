@@ -41,8 +41,9 @@ mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
 }
 
+pub mod connection_monitor;
+
 pub(crate) mod anemo_network;
-pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
 mod metrics_layer;

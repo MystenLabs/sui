@@ -1,0 +1,9 @@
+  [package]
+  name = "tracing_unit_tests"
+  edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+  
+  [dependencies]
+  MoveStdlib = { local = "../../../../move-stdlib" }
+
+  [addresses]
+  std = "0x1"

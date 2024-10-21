@@ -102,6 +102,8 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -113,6 +115,8 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -143,8 +147,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -159,7 +163,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -270,6 +274,8 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -281,6 +287,8 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -311,8 +319,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -327,7 +335,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -438,6 +446,8 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -449,6 +459,8 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -479,8 +491,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -495,7 +507,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -606,6 +618,8 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -617,6 +631,8 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -647,8 +663,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -663,7 +679,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -774,6 +790,8 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -785,6 +803,8 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -815,8 +835,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -831,7 +851,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -942,6 +962,8 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -953,6 +975,8 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -983,8 +1007,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -999,7 +1023,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -1110,6 +1134,8 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -1121,6 +1147,8 @@ validator_configs:
         - Twitch
       Testnet:
         - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -1151,8 +1179,8 @@ validator_configs:
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
-        secs: 1
-        nanos: 0
+        secs: 0
+        nanos: 200000000
       overload-monitor-interval:
         secs: 10
         nanos: 0
@@ -1167,7 +1195,7 @@ validator_configs:
       safe-transaction-ready-rate: 100
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
-      max-transaction-manager-per-object-queue-length: 100
+      max-transaction-manager-per-object-queue-length: 20
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -1186,4 +1214,3 @@ account_keys:
   - mfPjCoE6SX0Sl84MnmNS/LS+tfPpkn7I8tziuk2g0WM=
   - 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
 genesis: "[fake genesis]"
-

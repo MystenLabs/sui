@@ -229,6 +229,7 @@ impl TransactionExecutionApi {
             Some(object_cache) if opts.show_object_changes => Some(
                 get_object_changes(
                     object_cache,
+                    &response.effects.effects,
                     sender,
                     response.effects.effects.modified_at_versions(),
                     response.effects.effects.all_changed_objects(),
@@ -302,6 +303,7 @@ impl TransactionExecutionApi {
         .await?;
         let object_changes = get_object_changes(
             &object_cache,
+            &transaction_effects,
             sender,
             transaction_effects.modified_at_versions(),
             transaction_effects.all_changed_objects(),

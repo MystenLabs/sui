@@ -3,9 +3,12 @@
 
 use clap::Parser;
 use sui_indexer::backfill::backfill_runner::BackfillRunner;
+use sui_indexer::benchmark::run_indexer_benchmark;
 use sui_indexer::config::{Command, UploadOptions};
 use sui_indexer::database::ConnectionPool;
-use sui_indexer::db::{check_db_migration_consistency, reset_database, run_migrations};
+use sui_indexer::db::{
+    check_db_migration_consistency, check_prunable_tables_valid, reset_database, run_migrations,
+};
 use sui_indexer::indexer::Indexer;
 use sui_indexer::metrics::{
     spawn_connection_pool_metric_collector, start_prometheus_server, IndexerMetrics,
@@ -45,15 +48,21 @@ async fn main() -> anyhow::Result<()> {
         } => {
             // Make sure to run all migrations on startup, and also serve as a compatibility check.
             run_migrations(pool.dedicated_connection().await?).await?;
+            let retention_config = pruning_options.load_from_file();
+            if retention_config.is_some() {
+                check_prunable_tables_valid(&mut pool.get().await?).await?;
+            }
+
             let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
 
             Indexer::start_writer(
-                &ingestion_config,
+                ingestion_config,
                 store,
                 indexer_metrics,
                 snapshot_config,
-                pruning_options,
+                retention_config,
                 CancellationToken::new(),
+                None,
             )
             .await?;
         }
@@ -90,6 +99,9 @@ async fn main() -> anyhow::Result<()> {
             let mut formal_restorer =
                 IndexerFormalSnapshotRestorer::new(store, restore_config).await?;
             formal_restorer.restore().await?;
+        }
+        Command::Benchmark(benchmark_config) => {
+            run_indexer_benchmark(benchmark_config, pool, indexer_metrics).await;
         }
     }
 

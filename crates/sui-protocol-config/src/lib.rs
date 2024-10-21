@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 62;
+const MAX_PROTOCOL_VERSION: u64 = 65;
 
 // Record history of protocol version allocations here:
 //
@@ -184,6 +184,8 @@ const MAX_PROTOCOL_VERSION: u64 = 62;
 //             Further reduce minimum number of random beacon shares.
 //             Add feature flag for Mysticeti fastpath.
 // Version 62: Makes the event's sending module package upgrade-aware.
+// Version 63: Enable gas based congestion control in consensus commit.
+// Version 64: Switch to distributed vote scoring in consensus in mainnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -577,8 +579,9 @@ impl ConsensusTransactionOrdering {
 pub enum PerObjectCongestionControlMode {
     #[default]
     None, // No congestion control.
-    TotalGasBudget, // Use txn gas budget as execution cost.
-    TotalTxCount,   // Use total txn count as execution cost.
+    TotalGasBudget,        // Use txn gas budget as execution cost.
+    TotalTxCount,          // Use total txn count as execution cost.
+    TotalGasBudgetWithCap, // Use txn gas budget as execution cost with a cap.
 }
 
 impl PerObjectCongestionControlMode {
@@ -1265,6 +1268,11 @@ pub struct ProtocolConfig {
     /// Configures the garbage collection depth for consensus. When is unset or `0` then the garbage collection
     /// is disabled.
     consensus_gc_depth: Option<u32>,
+
+    /// Used to calculate the max transaction cost when using TotalGasBudgetWithCap as shard
+    /// object congestion control strategy. Basically the max transaction cost is calculated as
+    /// (num of input object + num of commands) * this factor.
+    gas_budget_based_txn_cost_cap_factor: Option<u64>,
 }
 
 // feature flags
@@ -1537,10 +1545,6 @@ impl ProtocolConfig {
 
     pub fn consensus_network(&self) -> ConsensusNetwork {
         self.feature_flags.consensus_network
-    }
-
-    pub fn mysticeti_leader_scoring_and_schedule(&self) -> bool {
-        self.feature_flags.mysticeti_leader_scoring_and_schedule
     }
 
     pub fn reshare_at_same_initial_version(&self) -> bool {
@@ -2139,6 +2143,8 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
 
             consensus_gc_depth: None,
+
+            gas_budget_based_txn_cost_cap_factor: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2820,6 +2826,24 @@ impl ProtocolConfig {
                 62 => {
                     cfg.feature_flags.relocate_event_module = true;
                 }
+                63 => {
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(18_500_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(240_000_000);
+                }
+                64 => {
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalTxCount;
+                    cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(40);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(3);
+                }
+                65 => {
+                    // Enable distributed vote scoring for mainnet
+                    cfg.feature_flags
+                        .consensus_distributed_vote_scoring_strategy = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2956,12 +2980,9 @@ impl ProtocolConfig {
     pub fn set_zklogin_max_epoch_upper_bound_delta_for_testing(&mut self, val: Option<u64>) {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
     }
+
     pub fn set_disable_bridge_for_testing(&mut self) {
         self.feature_flags.bridge = false
-    }
-
-    pub fn set_mysticeti_leader_scoring_and_schedule_for_testing(&mut self, val: bool) {
-        self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
     }
 
     pub fn set_mysticeti_num_leaders_per_round_for_testing(&mut self, val: Option<usize>) {

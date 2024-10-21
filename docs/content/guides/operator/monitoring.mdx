@@ -1,0 +1,25 @@
+---
+title: Sui Node Monitoring
+description: Monitor Sui node metrics to ensure the health and performance of your node.
+---
+
+:::info
+
+These instructions are for advanced users. If you just need a local development environment, you should instead follow the instructions in [Create a Local Sui Network](../developer/getting-started/local-network.mdx) to create a local Full node, validators, and faucet.
+
+:::
+
+Nodes expose on `localhost:9184/metrics` by default.
+
+You can view the metrics in the metrics UI, or you can use a tool like `curl` to get the metrics in a format that is easy to parse.
+
+```bash
+curl -s http://localhost:9184/metrics | grep -E 'sui_validator|sui_fullnode'
+```
+
+## Production monitoring
+
+For production monitoring, we recommend using [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/).
+
+You can use grafana agent, grafana alloy, or another tool to scrape the metrics from your node.
+

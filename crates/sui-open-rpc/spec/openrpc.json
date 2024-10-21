@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.36.0"
+    "version": "1.37.0"
   },
   "methods": [
     {
@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "62",
+              "maxSupportedProtocolVersion": "65",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1592,6 +1592,7 @@
                   "u64": "2"
                 },
                 "execution_version": null,
+                "gas_budget_based_txn_cost_cap_factor": null,
                 "gas_model_version": {
                   "u64": "5"
                 },
@@ -6116,6 +6117,22 @@
               "All": {
                 "type": "array",
                 "maxItems": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events that match any of the given filters. Only supported on event subscriptions.",
+            "type": "object",
+            "required": [
+              "Any"
+            ],
+            "properties": {
+              "Any": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventFilter"
+                }
               }
             },
             "additionalProperties": false

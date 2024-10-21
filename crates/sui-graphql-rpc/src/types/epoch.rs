@@ -4,14 +4,15 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::connection::ScanConnection;
+use crate::consistency::Checkpointed;
 use crate::context_data::db_data_provider::{convert_to_validators, PgManager};
-use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
+use crate::data::{self, DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::server::watermark_task::Watermark;
 
 use super::big_int::BigInt;
 use super::checkpoint::{self, Checkpoint};
-use super::cursor::Page;
+use super::cursor::{self, Page, Paginated, ScanLimited, Target};
 use super::date_time::DateTime;
 use super::protocol_config::ProtocolConfigs;
 use super::system_state_summary::SystemStateSummary;
@@ -21,9 +22,11 @@ use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::dataloader::Loader;
 use async_graphql::*;
+use connection::{CursorType, Edge};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use fastcrypto::encoding::{Base58, Encoding};
+use serde::{Deserialize, Serialize};
 use sui_indexer::models::epoch::QueryableEpochInfo;
 use sui_indexer::schema::epochs;
 use sui_types::messages_checkpoint::CheckpointCommitment as EpochCommitment;
@@ -40,6 +43,21 @@ pub(crate) struct Epoch {
 struct EpochKey {
     pub epoch_id: u64,
     pub checkpoint_viewed_at: u64,
+}
+
+pub(crate) type Cursor = cursor::JsonCursor<EpochCursor>;
+type Query<ST, GB> = data::Query<ST, epochs::table, GB>;
+
+/// The cursor returned for each `Epoch` in a connection's page of results. The
+/// `checkpoint_viewed_at` will set the consistent upper bound for subsequent queries made on this
+/// cursor.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub(crate) struct EpochCursor {
+    /// The checkpoint sequence number this was viewed at.
+    #[serde(rename = "c")]
+    pub checkpoint_viewed_at: u64,
+    #[serde(rename = "e")]
+    pub epoch_id: u64,
 }
 
 /// Operation of the Sui network is temporally partitioned into non-overlapping epochs,
@@ -342,7 +360,89 @@ impl Epoch {
             checkpoint_viewed_at,
         }))
     }
+
+    pub(crate) async fn paginate(
+        db: &Db,
+        page: Page<Cursor>,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Connection<String, Epoch>, Error> {
+        use epochs::dsl;
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+
+        let (prev, next, results) = db
+            .execute(move |conn| {
+                async move {
+                    page.paginate_query::<QueryableEpochInfo, _, _, _>(
+                        conn,
+                        checkpoint_viewed_at,
+                        move || {
+                            dsl::epochs
+                                .select(QueryableEpochInfo::as_select())
+                                .filter(dsl::first_checkpoint_id.le(checkpoint_viewed_at as i64))
+                                .into_boxed()
+                        },
+                    )
+                    .await
+                }
+                .scope_boxed()
+            })
+            .await?;
+
+        // The "checkpoint viewed at" sets a consistent upper bound for the nested queries.
+        let mut conn = Connection::new(prev, next);
+        for stored in results {
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
+            conn.edges.push(Edge::new(
+                cursor,
+                Epoch {
+                    stored,
+                    checkpoint_viewed_at,
+                },
+            ));
+        }
+
+        Ok(conn)
+    }
 }
+
+impl Paginated<Cursor> for QueryableEpochInfo {
+    type Source = epochs::table;
+
+    fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(epochs::dsl::epoch.ge(cursor.epoch_id as i64))
+    }
+
+    fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(epochs::dsl::epoch.le(cursor.epoch_id as i64))
+    }
+
+    fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
+        use epochs::dsl;
+        if asc {
+            query.order(dsl::epoch)
+        } else {
+            query.order(dsl::epoch.desc())
+        }
+    }
+}
+
+impl Target<Cursor> for QueryableEpochInfo {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
+        Cursor::new(EpochCursor {
+            checkpoint_viewed_at,
+            epoch_id: self.epoch as u64,
+        })
+    }
+}
+
+impl Checkpointed for Cursor {
+    fn checkpoint_viewed_at(&self) -> u64 {
+        self.checkpoint_viewed_at
+    }
+}
+
+impl ScanLimited for Cursor {}
 
 #[async_trait::async_trait]
 impl Loader<EpochKey> for Db {

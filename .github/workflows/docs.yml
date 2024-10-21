@@ -13,11 +13,27 @@ jobs:
     outputs:
       isDoc: ${{ steps.diff.outputs.isDoc }}
       isOldDoc: ${{ steps.diff.outputs.isOldDoc }}
+      isExamples: ${{ steps.diff.outputs.isExamples }}
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Detect Changes
         uses: './.github/actions/diffs'
         id: diff
+
+  examples:
+    name: Notify Slack if examples directory changed
+    needs: diff
+    if: needs.diff.outputs.isExamples == 'true'
+    runs-on: [ubuntu-latest]
+    
+    steps:
+      - name: Notify Slack of Examples Changes
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          channel-id: 'tech-docs'
+          slack-message: "An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
   
   spelling:
     name: Lint documentation

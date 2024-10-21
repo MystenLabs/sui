@@ -43,6 +43,5 @@ gas-profiler = [
     "sui-types/gas-profiler",
     "move-vm-runtime/gas-profiler",
     "move-vm-profiler/gas-profiler",
-    "move-vm-types/gas-profiler",
     "move-vm-config/gas-profiler",
 ]

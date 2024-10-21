@@ -6,5 +6,6 @@ mod workers;
 
 pub use progress_store::DynamoDBProgressStore;
 pub use workers::{
-    ArchivalConfig, ArchivalWorker, BlobTaskConfig, BlobWorker, KVStoreTaskConfig, KVStoreWorker,
+    ArchivalConfig, ArchivalReducer, ArchivalWorker, BlobTaskConfig, BlobWorker, KVStoreTaskConfig,
+    KVStoreWorker,
 };

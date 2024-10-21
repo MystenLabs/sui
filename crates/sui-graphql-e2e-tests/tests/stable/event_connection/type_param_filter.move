@@ -50,13 +50,15 @@ module Test::M1 {
 {
   events(filter: {eventType: "@{Test}::M1::EventA"}) {
     nodes {
-      type {
-        repr
-      }
       sender {
         address
       }
-      json
+      contents {
+        type {
+          repr
+        }
+        json
+      }
     }
   }
 }
@@ -65,13 +67,15 @@ module Test::M1 {
 {
   events(filter: {eventType: "@{Test}::M1::EventA<@{Test}::M1::T1>"}) {
     nodes {
-      type {
-        repr
-      }
       sender {
         address
       }
-      json
+      contents {
+        type {
+          repr
+        }
+        json
+      }
     }
   }
 }
@@ -80,13 +84,15 @@ module Test::M1 {
 {
   events(filter: {eventType: "@{Test}::M1::EventA<@{Test}::M1::T2>", transactionDigest: "9nu1ivpL9hHcbJ9GwGfmD3Kuet5w74t2GBp8f1Ggy3UD"}) {
     nodes {
-      type {
-        repr
-      }
       sender {
         address
       }
-      json
+      contents {
+        type {
+          repr
+        }
+        json
+      }
     }
   }
 }

@@ -291,7 +291,8 @@ impl<C: NetworkClient> CommitSyncer<C> {
             }
 
             debug!(
-                "Fetched certified blocks: {}",
+                "Fetched certified blocks for commit range {:?}: {}",
+                fetched_commit_range,
                 blocks.iter().map(|b| b.reference().to_string()).join(","),
             );
             // If core thread cannot handle the incoming blocks, it is ok to block here.
@@ -301,7 +302,10 @@ impl<C: NetworkClient> CommitSyncer<C> {
             match self.inner.core_thread_dispatcher.add_blocks(blocks).await {
                 Ok(missing) => {
                     if !missing.is_empty() {
-                        warn!("Fetched blocks have missing ancestors: {:?}", missing);
+                        warn!(
+                            "Fetched blocks have missing ancestors: {:?} for commit range {:?}",
+                            missing, fetched_commit_range
+                        );
                     }
                 }
                 Err(e) => {
@@ -439,13 +443,12 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             .hostname
                             .clone();
                         warn!("Failed to fetch {commit_range:?} from {hostname}: {}", e);
-                        let error: &'static str = e.into();
                         inner
                             .context
                             .metrics
                             .node_metrics
                             .commit_sync_fetch_once_errors
-                            .with_label_values(&[&hostname, error])
+                            .with_label_values(&[&hostname, e.name()])
                             .inc();
                     }
                     Err(_) => {
@@ -466,6 +469,8 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     }
                 }
             }
+            // Avoid busy looping, by waiting for a while before retrying.
+            sleep(TIMEOUT).await;
         }
     }
 

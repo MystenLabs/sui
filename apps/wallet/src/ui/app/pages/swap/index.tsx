@@ -183,6 +183,7 @@ export function SwapPage() {
 		amount: parsed.toString(),
 		slippage: Number(allowedMaxSlippagePercentage),
 		enabled: isFormValid && parsed > 0n && !!fromCoinType && !!toCoinType,
+		source: 'sui-wallet',
 	});
 
 	const swapData = useMemo(() => {

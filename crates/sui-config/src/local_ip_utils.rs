@@ -122,15 +122,18 @@ pub fn new_udp_address_for_testing(host: &str) -> Multiaddr {
         .unwrap()
 }
 
-/// Returns a new unique TCP address (SocketAddr) for localhost, by finding a new available port on localhost.
-pub fn new_local_tcp_socket_for_testing() -> SocketAddr {
+/// Returns a new unique TCP address in String format for localhost, by finding a new available port on localhost.
+pub fn new_local_tcp_socket_for_testing_string() -> String {
     format!(
         "{}:{}",
         localhost_for_testing(),
         get_available_port(&localhost_for_testing())
     )
-    .parse()
-    .unwrap()
+}
+
+/// Returns a new unique TCP address (SocketAddr) for localhost, by finding a new available port on localhost.
+pub fn new_local_tcp_socket_for_testing() -> SocketAddr {
+    new_local_tcp_socket_for_testing_string().parse().unwrap()
 }
 
 /// Returns a new unique TCP address (Multiaddr) for localhost, by finding a new available port on localhost.

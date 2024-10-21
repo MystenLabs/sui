@@ -316,6 +316,11 @@ pub struct AuthorityPerEpochStore {
 
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
+    /// Get notified when a synced checkpoint has reached CheckpointExecutor.
+    synced_checkpoint_notify_read: NotifyRead<CheckpointSequenceNumber, ()>,
+    /// Caches the highest synced checkpoint sequence number as this has been notified from the CheckpointExecutor
+    highest_synced_checkpoint: RwLock<CheckpointSequenceNumber>,
+
     /// This is used to notify all epoch specific tasks that epoch has ended.
     epoch_alive_notify: NotifyOnce,
 
@@ -876,6 +881,8 @@ impl AuthorityPerEpochStore {
             checkpoint_state_notify_read: NotifyRead::new(),
             running_root_notify_read: NotifyRead::new(),
             executed_digests_notify_read: NotifyRead::new(),
+            synced_checkpoint_notify_read: NotifyRead::new(),
+            highest_synced_checkpoint: RwLock::new(0),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: RwLock::new(pending_consensus_certificates),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
@@ -1473,8 +1480,6 @@ impl AuthorityPerEpochStore {
             digests.iter().map(|d| TransactionKey::Digest(*d)),
         )?;
 
-        batch.delete_batch(&tables.user_signatures_for_checkpoints, digests)?;
-
         batch.write()?;
         Ok(())
     }
@@ -1880,20 +1885,26 @@ impl AuthorityPerEpochStore {
             .pending_consensus_transactions
             .multi_insert(key_value_pairs)?;
 
-        // TODO: lock once for all insert() calls.
-        for transaction in transactions {
-            if let ConsensusTransactionKind::CertifiedTransaction(cert) = &transaction.kind {
-                let state = lock.expect("Must pass reconfiguration lock when storing certificate");
-                // Caller is responsible for performing graceful check
-                assert!(
-                    state.should_accept_user_certs(),
-                    "Reconfiguration state should allow accepting user transactions"
-                );
-                self.pending_consensus_certificates
-                    .write()
-                    .insert(*cert.digest());
-            }
+        // UserTransaction exists only when mysticeti_fastpath is enabled in protocol config.
+        let digests: Vec<_> = transactions
+            .iter()
+            .filter_map(|tx| match &tx.kind {
+                ConsensusTransactionKind::CertifiedTransaction(cert) => Some(cert.digest()),
+                ConsensusTransactionKind::UserTransaction(txn) => Some(txn.digest()),
+                _ => None,
+            })
+            .collect();
+        if !digests.is_empty() {
+            let state = lock.expect("Must pass reconfiguration lock when storing certificate");
+            // Caller is responsible for performing graceful check
+            assert!(
+                state.should_accept_user_certs(),
+                "Reconfiguration state should allow accepting user transactions"
+            );
+            let mut pending_consensus_certificates = self.pending_consensus_certificates.write();
+            pending_consensus_certificates.extend(digests);
         }
+
         Ok(())
     }
 
@@ -2030,6 +2041,33 @@ impl AuthorityPerEpochStore {
             .map(|(registration, _)| registration);
 
         join_all(unprocessed_keys_registrations).await;
+        Ok(())
+    }
+
+    /// Notifies that a synced checkpoint of sequence number `checkpoint_seq` is available. The source of the notification
+    /// is the CheckpointExecutor. The consumer here is guaranteed to be notified in sequence order.
+    pub fn notify_synced_checkpoint(&self, checkpoint_seq: CheckpointSequenceNumber) {
+        let mut highest_synced_checkpoint = self.highest_synced_checkpoint.write();
+        *highest_synced_checkpoint = checkpoint_seq;
+        self.synced_checkpoint_notify_read
+            .notify(&checkpoint_seq, &());
+    }
+
+    /// Get notified when a synced checkpoint of sequence number `>= checkpoint_seq` is available.
+    pub async fn synced_checkpoint_notify(
+        &self,
+        checkpoint_seq: CheckpointSequenceNumber,
+    ) -> Result<(), SuiError> {
+        let registration = self
+            .synced_checkpoint_notify_read
+            .register_one(&checkpoint_seq);
+        {
+            let synced_checkpoint = self.highest_synced_checkpoint.read();
+            if *synced_checkpoint >= checkpoint_seq {
+                return Ok(());
+            }
+        }
+        registration.await;
         Ok(())
     }
 
@@ -2770,7 +2808,7 @@ impl AuthorityPerEpochStore {
             .collect();
 
         let (
-            transactions_to_schedule,
+            verified_transactions,
             notifications,
             lock,
             final_round,
@@ -2792,10 +2830,7 @@ impl AuthorityPerEpochStore {
                 authority_metrics,
             )
             .await?;
-        self.finish_consensus_certificate_process_with_batch(
-            &mut output,
-            &transactions_to_schedule,
-        )?;
+        self.finish_consensus_certificate_process_with_batch(&mut output, &verified_transactions)?;
         output.record_consensus_commit_stats(consensus_stats.clone());
 
         // Create pending checkpoints if we are still accepting tx.
@@ -2903,7 +2938,7 @@ impl AuthorityPerEpochStore {
             self.record_end_of_message_quorum_time_metric();
         }
 
-        Ok(transactions_to_schedule)
+        Ok(verified_transactions)
     }
 
     // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update
@@ -3121,10 +3156,14 @@ impl AuthorityPerEpochStore {
         // they will be in different checkpoints.
         let mut shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
             self.protocol_config().per_object_congestion_control_mode(),
+            self.protocol_config()
+                .gas_budget_based_txn_cost_cap_factor_as_option(),
         );
         let mut shared_object_using_randomness_congestion_tracker =
             SharedObjectCongestionTracker::new(
                 self.protocol_config().per_object_congestion_control_mode(),
+                self.protocol_config()
+                    .gas_budget_based_txn_cost_cap_factor_as_option(),
             );
 
         fail_point_arg!(
@@ -3684,7 +3723,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::UserTransaction(_tx),
                 ..
             }) => {
-                // TODO: implement handling of unsigned user transactions.
+                // TODO(fastpath): implement handling of user transactions from consensus commits.
                 Ok(ConsensusCertificateResult::Ignored)
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
@@ -3782,6 +3821,11 @@ impl AuthorityPerEpochStore {
                 transactions
                     .iter()
                     .map(|tx| (tx.transaction, sequence_number)),
+            )?;
+
+            batch.delete_batch(
+                &tables.user_signatures_for_checkpoints,
+                transactions.iter().map(|tx| tx.transaction),
             )?;
         }
 

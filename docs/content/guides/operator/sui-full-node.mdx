@@ -42,7 +42,7 @@ Validator nodes store only the latest transactions on the frontier of the object
 
 ## Full node setup 
 
-Follow the instructions here to run your own Sui Full node.
+Follow the instructions here to run your own Sui Full node. Sui Full nodes run using the `sui-node` binary.
 
 ### Hardware requirements 
 
@@ -54,7 +54,8 @@ Suggested minimum hardware to run a Sui Full node:
 
 ### Software requirements 
 
-Sui recommends running Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions. You can also run a Sui Full node on macOS.
+Sui recommends running Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions. You can run a Sui Full node on macOS,
+but this is only recommended for development and not for production use.
 
 Make sure to [update Rust](https://doc.rust-lang.org/book/ch01-01-installation.html#updating-and-uninstalling).
 
@@ -78,34 +79,33 @@ clang \
 cmake
 ```
 
-## Configure a Full node 
+## Running a Full node {#running-a-full-node}
 
-You can configure a Sui Full node either using Docker or by building from source.
+Instructions for building, installing, or downloading the `sui-node` binary are available at [Sui Install](../developer/getting-started/sui-install.mdx). 
+These install instructions are specific to the `sui` cli, but apply to the `sui-node` binary as well.
+
+There are many ways to run a Sui Full node (bare metal, virtual machine, Kubernetes statefulset, and so on), and the solution that you choose depends on your specific needs as well as the infrastructure that you have available.
+
+There are some specific considerations to keep in mind when running a Sui Full node that apply to all environments:
+
+* [Genesis](./genesis.mdx): You must download the genesis blob for the network that you want to connect to, and make it available to the `sui-node`.
+* [Data Storage](./data-management.mdx): Sui Full nodes _can_ require a significant amount of disk space to store the blockchain history. If you plan to use your Full node to serve RPC requests, you must also plan for the storage of index files, which requires a significant amount of disk space.
+* [Monitoring](./monitoring.mdx): Sui Full nodes expose metrics about the node's health and the state of the Sui network.
+* [Updates](./updates.mdx): Sui Full nodes must be updated to the latest version to remain in sync with the network.
+* [Archival Fallback](./archives.mdx): The archival fallback allows you to sync checkpoints from any point in the chain's history. The network `seed-peers` below only keep a few epochs of history.
+
 
 ### Using Docker Compose 
 
-Follow the instructions in the [Full node Docker Readme](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme) to run a Sui Full node using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
+There's a guide in the Sui repository on running a Full node via [Docker Compose](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme). 
+This alone is not suitable for a production environment, but can be used to get a Full node up and running quickly on a virtual machine or local machine for development purposes.
+Refer to [Running a Full node](#running-a-full-node) for instructions relevant to production use cases.
 
-### Setting up a local Sui repository 
 
-You must get the latest source files from the Sui GitHub repository.
-1. Set up your fork of the Sui repository:
-    1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub and click the Fork button in the top right-hand corner of the screen.
-    1. Clone your personal fork of the Sui repository to your local machine (ensure that you insert your GitHub username into the URL):
-    `git clone https://github.com/<YOUR-GITHUB-USERNAME>/sui.git`
-1. `cd` into your `sui` repository:
-    `cd sui`
-1. Set up the Sui repository as a git remote:
-    `git remote add upstream https://github.com/MystenLabs/sui`
-1. Sync your fork:
-    `git fetch upstream`
-1. Check out the branch associated with the network version you want to run (for example, `devnet` to run a Devnet Full node):
-    `git checkout --track upstream/<BRANCH-NAME>`
+### Setting up a Full node
 
-### Setting up a Full node from source {#set-up-from-source}
+When you are ready to run `sui-node` in your production environment, you can set up your Full node by completing the following steps:
 
-Open a terminal or console to the `sui` directory you downloaded in the previous steps to complete the following:
-1. Install the required prerequisites.
 1. Make a copy of the [Full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
     `cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml`
 1. Download the genesis blob for the network to use:
@@ -171,7 +171,7 @@ Open a terminal or console to the `sui` directory you downloaded in the previous
     </TabItem>
 
     </Tabs>
-    
+1. Optional: Set up the [Archival Fallback](./archives.mdx), which allows you to sync checkpoints if you fall behind the network's `seed-peers`.
 1. Optional: Skip this step to accept the default paths to resources. Edit the fullnode.yaml file to use custom paths.
 1. Update the `db-path` field with the path to the Full node database.
     `db-path: "/db-files/sui-fullnode"`
@@ -181,18 +181,19 @@ Open a terminal or console to the `sui` directory you downloaded in the previous
         genesis-file-location: "/sui-fullnode/genesis.blob"
     ```
 
-### Starting services 
+### Starting your Full node {#starting-a-full-node}
 
-At this point, your Sui Full node is ready to connect to the Sui network.
+You should not start syncing your Full node from the start of the genesis. This will take a very long time and consume a lot of resources (including likely filling up your disk).
 
-1. Open a terminal or console to the sui directory.
-1. Start the Sui Full node:
-    `cargo run --release --bin sui-node -- --config-path fullnode.yaml`
-1. Optional: Publish/subscribe to notifications using JSON-RPC via websocket.
+Instead, start your Full node from a recent snapshot. You can find details on how to obtain a snapshot from the [Sui Snapshots guide](./snapshots.mdx).
 
-If your setup is successful, your Sui Full node is now connected to the appropriate network.
+Now that you have your Full node config file set up, and you've obtained a snapshot, you can start your Full node by running the `sui-node` binary with your `fullnode.yaml` configuration file:
 
-Your Full node serves the read endpoints of the Sui JSON-RPC API at: `http://127.0.0.1:9000`.
+```shell
+sui-node --config-path fullnode.yaml
+```
+
+It's a good idea to use something like systemd to manage your Full node in a production environment.
 
 ### Troubleshooting 
 If you receive a `cannot find -lpq` error, you are missing the `libpq` library. Use `sudo apt-get install libpq-dev` to install on Linux, or `brew install libpq` on MacOS. After you install on MacOS, create a Homebrew link using `brew link --force libpq`. For further context, reference the [issue on Stack Overflow](https://stackoverflow.com/questions/70313347/ld-library-not-found-for-lpq-when-build-rust-in-macos?rq=1).
@@ -208,131 +209,3 @@ Then update the metrics address in your fullnode.yaml file to use port `9180`.
 ```shell
 metrics-address: "0.0.0.0:9180"
 ```
-
-## Monitoring 
-
-Monitor your Full node using the instructions at Logging, Tracing, Metrics, and Observability.
-
-The default metrics port is `9184`. To change the port, edit your fullnode.yaml file.
-
-## Update your Full node 
-
-Whenever Sui releases a new version, you must update your Full node with the release to ensure compatibility with the network it connects to. For example, if you use Sui Testnet you should install the version of Sui running on Sui Testnet.
-
-### Update with Docker Compose 
-
-Follow the instructions to [reset the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment), namely by running the command:
-
-```shell
-docker-compose down --volumes
-```
-
-### Update from source 
-
-If you followed the instructions for Building from Source, use the following steps to update your Full node:
-
-1. Shut down your running Full node.
-1. `cd` into your local Sui repository:
-    ```shell
-    cd sui
-    ```
-1. Remove the database and 'genesis.blob' file:
-    ```shell
-    rm -r suidb genesis.blob
-    ```
-1. Fetch the source from the latest release:
-    ```shell
-    git fetch upstream
-    ```
-1. Reset your branch:
-    ```shell
-    git checkout -B <BRANCH-NAME> --track upstream/<BRANCH-NAME>
-    ```
-1. Download the latest genesis blob:
-    - [Devnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob):
-        ```shell
-        curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
-        ```
-    - [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob):
-        ```shell
-        curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
-        ```
-1. Update your fullnode.yaml configuration file, if needed.
-1. Restart your Sui Full node:
-    ```shell
-    cargo run --release --bin sui-node -- --config-path fullnode.yaml
-    ```
-    
-Your Full node starts on: http://127.0.0.1:9000.
-
-## Object pruning {#object-pruning}
-
-Sui adds new object versions to the database as part of transaction execution. This makes previous versions ready for 
-garbage collection. However, without pruning, this can result in database performance degradation and requires large 
-amounts of storage space. Sui identifies the objects that are eligible for pruning in each checkpoint, and then performs
-the pruning in the background.
-
-You can enable pruning for a Sui node by adding the `authority-store-pruning-config` config to `fullnode.yaml` file:
-```yaml
-authority-store-pruning-config:
-  # Number of epoch dbs to keep 
-  # Not relevant for object pruning
-  num-latest-epoch-dbs-to-retain: 3
-  # The amount of time, in seconds, between running the object pruning task.
-  # Not relevant for object pruning
-  epoch-db-pruning-period-secs: 3600
-  # Number of epochs to wait before performing object pruning.
-  # When set to 0, Sui prunes old object versions as soon
-  # as possible. This is also called *aggressive pruning*, and results in the most effective
-  # garbage collection method with the lowest disk usage possible. 
-  # This is the recommended setting for Sui Validator nodes since older object versions aren't
-  # necessary to execute transactions.
-  # When set to 1, Sui prunes only object versions from transaction checkpoints
-  # previous to the current epoch. In general, when set to N (where N >= 1), Sui prunes  
-  # only object versions from checkpoints up to `current - N` epoch. 
-  # It is therefore possible to have multiple versions of an object present 
-  # in the database. This setting is recommended for Sui Full nodes as they might need to serve 
-  # RPC requests that require looking up objects by ID and Version (rather than just latest
-  # version). However, if your Full node does not serve RPC requests you should then also enable  
-  # aggressive pruning.
-  num-epochs-to-retain: 0
-  # Advanced setting: Maximum number of checkpoints to prune in a batch. The default
-  # settings are appropriate for most use cases.
-  max-checkpoints-in-batch: 10
-  # Advanced setting: Maximum number of transactions in one batch of pruning run. The default
-  # settings are appropriate for most use cases.
-  max-transactions-in-batch: 1000
-```
-## Transaction pruning {#transaction-pruning}
-
-Transaction pruning removes previous transactions and effects from the database.
-Sui periodically creates checkpoints. Each checkpoint contains the transactions that occurred during the checkpoint and their associated effects.
-
-Sui performs transaction pruning in the background after checkpoints complete.
-
-You can enable transaction pruning for your Full node or Validator node by adding  `num-epochs-to-retain-for-checkpoints`
-to the `authority-store-pruning-config` config for the node:
-
-```yaml
-authority-store-pruning-config:
-  num-latest-epoch-dbs-to-retain: 3
-  epoch-db-pruning-period-secs: 3600
-  num-epochs-to-retain: 0
-  max-checkpoints-in-batch: 10
-  max-transactions-in-batch: 1000
-  # Number of epochs to wait before performing transaction pruning.
-  # When this is N (where N >= 2), Sui prunes transactions and effects from 
-  # checkpoints up to the `current - N` epoch. Sui never prunes transactions and effects from the current and
-  # immediately prior epoch. N = 2 is a recommended setting for Sui Validator nodes and Sui Full nodes that don't 
-  # serve RPC requests.
-  num-epochs-to-retain-for-checkpoints: 2
-  # Ensures that individual database files periodically go through the compaction process.
-  # This helps reclaim disk space and avoid fragmentation issues
-  periodic-compaction-threshold-days: 1
-```
-
-:::info
-
-If you prune transactions, Archival nodes can help ensure lagging peer nodes don't lose any information. For more information, see [Sui Archives](./archives.mdx).
-
-:::

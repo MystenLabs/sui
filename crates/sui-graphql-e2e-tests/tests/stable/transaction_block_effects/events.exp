@@ -1,4 +1,4 @@
-processed 10 tasks
+processed 11 tasks
 
 init:
 A: object(0,0)
@@ -31,7 +31,7 @@ task 5, line 36:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 6, lines 38-57:
+task 6, lines 38-59:
 //# run-graphql
 Response: {
   "data": {
@@ -46,10 +46,12 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "json": {
-                      "new_value": "1"
-                    },
-                    "bcs": "AQAAAAAAAAA="
+                    "contents": {
+                      "json": {
+                        "new_value": "1"
+                      },
+                      "bcs": "AQAAAAAAAAA="
+                    }
                   }
                 }
               ]
@@ -65,10 +67,12 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "json": {
-                      "new_value": "10"
-                    },
-                    "bcs": "CgAAAAAAAAA="
+                    "contents": {
+                      "json": {
+                        "new_value": "10"
+                      },
+                      "bcs": "CgAAAAAAAAA="
+                    }
                   }
                 },
                 {
@@ -76,10 +80,12 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "json": {
-                      "new_value": "11"
-                    },
-                    "bcs": "CwAAAAAAAAA="
+                    "contents": {
+                      "json": {
+                        "new_value": "11"
+                      },
+                      "bcs": "CwAAAAAAAAA="
+                    }
                   }
                 }
               ]
@@ -95,10 +101,12 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "json": {
-                      "new_value": "100"
-                    },
-                    "bcs": "ZAAAAAAAAAA="
+                    "contents": {
+                      "json": {
+                        "new_value": "100"
+                      },
+                      "bcs": "ZAAAAAAAAAA="
+                    }
                   }
                 },
                 {
@@ -106,10 +114,12 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "json": {
-                      "new_value": "101"
-                    },
-                    "bcs": "ZQAAAAAAAAA="
+                    "contents": {
+                      "json": {
+                        "new_value": "101"
+                      },
+                      "bcs": "ZQAAAAAAAAA="
+                    }
                   }
                 },
                 {
@@ -117,10 +127,12 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "json": {
-                      "new_value": "102"
-                    },
-                    "bcs": "ZgAAAAAAAAA="
+                    "contents": {
+                      "json": {
+                        "new_value": "102"
+                      },
+                      "bcs": "ZgAAAAAAAAA="
+                    }
                   }
                 }
               ]
@@ -132,7 +144,7 @@ Response: {
   }
 }
 
-task 7, lines 59-70:
+task 7, lines 61-74:
 //# run-graphql
 Response: {
   "data": {
@@ -142,62 +154,74 @@ Response: {
           "sendingModule": {
             "name": "M1"
           },
-          "json": {
-            "new_value": "1"
-          },
-          "bcs": "AQAAAAAAAAA="
+          "contents": {
+            "json": {
+              "new_value": "1"
+            },
+            "bcs": "AQAAAAAAAAA="
+          }
         },
         {
           "sendingModule": {
             "name": "M1"
           },
-          "json": {
-            "new_value": "10"
-          },
-          "bcs": "CgAAAAAAAAA="
+          "contents": {
+            "json": {
+              "new_value": "10"
+            },
+            "bcs": "CgAAAAAAAAA="
+          }
         },
         {
           "sendingModule": {
             "name": "M1"
           },
-          "json": {
-            "new_value": "11"
-          },
-          "bcs": "CwAAAAAAAAA="
+          "contents": {
+            "json": {
+              "new_value": "11"
+            },
+            "bcs": "CwAAAAAAAAA="
+          }
         },
         {
           "sendingModule": {
             "name": "M1"
           },
-          "json": {
-            "new_value": "100"
-          },
-          "bcs": "ZAAAAAAAAAA="
+          "contents": {
+            "json": {
+              "new_value": "100"
+            },
+            "bcs": "ZAAAAAAAAAA="
+          }
         },
         {
           "sendingModule": {
             "name": "M1"
           },
-          "json": {
-            "new_value": "101"
-          },
-          "bcs": "ZQAAAAAAAAA="
+          "contents": {
+            "json": {
+              "new_value": "101"
+            },
+            "bcs": "ZQAAAAAAAAA="
+          }
         },
         {
           "sendingModule": {
             "name": "M1"
           },
-          "json": {
-            "new_value": "102"
-          },
-          "bcs": "ZgAAAAAAAAA="
+          "contents": {
+            "json": {
+              "new_value": "102"
+            },
+            "bcs": "ZgAAAAAAAAA="
+          }
         }
       ]
     }
   }
 }
 
-task 8, lines 72-91:
+task 8, lines 76-97:
 //# run-graphql
 Response: {
   "data": {
@@ -212,10 +236,12 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "json": {
-                      "new_value": "1"
-                    },
-                    "bcs": "AQAAAAAAAAA="
+                    "contents": {
+                      "json": {
+                        "new_value": "1"
+                      },
+                      "bcs": "AQAAAAAAAAA="
+                    }
                   }
                 }
               ]
@@ -227,7 +253,7 @@ Response: {
   }
 }
 
-task 9, lines 93-112:
+task 9, lines 99-120:
 //# run-graphql --cursors {"i":0,"c":1}
 Response: {
   "data": {
@@ -242,10 +268,12 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "json": {
-                      "new_value": "101"
-                    },
-                    "bcs": "ZQAAAAAAAAA="
+                    "contents": {
+                      "json": {
+                        "new_value": "101"
+                      },
+                      "bcs": "ZQAAAAAAAAA="
+                    }
                   }
                 },
                 {
@@ -253,10 +281,96 @@ Response: {
                     "sendingModule": {
                       "name": "M1"
                     },
-                    "json": {
-                      "new_value": "102"
-                    },
-                    "bcs": "ZgAAAAAAAAA="
+                    "contents": {
+                      "json": {
+                        "new_value": "102"
+                      },
+                      "bcs": "ZgAAAAAAAAA="
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10, lines 122-138:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "digest": "FPhSSzT7tHmrPhs3H9GT1n4Dqj3eyCgaFLkQSc9FEDVV",
+          "effects": {
+            "events": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "digest": "GJMTYHH46d31ohELwH3ZfvGvbiDZ7GCqNcyg4fGGFJJQ",
+          "effects": {
+            "events": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "digest": "48LNnMV9MFXiXfXwDRWzu6SndwxY3ZfKUNEKJiDqJqM7",
+          "effects": {
+            "events": {
+              "nodes": [
+                {
+                  "transactionBlock": {
+                    "digest": "48LNnMV9MFXiXfXwDRWzu6SndwxY3ZfKUNEKJiDqJqM7"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "digest": "FhpR5hSSP2wf8ABXKcDVVTzo7H1DZYUUgABWPtADHcQA",
+          "effects": {
+            "events": {
+              "nodes": [
+                {
+                  "transactionBlock": {
+                    "digest": "FhpR5hSSP2wf8ABXKcDVVTzo7H1DZYUUgABWPtADHcQA"
+                  }
+                },
+                {
+                  "transactionBlock": {
+                    "digest": "FhpR5hSSP2wf8ABXKcDVVTzo7H1DZYUUgABWPtADHcQA"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX",
+          "effects": {
+            "events": {
+              "nodes": [
+                {
+                  "transactionBlock": {
+                    "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX"
+                  }
+                },
+                {
+                  "transactionBlock": {
+                    "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX"
+                  }
+                },
+                {
+                  "transactionBlock": {
+                    "digest": "2CdTttmE8ciZggrK8qnyjgLaDoDNzT6UCzFsn4834UWX"
                   }
                 }
               ]

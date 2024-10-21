@@ -884,6 +884,145 @@
         }
       }
     },
+    "/transactions/simulate": {
+      "post": {
+        "tags": [
+          "Transactions"
+        ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
+        "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "balance_changes",
+            "description": "Request `BalanceChanges` be included in the Response.",
+            "schema": {
+              "description": "Request `BalanceChanges` be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "input_objects",
+            "description": "Request input `Object`s be included in the Response.",
+            "schema": {
+              "description": "Request input `Object`s be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "output_objects",
+            "description": "Request output `Object`s be included in the Response.",
+            "schema": {
+              "description": "Request output `Object`s be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/bcs": {}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionSimulationResponse"
+                }
+              },
+              "application/bcs": {}
+            }
+          }
+        }
+      }
+    },
+    "/transactions/resolve": {
+      "post": {
+        "tags": [
+          "Transactions"
+        ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
+        "operationId": "ResolveTransaction",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "balance_changes",
+            "description": "Request `BalanceChanges` be included in the Response.",
+            "schema": {
+              "description": "Request `BalanceChanges` be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "input_objects",
+            "description": "Request input `Object`s be included in the Response.",
+            "schema": {
+              "description": "Request input `Object`s be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "output_objects",
+            "description": "Request output `Object`s be included in the Response.",
+            "schema": {
+              "description": "Request output `Object`s be included in the Response.",
+              "default": "false",
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "simulate",
+            "description": "Request that the fully resolved transaction be simulated and have its results sent back in the response.",
+            "schema": {
+              "description": "Request that the fully resolved transaction be simulated and have its results sent back in the response.",
+              "default": false,
+              "type": "boolean"
+            },
+            "style": "form"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnresolvedTransaction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveTransactionResponse"
+                }
+              },
+              "application/bcs": {}
+            }
+          }
+        }
+      }
+    },
     "/coins/{coin_type}": {
       "get": {
         "tags": [
@@ -4027,6 +4166,21 @@
           }
         }
       },
+      "ResolveTransactionResponse": {
+        "description": "Response type for the execute transaction endpoint",
+        "type": "object",
+        "required": [
+          "transaction"
+        ],
+        "properties": {
+          "simulation": {
+            "$ref": "#/components/schemas/TransactionSimulationResponse"
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/Transaction"
+          }
+        }
+      },
       "Secp256k1PublicKey": {
         "description": "Base64 encoded data",
         "type": "string",
@@ -4046,24 +4200,6 @@
         "description": "Base64 encoded data",
         "type": "string",
         "format": "base64"
-      },
-      "SignedTransaction": {
-        "type": "object",
-        "required": [
-          "signatures",
-          "transaction"
-        ],
-        "properties": {
-          "signatures": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UserSignature"
-            }
-          },
-          "transaction": {
-            "$ref": "#/components/schemas/Transaction"
-          }
-        }
       },
       "SimpleSignature": {
         "oneOf": [
@@ -5173,6 +5309,39 @@
           }
         }
       },
+      "TransactionSimulationResponse": {
+        "description": "Response type for the transaction simulation endpoint",
+        "type": "object",
+        "required": [
+          "effects"
+        ],
+        "properties": {
+          "balance_changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceChange"
+            }
+          },
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "events": {
+            "$ref": "#/components/schemas/TransactionEvents"
+          },
+          "input_objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
+          },
+          "output_objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
+          }
+        }
+      },
       "TypeArgumentError": {
         "oneOf": [
           {
@@ -5341,6 +5510,145 @@
           }
         }
       },
+      "UnresolvedGasPayment": {
+        "type": "object",
+        "required": [
+          "owner"
+        ],
+        "properties": {
+          "budget": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnresolvedObjectReference"
+            }
+          },
+          "owner": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "price": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "UnresolvedInputArgument": {
+        "type": "object",
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/ObjectDigest"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/UnresolvedInputArgumentKind"
+          },
+          "mutable": {
+            "type": "boolean"
+          },
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "value": {
+            "$ref": "#/components/schemas/UnresolvedValue"
+          },
+          "version": {
+            "description": "Either the `initial_shared_version` if object is a shared object, or the `version` if this is an owned object",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "UnresolvedInputArgumentKind": {
+        "type": "string",
+        "enum": [
+          "pure",
+          "shared",
+          "receiving",
+          "immutable_or_owned",
+          "immutable",
+          "owned",
+          "literal"
+        ]
+      },
+      "UnresolvedObjectReference": {
+        "type": "object",
+        "required": [
+          "object_id"
+        ],
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/ObjectDigest"
+          },
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "version": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "UnresolvedTransaction": {
+        "type": "object",
+        "required": [
+          "commands",
+          "expiration",
+          "inputs",
+          "sender"
+        ],
+        "properties": {
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Command"
+            }
+          },
+          "expiration": {
+            "$ref": "#/components/schemas/TransactionExpiration"
+          },
+          "gas_payment": {
+            "$ref": "#/components/schemas/UnresolvedGasPayment"
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnresolvedInputArgument"
+            }
+          },
+          "sender": {
+            "$ref": "#/components/schemas/Address"
+          }
+        }
+      },
+      "UnresolvedValue": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnresolvedValue"
+            }
+          }
+        ]
+      },
       "UpgradeInfo": {
         "description": "Upgraded package info for the linkage table",
         "type": "object",
@@ -5468,7 +5776,7 @@
                 ]
               },
               "signatures": {
-                "description": "The plain signature encoded with signature scheme.",
+                "description": "The plain signature encoded with signature scheme.\n\nThe signatures must be in the same order as they are listed in the committee.",
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/MultisigMemberSignature"

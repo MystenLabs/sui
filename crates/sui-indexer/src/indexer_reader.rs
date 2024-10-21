@@ -737,8 +737,8 @@ impl IndexerReader {
             Some(TransactionFilter::FromAddress(from_address)) => {
                 let from_address = Hex::encode(from_address.to_vec());
                 (
-                    "tx_senders".to_owned(),
-                    format!("sender = '\\x{from_address}'::bytea"),
+                    "tx_affected_addresses".to_owned(),
+                    format!("sender = '\\x{from_address}'::bytea AND affected = '\\x{from_address}'::bytea"),
                 )
             }
             Some(TransactionFilter::FromAndToAddress { from, to }) => {
@@ -974,10 +974,9 @@ impl IndexerReader {
                 )
                 .first::<i64>(&mut connection)
                 .await?;
-            (tx_seq, event_seq)
+            (tx_seq, event_seq as i64)
         } else if descending_order {
-            let max_tx_seq = u64::MAX as i64;
-            (max_tx_seq + 1, 0)
+            (i64::MAX, i64::MAX)
         } else {
             (-1, 0)
         };
@@ -997,11 +996,10 @@ impl IndexerReader {
             format!(
                 "( \
                     SELECT *
-                    FROM tx_senders s
+                    FROM event_senders s
                     JOIN events e
-                    ON e.tx_sequence_number = s.tx_sequence_number
-                    AND s.sender = '\\x{}'::bytea
-                    WHERE {} \
+                    USING (tx_sequence_number, event_sequence_number)
+                    WHERE s.sender = '\\x{}'::bytea AND {} \
                     ORDER BY {} \
                     LIMIT {}
                 )",
@@ -1042,7 +1040,7 @@ impl IndexerReader {
                     // Processed above
                     unreachable!()
                 }
-                EventFilter::TimeRange { .. } => {
+                EventFilter::TimeRange { .. } | EventFilter::Any(_) => {
                     return Err(IndexerError::NotSupportedError(
                         "This type of EventFilter is not supported.".to_owned(),
                     ));

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anemo::Network;
+use anemo::PeerId;
 use anemo_tower::callback::CallbackLayer;
 use anemo_tower::trace::DefaultMakeSpan;
 use anemo_tower::trace::DefaultOnFailure;
@@ -44,10 +45,8 @@ use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
-use tokio::sync::broadcast;
-use tokio::sync::mpsc;
-use tokio::sync::{watch, Mutex};
-use tokio::task::JoinHandle;
+use tokio::sync::{broadcast, mpsc, watch, Mutex};
+use tokio::task::{JoinHandle, JoinSet};
 use tower::ServiceBuilder;
 use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
@@ -57,8 +56,6 @@ pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use mysten_service::server_timing::server_timing_middleware;
-use narwhal_network::metrics::MetricsMakeCallbackHandler;
-use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
@@ -90,6 +87,7 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::consensus_store_pruner::ConsensusStorePruner;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
+use sui_core::jsonrpc_index::IndexStore;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
 use sui_core::rest_index::RestIndexStore;
@@ -122,7 +120,7 @@ use sui_storage::{
     key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
     key_value_store_metrics::KeyValueStoreMetrics,
 };
-use sui_storage::{FileCompression, IndexStore, StorageFormat};
+use sui_storage::{FileCompression, StorageFormat};
 use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
@@ -150,18 +148,24 @@ pub struct ValidatorComponents {
     consensus_manager: ConsensusManager,
     consensus_store_pruner: ConsensusStorePruner,
     consensus_adapter: Arc<ConsensusAdapter>,
-    // dropping this will eventually stop checkpoint tasks. The receiver side of this channel
-    // is copied into each checkpoint service task, and they are listening to any change to this
-    // channel. When the sender is dropped, a change is triggered and those tasks will exit.
-    checkpoint_service_exit: watch::Sender<()>,
+    // Keeping the handle to the checkpoint service tasks to shut them down during reconfiguration.
+    checkpoint_service_tasks: JoinSet<()>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
+}
+pub struct P2pComponents {
+    p2p_network: Network,
+    known_peers: HashMap<PeerId, String>,
+    discovery_handle: discovery::Handle,
+    state_sync_handle: state_sync::Handle,
+    randomness_handle: randomness::Handle,
 }
 
 #[cfg(msim)]
 mod simulator {
-    use super::*;
     use std::sync::atomic::AtomicBool;
+
+    use super::*;
     pub(super) struct SimState {
         pub sim_node: sui_simulator::runtime::NodeHandle,
         pub sim_safe_mode_expected: AtomicBool,
@@ -210,13 +214,13 @@ mod simulator {
 }
 
 #[cfg(msim)]
-use simulator::*;
-
-#[cfg(msim)]
 pub use simulator::set_jwk_injector;
-use sui_core::consensus_handler::ConsensusHandlerInitializer;
-use sui_core::safe_client::SafeClientMetricsBase;
-use sui_core::validator_tx_finalizer::ValidatorTxFinalizer;
+#[cfg(msim)]
+use simulator::*;
+use sui_core::{
+    consensus_handler::ConsensusHandlerInitializer, safe_client::SafeClientMetricsBase,
+    validator_tx_finalizer::ValidatorTxFinalizer,
+};
 use sui_types::execution_config_utils::to_binary_config;
 
 pub struct SuiNode {
@@ -230,6 +234,7 @@ pub struct SuiNode {
     metrics: Arc<SuiNodeMetrics>,
 
     _discovery: discovery::Handle,
+    _connection_monitor_handle: consensus_core::ConnectionMonitorHandle,
     state_sync_handle: state_sync::Handle,
     randomness_handle: randomness::Handle,
     checkpoint_store: Arc<CheckpointStore>,
@@ -572,6 +577,7 @@ impl SuiNode {
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
                 config.remove_deprecated_tables,
+                &store,
             )))
         } else {
             None
@@ -611,16 +617,21 @@ impl SuiNode {
                 .unwrap_or_default()
                 .mailbox_capacity(),
         );
-        let (p2p_network, discovery_handle, state_sync_handle, randomness_handle) =
-            Self::create_p2p_network(
-                &config,
-                state_sync_store.clone(),
-                chain_identifier,
-                trusted_peer_change_rx,
-                archive_readers.clone(),
-                randomness_tx,
-                &prometheus_registry,
-            )?;
+        let P2pComponents {
+            p2p_network,
+            known_peers,
+            discovery_handle,
+            state_sync_handle,
+            randomness_handle,
+        } = Self::create_p2p_network(
+            &config,
+            state_sync_store.clone(),
+            chain_identifier,
+            trusted_peer_change_rx,
+            archive_readers.clone(),
+            randomness_tx,
+            &prometheus_registry,
+        )?;
 
         // We must explicitly send this instead of relying on the initial value to trigger
         // watch value change, so that state-sync is able to process it.
@@ -767,21 +778,21 @@ impl SuiNode {
             .epoch_start_state()
             .get_authority_names_to_peer_ids();
 
-        let network_connection_metrics =
-            NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
+        let network_connection_metrics = consensus_core::QuinnConnectionMetrics::new(
+            "sui",
+            &registry_service.default_registry(),
+        );
 
         let authority_names_to_peer_ids = ArcSwap::from_pointee(authority_names_to_peer_ids);
 
-        let (_connection_monitor_handle, connection_statuses) =
-            narwhal_network::connectivity::ConnectionMonitor::spawn(
-                p2p_network.downgrade(),
-                network_connection_metrics,
-                HashMap::new(),
-                None,
-            );
+        let connection_monitor_handle = consensus_core::AnemoConnectionMonitor::spawn(
+            p2p_network.downgrade(),
+            Arc::new(network_connection_metrics),
+            known_peers,
+        );
 
         let connection_monitor_status = ConnectionMonitorStatus {
-            connection_statuses,
+            connection_statuses: connection_monitor_handle.connection_statuses(),
             authority_names_to_peer_ids,
         };
 
@@ -824,6 +835,7 @@ impl SuiNode {
             metrics: sui_node_metrics,
 
             _discovery: discovery_handle,
+            _connection_monitor_handle: connection_monitor_handle,
             state_sync_handle,
             randomness_handle,
             checkpoint_store,
@@ -1023,12 +1035,7 @@ impl SuiNode {
         archive_readers: ArchiveReaderBalancer,
         randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
         prometheus_registry: &Registry,
-    ) -> Result<(
-        Network,
-        discovery::Handle,
-        state_sync::Handle,
-        randomness::Handle,
-    )> {
+    ) -> Result<P2pComponents> {
         let (state_sync, state_sync_server) = state_sync::Builder::new()
             .config(config.p2p_config.state_sync.clone().unwrap_or_default())
             .store(state_sync_store)
@@ -1039,6 +1046,18 @@ impl SuiNode {
         let (discovery, discovery_server) = discovery::Builder::new(trusted_peer_change_rx)
             .config(config.p2p_config.clone())
             .build();
+
+        let discovery_config = config.p2p_config.discovery.clone().unwrap_or_default();
+        let known_peers: HashMap<PeerId, String> = discovery_config
+            .allowlisted_peers
+            .clone()
+            .into_iter()
+            .map(|ap| (ap.peer_id, "allowlisted_peer".to_string()))
+            .chain(config.p2p_config.seed_peers.iter().filter_map(|peer| {
+                peer.peer_id
+                    .map(|peer_id| (peer_id, "seed_peer".to_string()))
+            }))
+            .collect();
 
         let (randomness, randomness_router) =
             randomness::Builder::new(config.protocol_public_key(), randomness_tx)
@@ -1053,9 +1072,9 @@ impl SuiNode {
             let routes = routes.merge(randomness_router);
 
             let inbound_network_metrics =
-                NetworkMetrics::new("sui", "inbound", prometheus_registry);
+                consensus_core::NetworkRouteMetrics::new("sui", "inbound", prometheus_registry);
             let outbound_network_metrics =
-                NetworkMetrics::new("sui", "outbound", prometheus_registry);
+                consensus_core::NetworkRouteMetrics::new("sui", "outbound", prometheus_registry);
 
             let service = ServiceBuilder::new()
                 .layer(
@@ -1063,10 +1082,12 @@ impl SuiNode {
                         .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
                         .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
                 )
-                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                    Arc::new(inbound_network_metrics),
-                    config.p2p_config.excessive_message_size(),
-                )))
+                .layer(CallbackLayer::new(
+                    consensus_core::MetricsMakeCallbackHandler::new(
+                        Arc::new(inbound_network_metrics),
+                        config.p2p_config.excessive_message_size(),
+                    ),
+                ))
                 .service(routes);
 
             let outbound_layer = ServiceBuilder::new()
@@ -1075,10 +1096,12 @@ impl SuiNode {
                         .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
                         .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
                 )
-                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                    Arc::new(outbound_network_metrics),
-                    config.p2p_config.excessive_message_size(),
-                )))
+                .layer(CallbackLayer::new(
+                    consensus_core::MetricsMakeCallbackHandler::new(
+                        Arc::new(outbound_network_metrics),
+                        config.p2p_config.excessive_message_size(),
+                    ),
+                ))
                 .into_inner();
 
             let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
@@ -1146,12 +1169,13 @@ impl SuiNode {
         let state_sync_handle = state_sync.start(p2p_network.clone());
         let randomness_handle = randomness.start(p2p_network.clone());
 
-        Ok((
+        Ok(P2pComponents {
             p2p_network,
+            known_peers,
             discovery_handle,
             state_sync_handle,
             randomness_handle,
-        ))
+        })
     }
 
     async fn construct_validator_components(
@@ -1261,7 +1285,7 @@ impl SuiNode {
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
-        let (checkpoint_service, checkpoint_service_exit) = Self::start_checkpoint_service(
+        let (checkpoint_service, checkpoint_service_tasks) = Self::start_checkpoint_service(
             config,
             consensus_adapter.clone(),
             checkpoint_store,
@@ -1347,7 +1371,7 @@ impl SuiNode {
             consensus_manager,
             consensus_store_pruner,
             consensus_adapter,
-            checkpoint_service_exit,
+            checkpoint_service_tasks,
             checkpoint_metrics,
             sui_tx_validator_metrics,
         })
@@ -1362,7 +1386,7 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         accumulator: Weak<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
-    ) -> (Arc<CheckpointService>, watch::Sender<()>) {
+    ) -> (Arc<CheckpointService>, JoinSet<()>) {
         let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
         let epoch_duration_ms = epoch_store.epoch_start_state().epoch_duration_ms();
 
@@ -1656,16 +1680,28 @@ impl SuiNode {
                 consensus_manager,
                 consensus_store_pruner,
                 consensus_adapter,
-                checkpoint_service_exit,
+                mut checkpoint_service_tasks,
                 checkpoint_metrics,
                 sui_tx_validator_metrics,
             }) = self.validator_components.lock().await.take()
             {
                 info!("Reconfiguring the validator.");
-                // Stop the old checkpoint service.
-                drop(checkpoint_service_exit);
+                // Cancel the old checkpoint service tasks.
+                // Waiting for checkpoint builder to finish gracefully is not possible, because it
+                // may wait on transactions while consensus on peers have already shut down.
+                checkpoint_service_tasks.abort_all();
+                while let Some(result) = checkpoint_service_tasks.join_next().await {
+                    if let Err(err) = result {
+                        if err.is_panic() {
+                            std::panic::resume_unwind(err.into_panic());
+                        }
+                        warn!("Error in checkpoint service task: {:?}", err);
+                    }
+                }
+                info!("Checkpoint service has shut down.");
 
                 consensus_manager.shutdown().await;
+                info!("Consensus has shut down.");
 
                 let new_epoch_store = self
                     .reconfigure_state(
@@ -1676,6 +1712,7 @@ impl SuiNode {
                         accumulator.clone(),
                     )
                     .await;
+                info!("Epoch store finished reconfiguration.");
 
                 // No other components should be holding a strong reference to state accumulator
                 // at this point. Confirm here before we swap in the new accumulator.
@@ -1693,7 +1730,7 @@ impl SuiNode {
                 consensus_store_pruner.prune(next_epoch).await;
 
                 if self.state.is_validator(&new_epoch_store) {
-                    // Only restart Narwhal if this node is still a validator in the new epoch.
+                    // Only restart consensus if this node is still a validator in the new epoch.
                     Some(
                         Self::start_epoch_specific_validator_components(
                             &self.config,

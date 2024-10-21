@@ -28,7 +28,6 @@ pub(crate) struct TransactionBlockFilter {
 
     /// Limit to transactions that interacted with the given address. The address could be a
     /// sender, sponsor, or recipient of the transaction.
-    #[cfg(feature = "staging")]
     pub affected_address: Option<SuiAddress>,
 
     /// Limit to transactions that interacted with the given object. The object could have been
@@ -38,23 +37,8 @@ pub(crate) struct TransactionBlockFilter {
     #[cfg(feature = "staging")]
     pub affected_object: Option<SuiAddress>,
 
-    /// Limit to transactions that were sent by the given address. NOTE: this input filter has been
-    /// deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
-    /// Both filters restrict transactions by their sender, only, not signers in general.
-    ///
-    /// This filter will be removed with 1.36.0 (2024-10-14).
-    pub sign_address: Option<SuiAddress>,
-
     /// Limit to transactions that were sent by the given address.
     pub sent_address: Option<SuiAddress>,
-
-    /// Limit to transactions that sent an object to the given address. NOTE: this input filter has
-    /// been deprecated in favor of `affectedAddress` which offers an easier to understand
-    /// behavior.
-    ///
-    /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-    /// `affectedAddress` is introduced, whichever is later.
-    pub recv_address: Option<SuiAddress>,
 
     /// Limit to transactions that accepted the given object as an input. NOTE: this input filter
     /// has been deprecated in favor of `affectedObject` which offers an easier to under behavior.
@@ -94,13 +78,10 @@ impl TransactionBlockFilter {
             at_checkpoint: intersect!(at_checkpoint, intersect::by_eq)?,
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
 
-            #[cfg(feature = "staging")]
             affected_address: intersect!(affected_address, intersect::by_eq)?,
             #[cfg(feature = "staging")]
             affected_object: intersect!(affected_object, intersect::by_eq)?,
-            sign_address: intersect!(sign_address, intersect::by_eq)?,
             sent_address: intersect!(sent_address, intersect::by_eq)?,
-            recv_address: intersect!(recv_address, intersect::by_eq)?,
             input_object: intersect!(input_object, intersect::by_eq)?,
             changed_object: intersect!(changed_object, intersect::by_eq)?,
 
@@ -119,11 +100,9 @@ impl TransactionBlockFilter {
         [
             self.function.is_some(),
             self.kind.is_some(),
-            #[cfg(feature = "staging")]
             self.affected_address.is_some(),
             #[cfg(feature = "staging")]
             self.affected_object.is_some(),
-            self.recv_address.is_some(),
             self.input_object.is_some(),
             self.changed_object.is_some(),
             self.transaction_ids.is_some(),
@@ -140,17 +119,15 @@ impl TransactionBlockFilter {
     pub(crate) fn explicit_sender(&self) -> Option<SuiAddress> {
         let missing_implicit_sender = self.function.is_none()
             && self.kind.is_none()
-            && self.recv_address.is_none()
+            && self.affected_address.is_none()
             && self.input_object.is_none()
             && self.changed_object.is_none();
 
         #[cfg(feature = "staging")]
-        let missing_implicit_sender = missing_implicit_sender
-            && self.affected_address.is_none()
-            && self.affected_object.is_none();
+        let missing_implicit_sender = missing_implicit_sender && self.affected_object.is_none();
 
         missing_implicit_sender
-            .then_some(self.sent_address.or(self.sign_address))
+            .then_some(self.sent_address)
             .flatten()
     }
 
@@ -159,16 +136,14 @@ impl TransactionBlockFilter {
     pub(crate) fn has_filters(&self) -> bool {
         let has_filters = self.function.is_some()
             || self.kind.is_some()
-            || self.sign_address.is_some()
             || self.sent_address.is_some()
-            || self.recv_address.is_some()
+            || self.affected_address.is_some()
             || self.input_object.is_some()
             || self.changed_object.is_some()
             || self.transaction_ids.is_some();
 
         #[cfg(feature = "staging")]
-        let has_filters =
-            has_filters || self.affected_address.is_some() || self.affected_object.is_some();
+        let has_filters = has_filters || self.affected_object.is_some();
 
         has_filters
     }
@@ -193,12 +168,6 @@ impl TransactionBlockFilter {
                 (Some(kind), Some(signer))
                     if (kind == TransactionBlockKindInput::SystemTx)
                         != (signer == SuiAddress::from(NativeSuiAddress::ZERO))
-            )
-            // Temporary while we deprecate `sign_address` in favor of `sent_address`.
-            || matches!(
-                (self.sign_address, self.sent_address),
-                (Some(signer), Some(sent))
-                    if signer != sent
             )
     }
 }

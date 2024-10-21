@@ -70,6 +70,12 @@ export default function Home() {
               Run a Sui Full node
               <span className="block bg-auto bg-[url(../static/img/index/right-arrow.svg)]"></span>
             </Link>
+            <Link
+              className={styles.cardLink}
+              to="./guides/operator/bridge-node-configuration"
+            >
+              Sui Bridge Node configuration
+            </Link>
           </HomeCard>
           <HomeCard title="About Sui">
             <Link className={styles.cardLink} to="./concepts/tokenomics">

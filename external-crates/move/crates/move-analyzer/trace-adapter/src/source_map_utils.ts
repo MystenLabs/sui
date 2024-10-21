@@ -7,40 +7,40 @@ import { ModuleInfo } from './utils';
 
 // Data types corresponding to source map file JSON schema.
 
-interface ISrcDefinitionLocation {
+interface JSONSrcDefinitionLocation {
     file_hash: number[];
     start: number;
     end: number;
 }
 
-interface ISrcStructSourceMapEntry {
-    definition_location: ISrcDefinitionLocation;
-    type_parameters: [string, ISrcDefinitionLocation][];
-    fields: ISrcDefinitionLocation[];
+interface JSONSrcStructSourceMapEntry {
+    definition_location: JSONSrcDefinitionLocation;
+    type_parameters: [string, JSONSrcDefinitionLocation][];
+    fields: JSONSrcDefinitionLocation[];
 }
 
-interface ISrcEnumSourceMapEntry {
-    definition_location: ISrcDefinitionLocation;
-    type_parameters: [string, ISrcDefinitionLocation][];
-    variants: [[string, ISrcDefinitionLocation], ISrcDefinitionLocation[]][];
+interface JSONSrcEnumSourceMapEntry {
+    definition_location: JSONSrcDefinitionLocation;
+    type_parameters: [string, JSONSrcDefinitionLocation][];
+    variants: [[string, JSONSrcDefinitionLocation], JSONSrcDefinitionLocation[]][];
 }
 
-interface ISrcFunctionMapEntry {
-    definition_location: ISrcDefinitionLocation;
-    type_parameters: [string, ISrcDefinitionLocation][];
-    parameters: [string, ISrcDefinitionLocation][];
-    locals: [string, ISrcDefinitionLocation][];
+interface JSONSrcFunctionMapEntry {
+    definition_location: JSONSrcDefinitionLocation;
+    type_parameters: [string, JSONSrcDefinitionLocation][];
+    parameters: [string, JSONSrcDefinitionLocation][];
+    locals: [string, JSONSrcDefinitionLocation][];
     nops: Record<string, any>;
-    code_map: Record<string, ISrcDefinitionLocation>;
+    code_map: Record<string, JSONSrcDefinitionLocation>;
     is_native: boolean;
 }
 
-interface ISrcRootObject {
-    definition_location: ISrcDefinitionLocation;
+interface JSONSrcRootObject {
+    definition_location: JSONSrcDefinitionLocation;
     module_name: string[];
-    struct_map: Record<string, ISrcStructSourceMapEntry>;
-    enum_map: Record<string, ISrcEnumSourceMapEntry>;
-    function_map: Record<string, ISrcFunctionMapEntry>;
+    struct_map: Record<string, JSONSrcStructSourceMapEntry>;
+    enum_map: Record<string, JSONSrcEnumSourceMapEntry>;
+    function_map: Record<string, JSONSrcFunctionMapEntry>;
     constant_map: Record<string, string>;
 }
 
@@ -126,7 +126,7 @@ export function readAllSourceMaps(
  * @throws Error if with a descriptive error message if the source map cannot be read.
  */
 function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>): ISourceMap {
-    const sourceMapJSON: ISrcRootObject = JSON.parse(fs.readFileSync(sourceMapPath, 'utf8'));
+    const sourceMapJSON: JSONSrcRootObject = JSON.parse(fs.readFileSync(sourceMapPath, 'utf8'));
 
     const fileHash = Buffer.from(sourceMapJSON.definition_location.file_hash).toString('base64');
     const modInfo: ModuleInfo = {
@@ -212,7 +212,7 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
  * @param sourceMapLines
  */
 function prePopulateSourceMapLines(
-    sourceMapJSON: ISrcRootObject,
+    sourceMapJSON: JSONSrcRootObject,
     fileInfo: IFileInfo,
     sourceMapLines: Set<number>
 ): void {
@@ -265,7 +265,7 @@ function prePopulateSourceMapLines(
  * @param sourceMapLines  set of source file lines.
  */
 function addLinesForLocation(
-    loc: ISrcDefinitionLocation,
+    loc: JSONSrcDefinitionLocation,
     fileInfo: IFileInfo,
     sourceMapLines: Set<number>
 ): void {

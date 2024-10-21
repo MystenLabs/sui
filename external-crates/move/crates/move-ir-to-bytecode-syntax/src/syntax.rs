@@ -1330,64 +1330,65 @@ fn parse_ability(tokens: &mut Lexer) -> Result<(Ability, Loc), ParseError<Loc, a
 // }
 
 fn parse_type(tokens: &mut Lexer) -> Result<Type, ParseError<Loc, anyhow::Error>> {
+    let start_loc = tokens.start_loc();
     let t = match tokens.peek() {
         Tok::NameValue if matches!(tokens.content(), "address") => {
             tokens.advance()?;
-            Type::Address
+            Type_::Address
         }
         Tok::NameValue if matches!(tokens.content(), "u8") => {
             tokens.advance()?;
-            Type::U8
+            Type_::U8
         }
         Tok::NameValue if matches!(tokens.content(), "u16") => {
             tokens.advance()?;
-            Type::U16
+            Type_::U16
         }
         Tok::NameValue if matches!(tokens.content(), "u32") => {
             tokens.advance()?;
-            Type::U32
+            Type_::U32
         }
         Tok::NameValue if matches!(tokens.content(), "u64") => {
             tokens.advance()?;
-            Type::U64
+            Type_::U64
         }
         Tok::NameValue if matches!(tokens.content(), "u128") => {
             tokens.advance()?;
-            Type::U128
+            Type_::U128
         }
         Tok::NameValue if matches!(tokens.content(), "u256") => {
             tokens.advance()?;
-            Type::U256
+            Type_::U256
         }
         Tok::NameValue if matches!(tokens.content(), "bool") => {
             tokens.advance()?;
-            Type::Bool
+            Type_::Bool
         }
         Tok::NameValue if matches!(tokens.content(), "signer") => {
             tokens.advance()?;
-            Type::Signer
+            Type_::Signer
         }
         Tok::NameBeginTyValue if matches!(tokens.content(), "vector<") => {
             tokens.advance()?;
             let ty = parse_type(tokens)?;
             adjust_token(tokens, &[Tok::Greater])?;
             consume_token(tokens, Tok::Greater)?;
-            Type::Vector(Box::new(ty))
+            Type_::Vector(Box::new(ty))
         }
         Tok::DotNameValue => {
             let s = parse_qualified_struct_ident(tokens)?;
             let tys = parse_type_actuals(tokens)?;
-            Type::Datatype(s, tys)
+            Type_::Datatype(s, tys)
         }
         Tok::Amp => {
             tokens.advance()?;
-            Type::Reference(false, Box::new(parse_type(tokens)?))
+            Type_::Reference(false, Box::new(parse_type(tokens)?))
         }
         Tok::AmpMut => {
             tokens.advance()?;
-            Type::Reference(true, Box::new(parse_type(tokens)?))
+            Type_::Reference(true, Box::new(parse_type(tokens)?))
         }
-        Tok::NameValue => Type::TypeParameter(TypeVar_(parse_name(tokens)?)),
+        Tok::NameValue => Type_::TypeParameter(TypeVar_(parse_name(tokens)?)),
         t => {
             return Err(ParseError::InvalidToken {
                 location: current_token_loc(tokens),
@@ -1395,7 +1396,8 @@ fn parse_type(tokens: &mut Lexer) -> Result<Type, ParseError<Loc, anyhow::Error>
             })
         }
     };
-    Ok(t)
+    let end_loc = tokens.previous_end_loc();
+    Ok(spanned(tokens.file_hash(), start_loc, end_loc, t))
 }
 
 // TypeVar: TypeVar = {

@@ -508,11 +508,10 @@ impl Debug for LeaderSwapTable {
 
 #[cfg(test)]
 mod tests {
-    use std::cmp::max;
 
     use super::*;
     use crate::{
-        block::{BlockAPI as _, BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
+        block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
         commit::{CommitDigest, CommitInfo, CommitRef, CommittedSubDag, TrustedCommit},
         storage::{mem_store::MemStore, Store, WriteBatch},
         test_dag_builder::DagBuilder,
@@ -567,116 +566,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_leader_schedule_from_store_with_no_scores() {
-        telemetry_subscribers::init_for_testing();
-        let mut context = Context::new_for_test(4).0;
-        context
-            .protocol_config
-            .set_mysticeti_leader_scoring_and_schedule_for_testing(false);
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-
-        let leader_timestamp = context.clock.timestamp_utc_ms();
-        let blocks = vec![
-            VerifiedBlock::new_for_test(
-                TestBlock::new(10, 2)
-                    .set_timestamp_ms(leader_timestamp)
-                    .build(),
-            ),
-            VerifiedBlock::new_for_test(TestBlock::new(9, 0).build()),
-            VerifiedBlock::new_for_test(TestBlock::new(9, 2).build()),
-            VerifiedBlock::new_for_test(TestBlock::new(9, 3).build()),
-        ];
-
-        let leader = blocks[0].clone();
-        let leader_ref = leader.reference();
-        let last_commit_index = 10;
-        let last_commit = TrustedCommit::new_for_test(
-            last_commit_index,
-            CommitDigest::MIN,
-            leader_timestamp,
-            leader_ref,
-            blocks
-                .iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        );
-
-        // The CommitInfo for the first 10 commits are written to store. This is the
-        // info that LeaderSchedule will be recovered from
-        let committed_rounds = vec![9, 9, 10, 9];
-        let commit_ref = CommitRef::new(10, CommitDigest::MIN);
-        let commit_info = CommitInfo {
-            reputation_scores: ReputationScores::default(),
-            committed_rounds,
-        };
-
-        store
-            .write(
-                WriteBatch::default()
-                    .commit_info(vec![(commit_ref, commit_info)])
-                    .blocks(blocks)
-                    .commits(vec![last_commit]),
-            )
-            .unwrap();
-
-        // CommitIndex '11' will be written to store. This should result in the cached
-        // last_committed_rounds & unscored subdags in DagState to be updated with the
-        // latest commit information on recovery.
-        let leader_timestamp = context.clock.timestamp_utc_ms();
-        let blocks = vec![
-            VerifiedBlock::new_for_test(
-                TestBlock::new(11, 3)
-                    .set_timestamp_ms(leader_timestamp)
-                    .build(),
-            ),
-            VerifiedBlock::new_for_test(TestBlock::new(10, 0).build()),
-            VerifiedBlock::new_for_test(TestBlock::new(10, 1).build()),
-            VerifiedBlock::new_for_test(TestBlock::new(10, 3).build()),
-        ];
-
-        let leader = blocks[0].clone();
-        let leader_ref = leader.reference();
-        let last_commit_index = 11;
-        let expected_last_committed_rounds = vec![10, 10, 10, 11];
-        let last_commit = TrustedCommit::new_for_test(
-            last_commit_index,
-            CommitDigest::MIN,
-            leader_timestamp,
-            leader_ref,
-            blocks
-                .iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        );
-        store
-            .write(
-                WriteBatch::default()
-                    .blocks(blocks)
-                    .commits(vec![last_commit]),
-            )
-            .unwrap();
-
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-
-        // Check that DagState recovery from stored CommitInfo worked correctly
-        assert_eq!(
-            expected_last_committed_rounds,
-            dag_state.read().last_committed_rounds()
-        );
-
-        // Leader Scoring & Schedule Change is disabled, unscored subdags should not be accumulated.
-        assert_eq!(0, dag_state.read().scoring_subdags_count());
-
-        let leader_schedule = LeaderSchedule::from_store(context.clone(), dag_state.clone());
-
-        // Check that LeaderSchedule recovery from stored CommitInfo worked correctly
-        let leader_swap_table = leader_schedule.leader_swap_table.read();
-        assert_eq!(leader_swap_table.good_nodes.len(), 0);
-        assert_eq!(leader_swap_table.bad_nodes.len(), 0);
-    }
-
-    #[tokio::test]
     async fn test_leader_schedule_from_store() {
         telemetry_subscribers::init_for_testing();
         let mut context = Context::new_for_test(4).0;
@@ -691,27 +580,12 @@ mod tests {
         dag_builder.layers(1..=11).build();
         let mut subdags = vec![];
         let mut expected_commits = vec![];
-        let leaders = dag_builder
-            .leader_blocks(1..=11)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
         let mut blocks_to_write = vec![];
 
-        let mut last_committed_rounds = vec![0; 4];
-        for (idx, leader) in leaders.into_iter().enumerate() {
-            let commit_index = idx as u32 + 1;
-            let (sub_dag, commit) = dag_builder.get_sub_dag_and_commit(
-                leader.clone(),
-                last_committed_rounds.clone(),
-                commit_index,
-            );
+        for (sub_dag, commit) in dag_builder.get_sub_dag_and_commits(1..=11) {
             for block in sub_dag.blocks.iter() {
                 blocks_to_write.push(block.clone());
-                last_committed_rounds[block.author().value()] =
-                    max(block.round(), last_committed_rounds[block.author().value()]);
             }
-
             expected_commits.push(commit);
             subdags.push(sub_dag);
         }
@@ -743,7 +617,7 @@ mod tests {
 
         // Check that DagState recovery from stored CommitInfo worked correctly
         assert_eq!(
-            last_committed_rounds,
+            dag_builder.last_committed_rounds.clone(),
             dag_state.read().last_committed_rounds()
         );
         assert_eq!(1, dag_state.read().scoring_subdags_count());
@@ -815,28 +689,14 @@ mod tests {
 
         let mut expected_scored_subdags = vec![];
         let mut expected_commits = vec![];
-        let leaders = dag_builder
-            .leader_blocks(1..=2)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
         let mut blocks_to_write = vec![];
 
-        let mut last_committed_rounds = vec![0; 4];
-        for (idx, leader) in leaders.into_iter().enumerate() {
-            let commit_index = idx as u32 + 1;
-            let (subdag, commit) = dag_builder.get_sub_dag_and_commit(
-                leader.clone(),
-                last_committed_rounds.clone(),
-                commit_index,
-            );
-            for block in subdag.blocks.iter() {
+        for (sub_dag, commit) in dag_builder.get_sub_dag_and_commits(1..=2) {
+            for block in sub_dag.blocks.iter() {
                 blocks_to_write.push(block.clone());
-                last_committed_rounds[block.author().value()] =
-                    max(block.round(), last_committed_rounds[block.author().value()]);
             }
             expected_commits.push(commit);
-            expected_scored_subdags.push(subdag);
+            expected_scored_subdags.push(sub_dag);
         }
 
         // The CommitInfo for the first 2 commits are written to store. 10 commits
@@ -856,7 +716,7 @@ mod tests {
 
         // Check that DagState recovery from stored CommitInfo worked correctly
         assert_eq!(
-            last_committed_rounds,
+            dag_builder.last_committed_rounds.clone(),
             dag_state.read().last_committed_rounds()
         );
         assert_eq!(
@@ -887,6 +747,7 @@ mod tests {
         )));
         let unscored_subdags = vec![CommittedSubDag::new(
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
+            vec![],
             vec![],
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
@@ -969,6 +830,7 @@ mod tests {
         let leader_block = leader.unwrap();
         let leader_ref = leader_block.reference();
         let commit_index = 1;
+        let rejected_transactions = vec![vec![]; blocks.len()];
 
         let last_commit = TrustedCommit::new_for_test(
             commit_index,
@@ -984,6 +846,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
+            rejected_transactions,
             context.clock.timestamp_utc_ms(),
             last_commit.reference(),
             vec![],
@@ -1196,119 +1059,6 @@ mod tests {
 
     // TODO: Remove all tests below this when DistributedVoteScoring is enabled.
     #[tokio::test]
-    async fn test_leader_schedule_from_store_with_no_scores_with_vote_scoring() {
-        telemetry_subscribers::init_for_testing();
-        let mut context = Context::new_for_test(4).0;
-        context
-            .protocol_config
-            .set_consensus_distributed_vote_scoring_strategy_for_testing(false);
-        context
-            .protocol_config
-            .set_mysticeti_leader_scoring_and_schedule_for_testing(false);
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-
-        let leader_timestamp = context.clock.timestamp_utc_ms();
-        let blocks = vec![
-            VerifiedBlock::new_for_test(
-                TestBlock::new(10, 2)
-                    .set_timestamp_ms(leader_timestamp)
-                    .build(),
-            ),
-            VerifiedBlock::new_for_test(TestBlock::new(9, 0).build()),
-            VerifiedBlock::new_for_test(TestBlock::new(9, 2).build()),
-            VerifiedBlock::new_for_test(TestBlock::new(9, 3).build()),
-        ];
-
-        let leader = blocks[0].clone();
-        let leader_ref = leader.reference();
-        let last_commit_index = 10;
-        let last_commit = TrustedCommit::new_for_test(
-            last_commit_index,
-            CommitDigest::MIN,
-            leader_timestamp,
-            leader_ref,
-            blocks
-                .iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        );
-
-        // The CommitInfo for the first 10 commits are written to store. This is the
-        // info that LeaderSchedule will be recovered from
-        let committed_rounds = vec![9, 9, 10, 9];
-        let commit_ref = CommitRef::new(10, CommitDigest::MIN);
-        let commit_info = CommitInfo {
-            reputation_scores: ReputationScores::default(),
-            committed_rounds,
-        };
-
-        store
-            .write(
-                WriteBatch::default()
-                    .commit_info(vec![(commit_ref, commit_info)])
-                    .blocks(blocks)
-                    .commits(vec![last_commit]),
-            )
-            .unwrap();
-
-        // CommitIndex '11' will be written to store. This should result in the cached
-        // last_committed_rounds & unscored subdags in DagState to be updated with the
-        // latest commit information on recovery.
-        let leader_timestamp = context.clock.timestamp_utc_ms();
-        let blocks = vec![
-            VerifiedBlock::new_for_test(
-                TestBlock::new(11, 3)
-                    .set_timestamp_ms(leader_timestamp)
-                    .build(),
-            ),
-            VerifiedBlock::new_for_test(TestBlock::new(10, 0).build()),
-            VerifiedBlock::new_for_test(TestBlock::new(10, 1).build()),
-            VerifiedBlock::new_for_test(TestBlock::new(10, 3).build()),
-        ];
-
-        let leader = blocks[0].clone();
-        let leader_ref = leader.reference();
-        let last_commit_index = 11;
-        let expected_last_committed_rounds = vec![10, 10, 10, 11];
-        let last_commit = TrustedCommit::new_for_test(
-            last_commit_index,
-            CommitDigest::MIN,
-            leader_timestamp,
-            leader_ref,
-            blocks
-                .iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        );
-        store
-            .write(
-                WriteBatch::default()
-                    .blocks(blocks)
-                    .commits(vec![last_commit]),
-            )
-            .unwrap();
-
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-
-        // Check that DagState recovery from stored CommitInfo worked correctly
-        assert_eq!(
-            expected_last_committed_rounds,
-            dag_state.read().last_committed_rounds()
-        );
-
-        // Leader Scoring & Schedule Change is disabled, unscored subdags should not be accumulated.
-        assert_eq!(0, dag_state.read().unscored_committed_subdags_count());
-
-        let leader_schedule = LeaderSchedule::from_store(context.clone(), dag_state.clone());
-
-        // Check that LeaderSchedule recovery from stored CommitInfo worked correctly
-        let leader_swap_table = leader_schedule.leader_swap_table.read();
-        assert_eq!(leader_swap_table.good_nodes.len(), 0);
-        assert_eq!(leader_swap_table.bad_nodes.len(), 0);
-    }
-
-    #[tokio::test]
     async fn test_leader_schedule_from_store_with_vote_scoring() {
         telemetry_subscribers::init_for_testing();
         let mut context = Context::new_for_test(4).0;
@@ -1326,27 +1076,12 @@ mod tests {
         dag_builder.layers(1..=11).build();
         let mut subdags = vec![];
         let mut expected_commits = vec![];
-        let leaders = dag_builder
-            .leader_blocks(1..=11)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
         let mut blocks_to_write = vec![];
 
-        let mut last_committed_rounds = vec![0; 4];
-        for (idx, leader) in leaders.into_iter().enumerate() {
-            let commit_index = idx as u32 + 1;
-            let (sub_dag, commit) = dag_builder.get_sub_dag_and_commit(
-                leader.clone(),
-                last_committed_rounds.clone(),
-                commit_index,
-            );
+        for (sub_dag, commit) in dag_builder.get_sub_dag_and_commits(1..=11) {
             for block in sub_dag.blocks.iter() {
                 blocks_to_write.push(block.clone());
-                last_committed_rounds[block.author().value()] =
-                    max(block.round(), last_committed_rounds[block.author().value()]);
             }
-
             expected_commits.push(commit);
             subdags.push(sub_dag);
         }
@@ -1378,7 +1113,7 @@ mod tests {
 
         // Check that DagState recovery from stored CommitInfo worked correctly
         assert_eq!(
-            last_committed_rounds,
+            dag_builder.last_committed_rounds.clone(),
             dag_state.read().last_committed_rounds()
         );
         let actual_unscored_subdags = dag_state.read().unscored_committed_subdags();
@@ -1456,28 +1191,14 @@ mod tests {
 
         let mut expected_unscored_subdags = vec![];
         let mut expected_commits = vec![];
-        let leaders = dag_builder
-            .leader_blocks(1..=2)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
         let mut blocks_to_write = vec![];
 
-        let mut last_committed_rounds = vec![0; 4];
-        for (idx, leader) in leaders.into_iter().enumerate() {
-            let commit_index = idx as u32 + 1;
-            let (subdag, commit) = dag_builder.get_sub_dag_and_commit(
-                leader.clone(),
-                last_committed_rounds.clone(),
-                commit_index,
-            );
-            for block in subdag.blocks.iter() {
+        for (sub_dag, commit) in dag_builder.get_sub_dag_and_commits(1..=2) {
+            for block in sub_dag.blocks.iter() {
                 blocks_to_write.push(block.clone());
-                last_committed_rounds[block.author().value()] =
-                    max(block.round(), last_committed_rounds[block.author().value()]);
             }
             expected_commits.push(commit);
-            expected_unscored_subdags.push(subdag);
+            expected_unscored_subdags.push(sub_dag);
         }
 
         // The CommitInfo for the first 2 commits are written to store. 10 commits
@@ -1497,7 +1218,7 @@ mod tests {
 
         // Check that DagState recovery from stored CommitInfo worked correctly
         assert_eq!(
-            last_committed_rounds,
+            dag_builder.last_committed_rounds.clone(),
             dag_state.read().last_committed_rounds()
         );
         let actual_unscored_subdags = dag_state.read().unscored_committed_subdags();
@@ -1534,6 +1255,7 @@ mod tests {
         )));
         let unscored_subdags = vec![CommittedSubDag::new(
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
+            vec![],
             vec![],
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
@@ -1622,6 +1344,7 @@ mod tests {
         let leader_block = leader.unwrap();
         let leader_ref = leader_block.reference();
         let commit_index = 1;
+        let rejected_transactions = vec![vec![]; blocks.len()];
 
         let last_commit = TrustedCommit::new_for_test(
             commit_index,
@@ -1637,6 +1360,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
+            rejected_transactions,
             context.clock.timestamp_utc_ms(),
             last_commit.reference(),
             vec![],

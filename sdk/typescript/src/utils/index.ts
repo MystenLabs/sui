@@ -40,3 +40,5 @@ export {
 } from './constants.js';
 
 export { isValidNamedPackage, isValidNamedType } from './move-registry.js';
+
+export { deriveDynamicFieldID } from './dynamic-fields.js';

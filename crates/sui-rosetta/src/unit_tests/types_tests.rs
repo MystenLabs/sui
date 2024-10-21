@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::types::{AccountBalanceRequest, Amount, Currency, CurrencyMetadata};
+use crate::types::{
+    AccountBalanceRequest, Amount, ConstructionMetadata, Currency, CurrencyMetadata,
+};
+use quick_js::Context;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sui_types::base_types::{ObjectRef, SuiAddress};
 
 #[tokio::test]
 async fn test_currency_defaults() {
@@ -64,4 +69,57 @@ async fn test_currency_defaults() {
         expected,
         account_balance_request.currencies.0.clone().pop().unwrap()
     );
+}
+
+#[tokio::test]
+async fn test_metadata_total_coin_value_js_conversion_for_large_balance() {
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct TestConstructionMetadata {
+        pub sender: SuiAddress,
+        pub coins: Vec<ObjectRef>,
+        pub objects: Vec<ObjectRef>,
+        pub total_coin_value: u64,
+        pub gas_price: u64,
+        pub budget: u64,
+        pub currency: Option<Currency>,
+    }
+
+    let test_metadata = TestConstructionMetadata {
+        sender: Default::default(),
+        coins: vec![],
+        objects: vec![],
+        total_coin_value: 65_000_004_233_578_496,
+        gas_price: 0,
+        budget: 0,
+        currency: None,
+    };
+    let test_metadata_json = serde_json::to_string(&test_metadata).unwrap();
+
+    let prod_metadata = ConstructionMetadata {
+        sender: Default::default(),
+        coins: vec![],
+        objects: vec![],
+        total_coin_value: 65_000_004_233_578_496,
+        gas_price: 0,
+        budget: 0,
+        currency: None,
+    };
+    let prod_metadata_json = serde_json::to_string(&prod_metadata).unwrap();
+
+    let context = Context::new().unwrap();
+
+    let test_total_coin_value = format!(
+        "JSON.parse({:?}).total_coin_value.toString()",
+        test_metadata_json
+    );
+    let js_test_total_coin_value = context.eval_as::<String>(&test_total_coin_value).unwrap();
+
+    let prod_total_coin_value = format!(
+        "JSON.parse({:?}).total_coin_value.toString()",
+        prod_metadata_json
+    );
+    let js_prod_total_coin_value = context.eval_as::<String>(&prod_total_coin_value).unwrap();
+
+    assert_eq!("65000004233578500", js_test_total_coin_value);
+    assert_eq!("65000004233578496", js_prod_total_coin_value);
 }

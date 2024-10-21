@@ -14,6 +14,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use sui_data_ingestion_core::Worker;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_synthetic_ingestion::IndexerProgress;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::{ObjectChange, TransactionEffectsAPI};
 use sui_types::event::SystemEpochInfoEvent;
@@ -24,16 +25,18 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::transaction::TransactionDataAPI;
+use tokio::sync::watch;
 
 use crate::errors::IndexerError;
 use crate::handlers::committer::start_tx_checkpoint_commit_task;
 use crate::metrics::IndexerMetrics;
 use crate::models::display::StoredDisplay;
+use crate::models::epoch::{EndOfEpochUpdate, StartOfEpochUpdate};
 use crate::models::obj_indices::StoredObjectVersion;
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
-    EventIndex, IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent,
-    IndexedObject, IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
+    EventIndex, IndexedCheckpoint, IndexedDeletedObject, IndexedEvent, IndexedObject,
+    IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
 };
 
 use super::tx_processor::EpochEndIndexingObjectStore;
@@ -49,6 +52,7 @@ pub async fn new_handlers(
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
+    committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
 ) -> Result<CheckpointHandler, IndexerError> {
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
@@ -70,7 +74,8 @@ pub async fn new_handlers(
         metrics_clone,
         indexed_checkpoint_receiver,
         next_checkpoint_sequence_number,
-        cancel.clone()
+        cancel.clone(),
+        committed_checkpoints_tx
     ));
     Ok(CheckpointHandler::new(
         state,
@@ -87,6 +92,7 @@ pub struct CheckpointHandler {
 
 #[async_trait]
 impl Worker for CheckpointHandler {
+    type Result = ();
     async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
         let time_now_ms = chrono::Utc::now().timestamp_millis();
         let cp_download_lag = time_now_ms - checkpoint.checkpoint_summary.timestamp_ms as i64;
@@ -151,12 +157,12 @@ impl CheckpointHandler {
                 get_sui_system_state(&checkpoint_object_store)?.into_sui_system_state_summary();
             return Ok(Some(EpochToCommit {
                 last_epoch: None,
-                new_epoch: IndexedEpochInfo::from_new_system_state_summary(
+                new_epoch: StartOfEpochUpdate::new(
                     system_state_summary,
                     0, //first_checkpoint_id
+                    0, // first_tx_sequence_number
                     None,
                 ),
-                network_total_transactions: 0,
             }));
         }
 
@@ -182,13 +188,9 @@ impl CheckpointHandler {
 
         let event = bcs::from_bytes::<SystemEpochInfoEvent>(&epoch_event.contents)?;
 
-        // Now we just entered epoch X, we want to calculate the diff between
-        // TotalTransactionsByEndOfEpoch(X-1) and TotalTransactionsByEndOfEpoch(X-2). Note that on
-        // the indexer's chain-reading side, this is not guaranteed to have the latest data. Rather
-        // than impose a wait on the reading side, however, we overwrite this on the persisting
-        // side, where we can guarantee that the previous epoch's checkpoints have been written to
-        // db.
-
+        // At some point while committing data in epoch X - 1, we will encounter a new epoch X. We
+        // want to retrieve X - 2's network total transactions to calculate the number of
+        // transactions that occurred in epoch X - 1.
         let network_tx_count_prev_epoch = match system_state_summary.epoch {
             // If first epoch change, this number is 0
             1 => Ok(0),
@@ -196,23 +198,28 @@ impl CheckpointHandler {
                 let last_epoch = system_state_summary.epoch - 2;
                 state
                     .get_network_total_transactions_by_end_of_epoch(last_epoch)
-                    .await
+                    .await?
+                    .ok_or_else(|| {
+                        IndexerError::PersistentStorageDataCorruptionError(format!(
+                            "Network total transactions for epoch {} not found",
+                            last_epoch
+                        ))
+                    })
             }
         }?;
 
         Ok(Some(EpochToCommit {
-            last_epoch: Some(IndexedEpochInfo::from_end_of_epoch_data(
-                system_state_summary.clone(),
+            last_epoch: Some(EndOfEpochUpdate::new(
                 checkpoint_summary,
                 &event,
                 network_tx_count_prev_epoch,
             )),
-            new_epoch: IndexedEpochInfo::from_new_system_state_summary(
+            new_epoch: StartOfEpochUpdate::new(
                 system_state_summary,
                 checkpoint_summary.sequence_number + 1, // first_checkpoint_id
+                checkpoint_summary.network_total_transactions,
                 Some(&event),
             ),
-            network_total_transactions: checkpoint_summary.network_total_transactions,
         }))
     }
 

@@ -2,15 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
-pub mod indexes;
-
 use crate::blob::BlobIter;
 use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::{Buf, Bytes};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use futures::StreamExt;
-pub use indexes::{IndexStore, IndexStoreTables};
 use itertools::Itertools;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::de::DeserializeOwned;

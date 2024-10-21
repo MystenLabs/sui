@@ -87,6 +87,7 @@ impl TxChangesProcessor {
             .start_timer();
         let object_change: Vec<_> = get_object_changes(
             self,
+            effects,
             tx.sender(),
             effects.modified_at_versions(),
             effects.all_changed_objects(),

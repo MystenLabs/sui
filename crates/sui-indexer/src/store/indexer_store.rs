@@ -4,13 +4,16 @@
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
+use strum::IntoEnumIterator;
 
 use crate::errors::IndexerError;
-use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
+use crate::handlers::pruner::PrunableTable;
+use crate::handlers::{CommitterWatermark, EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
 use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
 use crate::models::raw_checkpoints::StoredRawCheckpoint;
+use crate::models::watermarks::StoredWatermark;
 use crate::types::{
     EventIndex, IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
 };
@@ -55,7 +58,7 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError>;
 
-    async fn persist_object_versions(
+    async fn persist_objects_version(
         &self,
         object_versions: Vec<StoredObjectVersion>,
     ) -> Result<(), IndexerError>;
@@ -95,8 +98,10 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
 
     async fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError>;
 
+    /// Updates the current epoch with end-of-epoch data, and writes a new epoch to the database.
     async fn persist_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError>;
 
+    /// Updates epoch-partitioned tables to accept data from the new epoch.
     async fn advance_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError>;
 
     async fn prune_epoch(&self, epoch: u64) -> Result<(), IndexerError>;
@@ -104,7 +109,7 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
     async fn get_network_total_transactions_by_end_of_epoch(
         &self,
         epoch: u64,
-    ) -> Result<u64, IndexerError>;
+    ) -> Result<Option<u64>, IndexerError>;
 
     async fn upload_display(&self, epoch: u64) -> Result<(), IndexerError>;
 
@@ -114,4 +119,22 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
         &self,
         checkpoints: Vec<StoredRawCheckpoint>,
     ) -> Result<(), IndexerError>;
+
+    /// Update the upper bound of the watermarks for the given tables.
+    async fn update_watermarks_upper_bound<E: IntoEnumIterator>(
+        &self,
+        watermark: CommitterWatermark,
+    ) -> Result<(), IndexerError>
+    where
+        E::Iterator: Iterator<Item: AsRef<str>>;
+
+    /// Updates each watermark entry's lower bounds per the list of tables and their new epoch lower
+    /// bounds.
+    async fn update_watermarks_lower_bound(
+        &self,
+        watermarks: Vec<(PrunableTable, u64)>,
+    ) -> Result<(), IndexerError>;
+
+    /// Load all watermark entries from the store, and the latest timestamp from the db.
+    async fn get_watermarks(&self) -> Result<(Vec<StoredWatermark>, i64), IndexerError>;
 }

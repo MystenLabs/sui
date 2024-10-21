@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_graphql_rpc_client::simple_client::SimpleClient;
-use sui_indexer::config::PruningOptions;
+pub use sui_indexer::config::RetentionConfig;
 pub use sui_indexer::config::SnapshotLagConfig;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::store::PgIndexerStore;
@@ -151,7 +151,7 @@ pub async fn start_network_cluster() -> NetworkCluster {
 pub async fn serve_executor(
     executor: Arc<dyn RestStateReader + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
-    epochs_to_keep: Option<u64>,
+    retention_config: Option<RetentionConfig>,
     data_ingestion_path: PathBuf,
 ) -> ExecutorCluster {
     let database = TempDb::new().unwrap();
@@ -184,7 +184,7 @@ pub async fn serve_executor(
     let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
         db_url,
         Some(snapshot_config.clone()),
-        Some(PruningOptions { epochs_to_keep }),
+        retention_config,
         Some(data_ingestion_path),
         Some(cancellation_token.clone()),
     )
@@ -372,6 +372,56 @@ pub async fn wait_for_graphql_checkpoint_catchup(
     .expect("Timeout waiting for graphql to catchup to checkpoint");
 }
 
+/// Ping the GraphQL server until its background task has updated the checkpoint watermark to the
+/// desired checkpoint.
+pub async fn wait_for_graphql_epoch_catchup(
+    client: &SimpleClient,
+    epoch: u64,
+    base_timeout: Duration,
+) {
+    info!(
+        "Waiting for graphql to catchup to epoch {}, base time out is {}",
+        epoch,
+        base_timeout.as_secs()
+    );
+    let query = r#"
+    {
+        epoch {
+            epochId
+        }
+    }"#;
+
+    let timeout = base_timeout.mul_f64(epoch.max(1) as f64);
+
+    tokio::time::timeout(timeout, async {
+        loop {
+            let resp = client
+                .execute_to_graphql(query.to_string(), false, vec![], vec![])
+                .await
+                .unwrap()
+                .response_body_json();
+
+            let latest_epoch = resp["data"]["epoch"].get("epochId");
+            info!("Latest epoch: {:?}", latest_epoch);
+            // Indexer has not picked up any epochs yet
+            let Some(latest_epoch) = latest_epoch else {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                continue;
+            };
+
+            // Indexer has picked up an epoch, but it's not the one we're waiting for
+            let latest_epoch = latest_epoch.as_u64().unwrap();
+            if latest_epoch < epoch {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            } else {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("Timeout waiting for graphql to catchup to epoch");
+}
+
 /// Ping the GraphQL server for a checkpoint until an empty response is returned, indicating that
 /// the checkpoint has been pruned.
 pub async fn wait_for_graphql_checkpoint_pruned(
@@ -421,6 +471,12 @@ impl Cluster {
     /// service's background task to update the checkpoint watermark to the given checkpoint.
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         wait_for_graphql_checkpoint_catchup(&self.graphql_client, checkpoint, base_timeout).await
+    }
+
+    /// Waits for the indexer to index up to the given epoch, then waits for the graphql service's
+    /// background task to update the corresponding watermark.
+    pub async fn wait_for_epoch_catchup(&self, epoch: u64, base_timeout: Duration) {
+        wait_for_graphql_epoch_catchup(&self.graphql_client, epoch, base_timeout).await
     }
 
     /// Waits for the indexer to prune a given checkpoint.
