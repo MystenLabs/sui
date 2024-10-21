@@ -2531,6 +2531,17 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::Call(pn, sp!(rloc, prs)) => {
             let en_opt = context.name_access_chain_to_module_access(Access::ApplyPositional, pn);
             let ers = sp(rloc, exps(context, prs));
+            if !context.env().flags().is_verifying() {
+                // return unit if the name of the function is invariant
+                if let Some(name) = &en_opt {
+                    // TODO: make this check nicer
+                    if name.access.to_string().ends_with("::prover::invariant") {
+                        println!("Ignoring invariant call: {:?}", name.access.to_string());
+                        return Box::new(sp(loc, EE::Unit { trailing: false }));
+                    }
+                }
+            }
+
             bind_access_result!(
                 en_opt =>
                     Some(access_result!(name, ptys_opt, is_macro))
