@@ -186,6 +186,7 @@ const MAX_PROTOCOL_VERSION: u64 = 65;
 // Version 62: Makes the event's sending module package upgrade-aware.
 // Version 63: Enable gas based congestion control in consensus commit.
 // Version 64: Switch to distributed vote scoring in consensus in mainnet
+// Version 66: Update to Move stdlib.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);

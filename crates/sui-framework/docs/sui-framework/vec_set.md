@@ -309,7 +309,7 @@ and are *not* sorted.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_from_keys">from_keys</a>&lt;K: <b>copy</b> + drop&gt;(<b>mut</b> keys: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;): <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt; {
     keys.reverse();
     <b>let</b> <b>mut</b> set = <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">empty</a>();
-    <b>while</b> (!keys.<a href="../sui-framework/vec_set.md#0x2_vec_set_is_empty">is_empty</a>()) set.<a href="../sui-framework/vec_set.md#0x2_vec_set_insert">insert</a>(keys.pop_back());
+    <b>while</b> (keys.length() != 0) set.<a href="../sui-framework/vec_set.md#0x2_vec_set_insert">insert</a>(keys.pop_back());
     set
 }
 </code></pre>
