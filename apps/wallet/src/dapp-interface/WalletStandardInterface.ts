@@ -253,8 +253,6 @@ export class SuiWallet implements Wallet {
 	};
 
 	#disconnect: StandardDisconnectMethod = async () => {
-		this.#accounts = [];
-		this.#events.emit('change', { accounts: this.accounts });
 		this.#send<DisconnectApp, void>({
 			type: 'disconnect-app',
 			origin: '', // origin is auto-discovered for wallet's disconnect.
