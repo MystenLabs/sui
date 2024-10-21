@@ -1,6 +1,6 @@
 ## Overview
 
-Sui Bridge Indexer is a binary that scans Sui Bridge transactions on Sui and Ethereum network, indexes the processed data for further use.
+Sui Bridge Indexer is a binary that scans Sui Bridge transactions on Sui and Ethereum networks, and indexes the processed data for further use.
 
 ## Get Binary
 
@@ -8,7 +8,7 @@ Sui Bridge Indexer is a binary that scans Sui Bridge transactions on Sui and Eth
 cargo build --bin bridge-indexer --release
 ```
 
-The pre-built Docker image for Bridge Indexer can be foudn in `mysten/sui-tools:{SHA}`
+The pre-built Docker image for Bridge Indexer can be found in `mysten/sui-tools:{SHA}`
 
 ## Run Binary
 
