@@ -18,6 +18,8 @@ pub mod rocks;
 pub use typed_store_error::TypedStoreError;
 pub mod sally;
 pub mod test_db;
+pub mod tidehunter;
+
 pub use metrics::DBMetrics;
 
 pub type StoreError = typed_store_error::TypedStoreError;
