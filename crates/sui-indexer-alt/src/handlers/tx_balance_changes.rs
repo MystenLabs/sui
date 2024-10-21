@@ -32,7 +32,7 @@ impl Handler for TxBalanceChanges {
 
     type Value = StoredTxBalanceChange;
 
-    fn handle(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,

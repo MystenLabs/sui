@@ -23,7 +23,7 @@ impl Handler for KvObjects {
 
     type Value = StoredObject;
 
-    fn handle(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let deleted_objects = checkpoint
             .eventually_removed_object_refs_post_version()
             .into_iter()
