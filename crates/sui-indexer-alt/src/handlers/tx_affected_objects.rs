@@ -23,7 +23,7 @@ impl Handler for TxAffectedObjects {
 
     type Value = StoredTxAffectedObject;
 
-    fn handle(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    fn process(checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
             transactions,
             checkpoint_summary,

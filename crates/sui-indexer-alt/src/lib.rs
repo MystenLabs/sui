@@ -5,10 +5,11 @@ use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use anyhow::{Context, Result};
 use db::{Db, DbConfig};
-use handlers::{pipeline, CommitterConfig, Handler};
+use handlers::Handler;
 use ingestion::{IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
+use pipeline::{concurrent, PipelineConfig};
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -20,6 +21,7 @@ pub mod handlers;
 pub mod ingestion;
 pub mod metrics;
 pub mod models;
+pub mod pipeline;
 pub mod schema;
 pub mod task;
 
@@ -37,7 +39,7 @@ pub struct Indexer {
     ingestion_service: IngestionService,
 
     /// Parameters for the committers of each pipeline.
-    committer_config: CommitterConfig,
+    pipeline_config: PipelineConfig,
 
     /// Optional override of the checkpoint lowerbound.
     first_checkpoint: Option<u64>,
@@ -69,7 +71,7 @@ pub struct IndexerConfig {
     pub db_config: DbConfig,
 
     #[command(flatten)]
-    pub committer_config: CommitterConfig,
+    pub pipeline_config: PipelineConfig,
 
     /// Override for the checkpoint to start ingestion from -- useful for backfills. By default,
     /// ingestion will start just after the lowest checkpoint watermark across all active
@@ -97,7 +99,7 @@ impl Indexer {
         let IndexerConfig {
             ingestion_config,
             db_config,
-            committer_config,
+            pipeline_config,
             first_checkpoint,
             last_checkpoint,
             pipeline,
@@ -118,7 +120,7 @@ impl Indexer {
             metrics,
             metrics_service,
             ingestion_service,
-            committer_config,
+            pipeline_config,
             first_checkpoint,
             last_checkpoint,
             enabled_pipelines: pipeline.into_iter().collect(),
@@ -130,7 +132,7 @@ impl Indexer {
 
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
-    pub async fn pipeline<H: Handler + 'static>(&mut self) -> Result<()> {
+    pub async fn concurrent_pipeline<H: Handler + 'static>(&mut self) -> Result<()> {
         if !self.enabled_pipelines.is_empty() && !self.enabled_pipelines.contains(H::NAME) {
             info!("Skipping pipeline {}", H::NAME);
             return Ok(());
@@ -148,9 +150,9 @@ impl Indexer {
             .map_or(0, |w| w.checkpoint_hi_inclusive as u64 + 1)
             .min(self.first_checkpoint_from_watermark);
 
-        let (handler, committer) = pipeline::<H>(
+        let (handler, committer) = concurrent::pipeline::<H>(
             watermark,
-            self.committer_config.clone(),
+            self.pipeline_config.clone(),
             self.db.clone(),
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
