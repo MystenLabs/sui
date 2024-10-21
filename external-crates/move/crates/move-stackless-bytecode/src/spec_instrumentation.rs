@@ -143,9 +143,11 @@ impl FunctionTargetProcessor for SpecInstrumentationProcessor {
             // NOTE(mengxu): do not clear the code if we are instrumenting for the interpreter.
             // For functions whose verification is turned off with `pragma verify=false` or due to
             // other reasons, we still want to keep a copy of the code in baseline.
-            if !options.for_interpretation {
-                data.code = vec![];
-            }
+            // if !options.for_interpretation {
+            //     data.code = vec![];
+            // }
+
+            // Andrei & Cosmin: we just leave the body of the function in place for now
             data
         }
     }
@@ -364,18 +366,20 @@ impl<'a> Instrumenter<'a> {
                 self.emit_save_for_old(&saved_params);
             }
         } else {
+            // Andrei & Cosmin: see above comment about leaving the body of the function in place
+
             // The inlined variant may have an inlined spec that used "old" values - these need to
             // be saved in both cases
-            assert!(
-                verification_analysis::get_info(&FunctionTarget::new(
-                    self.builder.fun_env,
-                    &self.builder.data
-                ))
-                .inlined
-                    || targets
-                        .get_fun_by_opaque_spec(&self.builder.fun_env.get_qualified_id())
-                        .is_some()
-            );
+            // assert!(
+            //     verification_analysis::get_info(&FunctionTarget::new(
+            //         self.builder.fun_env,
+            //         &self.builder.data
+            //     ))
+            //     .inlined
+            //         || targets
+            //             .get_fun_by_opaque_spec(&self.builder.fun_env.get_qualified_id())
+            //             .is_some()
+            // );
             for translated_spec in inlined_props.values().map(|(s, _)| s) {
                 let saved_params = translated_spec.saved_params.clone();
                 self.emit_save_for_old(&saved_params);
