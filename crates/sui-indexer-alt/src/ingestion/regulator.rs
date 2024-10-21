@@ -27,7 +27,7 @@ use tracing::info;
 ///
 /// The task will shut down if the `cancel` token is signalled, or if the `checkpoints` iterator
 /// runs out.
-pub(crate) fn regulator<I>(
+pub(super) fn regulator<I>(
     checkpoints: I,
     buffer_size: usize,
     mut ingest_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,

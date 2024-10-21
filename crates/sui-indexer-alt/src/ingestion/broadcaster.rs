@@ -22,7 +22,7 @@ use super::{client::IngestionClient, IngestionConfig};
 ///
 /// The task will shut down if the `cancel` token is signalled, or if the `checkpoint_rx` channel
 /// closes.
-pub(crate) fn broadcaster(
+pub(super) fn broadcaster(
     config: IngestionConfig,
     client: IngestionClient,
     metrics: Arc<IndexerMetrics>,
