@@ -23,6 +23,13 @@ pub const STORAGE_COST_PER_COUNTER: u64 = 341 * 76 * 100;
 /// Used to estimate the budget required for each transaction.
 pub const ESTIMATED_COMPUTATION_COST: u64 = 1_000_000;
 
+#[derive(Debug, Clone, Copy)]
+pub enum FailureType {
+    InvalidSignature,
+    LowGasBudget,
+    // Add other failure types as needed
+}
+
 #[async_trait]
 pub trait WorkloadBuilder<T: Payload + ?Sized>: Send + Sync + std::fmt::Debug {
     async fn generate_coin_config_for_init(&self) -> Vec<GasCoinConfig>;
