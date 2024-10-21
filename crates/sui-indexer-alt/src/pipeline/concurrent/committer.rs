@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeMap, mem, sync::Arc, time::Duration};
 
 use mysten_metrics::spawn_monitored_task;
 use tokio::{
@@ -20,7 +16,7 @@ use crate::{
     db::Db,
     handlers::Handler,
     metrics::IndexerMetrics,
-    models::watermarks::{CommitterWatermark, Ordering},
+    models::watermarks::CommitterWatermark,
     pipeline::{Indexed, PipelineConfig},
 };
 
@@ -29,10 +25,6 @@ const COOLDOWN_INTERVAL: Duration = Duration::from_millis(20);
 
 /// The committer will wait at least this long between attempts to commit a failed batch.
 const RETRY_INTERVAL: Duration = Duration::from_millis(100);
-
-/// Tracing message for the watermark update will be logged at info level at least this many
-/// checkpoints.
-const LOUD_WATERMARK_UPDATE_INTERVAL: i64 = 5 * 10;
 
 /// The committer task is responsible for gathering rows to write to the database. It is a single
 /// work loop that gathers checkpoint-wise row information, and periodically writes them out to the
@@ -56,12 +48,16 @@ const LOUD_WATERMARK_UPDATE_INTERVAL: i64 = 5 * 10;
 /// again at the next opportunity, potentially adding more rows to the batch if more have arrived
 /// in the interim.
 ///
+/// On every successful write of a batch, the committer sends the checkpoint watermarks associated
+/// with the batch to the `watermark_tx` channel, where they will be used to update the watermarks
+/// table associated with this pipeline.
+///
 /// This task will shutdown if canceled via the `cancel` token, or if the channel it receives data
 /// on has been closed by the handler for some reason.
 pub(super) fn committer<H: Handler + 'static>(
-    watermark: Option<CommitterWatermark<'static>>,
     config: PipelineConfig,
-    mut rx: mpsc::Receiver<Indexed<H>>,
+    mut indexed_rx: mpsc::Receiver<Indexed<H>>,
+    watermark_tx: mpsc::Sender<Vec<CommitterWatermark<'static>>>,
     db: Db,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -89,31 +85,7 @@ pub(super) fn committer<H: Handler + 'static>(
         let mut pending: BTreeMap<u64, Indexed<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
-        // Track the high watermark for the pipeline. The pipeline confirms that it has written all
-        // checkpoint data up from the watermark it is initialised with up to and including this
-        // watermark.
-        //
-        // To correctly update the watermark, the committer tracks the watermark it last tried to
-        // write and the watermarks for any checkpoints that have been written since then
-        // ("pre-committed"). After each batch is written, the committer will try to progress the
-        // watermark as much as possible without going over any holes in the sequence of
-        // checkpoints.
-        //
-        // NOTE: When no watermark is provided, it is assumed that the pipeline is starting from
-        // scratch, but we still initialize it as if it is at (after) the genesis checkpoint. This
-        // means we never write a watermark for the genesis checkpoint, but would wait for another
-        // checkpoint to be written out before updating the watermark, which is fine in practice
-        // and simplifies the logic of tracking watermarks.
-        let mut precommitted: BTreeSet<CommitterWatermark<'static>> = BTreeSet::new();
-        let mut watermark =
-            watermark.unwrap_or_else(|| CommitterWatermark::initial(H::NAME.into()));
-
-        // The committer will periodically output a log message at a higher log level to
-        // demonstrate that the pipeline is making progress.
-        let mut next_loud_watermark_update =
-            watermark.checkpoint_hi_inclusive + LOUD_WATERMARK_UPDATE_INTERVAL;
-
-        info!(pipeline = H::NAME, ?watermark, "Starting committer");
+        info!(pipeline = H::NAME, "Starting committer");
 
         loop {
             tokio::select! {
@@ -131,7 +103,7 @@ pub(super) fn committer<H: Handler + 'static>(
                 // Time to write out another batch of rows, and update the watermark, if we can.
                 _ = poll.tick() => {
                     let Ok(mut conn) = db.connect().await else {
-                        warn!(pipeline = H::NAME, "Failed to get connection for DB");
+                        warn!(pipeline = H::NAME, "Committer failed to get connection for DB");
                         cool.reset();
                         continue;
                     };
@@ -262,138 +234,18 @@ pub(super) fn committer<H: Handler + 'static>(
                     );
 
                     pending_rows -= batch_values.len();
+                    batch_values.clear();
                     attempt = 0;
 
-                    precommitted.extend(batch_watermarks.drain(..));
-                    batch_values.clear();
-
-                    // Check if the pipeline's watermark needs to be updated
-                    let guard = metrics
-                        .watermark_gather_latency
-                        .with_label_values(&[H::NAME])
-                        .start_timer();
-
-                    let mut watermark_needs_update = false;
-                    while let Some(pending) = precommitted.first() {
-                        match watermark.next_cmp(pending) {
-                            Ordering::Future => break,
-                            Ordering::Past => {
-                                // Out of order watermarks can be encountered when a pipeline is
-                                // starting up, because ingestion must start at the lowest
-                                // checkpoint across all pipelines, or because of a backfill, where
-                                // the initial checkpoint has been overridden.
-                                //
-                                // Track how many we see to make sure it doesn't grow without
-                                // bound.
-                                metrics
-                                    .total_watermarks_out_of_order
-                                    .with_label_values(&[H::NAME])
-                                    .inc();
-
-                                precommitted.pop_first().unwrap();
-                            }
-
-                            Ordering::Next => {
-                                // SAFETY: `precommitted` is known to be non-empty because of the loop
-                                // condition.
-                                watermark = precommitted.pop_first().unwrap();
-                                watermark_needs_update = true;
-                            }
-                        }
-                    }
-
-                    let elapsed = guard.stop_and_record();
-
-                    metrics
-                        .watermark_epoch
-                        .with_label_values(&[H::NAME])
-                        .set(watermark.epoch_hi_inclusive);
-
-                    metrics
-                        .watermark_checkpoint
-                        .with_label_values(&[H::NAME])
-                        .set(watermark.checkpoint_hi_inclusive);
-
-                    metrics
-                        .watermark_transaction
-                        .with_label_values(&[H::NAME])
-                        .set(watermark.tx_hi);
-
-                    debug!(
-                        pipeline = H::NAME,
-                        elapsed_ms = elapsed * 1000.0,
-                        watermark = watermark.checkpoint_hi_inclusive,
-                        pending = precommitted.len(),
-                        "Gathered watermarks",
-                    );
-
-                    if !config.skip_watermark && watermark_needs_update {
-                        let guard = metrics
-                            .watermark_commit_latency
-                            .with_label_values(&[H::NAME])
-                            .start_timer();
-
-                        match watermark.update(&mut conn).await {
-                            // If there's an issue updating the watermark, log it but keep going,
-                            // it's OK for the watermark to lag from a correctness perspective.
-                            Err(e) => {
-                                let elapsed = guard.stop_and_record();
-                                error!(
-                                    pipeline = H::NAME,
-                                    elapsed_ms = elapsed * 1000.0,
-                                    ?watermark,
-                                    "Error updating watermark: {e}",
-                                );
-                            }
-
-                            Ok(updated) => {
-                                let elapsed = guard.stop_and_record();
-
-                                if updated {
-                                    metrics
-                                        .watermark_epoch_in_db
-                                        .with_label_values(&[H::NAME])
-                                        .set(watermark.epoch_hi_inclusive);
-
-                                    metrics
-                                        .watermark_checkpoint_in_db
-                                        .with_label_values(&[H::NAME])
-                                        .set(watermark.checkpoint_hi_inclusive);
-
-                                    metrics
-                                        .watermark_transaction_in_db
-                                        .with_label_values(&[H::NAME])
-                                        .set(watermark.tx_hi);
-                                }
-
-                                if watermark.checkpoint_hi_inclusive > next_loud_watermark_update {
-                                    next_loud_watermark_update += LOUD_WATERMARK_UPDATE_INTERVAL;
-                                    info!(
-                                        pipeline = H::NAME,
-                                        elapsed_ms = elapsed * 1000.0,
-                                        updated,
-                                        epoch = watermark.epoch_hi_inclusive,
-                                        checkpoint = watermark.checkpoint_hi_inclusive,
-                                        transaction = watermark.tx_hi,
-                                        "Watermark",
-                                    );
-                                } else {
-                                    debug!(
-                                        pipeline = H::NAME,
-                                        elapsed_ms = elapsed * 1000.0,
-                                        updated,
-                                        epoch = watermark.epoch_hi_inclusive,
-                                        checkpoint = watermark.checkpoint_hi_inclusive,
-                                        transaction = watermark.tx_hi,
-                                        "Watermark",
-                                    );
-                                }
-                            }
-                        }
+                    if config.skip_watermark {
+                        batch_watermarks.clear();
+                    } else if !watermark_tx.send(mem::take(&mut batch_watermarks)).await.is_ok() {
+                        info!(pipeline = H::NAME, "Watermark closed channel, stopping committer");
+                        break;
                     }
 
                     // TODO (amnn): Test this behaviour (requires tempdb and migrations).
-                    if pending_rows == 0 && rx.is_closed() {
+                    if pending_rows == 0 && indexed_rx.is_closed() {
                         info!(pipeline = H::NAME, "Handler closed channel, pending rows empty, stopping committer");
                         break;
                     }
@@ -412,21 +264,14 @@ pub(super) fn committer<H: Handler + 'static>(
                     poll.reset_immediately();
                 }
 
-                Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_SIZE => {
+                Some(indexed) = indexed_rx.recv(), if pending_rows < H::MAX_PENDING_SIZE => {
                     metrics
                         .total_committer_rows_received
                         .with_label_values(&[H::NAME])
                         .inc_by(indexed.values.len() as u64);
 
-                    if indexed.values.is_empty() {
-                        // If the handler sends an empty batch, short-circuit the commit, and add
-                        // it directly to the pre-commit list.
-                        let (watermark, _) = indexed.into_batch();
-                        precommitted.insert(watermark);
-                    } else {
-                        pending_rows += indexed.values.len();
-                        pending.insert(indexed.cp_sequence_number, indexed);
-                    }
+                    pending_rows += indexed.values.len();
+                    pending.insert(indexed.cp_sequence_number, indexed);
                 }
             }
         }
