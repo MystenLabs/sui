@@ -468,6 +468,9 @@ impl WritebackCache {
             .entry(*object_id)
             .or_default()
             .insert(version, object.clone());
+
+        fail_point_async!("write_object_entry");
+
         self.cached.object_by_id_cache.insert(
             *object_id,
             Arc::new(Mutex::new(LatestObjectCacheEntry::Object(version, object))),
