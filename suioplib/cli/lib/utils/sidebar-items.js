@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["day_of_week","validate_project_name"]};

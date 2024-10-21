@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["balance_manager_id","checkpoint","digest","epoch","from_proposal_id","id","package","pool_id","sender","stake","star","timestamp","to_proposal_id"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EthBridgeEvent"],"mod":["eth_bridge_committee","eth_bridge_config","eth_bridge_limiter","eth_bridge_vault","eth_committee_upgradeable_contract","eth_erc20","eth_sui_bridge"],"struct":["EthToSuiTokenBridgeV1"]};

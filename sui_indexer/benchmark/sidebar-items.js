@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["run_indexer_benchmark"],"struct":["BenchmarkIndexer"]};
