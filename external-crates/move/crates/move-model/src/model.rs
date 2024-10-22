@@ -1851,7 +1851,10 @@ impl GlobalEnv {
     }
 
     pub fn declare_global_mut_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::DECLARE_GLOBAL_MUT_FUNCTION_NAME)
+        self.get_fun_qid(
+            Self::SPEC_MODULE_NAME,
+            Self::DECLARE_GLOBAL_MUT_FUNCTION_NAME,
+        )
     }
 
     pub fn havoc_global_qid(&self) -> QualifiedId<FunId> {
@@ -1859,11 +1862,57 @@ impl GlobalEnv {
     }
 
     pub fn invariant_begin_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::INVARIANT_BEGIN_FUNCTION_NAME)
+        self.get_fun_qid(
+            Self::PROVER_MODULE_NAME,
+            Self::INVARIANT_BEGIN_FUNCTION_NAME,
+        )
     }
 
     pub fn invariant_end_qid(&self) -> QualifiedId<FunId> {
         self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::INVARIANT_END_FUNCTION_NAME)
+    }
+
+    fn add_stub_module(&mut self, module_symbol: Symbol) {
+        if self.find_module_by_name(module_symbol).is_none() {
+            self.module_data.push(ModuleData {
+                name: ModuleName::new(Default::default(), module_symbol),
+                id: ModuleId::new(self.get_module_count()),
+                module: CompiledModule::default(),
+                named_constants: BTreeMap::new(),
+                struct_data: BTreeMap::new(),
+                struct_idx_to_id: BTreeMap::new(),
+                function_data: BTreeMap::new(),
+                function_idx_to_id: BTreeMap::new(),
+                // below this line is source/prover specific
+                spec_vars: BTreeMap::new(),
+                spec_funs: BTreeMap::new(),
+                module_spec: Spec::default(),
+                source_map: SourceMap::new(
+                    MoveIrLoc::new(FileHash::empty(), 0, 0),
+                    IR::ModuleIdent::new(
+                        IR::ModuleName(move_symbol_pool::Symbol::from(
+                            self.symbol_pool.string(module_symbol).as_str(),
+                        )),
+                        AccountAddress::ZERO,
+                    ),
+                ),
+                loc: Loc::default(),
+                attributes: Default::default(),
+                spec_block_infos: vec![],
+                used_modules: Default::default(),
+                friend_modules: Default::default(),
+                enum_data: BTreeMap::new(),
+                enum_idx_to_id: BTreeMap::new(),
+            })
+        }
+    }
+
+    pub fn add_stub_prover_module(&mut self) {
+        self.add_stub_module(self.symbol_pool().make(Self::PROVER_MODULE_NAME))
+    }
+
+    pub fn add_stub_spec_module(&mut self) {
+        self.add_stub_module(self.symbol_pool().make(Self::SPEC_MODULE_NAME))
     }
 }
 

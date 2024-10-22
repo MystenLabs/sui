@@ -698,15 +698,6 @@ impl<'env> BoogieTranslator<'env> {
     }
 
     fn translate_ghost_global(&mut self, mono_info: &std::rc::Rc<MonoInfo>) {
-        let ghost_global_fun_env = self.env.get_function(self.env.global_qid());
-        let ghost_global_fun_target = self
-            .targets
-            .get_target(&ghost_global_fun_env, &FunctionVariant::Baseline);
-        let ghost_havoc_global_fun_env = self.env.get_function(self.env.havoc_global_qid());
-        let ghost_havoc_global_fun_target = self
-            .targets
-            .get_target(&ghost_havoc_global_fun_env, &FunctionVariant::Baseline);
-
         let ghost_declare_global_type_instances = self
             .targets
             .specs()
@@ -733,6 +724,20 @@ impl<'env> BoogieTranslator<'env> {
             })
             .flatten()
             .collect::<BTreeSet<_>>();
+
+        if ghost_declare_global_type_instances.is_empty() {
+            return;
+        }
+
+        let ghost_global_fun_env = self.env.get_function(self.env.global_qid());
+        let ghost_global_fun_target = self
+            .targets
+            .get_target(&ghost_global_fun_env, &FunctionVariant::Baseline);
+        let ghost_havoc_global_fun_env = self.env.get_function(self.env.havoc_global_qid());
+        let ghost_havoc_global_fun_target = self
+            .targets
+            .get_target(&ghost_havoc_global_fun_env, &FunctionVariant::Baseline);
+
         let empty_set = &BTreeSet::new();
         let ghost_global_type_instances = mono_info
             .funs

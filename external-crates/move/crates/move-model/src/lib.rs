@@ -285,6 +285,10 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     // Now that it is known that the program has no errors, run the spec checker on verified units
     // plus expanded AST. This will populate the environment including any errors.
     run_spec_checker(&mut env, units, expansion_ast);
+
+    env.add_stub_prover_module();
+    env.add_stub_spec_module();
+
     Ok(env)
 }
 
