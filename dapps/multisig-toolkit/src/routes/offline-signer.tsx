@@ -9,7 +9,7 @@ import { fromBase64, toHex } from '@mysten/sui/utils';
 import { blake2b } from '@noble/hashes/blake2b';
 import { useMutation } from '@tanstack/react-query';
 import { AlertCircle, Terminal } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { ConnectWallet } from '@/components/connect';
 import { DryRunProvider, type Network } from '@/components/preview-effects/DryRunContext';
@@ -73,22 +73,20 @@ export default function OfflineSigner() {
 		},
 	});
 
-	// Step 3: Add state for the blake2b hash
-	const [ledgerTransactionHash, setLedgerTransactionhash] = useState<string>('');
-
-	// Step 4: Create a function to compute the blake2b hash
-	const computeLedgerTransactionHash = async () => {
+	// Step 3: compute the blake2b hash
+	const ledgerTransactionHash = useMemo(() => {
+		if (!bytes) return null;
 		try {
 			// Decode the base64-encoded transaction bytes
 			const decodedBytes = fromBase64(bytes);
 			const intentMessage = messageWithIntent('TransactionData', decodedBytes);
 			const intentMessageDigest = blake2b(intentMessage, { dkLen: 32 });
 			const intentMessageDigestHex = toHex(intentMessageDigest);
-			setLedgerTransactionhash(intentMessageDigestHex);
+			return `0x${intentMessageDigestHex}`;
 		} catch (error) {
-			setLedgerTransactionhash('Error computing hash');
+			return 'Error computing hash';
 		}
-	};
+	}, [bytes]);
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -130,14 +128,6 @@ export default function OfflineSigner() {
 								<Button disabled={!currentAccount || !bytes || isPending} onClick={() => mutate()}>
 									Sign Transaction
 								</Button>
-								{/* Step 5: Add a new button for blake2b hash */}
-								<Button
-									variant="secondary"
-									disabled={!bytes}
-									onClick={computeLedgerTransactionHash}
-								>
-									Show Ledger Transaction Hash
-								</Button>
 							</div>
 
 							<div className="justify-between md:justify-end flex gap-5">
@@ -175,8 +165,11 @@ export default function OfflineSigner() {
 						)}
 
 						{ledgerTransactionHash && (
-							<div className="border text-mono break-all rounded p-4">
-								0x{ledgerTransactionHash}
+							<div>
+								<h4 className="text-lg font-semibold">Ledger Transaction Hash</h4>
+								<div className="border text-mono break-all rounded p-4">
+									{ledgerTransactionHash}
+								</div>
 							</div>
 						)}
 					</div>
