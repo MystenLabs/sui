@@ -370,15 +370,15 @@ diesel::table! {
 }
 
 diesel::table! {
-    watermarks (entity) {
-        entity -> Text,
+    watermarks (pipeline) {
+        pipeline -> Text,
         epoch_hi_inclusive -> Int8,
-        epoch_lo -> Int8,
         checkpoint_hi_inclusive -> Int8,
-        tx_hi_inclusive -> Int8,
+        tx_hi -> Int8,
+        epoch_lo -> Int8,
         reader_lo -> Int8,
         timestamp_ms -> Int8,
-        pruner_hi_inclusive -> Nullable<Int8>,
+        pruner_hi -> Int8,
     }
 }
 

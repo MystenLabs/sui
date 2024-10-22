@@ -30,6 +30,7 @@ pub mod pruner;
 pub mod tx_processor;
 
 pub(crate) const CHECKPOINT_COMMIT_BATCH_SIZE: usize = 100;
+pub(crate) const UNPROCESSED_CHECKPOINT_SIZE_LIMIT: usize = 1000;
 
 #[derive(Debug)]
 pub struct CheckpointDataToCommit {
@@ -116,17 +117,25 @@ impl<T> CommonHandler<T> {
             }
 
             // Try to fetch new data tuple from the stream
-            match stream.next().now_or_never() {
-                Some(Some(tuple_chunk)) => {
-                    if cancel.is_cancelled() {
-                        return Ok(());
+            if unprocessed.len() >= UNPROCESSED_CHECKPOINT_SIZE_LIMIT {
+                tracing::info!(
+                    "Unprocessed checkpoint size reached limit {}, skip reading from stream...",
+                    UNPROCESSED_CHECKPOINT_SIZE_LIMIT
+                );
+            } else {
+                // Try to fetch new data tuple from the stream
+                match stream.next().now_or_never() {
+                    Some(Some(tuple_chunk)) => {
+                        if cancel.is_cancelled() {
+                            return Ok(());
+                        }
+                        for tuple in tuple_chunk {
+                            unprocessed.insert(tuple.0.checkpoint_hi_inclusive, tuple);
+                        }
                     }
-                    for tuple in tuple_chunk {
-                        unprocessed.insert(tuple.0.cp, tuple);
-                    }
+                    Some(None) => break, // Stream has ended
+                    None => {}           // No new data tuple available right now
                 }
-                Some(None) => break, // Stream has ended
-                None => {}           // No new data tuple available right now
             }
 
             // Process unprocessed checkpoints, even no new checkpoints from stream
@@ -191,17 +200,17 @@ pub trait Handler<T>: Send + Sync {
 /// will be used for a particular table.
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct CommitterWatermark {
-    pub epoch: u64,
-    pub cp: u64,
-    pub tx: u64,
+    pub epoch_hi_inclusive: u64,
+    pub checkpoint_hi_inclusive: u64,
+    pub tx_hi: u64,
 }
 
 impl From<&IndexedCheckpoint> for CommitterWatermark {
     fn from(checkpoint: &IndexedCheckpoint) -> Self {
         Self {
-            epoch: checkpoint.epoch,
-            cp: checkpoint.sequence_number,
-            tx: checkpoint.network_total_transactions.saturating_sub(1),
+            epoch_hi_inclusive: checkpoint.epoch,
+            checkpoint_hi_inclusive: checkpoint.sequence_number,
+            tx_hi: checkpoint.network_total_transactions,
         }
     }
 }
@@ -209,12 +218,9 @@ impl From<&IndexedCheckpoint> for CommitterWatermark {
 impl From<&CheckpointData> for CommitterWatermark {
     fn from(checkpoint: &CheckpointData) -> Self {
         Self {
-            epoch: checkpoint.checkpoint_summary.epoch,
-            cp: checkpoint.checkpoint_summary.sequence_number,
-            tx: checkpoint
-                .checkpoint_summary
-                .network_total_transactions
-                .saturating_sub(1),
+            epoch_hi_inclusive: checkpoint.checkpoint_summary.epoch,
+            checkpoint_hi_inclusive: checkpoint.checkpoint_summary.sequence_number,
+            tx_hi: checkpoint.checkpoint_summary.network_total_transactions,
         }
     }
 }
