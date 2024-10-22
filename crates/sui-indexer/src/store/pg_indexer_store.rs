@@ -65,6 +65,8 @@ use super::IndexerStore;
 
 use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use diesel::upsert::excluded;
+use futures::SinkExt;
+use hex::encode;
 use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 
 #[macro_export]
@@ -572,6 +574,44 @@ impl PgIndexerStore {
         .tap_err(|e| {
             tracing::error!("Failed to persist object history with error: {}", e);
         })
+    }
+
+    async fn persist_full_objects_history_chunk_with_copy_from(
+        &self,
+        idx: usize,
+        objects: Vec<StoredFullHistoryObject>,
+    ) -> Result<(), IndexerError> {
+        let query = format!(
+            "COPY {} (object_id, object_version, serialized_object) FROM STDIN",
+            "full_objects_history",
+        );
+        let mut sink = Box::pin(self.pool.clients[idx].copy_in(&query).await.unwrap());
+
+        // Stream the data to the connection
+        for object in objects {
+            // Convert object_id to a hex-encoded string or another suitable format for PostgreSQL
+            let object_id_str = encode(&object.object_id);
+
+            // Handle serialized_object (convert to hex if it exists, or use NULL)
+            let serialized_object_str = match &object.serialized_object {
+                Some(bytes) => encode(bytes),
+                None => "\\N".to_string(), // \N represents NULL in PostgreSQL's COPY
+            };
+
+            // Prepare the tab-separated line for each entry
+            let line = format!(
+                "{}\t{}\t{}\n",
+                object_id_str, object.object_version, serialized_object_str
+            );
+
+            // Send the line into the COPY sink
+            let line_bytes = bytes::Bytes::from(line);
+            sink.as_mut().send(line_bytes).await.unwrap();
+        }
+
+        // Finish the COPY process
+        sink.as_mut().finish().await.unwrap();
+        Ok(())
     }
 
     async fn persist_full_objects_history_chunk(
@@ -1897,7 +1937,7 @@ impl IndexerStore for PgIndexerStore {
         if object_changes.is_empty() {
             return Ok(());
         }
-        let objects: Vec<StoredFullHistoryObject> = object_changes
+        let mut objects: Vec<StoredFullHistoryObject> = object_changes
             .into_iter()
             .flat_map(|c| {
                 let TransactionObjectChangesToCommit {
@@ -1910,16 +1950,21 @@ impl IndexerStore for PgIndexerStore {
                     .chain(deleted_objects.into_iter().map(|o| o.into()))
             })
             .collect();
+        // Make each object ID fake, so that it's easy to delete them.
+        for object in objects.iter_mut() {
+            object.object_id.insert(0, 0x41);
+        }
+        let len = objects.len();
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_full_objects_history
             .start_timer();
 
-        let len = objects.len();
-        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
+        let chunks = chunk!(objects, 10);
         let futures = chunks
             .into_iter()
-            .map(|c| self.persist_full_objects_history_chunk(c))
+            .enumerate()
+            .map(|(idx, c)| self.persist_full_objects_history_chunk_with_copy_from(idx, c))
             .collect::<Vec<_>>();
 
         futures::future::join_all(futures)

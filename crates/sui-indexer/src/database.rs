@@ -21,6 +21,7 @@ use crate::db::ConnectionPoolConfig;
 pub struct ConnectionPool {
     database_url: Arc<Url>,
     pool: Pool<AsyncPgConnection>,
+    pub clients: Vec<Arc<tokio_postgres::Client>>,
 }
 
 impl ConnectionPool {
@@ -33,12 +34,29 @@ impl ConnectionPool {
         let manager =
             AsyncDieselConnectionManager::new_with_config(database_url.as_str(), manager_config);
 
+        let mut clients = vec![];
+        for _ in 0..10 {
+            let (client, connection) =
+                tokio_postgres::connect(database_url.as_str(), tokio_postgres::NoTls)
+                    .await
+                    .unwrap();
+            tokio::spawn(async move {
+                if let Err(e) = connection.await {
+                    tracing::error!("connection error: {}", e);
+                }
+            });
+            clients.push(Arc::new(client));
+        }
         Pool::builder()
             .max_size(config.pool_size)
             .connection_timeout(config.connection_timeout)
             .build(manager)
             .await
-            .map(|pool| Self { database_url, pool })
+            .map(|pool| Self {
+                database_url,
+                pool,
+                clients,
+            })
     }
 
     /// Retrieves a connection from the pool.

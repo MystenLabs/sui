@@ -74,6 +74,7 @@ diesel_migrations.workspace = true
 cached.workspace = true
 tokio-stream.workspace = true
 dashmap.workspace = true
+tokio-postgres = "0.7.12"
 
 [dev-dependencies]
 sui-keys.workspace = true

@@ -13856,6 +13856,7 @@ dependencies = [
  "test-cluster",
  "thiserror",
  "tokio",
+ "tokio-postgres",
  "tokio-stream",
  "tokio-util 0.7.10",
  "toml 0.7.4",
