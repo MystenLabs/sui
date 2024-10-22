@@ -2938,7 +2938,7 @@ async fn execute_dev_inspect(
     skip_checks: Option<bool>,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let client = context.get_client().await?;
-    let gas_budget = gas_budget.map(|x| sui_serde::BigInt::from(x));
+    let gas_budget = gas_budget.map(sui_serde::BigInt::from);
     let mut gas_objs = vec![];
     let gas_objects = if let Some(gas_payment) = gas_payment {
         for o in gas_payment.iter() {
