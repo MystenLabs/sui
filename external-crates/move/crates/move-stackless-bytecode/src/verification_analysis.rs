@@ -105,7 +105,9 @@ impl FunctionTargetProcessor for VerificationAnalysisProcessor {
             .iter()
             .any(|menv| menv.get_id() == fun_env.module_env.get_id());
         if is_in_target_module {
-            if Self::is_within_verification_scope(fun_env) {
+            if targets.is_spec(&fun_env.get_qualified_id())
+                && Self::is_within_verification_scope(fun_env)
+            {
                 Self::mark_verified(fun_env, &mut data, targets);
             }
             return data;
@@ -421,12 +423,11 @@ impl VerificationAnalysisProcessor {
     /// `mark_inlined` function above.
     fn mark_callees_inlined(fun_env: &FunctionEnv, targets: &mut FunctionTargetsHolder) {
         for callee in fun_env.get_called_functions() {
+            let callee_env = fun_env.module_env.env.get_function(callee);
+            Self::mark_inlined(&callee_env, targets);
             if let Some(spec_id) = targets.get_opaque_spec_by_fun(&callee) {
                 let spec_env = fun_env.module_env.env.get_function(*spec_id);
                 Self::mark_inlined(&spec_env, targets);
-            } else {
-                let callee_env = fun_env.module_env.env.get_function(callee);
-                Self::mark_inlined(&callee_env, targets);
             }
         }
     }

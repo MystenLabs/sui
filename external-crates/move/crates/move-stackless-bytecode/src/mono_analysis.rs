@@ -34,6 +34,7 @@ use crate::{
     spec_global_variable_analysis,
     stackless_bytecode::{BorrowEdge, Bytecode, Operation},
     usage_analysis::UsageProcessor,
+    verification_analysis,
 };
 
 /// The environment extension computed by this analysis.
@@ -244,9 +245,13 @@ impl<'a> Analyzer<'a> {
         for module in self.env.get_modules() {
             for fun in module.get_functions() {
                 for (variant, target) in self.targets.get_targets(&fun) {
-                    if !self.targets.is_spec(&fun.get_qualified_id()) {
+                    if !(variant.is_verified()
+                        || self.targets.is_spec(&fun.get_qualified_id())
+                            && verification_analysis::get_info(&target).inlined)
+                    {
                         continue;
                     }
+
                     self.analyze_fun(target.clone());
 
                     let info = spec_global_variable_analysis::get_info(&target.data);
