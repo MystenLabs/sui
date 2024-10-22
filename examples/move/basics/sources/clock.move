@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// I shouldn't be here
 module basics::clock {
     use sui::{clock::Clock, event};
 
