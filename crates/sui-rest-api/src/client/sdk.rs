@@ -23,7 +23,6 @@ use tap::Pipe;
 
 use crate::accounts::AccountOwnedObjectInfo;
 use crate::accounts::ListAccountOwnedObjectsQueryParameters;
-use crate::checkpoints::CheckpointResponse;
 use crate::checkpoints::ListCheckpointsQueryParameters;
 use crate::coins::CoinInfo;
 use crate::health::Threshold;
@@ -285,7 +284,7 @@ impl Client {
     pub async fn get_checkpoint(
         &self,
         checkpoint_sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Response<CheckpointResponse>> {
+    ) -> Result<Response<SignedCheckpointSummary>> {
         let url = self
             .url()
             .join(&format!("checkpoints/{checkpoint_sequence_number}"))?;
@@ -305,7 +304,6 @@ impl Client {
             limit: Some(1),
             start: None,
             direction: None,
-            contents: false,
         };
 
         let (mut page, parts) = self.list_checkpoints(&parameters).await?.into_parts();
@@ -313,10 +311,6 @@ impl Client {
         let checkpoint = page
             .pop()
             .ok_or_else(|| Error::new_message("server returned empty checkpoint list"))?;
-        let checkpoint = SignedCheckpointSummary {
-            checkpoint: checkpoint.checkpoint,
-            signature: checkpoint.signature,
-        };
 
         Ok(Response::new(checkpoint, parts))
     }
@@ -324,7 +318,7 @@ impl Client {
     pub async fn list_checkpoints(
         &self,
         parameters: &ListCheckpointsQueryParameters,
-    ) -> Result<Response<Vec<CheckpointResponse>>> {
+    ) -> Result<Response<Vec<SignedCheckpointSummary>>> {
         let url = self.url().join("checkpoints")?;
 
         let response = self
