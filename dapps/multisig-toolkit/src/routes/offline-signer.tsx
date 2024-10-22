@@ -3,7 +3,10 @@
 
 import { useCurrentAccount, useSignTransaction, useSuiClientContext } from '@mysten/dapp-kit';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { messageWithIntent } from '@mysten/sui/cryptography';
 import { Transaction } from '@mysten/sui/transactions';
+import { fromBase64, toHex } from '@mysten/sui/utils';
+import { blake2b } from '@noble/hashes/blake2b';
 import { useMutation } from '@tanstack/react-query';
 import { AlertCircle, Terminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -70,6 +73,23 @@ export default function OfflineSigner() {
 		},
 	});
 
+	// Step 3: Add state for the blake2b hash
+	const [ledgerTransactionHash, setLedgerTransactionhash] = useState<string>('');
+
+	// Step 4: Create a function to compute the blake2b hash
+	const computeLedgerTransactionHash = async () => {
+		try {
+			// Decode the base64-encoded transaction bytes
+			const decodedBytes = fromBase64(bytes);
+			const intentMessage = messageWithIntent('TransactionData', decodedBytes);
+			const intentMessageDigest = blake2b(intentMessage, { dkLen: 32 });
+			const intentMessageDigestHex = toHex(intentMessageDigest);
+			setLedgerTransactionhash(intentMessageDigestHex);
+		} catch (error) {
+			setLedgerTransactionhash('Error computing hash');
+		}
+	};
+
 	return (
 		<div className="flex flex-col gap-4">
 			<h2 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
@@ -110,6 +130,14 @@ export default function OfflineSigner() {
 								<Button disabled={!currentAccount || !bytes || isPending} onClick={() => mutate()}>
 									Sign Transaction
 								</Button>
+								{/* Step 5: Add a new button for blake2b hash */}
+								<Button
+									variant="secondary"
+									disabled={!bytes}
+									onClick={computeLedgerTransactionHash}
+								>
+									Show Ledger Transaction Hash
+								</Button>
 							</div>
 
 							<div className="justify-between md:justify-end flex gap-5">
@@ -144,6 +172,12 @@ export default function OfflineSigner() {
 							<DryRunProvider network={dryRunNetwork}>
 								<EffectsPreview output={dryRunData} network={dryRunNetwork} />
 							</DryRunProvider>
+						)}
+
+						{ledgerTransactionHash && (
+							<div className="border text-mono break-all rounded p-4">
+								0x{ledgerTransactionHash}
+							</div>
 						)}
 					</div>
 				</TabsContent>
