@@ -7,6 +7,7 @@ use committer::committer;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use watermark::watermark;
 
 use crate::{
     db::Db, handlers::Handler, metrics::IndexerMetrics, models::watermarks::CommitterWatermark,
@@ -15,6 +16,7 @@ use crate::{
 use super::{processor::processor, PipelineConfig, COMMITTER_BUFFER};
 
 mod committer;
+mod watermark;
 
 /// Start a new concurrent (out-of-order) indexing pipeline served by the handler, `H`. Starting
 /// strictly after the `watermark` (or from the beginning if no watermark was provided).
@@ -32,17 +34,28 @@ mod committer;
 /// channel is created to communicate checkpoint-wise data to the committer. The pipeline can be
 /// shutdown using its `cancel` token.
 pub fn pipeline<H: Handler + 'static>(
-    watermark: Option<CommitterWatermark<'static>>,
+    initial_watermark: Option<CommitterWatermark<'static>>,
     config: PipelineConfig,
     db: Db,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> (JoinHandle<()>, JoinHandle<()>) {
+) -> (JoinHandle<()>, JoinHandle<()>, JoinHandle<()>) {
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + COMMITTER_BUFFER);
+    let (watermark_tx, watermark_rx) = mpsc::channel(COMMITTER_BUFFER);
 
     let processor = processor::<H>(checkpoint_rx, processor_tx, metrics.clone(), cancel.clone());
-    let committer = committer::<H>(watermark, config, committer_rx, db, metrics, cancel);
 
-    (processor, committer)
+    let committer = committer::<H>(
+        config.clone(),
+        committer_rx,
+        watermark_tx,
+        db.clone(),
+        metrics.clone(),
+        cancel.clone(),
+    );
+
+    let watermark = watermark::<H>(initial_watermark, config, watermark_rx, db, metrics, cancel);
+
+    (processor, committer, watermark)
 }
