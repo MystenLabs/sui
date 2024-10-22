@@ -41,7 +41,7 @@ use crate::models::epoch::{StoredFeatureFlag, StoredProtocolConfig};
 use crate::models::events::StoredEvent;
 use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{
-    StoredDeletedObject, StoredFullHistoryObject, StoredHistoryObject, StoredObject,
+    NewStoredFullHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
     StoredObjectSnapshot,
 };
 use crate::models::packages::StoredPackage;
@@ -576,7 +576,7 @@ impl PgIndexerStore {
 
     async fn persist_full_objects_history_chunk(
         &self,
-        objects: Vec<StoredFullHistoryObject>,
+        objects: Vec<NewStoredFullHistoryObject>,
     ) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
@@ -1897,7 +1897,7 @@ impl IndexerStore for PgIndexerStore {
         if object_changes.is_empty() {
             return Ok(());
         }
-        let objects: Vec<StoredFullHistoryObject> = object_changes
+        let objects: Vec<NewStoredFullHistoryObject> = object_changes
             .into_iter()
             .flat_map(|c| {
                 let TransactionObjectChangesToCommit {

@@ -3,8 +3,10 @@
 -- of point lookups.
 CREATE TABLE full_objects_history
 (
+    id                          bigserial     PRIMARY KEY,
     object_id                   bytea         NOT NULL,
     object_version              bigint        NOT NULL,
-    serialized_object           bytea,
-    PRIMARY KEY (object_id, object_version)
+    serialized_object           bytea
 );
+
+CREATE INDEX full_objects_history_object_id_version_idx ON full_objects_history(object_id, object_version);

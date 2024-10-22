@@ -438,15 +438,24 @@ impl TryFrom<CoinBalance> for Balance {
     }
 }
 
-#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName, Selectable)]
-#[diesel(table_name = full_objects_history, primary_key(object_id, object_version))]
+#[derive(Queryable, Debug, Identifiable, Clone, QueryableByName, Selectable)]
+#[diesel(table_name = full_objects_history, primary_key(id))]
 pub struct StoredFullHistoryObject {
+    pub id: i64,
     pub object_id: Vec<u8>,
     pub object_version: i64,
     pub serialized_object: Option<Vec<u8>>,
 }
 
-impl From<IndexedObject> for StoredFullHistoryObject {
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = full_objects_history, primary_key(id))]
+pub struct NewStoredFullHistoryObject {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub serialized_object: Option<Vec<u8>>,
+}
+
+impl From<IndexedObject> for NewStoredFullHistoryObject {
     fn from(o: IndexedObject) -> Self {
         let object = o.object;
         Self {
@@ -457,7 +466,7 @@ impl From<IndexedObject> for StoredFullHistoryObject {
     }
 }
 
-impl From<IndexedDeletedObject> for StoredFullHistoryObject {
+impl From<IndexedDeletedObject> for NewStoredFullHistoryObject {
     fn from(o: IndexedDeletedObject) -> Self {
         Self {
             object_id: o.object_id.to_vec(),
