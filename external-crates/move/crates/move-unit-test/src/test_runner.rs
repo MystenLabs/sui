@@ -28,7 +28,7 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
-use move_vm_runtime::shared::gas::GasMeter;
+use move_vm_runtime::{dev_utils::storage::StoredPackage, shared::gas::GasMeter};
 use move_vm_runtime::{
     dev_utils::{
         gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
@@ -77,7 +77,18 @@ fn setup_test_storage<'a>(
     adapter: &mut InMemoryTestAdapter,
     modules: impl Iterator<Item = &'a CompiledModule>,
 ) -> Result<()> {
-    adapter.insert_modules_into_storage(modules.map(|module| module.clone()).collect())
+    let mut packages = BTreeMap::new();
+    for module in modules {
+        let entry = packages
+            .entry(*module.self_id().address())
+            .or_insert_with(Vec::new);
+        entry.push(module.clone());
+    }
+    for (addr, modules) in packages {
+        let package = StoredPackage::from_modules_for_testing(addr, modules).unwrap();
+        adapter.insert_package_into_storage(package);
+    }
+    Ok(())
 }
 
 fn convert_clever_move_abort_error(
@@ -260,15 +271,14 @@ impl SharedTestingConfig {
             function_name: &str,
             arguments: Vec<MoveValue>,
         ) -> VMResult<(Vec<Vec<u8>>, NativeContextExtensions<'extensions>)> {
-            // TODO: This does not support upgrades. Maybe that does not matter?
             let link_context = test_config
                 .vm_test_adapter
                 .read()
-                .generate_default_linkage(*module_id.address())?;
+                .get_linkage_context(*module_id.address())?;
             let extensions = extensions::new_extensions();
             let adapter = test_config.vm_test_adapter.read();
             let mut vm_instance =
-                adapter.mave_vm_with_native_extensions(link_context, extensions)?;
+                adapter.make_vm_with_native_extensions(link_context, extensions)?;
 
             let function_name = IdentStr::new(function_name).unwrap();
 

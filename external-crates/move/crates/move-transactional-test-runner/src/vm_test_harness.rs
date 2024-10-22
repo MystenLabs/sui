@@ -30,7 +30,7 @@ use move_vm_runtime::{
     dev_utils::{
         gas_schedule::{self, GasStatus},
         in_memory_test_adapter::InMemoryTestAdapter,
-        storage::InMemoryStorage,
+        storage::{InMemoryStorage, StoredPackage},
         vm_test_adapter::VMTestAdapter,
     },
     natives::move_stdlib::{stdlib_native_functions, GasParameters},
@@ -219,11 +219,16 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
                 let linkage_context =
                     LinkageContext::new(sender, HashMap::from([(sender, sender)]));
                 println!("calling stdlib publish with address {sender:?}");
+                let pkg = StoredPackage::from_module_for_testing_with_linkage(
+                    sender,
+                    linkage_context,
+                    move_stdlib,
+                )
+                .unwrap();
                 inner_adapter
-                    .publish_package_modules_for_test(
-                        linkage_context,
+                    .publish_package(
                         sender,
-                        move_stdlib,
+                        pkg.into_serialized_package(),
                         // FIXME(cswords): support gas
                         // gas_status,
                     )
@@ -264,27 +269,24 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
         println!("computing sender");
         let sender = *id.address();
         println!("performing publish for {sender}");
-        let ser_modules = pub_modules
-            .iter()
-            .map(|module| {
-                let mut module_bytes = vec![];
-                module.serialize_with_version(module.version, &mut module_bytes)?;
-                Ok(module_bytes)
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        let publish_result =
-            self.perform_action(gas_budget, |inner_adapter, _gas_status| {
-                // TODO: If there are linkage directives, respect them here.
-                println!("generating linkage");
-                let linkage_context = extra_args.overlay(
-                    inner_adapter.generate_linkage_context(sender, sender, &pub_modules)?,
-                )?;
-                println!("linkage: {linkage_context:#?}");
-                println!("doing publish");
-                inner_adapter.publish_package(linkage_context, sender, ser_modules)?;
-                println!("done");
-                Ok(())
-            });
+        println!("generating linkage");
+        let linkage_context = extra_args.overlay(self.adapter.generate_linkage_context(
+            sender,
+            sender,
+            &pub_modules,
+        )?)?;
+        println!("linkage: {linkage_context:#?}");
+        println!("doing publish");
+        let pkg = StoredPackage::from_module_for_testing_with_linkage(
+            sender,
+            linkage_context,
+            pub_modules.clone(),
+        )?;
+        let publish_result = self.perform_action(gas_budget, |inner_adapter, _gas_status| {
+            inner_adapter.publish_package(sender, pkg.into_serialized_package())?;
+            println!("done");
+            Ok(())
+        });
         match publish_result {
             Ok(()) => Ok((None, modules)),
             Err(e) => Err(anyhow!(
@@ -327,7 +329,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
                 // TODO: If there are linkage directives, respect them here.
                 println!("generating linkage");
                 let mut linkage =
-                    extra_args.overlay(inner_adapter.generate_default_linkage(runtime_id)?)?;
+                    extra_args.overlay(inner_adapter.get_linkage_context(runtime_id)?)?;
                 linkage.add_type_arg_addresses_reflexive(&type_arg_tags);
 
                 println!("generating vm instance");

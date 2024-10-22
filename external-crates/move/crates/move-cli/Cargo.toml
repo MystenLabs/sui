@@ -19,6 +19,7 @@ tempfile.workspace = true
 walkdir.workspace = true
 codespan-reporting.workspace = true
 toml_edit.workspace = true
+serde.workspace = true
 
 bcs.workspace = true
 

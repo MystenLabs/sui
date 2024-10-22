@@ -6,6 +6,7 @@ use crate::{
     dev_utils::{
         compilation_utils::{as_module, compile_units},
         in_memory_test_adapter::InMemoryTestAdapter,
+        storage::StoredPackage,
         vm_test_adapter::VMTestAdapter,
     },
     shared::{gas::UnmeteredGasMeter, serialization::SerializedReturnValues},
@@ -92,9 +93,7 @@ fn run(
     let module_id = &module.0;
     let modules = vec![module.clone()];
     let adapter = setup_vm(&modules);
-    let linkage = adapter
-        .generate_default_linkage(*module_id.address())
-        .unwrap();
+    let linkage = adapter.get_linkage_context(*module_id.address()).unwrap();
     let mut session = adapter.make_vm(linkage).unwrap();
 
     let fun_name = Identifier::new(fun_name).unwrap();
@@ -113,14 +112,17 @@ type ModuleCode = (ModuleId, String);
 // TODO - move some utility functions to where test infra lives, see about unifying with similar code
 fn setup_vm(modules: &[ModuleCode]) -> InMemoryTestAdapter {
     let mut adapter = InMemoryTestAdapter::new();
-    let modules = modules
+    let modules: Vec<_> = modules
         .into_iter()
         .map(|(_, code)| {
             let mut units = compile_units(code).unwrap();
             as_module(units.pop().unwrap())
         })
         .collect();
-    adapter.insert_modules_into_storage(modules).unwrap();
+    adapter.insert_package_into_storage(
+        StoredPackage::from_modules_for_testing(*modules.first().unwrap().address(), modules)
+            .unwrap(),
+    );
     adapter
 }
 

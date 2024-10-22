@@ -7,11 +7,7 @@ use crate::{
     execution::{dispatch_tables::VMDispatchTables, vm::MoveVM},
     jit,
     natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
-    shared::{
-        gas::GasMeter,
-        linkage_context::LinkageContext,
-        types::{PackageStorageId, RuntimePackageId},
-    },
+    shared::{gas::GasMeter, linkage_context::LinkageContext, types::RuntimePackageId},
     try_block,
     validation::{validate_for_publish, validate_for_vm_execution},
 };
@@ -157,19 +153,18 @@ impl MoveRuntime {
     ///
     /// In case an invariant violation occurs, the provided data cache should be considered
     /// corrupted and discarded; a change set will not be returned.
-    /// TODO(vm-rewrite): This API should probably move to passing a `SerializedPackage` in.
     pub fn validate_package<DataCache: MoveResolver>(
         &mut self,
         data_cache: DataCache,
-        link_context: &LinkageContext,
         pkg_runtime_id: RuntimePackageId,
-        pkg_storage_id: PackageStorageId,
-        package: Vec<Vec<u8>>,
+        pkg: SerializedPackage,
         _gas_meter: &mut impl GasMeter,
     ) -> (VMResult<ChangeSet>, DataCache) {
-        dbg_println!("\n\nPublishing module at {pkg_storage_id} (=> {pkg_runtime_id})\n\n");
+        let storage_id = pkg.storage_id;
+        dbg_println!("\n\nPublishing module at {storage_id} (=> {pkg_runtime_id})\n\n");
         // TODO: Don't deserialize just for names. Reserialize off the verified ones or something.
-        let compiled_modules = match package
+        let compiled_modules = match pkg
+            .modules
             .iter()
             .map(|blob| {
                 CompiledModule::deserialize_with_config(blob, &self.vm_config.binary_config)
@@ -185,16 +180,11 @@ impl MoveRuntime {
         };
         dbg_println!("\n\nGrabbed modules\n\n");
 
-        // FIXME: Should this come in a bit differently?
-        let pkg = SerializedPackage {
-            modules: package,
-            storage_id: pkg_storage_id,
-            linkage_table: link_context.linkage_table.clone().into_iter().collect(),
-            // TODO(vm-rewrite): fill this in
-            type_origin_table: vec![],
-        };
-
         let mut data_cache = TransactionDataCache::new(data_cache);
+        let link_context = LinkageContext::new(
+            pkg.storage_id,
+            HashMap::from_iter(pkg.linkage_table.clone().into_iter()),
+        );
 
         // Verify a provided serialized package. This will validate the provided serialized
         // package, including attempting to jit-compile the package and verify linkage with its
@@ -207,14 +197,13 @@ impl MoveRuntime {
                 &self.natives,
                 &self.vm_config,
                 &data_cache,
-                link_context,
+                &link_context,
                 link_context.all_package_dependencies()?,
             )?;
             let dependencies = dependencies.iter().map(|(id, pkg)| (*id, &*pkg.verified)).collect();
             validate_for_publish(
                 &self.natives,
                 &self.vm_config,
-                link_context,
                 pkg_runtime_id,
                 pkg,
                 dependencies
@@ -226,7 +215,7 @@ impl MoveRuntime {
         }
         dbg_println!("\n\nVerified package\n\n");
 
-        data_cache.publish_package(pkg_storage_id, compiled_modules);
+        data_cache.publish_package(storage_id, compiled_modules);
         dbg_println!("\n\nUpdated data cache\n\n");
 
         let (result, remote) = data_cache.into_effects();

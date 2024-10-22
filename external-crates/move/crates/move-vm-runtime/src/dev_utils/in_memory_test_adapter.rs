@@ -3,7 +3,9 @@
 
 use crate::{
     dev_utils::{
-        gas_schedule::GasStatus, storage::InMemoryStorage, vm_test_adapter::VMTestAdapter,
+        gas_schedule::GasStatus,
+        storage::{InMemoryStorage, StoredPackage},
+        vm_test_adapter::VMTestAdapter,
     },
     execution::vm::MoveVM,
     natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
@@ -13,15 +15,14 @@ use crate::{
         types::{PackageStorageId, RuntimePackageId},
     },
 };
-
 use move_binary_format::errors::{Location, PartialVMError, VMResult};
 use move_binary_format::file_format::CompiledModule;
-
 use move_core_types::{
-    account_address::AccountAddress, resolver::ModuleResolver, vm_status::StatusCode,
+    account_address::AccountAddress,
+    resolver::{ModuleResolver, SerializedPackage},
+    vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-
 use std::collections::BTreeSet;
 
 pub struct InMemoryTestAdapter {
@@ -47,44 +48,20 @@ impl InMemoryTestAdapter {
         Self { runtime, storage }
     }
 
-    /// Insert package into storage without any checking or validation. This is useful for
-    /// testing invalid packages and other failures.
-    pub fn insert_modules_into_storage(
-        &mut self,
-        modules: Vec<CompiledModule>,
-    ) -> anyhow::Result<()> {
-        assert!(
-            !modules.is_empty(),
-            "Tried to add empty module(s) to storage"
-        );
-        // TODO: Should we enforce this is a set?
-        for module in modules {
-            let module_id = module.self_id();
-            let mut module_bytes = vec![];
-            module.serialize_with_version(module.version, &mut module_bytes)?;
-            self.storage
-                .publish_or_overwrite_module(module_id, module_bytes);
-        }
-        Ok(())
+    pub fn insert_package_into_storage(&mut self, pkg: StoredPackage) {
+        self.storage.publish_package(pkg);
     }
 
-    pub fn get_compiled_modules(
-        &self,
-        package_id: &RuntimePackageId,
-    ) -> VMResult<Vec<CompiledModule>> {
+    pub fn get_package(&self, package_id: &RuntimePackageId) -> VMResult<SerializedPackage> {
         let Ok([Some(pkg)]) = self.storage.get_packages_static([*package_id]) else {
             return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!(
-                    "Cannot find {:?} in data cache when building linkage context",
+                    "Cannot find package {:?} in data cache",
                     package_id
                 ))
                 .finish(Location::Undefined));
         };
-        Ok(pkg
-            .modules
-            .iter()
-            .map(|module| CompiledModule::deserialize_with_defaults(module).unwrap())
-            .collect())
+        Ok(pkg)
     }
 
     /// Compute all of the transitive dependencies for a `root_package`, including itself.
@@ -138,60 +115,24 @@ impl InMemoryTestAdapter {
 impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
     fn publish_package(
         &mut self,
-        linkage_context: LinkageContext,
         runtime_id: RuntimePackageId,
-        modules: Vec<Vec<u8>>,
+        package: SerializedPackage,
     ) -> VMResult<()> {
-        let Some(storage_id) = linkage_context.linkage_table.get(&runtime_id).cloned() else {
+        let Some(storage_id) = package.linkage_table.get(&runtime_id).cloned() else {
             // TODO: VM error instead?
-            panic!("Did not find runtime ID in linkage context.");
+            panic!("Did not find runtime ID {runtime_id} in linkage context.");
         };
+        assert!(storage_id == package.storage_id);
         let mut gas_meter = GasStatus::new_unmetered();
         let (changeset, _) = self.runtime.validate_package(
             &self.storage,
-            &linkage_context,
             runtime_id,
-            storage_id,
-            modules,
+            package.clone(),
             &mut gas_meter,
         );
+        changeset?;
         self.storage
-            .apply(changeset?)
-            .expect("Failed to apply change set");
-        Ok(())
-    }
-
-    fn publish_package_modules_for_test(
-        &mut self,
-        linkage_context: LinkageContext,
-        runtime_id: RuntimePackageId,
-        modules: Vec<CompiledModule>,
-    ) -> anyhow::Result<()> {
-        let Some(storage_id) = linkage_context.linkage_table.get(&runtime_id).cloned() else {
-            // TODO: VM error instead?
-            panic!("Did not find runtime ID in linkage context.");
-        };
-        let modules = modules
-            .into_iter()
-            .map(|module| {
-                let mut module_bytes = vec![];
-                module.serialize_with_version(module.version, &mut module_bytes)?;
-                Ok(module_bytes)
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
-        let mut gas_meter = GasStatus::new_unmetered();
-        let (changeset, _) = self.runtime.validate_package(
-            &self.storage,
-            &linkage_context,
-            runtime_id,
-            storage_id,
-            modules,
-            &mut gas_meter,
-        );
-        self.storage
-            .apply(changeset?)
-            .expect("Failed to apply change set");
+            .publish_package(StoredPackage::from_serialized_package(package));
         Ok(())
     }
 
@@ -204,7 +145,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
         runtime.make_vm(storage, linkage_context)
     }
 
-    fn mave_vm_with_native_extensions<'extensions>(
+    fn make_vm_with_native_extensions<'extensions>(
         &self,
         linkage_context: LinkageContext,
         native_extensions: NativeContextExtensions<'extensions>,
@@ -260,11 +201,8 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
         Ok(linkage_context)
     }
 
-    fn get_compiled_modules_from_storage(
-        &self,
-        package_id: &PackageStorageId,
-    ) -> VMResult<Vec<CompiledModule>> {
-        self.get_compiled_modules(package_id)
+    fn get_package_from_store(&self, package_id: &PackageStorageId) -> VMResult<SerializedPackage> {
+        self.get_package(package_id)
     }
 
     fn runtime(&mut self) -> &mut MoveRuntime {

@@ -9,7 +9,7 @@ use crate::{
     dev_utils::{
         gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
         in_memory_test_adapter::InMemoryTestAdapter,
-        storage::InMemoryStorage,
+        storage::{InMemoryStorage, StoredPackage},
         vm_test_adapter::VMTestAdapter,
     },
     shared::{linkage_context::LinkageContext, serialization::SerializedReturnValues},
@@ -519,7 +519,8 @@ fn make_module(
     move_bytecode_verifier::verify_module_unmetered(&module).expect("verification failed");
 
     let module_id = module.self_id();
-    let linkage = LinkageContext::new(
+    let mut pkg = StoredPackage::from_modules_for_testing(addr, vec![module.clone()]).unwrap();
+    pkg.linkage_context = LinkageContext::new(
         addr,
         [(addr, addr)]
             .into_iter()
@@ -530,7 +531,7 @@ fn make_module(
             .collect(),
     );
     session
-        .publish_package_modules_for_test(linkage, addr, vec![module])
+        .publish_package(addr, pkg.into_serialized_package())
         .unwrap();
     (module_id, entry_point)
 }
@@ -557,9 +558,7 @@ fn run_with_module(
 
     let now = Instant::now();
 
-    let link_context = adapter
-        .generate_default_linkage(*module_id.address())
-        .unwrap();
+    let link_context = adapter.get_linkage_context(*module_id.address()).unwrap();
     let mut vm_session = adapter.make_vm(link_context).unwrap();
     let type_args = type_arg_tags
         .into_iter()

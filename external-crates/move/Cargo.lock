@@ -1655,6 +1655,7 @@ dependencies = [
  "move-unit-test",
  "move-vm-profiler",
  "move-vm-runtime",
+ "serde",
  "serde_yaml",
  "tempfile",
  "toml_edit 0.14.4",

@@ -18,12 +18,12 @@ pub const DEBUG_FLAGS: DebugFlags = DebugFlags {
 
 #[macro_export]
 macro_rules! dbg_println {
-    ($( $args:expr ),*) => {
+    ($( $args:expr ),*$(,)?) => {
         if $crate::dev_utils::dbg_print::DEBUG_PRINT {
             println!( $( $args ),* );
         }
     };
-    (flag: $field:ident, $( $args:expr ),*) => {
+    (flag: $field:ident, $( $args:expr ),*$(,)?) => {
         if $crate::dev_utils::dbg_print::DEBUG_PRINT && $crate::dev_utils::dbg_print::DEBUG_FLAGS.$field {
             println!( $( $args ),* );
         }
@@ -33,6 +33,6 @@ macro_rules! dbg_println {
 #[cfg(not(debug_assertions))]
 #[macro_export]
 macro_rules! dbg_println {
-    ($( $args:expr ),*) => {};
-    (flag: $field:ident, $( $args:expr ),*) => {};
+    ($( $args:expr ),*$(,)?) => {};
+    (flag: $field:ident, $( $args:expr ),*$(,)?) => {};
 }

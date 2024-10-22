@@ -5,10 +5,10 @@ use crate::{
     dev_utils::{
         compilation_utils::{as_module, compile_units},
         in_memory_test_adapter::InMemoryTestAdapter,
+        storage::StoredPackage,
         vm_test_adapter::VMTestAdapter,
     },
     runtime::MoveRuntime,
-    shared::linkage_context::LinkageContext,
 };
 use move_core_types::account_address::AccountAddress;
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
@@ -57,10 +57,9 @@ fn test_publish_module_with_nested_loops() {
         );
 
         let mut adapter = InMemoryTestAdapter::new_with_runtime(runtime);
-        let linkage =
-            LinkageContext::new(TEST_ADDR, [(TEST_ADDR, TEST_ADDR)].into_iter().collect());
+        let pkg = StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m.clone()]).unwrap();
         adapter
-            .publish_package_modules_for_test(linkage, TEST_ADDR, vec![m.clone()])
+            .publish_package(TEST_ADDR, pkg.into_serialized_package())
             .unwrap();
     }
 
@@ -83,10 +82,9 @@ fn test_publish_module_with_nested_loops() {
         );
 
         let mut adapter = InMemoryTestAdapter::new_with_runtime(runtime);
-        let linkage =
-            LinkageContext::new(TEST_ADDR, [(TEST_ADDR, TEST_ADDR)].into_iter().collect());
+        let pkg = StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m.clone()]).unwrap();
         adapter
-            .publish_package_modules_for_test(linkage, TEST_ADDR, vec![m])
+            .publish_package(TEST_ADDR, pkg.into_serialized_package())
             .unwrap_err();
     }
 }

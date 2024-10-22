@@ -2,18 +2,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Result};
+use crate::shared::{linkage_context::LinkageContext, types::PackageStorageId};
+use anyhow::Result;
+use move_binary_format::CompiledModule;
 use move_core_types::{
     account_address::AccountAddress,
-    effects::{AccountChangeSet, ChangeSet, Op},
+    effects::ChangeSet,
     identifier::Identifier,
     language_storage::ModuleId,
-    resolver::{ModuleResolver, MoveResolver, SerializedPackage},
+    resolver::{ModuleResolver, MoveResolver, SerializedPackage, TypeOrigin},
 };
-use std::{
-    collections::{btree_map, BTreeMap},
-    fmt::Debug,
-};
+use std::collections::{BTreeMap, HashMap};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -31,16 +30,22 @@ pub struct DeltaStorage<'a, 'b, S> {
     delta: &'b ChangeSet,
 }
 
-/// Simple in-memory storage for modules and resources under an account.
+/// Simple in-memory representation of packages
 #[derive(Debug, Clone)]
-struct InMemoryAccountStorage {
-    modules: BTreeMap<Identifier, Vec<u8>>,
+pub struct StoredPackage {
+    pub modules: BTreeMap<Identifier, Vec<u8>>,
+    /// For each dependency (including transitive dependencies), maps runtime package ID to the
+    /// storage ID of the package that is to be used for the linkage rooted at this package.
+    pub linkage_context: LinkageContext,
+    /// The type origin table for the package. Every type in the package must have an entry in this
+    /// table.
+    pub type_origin_table: Vec<TypeOrigin>,
 }
 
 /// Simple in-memory storage that can be used as a Move VM storage backend for testing purposes.
 #[derive(Debug, Clone)]
 pub struct InMemoryStorage {
-    accounts: BTreeMap<AccountAddress, InMemoryAccountStorage>,
+    accounts: BTreeMap<PackageStorageId, StoredPackage>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -59,59 +64,172 @@ impl<'a, 'b, S: MoveResolver> DeltaStorage<'a, 'b, S> {
     }
 }
 
-impl InMemoryAccountStorage {
-    fn apply(&mut self, account_changeset: AccountChangeSet) -> Result<()> {
-        let modules = account_changeset.into_inner();
-        apply_changes(&mut self.modules, modules)?;
-        Ok(())
-    }
-
-    fn new() -> Self {
+impl StoredPackage {
+    fn empty(storage_id: AccountAddress) -> Self {
         Self {
             modules: BTreeMap::new(),
+            linkage_context: LinkageContext::new(storage_id, HashMap::new()),
+            type_origin_table: vec![],
+        }
+    }
+
+    pub fn from_modules_for_testing(
+        storage_id: AccountAddress,
+        modules: Vec<CompiledModule>,
+    ) -> Result<Self> {
+        assert!(!modules.is_empty());
+        // Map the modules in this package to `storage_id` and generate the identity linkage for
+        // all deps.
+        let mut linkage_table = HashMap::new();
+        let type_origin_table = generate_type_origins(storage_id, &modules);
+        let modules: BTreeMap<_, _> = modules
+            .into_iter()
+            .map(|m| {
+                let mut bin = vec![];
+                linkage_table.insert(*m.self_id().address(), storage_id);
+                for addr in m
+                    .immediate_dependencies()
+                    .iter()
+                    .map(|dep| *dep.address())
+                    .filter(|addr| *addr != *m.self_id().address())
+                {
+                    linkage_table.insert(addr, addr);
+                }
+                m.serialize_with_version(m.version, &mut bin)?;
+                Ok((m.self_id().name().to_owned(), bin))
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(Self {
+            modules,
+            linkage_context: LinkageContext::new(storage_id, linkage_table),
+            type_origin_table,
+        })
+    }
+
+    pub fn from_module_for_testing_with_linkage(
+        storage_id: AccountAddress,
+        linkage_context: LinkageContext,
+        modules: Vec<CompiledModule>,
+    ) -> Result<Self> {
+        let type_origin_table = generate_type_origins(storage_id, &modules);
+        let modules: BTreeMap<_, _> = modules
+            .into_iter()
+            .map(|m| {
+                let mut bin = vec![];
+                m.serialize_with_version(m.version, &mut bin)?;
+                Ok((m.self_id().name().to_owned(), bin))
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(Self {
+            modules,
+            linkage_context,
+            type_origin_table,
+        })
+    }
+
+    pub fn from_serialized_package(serialized_package: SerializedPackage) -> Self {
+        Self {
+            modules: serialized_package
+                .modules
+                .into_iter()
+                .map(|m| {
+                    let dm = CompiledModule::deserialize_with_defaults(&m).unwrap();
+                    (dm.self_id().name().to_owned(), m)
+                })
+                .collect(),
+            linkage_context: LinkageContext::new(
+                serialized_package.storage_id,
+                serialized_package.linkage_table.into_iter().collect(),
+            ),
+            type_origin_table: serialized_package.type_origin_table,
+        }
+    }
+
+    pub fn into_serialized_package(self) -> SerializedPackage {
+        SerializedPackage {
+            storage_id: self.linkage_context.root_package(),
+            modules: self.modules.into_values().collect(),
+            linkage_table: self.linkage_context.linkage_table.into_iter().collect(),
+            type_origin_table: self.type_origin_table,
         }
     }
 }
 
+pub fn generate_type_origins(
+    storage_id: PackageStorageId,
+    modules: &[CompiledModule],
+) -> Vec<TypeOrigin> {
+    modules
+        .iter()
+        .flat_map(|module| {
+            module
+                .struct_defs()
+                .iter()
+                .map(|def| {
+                    let mid = module.self_id();
+                    let handle = module.datatype_handle_at(def.struct_handle);
+                    let struct_name = module.identifier_at(handle.name).to_owned();
+                    TypeOrigin {
+                        module_name: mid.name().to_owned(),
+                        type_name: struct_name.clone(),
+                        origin_id: storage_id,
+                    }
+                })
+                .chain(module.enum_defs().iter().map(|def| {
+                    let mid = module.self_id();
+                    let handle = module.datatype_handle_at(def.enum_handle);
+                    let enum_name = module.identifier_at(handle.name);
+                    TypeOrigin {
+                        module_name: mid.name().to_owned(),
+                        type_name: enum_name.to_owned(),
+                        origin_id: storage_id,
+                    }
+                }))
+        })
+        .collect()
+}
+
 impl InMemoryStorage {
-    pub fn apply_extended(&mut self, changeset: ChangeSet) -> Result<()> {
-        for (addr, account_changeset) in changeset.into_inner() {
-            match self.accounts.entry(addr) {
-                btree_map::Entry::Occupied(entry) => {
-                    entry.into_mut().apply(account_changeset)?;
-                }
-                btree_map::Entry::Vacant(entry) => {
-                    let mut account_storage = InMemoryAccountStorage::new();
-                    account_storage.apply(account_changeset)?;
-                    entry.insert(account_storage);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn apply(&mut self, changeset: ChangeSet) -> Result<()> {
-        self.apply_extended(changeset)
-    }
-
     pub fn new() -> Self {
         Self {
             accounts: BTreeMap::new(),
         }
     }
 
-    pub fn publish_or_overwrite_module(&mut self, module_id: ModuleId, blob: Vec<u8>) {
-        let account = get_or_insert(&mut self.accounts, *module_id.address(), || {
-            InMemoryAccountStorage::new()
-        });
-        account.modules.insert(module_id.name().to_owned(), blob);
+    pub fn publish_package(&mut self, stored_package: StoredPackage) {
+        self.accounts.insert(
+            stored_package.linkage_context.root_package(),
+            stored_package,
+        );
+    }
+
+    pub fn publish_or_overwrite_module(
+        &mut self,
+        storage_id: PackageStorageId,
+        module_name: Identifier,
+        blob: Vec<u8>,
+    ) {
+        let account = self
+            .accounts
+            .entry(storage_id)
+            .or_insert_with(|| StoredPackage::empty(storage_id));
+        account.modules.insert(module_name, blob);
+    }
+
+    pub fn debug_dump(&self) {
+        for (storage_id, stored_package) in &self.accounts {
+            println!("Storage ID: {:?}", storage_id);
+            println!("Linkage context: {:?}", stored_package.linkage_context);
+            println!("Type origins: {:?}", stored_package.type_origin_table);
+            println!("Modules:");
+            for (module_name, _blob) in &stored_package.modules {
+                println!("\tModule: {:?}", module_name);
+            }
+        }
     }
 }
-
-// -------------------------------------------------------------------------------------------------
-// Resolver Impls
-// -------------------------------------------------------------------------------------------------
 
 // -----------------------------------------------
 // Module Resolvers
@@ -221,74 +339,12 @@ impl ModuleResolver for InMemoryStorage {
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         ids.iter()
             .map(|storage_id| {
-                if let Some(account_storage) = self.accounts.get(storage_id) {
-                    let module_bytes: Vec<_> = account_storage
-                        .modules
-                        .values()
-                        .map(|op| op.clone())
-                        .collect();
-
-                    Ok(Some(SerializedPackage::raw_package(
-                        module_bytes,
-                        *storage_id,
-                    )))
+                if let Some(stored_package) = self.accounts.get(storage_id) {
+                    Ok(Some(stored_package.clone().into_serialized_package()))
                 } else {
                     Ok(None)
                 }
             })
             .collect::<Result<Vec<_>, Self::Error>>()
-    }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Helper Functions
-// -------------------------------------------------------------------------------------------------
-
-fn apply_changes<K, V>(
-    map: &mut BTreeMap<K, V>,
-    changes: impl IntoIterator<Item = (K, Op<V>)>,
-) -> Result<()>
-where
-    K: Ord + Debug,
-{
-    use btree_map::Entry::*;
-    use Op::*;
-
-    for (k, op) in changes.into_iter() {
-        match (map.entry(k), op) {
-            (Occupied(entry), New(_)) => {
-                bail!(
-                    "Failed to apply changes -- key {:?} already exists",
-                    entry.key()
-                )
-            }
-            (Occupied(entry), Delete) => {
-                entry.remove();
-            }
-            (Occupied(entry), Modify(val)) => {
-                *entry.into_mut() = val;
-            }
-            (Vacant(entry), New(val)) => {
-                entry.insert(val);
-            }
-            (Vacant(entry), Delete | Modify(_)) => bail!(
-                "Failed to apply changes -- key {:?} does not exist",
-                entry.key()
-            ),
-        }
-    }
-    Ok(())
-}
-
-fn get_or_insert<K, V, F>(map: &mut BTreeMap<K, V>, key: K, make_val: F) -> &mut V
-where
-    K: Ord,
-    F: FnOnce() -> V,
-{
-    use btree_map::Entry::*;
-
-    match map.entry(key) {
-        Occupied(entry) => entry.into_mut(),
-        Vacant(entry) => entry.insert(make_val()),
     }
 }

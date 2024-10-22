@@ -5,9 +5,7 @@ pub mod deserialization;
 pub mod verification;
 
 use crate::{
-    dbg_println,
-    natives::functions::NativeFunctions,
-    shared::{linkage_context::LinkageContext, types::RuntimePackageId},
+    dbg_println, natives::functions::NativeFunctions, shared::types::RuntimePackageId,
     validation::verification::linkage::verify_linkage_and_cyclic_checks_for_publication,
 };
 
@@ -31,14 +29,18 @@ use self::verification::linkage::verify_linkage_and_cyclic_checks;
 pub fn validate_for_publish(
     natives: &NativeFunctions,
     vm_config: &VMConfig,
-    link_context: &LinkageContext,
     runtime_package_id: RuntimePackageId,
     package: SerializedPackage,
     dependencies: BTreeMap<RuntimePackageId, &verification::ast::Package>,
 ) -> VMResult<verification::ast::Package> {
+    dbg_println!(
+        "doing verification with linkage context {:#?}\nand type origins {:#?}",
+        package.linkage_table,
+        package.type_origin_table,
+    );
+
     let loading_package = validate_package(natives, vm_config, package)?;
 
-    dbg_println!("doing verification with linkage context {link_context:#?}");
     // Make sure all modules' self addresses match the `runtime_package_id`.
     for module in loading_package.as_modules().into_iter() {
         if module.value.address() != &runtime_package_id {

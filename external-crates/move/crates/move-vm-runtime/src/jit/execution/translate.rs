@@ -17,6 +17,7 @@ use crate::{
         types::{PackageStorageId, RuntimePackageId},
     },
     string_interner,
+    validation::verification,
 };
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
@@ -41,6 +42,7 @@ struct ModuleContext<'a, 'natives> {
 
 struct PackageContext<'natives> {
     pub natives: &'natives NativeFunctions,
+    pub type_origin_table: HashMap<IntraPackageKey, PackageStorageId>,
 
     pub storage_id: PackageStorageId,
     pub runtime_id: RuntimePackageId,
@@ -90,14 +92,12 @@ pub fn package(
     package_cache: Arc<RwLock<CrossVersionPackageCache>>,
     natives: &NativeFunctions,
     link_context: &LinkageContext,
-    storage_id: PackageStorageId,
-    runtime_id: RuntimePackageId,
-    mut package_modules: Vec<CompiledModule>,
+    verified_package: verification::ast::Package,
 ) -> PartialVMResult<Package> {
-    let module_ids_in_pkg = package_modules
-        .iter()
-        .map(|m| m.self_id())
-        .collect::<BTreeSet<_>>();
+    let storage_id = verified_package.storage_id;
+    let runtime_id = verified_package.runtime_id;
+    let (module_ids_in_pkg, mut package_modules): (BTreeSet<_>, Vec<_>) =
+        verified_package.modules.into_iter().unzip();
 
     let mut package_context = PackageContext {
         natives,
@@ -107,15 +107,31 @@ pub fn package(
         compiled_modules: BinaryCache::new(),
         package_arena: Arena::new(),
         vtable: PackageVTable::new(package_cache),
+        type_origin_table: verified_package
+            .type_origin_table
+            .into_iter()
+            .map(|type_origin| {
+                Ok((
+                    IntraPackageKey {
+                        module_name: string_interner()
+                            .get_or_intern_identifier(&type_origin.module_name)?,
+                        member_name: string_interner()
+                            .get_or_intern_identifier(&type_origin.type_name)?,
+                    },
+                    type_origin.origin_id,
+                ))
+            })
+            .collect::<PartialVMResult<_>>()?,
     };
 
     // Load modules in dependency order within the package. Needed for both static call
     // resolution and type caching.
     while let Some(input_module) = package_modules.pop() {
         let mut immediate_dependencies = input_module
+            .value
             .immediate_dependencies()
             .into_iter()
-            .filter(|dep| module_ids_in_pkg.contains(dep) && dep != &input_module.self_id());
+            .filter(|dep| module_ids_in_pkg.contains(dep) && dep != &input_module.value.self_id());
 
         // If we haven't processed the immediate dependencies yet, push the module back onto
         // the front and process other modules first.
@@ -132,15 +148,16 @@ pub fn package(
             &mut package_context,
             link_context,
             storage_id,
-            &input_module,
+            &input_module.value,
         )?;
 
         package_context
             .loaded_modules
             .insert(loaded_module.id.name().to_owned(), loaded_module)?;
-        package_context
-            .compiled_modules
-            .insert(input_module.self_id().name().to_owned(), input_module)?;
+        package_context.compiled_modules.insert(
+            input_module.value.self_id().name().to_owned(),
+            input_module.value,
+        )?;
     }
 
     let PackageContext {
@@ -151,6 +168,7 @@ pub fn package(
         compiled_modules: _,
         package_arena,
         vtable,
+        type_origin_table: _,
     } = package_context;
 
     Ok(Package {
@@ -427,18 +445,6 @@ fn load_module_types(
         let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
         let name = module.identifier_at(struct_handle.name);
 
-        // TODO/FIXME(Tim): This is always the runtime address at the moment. It should not be. How
-        // do we get the _correct_ one?
-        let struct_module_handle = module.module_handle_at(struct_handle.module);
-        dbg_println!("Indexing type {:?} at {:?}", name, struct_module_handle);
-        let defining_address = module.address_identifier_at(struct_module_handle.address);
-        dbg_println!("Package ID: {:?}", package_id);
-        dbg_println!("Defining Address: {:?}", defining_address);
-        // ---------- THIS IS A HACK -----------
-        // DEFINING_ADDRESS should refer to originally-defining address
-        // ---------- THIS IS A HACK -----------
-        let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
-
         let member_name = string_interner().get_or_intern_ident_str(name)?;
         let struct_key = IntraPackageKey {
             module_name,
@@ -453,6 +459,23 @@ fn load_module_types(
         {
             continue;
         }
+
+        let struct_module_handle = module.module_handle_at(struct_handle.module);
+        dbg_println!("Indexing type {:?} at {:?}", name, struct_module_handle);
+        // NB: It is the responsibility of the adapter to determine the correct type origin table,
+        // and pass a full and complete representation of it in with the package.
+        let defining_address = package_context
+            .type_origin_table
+            .get(&struct_key)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::LOOKUP_FAILED).with_message(format!(
+                    "Type origin not found for type {:?} in module {:?}",
+                    name, module_id
+                ))
+            })?;
+        dbg_println!("Package ID: {:?}", package_id);
+        dbg_println!("Defining Address: {:?}", defining_address);
+        let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
 
         let field_names = match &struct_def.field_information {
             StructFieldInformation::Native => vec![],
@@ -497,18 +520,6 @@ fn load_module_types(
         let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
         let name = module.identifier_at(enum_handle.name);
 
-        // TODO/FIXME(Tim): This is always the runtime address at the moment. It should not be. How
-        // do we get the _correct_ one?
-        let enum_module_handle = module.module_handle_at(enum_handle.module);
-        dbg_println!("Indexing type {:?} at {:?}", name, enum_module_handle);
-        let defining_address = module.address_identifier_at(enum_module_handle.address);
-        dbg_println!("Package ID: {:?}", package_id);
-        dbg_println!("Enum Defining Address: {:?}", defining_address);
-        // ---------- THIS IS A HACK -----------
-        // DEFINING_ADDRESS should refer to originally-defining address
-        // ---------- THIS IS A HACK -----------
-        let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
-
         let member_name = string_interner().get_or_intern_ident_str(name)?;
         let enum_key = IntraPackageKey {
             module_name,
@@ -523,6 +534,23 @@ fn load_module_types(
         {
             continue;
         }
+
+        let enum_module_handle = module.module_handle_at(enum_handle.module);
+        dbg_println!("Indexing type {:?} at {:?}", name, enum_module_handle);
+        // NB: It is the responsibility of the adapter to determine the correct type origin table,
+        // and pass a full and complete representation of it in with the package.
+        let defining_address = package_context
+            .type_origin_table
+            .get(&enum_key)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::LOOKUP_FAILED).with_message(format!(
+                    "Type origin not found for type {:?} in module {:?}",
+                    name, module_id
+                ))
+            })?;
+        dbg_println!("Package ID: {:?}", package_id);
+        dbg_println!("Enum Defining Address: {:?}", defining_address);
+        let defining_id = ModuleId::new(*defining_address, module_id.name().to_owned());
 
         let variants: Vec<VariantType> = enum_def
             .variants

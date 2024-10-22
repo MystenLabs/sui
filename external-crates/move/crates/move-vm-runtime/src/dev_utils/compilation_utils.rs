@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::types::RuntimePackageId;
+use crate::{dev_utils::storage::StoredPackage, shared::types::RuntimePackageId};
 use anyhow::Result;
 use move_binary_format::{file_format::CompiledModule, file_format_common::VERSION_MAX};
 use move_compiler::{
@@ -66,7 +66,7 @@ pub fn expect_modules(
         .map(|annot_module| annot_module.named_module.module)
 }
 
-pub fn compile_modules_in_file(filename: &str, dependencies: &[&str]) -> Vec<CompiledModule> {
+pub fn compile_packages_in_file(filename: &str, dependencies: &[&str]) -> Vec<StoredPackage> {
     let mut path = make_base_path();
     path.push(filename);
     let deps = dependencies
@@ -92,15 +92,7 @@ pub fn compile_modules_in_file(filename: &str, dependencies: &[&str]) -> Vec<Com
     .build_and_report()
     .expect("Failed module compilation");
 
-    expect_modules(units).collect::<Vec<_>>()
-}
-
-pub fn compile_packages(
-    filename: &str,
-    dependencies: &[&str],
-) -> BTreeMap<RuntimePackageId, Vec<CompiledModule>> {
-    let modules = compile_modules_in_file(filename, dependencies);
-    assert!(!modules.is_empty(), "Tried to publish an empty package");
+    let modules = expect_modules(units).collect::<Vec<_>>();
     let mut packages = BTreeMap::new();
     for module in modules {
         let module_id = module.self_id();
@@ -109,6 +101,19 @@ pub fn compile_packages(
             .or_insert_with(Vec::new)
             .push(module);
     }
-
+    // NB: storage id == runtime id for these packages
     packages
+        .into_iter()
+        .map(|(id, modules)| StoredPackage::from_modules_for_testing(id, modules).unwrap())
+        .collect()
+}
+
+pub fn compile_packages(
+    filename: &str,
+    dependencies: &[&str],
+) -> BTreeMap<RuntimePackageId, StoredPackage> {
+    compile_packages_in_file(filename, dependencies)
+        .into_iter()
+        .map(|p| (p.linkage_context.root_package(), p))
+        .collect()
 }

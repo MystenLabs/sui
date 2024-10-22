@@ -4,6 +4,7 @@
 use crate::{sandbox::utils::OnDiskStateView, DEFAULT_BUILD_DIR};
 use anyhow::{bail, Result};
 use move_package::{compilation::compiled_package::CompiledPackage, BuildConfig};
+use move_vm_runtime::dev_utils::storage::StoredPackage;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -61,17 +62,9 @@ impl PackageContext {
             id.1.push(module.unit.module.clone());
         }
 
-        for (package_id, package) in package_id_mapping.values() {
-            state.save_package(
-                package_id,
-                package.into_iter().map(|module| {
-                    let mut module_bytes = vec![];
-                    module
-                        .serialize_with_version(module.version, &mut module_bytes)
-                        .unwrap();
-                    (module.self_id().name().to_owned(), module_bytes)
-                }),
-            )?;
+        for (package_id, package) in package_id_mapping.into_values() {
+            let pkg = StoredPackage::from_modules_for_testing(package_id, package)?;
+            state.save_package(pkg.into_serialized_package())?;
         }
 
         Ok(state)

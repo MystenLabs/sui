@@ -63,7 +63,7 @@ pub fn resolve_packages(
         allow_loading_failure,
         &pkgs_to_cache,
     )? {
-        let pkg = jit_and_cache_package(cache, natives, link_context, pkg.storage_id, pkg)?;
+        let pkg = jit_and_cache_package(cache, natives, link_context, pkg)?;
         cached_packages.insert(pkg.verified.storage_id, pkg);
     }
 
@@ -107,9 +107,9 @@ pub fn jit_and_cache_package(
     cache: &MoveCache,
     natives: &NativeFunctions,
     link_context: &LinkageContext,
-    storage_id: PackageStorageId,
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
+    let storage_id = verified_pkg.storage_id;
     if cache.cached_package_at(storage_id).is_some() {
         panic!("Attempting to re-jit a package, which should be impossible -- we already checked.");
     }
@@ -118,14 +118,9 @@ pub fn jit_and_cache_package(
         .type_cache
         .write()
         .get_or_create_package_cache(verified_pkg.runtime_id);
-    let runtime_pkg = jit::translate_package(
-        package_cache,
-        natives,
-        link_context,
-        storage_id,
-        verified_pkg.clone(),
-    )
-    .map_err(|err| err.finish(Location::Undefined))?;
+    let runtime_pkg =
+        jit::translate_package(package_cache, natives, link_context, verified_pkg.clone())
+            .map_err(|err| err.finish(Location::Undefined))?;
 
     cache.add_to_cache(storage_id, verified_pkg, runtime_pkg);
 

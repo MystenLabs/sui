@@ -6,6 +6,7 @@ use crate::{
     dev_utils::{
         compilation_utils::{as_module, compile_units, serialize_module_at_max_version},
         in_memory_test_adapter::InMemoryTestAdapter,
+        storage::StoredPackage,
         vm_test_adapter::VMTestAdapter,
     },
     shared::{gas::UnmeteredGasMeter, serialization::SerializedReturnValues},
@@ -48,9 +49,10 @@ fn run(
     serialize_module_at_max_version(&m, &mut blob).unwrap();
 
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(vec![m]).unwrap();
+    let pkg = StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m]).unwrap();
+    adapter.insert_package_into_storage(pkg);
     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("M").unwrap());
-    let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
+    let linkage = adapter.get_linkage_context(TEST_ADDR).unwrap();
     let mut sess = adapter.make_vm(linkage).unwrap();
 
     let fun_name = Identifier::new("foo").unwrap();

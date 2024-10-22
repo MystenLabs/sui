@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::dev_utils::{
-    gas_schedule::GasStatus, in_memory_test_adapter::InMemoryTestAdapter,
+    gas_schedule::GasStatus, in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage,
     vm_test_adapter::VMTestAdapter,
 };
 use move_binary_format::file_format::{
@@ -80,11 +80,10 @@ fn merge_borrow_states_infinite_loop() {
     let fname = m.identifiers[0].clone();
 
     let mut adapter = InMemoryTestAdapter::new();
-    let linkage = adapter
-        .generate_linkage_context(*module_id.address(), *module_id.address(), &[m.clone()])
-        .unwrap();
+    let pkg = StoredPackage::from_modules_for_testing(*module_id.address(), vec![m]).unwrap();
+    let linkage = pkg.linkage_context.clone();
     adapter
-        .publish_package_modules_for_test(linkage.clone(), *module_id.address(), vec![m])
+        .publish_package(*module_id.address(), pkg.into_serialized_package())
         .unwrap();
     let mut session = adapter.make_vm(linkage).unwrap();
 

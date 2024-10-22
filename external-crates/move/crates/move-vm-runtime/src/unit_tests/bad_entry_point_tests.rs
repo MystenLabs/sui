@@ -6,6 +6,7 @@ use crate::{
     dev_utils::{
         compilation_utils::{as_module, compile_units},
         in_memory_test_adapter::InMemoryTestAdapter,
+        storage::StoredPackage,
         vm_test_adapter::VMTestAdapter,
     },
     shared::{gas::UnmeteredGasMeter, linkage_context::LinkageContext},
@@ -54,10 +55,11 @@ fn call_non_existent_function() {
     let m = as_module(units.pop().unwrap());
 
     let mut adapter = InMemoryTestAdapter::new();
-    adapter.insert_modules_into_storage(vec![m]).unwrap();
+    let pkg = StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m]).unwrap();
+    adapter.insert_package_into_storage(pkg);
 
     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("M").unwrap());
-    let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
+    let linkage = adapter.get_linkage_context(TEST_ADDR).unwrap();
 
     let mut sess = adapter.make_vm(linkage).unwrap();
 

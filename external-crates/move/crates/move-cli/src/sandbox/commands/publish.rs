@@ -11,7 +11,7 @@ use crate::{
 use anyhow::{bail, Result};
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
-    dev_utils::gas_schedule::CostTable,
+    dev_utils::{gas_schedule::CostTable, storage::StoredPackage},
     natives::functions::NativeFunctions,
     runtime::MoveRuntime,
     shared::{linkage_context::LinkageContext, types::PackageStorageId},
@@ -53,7 +53,7 @@ pub fn publish(
 
     let compiled_modules = compiled_modules
         .into_iter()
-        .map(|module| &module.unit)
+        .map(|module| module.unit.module.clone())
         .collect::<Vec<_>>();
 
     // Build the dependency map from the package
@@ -81,35 +81,23 @@ pub fn publish(
     // Create a `LinkageContext`
     let linkage_context = LinkageContext::new(package_storage_id, dependency_map);
 
-    // Serialize the modules to prepare them for publishing
-    let serialized_modules: Vec<Vec<u8>> = compiled_modules
-        .iter()
-        .map(|module| module.serialize())
-        .collect();
-
-    // Publish the package using the VM
-    let (publish_result, _) = runtime.validate_package(
-        state,
-        &linkage_context,
-        package_runtime_id,
+    // Serialize the modules into a package to prepare them for publishing
+    let pkg = StoredPackage::from_module_for_testing_with_linkage(
         package_storage_id,
-        serialized_modules,
-        &mut gas_status,
-    );
+        linkage_context,
+        compiled_modules,
+    )
+    .unwrap();
+
+    let ser_pkg = pkg.into_serialized_package();
+    // Publish the package using the VM
+    let (publish_result, _) =
+        runtime.validate_package(state, package_runtime_id, ser_pkg.clone(), &mut gas_status);
     let changeset = publish_result?;
     if verbose {
         explain_publish_changeset(&changeset);
     }
-    let modules: Vec<_> = changeset
-        .into_modules()
-        .map(|(module_id, blob_opt)| {
-            (
-                module_id.name().to_owned(),
-                blob_opt.ok().expect("must be non-deletion"),
-            )
-        })
-        .collect();
-    state.save_package(&package_storage_id, modules)?;
+    state.save_package(ser_pkg)?;
 
     Ok(())
 }

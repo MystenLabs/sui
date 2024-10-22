@@ -31,7 +31,8 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
-    dev_utils::in_memory_test_adapter::InMemoryTestAdapter, runtime::MoveRuntime,
+    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage},
+    runtime::MoveRuntime,
 };
 use move_vm_runtime::{
     dev_utils::{storage::InMemoryStorage, vm_test_adapter::VMTestAdapter},
@@ -63,11 +64,10 @@ static STORAGE_WITH_MOVE_STDLIB: Lazy<InMemoryStorage> = Lazy::new(|| {
     let compiled_modules = compiled_units
         .into_iter()
         .map(|annot_module| annot_module.named_module.module);
-    for module in compiled_modules {
-        let mut blob = vec![];
-        module.serialize(&mut blob).unwrap();
-        storage.publish_or_overwrite_module(module.self_id(), blob);
-    }
+    let pkg =
+        StoredPackage::from_modules_for_testing(AccountAddress::ONE, compiled_modules.collect())
+            .unwrap();
+    storage.publish_package(pkg);
     storage
 });
 
@@ -139,9 +139,12 @@ fn execute_function_in_module(
             STORAGE_WITH_MOVE_STDLIB.clone(),
         );
 
-        vm.insert_modules_into_storage(vec![module]).unwrap();
+        let pkg =
+            StoredPackage::from_modules_for_testing(*module.self_id().address(), vec![module])
+                .unwrap();
+        vm.insert_package_into_storage(pkg);
 
-        let linkage = vm.generate_default_linkage(*module_id.address()).unwrap();
+        let linkage = vm.get_linkage_context(*module_id.address()).unwrap();
         let mut sess = vm.make_vm(linkage).unwrap();
 
         let ty_args = ty_arg_tags

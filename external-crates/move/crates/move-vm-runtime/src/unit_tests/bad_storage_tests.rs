@@ -6,6 +6,7 @@ use crate::{
     dev_utils::{
         compilation_utils::{as_module, compile_units, serialize_module_at_max_version},
         in_memory_test_adapter::InMemoryTestAdapter,
+        storage::StoredPackage,
         vm_test_adapter::VMTestAdapter,
     },
     shared::{gas::UnmeteredGasMeter, linkage_context::LinkageContext},
@@ -40,10 +41,10 @@ fn test_malformed_module() {
     // Publish M and call M::foo. No errors should be thrown.
     {
         let mut adapter = InMemoryTestAdapter::new();
-        adapter
-            .insert_modules_into_storage(vec![m.clone()])
-            .unwrap();
-        let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m.clone()]).unwrap(),
+        );
+        let linkage = adapter.get_linkage_context(TEST_ADDR).unwrap();
         let mut sess = adapter.make_vm(linkage).unwrap();
         sess.execute_function_bypass_visibility(
             &module_id,
@@ -67,13 +68,15 @@ fn test_malformed_module() {
         blob[2] = 0xbe;
         blob[3] = 0xef;
         let mut adapter = InMemoryTestAdapter::new();
-        adapter
-            .insert_modules_into_storage(vec![m.clone()])
-            .unwrap();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m.clone()]).unwrap(),
+        );
         // Write out the corrupted module
-        adapter
-            .storage
-            .publish_or_overwrite_module(m.self_id(), blob);
+        adapter.storage.publish_or_overwrite_module(
+            *m.self_id().address(),
+            m.self_id().name().to_owned(),
+            blob,
+        );
         let linkage = LinkageContext {
             root_package: TEST_ADDR,
             linkage_table: [(TEST_ADDR, TEST_ADDR)].into_iter().collect(),
@@ -106,10 +109,10 @@ fn test_unverifiable_module() {
     // Publish M and call M::foo to make sure it works.
     {
         let mut adapter = InMemoryTestAdapter::new();
-        adapter
-            .insert_modules_into_storage(vec![m.clone()])
-            .unwrap();
-        let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m.clone()]).unwrap(),
+        );
+        let linkage = adapter.get_linkage_context(TEST_ADDR).unwrap();
         let mut sess = adapter.make_vm(linkage).unwrap();
 
         sess.execute_function_bypass_visibility(
@@ -129,8 +132,10 @@ fn test_unverifiable_module() {
         m.function_defs[0].code.as_mut().unwrap().code = vec![];
 
         let mut adapter = InMemoryTestAdapter::new();
-        adapter.insert_modules_into_storage(vec![m]).unwrap();
-        let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m.clone()]).unwrap(),
+        );
+        let linkage = adapter.get_linkage_context(TEST_ADDR).unwrap();
         let Err(err) = adapter.make_vm(linkage) else {
             panic!("Expected an error, but passed");
         };
@@ -170,11 +175,11 @@ fn test_missing_module_dependency() {
     // Publish M and N and call N::bar. Everything should work.
     {
         let mut adapter = InMemoryTestAdapter::new();
-        adapter
-            .insert_modules_into_storage(vec![m, n.clone()])
-            .unwrap();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m, n.clone()]).unwrap(),
+        );
 
-        let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
+        let linkage = adapter.get_linkage_context(TEST_ADDR).unwrap();
         let mut sess = adapter.make_vm(linkage).unwrap();
 
         sess.execute_function_bypass_visibility(
@@ -191,7 +196,9 @@ fn test_missing_module_dependency() {
     // an invariant violation.
     {
         let mut adapter = InMemoryTestAdapter::new();
-        adapter.insert_modules_into_storage(vec![n]).unwrap();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![n]).unwrap(),
+        );
 
         let linkage =
             LinkageContext::new(TEST_ADDR, [(TEST_ADDR, TEST_ADDR)].into_iter().collect());
@@ -233,11 +240,11 @@ fn test_malformed_module_dependency() {
     // Publish M and N and call N::bar. Everything should work.
     {
         let mut adapter = InMemoryTestAdapter::new();
-        adapter
-            .insert_modules_into_storage(vec![m, n.clone()])
-            .unwrap();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m, n.clone()]).unwrap(),
+        );
 
-        let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
+        let linkage = adapter.get_linkage_context(TEST_ADDR).unwrap();
         let mut sess = adapter.make_vm(linkage).unwrap();
 
         sess.execute_function_bypass_visibility(
@@ -258,15 +265,17 @@ fn test_malformed_module_dependency() {
         blob_m[3] = 0xef;
 
         let mut adapter = InMemoryTestAdapter::new();
-        adapter
-            .insert_modules_into_storage(vec![n.clone()])
-            .unwrap();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![n.clone()]).unwrap(),
+        );
 
         let linkage =
             LinkageContext::new(TEST_ADDR, [(TEST_ADDR, TEST_ADDR)].into_iter().collect());
-        adapter
-            .storage
-            .publish_or_overwrite_module(n.self_id(), blob_n);
+        adapter.storage.publish_or_overwrite_module(
+            *n.self_id().address(),
+            n.self_id().name().to_owned(),
+            blob_n,
+        );
         let Err(err) = adapter.make_vm(linkage) else {
             panic!("Expected an error, but passed");
         };
@@ -304,11 +313,11 @@ fn test_unverifiable_module_dependency() {
     // Publish M and N and call N::bar. Everything should work.
     {
         let mut adapter = InMemoryTestAdapter::new();
-        adapter
-            .insert_modules_into_storage(vec![m.clone(), n.clone()])
-            .unwrap();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![m.clone(), n.clone()]).unwrap(),
+        );
 
-        let linkage = adapter.generate_default_linkage(TEST_ADDR).unwrap();
+        let linkage = adapter.get_linkage_context(TEST_ADDR).unwrap();
         let mut sess = adapter.make_vm(linkage).unwrap();
 
         sess.execute_function_bypass_visibility(
@@ -329,15 +338,17 @@ fn test_unverifiable_module_dependency() {
         serialize_module_at_max_version(&m, &mut blob_m).unwrap();
 
         let mut adapter = InMemoryTestAdapter::new();
-        adapter
-            .insert_modules_into_storage(vec![n.clone()])
-            .unwrap();
+        adapter.insert_package_into_storage(
+            StoredPackage::from_modules_for_testing(TEST_ADDR, vec![n.clone()]).unwrap(),
+        );
 
         let linkage =
             LinkageContext::new(TEST_ADDR, [(TEST_ADDR, TEST_ADDR)].into_iter().collect());
-        adapter
-            .storage
-            .publish_or_overwrite_module(n.self_id(), blob_m);
+        adapter.storage.publish_or_overwrite_module(
+            *n.self_id().address(),
+            n.self_id().name().to_owned(),
+            blob_m,
+        );
         let Err(err) = adapter.make_vm(linkage) else {
             panic!("Expected an error, but passed");
         };

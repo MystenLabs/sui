@@ -12,7 +12,10 @@ use move_core_types::{
 };
 
 use move_vm_runtime::{
-    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, vm_test_adapter::VMTestAdapter},
+    dev_utils::{
+        in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage,
+        vm_test_adapter::VMTestAdapter,
+    },
     natives::move_stdlib::stdlib_native_functions,
 };
 use move_vm_runtime::{runtime::MoveRuntime, shared::gas::UnmeteredGasMeter};
@@ -100,8 +103,10 @@ fn execute<M: Measurement + 'static>(
     let linkage = adapter
         .generate_linkage_context(sender, sender, &modules)
         .unwrap();
+    let pkg = StoredPackage::from_module_for_testing_with_linkage(sender, linkage.clone(), modules)
+        .unwrap();
     adapter
-        .publish_package_modules_for_test(linkage.clone(), sender, modules)
+        .publish_package(sender, pkg.into_serialized_package())
         .unwrap();
 
     // module and function to call
