@@ -29,4 +29,5 @@ import { DeepBookClient } from '../src/index.js'; // Adjust import source accord
 	console.log(await dbClient.checkManagerBalance('AMBER', 'WUSDT'));
 	console.log(await dbClient.checkManagerBalance('AMBER', 'WUSDC'));
 	console.log(await dbClient.checkManagerBalance('AMBER', 'BETH'));
+	console.log(await dbClient.checkManagerBalance('AMBER', 'DEEP'));
 })();
