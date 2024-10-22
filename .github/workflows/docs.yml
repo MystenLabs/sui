@@ -29,11 +29,11 @@ jobs:
     steps:
       - name: Notify Slack of Examples Changes
         uses: slackapi/slack-github-action@v1.24.0
-        with:
-          channel-id: 'tech-docs'
-          slack-message: "An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>"
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        with:
+          channel-id: 'tech-docs'
+          slack-message: 'An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>'
   
   spelling:
     name: Lint documentation
