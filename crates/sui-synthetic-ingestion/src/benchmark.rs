@@ -32,7 +32,11 @@ pub async fn run_benchmark<I: BenchmarkableIndexer>(
         "Checkpoint 0 is reserved for genesis checkpoint"
     );
     let expected_last_checkpoint = config.starting_checkpoint + config.num_checkpoints - 1;
-    generate_ingestion(config.clone());
+    if dir_not_empty(&config.ingestion_dir) {
+        info!("Starting from an existing ingestion workload directory");
+    } else {
+        generate_ingestion(config.clone());
+    }
 
     let mut rx = indexer.subscribe_to_committed_checkpoints();
     let mut tps_tracker = TpsTracker::new(Duration::from_secs(1));
@@ -55,6 +59,12 @@ pub async fn run_benchmark<I: BenchmarkableIndexer>(
     let seq = tps_tracker.finish();
     indexer.stop().await;
     seq
+}
+
+fn dir_not_empty(dir: &std::path::Path) -> bool {
+    dir.read_dir()
+        .map(|mut it| it.next().is_some())
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

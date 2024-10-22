@@ -30,14 +30,19 @@ pub async fn run_indexer_benchmark(
             .unwrap();
     }
     let store = PgIndexerStore::new(pool, UploadOptions::default(), metrics.clone());
-    let ingestion_dir = tempfile::tempdir().unwrap().into_path();
+    let ingestion_dir = config
+        .workload_dir
+        .clone()
+        .unwrap_or_else(|| tempfile::tempdir().unwrap().into_path());
+    // If we are using a non-temp directory, we should not delete the ingestion directory.
+    let gc_checkpoint_files = config.workload_dir.is_none();
     let synthetic_ingestion_config = SyntheticIngestionConfig {
         ingestion_dir: ingestion_dir.clone(),
         checkpoint_size: config.checkpoint_size,
         num_checkpoints: config.num_checkpoints,
         starting_checkpoint: config.starting_checkpoint,
     };
-    let indexer = BenchmarkIndexer::new(store, metrics, ingestion_dir);
+    let indexer = BenchmarkIndexer::new(store, metrics, ingestion_dir, gc_checkpoint_files);
     run_benchmark(synthetic_ingestion_config, indexer).await;
 }
 
@@ -50,18 +55,25 @@ pub struct BenchmarkIndexer {
 
 struct BenchmarkIndexerInner {
     ingestion_dir: PathBuf,
+    gc_checkpoint_files: bool,
     store: PgIndexerStore,
     metrics: IndexerMetrics,
     committed_checkpoints_tx: watch::Sender<Option<IndexerProgress>>,
 }
 
 impl BenchmarkIndexer {
-    pub fn new(store: PgIndexerStore, metrics: IndexerMetrics, ingestion_dir: PathBuf) -> Self {
+    pub fn new(
+        store: PgIndexerStore,
+        metrics: IndexerMetrics,
+        ingestion_dir: PathBuf,
+        gc_checkpoint_files: bool,
+    ) -> Self {
         let cancel = CancellationToken::new();
         let (committed_checkpoints_tx, committed_checkpoints_rx) = watch::channel(None);
         Self {
             inner: Some(BenchmarkIndexerInner {
                 ingestion_dir,
+                gc_checkpoint_files,
                 store,
                 metrics,
                 committed_checkpoints_tx,
@@ -82,6 +94,7 @@ impl BenchmarkableIndexer for BenchmarkIndexer {
     async fn start(&mut self) {
         let BenchmarkIndexerInner {
             ingestion_dir,
+            gc_checkpoint_files,
             store,
             metrics,
             committed_checkpoints_tx,
@@ -91,6 +104,7 @@ impl BenchmarkableIndexer for BenchmarkIndexer {
                 data_ingestion_path: Some(ingestion_dir),
                 ..Default::default()
             },
+            gc_checkpoint_files,
             ..Default::default()
         };
         let cancel = self.cancel.clone();
