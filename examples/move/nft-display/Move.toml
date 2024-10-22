@@ -3,7 +3,7 @@ name = "nft_display"
 edition = "2024.beta"
 
 [dependencies]
-Sui = { local = "../../sui/crates/sui-framework/packages/sui-framework" }
+Sui = { local = "../../../sui/crates/sui-framework/packages/sui-framework" }
 
 [addresses]
 metal = "0x0"
