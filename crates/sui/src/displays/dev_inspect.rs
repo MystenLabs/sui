@@ -25,15 +25,15 @@ impl<'a> Display for Pretty<'a, DevInspectResults> {
 
         if let Some(results) = &response.results {
             for result in results {
-                write!(f, "Execution Result")?;
-                write!(f, "  Mutable Reference Outputs")?;
+                writeln!(f, "Execution Result")?;
+                writeln!(f, "  Mutable Reference Outputs")?;
                 for m in result.mutable_reference_outputs.iter() {
                     writeln!(f, "    Sui Argument: {}", m.0)?;
                     writeln!(f, "    Sui TypeTag: {:?}", m.2)?;
                     writeln!(f, "    Bytes: {:?}", m.1)?;
                 }
 
-                write!(f, "  Return values")?;
+                writeln!(f, "  Return values")?;
                 for val in result.return_values.iter() {
                     writeln!(f, "    Sui TypeTag: {:?}", val.1)?;
                     writeln!(f, "    Bytes: {:?}", val.0)?;
