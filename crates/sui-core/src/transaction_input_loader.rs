@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution_cache::ObjectCacheRead;
+use crate::{
+    authority::authority_per_epoch_store::CertLockGuard, execution_cache::ObjectCacheRead,
+};
 use itertools::izip;
+use mysten_common::fatal;
 use once_cell::unsync::OnceCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::{
-    base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, TransactionDigest},
+    base_types::{EpochId, ObjectRef, TransactionDigest},
     error::{SuiError, SuiResult, UserInputError},
     storage::{GetSharedLocks, ObjectKey},
     transaction::{
@@ -126,10 +129,11 @@ impl TransactionInputLoader {
         &self,
         shared_lock_store: &impl GetSharedLocks,
         tx_key: &TransactionKey,
+        _tx_lock: &CertLockGuard, // see below for why this is needed
         input_object_kinds: &[InputObjectKind],
         epoch_id: EpochId,
     ) -> SuiResult<InputObjects> {
-        let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
+        let shared_locks_cell: OnceCell<Option<HashMap<_, _>>> = OnceCell::new();
 
         let mut results = vec![None; input_object_kinds.len()];
         let mut object_keys = Vec::with_capacity(input_object_kinds.len());
@@ -153,17 +157,22 @@ impl TransactionInputLoader {
                     fetches.push((i, input));
                 }
                 InputObjectKind::SharedMoveObject { id, .. } => {
-                    let shared_locks = shared_locks_cell.get_or_try_init(|| {
-                        Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
+                    let shared_locks = shared_locks_cell
+                        .get_or_init(|| {
                             shared_lock_store
-                                .get_shared_locks(tx_key)?
-                                .into_iter()
-                                .collect(),
-                        )
-                    })?;
-                    // If we can't find the locked version, it means
-                    // 1. either we have a bug that skips shared object version assignment
-                    // 2. or we have some DB corruption
+                                .get_shared_locks(tx_key)
+                                .expect("loading shared locks should not fail")
+                                .map(|locks| locks.into_iter().collect())
+                        })
+                        .as_ref()
+                        .unwrap_or_else(|| {
+                            // Important to hold the _tx_lock here - otherwise it would be possible
+                            // for a concurrent execution of the same tx to enter this point after the
+                            // first execution has finished and the shared locks have been deleted.
+                            fatal!("Failed to get shared locks for transaction {tx_key:?}");
+                        });
+
+                    // If we find a set of locks but an object is missing, it indicates a serious inconsistency:
                     let version = shared_locks.get(id).unwrap_or_else(|| {
                         panic!("Shared object locks should have been set. key: {tx_key:?}, obj id: {id:?}")
                     });

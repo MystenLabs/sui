@@ -129,6 +129,16 @@ pub struct CertTxGuard(#[allow(unused)] CertLockGuard);
 impl CertTxGuard {
     pub fn release(self) {}
     pub fn commit_tx(self) {}
+    pub fn as_lock_guard(&self) -> &CertLockGuard {
+        &self.0
+    }
+}
+
+impl CertLockGuard {
+    pub fn dummy_for_tests() -> Self {
+        let lock = Arc::new(tokio::sync::Mutex::new(()));
+        Self(lock.try_lock_owned().unwrap())
+    }
 }
 
 type JwkAggregator = GenericMultiStakeAggregator<(JwkId, JWK), true>;
@@ -1321,23 +1331,29 @@ impl AuthorityPerEpochStore {
         &self,
         key: &TransactionKey,
         objects: &[InputObjectKind],
-    ) -> BTreeSet<InputKey> {
-        let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
+    ) -> SuiResult<BTreeSet<InputKey>> {
+        let shared_locks =
+            once_cell::unsync::OnceCell::<Option<HashMap<ObjectID, SequenceNumber>>>::new();
         objects
             .iter()
             .map(|kind| {
-                match kind {
+                Ok(match kind {
                     InputObjectKind::SharedMoveObject { id, .. } => {
-                        if shared_locks.is_empty() {
-                            shared_locks = self
-                                .get_shared_locks(key)
-                                .expect("Read from storage should not fail!")
-                                .into_iter()
-                                .collect();
-                        }
-                        // If we can't find the locked version, it means
-                        // 1. either we have a bug that skips shared object version assignment
-                        // 2. or we have some DB corruption
+                        let shared_locks = shared_locks
+                            .get_or_init(|| {
+                                self.get_shared_locks(key)
+                                    .expect("reading shared locks should not fail")
+                                    .map(|locks| locks.into_iter().collect())
+                            })
+                            .as_ref()
+                            // Shared version assignments could have been deleted if the tx just
+                            // finished executing concurrently.
+                            .ok_or(SuiError::GenericAuthorityError {
+                                error: "no shared locks".to_string(),
+                            })?;
+
+                        // If we found locks, but they are missing the assignment for this object,
+                        // it indicates a serious inconsistency!
                         let Some(version) = shared_locks.get(id) else {
                             panic!(
                                 "Shared object locks should have been set. key: {key:?}, obj \
@@ -1354,7 +1370,7 @@ impl AuthorityPerEpochStore {
                         id: objref.0,
                         version: objref.1,
                     },
-                }
+                })
             })
             .collect()
     }
@@ -4281,12 +4297,8 @@ impl GetSharedLocks for AuthorityPerEpochStore {
     fn get_shared_locks(
         &self,
         key: &TransactionKey,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
-        Ok(self
-            .tables()?
-            .assigned_shared_object_versions_v2
-            .get(key)?
-            .unwrap_or_default())
+    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
+        Ok(self.tables()?.assigned_shared_object_versions_v2.get(key)?)
     }
 }
 
