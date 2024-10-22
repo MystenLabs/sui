@@ -86,7 +86,6 @@ export default function OfflineSigner() {
 			const intentMessageDigestHex = toHex(intentMessageDigest);
 			setLedgerTransactionhash(intentMessageDigestHex);
 		} catch (error) {
-			console.error('Error computing blake2b hash:', error);
 			setLedgerTransactionhash('Error computing hash');
 		}
 	};
