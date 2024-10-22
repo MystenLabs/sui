@@ -46,12 +46,6 @@ pub enum Direction {
     Descending,
 }
 
-impl Direction {
-    pub fn is_descending(self) -> bool {
-        matches!(self, Self::Descending)
-    }
-}
-
 #[derive(Debug)]
 pub struct Page<T, C> {
     pub entries: response::ResponseContent<Vec<T>>,
@@ -75,15 +69,14 @@ const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
     // stable APIs
     &info::GetNodeInfo,
     &health::HealthCheck,
-    &checkpoints::ListCheckpoints,
-    &checkpoints::GetCheckpoint,
     // unstable APIs
     &accounts::ListAccountObjects,
     &objects::GetObject,
     &objects::GetObjectWithVersion,
     &objects::ListDynamicFields,
-    &checkpoints::GetFullCheckpoint,
-    &checkpoints::ListFullCheckpoints,
+    &checkpoints::ListCheckpoints,
+    &checkpoints::GetCheckpoint,
+    &checkpoints::GetCheckpointFull,
     &transactions::GetTransaction,
     &transactions::ListTransactions,
     &committee::GetCommittee,
