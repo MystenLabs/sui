@@ -24,7 +24,7 @@ pub(crate) struct NamedMovePackage;
 
 impl NamedMovePackage {
     /// Queries a package by name (and version, encoded in the name but optional).
-    /// Name's format should be `{organization}/{application}:v{version}`.
+    /// Name's format should be `{organization}/{application}/{version}`.
     pub(crate) async fn query(
         ctx: &Context<'_>,
         name: &str,
@@ -54,17 +54,25 @@ async fn query_internal(
         Error::Internal(format!("Failed to convert name to dynamic field id: {}", e))
     })?;
 
+    println!("df_id: {:?}", df_id);
+
     let Some(df) =
         MoveObject::query(ctx, df_id.into(), Object::latest_at(checkpoint_viewed_at)).await?
     else {
         return Ok(None);
     };
 
+    println!("we got a df back");
+
     let app_record = AppRecord::try_from(df.native)?;
+
+    println!("app_record: {:?}", app_record);
 
     let Some(app_info) = app_record.app_info else {
         return Ok(None);
     };
+
+    println!("we found app_info");
 
     package_from_app_info(ctx, app_info, versioned.version, checkpoint_viewed_at).await
 }
