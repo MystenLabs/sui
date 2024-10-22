@@ -18,6 +18,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    balances_summary (asset) {
+        asset -> Text,
+        amount -> Int8,
+        deposit -> Bool,
+    }
+}
+
+diesel::table! {
     flashloans (id) {
         id -> Int4,
         digest -> Text,
