@@ -11,7 +11,7 @@ use move_compiler::editions::Edition;
 use move_compiler::{diagnostics::WarningFilters, shared::PackageConfig};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
-use std::fs::File;
+use std::io::Cursor;
 use std::str::FromStr;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -68,6 +68,8 @@ type PackageTable = BTreeMap<PackageName, Package>;
 pub struct Package {
     /// Source manifest for this package
     pub source_package: SourceManifest,
+    /// Lockfile for this package
+    pub lockfile: Option<String>,
     /// Where this package is located on the filesystem
     pub package_path: PathBuf,
     /// The renaming of addresses performed by this package
@@ -341,8 +343,16 @@ impl ResolvedGraph {
 
 impl Package {
     fn new(package_path: PathBuf, config: &BuildConfig) -> Result<Package> {
+        let lock_path = package_path.join(SourcePackageLayout::Lock.path());
+        let lockfile = if lock_path.exists() {
+            Some(std::fs::read_to_string(&lock_path)?)
+        } else {
+            None
+        };
+
         Ok(Package {
             source_package: parse_move_manifest_from_file(&package_path)?,
+            lockfile,
             source_digest: package_digest_for_config(&package_path, config)?,
             package_path,
             renaming: Renaming::new(),
@@ -362,12 +372,13 @@ impl Package {
         resolving_table: &mut ResolvingTable,
         chain_id: &Option<String>,
     ) -> Result<()> {
-        let pkg_id = custom_resolve_pkg_id(&self.source_package).with_context(|| {
-            format!(
-                "Resolving package name for '{}'",
-                &self.source_package.package.name
-            )
-        })?;
+        let pkg_id = custom_resolve_pkg_id(&self.source_package, self.lockfile.as_deref())
+            .with_context(|| {
+                format!(
+                    "Resolving package name for '{}'",
+                    &self.source_package.package.name
+                )
+            })?;
         for (name, addr) in self.source_package.addresses.iter().flatten() {
             if *addr == Some(AccountAddress::ZERO) {
                 // The address in the manifest is set to 0x0, meaning `name` is associated with 'this'
@@ -385,9 +396,8 @@ impl Package {
     }
 
     fn resolve_original_id_from_lock(&self, chain_id: &Option<String>) -> Option<String> {
-        let lock_file = self.package_path.join(SourcePackageLayout::Lock.path());
-        let mut lock_file = File::open(lock_file).ok()?;
-        let managed_packages = ManagedPackage::read(&mut lock_file).ok();
+        let mut lockfile = Cursor::new(self.lockfile.as_ref()?);
+        let managed_packages = ManagedPackage::read(&mut lockfile).ok();
         managed_packages
             .and_then(|m| {
                 let chain_id = chain_id.as_ref()?;
@@ -404,12 +414,13 @@ impl Package {
         resolving_table: &mut ResolvingTable,
     ) -> Result<()> {
         let pkg_name = self.source_package.package.name;
-        let pkg_id = custom_resolve_pkg_id(&self.source_package).with_context(|| {
-            format!(
-                "Resolving package name for '{}'",
-                &self.source_package.package.name
-            )
-        })?;
+        let pkg_id = custom_resolve_pkg_id(&self.source_package, self.lockfile.as_deref())
+            .with_context(|| {
+                format!(
+                    "Resolving package name for '{}'",
+                    &self.source_package.package.name
+                )
+            })?;
         let dep_name = dep.dep_name;
 
         let mut dep_renaming = BTreeMap::new();
@@ -476,12 +487,13 @@ impl Package {
 
     fn finalize_address_resolution(&mut self, resolving_table: &ResolvingTable) -> Result<()> {
         let pkg_name = self.source_package.package.name;
-        let pkg_id = custom_resolve_pkg_id(&self.source_package).with_context(|| {
-            format!(
-                "Resolving package name for '{}'",
-                &self.source_package.package.name
-            )
-        })?;
+        let pkg_id = custom_resolve_pkg_id(&self.source_package, self.lockfile.as_deref())
+            .with_context(|| {
+                format!(
+                    "Resolving package name for '{}'",
+                    &self.source_package.package.name
+                )
+            })?;
         let mut unresolved_addresses = Vec::new();
 
         for (name, addr) in resolving_table.bindings(pkg_id) {
@@ -507,7 +519,7 @@ impl Package {
     }
 
     pub fn immediate_dependencies(&self, graph: &ResolvedGraph) -> BTreeSet<PackageName> {
-        let pkg_id = custom_resolve_pkg_id(&self.source_package)
+        let pkg_id = custom_resolve_pkg_id(&self.source_package, self.lockfile.as_deref())
             .with_context(|| {
                 format!(
                     "Resolving package name for '{}'",
