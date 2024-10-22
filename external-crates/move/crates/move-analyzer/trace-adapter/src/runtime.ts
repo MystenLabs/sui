@@ -494,8 +494,10 @@ export class Runtime extends EventEmitter {
     public setLineBreakpoints(path: string, lines: number[]): boolean[] {
         const breakpoints = new Set<number>();
         const tracedLines = this.trace.tracedLines.get(path);
-        // set all breakpoints to invalid and validate the correct ones in the loop,
-        // otherwise let them all be invalid if there are no traced lines
+        // Set all breakpoints to invalid and validate the correct ones in the loop,
+        // otherwise let them all be invalid if there are no traced lines.
+        // Valid breakpoints are those that are on lines that have at least
+        // one instruction in the trace on them.
         const validated = lines.map(() => false);
         if (tracedLines) {
             for (let i = 0; i < lines.length; i++) {
