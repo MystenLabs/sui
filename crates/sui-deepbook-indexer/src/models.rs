@@ -118,6 +118,7 @@ pub struct Proposals {
     pub sender: String,
     pub checkpoint: i64,
     pub package: String,
+    pub pool_id: String,
     pub balance_manager_id: String,
     pub epoch: i64,
     pub taker_fee: i64,
