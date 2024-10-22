@@ -617,6 +617,7 @@ fn process_sui_event(
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
                     package,
+                    pool_id: move_event.pool_id.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                     epoch: move_event.epoch,
                     taker_fee: move_event.taker_fee,
