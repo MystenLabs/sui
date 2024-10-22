@@ -88,11 +88,12 @@ impl Build {
         if generate_struct_layouts {
             let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();
             // store under <package_path>/build/<package_name>/layouts/struct_layouts.yaml
-            let layout_filename = rerooted_path
+            let dir_name = rerooted_path
                 .join("build")
                 .join(pkg.package.compiled_package_info.package_name.as_str())
-                .join(LAYOUTS_DIR)
-                .join(STRUCT_LAYOUTS_FILENAME);
+                .join(LAYOUTS_DIR);
+            let layout_filename = dir_name.join(STRUCT_LAYOUTS_FILENAME);
+            fs::create_dir_all(dir_name)?;
             fs::write(layout_filename, layout_str)?
         }
 
