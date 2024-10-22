@@ -6,7 +6,6 @@ use crate::{
     client_ptb::ptb::PTB,
     displays::Pretty,
     key_identity::{get_identity_address, KeyIdentity},
-    upgrade_compatibility::check_compatibility,
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
 use std::{
@@ -94,7 +93,6 @@ use tabled::{
     },
 };
 
-use sui_types::digests::ChainIdentifier;
 use tracing::{debug, info};
 
 #[path = "unit_tests/profiler_tests.rs"]
@@ -868,16 +866,6 @@ impl SuiClientCommands {
                 let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
                 let chain_id = client.read_api().get_chain_identifier().await.ok();
-                let protocol_config = ProtocolConfig::get_for_version(
-                    ProtocolVersion::MAX,
-                    match chain_id
-                        .as_ref()
-                        .and_then(ChainIdentifier::from_chain_short_id)
-                    {
-                        Some(chain_id) => chain_id.chain(),
-                        None => Chain::Unknown,
-                    },
-                );
 
                 let package_path =
                     package_path
@@ -920,16 +908,8 @@ impl SuiClientCommands {
                         previous_id,
                     )?;
                 }
-                let (
-                    package_id,
-                    compiled_modules,
-                    dependencies,
-                    package_digest,
-                    upgrade_policy,
-                    upgrade_package,
-                ) = upgrade_result?;
-
-                check_compatibility(&client, package_id, upgrade_package, protocol_config).await?;
+                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
+                    upgrade_result?;
 
                 let tx_kind = client
                     .transaction_builder()

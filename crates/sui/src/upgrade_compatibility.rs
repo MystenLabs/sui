@@ -431,13 +431,11 @@ fn compare_packages(
 
     let mut files = SimpleFiles::new();
     let config = term::Config::default();
-    let mut writer;
-
-    if stdout().is_terminal() {
-        writer = term::termcolor::Buffer::ansi();
+    let mut writer = if stdout().is_terminal() {
+        term::termcolor::Buffer::ansi()
     } else {
-        writer = term::termcolor::Buffer::no_color();
-    }
+        term::termcolor::Buffer::no_color()
+    };
     let mut file_id_map = HashMap::new();
 
     for (name, err) in errors {
@@ -465,7 +463,7 @@ fn compare_packages(
     }
 
     Err(anyhow!(
-        "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. It's upgrade policy is set to 'Compatible'.",
+        "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.",
         String::from_utf8(writer.into_inner()).context("Unable to convert buffer to string")?
     ))
 }

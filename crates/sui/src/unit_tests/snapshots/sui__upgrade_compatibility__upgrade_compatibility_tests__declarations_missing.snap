@@ -27,4 +27,4 @@ error: public function is missing
   = public functions are part of a module's public interface and cannot be removed or changed during an upgrade, add back the public function 'fun_to_be_removed'.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. It's upgrade policy is set to 'Compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'Compatible'.
