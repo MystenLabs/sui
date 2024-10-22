@@ -64,6 +64,7 @@ title: Module `0x3::sui_system_state_inner`
 -  [Function `get_storage_fund_object_rebates`](#0x3_sui_system_state_inner_get_storage_fund_object_rebates)
 -  [Function `validator_address_by_pool_id`](#0x3_sui_system_state_inner_validator_address_by_pool_id)
 -  [Function `pool_exchange_rates`](#0x3_sui_system_state_inner_pool_exchange_rates)
+-  [Function `is_staking_pool_active`](#0x3_sui_system_state_inner_is_staking_pool_active)
 -  [Function `active_validator_addresses`](#0x3_sui_system_state_inner_active_validator_addresses)
 -  [Function `extract_coin_balance`](#0x3_sui_system_state_inner_extract_coin_balance)
 
@@ -2627,6 +2628,33 @@ Returns all the validators who are currently reporting <code>addr</code>
 ): &Table&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, PoolTokenExchangeRate&gt;  {
     <b>let</b> validators = &<b>mut</b> self.validators;
     validators.<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_pool_exchange_rates">pool_exchange_rates</a>(pool_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_state_inner_is_staking_pool_active"></a>
+
+## Function `is_staking_pool_active`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_is_staking_pool_active">is_staking_pool_active</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>, staking_pool_id: &<a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_is_staking_pool_active">is_staking_pool_active</a>(
+    self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
+    staking_pool_id: &ID
+): bool {
+    self.validators.<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_is_staking_pool_active">is_staking_pool_active</a>(staking_pool_id)
 }
 </code></pre>
 

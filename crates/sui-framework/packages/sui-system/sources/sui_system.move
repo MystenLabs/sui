@@ -539,6 +539,14 @@ module sui_system::sui_system {
         self.pool_exchange_rates(pool_id)
     }
 
+    public fun is_staking_pool_active(
+        wrapper: &mut SuiSystemState,
+        staking_pool_id: &ID
+    ): bool {
+        let self = load_system_state_mut(wrapper);
+        self.is_staking_pool_active(staking_pool_id)
+    }
+
     /// Getter returning addresses of the currently active validators.
     public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<address> {
         let self = load_system_state(wrapper);
