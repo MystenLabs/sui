@@ -5,8 +5,8 @@ use anyhow::Result;
 use clap::Parser;
 use suioplib::{
     cli::{
-        ci_cmd, docker_cmd, iam_cmd, incidents_cmd, pulumi_cmd, service_cmd, CIArgs, DockerArgs,
-        IAMArgs, IncidentsArgs, PulumiArgs, ServiceArgs,
+        ci_cmd, docker_cmd, iam_cmd, incidents_cmd, load_environment_cmd, pulumi_cmd, service_cmd,
+        CIArgs, DockerArgs, IAMArgs, IncidentsArgs, LoadEnvironmentArgs, PulumiArgs, ServiceArgs,
     },
     DEBUG_MODE,
 };
@@ -38,6 +38,8 @@ pub(crate) enum Resource {
     Service(ServiceArgs),
     #[clap()]
     CI(CIArgs),
+    #[clap(name="load-env", aliases = ["e", "env"])]
+    LoadEnvironment(LoadEnvironmentArgs),
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -75,6 +77,9 @@ async fn main() -> Result<()> {
         }
         Resource::CI(args) => {
             ci_cmd(&args).await?;
+        }
+        Resource::LoadEnvironment(args) => {
+            load_environment_cmd(&args)?;
         }
     }
 
