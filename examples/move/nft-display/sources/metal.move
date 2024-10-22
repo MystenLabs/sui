@@ -62,7 +62,7 @@ module metal::random_nft {
 
     display::update_version(&mut display);
 
-    sui::transfer::public_transfer(display, ctx.sender());
+    transfer::public_transfer(display, ctx.sender());
     
     transfer::transfer(
         MintingCapability { id: object::new(ctx) },
@@ -71,7 +71,7 @@ module metal::random_nft {
 
     transfer::public_transfer(AirDropNFT { id: object::new(ctx) }, ctx.sender());
 
-    sui::transfer::public_transfer(publisher, ctx.sender())
+    transfer::public_transfer(publisher, ctx.sender())
   }
 
   public fun mint(_cap: &MintingCapability, n: u16, ctx: &mut TxContext): vector<AirDropNFT> {
