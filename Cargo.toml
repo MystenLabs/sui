@@ -288,8 +288,8 @@ backoff = { version = "0.4.0", features = [
     "tokio",
     "tokio_1",
 ] }
-base64 = "0.21.2"
-base64-url = "2"
+base64 = "0.22"
+base64-url = "3"
 bcs = "0.1.4"
 better_any = "0.1.1"
 bimap = "0.6.2"
