@@ -186,6 +186,10 @@ pub enum Command {
     ResetDatabase {
         #[clap(long)]
         force: bool,
+        /// If true, only drop all tables but do not run the migrations.
+        /// That is, no tables will exist in the DB after the reset.
+        #[clap(long, default_value_t = false)]
+        skip_migrations: bool,
     },
     /// Run through the migration scripts.
     RunMigrations,
