@@ -21,6 +21,12 @@ export type TypeSignature =
 	  }
 	| {
 			TypeParameter: number;
+	  }
+	| {
+			Reference: TypeSignature;
+	  }
+	| {
+			MutableReference: TypeSignature;
 	  };
 
 export interface DeserializedModule {

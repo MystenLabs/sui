@@ -11,3 +11,7 @@ public fun create_box<T>(value: T, ctx: &mut TxContext): Box<T> {
         value,
     }
 }
+
+public fun box_id<T>(box: &Box<T>): ID {
+    box.id.to_inner()
+}
