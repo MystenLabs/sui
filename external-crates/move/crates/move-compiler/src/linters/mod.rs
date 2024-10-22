@@ -193,6 +193,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 loop_without_exit::LoopWithoutExit.visitor(),
                 self_assignment::SelfAssignmentVisitor.visitor(),
                 redundant_ref_deref::RedundantRefDerefVisitor.visitor(),
+                unnecessary_unit::UnnecessaryUnit.visitor(),
             ]
         }
     }
