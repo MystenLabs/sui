@@ -1612,7 +1612,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 }
             };
             let result_type = core::make_tvar(context, aloc);
-            let earms = match_arms(context, &subject_type, &result_type, narms_, &ref_mut);
+            let earms = match_arms(context, &esubject.ty.clone(), &result_type, narms_, &ref_mut);
             (result_type, TE::Match(esubject, sp(aloc, earms)))
         }
         NE::While(name, nb, nloop) => {
