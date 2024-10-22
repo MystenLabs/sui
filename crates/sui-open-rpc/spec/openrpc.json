@@ -1817,6 +1817,7 @@
                 "max_tx_size_bytes": {
                   "u64": "131072"
                 },
+                "max_txn_cost_overage_per_object_in_commit": null,
                 "max_type_argument_depth": {
                   "u32": "16"
                 },

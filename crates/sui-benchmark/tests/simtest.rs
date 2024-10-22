@@ -463,6 +463,7 @@ mod test {
         let txn_count_limit; // When using transaction count as congestion control mode, the limit of transactions per object per commit.
         let max_deferral_rounds;
         let cap_factor_denominator;
+        let allow_overage_factor;
         {
             let mut rng = thread_rng();
             mode = if rng.gen_bool(0.33) {
@@ -481,26 +482,30 @@ mod test {
             } else {
                 rng.gen_range(1000..10000) // Large deferral round (testing liveness)
             };
+            allow_overage_factor = if rng.gen_bool(0.5) {
+                0
+            } else {
+                rng.gen_range(1..100)
+            };
 
             cap_factor_denominator = rng.gen_range(1..100);
         }
 
         info!(
             "test_simulated_load_shared_object_congestion_control setup.
-             mode: {:?}, checkpoint_budget_factor: {:?},
-             max_deferral_rounds: {:?},
-             txn_count_limit: {:?}",
-            mode, checkpoint_budget_factor, max_deferral_rounds, txn_count_limit
+             mode: {mode:?}, checkpoint_budget_factor: {checkpoint_budget_factor:?},
+             max_deferral_rounds: {max_deferral_rounds:?},
+             txn_count_limit: {txn_count_limit:?}, allow_overage_factor: {allow_overage_factor:?}",
         );
 
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
+            let total_gas_limit = checkpoint_budget_factor
+                * DEFAULT_VALIDATOR_GAS_PRICE
+                * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
             config.set_per_object_congestion_control_mode_for_testing(mode);
             match mode {
                 PerObjectCongestionControlMode::None => panic!("Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"),
                 PerObjectCongestionControlMode::TotalGasBudget => {
-                    let total_gas_limit = checkpoint_budget_factor
-                        * DEFAULT_VALIDATOR_GAS_PRICE
-                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
                 },
@@ -513,15 +518,15 @@ mod test {
                     );
                 },
                 PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
-                    let total_gas_limit = checkpoint_budget_factor
-                        * DEFAULT_VALIDATOR_GAS_PRICE
-                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
                     config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit/cap_factor_denominator);
                 },
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
+            config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
+                allow_overage_factor * total_gas_limit,
+            );
             config
         });
 

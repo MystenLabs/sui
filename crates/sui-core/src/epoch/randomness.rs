@@ -896,7 +896,7 @@ mod tests {
             }
         }
         for i in 0..randomness_managers.len() {
-            let mut output = ConsensusCommitOutput::new();
+            let mut output = ConsensusCommitOutput::new(0);
             for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
                 randomness_managers[i]
                     .add_message(&epoch_stores[j].name, dkg_message)
@@ -926,7 +926,7 @@ mod tests {
             }
         }
         for i in 0..randomness_managers.len() {
-            let mut output = ConsensusCommitOutput::new();
+            let mut output = ConsensusCommitOutput::new(0);
             for (j, dkg_confirmation) in dkg_confirmations.iter().cloned().enumerate() {
                 randomness_managers[i]
                     .add_confirmation(&mut output, &epoch_stores[j].name, dkg_confirmation)
@@ -1028,7 +1028,7 @@ mod tests {
             }
         }
         for i in 0..randomness_managers.len() {
-            let mut output = ConsensusCommitOutput::new();
+            let mut output = ConsensusCommitOutput::new(0);
             for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
                 randomness_managers[i]
                     .add_message(&epoch_stores[j].name, dkg_message)
