@@ -59,6 +59,7 @@ impl Indexer {
             batch_size: config.checkpoint_download_queue_size,
             timeout_secs: config.checkpoint_download_timeout,
             data_limit: config.checkpoint_download_queue_size_bytes,
+            gc_checkpoint_files: config.gc_checkpoint_files,
             ..Default::default()
         };
 
