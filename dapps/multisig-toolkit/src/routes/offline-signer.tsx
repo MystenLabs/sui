@@ -5,6 +5,8 @@ import { useCurrentAccount, useSignTransaction, useSuiClientContext } from '@mys
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromBase64, toBase64, toHex } from '@mysten/sui/utils';
+import { messageWithIntent } from '@mysten/sui/cryptography';
+
 
 import { fromBase58 } from '@mysten/bcs';
 import { useMutation } from '@tanstack/react-query';
@@ -20,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 
 import { blake2b } from '@noble/hashes/blake2b'; 
+import { Buffer } from 'buffer';
 
 export default function OfflineSigner() {
 	const currentAccount = useCurrentAccount();
@@ -76,26 +79,20 @@ export default function OfflineSigner() {
 	});
 
 	// Step 3: Add state for the blake2b hash
-	const [blakeHash, setBlakeHash] = useState<string>('');
+	const [ledgerTransactionHash, setLedgerTransactionhash] = useState<string>('');
 
 	// Step 4: Create a function to compute the blake2b hash
-	const computeBlakeHash = async () => {
+	const computeLedgerTransactionHash = async () => {
 		try {
-			// Assuming 'bytes' is a base64 string. Convert it to a Uint8Array.
-			const transactionJson = await Transaction.from(bytes).toJSON();
-			//console.log(transactionJson);
-			const transactionJSONHash = blake2b(transactionJson, { dkLen: 32 });
-			console.log(toHex(transactionJSONHash));
-			const transaction = Transaction.from(bytes);
-			const digest = await transaction.getDigest();
-			const digestBytes = fromBase58(digest);
-			const digestHex = toHex(digestBytes);
-			console.log(digestHex);
-
-			setBlakeHash(digestHex);
+			// Decode the base64-encoded transaction bytes
+			const decodedBytes = fromBase64(bytes);
+			const intentMessage = messageWithIntent('TransactionData', decodedBytes);
+			const intentMessageDigest = blake2b(intentMessage, { dkLen: 32 });
+			const intentMessageDigestHex = toHex(intentMessageDigest);
+			setLedgerTransactionhash(intentMessageDigestHex);
 		} catch (error) {
 			console.error('Error computing blake2b hash:', error);
-			setBlakeHash('Error computing hash');
+			setLedgerTransactionhash('Error computing hash');
 		}
 	};
 
@@ -143,9 +140,9 @@ export default function OfflineSigner() {
 								<Button
 									variant="secondary"
 									disabled={!bytes}
-									onClick={computeBlakeHash}
+									onClick={computeLedgerTransactionHash}
 								>
-									Show blake2b Hash
+									Show Ledger Transaction Hash
 								</Button>
 							</div>
 
@@ -183,9 +180,9 @@ export default function OfflineSigner() {
 							</DryRunProvider>
 						)}
 
-						{blakeHash && (
+						{ledgerTransactionHash && (
 							<div className="border text-mono break-all rounded p-4">
-								{blakeHash}
+								{ledgerTransactionHash}
 							</div>
 						)}
 					</div>
