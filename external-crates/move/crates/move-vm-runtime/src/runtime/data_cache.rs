@@ -103,28 +103,6 @@ impl<S: MoveResolver> TransactionDataCache<S> {
 
 // `DataStore` implementation for the `TransactionDataCache`
 impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
-    fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
-        if let Some(account_cache) = self.module_map.get(module_id.address()) {
-            if let Some(blob) = account_cache.module_map.get(module_id.name()) {
-                return Ok(blob.clone());
-            }
-        }
-        match self.remote.get_module(module_id) {
-            Ok(Some(bytes)) => Ok(bytes),
-            Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Cannot find module {:?} in data cache", module_id))
-                .finish(Location::Undefined)),
-            Err(err) => {
-                let msg = format!("Unexpected storage error: {:?}", err);
-                Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(msg)
-                        .finish(Location::Undefined),
-                )
-            }
-        }
-    }
-
     fn load_packages_static<const N: usize>(
         &self,
         ids: [AccountAddress; N],

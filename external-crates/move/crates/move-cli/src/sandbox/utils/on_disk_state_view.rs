@@ -424,19 +424,6 @@ impl OnDiskStateView {
 
 impl ModuleResolver for OnDiskStateView {
     type Error = anyhow::Error;
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        let package = self.get_package(module_id.address())?;
-        Ok(package.and_then(|pkg| {
-            pkg.modules
-                .iter()
-                .find(|bytes| {
-                    let module = CompiledModule::deserialize_with_defaults(&bytes).unwrap();
-                    module.self_id() == *module_id
-                })
-                .cloned()
-        }))
-    }
-
     fn get_packages_static<const N: usize>(
         &self,
         ids: [AccountAddress; N],

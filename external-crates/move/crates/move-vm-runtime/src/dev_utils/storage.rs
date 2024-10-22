@@ -9,7 +9,6 @@ use move_core_types::{
     account_address::AccountAddress,
     effects::ChangeSet,
     identifier::Identifier,
-    language_storage::ModuleId,
     resolver::{ModuleResolver, MoveResolver, SerializedPackage, TypeOrigin},
 };
 use std::collections::{BTreeMap, HashMap};
@@ -238,10 +237,6 @@ impl InMemoryStorage {
 impl ModuleResolver for BlankStorage {
     type Error = ();
 
-    fn get_module(&self, _module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(None)
-    }
-
     fn get_packages_static<const N: usize>(
         &self,
         ids: [AccountAddress; N],
@@ -263,16 +258,6 @@ impl ModuleResolver for BlankStorage {
 
 impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
     type Error = S::Error;
-
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        if let Some(account_storage) = self.delta.accounts().get(module_id.address()) {
-            if let Some(blob_opt) = account_storage.modules().get(module_id.name()) {
-                return Ok(blob_opt.clone().ok());
-            }
-        }
-
-        self.base.get_module(module_id)
-    }
 
     fn get_packages_static<const N: usize>(
         &self,
@@ -314,13 +299,6 @@ impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
 
 impl ModuleResolver for InMemoryStorage {
     type Error = ();
-
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        if let Some(account_storage) = self.accounts.get(module_id.address()) {
-            return Ok(account_storage.modules.get(module_id.name()).cloned());
-        }
-        Ok(None)
-    }
 
     fn get_packages_static<const N: usize>(
         &self,

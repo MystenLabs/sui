@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId};
+use crate::{account_address::AccountAddress, identifier::Identifier};
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 /// The `TypeOrigin` struct holds the first storage ID that the type `module_name::type_name` in
@@ -73,8 +73,6 @@ impl SerializedPackage {
 pub trait ModuleResolver {
     type Error: Debug;
 
-    fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error>;
-
     /// Given a list of storage IDs where the number is statically known, return the `SerializedPackage` for
     /// each ID. A result is returned for every ID requested. `None` if the package did not exist.
     fn get_packages_static<const N: usize>(
@@ -103,9 +101,6 @@ impl<E: Debug, T: ModuleResolver<Error = E> + ?Sized> MoveResolver for T {
 
 impl<T: ModuleResolver + ?Sized> ModuleResolver for &T {
     type Error = T::Error;
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        (**self).get_module(module_id)
-    }
 
     fn get_packages_static<const N: usize>(
         &self,
@@ -124,9 +119,6 @@ impl<T: ModuleResolver + ?Sized> ModuleResolver for &T {
 
 impl<T: ModuleResolver + ?Sized> ModuleResolver for Arc<T> {
     type Error = T::Error;
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        (**self).get_module(module_id)
-    }
 
     fn get_packages_static<const N: usize>(
         &self,

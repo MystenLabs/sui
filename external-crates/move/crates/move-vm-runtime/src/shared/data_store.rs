@@ -14,9 +14,6 @@ use move_core_types::{
 /// an in memory cache for a given transaction and the atomic transactional changes
 /// proper of a script execution (transaction).
 pub trait DataStore {
-    /// Get the serialized format of a `CompiledModule` given a `ModuleId`.
-    fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>>;
-
     /// Given a list of storage IDs for a package, return the `SerializedPackage` for each ID.
     /// A result is returned for every ID requested. If any package is not found, an error is
     /// returned.

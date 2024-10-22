@@ -46,6 +46,20 @@ impl<R: ModuleResolver> ModuleCache<R> {
     }
 }
 
+fn get_module_by_id<R: ModuleResolver>(
+    resolver: &R,
+    id: &ModuleId,
+) -> Result<Option<CompiledModule>, R::Error> {
+    let [Some(pkg)] = resolver.get_packages_static([*id.address()])? else {
+        return Ok(None);
+    };
+    Ok(pkg
+        .modules
+        .iter()
+        .map(|m| CompiledModule::deserialize_with_defaults(&m).unwrap())
+        .find_map(|m| if m.self_id() == *id { Some(m) } else { None }))
+}
+
 impl<R: ModuleResolver> GetModule for ModuleCache<R> {
     type Error = anyhow::Error;
     type Item = CompiledModule;
@@ -53,13 +67,11 @@ impl<R: ModuleResolver> GetModule for ModuleCache<R> {
     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<CompiledModule>, Self::Error> {
         Ok(Some(match self.cache.borrow_mut().entry(id.clone()) {
             Entry::Vacant(entry) => {
-                let module_bytes = self
-                    .resolver
-                    .get_module(id)
-                    .map_err(|_| anyhow!("Failed to get module {:?}", id))?
-                    .ok_or_else(|| anyhow!("Module {:?} doesn't exist", id))?;
-                let module = CompiledModule::deserialize_with_defaults(&module_bytes)
-                    .map_err(|_| anyhow!("Failure deserializing module {:?}", id))?;
+                let Some(module) = get_module_by_id(&self.resolver, id)
+                    .map_err(|e| anyhow!("Failed to get module {:?}: {:?}", id, e))?
+                else {
+                    return Ok(None);
+                };
                 entry.insert(module.clone());
                 module
             }
@@ -73,10 +85,7 @@ impl<R: ModuleResolver> GetModule for &R {
     type Item = CompiledModule;
 
     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<CompiledModule>, Self::Error> {
-        Ok(self
-            .get_module(id)
-            .unwrap()
-            .map(|bytes| CompiledModule::deserialize_with_defaults(&bytes).unwrap()))
+        get_module_by_id(self, id)
     }
 }
 
@@ -85,10 +94,7 @@ impl<R: ModuleResolver> GetModule for &mut R {
     type Item = CompiledModule;
 
     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<CompiledModule>, Self::Error> {
-        Ok(self
-            .get_module(id)
-            .unwrap()
-            .map(|bytes| CompiledModule::deserialize_with_defaults(&bytes).unwrap()))
+        get_module_by_id(*self, id)
     }
 }
 
@@ -134,23 +140,17 @@ impl<R: ModuleResolver> GetModule for SyncModuleCache<R> {
             return Ok(Some(compiled_module.clone()));
         }
 
-        if let Some(module_bytes) = self
-            .resolver
-            .get_module(id)
-            .map_err(|_| anyhow!("Failed to get module {:?}", id))?
-        {
-            let module = Arc::new(
-                CompiledModule::deserialize_with_defaults(&module_bytes)
-                    .map_err(|_| anyhow!("Failure deserializing module {:?}", id))?,
-            );
+        let Some(module) = get_module_by_id(&self.resolver, id)
+            .map_err(|e| anyhow!("Failed to get module {:?}: {:?}", id, e))?
+        else {
+            return Ok(None);
+        };
 
-            self.cache
-                .write()
-                .unwrap()
-                .insert(id.clone(), module.clone());
-            Ok(Some(module))
-        } else {
-            Ok(None)
-        }
+        let module = Arc::new(module);
+        self.cache
+            .write()
+            .unwrap()
+            .insert(id.clone(), module.clone());
+        Ok(Some(module))
     }
 }
