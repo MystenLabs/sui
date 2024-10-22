@@ -908,7 +908,7 @@ impl SuiClientCommands {
                         previous_id,
                     )?;
                 }
-                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
+                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
                     upgrade_result?;
 
                 let tx_kind = client
@@ -1685,7 +1685,17 @@ pub(crate) async fn upgrade_package(
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
     env_alias: Option<String>,
-) -> Result<(ObjectID, Vec<Vec<u8>>, PackageDependencies, [u8; 32], u8), anyhow::Error> {
+) -> Result<
+    (
+        ObjectID,
+        Vec<Vec<u8>>,
+        PackageDependencies,
+        [u8; 32],
+        u8,
+        CompiledPackage,
+    ),
+    anyhow::Error,
+> {
     let (dependencies, compiled_modules, compiled_package, package_id) = compile_package(
         read_api,
         build_config,
@@ -1752,6 +1762,7 @@ pub(crate) async fn upgrade_package(
         dependencies,
         package_digest,
         upgrade_policy,
+        compiled_package,
     ))
 }
 
