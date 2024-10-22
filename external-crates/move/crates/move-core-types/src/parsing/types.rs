@@ -3,14 +3,14 @@
 
 use std::fmt::{self, Display};
 
-use anyhow::bail;
-use move_core_types::{
+use crate::{
     account_address::AccountAddress,
     identifier::{self, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
 };
+use anyhow::bail;
 
-use crate::{address::ParsedAddress, parser::Token};
+use crate::parsing::{address::ParsedAddress, parser::Token};
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
 pub enum TypeToken {

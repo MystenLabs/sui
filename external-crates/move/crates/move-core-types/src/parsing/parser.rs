@@ -1,16 +1,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::parsing::{
     address::{NumericalAddress, ParsedAddress},
     types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType, TypeToken},
     values::{ParsableValue, ParsedValue, ValueToken},
 };
-use anyhow::{anyhow, bail, Result};
-use move_core_types::{
+use crate::{
     account_address::AccountAddress,
     u256::{U256FromStrError, U256},
 };
+use anyhow::{anyhow, bail, Result};
 use num_bigint::BigUint;
 use std::{fmt::Display, iter::Peekable, num::ParseIntError};
 
@@ -460,12 +460,12 @@ pub fn parse_address_number(s: &str) -> Option<([u8; AccountAddress::LENGTH], Nu
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::parsing::{
         address::{NumericalAddress, ParsedAddress},
         types::{ParsedStructType, ParsedType},
         values::ParsedValue,
     };
-    use move_core_types::{account_address::AccountAddress, identifier::Identifier, u256::U256};
+    use crate::{account_address::AccountAddress, identifier::Identifier, u256::U256};
     use proptest::prelude::*;
     use proptest::proptest;
 
@@ -516,7 +516,7 @@ mod tests {
                     AccountAddress::from_hex_literal("0x0")
                         .unwrap()
                         .into_bytes(),
-                    crate::parser::NumberFormat::Hex,
+                    crate::parsing::parser::NumberFormat::Hex,
                 ))),
             ),
             (
@@ -525,7 +525,7 @@ mod tests {
                     AccountAddress::from_hex_literal("0x0")
                         .unwrap()
                         .into_bytes(),
-                    crate::parser::NumberFormat::Hex,
+                    crate::parsing::parser::NumberFormat::Hex,
                 ))),
             ),
             (
@@ -534,7 +534,7 @@ mod tests {
                     AccountAddress::from_hex_literal("0x54afa3526")
                         .unwrap()
                         .into_bytes(),
-                    crate::parser::NumberFormat::Hex,
+                    crate::parsing::parser::NumberFormat::Hex,
                 ))),
             ),
             (

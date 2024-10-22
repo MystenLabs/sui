@@ -1868,6 +1868,7 @@ dependencies = [
  "leb128",
  "move-proc-macros",
  "num",
+ "num-bigint",
  "once_cell",
  "primitive-types",
  "proptest",

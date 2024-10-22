@@ -1,16 +1,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::parsing::{
     address::ParsedAddress,
     parser::{Parser, Token},
 };
-use anyhow::bail;
-use move_core_types::{
+use crate::{
     account_address::AccountAddress,
     identifier,
     runtime_value::{MoveStruct, MoveValue},
 };
+use anyhow::bail;
 use std::fmt::{self, Display};
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
@@ -39,13 +39,13 @@ pub enum ValueToken {
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum ParsedValue<Extra: ParsableValue = ()> {
     Address(ParsedAddress),
-    InferredNum(move_core_types::u256::U256),
+    InferredNum(crate::u256::U256),
     U8(u8),
     U16(u16),
     U32(u32),
     U64(u64),
     U128(u128),
-    U256(move_core_types::u256::U256),
+    U256(crate::u256::U256),
     Bool(bool),
     Vector(Vec<ParsedValue<Extra>>),
     Struct(Vec<ParsedValue<Extra>>),

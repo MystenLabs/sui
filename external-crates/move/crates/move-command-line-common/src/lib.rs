@@ -4,14 +4,15 @@
 
 #![forbid(unsafe_code)]
 
-pub mod address;
 pub mod character_sets;
 pub mod display;
 pub mod env;
 pub mod error_bitset;
 pub mod files;
 pub mod interactive;
-pub mod parser;
 pub mod testing;
-pub mod types;
-pub mod values;
+
+pub use move_core_types::parsing::address;
+pub use move_core_types::parsing::parser;
+pub use move_core_types::parsing::types;
+pub use move_core_types::parsing::values;

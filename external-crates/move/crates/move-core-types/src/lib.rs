@@ -19,6 +19,7 @@ pub mod language_storage;
 pub mod metadata;
 pub mod move_resource;
 pub mod parser;
+pub mod parsing;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod proptest_types;
 pub mod resolver;
