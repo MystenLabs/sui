@@ -3,12 +3,10 @@
 
 import { useCurrentAccount, useSignTransaction, useSuiClientContext } from '@mysten/dapp-kit';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-import { Transaction } from '@mysten/sui/transactions';
-import { fromBase64, toBase64, toHex } from '@mysten/sui/utils';
 import { messageWithIntent } from '@mysten/sui/cryptography';
-
-
-import { fromBase58 } from '@mysten/bcs';
+import { Transaction } from '@mysten/sui/transactions';
+import { fromBase64, toHex } from '@mysten/sui/utils';
+import { blake2b } from '@noble/hashes/blake2b';
 import { useMutation } from '@tanstack/react-query';
 import { AlertCircle, Terminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -20,9 +18,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-
-import { blake2b } from '@noble/hashes/blake2b'; 
-import { Buffer } from 'buffer';
 
 export default function OfflineSigner() {
 	const currentAccount = useCurrentAccount();
@@ -148,10 +143,10 @@ export default function OfflineSigner() {
 
 							<div className="justify-between md:justify-end flex gap-5">
 								<Button
-										variant="outline"
-										className="flex-shrink-0 max-md:w-1/2 h-full"
-										disabled={!dryRunNetwork || !bytes || dryRunLoading}
-										onClick={() => dryRun()}
+									variant="outline"
+									className="flex-shrink-0 max-md:w-1/2 h-full"
+									disabled={!dryRunNetwork || !bytes || dryRunLoading}
+									onClick={() => dryRun()}
 								>
 									Preview Effects
 								</Button>
@@ -182,7 +177,7 @@ export default function OfflineSigner() {
 
 						{ledgerTransactionHash && (
 							<div className="border text-mono break-all rounded p-4">
-								{ledgerTransactionHash}
+								0x{ledgerTransactionHash}
 							</div>
 						)}
 					</div>
