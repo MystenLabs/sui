@@ -72,52 +72,23 @@ fn get_callee_fun_type_instances(
 }
 
 fn get_spec_global_instances(fun_target: &FunctionTarget) -> BTreeSet<Vec<Type>> {
-    let spec_module_id = fun_target
-        .func_env
-        .module_env
-        .env
-        .find_module_by_name(fun_target.func_env.symbol_pool().make("ghost"))
-        .unwrap()
-        .get_id();
-    let global_function_id = FunId::new(fun_target.func_env.symbol_pool().make("global"));
-
     get_callee_fun_type_instances(
         fun_target.data,
-        &spec_module_id.qualified(global_function_id),
+        &fun_target.func_env.module_env.env.global_qid(),
     )
 }
 
 fn get_spec_declare_global_instances(fun_target: &FunctionTarget) -> BTreeSet<Vec<Type>> {
-    let spec_module_id = fun_target
-        .func_env
-        .module_env
-        .env
-        .find_module_by_name(fun_target.func_env.symbol_pool().make("ghost"))
-        .unwrap()
-        .get_id();
-    let declare_global_function_id =
-        FunId::new(fun_target.func_env.symbol_pool().make("declare_global"));
-
     get_callee_fun_type_instances(
         fun_target.data,
-        &spec_module_id.qualified(declare_global_function_id),
+        &fun_target.func_env.module_env.env.declare_global_qid(),
     )
 }
 
 fn get_spec_declare_global_mut_instances(fun_target: &FunctionTarget) -> BTreeSet<Vec<Type>> {
-    let spec_module_id = fun_target
-        .func_env
-        .module_env
-        .env
-        .find_module_by_name(fun_target.func_env.symbol_pool().make("ghost"))
-        .unwrap()
-        .get_id();
-    let declare_global_mut_function_id =
-        FunId::new(fun_target.func_env.symbol_pool().make("declare_global_mut"));
-
     get_callee_fun_type_instances(
         fun_target.data,
-        &spec_module_id.qualified(declare_global_mut_function_id),
+        &fun_target.func_env.module_env.env.declare_global_mut_qid(),
     )
 }
 
@@ -126,14 +97,6 @@ pub fn collect_spec_global_variable_info(
     func_env: &FunctionEnv,
     code: &[Bytecode],
 ) -> SpecGlobalVariableInfo {
-    let spec_module_id = func_env
-        .module_env
-        .env
-        .find_module_by_name(func_env.symbol_pool().make("ghost"))
-        .unwrap()
-        .get_id();
-    let global_function_id = FunId::new(func_env.symbol_pool().make("global"));
-
     let (imm_iter, mut_iter): (Vec<_>, Vec<_>) = code
         .iter()
         .filter_map(|bc| match bc {
@@ -144,7 +107,7 @@ pub fn collect_spec_global_variable_info(
                     return None;
                 }
 
-                if callee_id == spec_module_id.qualified(global_function_id) {
+                if callee_id == func_env.module_env.env.global_qid() {
                     return Some((vec![type_inst.clone()], vec![]));
                 }
 
@@ -212,16 +175,6 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
     ) -> FunctionData {
         // assert!(scc_opt.is_none(), "recursive functions not supported");
 
-        let spec_module_id = func_env
-            .module_env
-            .env
-            .find_module_by_name(func_env.symbol_pool().make("ghost"))
-            .unwrap()
-            .get_id();
-        let declare_global_function_id = FunId::new(func_env.symbol_pool().make("declare_global"));
-        let declare_global_mut_function_id =
-            FunId::new(func_env.symbol_pool().make("declare_global_mut"));
-
         let info = collect_spec_global_variable_info(targets, func_env, &data.code);
         if targets.is_spec(&func_env.get_qualified_id()) {
             let spec_info = get_info(&data);
@@ -261,9 +214,8 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
                 .filter(|bc| match bc {
                     Bytecode::Call(_, _, Operation::Function(module_id, fun_id, _), _, _) => {
                         let callee_id = module_id.qualified(*fun_id);
-                        return callee_id != spec_module_id.qualified(declare_global_function_id)
-                            && callee_id
-                                != spec_module_id.qualified(declare_global_mut_function_id);
+                        return callee_id != func_env.module_env.env.declare_global_qid()
+                            && callee_id != func_env.module_env.env.declare_global_mut_qid();
                     }
                     _ => true,
                 })

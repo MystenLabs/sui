@@ -11,8 +11,8 @@ use move_model::{
     ast::{Exp, ExpData, MemoryLabel, TempIndex, TraceKind},
     exp_rewriter::{ExpRewriter, ExpRewriterFunctions, RewriteTarget},
     model::{
-        DatatypeId, FunId, GlobalEnv, ModuleId, NodeId, QualifiedInstId, RefType, SpecVarId,
-        VariantId,
+        DatatypeId, FunId, GlobalEnv, ModuleId, NodeId, QualifiedId, QualifiedInstId, RefType,
+        SpecVarId, VariantId,
     },
     ty::{Type, TypeDisplayContext},
 };
@@ -268,6 +268,10 @@ impl Operation {
             Operation::PackVariant(_, _, _, _) => false,
             Operation::UnpackVariant(_, _, _, _, _) => false,
         }
+    }
+
+    pub fn apply_fun_qid(qid: &QualifiedId<FunId>, tys: Vec<Type>) -> Self {
+        Operation::Function(qid.module_id, qid.id, tys)
     }
 }
 

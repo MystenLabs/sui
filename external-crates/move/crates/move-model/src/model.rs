@@ -1810,6 +1810,61 @@ impl GlobalEnv {
     pub fn get_extlib_address(&self) -> BigUint {
         self.extlib_address.clone().unwrap_or_else(|| 2u16.into())
     }
+
+    fn get_fun_qid(&self, module_name: &str, fun_name: &str) -> QualifiedId<FunId> {
+        self.find_module_by_name(self.symbol_pool().make(module_name))
+            .unwrap_or_else(|| panic!("module not found: {}", module_name))
+            .get_id()
+            .qualified(FunId::new(self.symbol_pool().make(fun_name)))
+    }
+
+    const PROVER_MODULE_NAME: &'static str = "prover";
+    const SPEC_MODULE_NAME: &'static str = "ghost";
+    const REQUIRES_FUNCTION_NAME: &'static str = "requires";
+    const ENSURES_FUNCTION_NAME: &'static str = "ensures";
+    const ASSERTS_FUNCTION_NAME: &'static str = "asserts";
+    const GLOBAL_FUNCTION_NAME: &'static str = "global";
+    const DECLARE_GLOBAL_FUNCTION_NAME: &'static str = "declare_global";
+    const DECLARE_GLOBAL_MUT_FUNCTION_NAME: &'static str = "declare_global_mut";
+    const HAVOC_GLOBAL_FUNCTION_NAME: &'static str = "havoc_global";
+    const INVARIANT_BEGIN_FUNCTION_NAME: &'static str = "invariant_begin";
+    const INVARIANT_END_FUNCTION_NAME: &'static str = "invariant_end";
+
+    pub fn requires_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::REQUIRES_FUNCTION_NAME)
+    }
+
+    pub fn ensures_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::ENSURES_FUNCTION_NAME)
+    }
+
+    pub fn asserts_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::ASSERTS_FUNCTION_NAME)
+    }
+
+    pub fn global_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::GLOBAL_FUNCTION_NAME)
+    }
+
+    pub fn declare_global_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::DECLARE_GLOBAL_FUNCTION_NAME)
+    }
+
+    pub fn declare_global_mut_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::DECLARE_GLOBAL_MUT_FUNCTION_NAME)
+    }
+
+    pub fn havoc_global_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::HAVOC_GLOBAL_FUNCTION_NAME)
+    }
+
+    pub fn invariant_begin_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::INVARIANT_BEGIN_FUNCTION_NAME)
+    }
+
+    pub fn invariant_end_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::INVARIANT_END_FUNCTION_NAME)
+    }
 }
 
 impl Default for GlobalEnv {

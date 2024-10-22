@@ -6,11 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use itertools::Itertools;
 use move_binary_format::file_format::CodeOffset;
-use move_model::{
-    ast::TempIndex,
-    model::{FunId, FunctionEnv},
-    ty::Type,
-};
+use move_model::{ast::TempIndex, model::FunctionEnv, ty::Type};
 
 use crate::{
     function_data_builder::{FunctionDataBuilder, FunctionDataBuilderOptions},
@@ -60,12 +56,6 @@ impl LoopAnnotation {
             .collect()
     }
 }
-
-pub const PROVER_MODULE_NAME: &str = "prover";
-pub const REQUIRES_NAME: &str = "requires";
-pub const ENSURES_NAME: &str = "ensures";
-pub const INVARIANT_BEGIN_NAME: &str = "invariant_begin";
-pub const INVARIANT_END_NAME: &str = "invariant_end";
 
 pub struct LoopAnalysisProcessor {}
 
@@ -125,31 +115,11 @@ impl LoopAnalysisProcessor {
     ) -> FunctionData {
         let options = ProverOptions::get(func_env.module_env.env);
 
-        let prover_module_id = func_env
-            .module_env
-            .env
-            .find_module_by_name(func_env.symbol_pool().make(PROVER_MODULE_NAME))
-            .unwrap()
-            .get_id();
-        let requires_function = Operation::Function(
-            prover_module_id,
-            FunId::new(func_env.symbol_pool().make(REQUIRES_NAME)),
-            vec![],
-        );
-        let ensures_function = Operation::Function(
-            prover_module_id,
-            FunId::new(func_env.symbol_pool().make(ENSURES_NAME)),
-            vec![],
-        );
-        let ensures_requires_subst =
-            BTreeMap::from_iter(vec![(ensures_function, requires_function)]);
-        let spec_module_id = func_env
-            .module_env
-            .env
-            .find_module_by_name(func_env.symbol_pool().make("ghost"))
-            .unwrap()
-            .get_id();
-        let havoc_global_function_id = FunId::new(func_env.symbol_pool().make("havoc_global"));
+        let ensures_requires_subst = BTreeMap::from_iter(vec![(
+            Operation::apply_fun_qid(&func_env.module_env.env.ensures_qid(), vec![]),
+            Operation::apply_fun_qid(&func_env.module_env.env.requires_qid(), vec![]),
+        )]);
+        let havoc_global_qid = func_env.module_env.env.havoc_global_qid();
 
         let back_edge_locs = loop_annotation.back_edges_locations();
         let mut builder = FunctionDataBuilder::new_with_options(
@@ -186,11 +156,7 @@ impl LoopAnalysisProcessor {
                                 Bytecode::Call(
                                     attr_id,
                                     vec![],
-                                    Operation::Function(
-                                        spec_module_id,
-                                        havoc_global_function_id,
-                                        type_inst.clone(),
-                                    ),
+                                    Operation::apply_fun_qid(&havoc_global_qid, type_inst.clone()),
                                     vec![],
                                     None,
                                 )
@@ -450,21 +416,10 @@ impl LoopAnalysisProcessor {
                 .push(single_loop);
         }
 
-        let prover_module_id = func_target
-            .global_env()
-            .find_module_by_name(func_target.symbol_pool().make(PROVER_MODULE_NAME))
-            .unwrap()
-            .get_id();
-        let invariant_begin_function = Operation::Function(
-            prover_module_id,
-            FunId::new(func_target.symbol_pool().make(INVARIANT_BEGIN_NAME)),
-            vec![],
-        );
-        let invariant_end_function = Operation::Function(
-            prover_module_id,
-            FunId::new(func_target.symbol_pool().make(INVARIANT_END_NAME)),
-            vec![],
-        );
+        let invariant_begin_function =
+            Operation::apply_fun_qid(&func_env.module_env.env.invariant_begin_qid(), vec![]);
+        let invariant_end_function =
+            Operation::apply_fun_qid(&func_env.module_env.env.invariant_end_qid(), vec![]);
         let begin_offsets = code.iter().enumerate().filter_map(|(i, bc)| match bc {
             Bytecode::Call(_, _, op, _, _) if *op == invariant_begin_function => Some(i),
             _ => None,

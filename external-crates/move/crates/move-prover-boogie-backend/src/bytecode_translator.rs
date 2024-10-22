@@ -4,10 +4,7 @@
 
 //! This module translates the bytecode of a module to Boogie code.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    str::FromStr,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use codespan::LineIndex;
 use itertools::Itertools;
@@ -30,7 +27,7 @@ use move_model::{
     well_known::{TYPE_INFO_MOVE, TYPE_NAME_GET_MOVE, TYPE_NAME_MOVE},
 };
 use move_stackless_bytecode::{
-    function_data_builder::{FunctionDataBuilder, FunctionDataBuilderOptions},
+    function_data_builder::FunctionDataBuilder,
     function_target::FunctionTarget,
     function_target_pipeline::{
         FunctionTargetProcessor, FunctionTargetsHolder, FunctionTargetsHolderDisplay,
@@ -43,7 +40,7 @@ use move_stackless_bytecode::{
         NumOperation::{self, Bitwise, Bottom},
     },
     options::ProverOptions,
-    reaching_def_analysis::{Def, ReachingDefProcessor},
+    reaching_def_analysis::ReachingDefProcessor,
     spec_global_variable_analysis::{self},
     stackless_bytecode::{
         AbortAction, BorrowEdge, BorrowNode, Bytecode, Constant, HavocKind, IndexEdgeKind,
@@ -494,27 +491,12 @@ impl<'env> BoogieTranslator<'env> {
             return;
         }
 
-        let prover_module_id = fun_env
-            .module_env
-            .env
-            .find_module_by_name(fun_env.symbol_pool().make("prover"))
-            .unwrap()
-            .get_id();
-        let requires_function = Operation::Function(
-            prover_module_id,
-            FunId::new(fun_env.symbol_pool().make("requires")),
-            vec![],
-        );
-        let ensures_function = Operation::Function(
-            prover_module_id,
-            FunId::new(fun_env.symbol_pool().make("ensures")),
-            vec![],
-        );
-        let asserts_function = Operation::Function(
-            prover_module_id,
-            FunId::new(fun_env.symbol_pool().make("asserts")),
-            vec![],
-        );
+        let requires_function =
+            Operation::apply_fun_qid(&fun_env.module_env.env.requires_qid(), vec![]);
+        let ensures_function =
+            Operation::apply_fun_qid(&fun_env.module_env.env.ensures_qid(), vec![]);
+        let asserts_function =
+            Operation::apply_fun_qid(&fun_env.module_env.env.asserts_qid(), vec![]);
         let ensures_requires_swap_subst = BTreeMap::from_iter(vec![
             (requires_function.clone(), ensures_function.clone()),
             (ensures_function.clone(), requires_function.clone()),
@@ -716,22 +698,11 @@ impl<'env> BoogieTranslator<'env> {
     }
 
     fn translate_ghost_global(&mut self, mono_info: &std::rc::Rc<MonoInfo>) {
-        let ghost_module_id = self
-            .env
-            .find_module_by_name(self.env.symbol_pool().make("ghost"))
-            .unwrap()
-            .get_id();
-        let global_function_id = FunId::new(self.env.symbol_pool().make("global"));
-        let havoc_global_function_id = FunId::new(self.env.symbol_pool().make("havoc_global"));
-        let ghost_global_fun_env = self
-            .env
-            .get_function(ghost_module_id.qualified(global_function_id));
+        let ghost_global_fun_env = self.env.get_function(self.env.global_qid());
         let ghost_global_fun_target = self
             .targets
             .get_target(&ghost_global_fun_env, &FunctionVariant::Baseline);
-        let ghost_havoc_global_fun_env = self
-            .env
-            .get_function(ghost_module_id.qualified(havoc_global_function_id));
+        let ghost_havoc_global_fun_env = self.env.get_function(self.env.havoc_global_qid());
         let ghost_havoc_global_fun_target = self
             .targets
             .get_target(&ghost_havoc_global_fun_env, &FunctionVariant::Baseline);
@@ -1100,23 +1071,9 @@ impl<'env> FunctionTranslator<'env> {
         );
         self.generate_function_sig();
 
-        let ghost_module_id = self
-            .fun_target
-            .func_env
-            .module_env
-            .env
-            .find_module_by_name(self.fun_target.func_env.symbol_pool().make("ghost"))
-            .unwrap()
-            .get_id();
-        let global_function_id = FunId::new(self.fun_target.func_env.symbol_pool().make("global"));
-        let havoc_global_function_id =
-            FunId::new(self.fun_target.func_env.symbol_pool().make("havoc_global"));
-        if self.fun_target.func_env.get_qualified_id()
-            == ghost_module_id.qualified(global_function_id)
-        {
+        if self.fun_target.func_env.get_qualified_id() == self.parent.env.global_qid() {
             self.generate_ghost_global_body();
-        } else if self.fun_target.func_env.get_qualified_id()
-            == ghost_module_id.qualified(havoc_global_function_id)
+        } else if self.fun_target.func_env.get_qualified_id() == self.parent.env.havoc_global_qid()
         {
             self.generate_ghost_havoc_global_body();
         } else {
