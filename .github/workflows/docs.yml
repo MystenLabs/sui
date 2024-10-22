@@ -45,7 +45,7 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
-          channel-id: 'tech-docs'
+          channel-id: '#tech-docs'
           payload: |
             {
               "text": "Examples update",
