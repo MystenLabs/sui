@@ -7,7 +7,7 @@
 	"scripts": {
 		"build": "wasm-pack build --target nodejs --scope mysten --out-dir pkg/node",
 		"build:dev": "wasm-pack build --target nodejs --debug --scope mysten --out-dir pkg/node",
-		"build:release": "wasm-pack build --target web --release --scope mysten; wasm-pack build --target nodejs --release --out-dir pkg/node --scope mysten",
+		"build:release": "wasm-pack build --target web --release --scope mysten; wasm-pack build --target nodejs --release --out-dir pkg/node --scope mysten; jq -s '.[0] * .[1]' pkg/package.json exports.node.json > pkg/new.package.json; mv pkg/new.package.json pkg/package.json",
 		"test": "vitest run"
 	},
 	"author": "Mysten Labs <build@mystenlabs.com>",
