@@ -239,7 +239,7 @@ pub(super) fn committer<H: Handler + 'static>(
 
                     if config.skip_watermark {
                         batch_watermarks.clear();
-                    } else if !watermark_tx.send(mem::take(&mut batch_watermarks)).await.is_ok() {
+                    } else if watermark_tx.send(mem::take(&mut batch_watermarks)).await.is_err() {
                         info!(pipeline = H::NAME, "Watermark closed channel, stopping committer");
                         break;
                     }
