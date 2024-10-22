@@ -5,7 +5,7 @@ use crate::drivers::Interval;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{Workload, STORAGE_COST_PER_COIN};
+use crate::workloads::workload::{ExpectedFailureType, Workload, STORAGE_COST_PER_COIN};
 use crate::workloads::workload::{WorkloadBuilder, ESTIMATED_COMPUTATION_COST};
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -115,6 +115,10 @@ impl Payload for BatchPaymentTestPayload {
                 .reference_gas_price,
             gas_budget,
         )
+    }
+
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
     }
 }
 
