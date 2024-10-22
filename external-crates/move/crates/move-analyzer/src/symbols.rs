@@ -78,6 +78,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Condvar, Mutex},
     thread,
+    time::Instant,
 };
 use tempfile::tempdir;
 use url::Url;
@@ -2085,13 +2086,16 @@ pub fn get_symbols(
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
+    let compilation_start = Instant::now();
     let (compiled_pkg_info_opt, ide_diagnostics) =
         get_compiled_pkg(pkg_dependencies, ide_files_root, pkg_path, lint)?;
+    eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
     let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
         return Ok((None, ide_diagnostics));
     };
+    let analysis_start = Instant::now();
     let symbols = compute_symbols(compiled_pkg_info, cursor_info);
-
+    eprintln!("analysis complete in {:?}", analysis_start.elapsed());
     eprintln!("get_symbols load complete");
 
     Ok((Some(symbols), ide_diagnostics))
