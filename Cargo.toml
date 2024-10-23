@@ -455,7 +455,7 @@ rustyline = "9.1.2"
 rustyline-derive = "0.7.0"
 schemars = { version = "0.8.21", features = ["either"] }
 scopeguard = "1.1"
-serde = { version = "1.0.144", features = ["derive", "rc"] }
+serde = { version = "1.0.210", features = ["derive", "rc"] }
 serde-env = "0.2.0"
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
@@ -486,6 +486,8 @@ tap = "1.0.1"
 tar = "0.4.40"
 tempfile = "3.3.0"
 test-fuzz = "3.0.4"
+tidehunter = {git = "https://github.com/andll/tidehunter.git", rev = "f4d3ee4cbe0a6fa49ac98c033f11c16e704fbc8b", version = "0.1.0"}
+#tidehunter = {path = "/Users/andrey/dev/tidehunter", version = "0.1.0"}
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
 tokio = "1.36.0"
