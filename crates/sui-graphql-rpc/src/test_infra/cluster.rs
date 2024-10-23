@@ -132,6 +132,8 @@ pub async fn start_network_cluster() -> NetworkCluster {
         None,
         Some(data_ingestion_path.path().to_path_buf()),
         Some(cancellation_token.clone()),
+        None, /* start_checkpoint */
+        None, /* end_checkpoint */
     )
     .await;
 
