@@ -2930,7 +2930,6 @@ impl AuthorityPerEpochStore {
         };
         let make_checkpoint = should_accept_tx || final_round;
         if make_checkpoint {
-            // Generate pending checkpoint for regular user tx.
             let checkpoint_height = if self.randomness_state_enabled() {
                 consensus_commit_info.round * 2
             } else {
@@ -2952,12 +2951,6 @@ impl AuthorityPerEpochStore {
             }
             checkpoint_roots.extend(roots.into_iter());
 
-            // Generate pending checkpoint for user tx with randomness.
-            // - If randomness is not generated for this commit, we will skip the
-            //   checkpoint with the associated height. Therefore checkpoint heights may
-            //   not be contiguous.
-            // - Exception: if DKG fails, we always need to write out a PendingCheckpoint
-            //   for randomness tx that are canceled.
             if let Some(randomness_round) = randomness_round {
                 randomness_roots.insert(TransactionKey::RandomnessRound(
                     self.epoch(),
@@ -2965,6 +2958,12 @@ impl AuthorityPerEpochStore {
                 ));
             }
 
+            // Determine whether to write pending checkpoint for user tx with randomness.
+            // - If randomness is not generated for this commit, we will skip the
+            //   checkpoint with the associated height. Therefore checkpoint heights may
+            //   not be contiguous.
+            // - Exception: if DKG fails, we always need to write out a PendingCheckpoint
+            //   for randomness tx that are canceled.
             let should_write_random_checkpoint =
                 randomness_round.is_some() || (dkg_failed && !randomness_roots.is_empty());
 
