@@ -310,6 +310,11 @@ impl<P, D, M> Indexer<P, D, M> {
     {
         &self.storage
     }
+
+    #[cfg(any(feature = "test-utils", test))]
+    pub fn test_only_name(&self) -> String {
+        self.name.clone()
+    }
 }
 
 #[async_trait]

@@ -5,9 +5,9 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority};
+use consensus_core::{CommitConsumer, CommitConsumerMonitor, CommitIndex, ConsensusAuthority};
 use fastcrypto::ed25519;
-use mysten_metrics::{monitored_mpsc::unbounded_channel, RegistryID, RegistryService};
+use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
 use sui_config::NodeConfig;
 use sui_protocol_config::ConsensusNetwork;
@@ -19,7 +19,9 @@ use tracing::info;
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    consensus_handler::{ConsensusHandlerInitializer, MysticetiConsensusHandler},
+    consensus_handler::{
+        ConsensusHandlerInitializer, ConsensusTransactionHandler, MysticetiConsensusHandler,
+    },
     consensus_manager::{
         ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
     },
@@ -46,6 +48,7 @@ pub struct MysticetiManager {
     client: Arc<LazyMysticetiClient>,
     // TODO: switch to parking_lot::Mutex.
     consensus_handler: Mutex<Option<MysticetiConsensusHandler>>,
+    consumer_monitor: ArcSwapOption<CommitConsumerMonitor>,
 }
 
 impl MysticetiManager {
@@ -70,6 +73,7 @@ impl MysticetiManager {
             client,
             consensus_handler: Mutex::new(None),
             boot_counter: Mutex::new(0),
+            consumer_monitor: ArcSwapOption::empty(),
         }
     }
 
@@ -144,18 +148,35 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
-        let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
-
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
-        let consumer = CommitConsumer::new(
-            commit_sender,
-            consensus_handler.last_processed_subdag_index() as CommitIndex,
-        );
-        let monitor = consumer.monitor();
+        let (commit_consumer, commit_receiver, transaction_receiver) =
+            CommitConsumer::new(consensus_handler.last_processed_subdag_index() as CommitIndex);
+        let monitor = commit_consumer.monitor();
 
-        // TODO(mysticeti): Investigate if we need to return potential errors from
-        // AuthorityNode and add retries here?
-        let boot_counter = *self.boot_counter.lock().await;
+        // If there is a previous consumer monitor, it indicates that the consensus engine has been restarted, due to an epoch change. However, that on its
+        // own doesn't tell us much whether it participated on an active epoch or an old one. We need to check if it has handled any commits to determine this.
+        // If indeed any commits did happen, then we assume that node did participate on previous run.
+        let participated_on_previous_run =
+            if let Some(previous_monitor) = self.consumer_monitor.swap(Some(monitor.clone())) {
+                previous_monitor.highest_handled_commit() > 0
+            } else {
+                false
+            };
+
+        // Increment the boot counter only if the consensus successfully participated in the previous run.
+        // This is typical during normal epoch changes, where the node restarts as expected, and the boot counter is incremented to prevent amnesia recovery on the next start.
+        // If the node is recovering from a restore process and catching up across multiple epochs, it won't handle any commits until it reaches the last active epoch.
+        // In this scenario, we do not increment the boot counter, as we need amnesia recovery to run.
+        let mut boot_counter = self.boot_counter.lock().await;
+        if participated_on_previous_run {
+            *boot_counter += 1;
+        } else {
+            info!(
+                "Node has not participated in previous run. Boot counter will not increment {}",
+                *boot_counter
+            );
+        }
+
         let authority = ConsensusAuthority::start(
             network_type,
             own_index,
@@ -165,16 +186,12 @@ impl ConsensusManagerTrait for MysticetiManager {
             self.protocol_keypair.clone(),
             self.network_keypair.clone(),
             Arc::new(tx_validator.clone()),
-            consumer,
+            commit_consumer,
             registry.clone(),
-            boot_counter,
+            *boot_counter,
         )
         .await;
         let client = authority.transaction_client();
-
-        // Now increment the boot counter
-        let mut boot_counter = self.boot_counter.lock().await;
-        *boot_counter += 1;
 
         let registry_id = self.registry_service.add(registry.clone());
 
@@ -185,7 +202,19 @@ impl ConsensusManagerTrait for MysticetiManager {
         self.client.set(client);
 
         // spin up the new mysticeti consensus handler to listen for committed sub dags
-        let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver, monitor);
+        let consensus_transaction_handler = ConsensusTransactionHandler::new(
+            epoch_store.clone(),
+            consensus_handler.transaction_manager_sender().clone(),
+            consensus_handler_initializer.metrics().clone(),
+        );
+        let handler = MysticetiConsensusHandler::new(
+            consensus_handler,
+            consensus_transaction_handler,
+            commit_receiver,
+            transaction_receiver,
+            monitor,
+        );
+
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);
 

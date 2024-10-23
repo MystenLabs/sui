@@ -348,6 +348,33 @@ impl<S> Resolver<S> {
 }
 
 impl<S: PackageStore> Resolver<S> {
+    /// The canonical form of a type refers to each type in terms of its defining package ID. This
+    /// function takes a non-canonical type and updates all its package IDs to the appropriate
+    /// defining ID.
+    ///
+    /// For every `package::module::datatype` in the input `tag`, `package` must be an object
+    /// on-chain, containing a move package that includes `module`, and that module must define the
+    /// `datatype`. In practice this means the input type `tag` can refer to types at or after
+    /// their defining IDs.
+    pub async fn canonical_type(&self, mut tag: TypeTag) -> Result<TypeTag> {
+        let mut context = ResolutionContext::new(self.limits.as_ref());
+
+        // (1). Fetch all the information from this store that is necessary to relocate package IDs
+        // in the type.
+        context
+            .add_type_tag(
+                &mut tag,
+                &self.package_store,
+                /* visit_fields */ false,
+                /* visit_phantoms */ true,
+            )
+            .await?;
+
+        // (2). Use that information to relocate package IDs in the type.
+        context.canonicalize_type(&mut tag)?;
+        Ok(tag)
+    }
+
     /// Return the type layout corresponding to the given type tag.  The layout always refers to
     /// structs in terms of their defining ID (i.e. their package ID always points to the first
     /// package that introduced them).
@@ -1349,6 +1376,36 @@ impl<'l> ResolutionContext<'l> {
         Ok(())
     }
 
+    /// Translate runtime IDs in a type `tag` into defining IDs using only the information
+    /// contained in this context. Requires that the necessary information was added to the context
+    /// through calls to `add_type_tag`.
+    fn canonicalize_type(&self, tag: &mut TypeTag) -> Result<()> {
+        use TypeTag as T;
+
+        match tag {
+            T::Signer => return Err(Error::UnexpectedSigner),
+            T::Address | T::Bool | T::U8 | T::U16 | T::U32 | T::U64 | T::U128 | T::U256 => {
+                /* nop */
+            }
+
+            T::Vector(tag) => self.canonicalize_type(tag.as_mut())?,
+
+            T::Struct(s) => {
+                for tag in &mut s.type_params {
+                    self.canonicalize_type(tag)?;
+                }
+
+                // SAFETY: `add_type_tag` ensures `datatyps` has an element with this key.
+                let key = DatatypeRef::from(s.as_ref());
+                let def = &self.datatypes[&key];
+
+                s.address = def.defining_id;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Translate a type `tag` into its layout using only the information contained in this context.
     /// Requires that the necessary information was added to the context through calls to
     /// `add_type_tag` and `add_signature` before being called.
@@ -1404,7 +1461,7 @@ impl<'l> ResolutionContext<'l> {
                     .type_params
                     .iter()
                     // Reduce the max depth because we know these type parameters will be nested
-                    // wthin this struct.
+                    // within this struct.
                     .map(|tag| self.resolve_type_layout(tag, max_depth - 1))
                     .collect::<Result<Vec<_>>>()?;
 
@@ -1737,9 +1794,90 @@ mod tests {
         format!("struct:\n{struct_layout:#}\n\nenum:\n{enum_layout:#}",)
     }
 
+    #[tokio::test]
+    async fn test_simple_canonical_type() {
+        let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
+        let package_resolver = Resolver::new(cache);
+
+        let input = type_("0xa0::m::T0");
+        let expect = input.clone();
+        let actual = package_resolver.canonical_type(input).await.unwrap();
+        assert_eq!(expect, actual);
+    }
+
+    #[tokio::test]
+    async fn test_upgraded_canonical_type() {
+        let (_, cache) = package_cache([
+            (1, build_package("a0"), a0_types()),
+            (2, build_package("a1"), a1_types()),
+        ]);
+
+        let package_resolver = Resolver::new(cache);
+
+        let input = type_("0xa1::m::T3");
+        let expect = input.clone();
+        let actual = package_resolver.canonical_type(input).await.unwrap();
+        assert_eq!(expect, actual);
+    }
+
+    #[tokio::test]
+    async fn test_latest_canonical_type() {
+        let (_, cache) = package_cache([
+            (1, build_package("a0"), a0_types()),
+            (2, build_package("a1"), a1_types()),
+        ]);
+
+        let package_resolver = Resolver::new(cache);
+
+        let input = type_("0xa1::m::T0");
+        let expect = type_("0xa0::m::T0");
+        let actual = package_resolver.canonical_type(input).await.unwrap();
+        assert_eq!(expect, actual);
+    }
+
+    #[tokio::test]
+    async fn test_type_param_canonical_type() {
+        let (_, cache) = package_cache([
+            (1, build_package("a0"), a0_types()),
+            (2, build_package("a1"), a1_types()),
+        ]);
+
+        let package_resolver = Resolver::new(cache);
+
+        let input = type_("0xa1::m::T1<0xa1::m::T0, 0xa1::m::T3>");
+        let expect = type_("0xa0::m::T1<0xa0::m::T0, 0xa1::m::T3>");
+        let actual = package_resolver.canonical_type(input).await.unwrap();
+        assert_eq!(expect, actual);
+    }
+
+    #[tokio::test]
+    async fn test_canonical_err_package_too_old() {
+        let (_, cache) = package_cache([
+            (1, build_package("a0"), a0_types()),
+            (2, build_package("a1"), a1_types()),
+        ]);
+
+        let package_resolver = Resolver::new(cache);
+
+        let input = type_("0xa0::m::T3");
+        let err = package_resolver.canonical_type(input).await.unwrap_err();
+        assert!(matches!(err, Error::DatatypeNotFound(_, _, _)));
+    }
+
+    #[tokio::test]
+    async fn test_canonical_err_signer() {
+        let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
+
+        let package_resolver = Resolver::new(cache);
+
+        let input = type_("0xa0::m::T1<0xa0::m::T0, signer>");
+        let err = package_resolver.canonical_type(input).await.unwrap_err();
+        assert!(matches!(err, Error::UnexpectedSigner));
+    }
+
     /// Layout for a type that only refers to base types or other types in the same module.
     #[tokio::test]
-    async fn test_simple_type() {
+    async fn test_simple_type_layout() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let package_resolver = Resolver::new(cache);
         let struct_layout = package_resolver
@@ -1755,7 +1893,7 @@ mod tests {
 
     /// A type that refers to types from other modules in the same package.
     #[tokio::test]
-    async fn test_cross_module() {
+    async fn test_cross_module_layout() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let resolver = Resolver::new(cache);
         let struct_layout = resolver.type_layout(type_("0xa0::n::T0")).await.unwrap();
@@ -1765,7 +1903,7 @@ mod tests {
 
     /// A type that refers to types a different package.
     #[tokio::test]
-    async fn test_cross_package() {
+    async fn test_cross_package_layout() {
         let (_, cache) = package_cache([
             (1, build_package("a0"), a0_types()),
             (1, build_package("b0"), b0_types()),
@@ -1780,7 +1918,7 @@ mod tests {
     /// A type from an upgraded package, mixing structs defined in the original package and the
     /// upgraded package.
     #[tokio::test]
-    async fn test_upgraded_package() {
+    async fn test_upgraded_package_layout() {
         let (_, cache) = package_cache([
             (1, build_package("a0"), a0_types()),
             (2, build_package("a1"), a1_types()),
@@ -1795,7 +1933,7 @@ mod tests {
     /// A generic type instantiation where the type parameters are resolved relative to linkage
     /// contexts from different versions of the same package.
     #[tokio::test]
-    async fn test_multiple_linkage_contexts() {
+    async fn test_multiple_linkage_contexts_layout() {
         let (_, cache) = package_cache([
             (1, build_package("a0"), a0_types()),
             (2, build_package("a1"), a1_types()),
@@ -1818,7 +1956,7 @@ mod tests {
     /// type can be referred to using the ID of any package that declares it, rather than only the
     /// package that first declared it (whose ID is its defining ID).
     #[tokio::test]
-    async fn test_upgraded_package_non_defining_id() {
+    async fn test_upgraded_package_non_defining_id_layout() {
         let (_, cache) = package_cache([
             (1, build_package("a0"), a0_types()),
             (2, build_package("a1"), a1_types()),
@@ -1840,7 +1978,7 @@ mod tests {
     /// dependency on A from v1 to v2.  The type in C refers to types that were defined in both B, A
     /// v1, and A v2.
     #[tokio::test]
-    async fn test_relinking() {
+    async fn test_relinking_layout() {
         let (_, cache) = package_cache([
             (1, build_package("a0"), a0_types()),
             (2, build_package("a1"), a1_types()),
@@ -1855,7 +1993,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_value_nesting_boundary() {
+    async fn test_value_nesting_boundary_layout() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
 
         let resolver = Resolver::new_with_limits(
@@ -1881,7 +2019,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_err_value_nesting_simple() {
+    async fn test_err_value_nesting_simple_layout() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
 
         let resolver = Resolver::new_with_limits(
@@ -1908,7 +2046,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_err_value_nesting_big_type_param() {
+    async fn test_err_value_nesting_big_type_param_layout() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
 
         let resolver = Resolver::new_with_limits(
@@ -1936,7 +2074,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_err_value_nesting_big_phantom_type_param() {
+    async fn test_err_value_nesting_big_phantom_type_param_layout() {
         let (_, cache) = package_cache([
             (1, build_package("sui"), sui_types()),
             (1, build_package("d0"), d0_types()),
@@ -1978,7 +2116,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_err_value_nesting_type_param_application() {
+    async fn test_err_value_nesting_type_param_application_layout() {
         let (_, cache) = package_cache([
             (1, build_package("sui"), sui_types()),
             (1, build_package("d0"), d0_types()),
@@ -2093,7 +2231,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_err_not_a_package() {
+    async fn test_layout_err_not_a_package() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let resolver = Resolver::new(cache);
         let err = resolver
@@ -2104,7 +2242,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_err_no_module() {
+    async fn test_layout_err_no_module() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let resolver = Resolver::new(cache);
         let err = resolver
@@ -2115,7 +2253,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_err_no_struct() {
+    async fn test_layout_err_no_struct() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let resolver = Resolver::new(cache);
 
@@ -2127,7 +2265,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_err_type_arity() {
+    async fn test_layout_err_type_arity() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let resolver = Resolver::new(cache);
 

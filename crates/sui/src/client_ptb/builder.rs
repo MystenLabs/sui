@@ -1029,7 +1029,7 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .map_err(|e| err!(path_loc, "{e}"))?;
                 }
-                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
+                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
                     upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
                 let upgrade_arg = self

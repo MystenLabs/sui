@@ -105,6 +105,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_block_ancestors_depth: HistogramVec,
     pub(crate) highest_verified_authority_round: IntGaugeVec,
     pub(crate) lowest_verified_authority_round: IntGaugeVec,
+    pub(crate) block_proposal_interval: Histogram,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
     pub(crate) block_proposal_leader_wait_count: IntCounterVec,
     pub(crate) block_timestamp_drift_wait_ms: IntCounterVec,
@@ -155,6 +156,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_manager_missing_blocks: IntGauge,
     pub(crate) block_manager_missing_blocks_by_authority: IntCounterVec,
     pub(crate) block_manager_missing_ancestors_by_authority: IntCounterVec,
+    pub(crate) block_manager_gc_unsuspended_blocks: IntCounterVec,
+    pub(crate) block_manager_skipped_blocks: IntCounterVec,
     pub(crate) threshold_clock_round: IntGauge,
     pub(crate) subscriber_connection_attempts: IntCounterVec,
     pub(crate) subscribed_to: IntGaugeVec,
@@ -231,6 +234,12 @@ impl NodeMetrics {
                 "lowest_verified_authority_round",
                 "The lowest round of verified block for the corresponding authority",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            block_proposal_interval: register_histogram_with_registry!(
+                "block_proposal_interval",
+                "Intervals (in secs) between block proposals.",
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             block_proposal_leader_wait_ms: register_int_counter_vec_with_registry!(
@@ -512,6 +521,18 @@ impl NodeMetrics {
             block_manager_missing_ancestors_by_authority: register_int_counter_vec_with_registry!(
                 "block_manager_missing_ancestors_by_authority",
                 "The number of missing ancestors by ancestor authority across received blocks",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            block_manager_gc_unsuspended_blocks: register_int_counter_vec_with_registry!(
+                "block_manager_gc_unsuspended_blocks",
+                "The number of blocks unsuspended because their missing ancestors are garbage collected by the block manager, counted by block's source authority",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            block_manager_skipped_blocks: register_int_counter_vec_with_registry!(
+                "block_manager_skipped_blocks",
+                "The number of blocks skipped by the block manager due to block round being <= gc_round",
                 &["authority"],
                 registry,
             ).unwrap(),

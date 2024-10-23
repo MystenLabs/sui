@@ -622,8 +622,8 @@ export const RPC_METHODS: {
 										: undefined,
 								inputObject: 'InputObject' in filter ? filter.InputObject : undefined,
 								changedObject: 'ChangedObject' in filter ? filter.ChangedObject : undefined,
-								signAddress: 'FromAddress' in filter ? filter.FromAddress : undefined,
-								recvAddress: 'ToAddress' in filter ? filter.ToAddress : undefined,
+								sentAddress: 'FromAddress' in filter ? filter.FromAddress : undefined,
+								affectedAddress: 'ToAddress' in filter ? filter.ToAddress : undefined,
 								kind:
 									'TransactionKind' in filter
 										? filter.TransactionKind === 'ProgrammableTransaction'
@@ -888,17 +888,17 @@ export const RPC_METHODS: {
 			hasNextPage: pagination.last ? pageInfo.hasPreviousPage : pageInfo.hasNextPage,
 			nextCursor: (pagination.last ? pageInfo.startCursor : pageInfo.endCursor) as never,
 			data: events.map((event) => ({
-				bcs: event.bcs,
+				bcs: event.contents.bcs,
 				id: {
 					eventSeq: '', // TODO
 					txDigest: '', // TODO
 				},
 				packageId: event.sendingModule?.package.address!,
-				parsedJson: event.json ? JSON.parse(event.json) : undefined,
+				parsedJson: event.contents.json ? JSON.parse(event.contents.json) : undefined,
 				sender: event.sender?.address,
 				timestampMs: new Date(event.timestamp).getTime().toString(),
 				transactionModule: `${event.sendingModule?.package.address}::${event.sendingModule?.name}`,
-				type: toShortTypeString(event.type?.repr)!,
+				type: toShortTypeString(event.contents.type?.repr)!,
 			})),
 		};
 	},
@@ -1020,7 +1020,7 @@ export const RPC_METHODS: {
 			(data) => {
 				return data.owner?.dynamicObjectField?.value?.__typename === 'MoveObject'
 					? data.owner.dynamicObjectField.value.owner?.__typename === 'Parent'
-						? data.owner.dynamicObjectField.value.owner.parent
+						? data.owner.dynamicObjectField.value.owner.parent?.asObject
 						: undefined
 					: undefined;
 			},

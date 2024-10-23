@@ -30,6 +30,10 @@ impl Client {
         }
     }
 
+    pub fn inner(&self) -> &sdk::Client {
+        &self.inner
+    }
+
     pub async fn get_latest_checkpoint(&self) -> Result<CertifiedCheckpointSummary> {
         self.inner
             .get_latest_checkpoint()

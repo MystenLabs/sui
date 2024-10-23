@@ -253,12 +253,6 @@ impl TryFrom<MoveObject> for DynamicField {
             ObjectKind::NotIndexed(native) | ObjectKind::Indexed(native, _) => native.clone(),
             ObjectKind::Serialized(bytes) => bcs::from_bytes(bytes)
                 .map_err(|e| Error::Internal(format!("Failed to deserialize object: {e}")))?,
-
-            ObjectKind::WrappedOrDeleted => {
-                return Err(Error::Internal(
-                    "DynamicField is wrapped or deleted.".to_string(),
-                ));
-            }
         };
 
         let Some(object) = native.data.try_as_move() else {

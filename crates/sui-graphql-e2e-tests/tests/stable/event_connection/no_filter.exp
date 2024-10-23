@@ -19,7 +19,7 @@ task 3, line 29:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 31-44:
+task 4, lines 31-46:
 //# run-graphql
 Response: {
   "data": {
@@ -32,103 +32,143 @@ Response: {
       },
       "nodes": [
         {
-          "json": {
-            "new_value": "0"
+          "contents": {
+            "json": {
+              "new_value": "0"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "1"
+          "contents": {
+            "json": {
+              "new_value": "1"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "2"
+          "contents": {
+            "json": {
+              "new_value": "2"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "3"
+          "contents": {
+            "json": {
+              "new_value": "3"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "4"
+          "contents": {
+            "json": {
+              "new_value": "4"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "5"
+          "contents": {
+            "json": {
+              "new_value": "5"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "6"
+          "contents": {
+            "json": {
+              "new_value": "6"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "7"
+          "contents": {
+            "json": {
+              "new_value": "7"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "8"
+          "contents": {
+            "json": {
+              "new_value": "8"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "9"
+          "contents": {
+            "json": {
+              "new_value": "9"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "10"
+          "contents": {
+            "json": {
+              "new_value": "10"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "11"
+          "contents": {
+            "json": {
+              "new_value": "11"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "12"
+          "contents": {
+            "json": {
+              "new_value": "12"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "13"
+          "contents": {
+            "json": {
+              "new_value": "13"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "14"
+          "contents": {
+            "json": {
+              "new_value": "14"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "15"
+          "contents": {
+            "json": {
+              "new_value": "15"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "16"
+          "contents": {
+            "json": {
+              "new_value": "16"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "17"
+          "contents": {
+            "json": {
+              "new_value": "17"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "18"
+          "contents": {
+            "json": {
+              "new_value": "18"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "19"
+          "contents": {
+            "json": {
+              "new_value": "19"
+            }
           }
         }
       ]
@@ -136,7 +176,7 @@ Response: {
   }
 }
 
-task 5, lines 46-59:
+task 5, lines 48-63:
 //# run-graphql --cursors {"tx":2,"e":19,"c":1}
 Response: {
   "data": {
@@ -149,103 +189,143 @@ Response: {
       },
       "nodes": [
         {
-          "json": {
-            "new_value": "20"
+          "contents": {
+            "json": {
+              "new_value": "20"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "21"
+          "contents": {
+            "json": {
+              "new_value": "21"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "22"
+          "contents": {
+            "json": {
+              "new_value": "22"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "23"
+          "contents": {
+            "json": {
+              "new_value": "23"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "24"
+          "contents": {
+            "json": {
+              "new_value": "24"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "25"
+          "contents": {
+            "json": {
+              "new_value": "25"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "26"
+          "contents": {
+            "json": {
+              "new_value": "26"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "27"
+          "contents": {
+            "json": {
+              "new_value": "27"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "28"
+          "contents": {
+            "json": {
+              "new_value": "28"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "29"
+          "contents": {
+            "json": {
+              "new_value": "29"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "30"
+          "contents": {
+            "json": {
+              "new_value": "30"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "31"
+          "contents": {
+            "json": {
+              "new_value": "31"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "32"
+          "contents": {
+            "json": {
+              "new_value": "32"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "33"
+          "contents": {
+            "json": {
+              "new_value": "33"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "34"
+          "contents": {
+            "json": {
+              "new_value": "34"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "35"
+          "contents": {
+            "json": {
+              "new_value": "35"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "36"
+          "contents": {
+            "json": {
+              "new_value": "36"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "37"
+          "contents": {
+            "json": {
+              "new_value": "37"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "38"
+          "contents": {
+            "json": {
+              "new_value": "38"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "39"
+          "contents": {
+            "json": {
+              "new_value": "39"
+            }
           }
         }
       ]

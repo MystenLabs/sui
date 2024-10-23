@@ -8,6 +8,7 @@ type WalletUsdcPromo = {
 	promoBannerText: string;
 	promoBannerSheetTitle: string;
 	promoBannerSheetContent: string;
+	ctaLabel: string;
 	wrappedUsdcList: string[];
 };
 
@@ -19,6 +20,7 @@ export function useUsdcPromo() {
 		promoBannerText: '',
 		promoBannerSheetTitle: '',
 		promoBannerSheetContent: '',
+		ctaLabel: '',
 		wrappedUsdcList: [],
 	});
 

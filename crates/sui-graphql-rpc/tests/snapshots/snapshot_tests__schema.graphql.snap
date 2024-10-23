@@ -168,25 +168,14 @@ The possible relationship types for a transaction block: sent, or received.
 """
 enum AddressTransactionBlockRelationship {
 	"""
-	Transactions this address has sent. NOTE: this input filter has been deprecated in favor of
-	`SENT` which behaves identically but is named more clearly. Both filters restrict
-	transactions by their sender, only, not signers in general.
-	
-	This filter will be removed with 1.36.0 (2024-10-14).
-	"""
-	SIGN
-	"""
 	Transactions this address has sent.
 	"""
 	SENT
 	"""
-	Transactions that sent objects to this address. NOTE: this input filter has been deprecated
-	in favor of `AFFECTED`, which offers an easier to understand behavior.
-	
-	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-	`AFFECTED` is introduced, whichever is later.
+	Transactions that this address was involved in, either as the sender, sponsor, or as the
+	owner of some object that was created, modified or transfered.
 	"""
-	RECV
+	AFFECTED
 }
 
 """
@@ -1204,7 +1193,42 @@ type Epoch {
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
+type EpochConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EpochEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Epoch!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EpochEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Epoch!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type Event {
+	"""
+	The transaction block that emitted this event. This information is only available for
+	events from indexed transactions, and not from transactions that have just been executed or
+	dry-run.
+	"""
+	transactionBlock: TransactionBlock
 	"""
 	The Move module containing some function that when called by
 	a programmable transaction block (PTB) emitted this event.
@@ -1222,32 +1246,13 @@ type Event {
 	"""
 	timestamp: DateTime
 	"""
-	The value's Move type.
+	The event's contents as a Move value.
 	"""
-	type: MoveType!
+	contents: MoveValue!
 	"""
-	The BCS representation of this value, Base64 encoded.
+	The Base64 encoded BCS serialized bytes of the event.
 	"""
 	bcs: Base64!
-	"""
-	Structured contents of a Move value.
-	"""
-	data: MoveData!
-	"""
-	Representation of a Move value in JSON, where:
-	
-	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
-	- Bools are represented by JSON boolean literals.
-	- u8, u16, and u32 are represented as JSON numbers.
-	- u64, u128, and u256 are represented as JSON strings.
-	- Vectors are represented by JSON arrays.
-	- Structs are represented by JSON objects.
-	- Empty optional values are represented by `null`.
-	
-	This form is offered as a less verbose convenience in cases where the layout of the type is
-	known by the client.
-	"""
-	json: JSON!
 }
 
 type EventConnection {
@@ -2358,6 +2363,10 @@ type MovePackage implements IObject & IOwner {
 	"""
 	typeOrigins: [TypeOrigin!]
 	"""
+	BCS representation of the package itself, as a MovePackage.
+	"""
+	packageBcs: Base64
+	"""
 	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
 	name, followed by module bytes), in alphabetic order by module name.
 	"""
@@ -2895,11 +2904,6 @@ enum ObjectKind {
 	The object is fetched from the index.
 	"""
 	INDEXED
-	"""
-	The object is deleted or wrapped and only partial information can be loaded from the
-	indexer.
-	"""
-	WRAPPED_OR_DELETED
 }
 
 """
@@ -3075,11 +3079,13 @@ type PageInfo {
 
 """
 If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
-the dynamic field, or the intermediate Field object itself). Also note that if the owner
-is a parent, then it's guaranteed to be an object.
+the dynamic field, or the intermediate Field object itself), and it is owned by another object.
+
+Although its owner is guaranteed to be an object, it is exposed as an Owner, as the parent
+object could be wrapped and therefore not directly accessible.
 """
 type Parent {
-	parent: Object
+	parent: Owner
 }
 
 """
@@ -3310,6 +3316,7 @@ type Query {
 	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
+	epochs(first: Int, after: String, last: Int, before: String): EpochConnection!
 	"""
 	The checkpoints that exist in the network.
 	"""
@@ -4207,7 +4214,7 @@ type TransactionBlock {
 	"""
 	expiration: Epoch
 	"""
-	Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
+	Serialized form of this transaction's `TransactionData`, BCS serialized and Base64 encoded.
 	"""
 	bcs: Base64
 }
@@ -4330,26 +4337,14 @@ input TransactionBlockFilter {
 	"""
 	beforeCheckpoint: UInt53
 	"""
-	Limit to transactions that were sent by the given address. NOTE: this input filter has been
-	deprecated in favor of `sentAddress` which behaves identically but is named more clearly.
-	Both filters restrict transactions by their sender, only, not signers in general.
-	
-	This filter will be removed with 1.36.0 (2024-10-14).
+	Limit to transactions that interacted with the given address. The address could be a
+	sender, sponsor, or recipient of the transaction.
 	"""
-	signAddress: SuiAddress
+	affectedAddress: SuiAddress
 	"""
 	Limit to transactions that were sent by the given address.
 	"""
 	sentAddress: SuiAddress
-	"""
-	Limit to transactions that sent an object to the given address. NOTE: this input filter has
-	been deprecated in favor of `affectedAddress` which offers an easier to understand
-	behavior.
-	
-	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
-	`affectedAddress` is introduced, whichever is later.
-	"""
-	recvAddress: SuiAddress
 	"""
 	Limit to transactions that accepted the given object as an input. NOTE: this input filter
 	has been deprecated in favor of `affectedObject` which offers an easier to under behavior.

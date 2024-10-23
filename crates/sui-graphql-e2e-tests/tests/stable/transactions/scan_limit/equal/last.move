@@ -57,7 +57,7 @@ module Test::M1 {
 //# run-graphql
 # Expect ten results
 {
-  transactionBlocks(last: 50 filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(last: 50 filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -84,7 +84,7 @@ module Test::M1 {
 # startCursor: 10, endCursor: 11
 # result is single element with cursor: 11
 {
-  transactionBlocks(last: 2 scanLimit: 2 filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(last: 2 scanLimit: 2 filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -110,7 +110,7 @@ module Test::M1 {
 # startCursor: 9, endCursor: 9
 # result is single element with cursor: 9
 {
-  transactionBlocks(last: 1 scanLimit: 1 before: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(last: 1 scanLimit: 1 before: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -136,7 +136,7 @@ module Test::M1 {
 # startCursor: 6, endCursor: 8
 # result is single element with cursor: 7
 {
-  transactionBlocks(last: 3 scanLimit: 3 before: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(last: 3 scanLimit: 3 before: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -162,7 +162,7 @@ module Test::M1 {
 # startCursor: 4, endCursor: 5
 # expect empty set
 {
-  transactionBlocks(last: 2 scanLimit: 2 before: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(last: 2 scanLimit: 2 before: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -187,7 +187,7 @@ module Test::M1 {
 # Returns the first two matching transactions, boundary cursors both have `is_scan_limited: true`
 # startCursor: 2, endCursor: 3
 {
-  transactionBlocks(last: 2 scanLimit: 2 before: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(last: 2 scanLimit: 2 before: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage
@@ -213,7 +213,7 @@ module Test::M1 {
 # Since we know from the previous query that there is not a previous page at this cursor,
 # Expect false for page flags and null for cursors
 {
-  transactionBlocks(last: 2 scanLimit: 2 before: "@{cursor_0}" filter: {recvAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(last: 2 scanLimit: 2 before: "@{cursor_0}" filter: {affectedAddress: "@{B}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
       hasPreviousPage
       hasNextPage

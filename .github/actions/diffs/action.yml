@@ -22,6 +22,9 @@ outputs:
   isMoveAutoFormatter:
     description: True when changes happened in MoveAutoFormatter code
     value: "${{ steps.diff.outputs.isMoveAutoFormatter }}"
+  isExamples:
+    description: True when changes happened in examples/ directory
+    value: "${{ steps.diff.outputs.isExamples }}"
 
 runs:
   using: composite
@@ -76,3 +79,5 @@ runs:
           - 'sui-execution/**'
         isMoveAutoFormatter:
           - 'external-crates/move/crates/move-analyzer/prettier-plugin/**'
+        isExamples:
+          - 'examples/**'

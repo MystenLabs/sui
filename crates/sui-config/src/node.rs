@@ -286,7 +286,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Onefc".to_string(),
         "FanTV".to_string(),
         "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(), // test tenant in mysten aws
-        "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(), // ambrus, external partner
+        "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(), // Ambrus, external partner
         "Arden".to_string(),                                                    // Arden partner
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
     ]);
@@ -297,12 +297,14 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Facebook".to_string(),
         "Twitch".to_string(),
         "Apple".to_string(),
-        "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(),
+        "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(), // Ambrus, external partner
         "KarrierOne".to_string(),
         "Credenza3".to_string(),
         "Playtron".to_string(),
         "Onefc".to_string(),
         "Threedos".to_string(),
+        "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
+        "Arden".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
@@ -874,7 +876,7 @@ pub struct AuthorityOverloadConfig {
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
-    Duration::from_secs(1)
+    Duration::from_millis(200)
 }
 
 fn default_overload_monitor_interval() -> Duration {
@@ -910,7 +912,7 @@ fn default_max_transaction_manager_queue_length() -> usize {
 }
 
 fn default_max_transaction_manager_per_object_queue_length() -> usize {
-    100
+    20
 }
 
 impl Default for AuthorityOverloadConfig {

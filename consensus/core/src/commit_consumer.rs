@@ -4,13 +4,20 @@
 use std::sync::{Arc, RwLock};
 use tokio::sync::watch;
 
-use mysten_metrics::monitored_mpsc::UnboundedSender;
+use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use crate::{CommitIndex, CommittedSubDag};
+use crate::{CommitIndex, CommittedSubDag, TransactionIndex, VerifiedBlock};
 
+#[derive(Clone)]
 pub struct CommitConsumer {
-    // A channel to send the committed sub dags through
-    pub(crate) sender: UnboundedSender<CommittedSubDag>,
+    // A channel to output the committed sub dags.
+    pub(crate) commit_sender: UnboundedSender<CommittedSubDag>,
+    // A channel to output certified and rejected transactions by batches of blocks.
+    // Each tuple contains the block containing transactions, and indices of rejected transactions.
+    // In each block, transactions that are not rejected are considered certified.
+    // Batches of blocks are sent together, to improve efficiency.
+    #[allow(unused)]
+    pub(crate) transaction_sender: UnboundedSender<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
     // Index of the last commit that the consumer has processed. This is useful for
     // crash/recovery so mysticeti can replay the commits from the next index.
     // First commit in the replayed sequence will have index last_processed_commit_index + 1.
@@ -22,15 +29,26 @@ pub struct CommitConsumer {
 
 impl CommitConsumer {
     pub fn new(
-        sender: UnboundedSender<CommittedSubDag>,
         last_processed_commit_index: CommitIndex,
-    ) -> Self {
+    ) -> (
+        Self,
+        UnboundedReceiver<CommittedSubDag>,
+        UnboundedReceiver<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
+    ) {
+        let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
+        let (transaction_sender, transaction_receiver) = unbounded_channel("consensus_certified");
+
         let monitor = Arc::new(CommitConsumerMonitor::new(last_processed_commit_index));
-        Self {
-            sender,
-            last_processed_commit_index,
-            monitor,
-        }
+        (
+            Self {
+                commit_sender,
+                transaction_sender,
+                last_processed_commit_index,
+                monitor,
+            },
+            commit_receiver,
+            transaction_receiver,
+        )
     }
 
     pub fn monitor(&self) -> Arc<CommitConsumerMonitor> {
@@ -54,7 +72,7 @@ impl CommitConsumerMonitor {
         }
     }
 
-    pub(crate) fn highest_handled_commit(&self) -> CommitIndex {
+    pub fn highest_handled_commit(&self) -> CommitIndex {
         *self.highest_handled_commit.borrow()
     }
 

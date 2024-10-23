@@ -12,6 +12,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, warn};
 
+#[derive(clap::Subcommand, Clone, Debug)]
 pub enum ProjectType {
     App,
     Service,

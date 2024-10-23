@@ -178,6 +178,7 @@ const concepts = [
 			'concepts/tokenomics/gas-in-sui',
 		],
 	},
+	'concepts/sui-bridge',
 	'concepts/research-papers',
 ];
 module.exports = concepts;

@@ -4742,6 +4742,7 @@ async fn test_shared_object_transaction_ok() {
         .epoch_store_for_testing()
         .get_shared_locks(&certificate.key())
         .expect("Reading shared locks should not fail")
+        .expect("Locks should be set")
         .into_iter()
         .find_map(|(object_id, version)| {
             if object_id == shared_object_id {
@@ -4858,6 +4859,7 @@ async fn test_consensus_commit_prologue_generation() {
             .epoch_store_for_testing()
             .get_shared_locks(txn_key)
             .unwrap()
+            .expect("locks should be set")
             .iter()
             .filter_map(|(id, seq)| {
                 if id == &SUI_CLOCK_OBJECT_ID {
@@ -5866,6 +5868,7 @@ async fn test_consensus_handler_per_object_congestion_control(
         PerObjectCongestionControlMode::None => unreachable!(),
         PerObjectCongestionControlMode::TotalGasBudget => 5,
         PerObjectCongestionControlMode::TotalTxCount => 2,
+        PerObjectCongestionControlMode::TotalGasBudgetWithCap => 5,
     };
     let gas_objects_commit_1 = create_gas_objects(5 + non_congested_tx_count, sender);
     let gas_objects_commit_2 = create_gas_objects(non_congested_tx_count, sender);
@@ -5890,6 +5893,15 @@ async fn test_consensus_handler_per_object_congestion_control(
                 .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(2);
             protocol_config
                 .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(2);
+        }
+        PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
+            protocol_config
+                .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(200_000_000);
+            protocol_config
+                .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                    200_000_000,
+                );
+            protocol_config.set_gas_budget_based_txn_cost_cap_factor_for_testing(100_000_000);
         }
     }
     protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(1000); // Set to a large number so that we don't hit this limit.
@@ -6082,6 +6094,14 @@ async fn test_consensus_handler_per_object_congestion_control_using_tx_count() {
     .await;
 }
 
+#[sim_test]
+async fn test_consensus_handler_per_object_congestion_control_using_budget_with_cap() {
+    test_consensus_handler_per_object_congestion_control(
+        PerObjectCongestionControlMode::TotalGasBudgetWithCap,
+    )
+    .await;
+}
+
 // Tests congestion control triggered transaction cancellation in consensus handler:
 //   1. Consensus handler cancels transactions that are deferred for too many rounds.
 //   2. Shared locks for cancelled transaction are set correctly.
@@ -6198,6 +6218,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         .epoch_store_for_testing()
         .get_shared_locks(&cancelled_txn.key())
         .expect("Reading shared locks should not fail")
+        .expect("locks should be set")
         .into_iter()
         .collect::<HashMap<_, _>>();
     assert_eq!(
@@ -6216,6 +6237,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         .read_objects_for_execution(
             authority.epoch_store_for_testing().as_ref(),
             &cancelled_txn.key(),
+            &CertLockGuard::dummy_for_tests(),
             &cancelled_txn
                 .data()
                 .transaction_data()

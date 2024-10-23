@@ -126,7 +126,6 @@ impl Primary {
         let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
         let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
-        let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
         let (tx_our_digests, rx_our_digests) = channel_with_total(
             CHANNEL_CAPACITY,
@@ -404,13 +403,6 @@ impl Primary {
             );
         }
 
-        let (connection_monitor_handle, _) = network::connectivity::ConnectionMonitor::spawn(
-            network.downgrade(),
-            network_connection_metrics,
-            peer_types,
-            Some(tx_shutdown.subscribe()),
-        );
-
         info!(
             "Primary {} listening to network admin messages on 127.0.0.1:{}",
             authority.id(),
@@ -477,12 +469,7 @@ impl Primary {
             leader_schedule.clone(),
         );
 
-        let mut handles = vec![
-            core_handle,
-            certificate_fetcher_handle,
-            proposer_handle,
-            connection_monitor_handle,
-        ];
+        let mut handles = vec![core_handle, certificate_fetcher_handle, proposer_handle];
         handles.extend(admin_handles);
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state

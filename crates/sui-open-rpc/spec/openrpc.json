@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.36.0"
+    "version": "1.37.0"
   },
   "methods": [
     {
@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "62",
+              "maxSupportedProtocolVersion": "66",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1353,6 +1353,7 @@
                 "soft_bundle": false,
                 "throughput_aware_consensus_submission": false,
                 "txn_base_cost_as_multiplier": false,
+                "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
                 "validate_identifier_inputs": false,
                 "verify_legacy_zklogin_address": false,
@@ -1592,6 +1593,7 @@
                   "u64": "2"
                 },
                 "execution_version": null,
+                "gas_budget_based_txn_cost_cap_factor": null,
                 "gas_model_version": {
                   "u64": "5"
                 },
@@ -1629,6 +1631,7 @@
                 "group_ops_bls12381_g1_msm_base_cost_per_input": null,
                 "group_ops_bls12381_g1_mul_cost": null,
                 "group_ops_bls12381_g1_sub_cost": null,
+                "group_ops_bls12381_g1_to_uncompressed_g1_cost": null,
                 "group_ops_bls12381_g2_add_cost": null,
                 "group_ops_bls12381_g2_div_cost": null,
                 "group_ops_bls12381_g2_hash_to_base_cost": null,
@@ -1647,6 +1650,10 @@
                 "group_ops_bls12381_scalar_div_cost": null,
                 "group_ops_bls12381_scalar_mul_cost": null,
                 "group_ops_bls12381_scalar_sub_cost": null,
+                "group_ops_bls12381_uncompressed_g1_sum_base_cost": null,
+                "group_ops_bls12381_uncompressed_g1_sum_cost_per_term": null,
+                "group_ops_bls12381_uncompressed_g1_sum_max_terms": null,
+                "group_ops_bls12381_uncompressed_g1_to_g1_cost": null,
                 "hash_blake2b256_cost_base": {
                   "u64": "52"
                 },
@@ -1810,6 +1817,7 @@
                 "max_tx_size_bytes": {
                   "u64": "131072"
                 },
+                "max_txn_cost_overage_per_object_in_commit": null,
                 "max_type_argument_depth": {
                   "u32": "16"
                 },
@@ -6116,6 +6124,22 @@
               "All": {
                 "type": "array",
                 "maxItems": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events that match any of the given filters. Only supported on event subscriptions.",
+            "type": "object",
+            "required": [
+              "Any"
+            ],
+            "properties": {
+              "Any": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventFilter"
+                }
               }
             },
             "additionalProperties": false

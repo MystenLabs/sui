@@ -10,12 +10,14 @@ use once_cell::sync::Lazy;
 use prometheus::{register_counter_vec, register_histogram_vec};
 use prometheus::{CounterVec, HistogramVec};
 use serde::Deserialize;
+use std::collections::BTreeMap;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
     time::Duration,
 };
 use sui_tls::Allower;
+use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeSummary;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use tracing::{debug, error, info, warn};
@@ -269,9 +271,24 @@ impl SuiNodeProvider {
     }
 
     async fn update_bridge_validator_set(&self, metrics_keys: MetricsPubKeys) {
+        let sui_system = match Self::get_validators(self.rpc_url.to_owned()).await {
+            Ok(summary) => summary,
+            Err(error) => {
+                JSON_RPC_STATE
+                    .with_label_values(&["update_bridge_peer_count", "failed"])
+                    .inc();
+                error!("unable to get sui system state: {error}");
+                return;
+            }
+        };
         match Self::get_bridge_validators(self.rpc_url.to_owned()).await {
             Ok(summary) => {
-                let validators = extract_bridge(summary, metrics_keys).await;
+                let names = sui_system
+                    .active_validators
+                    .into_iter()
+                    .map(|v| (v.sui_address, v.name))
+                    .collect();
+                let validators = extract_bridge(summary, Arc::new(names), metrics_keys).await;
                 let mut allow = self.bridge_nodes.write().unwrap();
                 allow.clear();
                 allow.extend(validators);
@@ -288,6 +305,7 @@ impl SuiNodeProvider {
             }
         };
     }
+
     /// poll_peer_list will act as a refresh interval for our cache
     pub fn poll_peer_list(&self) {
         info!("Started polling for peers using rpc: {}", self.rpc_url);
@@ -345,6 +363,7 @@ fn extract(
 
 async fn extract_bridge(
     summary: BridgeSummary,
+    names: Arc<BTreeMap<SuiAddress, String>>,
     metrics_keys: MetricsPubKeys,
 ) -> Vec<(Ed25519PublicKey, AllowedPeer)> {
     {
@@ -366,6 +385,7 @@ async fn extract_bridge(
         .filter_map(|(_, cm)| {
             let client = client.clone();
             let metrics_keys = metrics_keys.clone();
+            let names = names.clone();
             async move {
                 debug!(
                     address =% cm.sui_address,
@@ -384,14 +404,22 @@ async fn extract_bridge(
                     }
                 };
                 // Parse the URL
-                let mut bridge_url = match Url::parse(&url_str) {
+                let bridge_url = match Url::parse(&url_str) {
                     Ok(url) => url,
                     Err(_) => {
                         warn!(url_str, "Unable to parse http_rest_url");
                         return None;
                     }
                 };
-                bridge_url.set_path("/metrics_pub_key");
+
+                // Append "metrics_pub_key" to the path
+                let bridge_url = match append_path_segment(bridge_url, "metrics_pub_key") {
+                    Some(url) => url,
+                    None => {
+                        warn!(url_str, "Unable to append path segment to URL");
+                        return None;
+                    }
+                };
 
                 // Use the host portion of the http_rest_url as the "name"
                 let bridge_host = match bridge_url.host_str() {
@@ -401,7 +429,15 @@ async fn extract_bridge(
                         return None;
                     }
                 };
-                let bridge_name = String::from(bridge_host);
+                let bridge_name = names.get(&cm.sui_address).cloned().unwrap_or_else(|| {
+                    warn!(
+                        address =% cm.sui_address,
+                        "Bridge node not found in sui committee, using base URL as the name",
+                    );
+                    String::from(bridge_host)
+                });
+                let bridge_name = format!("bridge-{}", bridge_name);
+
                 let bridge_request_url = bridge_url.as_str();
 
                 let metrics_pub_key = match client.get(bridge_request_url).send().await {
@@ -496,6 +532,11 @@ fn fallback_to_cached_key(
     }
 }
 
+fn append_path_segment(mut url: Url, segment: &str) -> Option<Url> {
+    url.path_segments_mut().ok()?.pop_if_empty().push(segment);
+    Some(url)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -565,7 +606,7 @@ mod tests {
                 Ed25519PublicKey::from_bytes(&[1u8; 32]).unwrap(),
             );
         }
-        let result = extract_bridge(summary, metrics_keys.clone()).await;
+        let result = extract_bridge(summary, Arc::new(BTreeMap::new()), metrics_keys.clone()).await;
 
         assert_eq!(
             result.len(),
@@ -599,7 +640,7 @@ mod tests {
                 Ed25519PublicKey::from_bytes(&[1u8; 32]).unwrap(),
             );
         }
-        let result = extract_bridge(summary, metrics_keys.clone()).await;
+        let result = extract_bridge(summary, Arc::new(BTreeMap::new()), metrics_keys.clone()).await;
 
         assert_eq!(
             result.len(),
@@ -618,5 +659,63 @@ mod tests {
             cache.contains_key("https://unresponsive_bridge_url"),
             "Cache should still contain the original key"
         );
+    }
+
+    #[test]
+    fn test_append_path_segment() {
+        let test_cases = vec![
+            (
+                "https://example.com",
+                "metrics_pub_key",
+                "https://example.com/metrics_pub_key",
+            ),
+            (
+                "https://example.com/api",
+                "metrics_pub_key",
+                "https://example.com/api/metrics_pub_key",
+            ),
+            (
+                "https://example.com/",
+                "metrics_pub_key",
+                "https://example.com/metrics_pub_key",
+            ),
+            (
+                "https://example.com/api/",
+                "metrics_pub_key",
+                "https://example.com/api/metrics_pub_key",
+            ),
+            (
+                "https://example.com:8080",
+                "metrics_pub_key",
+                "https://example.com:8080/metrics_pub_key",
+            ),
+            (
+                "https://example.com?param=value",
+                "metrics_pub_key",
+                "https://example.com/metrics_pub_key?param=value",
+            ),
+            (
+                "https://example.com:8080/api/v1?param=value",
+                "metrics_pub_key",
+                "https://example.com:8080/api/v1/metrics_pub_key?param=value",
+            ),
+        ];
+
+        for (input_url, segment, expected_output) in test_cases {
+            let url = Url::parse(input_url).unwrap();
+            let result = append_path_segment(url, segment);
+            assert!(
+                result.is_some(),
+                "Failed to append segment for URL: {}",
+                input_url
+            );
+            let result_url = result.unwrap();
+            assert_eq!(
+                result_url.as_str(),
+                expected_output,
+                "Unexpected result for input URL: {}",
+                input_url
+            );
+        }
     }
 }

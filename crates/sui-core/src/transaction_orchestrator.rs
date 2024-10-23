@@ -38,7 +38,8 @@ use sui_types::quorum_driver_types::{
     QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{TransactionData, VerifiedTransaction};
+use sui_types::transaction_executor::SimulateTransactionResult;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
@@ -709,5 +710,12 @@ where
         client_addr: Option<std::net::SocketAddr>,
     ) -> Result<ExecuteTransactionResponseV3, QuorumDriverError> {
         self.execute_transaction_v3(request, client_addr).await
+    }
+
+    fn simulate_transaction(
+        &self,
+        transaction: TransactionData,
+    ) -> Result<SimulateTransactionResult, SuiError> {
+        self.validator_state.simulate_transaction(transaction)
     }
 }

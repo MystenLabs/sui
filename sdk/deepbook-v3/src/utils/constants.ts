@@ -18,9 +18,9 @@ export const testnetPackageIds = {
 } satisfies DeepbookPackageIds;
 
 export const mainnetPackageIds = {
-	DEEPBOOK_PACKAGE_ID: '',
-	REGISTRY_ID: '',
-	DEEP_TREASURY_ID: '',
+	DEEPBOOK_PACKAGE_ID: '0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809',
+	REGISTRY_ID: '0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d',
+	DEEP_TREASURY_ID: '0x032abf8948dda67a271bcc18e776dbbcfb0d58c8d288a700ff0d5521e57a1ffe',
 };
 
 export const testnetCoins: CoinMap = {
@@ -60,7 +60,7 @@ export const mainnetCoins: CoinMap = {
 	USDC: {
 		address: `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7`,
 		type: `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC`,
-		scalar: 6,
+		scalar: 1000000,
 	},
 	WUSDC: {
 		address: `0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf`,
@@ -72,10 +72,15 @@ export const mainnetCoins: CoinMap = {
 		type: `0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN`,
 		scalar: 100000000,
 	},
+	BETH: {
+		address: `0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29`,
+		type: `0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH`,
+		scalar: 100000000,
+	},
 	WBTC: {
 		address: `0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881`,
 		type: `0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881::coin::COIN`,
-		scalar: 0,
+		scalar: 100000000,
 	},
 	WUSDT: {
 		address: `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c`,
@@ -109,28 +114,33 @@ export const testnetPools: PoolMap = {
 
 export const mainnetPools: PoolMap = {
 	DEEP_SUI: {
-		address: ``,
+		address: `0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'SUI',
 	},
 	SUI_USDC: {
-		address: ``,
+		address: `0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407`,
 		baseCoin: 'SUI',
 		quoteCoin: 'USDC',
 	},
 	DEEP_USDC: {
-		address: ``,
+		address: `0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'USDC',
 	},
-	USDT_USDC: {
-		address: ``,
-		baseCoin: 'USDT',
+	WUSDT_USDC: {
+		address: `0x4e2ca3988246e1d50b9bf209abb9c1cbfec65bd95afdacc620a36c67bdb8452f`,
+		baseCoin: 'WUSDT',
 		quoteCoin: 'USDC',
 	},
 	WUSDC_USDC: {
-		address: ``,
+		address: `0xa0b9ebefb38c963fd115f52d71fa64501b79d1adcb5270563f92ce0442376545`,
 		baseCoin: 'WUSDC',
+		quoteCoin: 'USDC',
+	},
+	BETH_USDC: {
+		address: `0x1109352b9112717bd2a7c3eb9a416fff1ba6951760f5bdd5424cf5e4e5b3e65c`,
+		baseCoin: 'BETH',
 		quoteCoin: 'USDC',
 	},
 };

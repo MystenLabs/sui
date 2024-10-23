@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use fastcrypto::{hash::HashFunction, traits::ToFromBytes};
+use fastcrypto::traits::ToFromBytes;
 use p256::pkcs8::DecodePublicKey;
 use passkey_authenticator::{Authenticator, UserValidationMethod};
 use passkey_client::Client;
@@ -15,11 +15,12 @@ use passkey_types::{
     },
     Bytes, Passkey,
 };
-use shared_crypto::intent::{Intent, IntentMessage, INTENT_PREFIX_LENGTH};
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::SocketAddr;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::crypto::Signature;
 use sui_types::error::UserInputError;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
@@ -29,10 +30,6 @@ use sui_types::{
     crypto::{PublicKey, SignatureScheme},
     passkey_authenticator::{to_signing_message, PasskeyAuthenticator},
     transaction::TransactionData,
-};
-use sui_types::{
-    crypto::{DefaultHash, Signature},
-    passkey_authenticator::to_signing_digest,
 };
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -159,23 +156,22 @@ async fn create_credential_and_sign_test_tx(
 
     // Compute the challenge = blake2b_hash(intent_msg(tx)) for passkey credential request.
     // If change_intent, mangle the intent bytes. If change_tx, mangle the hashed tx bytes.
-    let mut extended = [0; INTENT_PREFIX_LENGTH + DefaultHash::OUTPUT_SIZE];
-    let passkey_digest = if change_intent {
-        extended[..INTENT_PREFIX_LENGTH].copy_from_slice(&Intent::personal_message().to_bytes());
-        extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&to_signing_digest(&intent_msg));
-        extended
+    let passkey_challenge = if change_intent {
+        to_signing_message(&IntentMessage::new(
+            Intent::personal_message(),
+            intent_msg.value.clone(),
+        ))
+        .to_vec()
     } else if change_tx {
-        extended[..INTENT_PREFIX_LENGTH].copy_from_slice(&intent_msg.intent.to_bytes());
-        extended[INTENT_PREFIX_LENGTH..].copy_from_slice(&random_vec(32));
-        extended
+        random_vec(32)
     } else {
-        to_signing_message(&intent_msg)
+        to_signing_message(&intent_msg).to_vec()
     };
 
     // Request a signature from passkey with challenge set to passkey_digest.
     let credential_request = CredentialRequestOptions {
         public_key: PublicKeyCredentialRequestOptions {
-            challenge: Bytes::from(passkey_digest.to_vec()),
+            challenge: Bytes::from(passkey_challenge),
             timeout: None,
             rp_id: Some(String::from(origin.domain().unwrap())),
             allow_credentials: None,

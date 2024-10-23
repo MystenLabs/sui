@@ -382,6 +382,70 @@ module sui::bls12381_tests {
         let _ = bls12381::hash_to_g1(&vector[]);
     }
 
+    #[random_test]
+    fun test_to_from_uncompressed_g1(scalar: u64) {
+        // Generator
+        let a = bls12381::g1_generator();
+        let a_uncompressed = bls12381::g1_to_uncompressed_g1(&a);
+        assert!(a_uncompressed.bytes() == x"17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1");
+        let reconstructed = bls12381::uncompressed_g1_to_g1(&a_uncompressed);
+        assert!(group_ops::equal(&a, &reconstructed));
+
+        // Identity element
+        let b = bls12381::g1_identity();
+        let b_uncompressed = bls12381::g1_to_uncompressed_g1(&b);
+        assert!(b_uncompressed.bytes() == x"400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+        let reconstructed = bls12381::uncompressed_g1_to_g1(&b_uncompressed);
+        assert!(group_ops::equal(&b, &reconstructed));
+
+        // Random element
+        let scalar = bls12381::scalar_from_u64(scalar);
+        let c = bls12381::g1_mul(&scalar, &bls12381::g1_generator());
+        let c_uncompressed = bls12381::g1_to_uncompressed_g1(&c);
+        let reconstructed = bls12381::uncompressed_g1_to_g1(&c_uncompressed);
+        assert!(group_ops::equal(&c, &reconstructed));
+    }
+
+    #[test]
+    fun test_uncompressed_g1_sum() {
+        // Empty sum
+        let sum = bls12381::uncompressed_g1_sum(&vector[]);
+        assert!(group_ops::equal(&bls12381::g1_to_uncompressed_g1(&bls12381::g1_identity()), &sum));
+
+        // Sum with random terms
+        let mut gen = random::new_generator_for_testing();
+        let mut elements = vector[];
+        let mut i = 100;
+        let mut expected_result = bls12381::g1_identity();
+        while (i > 0) {
+            let scalar = bls12381::scalar_from_u64(gen.generate_u64());
+            let element = bls12381::g1_mul(&scalar, &bls12381::g1_generator());
+            expected_result = bls12381::g1_add(&expected_result, &element);
+            let uncompressed_element = bls12381::g1_to_uncompressed_g1(&element);
+            elements.push_back(uncompressed_element);
+            let actual_result = bls12381::uncompressed_g1_sum(&elements);
+            assert!(group_ops::equal(&bls12381::g1_to_uncompressed_g1(&expected_result), &actual_result));
+            i = i - 1;
+        };
+    }
+
+    #[test]
+    #[expected_failure(abort_code = group_ops::EInputTooLong)]
+    fun test_uncompressed_g1_sum_too_long() {
+        // Sum with random terms
+        let mut gen = random::new_generator_for_testing();
+        let mut elements = vector[];
+        let mut i = 2001;
+        while (i > 0) {
+            let scalar = bls12381::scalar_from_u64(gen.generate_u64());
+            let element = bls12381::g1_mul(&scalar, &bls12381::g1_generator());
+            let uncompressed_element = bls12381::g1_to_uncompressed_g1(&element);
+            elements.push_back(uncompressed_element);
+            i = i - 1;
+        };
+        let _ = bls12381::uncompressed_g1_sum(&elements);
+    }
+
     #[test]
     fun test_g2_ops() {
         let id = bls12381::g2_identity();

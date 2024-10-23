@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 
-use crate::config::{IngestionConfig, PruningOptions, SnapshotLagConfig, UploadOptions};
+use crate::config::{IngestionConfig, RetentionConfig, SnapshotLagConfig, UploadOptions};
 use crate::database::Connection;
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
@@ -72,7 +72,7 @@ pub async fn start_indexer_jsonrpc_for_testing(
 pub async fn start_indexer_writer_for_testing(
     db_url: String,
     snapshot_config: Option<SnapshotLagConfig>,
-    pruning_options: Option<PruningOptions>,
+    retention_config: Option<RetentionConfig>,
     data_ingestion_path: Option<PathBuf>,
     cancel: Option<CancellationToken>,
 ) -> (
@@ -85,7 +85,6 @@ pub async fn start_indexer_writer_for_testing(
         snapshot_min_lag: 5,
         sleep_duration: 0,
     });
-    let pruning_options = pruning_options.unwrap_or_default();
 
     // Reduce the connection pool size to 10 for testing to prevent maxing out
     let pool_config = ConnectionPoolConfig {
@@ -124,12 +123,13 @@ pub async fn start_indexer_writer_for_testing(
 
         tokio::spawn(async move {
             Indexer::start_writer(
-                &ingestion_config,
+                ingestion_config,
                 store_clone,
                 indexer_metrics,
                 snapshot_config,
-                pruning_options,
+                retention_config,
                 token_clone,
+                None,
             )
             .await
         })

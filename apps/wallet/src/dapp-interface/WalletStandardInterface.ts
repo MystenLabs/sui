@@ -22,6 +22,7 @@ import type {
 } from '_payloads/transactions';
 import { API_ENV } from '_src/shared/api-env';
 import type { NetworkEnvType } from '_src/shared/api-env';
+import { type DisconnectApp } from '_src/shared/messaging/messages/payloads/permissions/DisconnectApp';
 import {
 	isQredoConnectPayload,
 	type QredoConnectPayload,
@@ -40,6 +41,8 @@ import {
 	SUI_TESTNET_CHAIN,
 	type StandardConnectFeature,
 	type StandardConnectMethod,
+	type StandardDisconnectFeature,
+	type StandardDisconnectMethod,
 	type StandardEventsFeature,
 	type StandardEventsListeners,
 	type StandardEventsOnMethod,
@@ -119,6 +122,7 @@ export class SuiWallet implements Wallet {
 
 	get features(): StandardConnectFeature &
 		StandardEventsFeature &
+		StandardDisconnectFeature &
 		SuiFeatures &
 		QredoConnectFeature {
 		return {
@@ -129,6 +133,10 @@ export class SuiWallet implements Wallet {
 			'standard:events': {
 				version: '1.0.0',
 				on: this.#on,
+			},
+			'standard:disconnect': {
+				version: '1.0.0',
+				disconnect: this.#disconnect,
 			},
 			'sui:signTransactionBlock': {
 				version: '1.0.0',
@@ -242,6 +250,13 @@ export class SuiWallet implements Wallet {
 		await this.#connected();
 
 		return { accounts: this.accounts };
+	};
+
+	#disconnect: StandardDisconnectMethod = async () => {
+		this.#send<DisconnectApp, void>({
+			type: 'disconnect-app',
+			origin: '', // origin is auto-discovered for wallet's disconnect.
+		});
 	};
 
 	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({

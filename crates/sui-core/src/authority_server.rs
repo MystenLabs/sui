@@ -828,7 +828,7 @@ impl ValidatorService {
                             .await?
                     }
                     ConsensusTransactionKind::UserTransaction(tx) => {
-                        self.state.await_transaction_effects(*tx.digest()).await?
+                        self.state.await_transaction_effects(*tx.digest(), epoch_store).await?
                     }
                     _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction or UserTransaction"),
                 };

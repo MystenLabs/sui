@@ -1,7 +1,7 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-query getProtocolConfig($protocolVersion: Int) {
+query getProtocolConfig($protocolVersion: UInt53) {
 	protocolConfig(protocolVersion: $protocolVersion) {
 		protocolVersion
 		configs {

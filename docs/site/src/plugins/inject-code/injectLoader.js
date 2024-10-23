@@ -65,7 +65,9 @@ const addCodeInject = function (source) {
           const isTs = language === "ts" || language === "js";
 
           if (fs.existsSync(fullPath)) {
-            let injectFileContent = fs.readFileSync(fullPath, "utf8");
+            let injectFileContent = fs
+              .readFileSync(fullPath, "utf8")
+              .replaceAll(`\t`, "  ");
             const marker =
               injectFileFull.indexOf("#") > 0
                 ? injectFileFull.substring(injectFileFull.indexOf("#"))
@@ -178,13 +180,15 @@ const addCodeInject = function (source) {
                   }
                 });
                 let varContent = [];
-                if (language === "ts") {
+                if (language === "ts" || language === "js") {
                   const varTsFunction = `^( *)?.*?(let|const) \\b${variableName}\\b.*=>`;
+                  const varTsVariable = `^( *)?.*?(let|const) \\b${variableName}\\b (?!.*=>)=.*;`;
                   const varTsRE = new RegExp(varTsFunction, "m");
+                  const varTsVarRE = new RegExp(varTsVariable, "m");
                   const varTsMatch = varTsRE.exec(injectFileContent);
+                  const varTsVarMatch = varTsVarRE.exec(injectFileContent);
                   if (varTsMatch) {
                     const start = injectFileContent.slice(varTsMatch.index);
-                    //console.log(varTsMatch[1]);
                     const endText = `^${varTsMatch[1] ? varTsMatch[1] : ""}\\)?\\};`;
                     const endRE = new RegExp(endText, "m");
                     const endMatch = endRE.exec(start);
@@ -197,6 +201,14 @@ const addCodeInject = function (source) {
                         start.slice(0, endMatch.index + endMatch[0].length),
                         preVarTs,
                       ),
+                    );
+                  } else if (varTsVarMatch) {
+                    let preVarTs2 = utils.capturePrepend(
+                      varTsVarMatch,
+                      injectFileContent,
+                    );
+                    varContent.push(
+                      utils.removeLeadingSpaces(varTsVarMatch[0], preVarTs2),
                     );
                   }
                 } else {
@@ -266,7 +278,7 @@ const addCodeInject = function (source) {
                     element = names[1];
                     ordinal = names[2] ? names[2] : "";
                   }
-                  const compStr = `^( *)(export (default )?)?function \\b${name}\\b.*?\\n\\1}\\n`;
+                  const compStr = `^( *)(export (default )?)?function \\b${name}\\b.*?\\n\\1\\}\\n`;
                   const compRE = new RegExp(compStr, "ms");
                   const compMatch = compRE.exec(injectFileContent);
                   if (compMatch) {
@@ -506,6 +518,7 @@ const addCodeInject = function (source) {
                 language,
                 injectFile,
                 processed,
+                options,
               );
               // Temporarily replace double spaces with tabs. Replaced back downstream.
               // Prevents unexpected whitespace removal from util functions.

@@ -46,9 +46,7 @@ Response: {
     "object1": {
       "digest": "4ZQVjpKKr9Et5qZNWvYQvpmydf2j7ohU1wB8bZ9LFKrG"
     },
-    "object2": {
-      "digest": null
-    }
+    "object2": null
   }
 }
 
@@ -77,9 +75,7 @@ task 10, lines 66-74:
 //# run-graphql
 Response: {
   "data": {
-    "object1": {
-      "digest": null
-    },
+    "object1": null,
     "object2": {
       "digest": "jVRpzwEAGgYKYJ5rQfpW2zjMajazCAF9VVGUXEACpN1"
     }
@@ -106,8 +102,6 @@ Response: {
     "object1": {
       "digest": "8B8PFHkbEB8w99ZevdLkb6CBuR2gZyPsE7zUWyXJZwDw"
     },
-    "object2": {
-      "digest": null
-    }
+    "object2": null
   }
 }

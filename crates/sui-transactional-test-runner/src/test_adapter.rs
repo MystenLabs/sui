@@ -50,7 +50,7 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
-use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
+use sui_graphql_rpc::test_infra::cluster::{serve_executor, RetentionConfig, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -330,6 +330,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             },
             cluster,
         ) = if is_simulator {
+            // TODO: (wlmyng) as of right now, we can't test per-table overrides until the pruner is
+            // updated
+            let retention_config =
+                epochs_to_keep.map(RetentionConfig::new_with_default_retention_only_for_testing);
+
             init_sim_executor(
                 rng,
                 account_names,
@@ -338,7 +343,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 custom_validator_account,
                 reference_gas_price,
                 snapshot_config,
-                epochs_to_keep,
+                retention_config,
             )
             .await
         } else {
@@ -2116,7 +2121,7 @@ async fn init_sim_executor(
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
     snapshot_config: SnapshotLagConfig,
-    epochs_to_keep: Option<u64>,
+    retention_config: Option<RetentionConfig>,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -2188,7 +2193,7 @@ async fn init_sim_executor(
     let cluster = serve_executor(
         Arc::new(read_replica),
         Some(snapshot_config),
-        epochs_to_keep,
+        retention_config,
         data_ingestion_path,
     )
     .await;

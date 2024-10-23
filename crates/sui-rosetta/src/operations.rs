@@ -651,7 +651,9 @@ impl Operations {
             .ok_or_else(|| anyhow!("Response balance changes should not be empty."))?
         {
             if let Ok(currency) = cache.get_currency(&balance_change.coin_type).await {
-                balance_changes.push((balance_change.clone(), currency));
+                if !currency.symbol.is_empty() {
+                    balance_changes.push((balance_change.clone(), currency));
+                }
             }
         }
 

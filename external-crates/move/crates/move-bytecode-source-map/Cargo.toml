@@ -17,6 +17,7 @@ move-command-line-common.workspace = true
 bcs.workspace = true
 
 serde.workspace = true
+serde_json.workspace = true
 
 [features]
 default = []

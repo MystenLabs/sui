@@ -681,15 +681,7 @@ mod checked {
             UpgradePolicy::Additive => InclusionCheck::Subset.check(cur_module, new_module),
             UpgradePolicy::DepOnly => InclusionCheck::Equal.check(cur_module, new_module),
             UpgradePolicy::Compatible => {
-                let compatibility = Compatibility {
-                    check_datatype_and_pub_function_linking: true,
-                    check_datatype_layout: true,
-                    check_friend_linking: false,
-                    check_private_entry_linking: false,
-                    disallowed_new_abilities: AbilitySet::ALL,
-                    disallow_change_datatype_type_params: true,
-                    disallow_new_variants: true,
-                };
+                let compatibility = Compatibility::upgrade_check();
 
                 compatibility.check(cur_module, new_module)
             }
