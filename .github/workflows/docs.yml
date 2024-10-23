@@ -61,4 +61,4 @@ jobs:
                   "type": "divider"
                 }
               ]
-            }slack-message: ''
+            }
