@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use crate::{handlers::Handler, models::watermarks::CommitterWatermark};
+use std::time::Duration;
 
 pub mod concurrent;
 mod processor;
@@ -14,6 +13,8 @@ const COMMITTER_BUFFER: usize = 5;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct PipelineConfig {
+    #[command(subcommand)]
+    pub pipeline: PipelineName,
     /// Committer will check for pending data at least this often
     #[arg(
         long,
@@ -35,6 +36,18 @@ pub struct PipelineConfig {
     /// Avoid writing to the watermark table
     #[arg(long)]
     skip_watermark: bool,
+}
+
+/// Each enum variant can also take pipeline-specific configuration.
+#[derive(Debug, Clone, clap::Subcommand)]
+pub enum PipelineName {
+    EvEmitMod,
+    EvStructInst,
+    KvCheckpoints,
+    KvObjects,
+    KvTransactions,
+    TxAffectedObjects,
+    TxBalanceChanges,
 }
 
 /// A batch of processed values associated with a single checkpoint. This is an internal type used

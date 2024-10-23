@@ -1,8 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
-
+use crate::handlers::ev_emit_mod::EvEmitMod;
+use crate::handlers::ev_struct_inst::EvStructInst;
+use crate::handlers::kv_checkpoints::KvCheckpoints;
+use crate::handlers::kv_objects::KvObjects;
+use crate::handlers::kv_transactions::KvTransactions;
+use crate::handlers::tx_affected_objects::TxAffectedObjects;
+use crate::handlers::tx_balance_changes::TxBalanceChanges;
+use crate::pipeline::PipelineName;
 use anyhow::{Context, Result};
 use db::{Db, DbConfig};
 use handlers::Handler;
@@ -10,6 +16,7 @@ use ingestion::{IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
 use pipeline::{concurrent, PipelineConfig};
+use std::{net::SocketAddr, sync::Arc};
 use task::graceful_shutdown;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -47,9 +54,6 @@ pub struct Indexer {
     /// Optional override of the checkpoint upperbound.
     last_checkpoint: Option<u64>,
 
-    /// Optional override of enabled pipelines.
-    enabled_pipelines: BTreeSet<String>,
-
     /// Cancellation token shared among all continuous tasks in the service.
     cancel: CancellationToken,
 
@@ -84,11 +88,6 @@ pub struct IndexerConfig {
     #[arg(long)]
     last_checkpoint: Option<u64>,
 
-    /// Only run the following pipelines -- useful for backfills. If not provided, all pipelines
-    /// will be run.
-    #[arg(long, action = clap::ArgAction::Append)]
-    pipeline: Vec<String>,
-
     /// Address to serve Prometheus Metrics from.
     #[arg(long, default_value = "0.0.0.0:9184")]
     pub metrics_address: SocketAddr,
@@ -102,7 +101,6 @@ impl Indexer {
             pipeline_config,
             first_checkpoint,
             last_checkpoint,
-            pipeline,
             metrics_address,
         } = config;
 
@@ -115,7 +113,7 @@ impl Indexer {
         let ingestion_service =
             IngestionService::new(ingestion_config, metrics.clone(), cancel.clone())?;
 
-        Ok(Self {
+        let mut indexer = Self {
             db,
             metrics,
             metrics_service,
@@ -123,21 +121,35 @@ impl Indexer {
             pipeline_config,
             first_checkpoint,
             last_checkpoint,
-            enabled_pipelines: pipeline.into_iter().collect(),
             cancel,
             first_checkpoint_from_watermark: u64::MAX,
             handles: vec![],
-        })
+        };
+        indexer.register_pipeline().await?;
+        Ok(indexer)
+    }
+
+    async fn register_pipeline(&mut self) -> Result<()> {
+        match self.pipeline_config.pipeline {
+            PipelineName::EvEmitMod => self.concurrent_pipeline::<EvEmitMod>().await?,
+            PipelineName::EvStructInst => self.concurrent_pipeline::<EvStructInst>().await?,
+            PipelineName::KvCheckpoints => self.concurrent_pipeline::<KvCheckpoints>().await?,
+            PipelineName::KvObjects => self.concurrent_pipeline::<KvObjects>().await?,
+            PipelineName::KvTransactions => self.concurrent_pipeline::<KvTransactions>().await?,
+            PipelineName::TxAffectedObjects => {
+                self.concurrent_pipeline::<TxAffectedObjects>().await?
+            }
+            PipelineName::TxBalanceChanges => {
+                self.concurrent_pipeline::<TxBalanceChanges>().await?
+            }
+        }
+
+        Ok(())
     }
 
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     pub async fn concurrent_pipeline<H: Handler + 'static>(&mut self) -> Result<()> {
-        if !self.enabled_pipelines.is_empty() && !self.enabled_pipelines.contains(H::NAME) {
-            info!("Skipping pipeline {}", H::NAME);
-            return Ok(());
-        }
-
         let mut conn = self.db.connect().await.context("Failed DB connection")?;
 
         let watermark = CommitterWatermark::get(&mut conn, H::NAME)

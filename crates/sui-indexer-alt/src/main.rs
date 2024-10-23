@@ -3,15 +3,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use sui_indexer_alt::{
-    args::Args,
-    handlers::{
-        ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
-        kv_objects::KvObjects, kv_transactions::KvTransactions,
-        tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
-    },
-    Indexer,
-};
+use sui_indexer_alt::{args::Args, Indexer};
 use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
@@ -25,15 +17,7 @@ async fn main() -> Result<()> {
 
     let cancel = CancellationToken::new();
 
-    let mut indexer = Indexer::new(args.indexer_config, cancel.clone()).await?;
-
-    indexer.concurrent_pipeline::<EvEmitMod>().await?;
-    indexer.concurrent_pipeline::<EvStructInst>().await?;
-    indexer.concurrent_pipeline::<KvCheckpoints>().await?;
-    indexer.concurrent_pipeline::<KvObjects>().await?;
-    indexer.concurrent_pipeline::<KvTransactions>().await?;
-    indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
-    indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
+    let indexer = Indexer::new(args.indexer_config, cancel.clone()).await?;
 
     let h_indexer = indexer.run().await.context("Failed to start indexer")?;
 
