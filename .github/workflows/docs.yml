@@ -45,5 +45,20 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
-          channel-id: '#test-notifications'
-          slack-message: 'whiskey tango foxtrot'
+          channel-id: 'test-notifications'
+          payload: |
+            {
+              "text": "whiskey tango foxtrot",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "whiskey tango foxtrot"
+                  }
+                },
+                {
+                  "type": "divider"
+                }
+              ]
+            }slack-message: ''
