@@ -478,6 +478,18 @@ impl Core {
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
         self.dag_state.write().flush();
 
+        let current_proposal_duration = Duration::from_millis(verified_block.timestamp_ms());
+        let previous_proposal_duration = Duration::from_millis(self.last_proposed_timestamp_ms());
+        self.context
+            .metrics
+            .node_metrics
+            .block_proposal_interval
+            .observe(
+                current_proposal_duration
+                    .saturating_sub(previous_proposal_duration)
+                    .as_secs_f64(),
+            );
+
         // Update internal state.
         self.last_proposed_block = verified_block.clone();
 
