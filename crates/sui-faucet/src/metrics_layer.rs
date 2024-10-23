@@ -76,7 +76,7 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let path = req.uri().path().to_string();
-        let metrics = MetricsGuard::new(self.metrics.clone(), &path); // This could be None
+        let metrics = MetricsGuard::new(self.metrics.clone(), &path);
         let inner = self.inner.clone();
 
         let future = Box::pin(async move {
@@ -114,7 +114,7 @@ impl<Res> Future for RequestMetricsFuture<Res> {
 
 impl MetricsGuard {
     fn new(metrics: Arc<RequestMetrics>, path: &str) -> Option<Self> {
-        let normalized_path = normalize_path(path); // Normalize the path
+        let normalized_path = normalize_path(path);
         if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/v1/status" {
             return None;
         }
