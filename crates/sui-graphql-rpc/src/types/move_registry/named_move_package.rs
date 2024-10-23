@@ -62,11 +62,17 @@ async fn query_internal(
         return Ok(None);
     };
 
+    println!("we got a df back");
+
     let app_record = AppRecord::try_from(df.native)?;
+
+    println!("app_record: {:?}", app_record);
 
     let Some(app_info) = app_record.app_info else {
         return Ok(None);
     };
+
+    println!("we found app_info");
 
     package_from_app_info(ctx, app_info, versioned.version, checkpoint_viewed_at).await
 }
