@@ -50,46 +50,46 @@ impl Pruner {
             last_seen_max_epoch = max_epoch;
 
             // Not all partitioned tables are epoch-partitioned, so we need to filter them out.
-            let table_partitions: HashMap<_, _> = self
-                .partition_manager
-                .get_table_partitions()
-                .await?
-                .into_iter()
-                .filter(|(table_name, _)| {
-                    self.partition_manager
-                        .get_strategy(table_name)
-                        .is_epoch_partitioned()
-                })
-                .collect();
+            // let table_partitions: HashMap<_, _> = self
+            //     .partition_manager
+            //     .get_table_partitions()
+            //     .await?
+            //     .into_iter()
+            //     .filter(|(table_name, _)| {
+            //         self.partition_manager
+            //             .get_strategy(table_name)
+            //             .is_epoch_partitioned()
+            //     })
+            //     .collect();
 
-            for (table_name, (min_partition, max_partition)) in &table_partitions {
-                if last_seen_max_epoch != *max_partition {
-                    error!(
-                        "Epochs are out of sync for table {}: max_epoch={}, max_partition={}",
-                        table_name, last_seen_max_epoch, max_partition
-                    );
-                }
+            // for (table_name, (min_partition, max_partition)) in &table_partitions {
+            //     if last_seen_max_epoch != *max_partition {
+            //         error!(
+            //             "Epochs are out of sync for table {}: max_epoch={}, max_partition={}",
+            //             table_name, last_seen_max_epoch, max_partition
+            //         );
+            //     }
 
-                let epochs_to_keep = if table_name == "objects_history" {
-                    OBJECTS_HISTORY_EPOCHS_TO_KEEP
-                } else {
-                    self.epochs_to_keep
-                };
-                for epoch in *min_partition..last_seen_max_epoch.saturating_sub(epochs_to_keep - 1)
-                {
-                    if cancel.is_cancelled() {
-                        info!("Pruner task cancelled.");
-                        return Ok(());
-                    }
-                    self.partition_manager
-                        .drop_table_partition(table_name.clone(), epoch)
-                        .await?;
-                    info!(
-                        "Batch dropped table partition {} epoch {}",
-                        table_name, epoch
-                    );
-                }
-            }
+            //     let epochs_to_keep = if table_name == "objects_history" {
+            //         OBJECTS_HISTORY_EPOCHS_TO_KEEP
+            //     } else {
+            //         self.epochs_to_keep
+            //     };
+            //     for epoch in *min_partition..last_seen_max_epoch.saturating_sub(epochs_to_keep - 1)
+            //     {
+            //         if cancel.is_cancelled() {
+            //             info!("Pruner task cancelled.");
+            //             return Ok(());
+            //         }
+            //         self.partition_manager
+            //             .drop_table_partition(table_name.clone(), epoch)
+            //             .await?;
+            //         info!(
+            //             "Batch dropped table partition {} epoch {}",
+            //             table_name, epoch
+            //         );
+            //     }
+            // }
 
             let prune_to_epoch = last_seen_max_epoch.saturating_sub(self.epochs_to_keep - 1);
             let prune_start_epoch = next_prune_epoch.unwrap_or(min_epoch);

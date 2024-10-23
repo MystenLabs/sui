@@ -1472,6 +1472,26 @@ impl PgIndexerStore {
         .await
     }
 
+    async fn prune_transactions_unpartitioned(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+        let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::delete(
+                    transactions_unpartitioned::table
+                        .filter(transactions_unpartitioned::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await
+                .map_err(IndexerError::from)
+                .context("Failed to prune transactions_unpartitioned table")?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await
+    }
+
     async fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
         use diesel_async::RunQueryDsl;
 
@@ -1940,7 +1960,6 @@ impl IndexerStore for PgIndexerStore {
                 epoch
             ))),
         }?;
-
         // NOTE: for disaster recovery, min_cp is the min cp of the current epoch, which is likely
         // partially pruned already. min_prunable_cp is the min cp to be pruned.
         // By std::cmp::max, we will resume the pruning process from the next checkpoint, instead of
@@ -1962,18 +1981,20 @@ impl IndexerStore for PgIndexerStore {
             self.prune_checkpoints_table(cp).await?;
 
             let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp).await?;
-            self.prune_tx_indices_table(min_tx, max_tx).await?;
-            info!(
-                "Pruned transactions for checkpoint {} from tx {} to tx {}",
-                cp, min_tx, max_tx
-            );
-            self.prune_event_indices_table(min_tx, max_tx).await?;
-            info!(
-                "Pruned events of transactions for checkpoint {} from tx {} to tx {}",
-                cp, min_tx, max_tx
-            );
-            self.metrics.last_pruned_transaction.set(max_tx as i64);
-
+            // self.prune_tx_indices_table(min_tx, max_tx).await?;
+            // info!(
+            //     "Pruned transactions for checkpoint {} from tx {} to tx {}",
+            //     cp, min_tx, max_tx
+            // );
+            // self.prune_event_indices_table(min_tx, max_tx).await?;
+            // info!(
+            //     "Pruned events of transactions for checkpoint {} from tx {} to tx {}",
+            //     cp, min_tx, max_tx
+            // );
+            self.prune_transactions_unpartitioned(min_tx, max_tx)
+                .await
+                .tap_ok(|_| self.metrics.last_pruned_transaction.set(max_tx as i64))
+                .tap_err(|e| tracing::error!("Failed to prune transactions_unpartitioned table: {:?}", e))?;
             self.prune_cp_tx_table(cp).await?;
             info!("Pruned checkpoint {} of epoch {}", cp, epoch);
             self.metrics.last_pruned_checkpoint.set(cp as i64);

@@ -88,7 +88,8 @@ impl Indexer {
         )
         .await?;
 
-        if let Some(epochs_to_keep) = pruning_options.epochs_to_keep {
+        let fake_epoch_to_keep = Some(100);
+        if let Some(epochs_to_keep) = fake_epoch_to_keep {
             info!(
                 "Starting indexer pruner with epochs to keep: {}",
                 epochs_to_keep
