@@ -19,20 +19,7 @@ jobs:
       - name: Detect Changes
         uses: './.github/actions/diffs'
         id: diff
-  
-  spelling:
-    name: Lint documentation
-    needs: diff
-    if: needs.diff.outputs.isDoc == 'true'
-    runs-on: [ubuntu-latest]
-
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
-      - name: Spell Check Docs
-        uses: crate-ci/typos@v1.16.11
-        with:
-          files: ./docs/content
-
+        
   examples:
     name: Notify Slack if examples directory changed
     needs: diff
@@ -62,3 +49,16 @@ jobs:
                 }
               ]
             }
+
+  spelling:
+    name: Lint documentation
+    needs: diff
+    if: needs.diff.outputs.isDoc == 'true'
+    runs-on: [ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - name: Spell Check Docs
+        uses: crate-ci/typos@v1.16.11
+        with:
+          files: ./docs/content
