@@ -47,9 +47,19 @@ const CHECKPOINT_QUEUE_SIZE: usize = 100;
 pub async fn new_handlers(
     state: PgIndexerStore,
     metrics: IndexerMetrics,
-    next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
-) -> Result<CheckpointHandler, IndexerError> {
+    start_checkpoint_opt: Option<CheckpointSequenceNumber>,
+    end_checkpoint_opt: Option<CheckpointSequenceNumber>,
+) -> Result<(CheckpointHandler, u64), IndexerError> {
+    let start_checkpoint = match start_checkpoint_opt {
+        Some(start_checkpoint) => start_checkpoint,
+        None => state
+            .get_latest_checkpoint_sequence_number()
+            .await?
+            .map(|seq| seq.saturating_add(1))
+            .unwrap_or_default(),
+    };
+
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
         .parse::<usize>()
@@ -69,13 +79,13 @@ pub async fn new_handlers(
         state_clone,
         metrics_clone,
         indexed_checkpoint_receiver,
-        next_checkpoint_sequence_number,
-        cancel.clone()
+        cancel.clone(),
+        start_checkpoint,
+        end_checkpoint_opt,
     ));
-    Ok(CheckpointHandler::new(
-        state,
-        metrics,
-        indexed_checkpoint_sender,
+    Ok((
+        CheckpointHandler::new(state, metrics, indexed_checkpoint_sender),
+        start_checkpoint,
     ))
 }
 

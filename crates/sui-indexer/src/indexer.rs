@@ -65,13 +65,6 @@ impl Indexer {
 
         info!("Sui Indexer Writer config: {config:?}",);
 
-        let primary_watermark = store
-            .get_latest_checkpoint_sequence_number()
-            .await
-            .expect("Failed to get latest tx checkpoint sequence number from DB")
-            .map(|seq| seq + 1)
-            .unwrap_or_default();
-
         let extra_reader_options = ReaderOptions {
             batch_size: config.checkpoint_download_queue_size,
             timeout_secs: config.checkpoint_download_timeout,
@@ -110,6 +103,17 @@ impl Indexer {
 
         let mut exit_senders = vec![];
         let mut executors = vec![];
+
+        let (worker, primary_watermark) = new_handlers(
+            store,
+            metrics,
+            cancel.clone(),
+            config.start_checkpoint,
+            config.end_checkpoint,
+        )
+        .await?;
+        // Ingestion task watermarks are snapshotted once on indexer startup based on the
+        // corresponding watermark table before being handed off to the ingestion task.
         let progress_store = ShimIndexerProgressStore::new(vec![
             ("primary".to_string(), primary_watermark),
             // ("object_snapshot".to_string(), object_snapshot_watermark),
@@ -119,7 +123,6 @@ impl Indexer {
             2,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker = new_handlers(store, metrics, primary_watermark, cancel.clone()).await?;
         let worker_pool = WorkerPool::new(
             worker,
             "primary".to_string(),

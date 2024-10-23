@@ -70,6 +70,34 @@ pub async fn start_test_indexer(
         reader_writer_config,
         Some(data_ingestion_path),
         token.clone(),
+        None,   
+        None,
+    )
+    .await;
+    (store, handle, token)
+}
+
+pub async fn start_test_indexer_with_start_and_end_checkpoints(
+    db_url: String,
+    rpc_url: String,
+    reader_writer_config: ReaderWriterConfig,
+    data_ingestion_path: PathBuf,
+    start_checkpoint: u64,
+    end_checkpoint: u64,
+) -> (
+    PgIndexerStore,
+    JoinHandle<Result<(), IndexerError>>,
+    CancellationToken,
+) {
+    let token = CancellationToken::new();
+    let (store, handle) = start_test_indexer_impl(
+        db_url,
+        rpc_url,
+        reader_writer_config,
+        Some(data_ingestion_path),
+        token.clone(),
+        Some(start_checkpoint),
+        Some(end_checkpoint),
     )
     .await;
     (store, handle, token)
@@ -82,6 +110,8 @@ pub async fn start_test_indexer_impl(
     reader_writer_config: ReaderWriterConfig,
     data_ingestion_path: Option<PathBuf>,
     cancel: CancellationToken,
+    start_checkpoint: Option<u64>,
+    end_checkpoint: Option<u64>,
 ) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 5 for testing
     // to prevent maxing out
@@ -130,9 +160,13 @@ pub async fn start_test_indexer_impl(
                 .unwrap();
             crate::db::reset_database(connection).await.unwrap();
 
-            let store_clone = store.clone();
-            let mut ingestion_config = IngestionConfig::default();
-            ingestion_config.sources.data_ingestion_path = data_ingestion_path;
+        let store_clone = store.clone();
+        let mut ingestion_config = IngestionConfig {
+            start_checkpoint,
+            end_checkpoint,
+            ..Default::default()
+        };
+        ingestion_config.sources.data_ingestion_path = data_ingestion_path;
 
             tokio::spawn(async move {
                 Indexer::start_writer_with_config(
@@ -263,6 +297,39 @@ pub async fn set_up(
         format!("http://{}", server_url),
         ReaderWriterConfig::writer_mode(None, None),
         data_ingestion_path,
+    )
+    .await;
+    (server_handle, pg_store, pg_handle, database)
+}
+
+pub async fn set_up_with_start_and_end_checkpoints(
+    sim: Arc<Simulacrum>,
+    data_ingestion_path: PathBuf,
+    start_checkpoint: u64,
+    end_checkpoint: u64,
+) -> (
+    JoinHandle<()>,
+    PgIndexerStore,
+    JoinHandle<Result<(), IndexerError>>,
+    TempDb,
+) {
+    let database = TempDb::new().unwrap();
+    let server_url: SocketAddr = format!("127.0.0.1:{}", get_available_port())
+        .parse()
+        .unwrap();
+    let server_handle = tokio::spawn(async move {
+        sui_rest_api::RestService::new_without_version(sim)
+            .start_service(server_url)
+            .await;
+    });
+    // Starts indexer
+    let (pg_store, pg_handle, _) = start_test_indexer_with_start_and_end_checkpoints(
+        database.database().url().as_str().to_owned(),
+        format!("http://{}", server_url),
+        ReaderWriterConfig::writer_mode(None, None),
+        data_ingestion_path,
+        start_checkpoint,
+        end_checkpoint,
     )
     .await;
     (server_handle, pg_store, pg_handle, database)
