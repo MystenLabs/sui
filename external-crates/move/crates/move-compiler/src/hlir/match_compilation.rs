@@ -1277,7 +1277,7 @@ fn make_if_else(test: T::Exp, conseq: T::Exp, alt: T::Exp, result_ty: Type) -> T
         result_ty,
         sp(
             loc,
-            T::UnannotatedExp_::IfElse(Box::new(test), Box::new(conseq), Box::new(alt)),
+            T::UnannotatedExp_::IfElse(Box::new(test), Box::new(conseq), Some(Box::new(alt))),
         ),
     )
 }

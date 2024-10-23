@@ -437,9 +437,9 @@ fn tail(context: &mut Context, e: &T::Exp) -> ControlFlow {
         // -----------------------------------------------------------------------------------------
         // control flow statements
         // -----------------------------------------------------------------------------------------
-        E::IfElse(test, conseq, alt) => do_if(
+        E::IfElse(test, conseq, alt_opt) => do_if(
             context,
-            (eloc, test, conseq, alt),
+            (eloc, test, conseq, alt_opt.as_deref()),
             /* tail_pos */ true,
             tail,
             |context, flow| context.maybe_report_tail_error(flow),
@@ -547,7 +547,7 @@ fn value(context: &mut Context, e: &T::Exp) -> ControlFlow {
         // -----------------------------------------------------------------------------------------
         E::IfElse(test, conseq, alt) => do_if(
             context,
-            (eloc, test, conseq, alt),
+            (eloc, test, conseq, alt.as_deref()),
             /* tail_pos */ false,
             value,
             |context, flow| context.maybe_report_value_error(flow),
@@ -726,7 +726,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> ControlFlow {
         // about the final, total view of them.
         E::IfElse(test, conseq, alt) => do_if(
             context,
-            (eloc, test, conseq, alt),
+            (eloc, test, conseq, alt.as_deref()),
             /* tail_pos */ false,
             statement,
             |_, _| false,
@@ -910,7 +910,7 @@ fn has_trailing_unit(seq: &VecDeque<T::SequenceItem>) -> bool {
 
 fn do_if<F1, F2>(
     context: &mut Context,
-    (loc, test, conseq, alt): (&Loc, &T::Exp, &T::Exp, &T::Exp),
+    (loc, test, conseq, alt_opt): (&Loc, &T::Exp, &T::Exp, Option<&T::Exp>),
     tail_pos: bool,
     arm_recur: F1,
     arm_error: F2,
@@ -926,14 +926,20 @@ where
     };
 
     let conseq_flow = arm_recur(context, conseq);
-    let alt_flow = arm_recur(context, alt);
+    let alt_flow = alt_opt.map(|alt| arm_recur(context, alt));
     if tail_pos
         && matches!(conseq.ty, sp!(_, N::Type_::Unit | N::Type_::Anything))
-        && matches!(alt.ty, sp!(_, N::Type_::Unit | N::Type_::Anything))
+        && matches!(
+            alt_opt.map(|alt| &alt.ty),
+            None | Some(sp!(_, N::Type_::Unit | N::Type_::Anything))
+        )
     {
         return CF::None;
     };
-    let mut arms_flow = conseq_flow.combine_arms(*loc, alt_flow);
+    let mut arms_flow = match alt_flow {
+        None => conseq_flow,
+        Some(alt_flow) => conseq_flow.combine_arms(*loc, alt_flow),
+    };
     if arm_error(context, &mut arms_flow) {
         arms_flow
     } else {

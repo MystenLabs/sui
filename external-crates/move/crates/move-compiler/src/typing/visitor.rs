@@ -431,10 +431,12 @@ pub trait TypingVisitorContext {
                 }
                 self.visit_exp(e);
             }
-            E::IfElse(e1, e2, e3) => {
+            E::IfElse(e1, e2, e3_opt) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
-                self.visit_exp(e3);
+                if let Some(e3) = e3_opt {
+                    self.visit_exp(e3);
+                }
             }
             E::Match(esubject, arms) => {
                 self.visit_exp(esubject);
@@ -973,10 +975,12 @@ pub trait TypingMutVisitorContext {
                 }
                 self.visit_exp(e);
             }
-            E::IfElse(e1, e2, e3) => {
+            E::IfElse(e1, e2, e3_opt) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
-                self.visit_exp(e3);
+                if let Some(e3) = e3_opt {
+                    self.visit_exp(e3);
+                }
             }
             E::Match(esubject, arms) => {
                 self.visit_exp(esubject);
@@ -1158,8 +1162,10 @@ where
         E::While(_, e1, e2) | E::Mutate(e1, e2) | E::BinopExp(e1, _, _, e2) => {
             exp_satisfies_(e1, p) || exp_satisfies_(e2, p)
         }
-        E::IfElse(e1, e2, e3) => {
-            exp_satisfies_(e1, p) || exp_satisfies_(e2, p) || exp_satisfies_(e3, p)
+        E::IfElse(e1, e2, e3_opt) => {
+            exp_satisfies_(e1, p)
+                || exp_satisfies_(e2, p)
+                || e3_opt.iter().any(|e3| exp_satisfies_(e3, p))
         }
         E::ModuleCall(c) => exp_satisfies_(&c.arguments, p),
         E::Match(esubject, arms) => {

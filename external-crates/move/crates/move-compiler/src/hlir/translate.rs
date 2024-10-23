@@ -798,7 +798,7 @@ fn tail(
             let mut if_block = make_block!();
             let conseq_exp = tail(context, &mut if_block, Some(&out_type), *conseq);
             let mut else_block = make_block!();
-            let alt_exp = tail(context, &mut else_block, Some(&out_type), *alt);
+            let alt_exp = alt.and_then(|alt| tail(context, &mut else_block, Some(&out_type), *alt));
 
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
 
@@ -1139,13 +1139,15 @@ fn value(
         // -----------------------------------------------------------------------------------------
         // control flow statements
         // -----------------------------------------------------------------------------------------
-        E::IfElse(test, conseq, alt) => {
+        E::IfElse(test, conseq, alt_opt) => {
             let cond = value(context, block, Some(&tbool(eloc)), *test);
             let mut if_block = make_block!();
             let conseq_exp = value(context, &mut if_block, Some(&out_type), *conseq);
             let mut else_block = make_block!();
-            let alt_exp = value(context, &mut else_block, Some(&out_type), *alt);
-
+            let alt_exp = match alt_opt {
+                Some(alt) => value(context, &mut else_block, Some(&out_type), *alt),
+                None => unit_exp(eloc),
+            };
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
 
             let arms_unreachable = conseq_exp.is_unreachable() && alt_exp.is_unreachable();
@@ -1809,12 +1811,14 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         // -----------------------------------------------------------------------------------------
         // control flow statements
         // -----------------------------------------------------------------------------------------
-        E::IfElse(test, conseq, alt) => {
+        E::IfElse(test, conseq, alt_opt) => {
             let cond = value(context, block, Some(&tbool(eloc)), *test);
             let mut if_block = make_block!();
             statement(context, &mut if_block, *conseq);
             let mut else_block = make_block!();
-            statement(context, &mut else_block, *alt);
+            if let Some(alt) = alt_opt {
+                statement(context, &mut else_block, *alt);
+            }
             block.push_back(sp(
                 eloc,
                 S::IfElse {
