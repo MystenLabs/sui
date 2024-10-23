@@ -11,7 +11,7 @@ use crate::{
     u256::{U256FromStrError, U256},
 };
 use anyhow::{anyhow, bail, Result};
-use num_bigint::BigUint;
+use num::BigUint;
 use std::{fmt::Display, iter::Peekable, num::ParseIntError};
 
 const MAX_TYPE_DEPTH: u64 = 128;
@@ -76,7 +76,7 @@ impl<Extra: ParsableValue> ParsedValue<Extra> {
     }
 }
 
-fn parse<'a, Tok: Token, R>(
+pub(crate) fn parse<'a, Tok: Token, R>(
     s: &'a str,
     f: impl FnOnce(&mut Parser<'a, Tok, std::vec::IntoIter<(Tok, &'a str)>>) -> Result<R>,
 ) -> Result<R> {
@@ -139,8 +139,12 @@ impl<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> Parser<'a, Tok, I> {
                 break;
             }
             self.advance(delim)?;
-            if is_end(self.peek_tok()) && allow_trailing_delim {
-                break;
+            if is_end(self.peek_tok()) {
+                if allow_trailing_delim {
+                    break;
+                } else {
+                    bail!("Invalid type list: trailing delimiter '{}'", delim)
+                }
             }
         }
         Ok(v)
@@ -225,6 +229,9 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
                             true,
                         )?;
                         self.advance(TypeToken::Gt)?;
+                        if type_args.is_empty() {
+                            bail!("expected at least one type argument")
+                        }
                         type_args
                     }
                     _ => vec![],

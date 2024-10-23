@@ -1,11 +1,18 @@
-use crate::parsing::{
-    address::{NumericalAddress, ParsedAddress},
-    types::{ParsedStructType, ParsedType},
-    values::ParsedValue,
+use crate::{
+    account_address::AccountAddress,
+    identifier::Identifier,
+    language_storage::{ModuleId, StructTag, TypeTag},
+    parsing::{
+        address::{NumericalAddress, ParsedAddress},
+        parser::parse,
+        types::{ParsedFqName, ParsedType, TypeToken},
+        values::ParsedValue,
+    },
+    u256::U256,
 };
-use crate::{account_address::AccountAddress, identifier::Identifier, u256::U256};
-use proptest::prelude::*;
-use proptest::proptest;
+use anyhow::bail;
+use proptest::{prelude::*, proptest};
+use std::str::FromStr;
 
 #[allow(clippy::unreadable_literal)]
 #[test]
@@ -163,9 +170,10 @@ fn test_parse_type_negative() {
         "0x1::foo::_",
         "0x1::_::_",
         "0x1::bar::foo<0x1::_::foo>",
+        "0X1::bar::bar",
     ] {
         assert!(
-            ParsedType::parse(s).is_err(),
+            TypeTag::from_str(s).is_err(),
             "Parsed type {s} but should have failed"
         );
     }
@@ -183,9 +191,20 @@ fn test_parse_struct_negative() {
         "0x1::foo::_",
         "0x1::_::_",
         "0x1::bar::foo<0x1::_::foo>",
+        "0x1::bar::bar::foo",
+        "0x1::Foo::Foo<",
+        "0x1::Foo::Foo<0x1::ABC::ABC",
+        "0x1::Foo::Foo<0x1::ABC::ABC::>",
+        "0x1::Foo::Foo<0x1::ABC::ABC::A>",
+        "0x1::Foo::Foo<>",
+        "0x1::Foo::Foo<,>",
+        "0x1::Foo::Foo<,",
+        "0x1::Foo::Foo,>",
+        "0x1::Foo::Foo>",
+        "0x1::Foo::Foo,",
     ] {
         assert!(
-            ParsedStructType::parse(s).is_err(),
+            TypeTag::from_str(s).is_err(),
             "Parsed type {s} but should have failed"
         );
     }
@@ -216,7 +235,7 @@ fn test_type_type() {
         "0x1::_bar::_BAR<0x2::_____::______fooo______>",
         "0x1::__::__<0x2::_____::______fooo______, 0xff::Bar____::_______foo>",
     ] {
-        assert!(ParsedType::parse(s).is_ok(), "Failed to parse type {}", s);
+        assert!(TypeTag::from_str(s).is_ok(), "Failed to parse type {}", s);
     }
 }
 
@@ -253,14 +272,76 @@ fn test_parse_valid_struct_type() {
         ];
     for s in valid {
         assert!(
-            ParsedStructType::parse(s).is_ok(),
+            StructTag::from_str(s).is_ok(),
             "Failed to parse struct {}",
             s
         );
     }
 }
 
-fn struct_type_gen() -> impl Strategy<Value = String> {
+#[test]
+fn test_parse_type_list() {
+    let valid_with_trails = vec![
+        "<u64,>",
+        "<u64, 0x0::a::a,>",
+        "<u64, 0x0::a::a, 0x0::a::a<0x0::a::a>,>",
+    ];
+    let valid_no_trails = vec![
+        "<u64>",
+        "<u64, 0x0::a::a>",
+        "<u64, 0x0::a::a, 0x0::a::a<0x0::a::a>>",
+    ];
+    let invalid = vec![
+        "<>",
+        "<,>",
+        "<u64,,>",
+        "<,u64>",
+        "<,u64,>",
+        ",",
+        "",
+        "<",
+        "<<",
+        "><",
+        ">,<",
+        ">,",
+        ",>",
+        ",,",
+        ">>",
+        "<u64, u64",
+        "<u64, u64,",
+        "u64>",
+        "u64,>",
+        "u64, u64,>",
+        "u64, u64,",
+        "u64, u64",
+        "u64 u64",
+        "<u64 u64>",
+        "<u64 u64,>",
+        "u64 u64,",
+        "<u64, 0x0::a::a, 0x0::a::a<0x::a::a>",
+        "<u64, 0x0::a::a, 0x0::a::a<0x0::a::a>,",
+        "<u64, 0x0::a::a, 0x0::a::a<0x0::a::a>,,>",
+    ];
+
+    for t in valid_no_trails.iter().chain(valid_with_trails.iter()) {
+        assert!(parse_type_tags(t, true).is_ok());
+    }
+
+    for t in &valid_no_trails {
+        assert!(parse_type_tags(t, false).is_ok());
+    }
+
+    for t in &valid_with_trails {
+        assert!(parse_type_tags(t, false).is_err());
+    }
+
+    for t in &invalid {
+        assert!(parse_type_tags(t, true).is_err(), "parsed type {}", t);
+        assert!(parse_type_tags(t, false).is_err(), "parsed type {}", t);
+    }
+}
+
+fn struct_type_gen0() -> impl Strategy<Value = String> {
     (
         any::<AccountAddress>(),
         any::<Identifier>(),
@@ -269,14 +350,241 @@ fn struct_type_gen() -> impl Strategy<Value = String> {
         .prop_map(|(address, module, name)| format!("0x{}::{}::{}", address, module, name))
 }
 
+fn struct_type_gen1() -> impl Strategy<Value = String> {
+    (any::<U256>(), any::<Identifier>(), any::<Identifier>())
+        .prop_map(|(address, module, name)| format!("{}::{}::{}", address, module, name))
+}
+
+fn module_id_gen0() -> impl Strategy<Value = String> {
+    (any::<AccountAddress>(), any::<Identifier>())
+        .prop_map(|(address, module)| format!("0x{address}::{module}"))
+}
+
+fn module_id_gen1() -> impl Strategy<Value = String> {
+    (any::<U256>(), any::<Identifier>())
+        .prop_map(|(address, module)| format!("{address}::{module}"))
+}
+
+fn fq_id_gen0() -> impl Strategy<Value = String> {
+    (
+        any::<AccountAddress>(),
+        any::<Identifier>(),
+        any::<Identifier>(),
+    )
+        .prop_map(|(address, module, name)| format!("0x{address}::{module}::{name}"))
+}
+
+fn fq_id_gen1() -> impl Strategy<Value = String> {
+    (any::<U256>(), any::<Identifier>(), any::<Identifier>())
+        .prop_map(|(address, module, name)| format!("{address}::{module}::{name}"))
+}
+
+fn parse_type_tags(s: &str, allow_trailing_delim: bool) -> anyhow::Result<Vec<ParsedType>> {
+    parse(s, |parser| {
+        parser.advance(TypeToken::Lt)?;
+        let parsed = parser.parse_list(
+            |parser| parser.parse_type(),
+            TypeToken::Comma,
+            TypeToken::Gt,
+            allow_trailing_delim,
+        )?;
+        parser.advance(TypeToken::Gt)?;
+        if parsed.is_empty() {
+            bail!("expected at least one type argument")
+        }
+        Ok(parsed)
+    })
+}
+
 proptest! {
     #[test]
-    fn test_parse_valid_struct_type_proptest(s in struct_type_gen()) {
-        prop_assert!(ParsedStructType::parse(&s).is_ok());
+    fn parse_type_tag_list(t in struct_type_gen0(), args in proptest::collection::vec(struct_type_gen0(), 1..=100)) {
+        let s_no_trail = format!("<{}>", args.join(","));
+        let s_with_trail = format!("<{},>", args.join(","));
+        let s_no_trail_no_trail = parse_type_tags(&s_no_trail, false);
+        let s_no_trail_allow_trail = parse_type_tags(&s_no_trail, true);
+        let s_with_trail_no_trail = parse_type_tags(&s_with_trail, false);
+        let s_with_trail_allow_trail = parse_type_tags(&s_with_trail, true);
+        prop_assert!(s_no_trail_no_trail.is_ok());
+        prop_assert!(s_no_trail_allow_trail.is_ok());
+        prop_assert!(s_with_trail_no_trail.is_err());
+        prop_assert!(s_with_trail_allow_trail.is_ok());
+        let t_with_trail = format!("{t}{s_no_trail}");
+        let t_no_trail = format!("{t}{s_with_trail}");
+        let t_with_trail = TypeTag::from_str(&t_with_trail);
+        let t_no_trail = TypeTag::from_str(&t_no_trail);
+        prop_assert!(t_with_trail.is_ok());
+        prop_assert!(t_no_trail.is_ok());
+        prop_assert_eq!(t_with_trail.unwrap(), t_no_trail.unwrap());
     }
 
     #[test]
-    fn test_parse_valid_type_struct_only_proptest(s in struct_type_gen()) {
-        prop_assert!(ParsedStructType::parse(&s).is_ok());
+    fn test_parse_valid_struct_type_proptest0(s in struct_type_gen0(), x in r#"(::foo)[^a-zA-Z0-9_\s]+"#) {
+        prop_assert!(StructTag::from_str(&s).is_ok());
+        prop_assert!(TypeTag::from_str(&s).is_ok());
+        prop_assert!(ParsedFqName::parse(&s).is_ok());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+
+        // Add remainder string
+        let s = s + &x;
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+
+    }
+
+    #[test]
+    fn test_parse_valid_struct_type_proptest1(s in struct_type_gen1(), x in r#"(::foo)[^a-zA-Z0-9_\s]+"#) {
+        prop_assert!(StructTag::from_str(&s).is_ok());
+        prop_assert!(TypeTag::from_str(&s).is_ok());
+        prop_assert!(ParsedFqName::parse(&s).is_ok());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+        // add remainder string
+        let s = s + &x;
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+    }
+
+    #[test]
+    fn test_parse_valid_module_id_proptest0(s in module_id_gen0(), x in r#"[^a-zA-Z0-9_\s]+"#) {
+        prop_assert!(ModuleId::from_str(&s).is_ok());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+        // add remainder string
+        let s = s + &x;
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+    }
+
+    #[test]
+    fn test_parse_valid_module_id_proptest1(s in module_id_gen1(), x in r#"[^a-zA-Z0-9_\s]+"#) {
+        prop_assert!(ModuleId::from_str(&s).is_ok());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+        // add remainder String
+        let s = s + &x;
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+
+    }
+
+    #[test]
+    fn test_parse_valid_fq_id_proptest0(s in fq_id_gen0(), x in r#"[^a-zA-Z0-9_\s]+"#) {
+        prop_assert!(ParsedFqName::parse(&s).is_ok());
+        prop_assert!(StructTag::from_str(&s).is_ok());
+        prop_assert!(TypeTag::from_str(&s).is_ok());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+        // add remainder string
+        let s = s + &x;
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+    }
+
+    #[test]
+    fn test_parse_valid_fq_id_proptest1(s in fq_id_gen1(), x in r#"[^a-zA-Z0-9_\s]+"#) {
+        prop_assert!(ParsedFqName::parse(&s).is_ok());
+        prop_assert!(StructTag::from_str(&s).is_ok());
+        prop_assert!(TypeTag::from_str(&s).is_ok());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+        let s = s + &x;
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+    }
+
+    #[test]
+    fn test_parse_valid_numeric_address(s in "[0-9]{64}", x in r#"[^a-zA-Z0-9_\s]+"#) {
+        prop_assert!(AccountAddress::from_str(&s).is_ok());
+        prop_assert!(ParsedAddress::parse(&s).is_ok());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        // add remainder string
+        let s = s + &x;
+        prop_assert!(AccountAddress::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+    }
+
+    #[test]
+    fn test_parse_different_length_numeric_addresses(s in "[0-9]{1,63}", x in r#"[^a-zA-Z0-9_\s]+"#) {
+        prop_assert!(AccountAddress::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_ok());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        // add remainder string
+        let s = s + &x;
+        prop_assert!(AccountAddress::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+    }
+
+    #[test]
+    fn test_parse_valid_hex_address(s in "0x[0-9a-fA-F]{64}", x in r#"[^a-zA-Z0-9_\s]+"#) {
+        prop_assert!(AccountAddress::from_str(&s).is_ok());
+        prop_assert!(ParsedAddress::parse(&s).is_ok());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        // add remainder string
+        let s = s + &x;
+        prop_assert!(AccountAddress::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_hex_address(s in "[0-9]{63}[a-fA-F]{1}", x in r#"[^a-zA-Z0-9_\s]+"#) {
+        prop_assert!(AccountAddress::from_str(&s).is_ok());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
+        // add remainder string
+        let s = s + &x;
+        prop_assert!(AccountAddress::from_str(&s).is_err());
+        prop_assert!(ParsedAddress::parse(&s).is_err());
+        prop_assert!(ParsedFqName::parse(&s).is_err());
+        prop_assert!(ModuleId::from_str(&s).is_err());
+        prop_assert!(StructTag::from_str(&s).is_err());
+        prop_assert!(TypeTag::from_str(&s).is_err());
     }
 }
