@@ -112,7 +112,7 @@ impl Indexer {
         let mut executors = vec![];
         let progress_store = ShimIndexerProgressStore::new(vec![
             ("primary".to_string(), primary_watermark),
-            ("object_snapshot".to_string(), object_snapshot_watermark),
+            // ("object_snapshot".to_string(), object_snapshot_watermark),
         ]);
         let mut executor = IndexerExecutor::new(
             progress_store.clone(),
@@ -131,24 +131,24 @@ impl Indexer {
         exit_senders.push(exit_sender);
 
         // in a non-colocated setup, start a separate indexer for processing object snapshots
-        if config.sources.data_ingestion_path.is_none() {
-            let executor = IndexerExecutor::new(
-                progress_store,
-                1,
-                DataIngestionMetrics::new(&Registry::new()),
-            );
-            let (exit_sender, exit_receiver) = oneshot::channel();
-            exit_senders.push(exit_sender);
-            executors.push((executor, exit_receiver));
-        }
+        // if config.sources.data_ingestion_path.is_none() {
+        //     let executor = IndexerExecutor::new(
+        //         progress_store,
+        //         1,
+        //         DataIngestionMetrics::new(&Registry::new()),
+        //     );
+        //     let (exit_sender, exit_receiver) = oneshot::channel();
+        //     exit_senders.push(exit_sender);
+        //     executors.push((executor, exit_receiver));
+        // }
 
-        let worker_pool = WorkerPool::new(
-            object_snapshot_worker,
-            "object_snapshot".to_string(),
-            config.checkpoint_download_queue_size,
-        );
-        let executor = executors.last_mut().expect("executors is not empty");
-        executor.0.register(worker_pool).await?;
+        // let worker_pool = WorkerPool::new(
+        //     object_snapshot_worker,
+        //     "object_snapshot".to_string(),
+        //     config.checkpoint_download_queue_size,
+        // );
+        // let executor = executors.last_mut().expect("executors is not empty");
+        // executor.0.register(worker_pool).await?;
 
         // Spawn a task that links the cancellation token to the exit sender
         spawn_monitored_task!(async move {
