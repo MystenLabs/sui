@@ -136,7 +136,7 @@ impl FaucetMetrics {
 impl MetricsCallbackProvider for RequestMetrics {
     fn on_request(&self, path: String) {
         let normalized_path = normalize_path(&path); // Normalize the path
-        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/status" {
+        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/v1/status" {
             return;
         }
 
@@ -147,7 +147,7 @@ impl MetricsCallbackProvider for RequestMetrics {
 
     fn on_response(&self, path: String, latency: Duration, _status: u16, grpc_status_code: Code) {
         let normalized_path = normalize_path(&path); // Normalize the path
-        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/status" {
+        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/v1/status" {
             return;
         }
 
@@ -176,7 +176,7 @@ impl MetricsCallbackProvider for RequestMetrics {
 
     fn on_start(&self, path: &str) {
         let normalized_path = normalize_path(path); // Normalize the path
-        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/status" {
+        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/v1/status" {
             return;
         }
 
@@ -187,7 +187,7 @@ impl MetricsCallbackProvider for RequestMetrics {
 
     fn on_drop(&self, path: &str) {
         let normalized_path = normalize_path(path); // Normalize the path
-        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/status" {
+        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/v1/status" {
             return;
         }
 

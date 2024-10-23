@@ -115,7 +115,7 @@ impl<Res> Future for RequestMetricsFuture<Res> {
 impl MetricsGuard {
     fn new(metrics: Arc<RequestMetrics>, path: &str) -> Option<Self> {
         let normalized_path = normalize_path(path); // Normalize the path
-        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/status" {
+        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/v1/status" {
             return None;
         }
 
