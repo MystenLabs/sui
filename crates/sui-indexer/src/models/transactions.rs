@@ -20,9 +20,26 @@ use sui_types::transaction::SenderSignedData;
 
 use crate::errors::IndexerError;
 use crate::schema::transactions;
+use crate::schema::transactions_unpartitioned;
 use crate::types::IndexedObjectChange;
 use crate::types::IndexedTransaction;
 use crate::types::IndexerResult;
+
+#[derive(Clone, Debug, Queryable, Insertable, QueryableByName, Selectable)]
+#[diesel(table_name = transactions_unpartitioned)]
+pub struct StoredTransactionUnpartitioned {
+    pub tx_sequence_number: i64,
+    pub transaction_digest: Vec<u8>,
+    pub raw_transaction: Vec<u8>,
+    pub raw_effects: Vec<u8>,
+    pub checkpoint_sequence_number: i64,
+    pub timestamp_ms: i64,
+    pub object_changes: Vec<Option<Vec<u8>>>,
+    pub balance_changes: Vec<Option<Vec<u8>>>,
+    pub events: Vec<Option<Vec<u8>>>,
+    pub transaction_kind: i16,
+    pub success_command_count: i16,
+}
 
 #[derive(Clone, Debug, Queryable, Insertable, QueryableByName, Selectable)]
 #[diesel(table_name = transactions)]
@@ -73,9 +90,40 @@ pub struct StoredTransactionSuccessCommandCount {
     pub timestamp_ms: i64,
 }
 
+
 impl From<&IndexedTransaction> for StoredTransaction {
     fn from(tx: &IndexedTransaction) -> Self {
         StoredTransaction {
+            tx_sequence_number: tx.tx_sequence_number as i64,
+            transaction_digest: tx.tx_digest.into_inner().to_vec(),
+            raw_transaction: bcs::to_bytes(&tx.sender_signed_data).unwrap(),
+            raw_effects: bcs::to_bytes(&tx.effects).unwrap(),
+            checkpoint_sequence_number: tx.checkpoint_sequence_number as i64,
+            object_changes: tx
+                .object_changes
+                .iter()
+                .map(|oc| Some(bcs::to_bytes(&oc).unwrap()))
+                .collect(),
+            balance_changes: tx
+                .balance_change
+                .iter()
+                .map(|bc| Some(bcs::to_bytes(&bc).unwrap()))
+                .collect(),
+            events: tx
+                .events
+                .iter()
+                .map(|e| Some(bcs::to_bytes(&e).unwrap()))
+                .collect(),
+            timestamp_ms: tx.timestamp_ms as i64,
+            transaction_kind: tx.transaction_kind.clone() as i16,
+            success_command_count: tx.successful_tx_num as i16,
+        }
+    }
+}
+
+impl From<&IndexedTransaction> for StoredTransactionUnpartitioned {
+    fn from(tx: &IndexedTransaction) -> Self {
+        StoredTransactionUnpartitioned {
             tx_sequence_number: tx.tx_sequence_number as i64,
             transaction_digest: tx.tx_digest.into_inner().to_vec(),
             raw_transaction: bcs::to_bytes(&tx.sender_signed_data).unwrap(),
