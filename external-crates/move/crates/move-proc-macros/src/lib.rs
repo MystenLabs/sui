@@ -3,7 +3,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DataEnum, DeriveInput, ItemFn};
+use syn::{parse_macro_input, Data, DataEnum, DeriveInput, ItemFn, Ident};
 
 /// This macro generates a function `order_to_variant_map` which returns a map
 /// of the position of each variant to the name of the variant.
@@ -107,6 +107,29 @@ pub fn growing_stack(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #(#attrs)* #vis #sig {
             stacker::maybe_grow(#RED_ZONE, #STACK_PER_CALL, || #block)
         }
+    };
+
+    output.into()
+}
+
+/// Procedural macro to parse an identifier and return it with the first letter capitalized.
+#[proc_macro]
+pub fn capitalize(input: TokenStream) -> TokenStream {
+    // Parse the input as an identifier
+    let ident = parse_macro_input!(input as Ident);
+
+    // Convert the identifier to a string
+    let mut ident_str = ident.to_string();
+
+    // Capitalize the first letter
+    ident_str[..1].make_ascii_uppercase();
+
+    // Create a new identifier with the capitalized string
+    let new_ident = Ident::new(&ident_str, ident.span());
+
+    // Generate and return the output TokenStream
+    let output = quote! {
+        #new_ident
     };
 
     output.into()

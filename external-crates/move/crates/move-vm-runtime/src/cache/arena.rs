@@ -60,7 +60,27 @@ impl<T> ArenaPointer<T> {
 
     #[inline]
     pub fn to_ref<'a>(self) -> &'a T {
-        to_ref(self.0)
+        to_ref(self.ptr_clone().0)
+    }
+
+    #[inline]
+    pub fn from_ref(t: &T) -> Self {
+        Self(unsafe { t as *const T })
+    }
+
+    #[inline]
+    pub fn ptr_eq(&self, other: &Self) -> Self {
+        std::ptr::eq(self.0, other.0)
+    }
+
+    #[inline]
+    pub fn ptr_clone(&self) -> Self {
+        Self(self.0)
+    }
+
+    #[inline]
+    pub fn from_ref(t: &T) -> Self {
+        Self(unsafe { t as *const T })
     }
 }
 
@@ -120,7 +140,7 @@ impl<T: ::std::fmt::Debug> ::std::fmt::Debug for ArenaPointer<T> {
 // Pointer equality
 impl<T> PartialEq for ArenaPointer<T> {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.0, other.0)
+        self.ptr_eq(other)
     }
 }
 
@@ -128,7 +148,7 @@ impl<T> Eq for ArenaPointer<T> {}
 
 impl<T> Clone for ArenaPointer<T> {
     fn clone(&self) -> Self {
-        *self
+        self.ptr_clone()
     }
 }
 
