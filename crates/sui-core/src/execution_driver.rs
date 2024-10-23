@@ -99,6 +99,16 @@ pub async fn execution_process(
         let digest = *certificate.digest();
         trace!(?digest, "Pending certificate execution activated.");
 
+        if epoch_store.epoch() != certificate.epoch() {
+            info!(
+                ?digest,
+                cur_epoch = epoch_store.epoch(),
+                cert_epoch = certificate.epoch(),
+                "Ignoring certificate from previous epoch."
+            );
+            continue;
+        }
+
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
         // the semaphore in this context.
