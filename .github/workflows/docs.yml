@@ -41,7 +41,7 @@ jobs:
     
     steps:
       - name: Notify Slack of Examples Changes
-        uses: slackapi/slack-github-action@v1.24.0 # pin@v1.21.0
+        uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
