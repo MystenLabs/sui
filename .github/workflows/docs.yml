@@ -32,7 +32,7 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
-          channel-id: 'test-notifications'
+          channel-id: 'tech-docs'
           slack-message: 'An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>'
   
   spelling:
