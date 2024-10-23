@@ -926,7 +926,9 @@ where
     };
 
     let conseq_flow = arm_recur(context, conseq);
-    let alt_flow = alt_opt.map(|alt| arm_recur(context, alt));
+    let alt_flow = alt_opt
+        .map(|alt| arm_recur(context, alt))
+        .unwrap_or(CF::None);
     if tail_pos
         && matches!(conseq.ty, sp!(_, N::Type_::Unit | N::Type_::Anything))
         && matches!(
@@ -936,10 +938,7 @@ where
     {
         return CF::None;
     };
-    let mut arms_flow = match alt_flow {
-        None => conseq_flow,
-        Some(alt_flow) => conseq_flow.combine_arms(*loc, alt_flow),
-    };
+    let mut arms_flow = conseq_flow.combine_arms(*loc, alt_flow);
     if arm_error(context, &mut arms_flow) {
         arms_flow
     } else {
