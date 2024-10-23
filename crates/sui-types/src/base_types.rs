@@ -1045,6 +1045,10 @@ impl TxContext {
         Ok(())
     }
 
+    pub fn add_ids_created(&mut self, ids_created: u64) {
+        self.ids_created += ids_created;
+    }
+
     // Generate a random TxContext for testing.
     pub fn random_for_testing_only() -> Self {
         Self::new(
