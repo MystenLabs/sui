@@ -298,13 +298,10 @@ impl PgIndexerStore {
 
         let mut connection = self.pool.get().await?;
 
-        watermarks::table
-            .select(watermarks::checkpoint_hi_inclusive)
-            .filter(watermarks::pipeline.eq("objects_snapshot"))
-            .first::<i64>(&mut connection)
+        objects_snapshot::table
+            .select(max(objects_snapshot::checkpoint_sequence_number))
+            .first::<Option<i64>>(&mut connection)
             .await
-            // Handle case where the watermark is not set yet
-            .optional()
             .map_err(Into::into)
             .map(|v| v.map(|v| v as u64))
             .context(
