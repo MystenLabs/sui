@@ -43,13 +43,13 @@ use crate::models::objects::{
     StoredObjectSnapshot,
 };
 use crate::models::packages::StoredPackage;
-use crate::models::transactions::StoredTransaction;
+use crate::models::transactions::{StoredTransaction, StoredTransactionUnpartitioned};
 use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
     event_struct_package, events, feature_flags, full_objects_history, objects, objects_history,
     objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
-    raw_checkpoints, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
+    raw_checkpoints, transactions_unpartitioned, transactions, tx_affected_addresses, tx_affected_objects, tx_calls_fun,
     tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
     tx_recipients, tx_senders,
 };
@@ -727,7 +727,7 @@ impl PgIndexerStore {
             .start_timer();
         let transactions = transactions
             .iter()
-            .map(StoredTransaction::from)
+            .map(StoredTransactionUnpartitioned::from)
             .collect::<Vec<_>>();
         drop(transformation_guard);
 
@@ -739,7 +739,7 @@ impl PgIndexerStore {
                         stringify!((transactions::table)),
                         " DB"
                     );
-                    diesel::insert_into(transactions::table)
+                    diesel::insert_into(transactions_unpartitioned::table)
                         .values(transaction_chunk)
                         .on_conflict_do_nothing()
                         .execute(conn)
