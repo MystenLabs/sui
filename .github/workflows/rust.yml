@@ -75,7 +75,6 @@ jobs:
       - run: cargo xlint
 
   move-auto-formatter-ci-test:
-    name: Move Auto Formatter Test
     needs: diff
     if: needs.diff.outputs.isMoveAutoFormatter == 'true'
     runs-on: [ ubuntu-latest ]
