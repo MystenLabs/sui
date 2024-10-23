@@ -53,7 +53,6 @@ module std::real {
     native public fun sqrt(x: Real, y: Real): Real;
     native public fun exp(x: Real, y: Real): Real;
 
-    native public fun eq(x: Real, y: Real): bool;
     native public fun lt(x: Real, y: Real): bool;
     native public fun gt(x: Real, y: Real): bool;
     native public fun lte(x: Real, y: Real): bool;

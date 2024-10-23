@@ -103,9 +103,6 @@ procedure {:inline 1} $1_integer_mod(x: int, y: int) returns (z: int) {
 procedure {:inline 1} $1_integer_pow(x: int, y: int) returns (z: int) {
     z := $pow(x, y);
 }
-procedure {:inline 1} $1_integer_eq(x: int, y: int) returns (z: bool) {
-    z := x == y;
-}
 procedure {:inline 1} $1_integer_lt(x: int, y: int) returns (z: bool) {
     z := x < y;
 }
@@ -152,9 +149,6 @@ procedure {:inline 1} $1_real_div(x: real, y: real) returns (z: real) {
 }
 procedure {:inline 1} $1_real_exp(x: real, y: real) returns (z: real) {
     z := x ** y;
-}
-procedure {:inline 1} $1_real_eq(x: real, y: real) returns (z: bool) {
-    z := x == y;
 }
 procedure {:inline 1} $1_real_lt(x: real, y: real) returns (z: bool) {
     z := x < y;

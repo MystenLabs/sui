@@ -28,13 +28,12 @@ module std::integer {
     native public fun pow(x: Integer, y: Integer): Integer;
 
     public fun shl(x: Integer, y: Integer): Integer {
-        mul(x, pow(from_u8(2), y))
+        x.mul(2u8.to_int().pow(y))
     }
     public fun shr(x: Integer, y: Integer): Integer {
-        div(x, pow(from_u8(2), y))
+        x.div(2u8.to_int().pow(y))
     }
 
-    native public fun eq(x: Integer, y: Integer): bool;
     native public fun lt(x: Integer, y: Integer): bool;
     native public fun gt(x: Integer, y: Integer): bool;
     native public fun lte(x: Integer, y: Integer): bool;
