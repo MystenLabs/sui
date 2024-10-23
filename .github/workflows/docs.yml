@@ -41,9 +41,24 @@ jobs:
     
     steps:
       - name: Notify Slack of Examples Changes
-        uses: slackapi/slack-github-action@v1.24.0
+        uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
-          channel-id: 'tech-docs'
-          slack-message: 'An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>'
+          channel-id: 'test-notifications'
+          payload: |
+            {
+              "text": "Examples update",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>"
+                  }
+                },
+                {
+                  "type": "divider"
+                }
+              ]
+            }
