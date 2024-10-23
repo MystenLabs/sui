@@ -116,6 +116,7 @@ impl Notion {
     pub fn new() -> Self {
         let token = env::var("NOTION_API_TOKEN")
             .expect("Please set the NOTION_API_TOKEN environment variable");
+        debug!("using notion token {}", token);
         let client = NotionApi::new(token.clone()).expect("Failed to create Notion API client");
         Self { client, token }
     }
@@ -145,8 +146,12 @@ impl Notion {
 
         if !response.status().is_success() {
             return Err(anyhow::anyhow!(
-                "Request failed with status: {}",
-                response.status()
+                "Request failed with status: {}, response: {}",
+                response.status(),
+                response
+                    .text()
+                    .await
+                    .unwrap_or("no response text".to_owned())
             ));
         }
 

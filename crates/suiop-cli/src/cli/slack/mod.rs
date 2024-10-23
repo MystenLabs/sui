@@ -75,6 +75,7 @@ impl Slack {
         let token = std::env::var("SLACK_BOT_TOKEN").expect(
             "Please set SLACK_BOT_TOKEN env var ('slack bot token (incidentbot)' in 1password)",
         );
+        debug!("using slack token {}", token);
         let mut headers = header::HeaderMap::new();
         headers.insert(
             header::AUTHORIZATION,
