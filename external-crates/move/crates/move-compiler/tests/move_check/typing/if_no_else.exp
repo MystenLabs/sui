@@ -5,7 +5,7 @@ error[E04007]: incompatible types
   │         ^^^^^^^^^^^
   │         │         │
   │         │         Given: integer
-  │         Invalid 'if'. The body of an 'if' without an 'else' must be type '()'
+  │         Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
   │         Expected: '()'
 
 error[E04007]: incompatible types
@@ -14,7 +14,7 @@ error[E04007]: incompatible types
  5 │         if (cond) foo();
    │         ^^^^^^^^^^^^^^^
    │         │
-   │         Invalid 'if'. The body of an 'if' without an 'else' must be type '()'
+   │         Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
    │         Expected: '()'
    ·
 13 │     fun foo(): u64 { 0 }
@@ -29,6 +29,6 @@ error[E04007]: incompatible types
    │ │ │                 - Given: integer
  9 │ │ │             x * y
 10 │ │ │         }
-   │ ╰─│─────────^ Invalid 'if'. The body of an 'if' without an 'else' must be type '()'
+   │ ╰─│─────────^ Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
    │   ╰─────────' Expected: '()'
 

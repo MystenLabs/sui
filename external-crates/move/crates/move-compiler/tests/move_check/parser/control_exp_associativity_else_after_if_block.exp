@@ -7,7 +7,7 @@ error[E04007]: incompatible types
 13 │         if (cond) { s1 }.f else s2.f
    │         ^^^^^^^^^^^^^^^^
    │         │
-   │         Invalid 'if'. The body of an 'if' without an 'else' must be type '()'
+   │         Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
    │         Expected: '()'
 
 error[E04005]: expected a single type

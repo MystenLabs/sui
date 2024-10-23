@@ -7,7 +7,7 @@ error[E04007]: incompatible types
 12 │         if (cond) bar() + 1;
    │         ^^^^^^^^^^^^^^^^^^^
    │         │
-   │         Invalid 'if'. The body of an 'if' without an 'else' must be type '()'
+   │         Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
    │         Expected: '()'
 
 error[E04003]: built-in operation not supported

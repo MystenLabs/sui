@@ -1599,13 +1599,9 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 ),
                 None => {
                     let ty = sp(eloc, Type_::Unit);
-                    subtype(
-                        context,
-                        eloc,
-                        || "Invalid 'if'. The body of an 'if' without an 'else' must be type '()'",
-                        et.ty.clone(),
-                        ty.clone(),
-                    );
+                    let msg =
+                        "Invalid 'if'. The body of an 'if' without an 'else' must have type '()'";
+                    subtype(context, eloc, || msg, et.ty.clone(), ty.clone());
                     ty
                 }
             };
