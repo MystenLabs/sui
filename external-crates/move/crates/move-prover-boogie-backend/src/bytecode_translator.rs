@@ -261,7 +261,6 @@ impl<'env> BoogieTranslator<'env> {
         };
 
         let mut translated_types = BTreeSet::new();
-        // let mut translated_funs = BTreeSet::new();
         let mut verified_functions_count = 0;
         info!(
             "generating verification conditions for {:?} module(s)",
@@ -378,96 +377,6 @@ impl<'env> BoogieTranslator<'env> {
                         }
                     }
                 }
-
-                // for (variant, ref fun_target) in self.targets.get_targets(fun_env) {
-                //     if variant.is_verified() {
-                //         if !self
-                //             .verification_targets
-                //             .contains_key(&fun_env.get_qualified_id())
-                //         {
-                //             continue;
-                //         }
-
-                //         verified_functions_count += 1;
-                //         // Always produce a verified functions with an empty instantiation such that
-                //         // there is at least one top-level entry points for a VC.
-                //         FunctionTranslator {
-                //             parent: self,
-                //             fun_target,
-                //             type_inst: &[],
-                //             style: FunctionTranslationStyle::Default,
-                //         }
-                //         .translate();
-
-                //         // There maybe more verification targets that needs to be produced as we
-                //         // defer the instantiation of verified functions to this stage
-                //         for type_inst in mono_info
-                //             .funs
-                //             .get(&(fun_target.func_env.get_qualified_id(), variant))
-                //             .unwrap_or(empty)
-                //         {
-                //             // Skip the none instantiation (i.e., each type parameter is
-                //             // instantiated to itself as a concrete type). This has the same
-                //             // effect as `type_inst: &[]` and is already captured above.
-                //             let is_none_inst = type_inst.iter().enumerate().all(
-                //                 |(i, t)| matches!(t, Type::TypeParameter(idx) if *idx == i as u16),
-                //             );
-                //             if is_none_inst {
-                //                 continue;
-                //             }
-
-                //             verified_functions_count += 1;
-                //             FunctionTranslator {
-                //                 parent: self,
-                //                 fun_target,
-                //                 type_inst,
-                //                 style: FunctionTranslationStyle::Default,
-                //             }
-                //             .translate();
-                //         }
-                //     } else {
-                //         println!(
-                //             "spec_fun_target function={}, variant={}",
-                //             fun_target, spec_fun_target.data.variant
-                //         );
-                //         if !self.called_targets.contains(&fun_env.get_qualified_id()) {
-                //             continue;
-                //         }
-
-                //         // This variant is inlined, so translate for all type instantiations.
-                //         for type_inst in mono_info
-                //             .funs
-                //             .get(&(
-                //                 fun_target.func_env.get_qualified_id(),
-                //                 FunctionVariant::Baseline,
-                //             ))
-                //             .unwrap_or(empty)
-                //         {
-                //             let fun_name = boogie_function_name(
-                //                 fun_env,
-                //                 type_inst,
-                //                 FunctionTranslationStyle::Default,
-                //             );
-                //             if !translated_funs.insert(fun_name) {
-                //                 continue;
-                //             }
-
-                //             self.translate_function_style(
-                //                 fun_env,
-                //                 FunctionTranslationStyle::Opaque,
-                //                 type_inst,
-                //             );
-
-                //             FunctionTranslator {
-                //                 parent: self,
-                //                 fun_target,
-                //                 type_inst,
-                //                 style: FunctionTranslationStyle::Default,
-                //             }
-                //             .translate();
-                //         }
-                //    }
-                // }
             }
         }
         // Emit any finalization items required by spec translation.
@@ -1546,7 +1455,6 @@ impl<'env> FunctionTranslator<'env> {
     ) {
         use Bytecode::*;
 
-        // let writer = self.parent.writer;
         let spec_translator = &self.parent.spec_translator;
         let options = self.parent.options;
         let fun_target = self.fun_target;
@@ -1705,11 +1613,6 @@ impl<'env> FunctionTranslator<'env> {
                         self.writer(),
                         "call {}({});",
                         self.function_variant_name(FunctionTranslationStyle::Asserts),
-                        // boogie_function_name(
-                        //     fun_target.func_env,
-                        //     self.type_inst,
-                        //     FunctionTranslationStyle::Asserts
-                        // ),
                         (0..fun_target.get_parameter_count())
                             .map(|i| {
                                 let prefix = if self.parameter_needs_to_be_mutable(fun_target, i) {
@@ -1859,72 +1762,6 @@ impl<'env> FunctionTranslator<'env> {
                         let module_env = env.get_module(*mid);
                         let callee_env = module_env.get_function(*fid);
 
-                        let mnm = format!(
-                            "{}",
-                            module_env.get_name().display(callee_env.symbol_pool())
-                        );
-                        let fnm = format!(
-                            "{}",
-                            callee_env.get_name().display(callee_env.symbol_pool())
-                        );
-
-                        if mnm == "prover" {
-                            match fnm.as_str() {
-                                // "requires" => {
-                                //     match style {
-                                //         &FunctionTranslationStyle::Default => {
-                                //             if !self.has_requires {
-                                //                 self.has_requires = true;
-                                //                 emitln!(
-                                //                     self.writer(),
-                                //                     "call {}$requires({});",
-                                //                     boogie_function_name(fun_target.func_env, self.type_inst),
-                                //                     (0..fun_target.get_parameter_count())
-                                //                         .map(|i| {
-                                //                             format!("$t{}", i)
-                                //                         })
-                                //                         .join(", "),
-                                //                 );
-                                //             }
-                                //             return;
-                                //         },
-                                //         &FunctionTranslationStyle::Requires => {},
-                                //         _ => { return; }
-                                //     }
-                                // },
-                                // "ensures" => {
-                                //     match style {
-                                //         &FunctionTranslationStyle::Default => {
-                                //             if !self.has_ensures {
-                                //                 self.has_ensures = true;
-                                //                 emitln!(
-                                //                     self.writer(),
-                                //                     "call {}$ensures({});",
-                                //                     boogie_function_name(fun_target.func_env, self.type_inst),
-                                //                     (0..fun_target.get_parameter_count())
-                                //                         .map(|i| {
-                                //                             format!("$t{}", i)
-                                //                         })
-                                //                         .join(", "),
-                                //                 );
-                                //             }
-                                //             return;
-                                //         },
-                                //         &FunctionTranslationStyle::Ensures => {},
-                                //         _ => { return; }
-                                //     }
-                                // },
-                                "asserts" if self.style == FunctionTranslationStyle::Aborts => {
-                                    emitln!(
-                                        self.writer(),
-                                        "res := {};\nif (!res) {{ return; }}",
-                                        str_local(*srcs.get(0).unwrap())
-                                    );
-                                    return;
-                                }
-                                _ => {}
-                            }
-                        }
                         let mut args_str = srcs.iter().cloned().map(str_local).join(", ");
                         let dest_str = dests
                             .iter()
@@ -2012,6 +1849,14 @@ impl<'env> FunctionTranslator<'env> {
                             }
                         }
 
+                        if callee_env.get_qualified_id() == self.parent.env.asserts_qid()
+                            && self.style == FunctionTranslationStyle::Aborts
+                        {
+                            emitln!(self.writer(), "res := {};", args_str);
+                            emitln!(self.writer(), "if (!res) { return; }");
+                            processed = true;
+                        }
+
                         if self
                             .parent
                             .targets
@@ -2031,11 +1876,6 @@ impl<'env> FunctionTranslator<'env> {
                                     self.writer(),
                                     "call $abort_if_cond := {}({});",
                                     self.function_variant_name(FunctionTranslationStyle::Aborts),
-                                    // boogie_function_name(
-                                    //     &callee_env,
-                                    //     inst,
-                                    //     FunctionTranslationStyle::Aborts
-                                    // ),
                                     args_str,
                                 );
                                 emitln!(self.writer(), "$abort_flag := !$abort_if_cond;");
@@ -3095,11 +2935,6 @@ impl<'env> FunctionTranslator<'env> {
                         self.writer(),
                         "call $abort_if_cond := {}({});",
                         self.function_variant_name(FunctionTranslationStyle::Aborts),
-                        // boogie_function_name(
-                        //     fun_target.func_env,
-                        //     self.type_inst,
-                        //     FunctionTranslationStyle::Aborts
-                        // ),
                         (0..fun_target.get_parameter_count())
                             .map(|i| {
                                 let prefix = if self.parameter_needs_to_be_mutable(fun_target, i) {
