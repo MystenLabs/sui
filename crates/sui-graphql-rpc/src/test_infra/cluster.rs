@@ -187,6 +187,8 @@ pub async fn serve_executor(
         retention_config,
         Some(data_ingestion_path),
         Some(cancellation_token.clone()),
+        None,
+        None,
     )
     .await;
 

@@ -114,6 +114,16 @@ pub struct IngestionConfig {
     )]
     pub checkpoint_download_queue_size: usize,
 
+    /// Start checkpoint to ingest from, this is optional and if not provided, the ingestion will
+    /// start from the next checkpoint after the latest committed checkpoint.
+    #[arg(long, env = "START_CHECKPOINT")]
+    pub start_checkpoint: Option<u64>,
+
+    /// End checkpoint to ingest until, this is optional and if not provided, the ingestion will
+    /// continue until u64::MAX.
+    #[arg(long, env = "END_CHECKPOINT")]
+    pub end_checkpoint: Option<u64>,
+
     #[arg(
         long,
         default_value_t = Self::DEFAULT_CHECKPOINT_DOWNLOAD_TIMEOUT,
@@ -141,6 +151,8 @@ impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
             sources: Default::default(),
+            start_checkpoint: None,
+            end_checkpoint: None,
             checkpoint_download_queue_size: Self::DEFAULT_CHECKPOINT_DOWNLOAD_QUEUE_SIZE,
             checkpoint_download_timeout: Self::DEFAULT_CHECKPOINT_DOWNLOAD_TIMEOUT,
             checkpoint_download_queue_size_bytes:

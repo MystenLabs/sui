@@ -46,6 +46,8 @@ impl IndexerHandle {
             None,
             Some(data_ingestion_path.clone()),
             None,
+            None,
+            None,
         )
         .await;
         cancellation_tokens.push(writer_token.drop_guard());
