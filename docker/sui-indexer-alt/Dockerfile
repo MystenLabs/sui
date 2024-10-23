@@ -8,8 +8,8 @@ ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
 WORKDIR "$WORKDIR/sui"
 
-# sui-indexer needs postgres libpq5 and ca-certificates
-RUN apt update && apt install -y libpq5 ca-certificates libpq-dev postgresql
+# sui-indexer need ca-certificates
+RUN apt update && apt install -y ca-certificates postgresql
 
 RUN apt-get update && apt-get install -y cmake clang
 
@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates curl
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 WORKDIR "$WORKDIR/sui"
 COPY --from=builder /sui/target/release/sui-indexer-alt /usr/local/bin
-RUN apt update && apt install -y libpq5 ca-certificates libpq-dev postgresql
+RUN apt update && apt install -y ca-certificates postgresql
 
 ARG BUILD_DATE
 ARG GIT_REVISION
