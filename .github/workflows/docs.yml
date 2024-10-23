@@ -46,19 +46,4 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
           channel-id: 'test-notifications'
-          payload: |
-            {
-              "text": "Examples update",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>"
-                  }
-                },
-                {
-                  "type": "divider"
-                }
-              ]
-            }
+          slack-message: 'whiskey tango foxtrot'
