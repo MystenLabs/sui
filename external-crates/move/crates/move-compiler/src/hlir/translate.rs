@@ -793,12 +793,13 @@ fn tail(
         // -----------------------------------------------------------------------------------------
         // control flow statements
         // -----------------------------------------------------------------------------------------
-        E::IfElse(test, conseq, alt) => {
+        E::IfElse(test, conseq, alt_opt) => {
             let cond = value(context, block, Some(&tbool(eloc)), *test);
             let mut if_block = make_block!();
             let conseq_exp = tail(context, &mut if_block, Some(&out_type), *conseq);
             let mut else_block = make_block!();
-            let alt_exp = alt.and_then(|alt| tail(context, &mut else_block, Some(&out_type), *alt));
+            let alt = alt_opt.unwrap_or_else(|| Box::new(typing_unit_exp(eloc)));
+            let alt_exp = tail(context, &mut else_block, Some(&out_type), *alt);
 
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
 
@@ -1144,10 +1145,8 @@ fn value(
             let mut if_block = make_block!();
             let conseq_exp = value(context, &mut if_block, Some(&out_type), *conseq);
             let mut else_block = make_block!();
-            let alt_exp = match alt_opt {
-                Some(alt) => value(context, &mut else_block, Some(&out_type), *alt),
-                None => unit_exp(eloc),
-            };
+            let alt = alt_opt.unwrap_or_else(|| Box::new(typing_unit_exp(eloc)));
+            let alt_exp = value(context, &mut else_block, Some(&out_type), *alt);
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
 
             let arms_unreachable = conseq_exp.is_unreachable() && alt_exp.is_unreachable();
@@ -1816,9 +1815,8 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             let mut if_block = make_block!();
             statement(context, &mut if_block, *conseq);
             let mut else_block = make_block!();
-            if let Some(alt) = alt_opt {
-                statement(context, &mut else_block, *alt);
-            }
+            let alt = alt_opt.unwrap_or_else(|| Box::new(typing_unit_exp(eloc)));
+            statement(context, &mut else_block, *alt);
             block.push_back(sp(
                 eloc,
                 S::IfElse {
@@ -2045,6 +2043,13 @@ fn bool_exp(loc: Loc, value: bool) -> H::Exp {
 
 fn tunit(loc: Loc) -> H::Type {
     sp(loc, H::Type_::Unit)
+}
+
+fn typing_unit_exp(loc: Loc) -> T::Exp {
+    T::exp(
+        sp(loc, N::Type_::Unit),
+        sp(loc, T::UnannotatedExp_::Unit { trailing: false }),
+    )
 }
 
 fn unit_exp(loc: Loc) -> H::Exp {
