@@ -13,7 +13,7 @@ use prometheus::{HistogramTimer, Registry};
 use tower::{load_shed::error::Overloaded, BoxError, Layer, Service, ServiceExt};
 use tracing::{error, info, warn};
 
-use crate::metrics::{normalize_path, RequestMetrics};
+use crate::metrics::{is_path_tracked, normalize_path, RequestMetrics};
 use http::Request;
 
 /// Tower Layer for tracking metrics in Prometheus related to number, success-rate and latency of
@@ -115,10 +115,8 @@ impl<Res> Future for RequestMetricsFuture<Res> {
 impl MetricsGuard {
     fn new(metrics: Arc<RequestMetrics>, path: &str) -> Option<Self> {
         let normalized_path = normalize_path(path);
-        if normalized_path != "/v1/gas"
-            && normalized_path != "/gas"
-            && normalized_path != "/v1/status"
-        {
+
+        if !is_path_tracked(normalized_path) {
             return None;
         }
 
