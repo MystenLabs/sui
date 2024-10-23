@@ -554,6 +554,10 @@ struct FeatureFlags {
     // Enable uncompressed group elements in BLS123-81 G1
     #[serde(skip_serializing_if = "is_false")]
     uncompressed_g1_group_elements: bool,
+
+    // Use smart ancestor selection in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_smart_ancestor_selection: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1647,6 +1651,10 @@ impl ProtocolConfig {
 
     pub fn uncompressed_g1_group_elements(&self) -> bool {
         self.feature_flags.uncompressed_g1_group_elements
+    }
+
+    pub fn consensus_smart_ancestor_selection(&self) -> bool {
+        self.feature_flags.consensus_smart_ancestor_selection
     }
 }
 
@@ -2880,6 +2888,11 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
+                    }
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Enable smart ancestor selection for devnet
+                        cfg.feature_flags.consensus_smart_ancestor_selection = true;
                     }
                 }
                 // Use this template when making changes:
