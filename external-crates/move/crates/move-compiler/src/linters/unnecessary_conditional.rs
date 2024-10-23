@@ -46,7 +46,7 @@ impl TypingVisitorContext for Context<'_> {
         let Some(vtrue) = extract_value(etrue) else {
             return false;
         };
-        let Some(vfalse) = extract_value(efalse) else {
+        let Some(vfalse) = efalse.as_ref().and_then(|efalse| extract_value(efalse)) else {
             return false;
         };
 

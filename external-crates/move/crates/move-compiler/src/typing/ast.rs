@@ -191,7 +191,7 @@ pub enum UnannotatedExp_ {
     Builtin(Box<BuiltinFunction>, Box<Exp>),
     Vector(Loc, usize, Box<Type>, Box<Exp>),
 
-    IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
+    IfElse(Box<Exp>, Box<Exp>, Option<Box<Exp>>),
     Match(Box<Exp>, Spanned<Vec<MatchArm>>),
     VariantMatch(
         Box<Exp>,
@@ -683,13 +683,15 @@ impl AstDebug for UnannotatedExp_ {
                 });
                 w.write("}");
             }
-            E::IfElse(b, t, f) => {
+            E::IfElse(b, t, f_opt) => {
                 w.write("if (");
                 b.ast_debug(w);
                 w.write(") ");
                 t.ast_debug(w);
-                w.write(" else ");
-                f.ast_debug(w);
+                if let Some(f) = f_opt {
+                    w.write(" else ");
+                    f.ast_debug(w);
+                }
             }
             E::Match(esubject, arms) => {
                 w.write("match (");
