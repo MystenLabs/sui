@@ -312,18 +312,6 @@ impl Datasource<RawEthData> for EthFinalizedSyncDatasource {
         self.genesis_block
     }
 
-    /*    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.backfill_tasks_remaining_checkpoints
-    }
-
-    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
-        &self.indexer_metrics.tasks_processed_checkpoints
-    }
-
-    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.inflight_live_tasks
-    }*/
-
     fn metric_provider(&self) -> &dyn IndexerMetricProvider {
         self.metrics.as_ref()
     }

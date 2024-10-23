@@ -41,16 +41,13 @@ impl SuiCheckpointDatasource {
         checkpoint_path: PathBuf,
         genesis_checkpoint: u64,
         ingestion_metrics: DataIngestionMetrics,
-        metrics: Box<dyn IndexerMetricProvider>, //metrics: DataIngestionMetrics,
-                                                 //indexer_metrics: BridgeIndexerMetrics,
+        metrics: Box<dyn IndexerMetricProvider>,
     ) -> Self {
         SuiCheckpointDatasource {
             remote_store_url,
             sui_client,
             concurrency,
             checkpoint_path,
-            //metrics,
-            //indexer_metrics,
             genesis_checkpoint,
             ingestion_metrics,
             metrics,
@@ -127,18 +124,6 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     fn metric_provider(&self) -> &dyn IndexerMetricProvider {
         self.metrics.as_ref()
     }
-
-    /*    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
-        &self.metrics.backfill_tasks_remaining_checkpoints
-    }
-
-    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
-        &self.indexer_metrics.tasks_processed_checkpoints
-    }*/
-
-    /*    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.inflight_live_tasks
-    }*/
 }
 
 struct PerTaskInMemProgressStore {
