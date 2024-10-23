@@ -135,47 +135,75 @@ impl FaucetMetrics {
 
 impl MetricsCallbackProvider for RequestMetrics {
     fn on_request(&self, path: String) {
+        let normalized_path = normalize_path(&path); // Normalize the path
+        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/status" {
+            return;
+        }
+
         self.total_requests_received
-            .with_label_values(&[path.as_str()])
+            .with_label_values(&[normalized_path])
             .inc();
     }
 
     fn on_response(&self, path: String, latency: Duration, _status: u16, grpc_status_code: Code) {
+        let normalized_path = normalize_path(&path); // Normalize the path
+        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/status" {
+            return;
+        }
+
         self.process_latency
-            .with_label_values(&[path.as_str()])
+            .with_label_values(&[normalized_path])
             .observe(latency.as_secs_f64());
 
         match grpc_status_code {
             Code::Ok => {
                 self.total_requests_succeeded
-                    .with_label_values(&[path.as_str()])
+                    .with_label_values(&[normalized_path])
                     .inc();
             }
             Code::Unavailable | Code::ResourceExhausted => {
                 self.total_requests_shed
-                    .with_label_values(&[path.as_str()])
+                    .with_label_values(&[normalized_path])
                     .inc();
             }
             _ => {
                 self.total_requests_failed
-                    .with_label_values(&[path.as_str()])
+                    .with_label_values(&[normalized_path])
                     .inc();
             }
         }
     }
 
     fn on_start(&self, path: &str) {
+        let normalized_path = normalize_path(path); // Normalize the path
+        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/status" {
+            return;
+        }
+
         self.current_requests_in_flight
-            .with_label_values(&[path])
+            .with_label_values(&[normalized_path])
             .inc();
     }
 
     fn on_drop(&self, path: &str) {
+        let normalized_path = normalize_path(path); // Normalize the path
+        if normalized_path != "/v1/gas" && normalized_path != "/gas" && normalized_path != "/status" {
+            return;
+        }
+
         self.total_requests_disconnected
-            .with_label_values(&[path])
+            .with_label_values(&[normalized_path])
             .inc();
         self.current_requests_in_flight
-            .with_label_values(&[path])
+            .with_label_values(&[normalized_path])
             .dec();
     }
+}
+
+pub fn normalize_path(path: &str) -> &str {
+    if path.starts_with("/v1/status/") {
+        return "/v1/status";
+    }
+
+    path
 }
