@@ -90,6 +90,8 @@ pub async fn start_objects_snapshot_handler(
     metrics: IndexerMetrics,
     snapshot_config: SnapshotLagConfig,
     cancel: CancellationToken,
+    start_checkpoint_opt: Option<u64>,
+    end_checkpoint_opt: Option<u64>,
 ) -> IndexerResult<(ObjectsSnapshotHandler, u64)> {
     info!("Starting object snapshot handler...");
 
@@ -104,10 +106,20 @@ pub async fn start_objects_snapshot_handler(
     let objects_snapshot_handler =
         ObjectsSnapshotHandler::new(store.clone(), sender, metrics.clone(), snapshot_config);
 
-    let watermark_hi = objects_snapshot_handler.get_watermark_hi().await?;
+    let next_cp_from_db = objects_snapshot_handler
+        .get_watermark_hi()
+        .await?
+        .map(|cp| cp.saturating_add(1))
+        .unwrap_or_default();
+    let start_checkpoint = start_checkpoint_opt.unwrap_or(next_cp_from_db);
     let common_handler = CommonHandler::new(Box::new(objects_snapshot_handler.clone()));
-    spawn_monitored_task!(common_handler.start_transform_and_load(receiver, cancel));
-    Ok((objects_snapshot_handler, watermark_hi.unwrap_or_default()))
+    spawn_monitored_task!(common_handler.start_transform_and_load(
+        receiver,
+        cancel,
+        start_checkpoint,
+        end_checkpoint_opt,
+    ));
+    Ok((objects_snapshot_handler, start_checkpoint))
 }
 
 impl ObjectsSnapshotHandler {

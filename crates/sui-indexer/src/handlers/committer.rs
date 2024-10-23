@@ -24,9 +24,10 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     state: S,
     metrics: IndexerMetrics,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
-    mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
     mut committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
+    mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
+    end_checkpoint_opt: Option<CheckpointSequenceNumber>,
 ) -> IndexerResult<()>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
@@ -82,10 +83,23 @@ where
                     );
                 })?;
             }
+            // stop adding to the commit batch if we've reached the end checkpoint
+            if let Some(end_checkpoint_sequence_number) = end_checkpoint_opt {
+                if next_checkpoint_sequence_number > end_checkpoint_sequence_number {
+                    break;
+                }
+            }
         }
         if !batch.is_empty() {
             commit_checkpoints(&state, batch, None, &metrics, &mut committed_checkpoints_tx).await;
             batch = vec![];
+        }
+
+        // stop the commit task if we've reached the end checkpoint
+        if let Some(end_checkpoint_sequence_number) = end_checkpoint_opt {
+            if next_checkpoint_sequence_number > end_checkpoint_sequence_number {
+                break;
+            }
         }
     }
     Ok(())
