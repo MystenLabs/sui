@@ -11,11 +11,12 @@ use crate::{
     u256::{U256FromStrError, U256},
 };
 use anyhow::{anyhow, bail, Result};
-use num::BigUint;
 use std::{fmt::Display, iter::Peekable, num::ParseIntError};
 
 const MAX_TYPE_DEPTH: u64 = 128;
 const MAX_TYPE_NODE_COUNT: u64 = 256;
+// See: https://stackoverflow.com/questions/43787672/the-max-number-of-digits-in-an-int-based-on-number-of-bits
+const U256_MAX_DECIMAL_DIGITS: usize = 241 * AccountAddress::LENGTH / 100 + 1;
 
 pub trait Token: Display + Copy + Eq {
     fn is_whitespace(&self) -> bool;
@@ -447,20 +448,22 @@ pub fn parse_u256(s: &str) -> Result<(U256, NumberFormat), U256FromStrError> {
 }
 
 // Parse an address from a decimal or hex encoding
-pub fn parse_address_number(s: &str) -> Option<([u8; AccountAddress::LENGTH], NumberFormat)> {
+pub fn parse_address_number(s: &str) -> Option<(AccountAddress, NumberFormat)> {
     let (txt, base) = determine_num_text_and_base(s);
-    let parsed = BigUint::parse_bytes(
-        txt.as_bytes(),
+    let max_len = match base {
+        NumberFormat::Hex => AccountAddress::LENGTH * 2,
+        NumberFormat::Decimal => U256_MAX_DECIMAL_DIGITS,
+    };
+    if txt.len() > max_len {
+        return None;
+    }
+    let parsed = U256::from_str_radix(
+        txt,
         match base {
             NumberFormat::Hex => 16,
             NumberFormat::Decimal => 10,
         },
-    )?;
-    let bytes = parsed.to_bytes_be();
-    if bytes.len() > AccountAddress::LENGTH {
-        return None;
-    }
-    let mut result = [0u8; AccountAddress::LENGTH];
-    result[(AccountAddress::LENGTH - bytes.len())..].clone_from_slice(&bytes);
-    Some((result, base))
+    )
+    .ok()?;
+    Some((AccountAddress::new(parsed.to_be_bytes()), base))
 }

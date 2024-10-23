@@ -11,6 +11,7 @@ use crate::{
     u256::U256,
 };
 use anyhow::bail;
+use num::BigUint;
 use proptest::{prelude::*, proptest};
 use std::str::FromStr;
 
@@ -532,6 +533,32 @@ proptest! {
         prop_assert!(ModuleId::from_str(&s).is_err());
         prop_assert!(StructTag::from_str(&s).is_err());
         prop_assert!(TypeTag::from_str(&s).is_err());
+    }
+
+    #[test]
+    fn decimal_parse_parity(s in "[0-9]{64}") {
+        let bigint_parsed = {
+            let bytes = BigUint::parse_bytes(s.as_bytes(), 10).unwrap().to_bytes_be();
+            let mut result = [0u8; AccountAddress::LENGTH];
+            result[(AccountAddress::LENGTH - bytes.len())..].clone_from_slice(&bytes);
+            result
+        };
+        let u256_parsed = U256::from_str(&s).unwrap();
+        prop_assert_eq!(bigint_parsed, u256_parsed.to_be_bytes(), "Parsed addresses do not match: {}", s);
+    }
+
+    #[test]
+    fn hex_parse_parity(s in "0x[0-9a-fA-F]{1,64}") {
+        let bigint_parsed = {
+            let bytes = BigUint::parse_bytes(s[2..].as_bytes(), 16).unwrap().to_bytes_be();
+            let mut result = [0u8; AccountAddress::LENGTH];
+            result[(AccountAddress::LENGTH - bytes.len())..].clone_from_slice(&bytes);
+            result
+        };
+        let addr_parsed = AccountAddress::from_hex_literal(&s).unwrap().into_bytes();
+        let u256_parsed = AccountAddress::new(U256::from_str_radix(&s[2..], 16).unwrap().to_be_bytes()).into_bytes();
+        prop_assert_eq!(bigint_parsed, addr_parsed, "Parsed addresses do not match: {}", s);
+        prop_assert_eq!(addr_parsed, u256_parsed, "Parsed addresses do not match: {}", s);
     }
 
     #[test]
