@@ -11,7 +11,6 @@ use tracing::{error, warn};
 use crate::{
     block::{BlockRef, Transaction, TransactionIndex},
     context::Context,
-    VerifiedBlock,
 };
 
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
@@ -37,19 +36,6 @@ pub(crate) struct TransactionConsumer {
     max_consumed_bytes_per_request: u64,
     max_consumed_transactions_per_request: u64,
     pending_transactions: Option<TransactionsGuard>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[allow(unused)]
-pub enum BlockStatus {
-    /// The block has been certified. A vector of the rejected transaction indexes is also provided.
-    Certified(Vec<(VerifiedBlock, Vec<TransactionIndex>)>),
-    /// The block has been sequenced as part of a committed sub dag. That means that any transaction that has been included in the block
-    /// has been committed as well.
-    Sequenced(Vec<VerifiedBlock>),
-    /// The block has been garbage collected and will never be committed. Any transactions that have been included in the block should also
-    /// be considered as impossible to be committed as part of this block and might need to be retried
-    GarbageCollected(Vec<VerifiedBlock>),
 }
 
 impl TransactionConsumer {
