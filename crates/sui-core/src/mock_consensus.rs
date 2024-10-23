@@ -5,8 +5,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_adapter::{ConsensusClient, SubmitResponse, SubmitToConsensus};
-use crate::consensus_handler::SequencedConsensusTransaction;
-use consensus_core::BlockStatus;
+use crate::consensus_handler::{SequencedConsensusTransaction, TerminalBlockStatus};
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
 use sui_types::error::{SuiError, SuiResult};
@@ -113,6 +112,8 @@ impl ConsensusClient for MockConsensusClient {
             .send(transaction.clone())
             .await
             .map_err(|e| SuiError::Unknown(e.to_string()))?;
-        Ok(SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced))
+        Ok(SubmitResponse::NoStatusWaiter(vec![
+            TerminalBlockStatus::Sequenced { rejected: false },
+        ]))
     }
 }

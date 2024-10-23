@@ -6,7 +6,6 @@ use std::collections::HashSet;
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
-use crate::consensus_adapter::BlockStatus;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
@@ -304,19 +303,23 @@ async fn submit_transaction_to_consensus_adapter() {
         .pop()
         .unwrap();
     let epoch_store = state.epoch_store_for_testing();
+    let transaction = ConsensusTransaction::new_certificate_message(&state.name, certificate);
 
     // Make a new consensus adapter instance.
     let submit_responses = vec![
-        SubmitResponse::NoStatusWaiter(BlockStatus::GarbageCollected),
-        SubmitResponse::NoStatusWaiter(BlockStatus::GarbageCollected),
-        SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced),
+        SubmitResponse::NoStatusWaiter(vec![TerminalBlockStatus::GarbageCollected {
+            rejected: false,
+        }]),
+        SubmitResponse::NoStatusWaiter(vec![TerminalBlockStatus::GarbageCollected {
+            rejected: false,
+        }]),
+        SubmitResponse::NoStatusWaiter(vec![TerminalBlockStatus::Sequenced { rejected: false }]),
     ];
     let adapter =
         make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, submit_responses);
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
-    let transaction = ConsensusTransaction::new_certificate_message(&state.name, certificate);
     let waiter = adapter
         .submit(
             transaction.clone(),
@@ -352,7 +355,9 @@ async fn submit_multiple_transactions_to_consensus_adapter() {
         state.clone(),
         process_via_checkpoint,
         false,
-        vec![SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)],
+        vec![SubmitResponse::NoStatusWaiter(vec![
+            TerminalBlockStatus::Sequenced { rejected: false },
+        ])],
     );
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
@@ -388,7 +393,9 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
         state,
         HashSet::new(),
         false,
-        vec![SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)],
+        vec![SubmitResponse::NoStatusWaiter(vec![
+            TerminalBlockStatus::Sequenced { rejected: false },
+        ])],
     );
 
     let checkpoint_summary = CheckpointSummary::new(

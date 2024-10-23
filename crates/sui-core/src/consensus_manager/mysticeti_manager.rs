@@ -20,8 +20,8 @@ use tracing::info;
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
     consensus_handler::{
-        BlockStatusNotifier, ConsensusHandlerInitializer, ConsensusTransactionHandler,
-        MysticetiConsensusHandler,
+        ConsensusHandlerInitializer, ConsensusTransactionHandler, MysticetiConsensusHandler,
+        TerminalBlockStatusNotifier,
     },
     consensus_manager::{
         ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
@@ -147,7 +147,7 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
-        let block_status_notifier = Arc::new(BlockStatusNotifier::default());
+        let block_status_notifier = Arc::new(TerminalBlockStatusNotifier::default());
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
         let (commit_consumer, commit_receiver, transaction_receiver) =
             CommitConsumer::new(consensus_handler.last_processed_subdag_index() as CommitIndex);

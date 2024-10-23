@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use arc_swap::{ArcSwap, ArcSwapOption};
-use consensus_core::{BlockRef, BlockStatus};
+use consensus_core::BlockRef;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
-use futures::future::{self, select, Either};
+use futures::future::{self, join_all, select, Either};
 use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
@@ -36,10 +36,10 @@ use sui_types::error::{SuiError, SuiResult};
 
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
-use tokio::time::{self};
+use tokio::time::{self, sleep};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
+use crate::consensus_handler::{classify, SequencedConsensusTransactionKey, TerminalBlockStatus};
 use crate::consensus_throughput_calculator::{ConsensusThroughputProfiler, Level};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 use crate::metrics::LatencyObserver;
@@ -195,15 +195,17 @@ impl ConsensusAdapterMetrics {
 }
 
 pub enum SubmitResponse {
-    NoStatusWaiter(BlockStatus),
-    WithStatusWaiter(RegistrationOwned<BlockRef, BlockStatus>),
+    NoStatusWaiter(Vec<TerminalBlockStatus>),
+    WithStatusWaiters(
+        Vec<RegistrationOwned<(BlockRef, ConsensusTransactionKey), TerminalBlockStatus>>,
+    ),
 }
 
 impl SubmitResponse {
-    pub async fn wait_for_status(self) -> SuiResult<BlockStatus> {
+    pub async fn wait_for_statuses(self) -> Vec<TerminalBlockStatus> {
         match self {
-            SubmitResponse::NoStatusWaiter(status) => Ok(status),
-            SubmitResponse::WithStatusWaiter(receiver) => Ok(receiver.await),
+            SubmitResponse::NoStatusWaiter(status) => status,
+            SubmitResponse::WithStatusWaiters(notifiers) => join_all(notifiers).await,
         }
     }
 }
@@ -774,55 +776,73 @@ impl ConsensusAdapter {
             let submit_inner = async {
                 const RETRY_DELAY_STEP: Duration = Duration::from_secs(1);
 
+                let mut transactions_to_submit = transactions.clone();
+                let mut transaction_keys_to_submit = transaction_keys.clone();
+
                 loop {
                     // Submit the transaction to consensus and return the submit result with a status waiter
                     let submit_result = self
                         .submit_inner(
-                            &transactions,
+                            &transactions_to_submit,
                             epoch_store,
-                            &transaction_keys,
+                            &transaction_keys_to_submit,
                             tx_type,
                             is_soft_bundle,
                         )
                         .await;
 
-                    match submit_result.wait_for_status().await {
-                        Ok(BlockStatus::Sequenced) => {
-                            self.metrics
-                                .sequencing_certificate_status
-                                .with_label_values(&[tx_type, "sequenced"])
-                                .inc();
-                            // Block has been sequenced. Nothing more to do, we do have guarantees that the transaction will appear in consensus output.
-                            trace!(
-                                "Transaction {transaction_keys:?} has been sequenced by consensus."
-                            );
-                            break;
-                        }
-                        Ok(BlockStatus::GarbageCollected) => {
-                            self.metrics
-                                .sequencing_certificate_status
-                                .with_label_values(&[tx_type, "garbage_collected"])
-                                .inc();
-                            // Block has been garbage collected and we have no guarantees that the transaction will appear in consensus output. We'll
-                            // resubmit the transaction to consensus. If the transaction has been already "processed", then probably someone else has submitted
-                            // the transaction and managed to get sequenced. Then this future will have been cancelled anyways so no need to check here on the processed output.
-                            debug!(
-                                "Transaction {transaction_keys:?} was garbage collected before being sequenced. Will be retried."
-                            );
-                            time::sleep(RETRY_DELAY_STEP).await;
-                            continue;
-                        }
-                        Ok(BlockStatus::Certified) => {
-                            panic!("Certified block status is not expected to be received.");
-                        }
-                        Err(_err) => {
-                            warn!(
-                                "Error while waiting for status from consensus for transactions {transaction_keys:?}. Will be retried."
-                            );
-                            time::sleep(RETRY_DELAY_STEP).await;
-                            continue;
+                    let all_statuses = submit_result.wait_for_statuses().await;
+                    let mut transactions_to_retry = vec![];
+                    for (index, status) in all_statuses.into_iter().enumerate() {
+                        match status {
+                            TerminalBlockStatus::Sequenced { rejected: _ } => {
+                                // TODO
+                                // A user Fast Path transaction that has been rejected, should not been retried and most probably we should abort the whole
+                                // System transactions should always be retried.
+                                self.metrics
+                                    .sequencing_certificate_status
+                                    .with_label_values(&[tx_type, "sequenced"])
+                                    .inc();
+                                // Block has been sequenced. Nothing more to do, we do have guarantees that the transaction will appear in consensus output.
+                                trace!(
+                                    "Transaction {transaction_keys:?} has been sequenced by consensus."
+                                );
+                            }
+                            TerminalBlockStatus::GarbageCollected { rejected: _ } => {
+                                // TODO:
+                                // A Fast Path transaction that has been rejected, should not be retried and most probably we should abort the whole
+                                // submission process.
+                                // A Fast Path transaction that has been accepted should be retried.
+                                // System transactions should always be retried.
+                                transactions_to_retry.push((
+                                    transactions_to_submit[index].clone(),
+                                    transaction_keys_to_submit[index].clone(),
+                                ));
+
+                                self.metrics
+                                    .sequencing_certificate_status
+                                    .with_label_values(&[tx_type, "garbage_collected"])
+                                    .inc();
+                                // Block has been garbage collected and we have no guarantees that the transaction will appear in consensus output. We'll
+                                // resubmit the transaction to consensus. If the transaction has been already "processed", then probably someone else has submitted
+                                // the transaction and managed to get sequenced. Then this future will have been cancelled anyways so no need to check here on the processed output.
+                                debug!(
+                                    "Transaction {transaction_keys:?} was garbage collected before being sequenced. Will be retried."
+                                );
+                            }
                         }
                     }
+
+                    // No more transactions to retry, so just exit the loop.
+                    if transactions_to_retry.is_empty() {
+                        break;
+                    }
+
+                    // Otherwise retry the transactions
+                    (transactions_to_submit, transaction_keys_to_submit) =
+                        transactions_to_retry.into_iter().unzip();
+
+                    sleep(RETRY_DELAY_STEP).await;
                 }
             };
 

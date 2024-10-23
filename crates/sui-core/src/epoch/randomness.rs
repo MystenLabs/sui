@@ -807,9 +807,9 @@ mod tests {
             ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
             MockConsensusClient, SubmitResponse,
         },
+        consensus_handler::TerminalBlockStatus,
         epoch::randomness::*,
     };
-    use consensus_core::BlockStatus;
     use std::num::NonZeroUsize;
     use sui_protocol_config::ProtocolConfig;
     use sui_protocol_config::{Chain, ProtocolVersion};
@@ -848,7 +848,11 @@ mod tests {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
-                .returning(|_, _| Ok(SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)));
+                .returning(|_, _| {
+                    Ok(SubmitResponse::NoStatusWaiter(vec![
+                        TerminalBlockStatus::Sequenced { rejected: false },
+                    ]))
+                });
 
             let state = TestAuthorityBuilder::new()
                 .with_protocol_config(protocol_config.clone())
@@ -980,7 +984,11 @@ mod tests {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
-                .returning(|_, _| Ok(SubmitResponse::NoStatusWaiter(BlockStatus::Sequenced)));
+                .returning(|_, _| {
+                    Ok(SubmitResponse::NoStatusWaiter(vec![
+                        TerminalBlockStatus::Sequenced { rejected: false },
+                    ]))
+                });
 
             let state = TestAuthorityBuilder::new()
                 .with_protocol_config(protocol_config.clone())
