@@ -7416,7 +7416,6 @@ dependencies = [
  "hex",
  "move-binary-format",
  "move-core-types",
- "num-bigint 0.4.4",
  "once_cell",
  "serde",
  "sha2 0.9.9",
