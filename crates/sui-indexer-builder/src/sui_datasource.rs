@@ -1,20 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::indexer_builder::{DataSender, Datasource};
+use crate::metrics::IndexerMetricProvider;
+use crate::Task;
 use anyhow::Error;
 use async_trait::async_trait;
 use mysten_metrics::{metered_channel, spawn_monitored_task};
-use prometheus::IntCounterVec;
-use prometheus::IntGaugeVec;
+use prometheus::IntGauge;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, Worker, WorkerPool,
 };
-use sui_indexer_builder::indexer_builder::{DataSender, Datasource};
-use sui_indexer_builder::Task;
 use sui_sdk::SuiClient;
-use sui_types::base_types::TransactionDigest;
 use sui_types::full_checkpoint_content::CheckpointData as SuiCheckpointData;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -22,7 +21,8 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
 
-use crate::metrics::DeepBookIndexerMetrics;
+const BACKFILL_TASK_INGESTION_READER_BATCH_SIZE: usize = 300;
+const LIVE_TASK_INGESTION_READER_BATCH_SIZE: usize = 10;
 
 pub struct SuiCheckpointDatasource {
     remote_store_url: String,
@@ -30,8 +30,8 @@ pub struct SuiCheckpointDatasource {
     concurrency: usize,
     checkpoint_path: PathBuf,
     genesis_checkpoint: u64,
-    metrics: DataIngestionMetrics,
-    indexer_metrics: DeepBookIndexerMetrics,
+    ingestion_metrics: DataIngestionMetrics,
+    metrics: Box<dyn IndexerMetricProvider>,
 }
 impl SuiCheckpointDatasource {
     pub fn new(
@@ -40,17 +40,20 @@ impl SuiCheckpointDatasource {
         concurrency: usize,
         checkpoint_path: PathBuf,
         genesis_checkpoint: u64,
-        metrics: DataIngestionMetrics,
-        indexer_metrics: DeepBookIndexerMetrics,
+        ingestion_metrics: DataIngestionMetrics,
+        metrics: Box<dyn IndexerMetricProvider>, //metrics: DataIngestionMetrics,
+                                                 //indexer_metrics: BridgeIndexerMetrics,
     ) -> Self {
         SuiCheckpointDatasource {
             remote_store_url,
             sui_client,
             concurrency,
             checkpoint_path,
-            metrics,
-            indexer_metrics,
+            //metrics,
+            //indexer_metrics,
             genesis_checkpoint,
+            ingestion_metrics,
+            metrics,
         }
     }
 }
@@ -68,13 +71,27 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
             exit_checkpoint: task.target_checkpoint,
             exit_sender: Some(exit_sender),
         };
-        let mut executor = IndexerExecutor::new(progress_store, 1, self.metrics.clone());
-        let worker = IndexerWorker::new(data_sender);
-        let worker_pool = WorkerPool::new(
-            worker,
-            TransactionDigest::random().to_string(),
-            self.concurrency,
+        // The max concurrnecy of checkpoint to fetch at the same time for ingestion framework
+        let ingestion_reader_batch_size = if task.is_live_task {
+            // Live task uses smaller number to be cost effective
+            LIVE_TASK_INGESTION_READER_BATCH_SIZE
+        } else {
+            std::env::var("BACKFILL_TASK_INGESTION_READER_BATCH_SIZE")
+                .unwrap_or(BACKFILL_TASK_INGESTION_READER_BATCH_SIZE.to_string())
+                .parse::<usize>()
+                .unwrap()
+        };
+        tracing::info!(
+            "Starting Sui checkpoint data retrieval with batch size {}",
+            ingestion_reader_batch_size
         );
+        let mut executor = IndexerExecutor::new(progress_store, 1, self.ingestion_metrics.clone());
+        let progress_metric = self
+            .metrics
+            .get_tasks_latest_retrieved_checkpoints()
+            .with_label_values(&[task.name_prefix(), task.type_str()]);
+        let worker = IndexerWorker::new(data_sender, progress_metric);
+        let worker_pool = WorkerPool::new(worker, task.task_name.clone(), self.concurrency);
         executor.register(worker_pool).await?;
         let checkpoint_path = self.checkpoint_path.clone();
         let remote_store_url = self.remote_store_url.clone();
@@ -84,7 +101,10 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
                     checkpoint_path,
                     Some(remote_store_url),
                     vec![], // optional remote store access options
-                    ReaderOptions::default(),
+                    ReaderOptions {
+                        batch_size: ingestion_reader_batch_size,
+                        ..Default::default()
+                    },
                     exit_receiver,
                 )
                 .await?;
@@ -104,17 +124,21 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
         self.genesis_checkpoint
     }
 
-    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.backfill_tasks_remaining_checkpoints
+    fn metric_provider(&self) -> &dyn IndexerMetricProvider {
+        self.metrics.as_ref()
+    }
+
+    /*    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
+        &self.metrics.backfill_tasks_remaining_checkpoints
     }
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
-    }
+    }*/
 
-    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
+    /*    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
         &self.indexer_metrics.inflight_live_tasks
-    }
+    }*/
 }
 
 struct PerTaskInMemProgressStore {
@@ -134,11 +158,19 @@ impl ProgressStore for PerTaskInMemProgressStore {
 
     async fn save(
         &mut self,
-        _task_name: String,
+        task_name: String,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> anyhow::Result<()> {
         if checkpoint_number >= self.exit_checkpoint {
+            tracing::info!(
+                task_name,
+                checkpoint_number,
+                exit_checkpoint = self.exit_checkpoint,
+                "Task completed, sending exit signal"
+            );
+            // `exit_sender` may be `None` if we have already sent the exit signal.
             if let Some(sender) = self.exit_sender.take() {
+                // Ignore the error if the receiver has already been dropped.
                 let _ = sender.send(());
             }
         }
@@ -149,11 +181,18 @@ impl ProgressStore for PerTaskInMemProgressStore {
 
 pub struct IndexerWorker<T> {
     data_sender: metered_channel::Sender<(u64, Vec<T>)>,
+    progress_metric: IntGauge,
 }
 
 impl<T> IndexerWorker<T> {
-    pub fn new(data_sender: metered_channel::Sender<(u64, Vec<T>)>) -> Self {
-        Self { data_sender }
+    pub fn new(
+        data_sender: metered_channel::Sender<(u64, Vec<T>)>,
+        progress_metric: IntGauge,
+    ) -> Self {
+        Self {
+            data_sender,
+            progress_metric,
+        }
     }
 }
 
@@ -179,9 +218,10 @@ impl Worker for IndexerWorker<CheckpointTxnData> {
             .into_iter()
             .map(|tx| (tx, checkpoint_num, timestamp_ms))
             .collect();
-        Ok(self
-            .data_sender
+        self.data_sender
             .send((checkpoint_num, transactions))
-            .await?)
+            .await?;
+        self.progress_metric.set(checkpoint_num as i64);
+        Ok(())
     }
 }
