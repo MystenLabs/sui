@@ -135,7 +135,7 @@ impl FaucetMetrics {
 
 impl MetricsCallbackProvider for RequestMetrics {
     fn on_request(&self, path: String) {
-        let normalized_path = normalize_path(&path); // Normalize the path
+        let normalized_path = normalize_path(&path);
         if normalized_path != "/v1/gas"
             && normalized_path != "/gas"
             && normalized_path != "/v1/status"
