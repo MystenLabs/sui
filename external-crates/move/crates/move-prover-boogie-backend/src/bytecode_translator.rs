@@ -4,7 +4,10 @@
 
 //! This module translates the bytecode of a module to Boogie code.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    str::FromStr,
+};
 
 use codespan::LineIndex;
 use itertools::Itertools;
@@ -203,7 +206,19 @@ impl<'env> BoogieTranslator<'env> {
         for idx in &mono_info.type_params {
             let param_type = boogie_type_param(env, *idx);
             let suffix = boogie_type_suffix(env, &Type::TypeParameter(*idx));
-            emitln!(writer, "type {};", param_type);
+            let is_uid = self
+                .env
+                .find_struct_by_tag(&StructTag::from_str("0x2::object::UID").unwrap())
+                .is_some();
+            if is_uid {
+                // Sui-specific to allow "using" unresolved type params as Sui objects in Boogie
+                // (otherwise Boogie compilation errors may occur)
+                emitln!(writer, "datatype {} {{", param_type);
+                emitln!(writer, "    {}($id: $2_object_UID)", param_type);
+                emitln!(writer, "}");
+            } else {
+                emitln!(writer, "type {};", param_type);
+            }
             emitln!(
                 writer,
                 "function {{:inline}} $IsEqual'{}'(x1: {}, x2: {}): bool {{ x1 == x2 }}",
@@ -1030,24 +1045,6 @@ impl<'env> FunctionTranslator<'env> {
         );
         self.writer().unindent();
         emitln!(self.writer(), "}");
-    }
-
-    fn generate_ghost_global_var_declaration(&self) {
-        assert!(
-            self.fun_target.func_env.is_native()
-                && self.fun_target.get_type_parameter_count() == 2
-                && self.fun_target.get_parameter_count() == 0
-                && self.fun_target.get_return_count() == 1
-        );
-        emitln!(
-            self.writer(),
-            "{}",
-            boogie_declare_global(
-                self.parent.env,
-                &format!("$global_var__{}", self.function_variant_name(self.style)),
-                &self.inst(self.fun_target.get_return_type(0))
-            ),
-        );
     }
 
     fn function_variant_name(&self, style: FunctionTranslationStyle) -> String {
