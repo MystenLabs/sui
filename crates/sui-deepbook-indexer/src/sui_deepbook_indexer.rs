@@ -317,19 +317,24 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiDeepBookDataMapper {
 
         match &data.events {
             Some(events) => {
-                let mut processed_sui_events = vec![];
-                for (idx, ev) in events.data.iter().enumerate() {
-                    if let Some(data) = process_sui_event(
-                        ev,
-                        idx,
-                        &data,
-                        checkpoint_num,
-                        timestamp_ms,
-                        self.package_id,
-                    )? {
-                        processed_sui_events.push(data);
-                    }
-                }
+                let processed_sui_events =
+                    events
+                        .data
+                        .iter()
+                        .enumerate()
+                        .try_fold(vec![], |mut result, (i, ev)| {
+                            if let Some(data) = process_sui_event(
+                                ev,
+                                i,
+                                &data,
+                                checkpoint_num,
+                                timestamp_ms,
+                                self.package_id,
+                            )? {
+                                result.push(data);
+                            }
+                            Ok::<_, anyhow::Error>(result)
+                        })?;
                 if !processed_sui_events.is_empty() {
                     info!(
                         "SUI: Extracted {} deepbook data entries for tx {}.",
