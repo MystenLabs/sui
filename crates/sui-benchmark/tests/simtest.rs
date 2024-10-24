@@ -13,7 +13,10 @@ mod test {
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
-    use sui_benchmark::workloads::workload_configuration::WorkloadConfiguration;
+    use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
+    use sui_benchmark::workloads::workload_configuration::{
+        WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
+    };
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
@@ -926,13 +929,6 @@ mod test {
         let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
         let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
         let batch_payment_size = get_var("SIM_BATCH_PAYMENT_SIZE", 15);
-        let shared_counter_weight = config.shared_counter_weight;
-        let transfer_object_weight = config.transfer_object_weight;
-        let num_transfer_accounts = config.num_transfer_accounts;
-        let delegation_weight = config.delegation_weight;
-        let batch_payment_weight = config.batch_payment_weight;
-        let shared_object_deletion_weight = config.shared_deletion_weight;
-        let randomness_weight = config.randomness_weight;
 
         // Run random payloads at 100% load
         let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
@@ -943,8 +939,10 @@ mod test {
         // tests run for ever
         let adversarial_weight = 0;
 
-        let shared_counter_hotness_factor = config.shared_counter_hotness_factor;
-        let num_shared_counters = config.num_shared_counters;
+        // TODO(william): leverage this in a separate test
+        let expected_failure_cfg = ExpectedFailurePayloadCfg::from_str("0-1.0").unwrap();
+        let expected_failure_weight = 0;
+
         let shared_counter_max_tip = if config.use_shared_counter_max_tip {
             config.shared_counter_max_tip
         } else {
@@ -952,25 +950,35 @@ mod test {
         };
         let gas_request_chunk_size = 100;
 
-        let workloads_builders = WorkloadConfiguration::create_workload_builders(
-            0,
+        let weights = WorkloadWeights {
+            shared_counter: config.shared_counter_weight,
+            transfer_object: config.transfer_object_weight,
+            delegation: config.delegation_weight,
+            batch_payment: config.batch_payment_weight,
+            shared_deletion: config.shared_deletion_weight,
+            randomness: config.randomness_weight,
+            adversarial: adversarial_weight,
+            expected_failure: expected_failure_weight,
+        };
+
+        let workload_config = WorkloadConfig {
+            group: 0,
             num_workers,
-            num_transfer_accounts,
-            shared_counter_weight,
-            transfer_object_weight,
-            delegation_weight,
-            batch_payment_weight,
-            shared_object_deletion_weight,
-            adversarial_weight,
+            num_transfer_accounts: config.num_transfer_accounts,
+            weights,
             adversarial_cfg,
-            randomness_weight,
+            expected_failure_cfg,
             batch_payment_size,
-            shared_counter_hotness_factor,
-            num_shared_counters,
+            shared_counter_hotness_factor: config.shared_counter_hotness_factor,
+            num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,
             target_qps,
             in_flight_ratio,
             duration,
+        };
+
+        let workloads_builders = WorkloadConfiguration::create_workload_builders(
+            workload_config,
             system_state_observer.clone(),
         )
         .await;

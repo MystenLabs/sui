@@ -49,6 +49,7 @@ pub struct BenchMetrics {
     pub benchmark_duration: IntGauge,
     pub num_success: IntCounterVec,
     pub num_error: IntCounterVec,
+    pub num_expected_error: IntCounterVec,
     pub num_submitted: IntCounterVec,
     pub num_in_flight: GaugeVec,
     pub latency_s: HistogramVec,
@@ -75,6 +76,13 @@ impl BenchMetrics {
             num_success: register_int_counter_vec_with_registry!(
                 "num_success",
                 "Total number of transaction success",
+                &["workload"],
+                registry,
+            )
+            .unwrap(),
+            num_expected_error: register_int_counter_vec_with_registry!(
+                "num_expected_error",
+                "Total number of transaction errors that were expected",
                 &["workload"],
                 registry,
             )
@@ -373,6 +381,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 duration: Duration::ZERO,
                 num_error_txes: 0,
                 num_success_txes: 0,
+                num_expected_error_txes: 0,
                 num_success_cmds: 0,
                 total_gas_used: 0,
                 latency_ms: HistogramWrapper {
@@ -681,6 +690,7 @@ async fn run_bench_worker(
     let request_delay_micros = 1_000_000 / worker.target_qps;
     let mut num_success_txes = 0;
     let mut num_error_txes = 0;
+    let mut num_expected_error_txes = 0;
     let mut num_success_cmds = 0;
     let mut num_no_gas = 0;
     let mut num_in_flight: u64 = 0;
@@ -708,6 +718,7 @@ async fn run_bench_worker(
      -> NextOp {
         match result {
             Ok(effects) => {
+                assert!(payload.get_failure_type().is_none());
                 let latency = start.elapsed();
                 let time_from_start = total_benchmark_start_time.elapsed();
 
@@ -767,27 +778,38 @@ async fn run_bench_worker(
             }
             Err(err) => {
                 error!("{}", err);
-                if err
-                    .downcast::<QuorumDriverError>()
-                    .and_then(|err| {
-                        if matches!(
-                            err,
-                            QuorumDriverError::NonRecoverableTransactionError { .. }
-                        ) {
-                            Err(err.into())
+                match payload.get_failure_type() {
+                    Some(_) => {
+                        metrics_cloned
+                            .num_expected_error
+                            .with_label_values(&[&payload.to_string()])
+                            .inc();
+                        NextOp::Retry(Box::new((transaction, payload)))
+                    }
+                    None => {
+                        if err
+                            .downcast::<QuorumDriverError>()
+                            .and_then(|err| {
+                                if matches!(
+                                    err,
+                                    QuorumDriverError::NonRecoverableTransactionError { .. }
+                                ) {
+                                    Err(err.into())
+                                } else {
+                                    Ok(())
+                                }
+                            })
+                            .is_err()
+                        {
+                            NextOp::Failure
                         } else {
-                            Ok(())
+                            metrics_cloned
+                                .num_error
+                                .with_label_values(&[&payload.to_string(), "rpc"])
+                                .inc();
+                            NextOp::Retry(Box::new((transaction, payload)))
                         }
-                    })
-                    .is_err()
-                {
-                    NextOp::Failure
-                } else {
-                    metrics_cloned
-                        .num_error
-                        .with_label_values(&[&payload.to_string(), "rpc"])
-                        .inc();
-                    NextOp::Retry(Box::new((transaction, payload)))
+                    }
                 }
             }
         }
@@ -841,6 +863,7 @@ async fn run_bench_worker(
                         bench_stats: BenchmarkStats {
                             duration:stat_start_time.elapsed(),
                             num_error_txes,
+                            num_expected_error_txes,
                             num_success_txes,
                             num_success_cmds,
                             latency_ms:HistogramWrapper{
@@ -855,6 +878,7 @@ async fn run_bench_worker(
                 }
                 num_success_txes = 0;
                 num_error_txes = 0;
+                num_expected_error_txes = 0;
                 num_success_cmds = 0;
                 num_no_gas = 0;
                 num_submitted = 0;
@@ -913,6 +937,9 @@ async fn run_bench_worker(
             Some(op) = futures.next() => {
                 match op {
                     NextOp::Retry(b) => {
+                        if b.1.get_failure_type().is_some() {
+                            num_expected_error_txes += 1;
+                        }
                         retry_queue.push_back(b);
 
                         // Update total benchmark progress
@@ -958,6 +985,7 @@ async fn run_bench_worker(
             bench_stats: BenchmarkStats {
                 duration: stat_start_time.elapsed(),
                 num_error_txes,
+                num_expected_error_txes,
                 num_success_txes,
                 num_success_cmds,
                 total_gas_used: worker_gas_used,

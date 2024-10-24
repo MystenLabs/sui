@@ -124,6 +124,8 @@ pub struct BenchmarkStats {
     pub duration: Duration,
     /// Number of transactions that ended in an error
     pub num_error_txes: u64,
+    /// Number of transactions that ended in an error but were expected
+    pub num_expected_error_txes: u64,
     /// Number of transactions that were executed successfully
     pub num_success_txes: u64,
     /// Total number of commands in transactions that executed successfully
@@ -137,6 +139,7 @@ impl BenchmarkStats {
     pub fn update(&mut self, duration: Duration, sample_stat: &BenchmarkStats) {
         self.duration = duration;
         self.num_error_txes += sample_stat.num_error_txes;
+        self.num_expected_error_txes += sample_stat.num_expected_error_txes;
         self.num_success_txes += sample_stat.num_success_txes;
         self.num_success_cmds += sample_stat.num_success_cmds;
         self.total_gas_used += sample_stat.total_gas_used;
@@ -155,6 +158,7 @@ impl BenchmarkStats {
                 "tps",
                 "cps",
                 "error%",
+                "expected error%",
                 "latency (min)",
                 "latency (p50)",
                 "latency (p99)",
@@ -168,6 +172,10 @@ impl BenchmarkStats {
         row.add_cell(Cell::new(
             (100 * self.num_error_txes) as f32
                 / (self.num_error_txes + self.num_success_txes) as f32,
+        ));
+        row.add_cell(Cell::new(
+            (100 * self.num_expected_error_txes) as f32
+                / (self.num_expected_error_txes + self.num_success_txes) as f32,
         ));
         row.add_cell(Cell::new(self.latency_ms.histogram.min()));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.5)));
