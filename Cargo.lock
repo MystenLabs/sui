@@ -13908,6 +13908,7 @@ dependencies = [
  "diesel",
  "diesel-async",
  "futures",
+ "itertools 0.13.0",
  "mysten-metrics",
  "prometheus",
  "rand 0.8.5",

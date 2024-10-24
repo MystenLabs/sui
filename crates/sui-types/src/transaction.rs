@@ -2422,6 +2422,10 @@ impl<S> Envelope<SenderSignedData, S> {
         self.data().intent_message().value.sender()
     }
 
+    pub fn gas_owner(&self) -> SuiAddress {
+        self.data().intent_message().value.gas_owner()
+    }
+
     pub fn gas(&self) -> &[ObjectRef] {
         self.data().intent_message().value.gas()
     }
