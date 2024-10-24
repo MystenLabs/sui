@@ -314,7 +314,7 @@ impl Client {
             .pop()
             .ok_or_else(|| Error::new_message("server returned empty checkpoint list"))?;
         let checkpoint = SignedCheckpointSummary {
-            checkpoint: checkpoint.checkpoint,
+            checkpoint: checkpoint.summary,
             signature: checkpoint.signature,
         };
 
@@ -335,7 +335,14 @@ impl Client {
             .send()
             .await?;
 
-        self.bcs(response).await
+        self.protobuf::<crate::proto::CheckpointPage>(response)
+            .await?
+            .try_map(|page| {
+                page.checkpoints
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect()
+            })
     }
 
     pub async fn get_full_checkpoint(
@@ -513,6 +520,19 @@ impl Client {
             Err(e) => Err(Error::from_error(e).with_parts(parts)),
         }
     }
+
+    async fn protobuf<T: prost::Message + std::default::Default>(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<Response<T>> {
+        let (response, parts) = self.check_response(response).await?;
+
+        let bytes = response.bytes().await?;
+        match T::decode(bytes) {
+            Ok(v) => Ok(Response::new(v, parts)),
+            Err(e) => Err(Error::from_error(e).with_parts(parts)),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -623,8 +643,20 @@ impl<T> Response<T> {
     where
         F: FnOnce(T) -> U,
     {
-        let (inner, state) = self.into_parts();
-        Response::new(f(inner), state)
+        let (inner, parts) = self.into_parts();
+        Response::new(f(inner), parts)
+    }
+
+    pub fn try_map<U, F, E>(self, f: F) -> Result<Response<U>>
+    where
+        F: FnOnce(T) -> Result<U, E>,
+        E: Into<BoxError>,
+    {
+        let (inner, parts) = self.into_parts();
+        match f(inner) {
+            Ok(out) => Ok(Response::new(out, parts)),
+            Err(e) => Err(Error::from_error(e).with_parts(parts)),
+        }
     }
 }
 

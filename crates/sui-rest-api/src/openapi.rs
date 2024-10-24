@@ -652,6 +652,10 @@ impl ResponseBuilder {
         self.content(crate::APPLICATION_BCS, MediaType::default())
     }
 
+    pub fn protobuf_content(&mut self) -> &mut Self {
+        self.content(crate::APPLICATION_PROTOBUF, MediaType::default())
+    }
+
     pub fn text_content(&mut self) -> &mut Self {
         self.content(mime::TEXT_PLAIN_UTF_8.as_ref(), MediaType::default())
     }

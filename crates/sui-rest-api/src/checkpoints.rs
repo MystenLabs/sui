@@ -10,17 +10,19 @@ use sui_sdk_types::types::{
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
+use crate::accept::AcceptJsonProtobufBcs;
 use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
+use crate::proto::CheckpointPage;
 use crate::reader::StateReader;
-use crate::response::Bcs;
-use crate::Page;
+use crate::response::{Bcs, JsonProtobufBcs};
 use crate::{accept::AcceptFormat, response::ResponseContent, RestError, Result};
 use crate::{Direction, RestService};
+use crate::{Page, PageCursor};
 use documented::Documented;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct CheckpointResponse {
-    pub checkpoint: CheckpointSummary,
+    pub summary: CheckpointSummary,
     pub signature: ValidatorAggregatedSignature,
     pub contents: Option<CheckpointContents>,
 }
@@ -115,7 +117,7 @@ async fn get_checkpoint(
     };
 
     let response = CheckpointResponse {
-        checkpoint,
+        summary: checkpoint,
         signature,
         contents,
     };
@@ -247,6 +249,7 @@ impl ApiEndpoint<RestService> for ListCheckpoints {
                 ResponseBuilder::new()
                     .json_content::<Vec<CheckpointResponse>>(generator)
                     .bcs_content()
+                    .protobuf_content()
                     .header::<String>(crate::types::X_SUI_CURSOR, generator)
                     .build(),
             )
@@ -262,9 +265,12 @@ impl ApiEndpoint<RestService> for ListCheckpoints {
 
 async fn list_checkpoints(
     Query(parameters): Query<ListCheckpointsQueryParameters>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<Page<CheckpointResponse, CheckpointSequenceNumber>> {
+) -> Result<(
+    PageCursor<CheckpointSequenceNumber>,
+    JsonProtobufBcs<Vec<CheckpointResponse>, CheckpointPage, Vec<SignedCheckpointSummary>>,
+)> {
     let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
     let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
     let limit = parameters.limit();
@@ -295,7 +301,7 @@ async fn list_checkpoints(
                         None
                     };
                     Ok(CheckpointResponse {
-                        checkpoint,
+                        summary: checkpoint,
                         signature,
                         contents,
                     })
@@ -304,9 +310,9 @@ async fn list_checkpoints(
         .collect::<Result<Vec<_>>>()?;
 
     let cursor = checkpoints.last().and_then(|checkpoint| match direction {
-        Direction::Ascending => checkpoint.checkpoint.sequence_number.checked_add(1),
+        Direction::Ascending => checkpoint.summary.sequence_number.checked_add(1),
         Direction::Descending => {
-            let cursor = checkpoint.checkpoint.sequence_number.checked_sub(1);
+            let cursor = checkpoint.summary.sequence_number.checked_sub(1);
             // If we've exhausted our available checkpoint range then there are no more pages left
             if cursor < Some(oldest_checkpoint) {
                 None
@@ -317,10 +323,22 @@ async fn list_checkpoints(
     });
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(checkpoints),
-        AcceptFormat::Bcs => ResponseContent::Bcs(checkpoints),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(checkpoints),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(checkpoints.try_into()?),
+        // In order to work around compatibility issues with existing clients, keep the BCS form as
+        // the old format without contents
+        AcceptJsonProtobufBcs::Bcs => {
+            let checkpoints = checkpoints
+                .into_iter()
+                .map(|c| SignedCheckpointSummary {
+                    checkpoint: c.summary,
+                    signature: c.signature,
+                })
+                .collect();
+            JsonProtobufBcs::Bcs(checkpoints)
+        }
     }
-    .pipe(|entries| Page { entries, cursor })
+    .pipe(|entries| (PageCursor(cursor), entries))
     .pipe(Ok)
 }
 
