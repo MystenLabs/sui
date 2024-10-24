@@ -188,8 +188,8 @@ async fn commit_checkpoints<S>(
             //    committed object list. We could call it early and share the result.
             // 2. We could avoid clone by using Arc.
             // state.persist_objects(object_changes_batch.clone()),
-            // state.persist_object_history(object_history_changes_batch.clone()),
-            state.persist_full_objects_history(object_history_changes_batch.clone()),
+            state.persist_object_history(object_history_changes_batch.clone()),
+            // state.persist_full_objects_history(object_history_changes_batch.clone()),
             // state.persist_objects_version(object_versions_batch.clone()),
             // state.persist_raw_checkpoints(raw_checkpoints_batch),
         ];
