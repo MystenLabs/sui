@@ -16,7 +16,7 @@ use miette::Severity;
 use move_binary_format::{
     binary_config::BinaryConfig, file_format::SignatureToken, CompiledModule,
 };
-use move_command_line_common::{
+use move_core_types::parsing::{
     address::{NumericalAddress, ParsedAddress},
     parser::NumberFormat,
 };
