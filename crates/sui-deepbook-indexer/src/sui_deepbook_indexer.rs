@@ -9,10 +9,6 @@ use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
-use fastcrypto::{
-    encoding::{Encoding, Hex},
-    hash::{HashFunction, Sha3_256},
-};
 use sui_indexer_builder::progress::ProgressSavingPolicy;
 use sui_types::base_types::ObjectID;
 use sui_types::transaction::{Command, TransactionDataAPI};
@@ -321,20 +317,19 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiDeepBookDataMapper {
 
         match &data.events {
             Some(events) => {
-                let processed_sui_events =
-                    events.data.iter().try_fold(vec![], |mut result, ev| {
-                        if let Some(data) = process_sui_event(
-                            ev,
-                            &data,
-                            checkpoint_num,
-                            timestamp_ms,
-                            self.package_id,
-                        )? {
-                            result.push(data);
-                        }
-                        Ok::<_, anyhow::Error>(result)
-                    })?;
-
+                let mut processed_sui_events = vec![];
+                for (idx, ev) in events.data.iter().enumerate() {
+                    if let Some(data) = process_sui_event(
+                        ev,
+                        idx,
+                        &data,
+                        checkpoint_num,
+                        timestamp_ms,
+                        self.package_id,
+                    )? {
+                        processed_sui_events.push(data);
+                    }
+                }
                 if !processed_sui_events.is_empty() {
                     info!(
                         "SUI: Extracted {} deepbook data entries for tx {}.",
@@ -371,6 +366,7 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiDeepBookDataMapper {
 
 fn process_sui_event(
     ev: &Event,
+    event_index: usize,
     tx: &CheckpointTransaction,
     checkpoint: u64,
     checkpoint_timestamp_ms: u64,
@@ -387,10 +383,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
                     sender: tx.transaction.sender_address().to_string(),
@@ -424,10 +418,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,
@@ -461,10 +453,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,
@@ -499,10 +489,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,
@@ -537,10 +525,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::OrderFill(OrderFill {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,
@@ -578,10 +564,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Flashloan(Flashloan {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,
@@ -607,10 +591,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::PoolPrice(PoolPrice {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,
@@ -635,10 +617,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Balances(Balances {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,
@@ -664,10 +644,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Proposals(Proposals {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,
@@ -695,10 +673,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Rebates(Rebates {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,
@@ -724,10 +700,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Stakes(Stakes {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,
@@ -754,10 +728,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let shared_objects = &tx.input_objects;
                 let mut pool_id = "0x0".to_string();
                 for obj in shared_objects.iter() {
@@ -795,10 +767,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
-                let mut hasher = Sha3_256::default();
-                hasher.update(&ev.contents);
-                let event_digest = hasher.finalize().digest;
-                let event_digest = Hex::encode(event_digest);
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Votes(Votes {
                     digest: tx.transaction.digest().to_string(),
                     event_digest,

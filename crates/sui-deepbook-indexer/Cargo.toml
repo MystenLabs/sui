@@ -32,7 +32,6 @@ sui-config.workspace = true
 sui-indexer-builder.workspace = true
 tempfile.workspace = true
 axum.workspace = true
-fastcrypto.workspace = true
 bigdecimal = { version = "0.4.5" }
 
 [dev-dependencies]

@@ -13411,7 +13411,6 @@ dependencies = [
  "clap",
  "diesel",
  "diesel-async",
- "fastcrypto",
  "futures",
  "hex-literal 0.3.4",
  "mysten-metrics",
