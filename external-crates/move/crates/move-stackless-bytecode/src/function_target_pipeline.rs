@@ -22,7 +22,7 @@ use move_compiler::expansion::ast::{AttributeName_, Attribute_};
 use move_compiler::shared::known_attributes::{ExternalAttribute, KnownAttribute::External};
 use move_symbol_pool::Symbol;
 
-use move_model::model::{FunId, FunctionEnv, GlobalEnv, QualifiedId};
+use move_model::model::{DatatypeId, FunId, FunctionEnv, GlobalEnv, QualifiedId};
 
 use crate::{
     function_target::{FunctionData, FunctionTarget},
@@ -40,6 +40,7 @@ pub struct FunctionTargetsHolder {
     no_verify_specs: BTreeSet<QualifiedId<FunId>>,
     no_asserts: BTreeSet<QualifiedId<FunId>>,
     scenario_specs: BTreeSet<QualifiedId<FunId>>,
+    datatype_invs: BiBTreeMap<QualifiedId<DatatypeId>, QualifiedId<FunId>>,
 }
 
 /// Describes a function verification flavor.
@@ -178,6 +179,7 @@ impl FunctionTargetsHolder {
             no_verify_specs: BTreeSet::new(),
             no_asserts: BTreeSet::new(),
             scenario_specs: BTreeSet::new(),
+            datatype_invs: BiBTreeMap::new(),
         }
     }
 
@@ -240,6 +242,14 @@ impl FunctionTargetsHolder {
         }
     }
 
+    pub fn get_inv_by_datatype(&self, id: &QualifiedId<DatatypeId>) -> Option<&QualifiedId<FunId>> {
+        self.datatype_invs.get_by_left(id)
+    }
+
+    pub fn get_datatype_by_inv(&self, id: &QualifiedId<FunId>) -> Option<&QualifiedId<DatatypeId>> {
+        self.datatype_invs.get_by_right(id)
+    }
+
     /// Adds a new function target. The target will be initialized from the Move byte code.
     pub fn add_target(&mut self, func_env: &FunctionEnv<'_>) {
         let generator = StacklessBytecodeGenerator::new(func_env);
@@ -283,6 +293,16 @@ impl FunctionTargetsHolder {
                 None => {
                     self.scenario_specs.insert(func_env.get_qualified_id());
                 }
+            }
+        });
+
+        func_env.get_name_str().strip_suffix("_inv").map(|name| {
+            if let Some(struct_env) = func_env
+                .module_env
+                .find_struct(func_env.symbol_pool().make(name))
+            {
+                self.datatype_invs
+                    .insert(struct_env.get_qualified_id(), func_env.get_qualified_id());
             }
         });
     }
@@ -432,6 +452,15 @@ impl FunctionTargetsHolder {
         writeln!(f, "Scenario specs:")?;
         for spec in self.scenario_specs.iter() {
             writeln!(f, "  {}", env.get_function(*spec).get_full_name_str())?;
+        }
+        writeln!(f, "Datatype invariants:")?;
+        for (datatype, inv) in self.datatype_invs.iter() {
+            writeln!(
+                f,
+                "  {} -> {}",
+                env.get_struct(*datatype).get_full_name_str(),
+                env.get_function(*inv).get_full_name_str(),
+            )?;
         }
         Ok(())
     }

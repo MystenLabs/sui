@@ -23,7 +23,10 @@ use move_prover_boogie_backend::{
 };
 use move_stackless_bytecode::{
     escape_analysis::EscapeAnalysisProcessor,
-    function_target_pipeline::{FunctionTargetPipeline, FunctionTargetsHolder},
+    function_target_pipeline::{
+        FunctionTargetPipeline, FunctionTargetsHolder, FunctionTargetsHolderDisplay,
+    },
+    mono_analysis,
     number_operation::GlobalNumberOperationState,
     pipeline_factory,
 };
@@ -248,6 +251,14 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
         }
     }
 
+    println!(
+        "{}",
+        FunctionTargetsHolderDisplay {
+            targets: &targets,
+            env
+        }
+    );
+
     // Create processing pipeline and run it.
     let pipeline = if options.experimental_pipeline {
         pipeline_factory::experimental_pipeline()
@@ -265,6 +276,14 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
     } else {
         pipeline.run(env, &mut targets);
     }
+
+    println!(
+        "{}",
+        mono_analysis::MonoInfoCFGDisplay {
+            info: &mono_analysis::get_info(env),
+            env
+        }
+    );
 
     targets
 }

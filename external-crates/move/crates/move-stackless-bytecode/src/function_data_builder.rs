@@ -11,6 +11,7 @@ use crate::{
     number_operation::GlobalNumberOperationState,
     stackless_bytecode::{AttrId, Bytecode, HavocKind, Label, Operation, PropKind},
 };
+use itertools::Itertools;
 use move_model::{
     ast::{Exp, TempIndex},
     exp_generator::ExpGenerator,
@@ -240,6 +241,73 @@ impl<'env> FunctionDataBuilder<'env> {
             Bytecode::Call(id, vec![temp], Operation::Havoc(havoc_kind), vec![], None)
         });
         (temp, temp_exp)
+    }
+
+    pub fn emit_let_call(
+        &mut self,
+        op: Operation,
+        args: Vec<TempIndex>,
+        ret_tys: &[Type],
+    ) -> Vec<TempIndex> {
+        let temps = ret_tys
+            .iter()
+            .map(|ty| self.new_temp(ty.clone()))
+            .collect_vec();
+        self.emit_with(|id| Bytecode::Call(id, temps.clone(), op, args, None));
+        temps
+    }
+
+    pub fn emit_let_read_ref(&mut self, idx: TempIndex) -> TempIndex {
+        let ty = self.get_local_type(idx);
+        assert!(ty.is_reference());
+        let temp = self.new_temp(ty.skip_reference().clone());
+        self.emit_with(|id| Bytecode::Call(id, vec![temp], Operation::ReadRef, vec![idx], None));
+        temp
+    }
+
+    pub fn emit_type_inv(&mut self, idx: TempIndex) -> TempIndex {
+        let ty = self.get_local_type(idx);
+        let (val, val_ty) = if ty.is_reference() {
+            (self.emit_let_read_ref(idx), ty.skip_reference().clone())
+        } else {
+            (idx, ty)
+        };
+
+        let temp = self.new_temp(BOOL_TYPE);
+        self.emit_with(|id| {
+            Bytecode::Call(
+                id,
+                vec![temp],
+                Operation::apply_fun_qid(&self.fun_env.module_env.env.type_inv_qid(), vec![val_ty]),
+                vec![val],
+                None,
+            )
+        });
+        temp
+    }
+
+    pub fn emit_requires(&mut self, idx: TempIndex) {
+        self.emit_with(|id| {
+            Bytecode::Call(
+                id,
+                vec![],
+                Operation::apply_fun_qid(&self.fun_env.module_env.env.requires_qid(), vec![]),
+                vec![idx],
+                None,
+            )
+        });
+    }
+
+    pub fn emit_ensures(&mut self, idx: TempIndex) {
+        self.emit_with(|id| {
+            Bytecode::Call(
+                id,
+                vec![],
+                Operation::apply_fun_qid(&self.fun_env.module_env.env.ensures_qid(), vec![]),
+                vec![idx],
+                None,
+            )
+        });
     }
 
     pub fn emit_havoc(&mut self, temp: TempIndex, havoc_kind: HavocKind) {

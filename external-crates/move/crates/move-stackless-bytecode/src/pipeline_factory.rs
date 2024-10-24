@@ -23,6 +23,7 @@ use crate::{
     reaching_def_analysis::ReachingDefProcessor,
     spec_global_variable_analysis::SpecGlobalVariableAnalysisProcessor,
     spec_instrumentation::SpecInstrumentationProcessor,
+    type_invariant_analysis::TypeInvariantAnalysisProcessor,
     usage_analysis::UsageProcessor,
     verification_analysis::VerificationAnalysisProcessor,
     well_formed_instrumentation::WellFormedInstrumentationProcessor,
@@ -52,6 +53,7 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
         VerificationAnalysisProcessor::new(),
         // spec instrumentation
         SpecInstrumentationProcessor::new(),
+        TypeInvariantAnalysisProcessor::new(),
         GlobalInvariantAnalysisProcessor::new(),
         GlobalInvariantInstrumentationProcessor::new(),
         WellFormedInstrumentationProcessor::new(),

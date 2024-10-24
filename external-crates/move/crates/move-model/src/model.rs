@@ -1823,6 +1823,7 @@ impl GlobalEnv {
     const REQUIRES_FUNCTION_NAME: &'static str = "requires";
     const ENSURES_FUNCTION_NAME: &'static str = "ensures";
     const ASSERTS_FUNCTION_NAME: &'static str = "asserts";
+    const TYPE_INV_FUNCTION_NAME: &'static str = "type_inv";
     const GLOBAL_FUNCTION_NAME: &'static str = "global";
     const DECLARE_GLOBAL_FUNCTION_NAME: &'static str = "declare_global";
     const DECLARE_GLOBAL_MUT_FUNCTION_NAME: &'static str = "declare_global_mut";
@@ -1840,6 +1841,10 @@ impl GlobalEnv {
 
     pub fn asserts_qid(&self) -> QualifiedId<FunId> {
         self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::ASSERTS_FUNCTION_NAME)
+    }
+
+    pub fn type_inv_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::TYPE_INV_FUNCTION_NAME)
     }
 
     pub fn global_qid(&self) -> QualifiedId<FunId> {

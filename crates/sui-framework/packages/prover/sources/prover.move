@@ -109,6 +109,9 @@ module prover::prover {
         fresh()
     }
 
+    #[allow(unused)]
+    native fun type_inv<T>(x: &T): bool;
+
     const MAX_U8: u8 = 255u8;
     const MAX_U16: u16 = 65535u16;
     const MAX_U32: u32 = 4294967295u32;

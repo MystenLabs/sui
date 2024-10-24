@@ -46,6 +46,9 @@ function {:inline} $IsValid'$1_integer_Integer'(x: int): bool {
 function {:inline} $IsEqual'$1_integer_Integer'(x: int, y: int): bool {
     x == y
 }
+procedure {:inline 1} $0_prover_type_inv'$1_integer_Integer'(x: int) returns (y: bool) {
+    y := true;
+}
 procedure {:inline 1} $1_integer_from_u8(x: int) returns (y: int) {
     y := x;
 }
@@ -125,6 +128,9 @@ function {:inline} $IsValid'$1_real_Real'(x: real): bool {
 }
 function {:inline} $IsEqual'$1_real_Real'(x: real, y: real): bool {
     x == y
+}
+procedure {:inline 1} $0_prover_type_inv'$1_real_Real'(x: real) returns (y: bool) {
+    y := true;
 }
 procedure {:inline 1} $1_real_from_integer(x: int) returns (y: real) {
     y := real(x);
@@ -302,6 +308,10 @@ function {:inline} $IsEqual'bv{{impl.base}}'(x: bv{{impl.base}}, y: bv{{impl.bas
     x == y
 }
 
+procedure {:inline 1} $0_prover_type_inv'bv{{impl.base}}'(v: bv{{impl.base}}) returns (y: bool) {
+    y := true;
+}
+
 procedure {:inline 1} $int2bv{{impl.base}}(src: int) returns (dst: bv{{impl.base}})
 {
     if (src > {{impl.max}}) {
@@ -406,6 +416,42 @@ function {:inline} $IsEqual'address'(x: int, y: int): bool {
 
 function {:inline} $IsEqual'bool'(x: bool, y: bool): bool {
     x == y
+}
+
+procedure {:inline 1} $0_prover_type_inv'bool'(x: bool) returns (y: bool) {
+    y := true;
+}
+
+procedure {:inline 1} $0_prover_type_inv'u8'(x: int) returns (y: bool) {
+    y := true;
+}
+
+procedure {:inline 1} $0_prover_type_inv'u16'(x: int) returns (y: bool) {
+    y := true;
+}
+
+procedure {:inline 1} $0_prover_type_inv'u32'(x: int) returns (y: bool) {
+    y := true;
+}
+
+procedure {:inline 1} $0_prover_type_inv'u64'(x: int) returns (y: bool) {
+    y := true;
+}
+
+procedure {:inline 1} $0_prover_type_inv'u128'(x: int) returns (y: bool) {
+    y := true;
+}
+
+procedure {:inline 1} $0_prover_type_inv'u256'(x: int) returns (y: bool) {
+    y := true;
+}
+
+procedure {:inline 1} $0_prover_type_inv'num'(x: int) returns (y: bool) {
+    y := true;
+}
+
+procedure {:inline 1} $0_prover_type_inv'address'(x: int) returns (y: bool) {
+    y := true;
 }
 
 // ============================================================================================

@@ -1,4 +1,4 @@
-module prover::invariant_tests;
+module prover::loop_invariant_tests;
 
 use std::integer::Integer;
 use prover::prover::{requires, ensures, invariant, old};

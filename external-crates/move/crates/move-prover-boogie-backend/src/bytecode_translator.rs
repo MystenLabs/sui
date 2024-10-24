@@ -33,8 +33,7 @@ use move_stackless_bytecode::{
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionTarget,
     function_target_pipeline::{
-        FunctionTargetProcessor, FunctionTargetsHolder, FunctionTargetsHolderDisplay,
-        FunctionVariant, VerificationFlavor,
+        FunctionTargetProcessor, FunctionTargetsHolder, FunctionVariant, VerificationFlavor,
     },
     livevar_analysis::LiveVarAnalysisProcessor,
     mono_analysis::{self, MonoInfo},
@@ -112,21 +111,6 @@ impl<'env> BoogieTranslator<'env> {
 
         let mono_info = mono_analysis::get_info(self.env);
         let empty = &BTreeSet::new();
-
-        println!(
-            "{}",
-            FunctionTargetsHolderDisplay {
-                targets: self.targets,
-                env: self.env
-            }
-        );
-        println!(
-            "{}",
-            mono_analysis::MonoInfoCFGDisplay {
-                info: &mono_info,
-                env: self.env
-            }
-        );
 
         emitln!(
             writer,
@@ -229,6 +213,12 @@ impl<'env> BoogieTranslator<'env> {
             emitln!(
                 writer,
                 "function {{:inline}} $IsValid'{}'(x: {}): bool {{ true }}",
+                suffix,
+                param_type,
+            );
+            emitln!(
+                writer,
+                "procedure {{:inline 1}} $0_prover_type_inv'{}'(x: {}) returns (res: bool) {{ res := true; }}",
                 suffix,
                 param_type,
             );
@@ -390,6 +380,34 @@ impl<'env> BoogieTranslator<'env> {
                             }
                             .translate();
                         }
+                    }
+                }
+            }
+
+            for ref struct_env in module_env.get_structs() {
+                if struct_env.is_native_or_intrinsic() {
+                    continue;
+                }
+                if let Some(inv_fun_id) = self
+                    .targets
+                    .get_inv_by_datatype(&struct_env.get_qualified_id())
+                {
+                    let inv_fun_env = self.env.get_function(*inv_fun_id);
+                    let inv_fun_target = self
+                        .targets
+                        .get_target(&inv_fun_env, &FunctionVariant::Baseline);
+                    for type_inst in mono_info
+                        .structs
+                        .get(&struct_env.get_qualified_id())
+                        .unwrap_or(empty)
+                    {
+                        FunctionTranslator {
+                            parent: self,
+                            fun_target: &inv_fun_target,
+                            type_inst,
+                            style: FunctionTranslationStyle::Default,
+                        }
+                        .translate();
                     }
                 }
             }
@@ -907,6 +925,34 @@ impl<'env> StructTranslator<'env> {
             );
             emitln!(writer, "var {}: $Memory {};", memory_name, struct_name);
         }
+
+        emitln!(
+            writer,
+            "procedure {{:inline 1}} $0_prover_type_inv'{}'(s: {}) returns (res: bool) {{",
+            suffix,
+            struct_name
+        );
+        writer.indent();
+        if let Some(inv_fun_id) = self
+            .parent
+            .targets
+            .get_inv_by_datatype(&self.struct_env.get_qualified_id())
+        {
+            emitln!(
+                writer,
+                "call res := {}(s);",
+                boogie_function_name(
+                    &self.parent.env.get_function(*inv_fun_id),
+                    self.type_inst,
+                    FunctionTranslationStyle::Default
+                )
+            );
+        } else {
+            emitln!(writer, "res := true;");
+        }
+        emitln!(writer, "return;");
+        writer.unindent();
+        emitln!(writer, "}");
 
         emitln!(writer);
     }
