@@ -202,7 +202,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         let cp: Vec<models::ProgressStore> =
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
             QueryDsl::filter(
-                QueryDsl::filter(dsl::progress_store, columns::task_name.like(format!("{prefix} - %"))), 
+                QueryDsl::filter(dsl::progress_store, columns::task_name.like(format!("{prefix} - %"))),
                 columns::checkpoint.lt(columns::target_checkpoint))
             .order_by(columns::target_checkpoint.desc())
             .load(&mut conn)
@@ -219,7 +219,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         let cp: Option<i64> =
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
             QueryDsl::filter(QueryDsl::filter(dsl::progress_store
-                .select(columns::target_checkpoint), columns::task_name.like(format!("{prefix} - %"))), 
+                .select(columns::target_checkpoint), columns::task_name.like(format!("{prefix} - %"))),
                 columns::target_checkpoint.ne(i64::MAX))
             .order_by(columns::target_checkpoint.desc())
             .first::<i64>(&mut conn)

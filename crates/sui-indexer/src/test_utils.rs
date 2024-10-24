@@ -75,6 +75,8 @@ pub async fn start_indexer_writer_for_testing(
     retention_config: Option<RetentionConfig>,
     data_ingestion_path: Option<PathBuf>,
     cancel: Option<CancellationToken>,
+    start_checkpoint: Option<u64>,
+    end_checkpoint: Option<u64>,
 ) -> (
     PgIndexerStore,
     JoinHandle<Result<(), IndexerError>>,
@@ -117,7 +119,11 @@ pub async fn start_indexer_writer_for_testing(
         crate::db::reset_database(connection).await.unwrap();
 
         let store_clone = store.clone();
-        let mut ingestion_config = IngestionConfig::default();
+        let mut ingestion_config = IngestionConfig {
+            start_checkpoint,
+            end_checkpoint,
+            ..Default::default()
+        };
         ingestion_config.sources.data_ingestion_path = data_ingestion_path;
         let token_clone = token.clone();
 
@@ -251,6 +257,42 @@ pub async fn set_up(
         None,
         Some(data_ingestion_path),
         None, /* cancel */
+        None, /* start_checkpoint */
+        None, /* end_checkpoint */
+    )
+    .await;
+    (server_handle, pg_store, pg_handle, database)
+}
+
+pub async fn set_up_with_start_and_end_checkpoints(
+    sim: Arc<Simulacrum>,
+    data_ingestion_path: PathBuf,
+    start_checkpoint: u64,
+    end_checkpoint: u64,
+) -> (
+    JoinHandle<()>,
+    PgIndexerStore,
+    JoinHandle<Result<(), IndexerError>>,
+    TempDb,
+) {
+    let database = TempDb::new().unwrap();
+    let server_url: SocketAddr = format!("127.0.0.1:{}", get_available_port())
+        .parse()
+        .unwrap();
+    let server_handle = tokio::spawn(async move {
+        sui_rest_api::RestService::new_without_version(sim)
+            .start_service(server_url)
+            .await;
+    });
+    // Starts indexer
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
+        database.database().url().as_str().to_owned(),
+        None,
+        None,
+        Some(data_ingestion_path),
+        None, /* cancel */
+        Some(start_checkpoint),
+        Some(end_checkpoint),
     )
     .await;
     (server_handle, pg_store, pg_handle, database)

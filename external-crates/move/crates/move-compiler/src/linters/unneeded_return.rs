@@ -75,9 +75,11 @@ fn tail_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) {
 #[growing_stack]
 fn tail(context: &mut Context, exp: &T::Exp) {
     match &exp.exp.value {
-        T::UnannotatedExp_::IfElse(_, conseq, alt) => {
+        T::UnannotatedExp_::IfElse(_, conseq, alt_opt) => {
             tail(context, conseq);
-            tail(context, alt);
+            if let Some(alt) = alt_opt {
+                tail(context, alt);
+            }
         }
         T::UnannotatedExp_::Match(_, arms) => {
             for arm in &arms.value {

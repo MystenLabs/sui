@@ -150,7 +150,7 @@ impl Indexer {
             .map_or(0, |w| w.checkpoint_hi_inclusive as u64 + 1)
             .min(self.first_checkpoint_from_watermark);
 
-        let (handler, committer) = concurrent::pipeline::<H>(
+        let (processor, committer, watermark) = concurrent::pipeline::<H>(
             watermark,
             self.pipeline_config.clone(),
             self.db.clone(),
@@ -159,8 +159,9 @@ impl Indexer {
             self.cancel.clone(),
         );
 
-        self.handles.push(handler);
+        self.handles.push(processor);
         self.handles.push(committer);
+        self.handles.push(watermark);
 
         Ok(())
     }

@@ -551,10 +551,12 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             recolor_lvalues(ctx, lvalues);
             recolor_exp(ctx, e)
         }
-        N::Exp_::IfElse(econd, et, ef) => {
+        N::Exp_::IfElse(econd, et, ef_opt) => {
             recolor_exp(ctx, econd);
             recolor_exp(ctx, et);
-            recolor_exp(ctx, ef);
+            if let Some(ef) = ef_opt {
+                recolor_exp(ctx, ef);
+            }
         }
         N::Exp_::Match(subject, arms) => {
             recolor_exp(ctx, subject);
@@ -833,10 +835,12 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             lvalues(context, lvs);
             exp(context, e)
         }
-        N::Exp_::IfElse(econd, et, ef) => {
+        N::Exp_::IfElse(econd, et, ef_opt) => {
             exp(context, econd);
             exp(context, et);
-            exp(context, ef);
+            if let Some(ef) = ef_opt {
+                exp(context, ef)
+            }
         }
         N::Exp_::Match(subject, arms) => {
             macro_rules! take_and_mut_replace {

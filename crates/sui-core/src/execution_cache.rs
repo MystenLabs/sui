@@ -8,6 +8,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::AuthorityStore;
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
+use mysten_common::fatal;
 use sui_types::bridge::Bridge;
 
 use futures::{future::BoxFuture, FutureExt};
@@ -587,6 +588,13 @@ pub trait TransactionCacheRead: Send + Sync {
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>>;
 
+    /// Wait until the effects of the given transactions are available and return them.
+    /// WARNING: If calling this on a transaction that could be reverted, you must be
+    /// sure that this function cannot be called during reconfiguration. The best way to
+    /// do this is to wrap your future in EpochStore::within_alive_epoch. Holding an
+    /// ExecutionLockReadGuard would also prevent reconfig from happening while waiting,
+    /// but this is very dangerous, as it could prevent reconfiguration from ever
+    /// occurring!
     fn notify_read_executed_effects<'a>(
         &'a self,
         digests: &'a [TransactionDigest],
@@ -597,7 +605,7 @@ pub trait TransactionCacheRead: Send + Sync {
             self.multi_get_effects(&digests).map(|effects| {
                 effects
                     .into_iter()
-                    .map(|e| e.expect("digests must exist"))
+                    .map(|e| e.unwrap_or_else(|| fatal!("digests must exist")))
                     .collect()
             })
         }

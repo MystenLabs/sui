@@ -2616,7 +2616,11 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             }
         }
 
-        EE::IfElse(eb, et, ef) => NE::IfElse(exp(context, eb), exp(context, et), exp(context, ef)),
+        EE::IfElse(eb, et, ef_opt) => NE::IfElse(
+            exp(context, eb),
+            exp(context, et),
+            ef_opt.map(|ef| exp(context, ef)),
+        ),
         // EE::Match(esubject, sp!(_aloc, arms)) if arms.is_empty() => {
         //     exp(context, esubject); // for error effect
         //     let msg = "Invalid 'match' form. 'match' must have at least one arm";
@@ -4223,10 +4227,12 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Loop(_, e)
         | N::Exp_::Give(_, _, e)
         | N::Exp_::Annotate(e, _) => remove_unused_bindings_exp(context, used, e),
-        N::Exp_::IfElse(econd, et, ef) => {
+        N::Exp_::IfElse(econd, et, ef_opt) => {
             remove_unused_bindings_exp(context, used, econd);
             remove_unused_bindings_exp(context, used, et);
-            remove_unused_bindings_exp(context, used, ef);
+            if let Some(ef) = ef_opt {
+                remove_unused_bindings_exp(context, used, ef);
+            }
         }
         N::Exp_::Match(esubject, arms) => {
             remove_unused_bindings_exp(context, used, esubject);

@@ -720,6 +720,8 @@ async fn start(
             None,
             Some(data_ingestion_path.clone()),
             None,
+            None, /* start_checkpoint */
+            None, /* end_checkpoint */
         )
         .await;
         info!("Indexer started in writer mode");

@@ -100,7 +100,7 @@ pub trait CompatibilityMode: Default {
     );
 
     /// Finish the compatibility check and return the error if one has been accumulated from individual errors.
-    fn finish(&self, _: &Compatibility) -> Result<(), Self::Error>;
+    fn finish(self, _: &Compatibility) -> Result<(), Self::Error>;
 }
 
 /// Compatibility mode impl for execution compatibility checks.
@@ -240,7 +240,7 @@ impl CompatibilityMode for ExecutionCompatibilityMode {
     }
 
     /// Finish by comparing against the compatibility flags.
-    fn finish(&self, compatability: &Compatibility) -> Result<(), ()> {
+    fn finish(self, compatability: &Compatibility) -> Result<(), ()> {
         if !self.datatype_and_function_linking {
             return Err(());
         }

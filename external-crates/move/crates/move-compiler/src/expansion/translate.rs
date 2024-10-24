@@ -2548,11 +2548,8 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::IfElse(pb, pt, pf_opt) => {
             let eb = exp(context, pb);
             let et = exp(context, pt);
-            let ef = match pf_opt {
-                None => Box::new(sp(loc, EE::Unit { trailing: false })),
-                Some(pf) => exp(context, pf),
-            };
-            EE::IfElse(eb, et, ef)
+            let ef_opt = pf_opt.map(|pf| exp(context, pf));
+            EE::IfElse(eb, et, ef_opt)
         }
         PE::Match(subject, sp!(aloc, arms)) => EE::Match(
             exp(context, subject),

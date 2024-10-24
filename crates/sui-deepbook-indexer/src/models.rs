@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::data_types::PgTimestamp;
-use diesel::{Identifiable, Insertable, Queryable, Selectable};
+use diesel::{Identifiable, Insertable, Queryable, QueryableByName, Selectable};
 
 use serde::Serialize;
 use sui_indexer_builder::{Task, LIVE_TASK_TARGET_CHECKPOINT};
 
 use crate::schema::{
-    balances, flashloans, order_fills, order_updates, pool_prices, pools, progress_store,
-    proposals, rebates, stakes, sui_error_transactions, trade_params_update, votes,
+    balances, balances_summary, flashloans, order_fills, order_updates, pool_prices, pools,
+    progress_store, proposals, rebates, stakes, sui_error_transactions, trade_params_update, votes,
 };
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -65,6 +65,14 @@ pub struct OrderFillSummary {
     pub base_quantity: i64,
 }
 
+#[derive(QueryableByName, Debug, Serialize)]
+#[diesel(table_name = balances_summary)]
+pub struct BalancesSummary {
+    pub asset: String,
+    pub amount: i64,
+    pub deposit: bool,
+}
+
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
 #[diesel(table_name = flashloans, primary_key(digest))]
 pub struct Flashloan {
@@ -110,6 +118,7 @@ pub struct Proposals {
     pub sender: String,
     pub checkpoint: i64,
     pub package: String,
+    pub pool_id: String,
     pub balance_manager_id: String,
     pub epoch: i64,
     pub taker_fee: i64,

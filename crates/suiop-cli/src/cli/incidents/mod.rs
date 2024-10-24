@@ -17,7 +17,7 @@ use jira::generate_follow_up_tasks;
 use pd::print_recent_incidents;
 use selection::review_recent_incidents;
 use std::path::PathBuf;
-use tracing::debug;
+use tracing::{debug, info};
 
 #[derive(Parser, Debug, Clone)]
 pub struct IncidentsArgs {
@@ -59,6 +59,7 @@ pub enum IncidentsAction {
 /// - Return the combined incident list.
 async fn get_incidents(limit: &usize, days: &usize) -> Result<Vec<Incident>> {
     let current_time = Local::now();
+    info!("going back {} days", days);
     let start_time = current_time - Duration::days(*days as i64);
     let slack = Slack::new().await;
     Ok(pd::fetch_incidents(*limit, start_time, current_time)

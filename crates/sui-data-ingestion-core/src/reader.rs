@@ -46,22 +46,25 @@ pub struct CheckpointReader {
 
 #[derive(Clone)]
 pub struct ReaderOptions {
-    pub tick_interal_ms: u64,
+    pub tick_internal_ms: u64,
     pub timeout_secs: u64,
     /// number of maximum concurrent requests to the remote store. Increase it for backfills
     pub batch_size: usize,
     pub data_limit: usize,
     pub upper_limit: Option<CheckpointSequenceNumber>,
+    /// Whether to delete processed checkpoint files from the local directory.
+    pub gc_checkpoint_files: bool,
 }
 
 impl Default for ReaderOptions {
     fn default() -> Self {
         Self {
-            tick_interal_ms: 100,
+            tick_internal_ms: 100,
             timeout_secs: 5,
             batch_size: 10,
             data_limit: 0,
             upper_limit: None,
+            gc_checkpoint_files: true,
         }
     }
 }
@@ -76,25 +79,19 @@ impl CheckpointReader {
     /// Represents a single iteration of the reader.
     /// Reads files in a local directory, validates them, and forwards `CheckpointData` to the executor.
     async fn read_local_files(&self) -> Result<Vec<Arc<CheckpointData>>> {
-        let mut files = vec![];
-        for entry in fs::read_dir(self.path.clone())? {
-            let entry = entry?;
-            let filename = entry.file_name();
-            if let Some(sequence_number) = Self::checkpoint_number_from_file_path(&filename) {
-                if sequence_number >= self.current_checkpoint_number {
-                    files.push((sequence_number, entry.path()));
-                }
-            }
-        }
-        files.sort();
-        debug!("unprocessed local files {:?}", files);
         let mut checkpoints = vec![];
-        for (_, filename) in files.iter().take(MAX_CHECKPOINTS_IN_PROGRESS) {
-            let checkpoint = Blob::from_bytes::<Arc<CheckpointData>>(&fs::read(filename)?)?;
-            if self.exceeds_capacity(checkpoint.checkpoint_summary.sequence_number) {
+        for offset in 0..MAX_CHECKPOINTS_IN_PROGRESS {
+            let sequence_number = self.current_checkpoint_number + offset as u64;
+            if self.exceeds_capacity(sequence_number) {
                 break;
             }
-            checkpoints.push(checkpoint);
+            match fs::read(self.path.join(format!("{}.chk", sequence_number))) {
+                Ok(bytes) => checkpoints.push(Blob::from_bytes::<Arc<CheckpointData>>(&bytes)?),
+                Err(err) => match err.kind() {
+                    std::io::ErrorKind::NotFound => break,
+                    _ => Err(err)?,
+                },
+            }
         }
         Ok(checkpoints)
     }
@@ -294,9 +291,12 @@ impl CheckpointReader {
 
     /// Cleans the local directory by removing all processed checkpoint files.
     fn gc_processed_files(&mut self, watermark: CheckpointSequenceNumber) -> Result<()> {
-        info!("cleaning processed files, watermark is {}", watermark);
         self.data_limiter.gc(watermark);
         self.last_pruned_watermark = watermark;
+        if !self.options.gc_checkpoint_files {
+            return Ok(());
+        }
+        info!("cleaning processed files, watermark is {}", watermark);
         for entry in fs::read_dir(self.path.clone())? {
             let entry = entry?;
             let filename = entry.file_name();
@@ -384,7 +384,7 @@ impl CheckpointReader {
                 Some(gc_checkpoint_number) = self.processed_receiver.recv() => {
                     self.gc_processed_files(gc_checkpoint_number).expect("Failed to clean the directory");
                 }
-                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(self.options.tick_interal_ms), inotify_recv.recv())  => {
+                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(self.options.tick_internal_ms), inotify_recv.recv())  => {
                     self.sync().await.expect("Failed to read checkpoint files");
                 }
             }

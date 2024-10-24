@@ -981,7 +981,14 @@ impl<K, V> DBMap<K, V> {
     }
 
     fn report_metrics(rocksdb: &Arc<RocksDB>, cf_name: &str, db_metrics: &Arc<DBMetrics>) {
-        let cf = rocksdb.cf_handle(cf_name).expect("Failed to get cf");
+        let Some(cf) = rocksdb.cf_handle(cf_name) else {
+            tracing::warn!(
+                "unable to report metrics for cf {cf_name:?} in db {:?}",
+                rocksdb.db_name()
+            );
+            return;
+        };
+
         db_metrics
             .cf_metrics
             .rocksdb_total_sst_files_size

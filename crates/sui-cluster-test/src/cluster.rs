@@ -238,6 +238,8 @@ impl Cluster for LocalNewCluster {
                 None,
                 Some(data_ingestion_path.path().to_path_buf()),
                 None, /* cancel */
+                None, /* start_checkpoint */
+                None, /* end_checkpoint */
             )
             .await;
             cancellation_tokens.push(writer_token.drop_guard());

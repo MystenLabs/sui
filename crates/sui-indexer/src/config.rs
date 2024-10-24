@@ -114,6 +114,16 @@ pub struct IngestionConfig {
     )]
     pub checkpoint_download_queue_size: usize,
 
+    /// Start checkpoint to ingest from, this is optional and if not provided, the ingestion will
+    /// start from the next checkpoint after the latest committed checkpoint.
+    #[arg(long, env = "START_CHECKPOINT")]
+    pub start_checkpoint: Option<u64>,
+
+    /// End checkpoint to ingest until, this is optional and if not provided, the ingestion will
+    /// continue until u64::MAX.
+    #[arg(long, env = "END_CHECKPOINT")]
+    pub end_checkpoint: Option<u64>,
+
     #[arg(
         long,
         default_value_t = Self::DEFAULT_CHECKPOINT_DOWNLOAD_TIMEOUT,
@@ -129,6 +139,11 @@ pub struct IngestionConfig {
         env = "CHECKPOINT_PROCESSING_BATCH_DATA_LIMIT",
     )]
     pub checkpoint_download_queue_size_bytes: usize,
+
+    /// Whether to delete processed checkpoint files from the local directory,
+    /// when running Fullnode-colocated indexer.
+    #[arg(long, default_value_t = true)]
+    pub gc_checkpoint_files: bool,
 }
 
 impl IngestionConfig {
@@ -141,10 +156,13 @@ impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
             sources: Default::default(),
+            start_checkpoint: None,
+            end_checkpoint: None,
             checkpoint_download_queue_size: Self::DEFAULT_CHECKPOINT_DOWNLOAD_QUEUE_SIZE,
             checkpoint_download_timeout: Self::DEFAULT_CHECKPOINT_DOWNLOAD_TIMEOUT,
             checkpoint_download_queue_size_bytes:
                 Self::DEFAULT_CHECKPOINT_DOWNLOAD_QUEUE_SIZE_BYTES,
+            gc_checkpoint_files: true,
         }
     }
 }
@@ -186,6 +204,10 @@ pub enum Command {
     ResetDatabase {
         #[clap(long)]
         force: bool,
+        /// If true, only drop all tables but do not run the migrations.
+        /// That is, no tables will exist in the DB after the reset.
+        #[clap(long, default_value_t = false)]
+        skip_migrations: bool,
     },
     /// Run through the migration scripts.
     RunMigrations,
@@ -405,6 +427,13 @@ pub struct BenchmarkConfig {
         help = "Whether to reset the database before running."
     )]
     pub reset_db: bool,
+    #[arg(
+        long,
+        help = "Path to workload directory. If not provided, a temporary directory will be created.\
+        If provided, synthetic workload generator will either load data from it if it exists or generate new data.\
+        This avoids repeat generation of the same data."
+    )]
+    pub workload_dir: Option<PathBuf>,
 }
 
 #[cfg(test)]

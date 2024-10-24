@@ -222,12 +222,23 @@ export function SwapPage() {
 				toCoinType: toCoinType || '',
 				totalBalance: Number(amount),
 				estimatedReturnBalance: inputAmountInUSD || 0,
+				provider: swapData?.provider,
 			});
 
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
 				response.digest,
 			)}&from=transactions`;
 			return navigate(receiptUrl);
+		},
+		onError: (error) => {
+			ampli.swappedCoinFailed({
+				estimatedReturnBalance: Number(swapData?.formattedToAmount || 0),
+				fromCoinType: fromCoinType!,
+				toCoinType: toCoinType!,
+				totalBalance: Number(amount || 0),
+				errorMessage: error.message,
+				provider: swapData?.provider,
+			});
 		},
 	});
 

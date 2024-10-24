@@ -8,8 +8,8 @@ use crate::{handlers::Handler, models::watermarks::CommitterWatermark};
 pub mod concurrent;
 mod processor;
 
-/// Extra buffer added to the channel between the processor and the committer. There does not need to
-/// be a huge capacity here because the committer is already buffering rows to insert internally.
+/// Extra buffer added to channels between tasks in a pipeline. There does not need to be a huge
+/// capacity here because tasks already buffer rows to insert internally.
 const COMMITTER_BUFFER: usize = 5;
 
 #[derive(clap::Args, Debug, Clone)]
@@ -22,6 +22,15 @@ pub struct PipelineConfig {
         value_parser = |s: &str| s.parse().map(Duration::from_millis),
     )]
     commit_interval: Duration,
+
+    /// Watermark task will check for pending watermarks this often.
+    #[arg(
+        long,
+        default_value = "500",
+        value_name = "MILLISECONDS",
+        value_parser = |s: &str| s.parse().map(Duration::from_millis),
+    )]
+    watermark_interval: Duration,
 
     /// Avoid writing to the watermark table
     #[arg(long)]

@@ -4742,6 +4742,7 @@ async fn test_shared_object_transaction_ok() {
         .epoch_store_for_testing()
         .get_shared_locks(&certificate.key())
         .expect("Reading shared locks should not fail")
+        .expect("Locks should be set")
         .into_iter()
         .find_map(|(object_id, version)| {
             if object_id == shared_object_id {
@@ -4858,6 +4859,7 @@ async fn test_consensus_commit_prologue_generation() {
             .epoch_store_for_testing()
             .get_shared_locks(txn_key)
             .unwrap()
+            .expect("locks should be set")
             .iter()
             .filter_map(|(id, seq)| {
                 if id == &SUI_CLOCK_OBJECT_ID {
@@ -6216,6 +6218,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         .epoch_store_for_testing()
         .get_shared_locks(&cancelled_txn.key())
         .expect("Reading shared locks should not fail")
+        .expect("locks should be set")
         .into_iter()
         .collect::<HashMap<_, _>>();
     assert_eq!(
@@ -6234,6 +6237,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         .read_objects_for_execution(
             authority.epoch_store_for_testing().as_ref(),
             &cancelled_txn.key(),
+            &CertLockGuard::dummy_for_tests(),
             &cancelled_txn
                 .data()
                 .transaction_data()

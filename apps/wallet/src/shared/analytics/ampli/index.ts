@@ -231,6 +231,18 @@ export interface ClickedSwapCoinProperties {
 	totalBalance?: number;
 }
 
+export interface ClickedTokenClaimsBannerProperties {
+	/**
+	 * A generic name property that can be used across events.
+	 */
+	name: string;
+	/**
+	 * The ID of an object on Sui.
+	 */
+	objectId: string;
+	objectType: string;
+}
+
 export interface ClickedUnstakeSuiProperties {
 	/**
 	 * The amount of SUI staked.
@@ -514,6 +526,10 @@ export interface SwappedCoinProperties {
 	 */
 	estimatedReturnBalance: number;
 	fromCoinType: string;
+	/**
+	 * swap provider name
+	 */
+	provider?: string;
 	toCoinType: string;
 	/**
 	 * The total balance of the selected coin that the user has.
@@ -537,6 +553,10 @@ export interface SwappedCoinFailedProperties {
 	 */
 	estimatedReturnBalance: number;
 	fromCoinType: string;
+	/**
+	 * swap provider name
+	 */
+	provider?: string;
 	toCoinType: string;
 	/**
 	 * The total balance of the selected coin that the user has.
@@ -687,6 +707,14 @@ export class ClickedSwapCoin implements BaseEvent {
 	event_type = 'clicked swap coin';
 
 	constructor(public event_properties: ClickedSwapCoinProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ClickedTokenClaimsBanner implements BaseEvent {
+	event_type = 'clicked token claims banner';
+
+	constructor(public event_properties: ClickedTokenClaimsBannerProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -1298,6 +1326,23 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new ClickedSwapCoin(properties), options);
+  }
+
+  /**
+   * clicked token claims banner
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20token%20claims%20banner)
+   *
+   * Event has no description in tracking plan.
+   *
+   * @param properties The event's properties (e.g. name)
+   * @param options Amplitude event options.
+   */
+  clickedTokenClaimsBanner(
+    properties: ClickedTokenClaimsBannerProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedTokenClaimsBanner(properties), options);
   }
 
   /**

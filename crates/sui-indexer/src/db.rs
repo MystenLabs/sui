@@ -196,7 +196,14 @@ pub mod setup_postgres {
 
     pub async fn reset_database(mut conn: Connection<'static>) -> Result<(), anyhow::Error> {
         info!("Resetting PG database ...");
+        clear_database(&mut conn).await?;
+        run_migrations(conn).await?;
+        info!("Reset database complete.");
+        Ok(())
+    }
 
+    pub async fn clear_database(conn: &mut Connection<'static>) -> Result<(), anyhow::Error> {
+        info!("Clearing the database...");
         let drop_all_tables = "
         DO $$ DECLARE
             r RECORD;
@@ -206,9 +213,7 @@ pub mod setup_postgres {
                 EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
             END LOOP;
         END $$;";
-        diesel::sql_query(drop_all_tables)
-            .execute(&mut conn)
-            .await?;
+        diesel::sql_query(drop_all_tables).execute(conn).await?;
         info!("Dropped all tables.");
 
         let drop_all_procedures = "
@@ -222,9 +227,7 @@ pub mod setup_postgres {
                 EXECUTE 'DROP PROCEDURE IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
             END LOOP;
         END $$;";
-        diesel::sql_query(drop_all_procedures)
-            .execute(&mut conn)
-            .await?;
+        diesel::sql_query(drop_all_procedures).execute(conn).await?;
         info!("Dropped all procedures.");
 
         let drop_all_functions = "
@@ -238,17 +241,13 @@ pub mod setup_postgres {
                 EXECUTE 'DROP FUNCTION IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
             END LOOP;
         END $$;";
-        diesel::sql_query(drop_all_functions)
-            .execute(&mut conn)
-            .await?;
-        info!("Dropped all functions.");
-
-        run_migrations(conn).await?;
-        info!("Reset database complete.");
+        diesel::sql_query(drop_all_functions).execute(conn).await?;
+        info!("Database cleared.");
         Ok(())
     }
 
     pub async fn run_migrations(conn: Connection<'static>) -> Result<(), anyhow::Error> {
+        info!("Running migrations ...");
         conn.run_pending_migrations(MIGRATIONS)
             .await
             .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
