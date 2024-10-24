@@ -40,8 +40,8 @@ use crate::{
 };
 #[cfg(test)]
 use crate::{
-    block_verifier::NoopBlockVerifier, storage::mem_store::MemStore, CommitConsumer,
-    TransactionClient,
+    block_verifier::NoopBlockVerifier, storage::mem_store::MemStore, BlockOutputBatch,
+    CommitConsumer, TransactionClient,
 };
 
 // Maximum number of commit votes to include in a block.
@@ -264,6 +264,8 @@ impl Core {
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
+
+            self.try_certify()?;
         }
 
         if !missing_blocks.is_empty() {
@@ -620,6 +622,17 @@ impl Core {
         Ok(committed_subdags)
     }
 
+    // Try processed certified blocks.
+    // Every transaction in a certified block is either accepted or rejected by a quorum.
+    fn try_certify(&mut self) -> ConsensusResult<()> {
+        if !self.context.protocol_config.mysticeti_fastpath() {
+            return Ok(());
+        }
+        let certified_blocks = self.dag_state.write().take_certified_blocks();
+        self.commit_observer
+            .handle_certified_blocks(certified_blocks)
+    }
+
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
         let _scope = monitored_scope("Core::get_missing_blocks");
         self.block_manager.missing_blocks()
@@ -901,8 +914,8 @@ pub(crate) struct CoreTextFixture {
     pub core: Core,
     pub signal_receivers: CoreSignalsReceivers,
     pub block_receiver: broadcast::Receiver<VerifiedBlock>,
-    #[allow(unused)]
-    pub commit_receiver: UnboundedReceiver<CommittedSubDag>,
+    pub _commit_output_receiver: UnboundedReceiver<CommittedSubDag>,
+    pub _block_output_receiver: UnboundedReceiver<BlockOutputBatch>,
     pub store: Arc<MemStore>,
 }
 
@@ -937,7 +950,8 @@ impl CoreTextFixture {
         // Need at least one subscriber to the block broadcast channel.
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, commit_output_receiver, block_output_receiver) =
+            CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -965,7 +979,8 @@ impl CoreTextFixture {
             core,
             signal_receivers,
             block_receiver,
-            commit_receiver,
+            _commit_output_receiver: commit_output_receiver,
+            _block_output_receiver: block_output_receiver,
             store,
         }
     }

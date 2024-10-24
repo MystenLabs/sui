@@ -9,7 +9,7 @@ use tokio::time::Instant;
 use tracing::{debug, info};
 
 use crate::{
-    block::{BlockAPI, VerifiedBlock},
+    block::{BlockAPI, BlockOutputBatch, VerifiedBlock},
     commit::{load_committed_subdag_from_store, CommitAPI, CommitIndex},
     context::Context,
     dag_state::DagState,
@@ -17,7 +17,7 @@ use crate::{
     leader_schedule::LeaderSchedule,
     linearizer::Linearizer,
     storage::Store,
-    CommitConsumer, CommittedSubDag,
+    BlockOutput, CommitConsumer, CommittedSubDag,
 };
 
 /// Role of CommitObserver
@@ -37,8 +37,10 @@ pub(crate) struct CommitObserver {
     context: Arc<Context>,
     /// Component to deterministically collect subdags for committed leaders.
     commit_interpreter: Linearizer,
-    /// An unbounded channel to send committed sub-dags to the consumer of consensus output.
-    sender: UnboundedSender<CommittedSubDag>,
+    /// An unbounded channel to send commits to commit handler.
+    commit_sender: UnboundedSender<CommittedSubDag>,
+    /// An unbounded channel to send blocks to block handler.
+    block_sender: UnboundedSender<BlockOutputBatch>,
     /// Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
     leader_schedule: Arc<LeaderSchedule>,
@@ -55,7 +57,8 @@ impl CommitObserver {
         let mut observer = Self {
             context,
             commit_interpreter: Linearizer::new(dag_state.clone(), leader_schedule.clone()),
-            sender: commit_consumer.commit_sender,
+            commit_sender: commit_consumer.commit_sender,
+            block_sender: commit_consumer.block_sender,
             store,
             leader_schedule,
         };
@@ -80,8 +83,8 @@ impl CommitObserver {
         let mut sent_sub_dags = Vec::with_capacity(committed_sub_dags.len());
         for committed_sub_dag in committed_sub_dags.into_iter() {
             // Failures in sender.send() are assumed to be permanent
-            if let Err(err) = self.sender.send(committed_sub_dag.clone()) {
-                tracing::error!(
+            if let Err(err) = self.commit_sender.send(committed_sub_dag.clone()) {
+                tracing::warn!(
                     "Failed to send committed sub-dag, probably due to shutdown: {err:?}"
                 );
                 return Err(ConsensusError::Shutdown);
@@ -99,6 +102,24 @@ impl CommitObserver {
         Ok(sent_sub_dags)
     }
 
+    pub(crate) fn handle_certified_blocks(
+        &mut self,
+        certified_blocks: Vec<BlockOutput>,
+    ) -> ConsensusResult<()> {
+        if certified_blocks.is_empty() {
+            return Ok(());
+        }
+        if let Err(err) = self
+            .block_sender
+            .send(BlockOutputBatch::Certified(certified_blocks))
+        {
+            tracing::warn!("Failed to send certified blocks, probably due to shutdown: {err:?}");
+            return Err(ConsensusError::Shutdown);
+        }
+        Ok(())
+    }
+
+    // Certified blocks are not sent to fast path, for efficiency.
     fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
         let now = Instant::now();
         // TODO: remove this check, to allow consensus to regenerate commits?
@@ -149,12 +170,14 @@ impl CommitObserver {
             info!("Sending commit {} during recovery", commit.index());
             let committed_sub_dag =
                 load_committed_subdag_from_store(self.store.as_ref(), commit, reputation_scores);
-            self.sender.send(committed_sub_dag).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to send commit during recovery, probably due to shutdown: {:?}",
-                    e
-                )
-            });
+            self.commit_sender
+                .send(committed_sub_dag)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "Failed to send commit during recovery, probably due to shutdown: {:?}",
+                        e
+                    )
+                });
 
             last_sent_commit_index += 1;
         }
