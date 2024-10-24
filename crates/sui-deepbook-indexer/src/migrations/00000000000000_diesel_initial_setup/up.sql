@@ -2,11 +2,12 @@
 
 CREATE TABLE IF NOT EXISTS order_updates
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checkpoint_timestamp_ms     BIGINT       NOT NULL,
     package                     TEXT         NOT NULL,
     status                      TEXT         NOT NULL,
     pool_id                     TEXT         NOT NULL,
@@ -24,11 +25,12 @@ CREATE TABLE IF NOT EXISTS order_updates
 
 CREATE TABLE IF NOT EXISTS order_fills
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checkpoint_timestamp_ms     BIGINT       NOT NULL,
     package                     TEXT         NOT NULL,
     pool_id                     TEXT         NOT NULL,
     maker_order_id              TEXT         NOT NULL,
@@ -50,11 +52,12 @@ CREATE TABLE IF NOT EXISTS order_fills
 
 CREATE TABLE IF NOT EXISTS flashloans
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checkpoint_timestamp_ms     BIGINT       NOT NULL,
     package                     TEXT         NOT NULL,
     borrow                      BOOLEAN      NOT NULL,
     pool_id                     TEXT         NOT NULL,
@@ -64,11 +67,12 @@ CREATE TABLE IF NOT EXISTS flashloans
 
 CREATE TABLE IF NOT EXISTS pool_prices
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checkpoint_timestamp_ms     BIGINT       NOT NULL,
     package                     TEXT         NOT NULL,
     target_pool                 TEXT         NOT NULL,
     reference_pool              TEXT         NOT NULL,
@@ -77,11 +81,12 @@ CREATE TABLE IF NOT EXISTS pool_prices
 
 CREATE TABLE IF NOT EXISTS balances
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checkpoint_timestamp_ms     BIGINT       NOT NULL,
     package                     TEXT         NOT NULL,
     balance_manager_id          TEXT         NOT NULL,
     asset                       TEXT         NOT NULL,
@@ -91,11 +96,12 @@ CREATE TABLE IF NOT EXISTS balances
 
 CREATE TABLE IF NOT EXISTS trade_params_update
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checkpoint_timestamp_ms     BIGINT       NOT NULL,
     package                     TEXT         NOT NULL,
     pool_id                     TEXT         NOT NULL,
     taker_fee                   BIGINT       NOT NULL,
@@ -105,11 +111,12 @@ CREATE TABLE IF NOT EXISTS trade_params_update
 
 CREATE TABLE IF NOT EXISTS stakes
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checkpoint_timestamp_ms     BIGINT       NOT NULL,
     package                     TEXT         NOT NULL,
     pool_id                     TEXT         NOT NULL,
     balance_manager_id          TEXT         NOT NULL,
@@ -120,11 +127,12 @@ CREATE TABLE IF NOT EXISTS stakes
 
 CREATE TABLE IF NOT EXISTS proposals
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checkpoint_timestamp_ms     BIGINT       NOT NULL,
     package                     TEXT         NOT NULL,
     pool_id                     TEXT         NOT NULL,
     balance_manager_id          TEXT         NOT NULL,
@@ -136,11 +144,12 @@ CREATE TABLE IF NOT EXISTS proposals
 
 CREATE TABLE IF NOT EXISTS votes
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checkpoint_timestamp_ms     BIGINT       NOT NULL,
     package                     TEXT         NOT NULL,
     pool_id                     TEXT         NOT NULL,
     balance_manager_id          TEXT         NOT NULL,
@@ -152,11 +161,12 @@ CREATE TABLE IF NOT EXISTS votes
 
 CREATE TABLE IF NOT EXISTS rebates
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checkpoint_timestamp_ms     BIGINT       NOT NULL,
     package                     TEXT         NOT NULL,
     pool_id                     TEXT         NOT NULL,
     balance_manager_id          TEXT         NOT NULL,
