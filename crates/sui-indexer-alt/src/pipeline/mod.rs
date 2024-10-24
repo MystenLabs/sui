@@ -51,8 +51,8 @@ pub struct PipelineConfig {
 struct Indexed<H: Handler> {
     /// Values to be inserted into the database from this checkpoint
     values: Vec<H::Value>,
-    /// The watermark associated with this checkpoint and the part of it that is left to commit
-    watermark: WatermarkPart,
+    /// The watermark associated with this checkpoint
+    watermark: CommitterWatermark<'static>,
 }
 
 /// Values ready to be written to the database. This is an internal type used to communicate
@@ -89,15 +89,11 @@ enum Break {
 impl<H: Handler> Indexed<H> {
     fn new(epoch: u64, cp_sequence_number: u64, tx_hi: u64, values: Vec<H::Value>) -> Self {
         Self {
-            watermark: WatermarkPart {
-                watermark: CommitterWatermark {
-                    pipeline: H::NAME.into(),
-                    epoch_hi_inclusive: epoch as i64,
-                    checkpoint_hi_inclusive: cp_sequence_number as i64,
-                    tx_hi: tx_hi as i64,
-                },
-                batch_rows: values.len(),
-                total_rows: values.len(),
+            watermark: CommitterWatermark {
+                pipeline: H::NAME.into(),
+                epoch_hi_inclusive: epoch as i64,
+                checkpoint_hi_inclusive: cp_sequence_number as i64,
+                tx_hi: tx_hi as i64,
             },
             values,
         }
@@ -105,27 +101,7 @@ impl<H: Handler> Indexed<H> {
 
     /// The checkpoint sequence number that this data is from
     fn checkpoint(&self) -> u64 {
-        self.watermark.watermark.checkpoint_hi_inclusive as u64
-    }
-
-    /// Whether there are values left to commit from this indexed checkpoint.
-    fn is_empty(&self) -> bool {
-        debug_assert!(self.watermark.batch_rows == 0);
-        self.values.is_empty()
-    }
-
-    /// Adds data from this indexed checkpoint to the `batch`, honoring the handler's bounds on
-    /// chunk size.
-    fn batch_into(&mut self, batch: &mut Batched<H>) {
-        if batch.values.len() + self.values.len() > H::CHUNK_SIZE {
-            let mut for_batch = self.values.split_off(H::CHUNK_SIZE - batch.values.len());
-            std::mem::swap(&mut self.values, &mut for_batch);
-            batch.watermark.push(self.watermark.take(for_batch.len()));
-            batch.values.extend(for_batch);
-        } else {
-            batch.watermark.push(self.watermark.take(self.values.len()));
-            batch.values.extend(std::mem::take(&mut self.values));
-        }
+        self.watermark.checkpoint_hi_inclusive as u64
     }
 }
 
