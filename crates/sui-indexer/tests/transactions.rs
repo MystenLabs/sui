@@ -6,17 +6,11 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use jsonrpsee::http_client::HttpClientBuilder;
 use simulacrum::Simulacrum;
 use sui_config::local_ip_utils::new_local_tcp_socket_for_testing_string;
-use sui_indexer::{
-    indexer_reader::IndexerReader,
-    test_utils::{set_up, start_indexer_jsonrpc_for_testing, wait_for_checkpoint},
-};
+use sui_indexer::test_utils::{set_up, start_indexer_jsonrpc_for_testing, wait_for_checkpoint};
 use sui_json_rpc_api::{IndexerApiClient, ReadApiClient};
 use sui_json_rpc_types::{SuiTransactionBlockResponseQuery, TransactionFilter};
 use sui_test_transaction_builder::publish_package;
-use sui_types::{
-    base_types::SuiAddress, effects::TransactionEffectsAPI, message_envelope::Message,
-    transaction::CallArg,
-};
+use sui_types::{base_types::SuiAddress, effects::TransactionEffectsAPI, transaction::CallArg};
 use tempfile::tempdir;
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
