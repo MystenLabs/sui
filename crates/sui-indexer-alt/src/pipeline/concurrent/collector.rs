@@ -15,8 +15,52 @@ use tracing::{debug, info};
 use crate::{
     handlers::Handler,
     metrics::IndexerMetrics,
-    pipeline::{Batched, Indexed, PipelineConfig},
+    pipeline::{Batched, Indexed, PipelineConfig, WatermarkPart},
 };
+
+/// Processed values that are waiting to be written to the database. This is an internal type used
+/// by the concurrent collector to hold data it is waiting to send to the committer.
+struct Pending<H: Handler> {
+    /// Values to be inserted into the database from this checkpoint
+    values: Vec<H::Value>,
+    /// The watermark associated with this checkpoint and the part of it that is left to commit
+    watermark: WatermarkPart,
+}
+
+impl<H: Handler> Pending<H> {
+    /// Whether there are values left to commit from this indexed checkpoint.
+    fn is_empty(&self) -> bool {
+        debug_assert!(self.watermark.batch_rows == 0);
+        self.values.is_empty()
+    }
+
+    /// Adds data from this indexed checkpoint to the `batch`, honoring the handler's bounds on
+    /// chunk size.
+    fn batch_into(&mut self, batch: &mut Batched<H>) {
+        if batch.values.len() + self.values.len() > H::CHUNK_SIZE {
+            let mut for_batch = self.values.split_off(H::CHUNK_SIZE - batch.values.len());
+            std::mem::swap(&mut self.values, &mut for_batch);
+            batch.watermark.push(self.watermark.take(for_batch.len()));
+            batch.values.extend(for_batch);
+        } else {
+            batch.watermark.push(self.watermark.take(self.values.len()));
+            batch.values.extend(std::mem::take(&mut self.values));
+        }
+    }
+}
+
+impl<H: Handler> From<Indexed<H>> for Pending<H> {
+    fn from(indexed: Indexed<H>) -> Self {
+        Self {
+            watermark: WatermarkPart {
+                watermark: indexed.watermark,
+                batch_rows: indexed.values.len(),
+                total_rows: indexed.values.len(),
+            },
+            values: indexed.values,
+        }
+    }
+}
 
 /// The collector task is responsible for gathering rows into batches which it then sends to a
 /// committer task to write to the database. The task publishes batches in the following
@@ -46,7 +90,7 @@ pub(super) fn collector<H: Handler + 'static>(
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // Data for checkpoints that haven't been written yet.
-        let mut pending: BTreeMap<u64, Indexed<H>> = BTreeMap::new();
+        let mut pending: BTreeMap<u64, Pending<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
         info!(pipeline = H::NAME, "Starting collector");
@@ -121,7 +165,7 @@ pub(super) fn collector<H: Handler + 'static>(
                         .inc_by(indexed.values.len() as u64);
 
                     pending_rows += indexed.values.len();
-                    pending.insert(indexed.checkpoint(), indexed);
+                    pending.insert(indexed.checkpoint(), indexed.into());
 
                     if pending_rows >= H::BATCH_SIZE {
                         poll.reset_immediately()
