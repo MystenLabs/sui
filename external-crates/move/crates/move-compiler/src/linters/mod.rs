@@ -158,7 +158,7 @@ lints!(
         UnnecessaryUnit,
         LinterDiagnosticCategory::Style,
         "unnecessary_unit",
-        "empty unit `()` expression can be removed or simplified"
+        "unit `()` expression can be removed or simplified"
     ),
 );
 
