@@ -71,7 +71,7 @@ impl TypingVisitorContext for Context<'_> {
     fn visit_exp_custom(&mut self, e: &T::Exp) -> bool {
         use UnannotatedExp_ as TE;
         match &e.exp.value {
-            TE::IfElse(e_cond, e_true, e_false) => {
+            TE::IfElse(e_cond, e_true, e_false_opt) => {
                 if is_unit(self, e_true) {
                     let u_msg = "Unnecessary unit '()'";
                     let if_msg = "Consider negating the 'if' condition and simplifying, \
@@ -82,15 +82,17 @@ impl TypingVisitorContext for Context<'_> {
                         (e_cond.exp.loc, if_msg),
                     ));
                 }
-                if is_unit(self, e_false) {
-                    let u_msg = "Unnecessary 'else ()'.";
-                    let if_msg = "An 'if' without an 'else' has an implicit 'else' with '()'. \
-                        Consider removing, e.g. 'if (cond) e else ()' becomes 'if (cond) e'";
-                    self.env.add_diag(diag!(
-                        StyleCodes::UnnecessaryUnit.diag_info(),
-                        (e_false.exp.loc, u_msg),
-                        (e.exp.loc, if_msg),
-                    ));
+                if let Some(e_false) = e_false_opt {
+                    if is_unit(self, e_false) {
+                        let u_msg = "Unnecessary 'else ()'.";
+                        let if_msg = "An 'if' without an 'else' has an implicit 'else' with '()'. \
+                            Consider removing, e.g. 'if (cond) e else ()' becomes 'if (cond) e'";
+                        self.env.add_diag(diag!(
+                            StyleCodes::UnnecessaryUnit.diag_info(),
+                            (e_false.exp.loc, u_msg),
+                            (e.exp.loc, if_msg),
+                        ));
+                    }
                 }
             }
 

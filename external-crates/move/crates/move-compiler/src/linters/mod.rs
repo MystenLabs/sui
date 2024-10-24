@@ -188,9 +188,12 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
         LintLevel::All => {
             vec![
                 constant_naming::ConstantNamingVisitor.visitor(),
+                unnecessary_while_loop::WhileTrueToLoop.visitor(),
                 meaningless_math_operation::MeaninglessMathOperation.visitor(),
+                unneeded_return::UnneededReturnVisitor.visitor(),
                 abort_constant::AssertAbortNamedConstants.visitor(),
                 loop_without_exit::LoopWithoutExit.visitor(),
+                unnecessary_conditional::UnnecessaryConditional.visitor(),
                 self_assignment::SelfAssignmentVisitor.visitor(),
                 redundant_ref_deref::RedundantRefDerefVisitor.visitor(),
                 unnecessary_unit::UnnecessaryUnit.visitor(),
