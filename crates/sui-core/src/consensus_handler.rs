@@ -10,7 +10,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
-use consensus_core::{CommitConsumerMonitor, TransactionIndex, VerifiedBlock};
+use consensus_core::{CertifiedBlocksOutput, CommitConsumerMonitor};
 use lru::LruCache;
 use mysten_common::debug_fatal;
 use mysten_metrics::{
@@ -504,7 +504,7 @@ impl MysticetiConsensusHandler {
         mut consensus_handler: ConsensusHandler<CheckpointService>,
         consensus_transaction_handler: ConsensusTransactionHandler,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
-        mut transaction_receiver: UnboundedReceiver<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
+        mut block_receiver: UnboundedReceiver<consensus_core::CertifiedBlocksOutput>,
         commit_consumer_monitor: Arc<CommitConsumerMonitor>,
     ) -> Self {
         let mut tasks = JoinSet::new();
@@ -520,10 +520,9 @@ impl MysticetiConsensusHandler {
         }));
         if consensus_transaction_handler.enabled() {
             tasks.spawn(monitored_future!(async move {
-                while let Some(blocks_and_rejected_transactions) = transaction_receiver.recv().await
-                {
+                while let Some(blocks) = block_receiver.recv().await {
                     consensus_transaction_handler
-                        .handle_consensus_transactions(blocks_and_rejected_transactions)
+                        .handle_certified_blocks(blocks)
                         .await;
                 }
             }));
@@ -947,18 +946,17 @@ impl ConsensusTransactionHandler {
     }
 
     #[instrument(level = "debug", skip_all)]
-    pub async fn handle_consensus_transactions(
-        &self,
-        blocks_and_rejected_transactions: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
-    ) {
+    async fn handle_certified_blocks(&self, blocks_output: CertifiedBlocksOutput) {
         self.backpressure_subscriber.await_no_backpressure().await;
 
-        let _scope = monitored_scope("ConsensusTransactionHandler::handle_consensus_transactions");
+        let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
+            monitored_scope("ConsensusTransactionHandler::handle_certified_blocks");
 
-        let parsed_transactions = blocks_and_rejected_transactions
+        let parsed_transactions = blocks_output
+            .blocks
             .into_iter()
-            .flat_map(|(block, rejected_transactions)| {
-                parse_block_transactions(&block, &rejected_transactions)
+            .flat_map(|certified_block| {
+                parse_block_transactions(&certified_block.block, &certified_block.rejected)
             })
             .collect::<Vec<_>>();
         let mut pending_consensus_transactions = vec![];
@@ -1029,7 +1027,8 @@ impl ConsensusTransactionHandler {
 #[cfg(test)]
 mod tests {
     use consensus_core::{
-        BlockAPI, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction, VerifiedBlock,
+        BlockAPI, CertifiedBlock, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction,
+        VerifiedBlock,
     };
     use futures::pin_mut;
     use prometheus::Registry;
@@ -1362,7 +1361,12 @@ mod tests {
 
         // AND process the transactions from consensus output.
         transaction_handler
-            .handle_consensus_transactions(vec![(block.clone(), rejected_transactions.clone())])
+            .handle_certified_blocks(CertifiedBlocksOutput {
+                blocks: vec![CertifiedBlock {
+                    block: block.clone(),
+                    rejected: rejected_transactions.clone(),
+                }],
+            })
             .await;
 
         // THEN check for status of transactions that should have been executed.
