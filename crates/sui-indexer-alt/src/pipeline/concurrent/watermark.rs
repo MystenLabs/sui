@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    sync::Arc,
+};
 
 use mysten_metrics::spawn_monitored_task;
 use tokio::{
@@ -17,7 +20,7 @@ use crate::{
     handlers::Handler,
     metrics::IndexerMetrics,
     models::watermarks::{CommitterWatermark, Ordering},
-    pipeline::PipelineConfig,
+    pipeline::{PipelineConfig, WatermarkPart},
 };
 
 /// Tracing message for the watermark update will be logged at info level at least this many
@@ -37,9 +40,11 @@ const WARN_PENDING_WATERMARKS: usize = 10000;
 /// updating its row in the `watermarks` table when a continuous run of checkpoints have landed
 /// since the last watermark update.
 ///
-/// It receives watermarks for each checkpoint that has been completely written out by the
-/// committer, and periodically (on a configurable interval) checks if the watermark for the
-/// pipeline can be pushed forward.
+/// It receives watermark "parts" that detail the proportion of each checkpoint's data that has
+/// been written out by the committer and periodically (on a configurable interval) checks if the
+/// watermark for the pipeline can be pushed forward. The watermark can be pushed forward if there
+/// is one or more complete (all data for that checkpoint written out) watermarks spanning
+/// contiguously from the current high watermark into the future.
 ///
 /// If it detects that more than [WARN_PENDING_WATERMARKS] watermarks have built up, it will issue
 /// a warning, as this could be the indication of a memory leak, and the caller probably intended
@@ -54,7 +59,7 @@ const WARN_PENDING_WATERMARKS: usize = 10000;
 pub(super) fn watermark<H: Handler + 'static>(
     initial_watermark: Option<CommitterWatermark<'static>>,
     config: PipelineConfig,
-    mut rx: mpsc::Receiver<Vec<CommitterWatermark<'static>>>,
+    mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
     db: Db,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -69,17 +74,17 @@ pub(super) fn watermark<H: Handler + 'static>(
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // To correctly update the watermark, the committer tracks the watermark it last tried to
-        // write and the watermarks for any checkpoints that have been written since then
+        // write and the watermark parts for any checkpoints that have been written since then
         // ("pre-committed"). After each batch is written, the committer will try to progress the
         // watermark as much as possible without going over any holes in the sequence of
-        // checkpoints.
+        // checkpoints (entirely missing watermarks, or incomplete watermarks).
         //
         // NOTE: When no watermark is provided, it is assumed that the pipeline is starting from
         // scratch, but we still initialize it as if it is at (after) the genesis checkpoint. This
         // means we never write a watermark for the genesis checkpoint, but would wait for another
         // checkpoint to be written out before updating the watermark, which is fine in practice
         // and simplifies the logic of tracking watermarks.
-        let mut precommitted: BTreeSet<CommitterWatermark<'static>> = BTreeSet::new();
+        let mut precommitted: BTreeMap<u64, WatermarkPart> = BTreeMap::new();
         let mut watermark =
             initial_watermark.unwrap_or_else(|| CommitterWatermark::initial(H::NAME.into()));
 
@@ -88,12 +93,12 @@ pub(super) fn watermark<H: Handler + 'static>(
         let mut next_loud_watermark_update =
             watermark.checkpoint_hi_inclusive + LOUD_WATERMARK_UPDATE_INTERVAL;
 
-        info!(pipeline = H::NAME, ?watermark, "Starting watermark task");
+        info!(pipeline = H::NAME, ?watermark, "Starting watermark");
 
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received, stopping watermark task");
+                    info!(pipeline = H::NAME, "Shutdown received, stopping watermark");
                     break;
                 }
 
@@ -118,9 +123,17 @@ pub(super) fn watermark<H: Handler + 'static>(
                         .start_timer();
 
                     let mut watermark_needs_update = false;
-                    while let Some(pending) = precommitted.first() {
-                        match watermark.next_cmp(pending) {
+                    while let Some(pending) = precommitted.first_entry() {
+                        let part = pending.get();
+
+                        // Some rows from the next watermark have not landed yet.
+                        if !part.is_complete() {
+                            break;
+                        }
+
+                        match watermark.next_cmp(&part.watermark) {
                             Ordering::Future => break,
+
                             Ordering::Past => {
                                 // Out of order watermarks can be encountered when a pipeline is
                                 // starting up, because ingestion must start at the lowest
@@ -134,13 +147,11 @@ pub(super) fn watermark<H: Handler + 'static>(
                                     .with_label_values(&[H::NAME])
                                     .inc();
 
-                                precommitted.pop_first().unwrap();
+                                pending.remove();
                             }
 
                             Ordering::Next => {
-                                // SAFETY: `precommitted` is known to be non-empty because of the loop
-                                // condition.
-                                watermark = precommitted.pop_first().unwrap();
+                                watermark = pending.remove().watermark;
                                 watermark_needs_update = true;
                             }
                         }
@@ -242,8 +253,18 @@ pub(super) fn watermark<H: Handler + 'static>(
                     }
                 }
 
-                Some(watermarks) = rx.recv() => {
-                    precommitted.extend(watermarks);
+                Some(parts) = rx.recv() => {
+                    for part in parts {
+                        match precommitted.entry(part.checkpoint()) {
+                            Entry::Vacant(entry) => {
+                                entry.insert(part);
+                            }
+
+                            Entry::Occupied(mut entry) => {
+                                entry.get_mut().add(part);
+                            }
+                        }
+                    }
                 }
             }
         }
