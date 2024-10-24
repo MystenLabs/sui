@@ -12,6 +12,7 @@ use sui_data_ingestion::{
 };
 use sui_data_ingestion_core::{DataIngestionMetrics, ReaderOptions};
 use sui_data_ingestion_core::{IndexerExecutor, WorkerPool};
+use sui_kvstore::{BigTableClient, KvWorker};
 use tokio::signal;
 use tokio::sync::oneshot;
 
@@ -21,6 +22,7 @@ enum Task {
     Archival(ArchivalConfig),
     Blob(BlobTaskConfig),
     KV(KVStoreTaskConfig),
+    BigTableKV(BigTableTaskConfig),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -38,6 +40,11 @@ struct ProgressStoreConfig {
     pub aws_secret_access_key: String,
     pub aws_region: String,
     pub table_name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct BigTableTaskConfig {
+    instance_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,6 +148,15 @@ async fn main() -> Result<()> {
             Task::KV(kv_config) => {
                 let worker_pool = WorkerPool::new(
                     KVStoreWorker::new(kv_config).await,
+                    task_config.name,
+                    task_config.concurrency,
+                );
+                executor.register(worker_pool).await?;
+            }
+            Task::BigTableKV(kv_config) => {
+                let client = BigTableClient::new_remote(kv_config.instance_id, false, None).await?;
+                let worker_pool = WorkerPool::new(
+                    KvWorker { client },
                     task_config.name,
                     task_config.concurrency,
                 );

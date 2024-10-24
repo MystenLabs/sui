@@ -13386,6 +13386,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "sui-archival",
  "sui-data-ingestion-core",
+ "sui-kvstore",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
