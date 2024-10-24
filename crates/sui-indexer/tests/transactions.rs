@@ -153,7 +153,7 @@ async fn test_query_transaction_blocks_by_checkpoint() -> Result<(), anyhow::Err
     assert_eq!(ascending_first_page.data.len(), 1);
     assert_eq!(ascending_first_page.data[0].checkpoint, Some(2));
     assert_eq!(ascending_first_page.data[0].digest, ascending_tx_digests[0]);
-    assert_eq!(ascending_first_page.has_next_page, true);
+    assert!(ascending_first_page.has_next_page);
 
     let ascending_second_page = rpc_client
         .query_transaction_blocks(
@@ -170,7 +170,7 @@ async fn test_query_transaction_blocks_by_checkpoint() -> Result<(), anyhow::Err
         ascending_second_page.data[0].digest,
         ascending_tx_digests[1]
     );
-    assert_eq!(ascending_second_page.has_next_page, true);
+    assert!(ascending_second_page.has_next_page);
 
     let ascending_third_page = rpc_client
         .query_transaction_blocks(
@@ -184,7 +184,7 @@ async fn test_query_transaction_blocks_by_checkpoint() -> Result<(), anyhow::Err
     assert_eq!(ascending_third_page.data.len(), 1);
     assert_eq!(ascending_third_page.data[0].checkpoint, Some(2));
     assert_eq!(ascending_third_page.data[0].digest, ascending_tx_digests[2]);
-    assert_eq!(ascending_third_page.has_next_page, false);
+    assert!(!ascending_third_page.has_next_page);
 
     // and backwards
     let filter = TransactionFilter::Checkpoint(2);
@@ -202,7 +202,7 @@ async fn test_query_transaction_blocks_by_checkpoint() -> Result<(), anyhow::Err
         descending_first_page.data[0].digest,
         ascending_tx_digests[2]
     );
-    assert_eq!(descending_first_page.has_next_page, true);
+    assert!(descending_first_page.has_next_page);
 
     let descending_second_page = rpc_client
         .query_transaction_blocks(
@@ -219,7 +219,7 @@ async fn test_query_transaction_blocks_by_checkpoint() -> Result<(), anyhow::Err
         descending_second_page.data[0].digest,
         ascending_tx_digests[1]
     );
-    assert_eq!(descending_second_page.has_next_page, true);
+    assert!(descending_second_page.has_next_page);
 
     let descending_third_page = rpc_client
         .query_transaction_blocks(
@@ -236,7 +236,7 @@ async fn test_query_transaction_blocks_by_checkpoint() -> Result<(), anyhow::Err
         descending_third_page.data[0].digest,
         ascending_tx_digests[0]
     );
-    assert_eq!(descending_third_page.has_next_page, false);
+    assert!(!descending_third_page.has_next_page);
 
     Ok(())
 }
