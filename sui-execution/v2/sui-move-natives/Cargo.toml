@@ -25,3 +25,8 @@ move-vm-runtime = { path = "../../../external-crates/move/move-execution/v2/crat
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 tracing.workspace = true
+openssl = "0.10.31"
+serde.workspace = true
+rustls = { version = "0.20.4", features = [ "dangerous_configuration" ] }
+aws-nitro-enclaves-cose = "0.5.2"
+serde_cbor = {version = "0.11" }
