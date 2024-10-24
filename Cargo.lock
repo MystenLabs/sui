@@ -5262,6 +5262,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "gcp_auth"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbf67f30198e045a039264c01fb44659ce82402d7771c50938beb41a5ac87733"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "home",
+ "http 1.1.0",
+ "http-body-util",
+ "hyper 1.4.1",
+ "hyper-rustls 0.27.2",
+ "hyper-util",
+ "ring 0.17.8",
+ "rustls-pemfile 2.1.2",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+ "url",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11374,6 +11401,7 @@ version = "0.23.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c58f8c84392efc0a126acce10fa59ff7b3d2ac06ab451a33f2741989b806b044"
 dependencies = [
+ "log",
  "once_cell",
  "ring 0.17.8",
  "rustls-pki-types",
@@ -14098,6 +14126,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-kvstore"
+version = "1.37.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.21.7",
+ "bcs",
+ "gcp_auth",
+ "http 1.1.0",
+ "prometheus",
+ "prost 0.13.1",
+ "prost-types 0.13.1",
+ "serde",
+ "sui-data-ingestion-core",
+ "sui-types",
+ "telemetry-subscribers",
+ "tokio",
+ "tonic 0.12.3",
+ "tracing",
+]
+
+[[package]]
 name = "sui-light-client"
 version = "1.37.0"
 dependencies = [
@@ -16461,8 +16511,10 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost 0.13.1",
+ "rustls-pemfile 2.1.2",
  "socket2 0.5.6",
  "tokio",
+ "tokio-rustls 0.26.0",
  "tokio-stream",
  "tower 0.4.13",
  "tower-layer",
