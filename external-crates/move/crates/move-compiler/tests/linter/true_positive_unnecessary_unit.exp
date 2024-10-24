@@ -4,8 +4,9 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
 6 │         if (b) () else { x = 1 };
   │             -  ^^ Unnecessary unit '()'
   │             │   
-  │             Consider negating the 'if' condition and simplifying, e.g. 'if (cond) () else e' becomes 'if (!cond) e'
+  │             Consider negating the 'if' condition and simplifying
   │
+  = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
@@ -14,8 +15,9 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
 8 │         if (b) {} else { x = 1 };
   │             -  ^^ Unnecessary unit '()'
   │             │   
-  │             Consider negating the 'if' condition and simplifying, e.g. 'if (cond) () else e' becomes 'if (!cond) e'
+  │             Consider negating the 'if' condition and simplifying
   │
+  = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
@@ -24,20 +26,22 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
 10 │         if (b) { () } else { x = 1 };
    │             -  ^^^^^^ Unnecessary unit '()'
    │             │   
-   │             Consider negating the 'if' condition and simplifying, e.g. 'if (cond) () else e' becomes 'if (!cond) e'
+   │             Consider negating the 'if' condition and simplifying
    │
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:12:16
    │  
 12 │           if (b) {
-   │               - Consider negating the 'if' condition and simplifying, e.g. 'if (cond) () else e' becomes 'if (!cond) e'
+   │               - Consider negating the 'if' condition and simplifying
    │ ╭────────────────^
 13 │ │             // new line and comment does not suppress it
 14 │ │         } else { x = 1 };
    │ ╰─────────^ Unnecessary unit '()'
    │  
+   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
@@ -47,8 +51,9 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │         ----------------------^^
    │         │                     │
    │         │                     Unnecessary 'else ()'.
-   │         An 'if' without an 'else' has an implicit 'else' with '()'. Consider removing, e.g. 'if (cond) e else ()' becomes 'if (cond) e'
+   │         An 'if' without an 'else' has an implicit 'else ()'. Consider removing the 'else' branch
    │
+   = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
@@ -58,8 +63,9 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │         ----------------------^^
    │         │                     │
    │         │                     Unnecessary 'else ()'.
-   │         An 'if' without an 'else' has an implicit 'else' with '()'. Consider removing, e.g. 'if (cond) e else ()' becomes 'if (cond) e'
+   │         An 'if' without an 'else' has an implicit 'else ()'. Consider removing the 'else' branch
    │
+   = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
@@ -69,8 +75,9 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │         ----------------------^^^^^^
    │         │                     │
    │         │                     Unnecessary 'else ()'.
-   │         An 'if' without an 'else' has an implicit 'else' with '()'. Consider removing, e.g. 'if (cond) e else ()' becomes 'if (cond) e'
+   │         An 'if' without an 'else' has an implicit 'else ()'. Consider removing the 'else' branch
    │
+   = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
@@ -81,8 +88,9 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
 28 │ │ │             // new line and comment does not suppress it
 29 │ │ │         };
    │ ╰─│─────────^ Unnecessary 'else ()'.
-   │   ╰─────────' An 'if' without an 'else' has an implicit 'else' with '()'. Consider removing, e.g. 'if (cond) e else ()' becomes 'if (cond) e'
+   │   ╰─────────' An 'if' without an 'else' has an implicit 'else ()'. Consider removing the 'else' branch
    │    
+   = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
