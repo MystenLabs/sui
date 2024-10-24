@@ -12,7 +12,6 @@ use tracing::instrument;
 use tracing::{error, info};
 
 use crate::metrics::IndexerMetrics;
-use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use crate::store::IndexerStore;
 use crate::types::IndexerResult;
 
