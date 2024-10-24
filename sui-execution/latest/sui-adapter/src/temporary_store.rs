@@ -123,6 +123,10 @@ impl<'backing> TemporaryStore<'backing> {
         &self.input_objects
     }
 
+    pub fn objects_created_count(&self) -> usize {
+        self.execution_results.created_object_ids.len()
+    }
+
     pub fn update_object_version_and_prev_tx(&mut self) {
         self.execution_results.update_version_and_previous_tx(
             self.lamport_timestamp,
