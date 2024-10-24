@@ -308,10 +308,22 @@ impl U256 {
         Self(PrimitiveU256::from_little_endian(slice))
     }
 
+    /// U256 from 32 big endian bytes
+    pub fn from_be_bytes(slice: &[u8; U256_NUM_BYTES]) -> Self {
+        Self(PrimitiveU256::from_big_endian(slice))
+    }
+
     /// U256 to 32 little endian bytes
     pub fn to_le_bytes(self) -> [u8; U256_NUM_BYTES] {
         let mut bytes = [0u8; U256_NUM_BYTES];
         self.0.to_little_endian(&mut bytes);
+        bytes
+    }
+
+    /// U256 to 32 big endian bytes
+    pub fn to_be_bytes(self) -> [u8; U256_NUM_BYTES] {
+        let mut bytes = [0u8; U256_NUM_BYTES];
+        self.0.to_big_endian(&mut bytes);
         bytes
     }
 

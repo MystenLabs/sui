@@ -91,10 +91,10 @@ impl Token for TypeToken {
                 Some(':') => (Self::ColonColon, 2),
                 _ => bail!("unrecognized token: {}", s),
             },
-            '0' if matches!(chars.peek(), Some('x') | Some('X')) => {
+            '0' if matches!(chars.peek(), Some('x')) => {
                 chars.next().unwrap();
                 match chars.next() {
-                    Some(c) if c.is_ascii_hexdigit() || c == '_' => {
+                    Some(c) if c.is_ascii_hexdigit() => {
                         // 0x + c + remaining
                         let len = 3 + chars
                             .take_while(|q| char::is_ascii_hexdigit(q) || *q == '_')
@@ -106,7 +106,9 @@ impl Token for TypeToken {
             }
             c if c.is_ascii_digit() => {
                 // c + remaining
-                let len = 1 + chars.take_while(char::is_ascii_digit).count();
+                let len = 1 + chars
+                    .take_while(|c| c.is_ascii_digit() || *c == '_')
+                    .count();
                 (Self::AddressIdent, len)
             }
             c if c.is_ascii_whitespace() => {

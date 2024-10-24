@@ -3,8 +3,8 @@
 
 use crate::account_address::AccountAddress;
 use crate::parsing::parser::{parse_address_number, NumberFormat};
+use crate::u256::U256;
 use anyhow::anyhow;
-use num::BigUint;
 use std::{fmt, hash::Hash};
 
 // Parsed Address, either a name or a numerical address
@@ -62,10 +62,7 @@ impl NumericalAddress {
 
     pub fn parse_str(s: &str) -> Result<NumericalAddress, String> {
         match parse_address_number(s) {
-            Some((n, format)) => Ok(NumericalAddress {
-                bytes: AccountAddress::new(n),
-                format,
-            }),
+            Some((n, format)) => Ok(NumericalAddress { bytes: n, format }),
             None =>
             // TODO the kind of error is in an unstable nightly API
             // But currently the only way this should fail is if the number is too long
@@ -90,7 +87,7 @@ impl fmt::Display for NumericalAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.format {
             NumberFormat::Decimal => {
-                let n = BigUint::from_bytes_be(self.bytes.as_ref());
+                let n = U256::from_be_bytes(&self.bytes);
                 write!(f, "{}", n)
             }
             NumberFormat::Hex => write!(f, "{:#X}", self),
