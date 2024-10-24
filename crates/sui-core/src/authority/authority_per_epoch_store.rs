@@ -84,7 +84,7 @@ use typed_store::{
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use super::shared_object_congestion_tracker::{
-    CongestionPerObjectDebt, SharedObjectCongestionTracker,
+    CongestionPerObjectDebt, Debt, SharedObjectCongestionTracker,
 };
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
@@ -2808,21 +2808,26 @@ impl AuthorityPerEpochStore {
 
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
         // they will be in different PendingCheckpoints.
-        let tables = self.tables()?;
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::from_protocol_config(
-            &tables,
+            self.consensus_quarantine.read().load_initial_object_debts(
+                self,
+                consensus_commit_info.round,
+                false,
+                &sequenced_transactions,
+            )?,
             self.protocol_config(),
-            consensus_commit_info.round,
             false,
-            &sequenced_transactions,
         )?;
         let shared_object_using_randomness_congestion_tracker =
             SharedObjectCongestionTracker::from_protocol_config(
-                &tables,
+                self.consensus_quarantine.read().load_initial_object_debts(
+                    self,
+                    consensus_commit_info.round,
+                    true,
+                    &sequenced_transactions,
+                )?,
                 self.protocol_config(),
-                consensus_commit_info.round,
                 true,
-                &sequenced_randomness_transactions,
             )?;
 
         // We always order transactions using randomness last.
@@ -4199,6 +4204,8 @@ impl AuthorityPerEpochStore {
 mod quarantine {
     use mysten_common::fatal;
 
+    use crate::authority::shared_object_congestion_tracker::Debt;
+
     use super::*;
 
     /// ConsensusOutputQuarantine holds outputs of consensus processing in memory until the checkpoints
@@ -4598,19 +4605,26 @@ mod quarantine {
             epoch_store: &AuthorityPerEpochStore,
             current_round: Round,
             for_randomness: bool,
-            per_commit_budget: u64,
             transactions: &[VerifiedSequencedConsensusTransaction],
-        ) -> SuiResult<impl IntoIterator<Item = (ObjectID, u64)>> {
+        ) -> SuiResult<impl IntoIterator<Item = (ObjectID, Debt)>> {
+            let protocol_config = epoch_store.protocol_config();
             let tables = epoch_store.tables()?;
-            let (hash_table, db_table) = if for_randomness {
+            let default_per_commit_budget = protocol_config
+                .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
+                .unwrap_or(0);
+            let (hash_table, db_table, per_commit_budget) = if for_randomness {
                 (
                     &self.congestion_control_randomness_object_debts,
                     &tables.congestion_control_randomness_object_debts,
+                    protocol_config
+                        .max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_as_option()
+                        .unwrap_or(default_per_commit_budget),
                 )
             } else {
                 (
                     &self.congestion_control_object_debts,
                     &tables.congestion_control_object_debts,
+                    default_per_commit_budget,
                 )
             };
             let shared_input_object_ids: BTreeSet<_> = transactions
@@ -4652,19 +4666,15 @@ mod quarantine {
 
             Ok(results
                 .into_iter()
-                .zip(shared_input_object_ids.into_iter())
-                .flat_map(move |(debt, object_id)| {
-                    if let Some((round, debt)) = debt {
-                        Some((
-                            object_id,
-                            // Stored debts already account for the budget of the round in which
-                            // they were accumulated. Application of budget from future rounds to
-                            // the debt is handled here.
-                            debt.saturating_sub(per_commit_budget * (current_round - round - 1)),
-                        ))
-                    } else {
-                        None
-                    }
+                .zip(shared_input_object_ids)
+                .filter_map(|(debt, object_id)| debt.map(|debt| (debt, object_id)))
+                .map(move |((round, debt), object_id)| {
+                    // Stored debts already account for the budget of the round in which
+                    // they were accumulated. Application of budget from future rounds to
+                    // the debt is handled here.
+                    assert!(current_round > round);
+                    let num_rounds = current_round - round - 1;
+                    (object_id, debt.dec_by(per_commit_budget * num_rounds))
                 }))
         }
     }
@@ -4705,8 +4715,8 @@ pub(crate) struct ConsensusCommitOutput {
     active_jwks: BTreeSet<(u64, (JwkId, JWK))>,
 
     // congestion control state
-    congestion_control_object_debts: Vec<(ObjectID, u64)>,
-    congestion_control_randomness_object_debts: Vec<(ObjectID, u64)>,
+    congestion_control_object_debts: Vec<(ObjectID, Debt)>,
+    congestion_control_randomness_object_debts: Vec<(ObjectID, Debt)>,
 }
 
 impl ConsensusCommitOutput {
@@ -4836,13 +4846,13 @@ impl ConsensusCommitOutput {
         self.active_jwks.insert((round, key));
     }
 
-    fn set_congestion_control_object_debts(&mut self, object_debts: Vec<(ObjectID, u64)>) {
+    fn set_congestion_control_object_debts(&mut self, object_debts: Vec<(ObjectID, Debt)>) {
         self.congestion_control_object_debts = object_debts;
     }
 
     fn set_congestion_control_randomness_object_debts(
         &mut self,
-        object_debts: Vec<(ObjectID, u64)>,
+        object_debts: Vec<(ObjectID, Debt)>,
     ) {
         self.congestion_control_randomness_object_debts = object_debts;
     }
