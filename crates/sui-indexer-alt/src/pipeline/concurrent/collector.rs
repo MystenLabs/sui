@@ -149,7 +149,7 @@ pub(super) fn collector<H: Handler + 'static>(
 
                     if pending_rows > 0 {
                         poll.reset_immediately();
-                    } else if rx.is_closed() {
+                    } else if rx.is_closed() && rx.is_empty() {
                         info!(
                             pipeline = H::NAME,
                             "Processor closed channel, pending rows empty, stopping collector",
