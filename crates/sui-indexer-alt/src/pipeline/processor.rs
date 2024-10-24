@@ -42,7 +42,8 @@ pub(super) fn processor<H: Handler + 'static>(
     }
 
     spawn_monitored_task!(async move {
-        info!(pipeline = H::NAME, "Starting handler");
+        info!(pipeline = H::NAME, "Starting processor");
+
         match ReceiverStream::new(rx)
             .map(Ok)
             .try_for_each_concurrent(H::FANOUT, |checkpoint| {
@@ -103,11 +104,11 @@ pub(super) fn processor<H: Handler + 'static>(
             .await
         {
             Ok(()) => {
-                info!(pipeline = H::NAME, "Checkpoints done, stopping handler");
+                info!(pipeline = H::NAME, "Checkpoints done, stopping processor");
             }
 
             Err(Break::Cancel) => {
-                info!(pipeline = H::NAME, "Shutdown received, stopping handler");
+                info!(pipeline = H::NAME, "Shutdown received, stopping processor");
             }
 
             Err(Break::Err(e)) => {
