@@ -691,6 +691,9 @@ advance_epoch
 current_epoch_subsidy_amount
 	public fun
 	0x3::stake_subsidy
+get_distribution_counter
+	public(package) fun
+	0x3::stake_subsidy
 SystemParameters
 	public struct
 	0x3::sui_system_state_inner
