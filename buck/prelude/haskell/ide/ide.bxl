@@ -1,0 +1,295 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under both the MIT license found in the
+# LICENSE-MIT file in the root directory of this source tree and the Apache
+# License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+# of this source tree.
+
+load("@prelude//haskell:haskell.bzl", "HaskellLibraryProvider", "HaskellLinkInfo", "HaskellToolchainInfo")
+load("@prelude//linking:link_info.bzl", "LinkStyle")
+load("@prelude//paths.bzl", "paths")
+
+# This script computes a solution for loading a Haskell project in VSCode
+# The solution includes:
+# - flags (and materializing any artifacts used by the flags)
+# - source files
+# - external dependencies whose changes will cause a reload (e.g. TARGETS files)
+
+# There are only 3 rule types that we need to support
+# - haskell_binary
+# - haskell_library
+# - haskell_ide (aka "projects")
+
+# The input to the script is usually a source file, although it can also be a target
+# Solving an input involves:
+# 1. Finding its owner target, if the input is a file
+# 2. Finding the target's "project", which involves a rdeps search
+# 3. Computing the project solution (flags, sources and dependencies)
+# 4. Outputing the solution as JSON
+
+_HASKELL_BIN = "prelude//rules.bzl:haskell_binary"
+_HASKELL_IDE = "prelude//rules.bzl:haskell_ide"
+_HASKELL_LIB = "prelude//rules.bzl:haskell_library"
+
+linkStyle = LinkStyle("static")
+
+def _impl_target(ctx):
+    target = ctx.cli_args.target
+    project_universe = ctx.cli_args.project_universe
+    res = _find_project_and_solve(ctx, target, project_universe)
+    solution = _assembleSolution(ctx, linkStyle, res)
+    _print_solution(ctx, solution)
+
+def _print_solution(ctx, solution):
+    if not ctx.cli_args.bios:
+        ctx.output.print_json(solution)
+    else:
+        for flag in solution["flags"]:
+            ctx.output.print(flag)
+        for src in solution["sources"]:
+            ctx.output.print(src)
+
+def _impl_file(ctx):
+    project_universe = ctx.cli_args.project_universe
+    res = _solution_for_file(ctx, ctx.cli_args.file, project_universe)
+    solution = _assembleSolution(ctx, linkStyle, res)
+    _print_solution(ctx, solution)
+
+def _solution_for_file(ctx, file, project_universe):
+    unconfigured_owners = ctx.uquery().owner(file)
+    target_universe = ctx.target_universe(unconfigured_owners).target_set()
+    owners = ctx.cquery().owner(file, target_universe)
+    if not owners or len(owners) == 0:
+        fail("No owner found for " + file)
+
+    owner = owners[0]
+
+    result = _find_project_and_solve(ctx, owner, project_universe)
+    result["owner"] = owner.label.raw_target()
+    return result
+
+def _find_project_and_solve(ctx, target, project_universe = []):
+    prefix = target.label.package.split("/", 1)[0]
+    local_universe = _find_project_universe(ctx, target.label.cell, prefix)
+    if local_universe:
+        project_universe.extend(local_universe)
+    project = _find_target_in_universe(ctx, target, dedupe(project_universe))
+
+    result = _solution_for_target(ctx, project)
+    result["project"] = project.label.raw_target()
+    result["project_type"] = project.rule_type
+    return result
+
+def _find_target_in_universe(ctx, target, project_universe):
+    for p in project_universe:
+        cfg_p = ctx.configured_targets(p)
+        members = cfg_p.resolved_attrs_eager(ctx).include_projects
+        for member in members:
+            if target.label.raw_target() == member.label.raw_target():
+                return cfg_p
+
+    return target
+
+def _find_project_universe(ctx, cell, prefix):
+    return ctx.uquery().eval("kind(haskell_ide, %s//%s/...)" % (cell, prefix))
+
+def _solution_for_target(ctx, target, exclude = {}):
+    result = None
+    if target.rule_type == _HASKELL_LIB:
+        result = _solution_for_haskell_lib(ctx, target, exclude)
+    elif target.rule_type == _HASKELL_BIN:
+        result = _solution_for_haskell_bin(ctx, target, exclude)
+    elif target.rule_type == _HASKELL_IDE:
+        result = _solution_for_haskell_ide(ctx, target)
+
+    if result == None:
+        return {"error": "Cannot handle rule type " + target.rule_type}
+    return result
+
+def _solution_for_haskell_ide(ctx, target):
+    resolved_attrs = target.resolved_attrs_eager(ctx)
+    results = []
+    deps = {}
+    for dep in resolved_attrs.deps_query:
+        t = ctx.configured_targets(dep.label.raw_target())
+        if (t.rule_type == _HASKELL_LIB or t.rule_type == _HASKELL_BIN):
+            deps[dep.label] = t
+    for lib in deps.values():
+        results.append(_solution_for_target(ctx, lib, deps))
+
+    final = merge(results)
+    final["targets"].extend(targetsForTarget(ctx, target))
+    return final
+
+def _solution_for_haskell_bin(ctx, target, exclude):
+    return _solution_for_haskell_lib(ctx, target, exclude)
+
+def _solution_for_haskell_lib(ctx, target, exclude):
+    resolved_attrs = target.resolved_attrs_eager(ctx)
+    hli = ctx.analysis(target).providers().get(HaskellLibraryProvider)
+
+    haskellLibs = {}
+    for dep in resolved_attrs.deps + resolved_attrs.template_deps:
+        if exclude.get(dep.label) == None:
+            providers = ctx.analysis(dep.label).providers()
+            lb = providers.get(HaskellLinkInfo)
+            if lb != None:
+                haskellLibs[dep.label] = lb
+
+    sources = []
+    for item in ctx.output.ensure_multiple(resolved_attrs.srcs.values()):
+        sources.append(item.abs_path())
+
+    import_dirs = {}
+    root = ctx.root()
+    for key, item in resolved_attrs.srcs.items():
+        # because BXL wont give you the path of an ensured artifact
+        sp = get_path_without_materialization(item, ctx)
+        (_, ext) = paths.split_extension(sp)
+        diff = sp.removesuffix(paths.replace_extension(key, ext))
+        import_dirs["%s/%s" % (root, diff)] = ()
+
+    haskell_toolchain = ctx.analysis(resolved_attrs._haskell_toolchain.label)
+    toolchain = haskell_toolchain.providers().get(HaskellToolchainInfo)
+
+    binutils_path = paths.join(root, toolchain.ghci_binutils_path)
+    cc_path = paths.join(root, toolchain.ghci_cc_path)
+    cxx_path = paths.join(root, toolchain.ghci_cxx_path)
+    cpp_path = paths.join(root, toolchain.ghci_cpp_path)
+
+    flags = [
+        "-this-unit-id",
+        "fbcode_fake_unit_id",
+        "-optP-undef",
+        "-optP-traditional-cpp",
+        "-I.",
+        "-no-global-package-db",
+        "-no-user-package-db",
+        "-hide-all-packages",
+        "-pgma%s" % cc_path,
+        "-pgml%s" % cxx_path,
+        "-pgmc%s" % cc_path,
+        "-pgmP%s" % cpp_path,
+        "-opta-B%s" % binutils_path,
+        "-optc-B%s" % binutils_path,
+    ]
+    flags.extend(resolved_attrs.compiler_flags)
+
+    return {
+        "exclude_packages": {hli.lib.get(linkStyle).name: ()} if hli else {},
+        "flags": flags,
+        "generated_dependencies": externalSourcesForTarget(ctx, target),
+        "haskell_deps": haskellLibs,
+        "import_dirs": import_dirs.keys(),
+        "sources": sources,
+        "targets": targetsForTarget(ctx, target),
+    }
+
+def targetsForTarget(ctx, target):
+    buildfile = ctx.cquery().buildfile(target)
+    root = ctx.root()
+    paths = []
+    for b in buildfile:
+        paths.append("%s/%s" % (root, str(b).replace("//", "/")))
+    return paths
+
+def externalSourcesForTarget(ctx, target):
+    deps3 = ctx.cquery().deps(target, 3)
+    thrifts = ctx.cquery().attrfilter("labels", "thrift_library=hs2/compile", deps3)
+    paths = []
+    for thrift in thrifts:
+        paths.extend(thrift.resolved_attrs_lazy(ctx).get("srcs"))
+    return paths
+
+def merge(results):
+    flags = {}
+    sources = {}
+    haskellDeps = {}
+    import_dirs = {}
+    generated_dependencies = {}
+    targets = {}
+    exclude_packages = {}
+
+    for result in results:
+        # TODO flags are order sensitive, so avoid the dedup dictionary trick
+        for flag in result["flags"]:
+            flags[flag] = ()
+        for source in result["sources"]:
+            sources[source] = ()
+        for p, v in result["haskell_deps"].items():
+            haskellDeps[p] = v
+        for i in result["import_dirs"]:
+            import_dirs[i] = ()
+        for dep in result["generated_dependencies"]:
+            generated_dependencies[dep] = ()
+        for t in result["targets"]:
+            targets[t] = ()
+        for t in result["exclude_packages"]:
+            exclude_packages[t] = ()
+
+    return {
+        "exclude_packages": exclude_packages,
+        "flags": flags.keys(),
+        "generated_dependencies": generated_dependencies.keys(),
+        "haskell_deps": haskellDeps,
+        "import_dirs": import_dirs.keys(),
+        "sources": sources.keys(),
+        "targets": targets.keys(),
+    }
+
+def _assembleSolution(ctx, linkStyle, result):
+    flags = result["flags"]
+    package_dbs = {}
+    for i in result["import_dirs"]:
+        flags.append("-i%s" % i)
+    hlis = {}
+    for provider in result["haskell_deps"].values():
+        info = provider.info.get(linkStyle)
+        if info != None:
+            for item in info:
+                if result["exclude_packages"].get(item.name) == None:
+                    hlis[item.name] = item
+    for hli in hlis.values():
+        flags.append("-package")
+        flags.append(hli.name)
+        ctx.output.ensure_multiple(hli.stub_dirs)
+        ctx.output.ensure_multiple(hli.libs)
+        ctx.output.ensure_multiple(hli.import_dirs.values())
+        package_dbs[hli.db] = ()
+    for pkgdb in ctx.output.ensure_multiple(package_dbs.keys()):
+        flags.append("-package-db")
+        flags.append(pkgdb.abs_path())
+
+    external_deps = result["targets"]
+    for s in ctx.output.ensure_multiple(result["generated_dependencies"]):
+        external_deps.append(s.abs_path())
+
+    return {
+        "externalDependencies": external_deps,
+        "flags": result["flags"],
+        "owner": result.get("owner"),
+        "owner_type": result.get("owner_type"),
+        "project": result.get("project"),
+        "project_type": result.get("project_type"),
+        # TODO check for duplicate module names in sources
+        "sources": result["sources"],
+    }
+
+_common_flags = {
+    "bios": cli_args.bool(False, "Output GHC flags and targets separated by newlines"),
+    "project_universe": cli_args.list(cli_args.target_label("list of haskell_ide targets"), []),
+}
+
+ide_for_target = bxl_main(
+    impl = _impl_target,
+    cli_args = dict(_common_flags.items() + {
+        "target": cli_args.target_label(),
+    }.items()),
+)
+
+ide_for_file = bxl_main(
+    impl = _impl_file,
+    cli_args = dict(_common_flags.items() + {
+        "file": cli_args.string("File to load in IDE"),
+    }.items()),
+)
