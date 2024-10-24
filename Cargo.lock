@@ -13106,6 +13106,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum 0.7.5",
  "backoff",
  "bcs",
  "bin-version",
@@ -13114,6 +13115,7 @@ dependencies = [
  "diesel-async",
  "ethers",
  "futures",
+ "hex",
  "hex-literal 0.3.4",
  "mysten-metrics",
  "prometheus",

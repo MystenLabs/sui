@@ -20,6 +20,7 @@ use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::utils::get_eth_contract_addresses;
 use sui_bridge_indexer::eth_bridge_indexer::EthFinalizedSyncDatasource;
 use sui_bridge_indexer::eth_bridge_indexer::EthSubscriptionDatasource;
+use sui_bridge_indexer::server::run_server;
 use sui_config::Config;
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -93,6 +94,15 @@ async fn main() -> Result<()> {
             tokio::time::Duration::from_secs(30),
         )),
     );
+
+    if (config.api_service_port.is_some()) {
+        let api_service_address = SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            config.api_service_port.unwrap(),
+        );
+        run_server(api_service_address, datastore.clone()).await?;
+    }
+
     let datastore_with_out_of_order_source = PgBridgePersistent::new(
         get_connection_pool(db_url.clone()).await,
         ProgressSavingPolicy::OutOfOrderSaveAfterDuration(OutOfOrderSaveAfterDurationPolicy::new(
@@ -202,6 +212,7 @@ async fn main() -> Result<()> {
 
     let sui_bridge_client =
         Arc::new(SuiBridgeClient::new(&config.sui_rpc_url, bridge_metrics.clone()).await?);
+
     start_watchdog(
         config,
         eth_bridge_proxy_address,
@@ -213,6 +224,7 @@ async fn main() -> Result<()> {
 
     // Wait for tasks in `tasks` to finish. Return when anyone of them returns an error.
     futures::future::try_join_all(tasks).await?;
+
     unreachable!("Indexer tasks finished unexpectedly");
 }
 

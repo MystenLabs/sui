@@ -24,7 +24,7 @@ use sui_indexer_builder::{
 /// Persistent layer impl
 #[derive(Clone)]
 pub struct PgBridgePersistent {
-    pool: PgPool,
+    pub pool: PgPool,
     save_progress_policy: ProgressSavingPolicy,
 }
 
