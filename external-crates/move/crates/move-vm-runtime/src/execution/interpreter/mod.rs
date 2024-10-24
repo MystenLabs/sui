@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 mod eval;
 pub(crate) mod state;
+// pub mod locals;
 
 /// Entrypoint into the interpreter. All external calls need to be routed through this
 /// function.

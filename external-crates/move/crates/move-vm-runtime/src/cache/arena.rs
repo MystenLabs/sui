@@ -64,6 +64,11 @@ impl<T> ArenaPointer<T> {
     }
 
     #[inline]
+    pub fn to_mut_ref<'a>(self) -> &'a mut T {
+        to_mut_ref(self.ptr_clone().0)
+    }
+
+    #[inline]
     pub fn from_ref(t: &T) -> Self {
         Self(unsafe { t as *const T })
     }
@@ -116,6 +121,12 @@ pub fn to_mut_ref_slice<'a, T>(value: *mut [T]) -> &'a mut [T] {
 #[inline]
 pub fn to_ref<'a, T>(value: *const T) -> &'a T {
     unsafe { &*value as &T }
+}
+
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[inline]
+pub fn to_mut_ref<'a, T>(value: *const T) -> &'a mut T {
+    unsafe { &*value as &mut T }
 }
 
 // -----------------------------------------------

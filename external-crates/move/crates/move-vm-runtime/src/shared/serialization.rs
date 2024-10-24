@@ -4,7 +4,8 @@
 use crate::{
     execution::{
         dispatch_tables::VMDispatchTables,
-        values::{Locals, Reference, VMValueCast, Value},
+        values::{Reference, VMValueCast, Value},
+        interpreter::locals::Locals,
     },
     jit::execution::ast::Type,
 };
