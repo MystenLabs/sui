@@ -68,8 +68,8 @@ module sui_system::voting_power {
         while (i < len) {
             let validator = &validators[i];
             let stake = validator.total_stake();
-            let adjusted_stake = stake as u128 * (TOTAL_VOTING_POWER as u128) / (total_stake as u128);
-            let voting_power = (adjusted_stake as u64).min(threshold);
+            let adjusted_stake = derive_voting_power(stake, total_stake);
+            let voting_power = adjusted_stake.min(threshold);
             let info = VotingPowerInfoV2 {
                 validator_index: i,
                 voting_power,
@@ -80,6 +80,10 @@ module sui_system::voting_power {
             i = i + 1;
         };
         (result, TOTAL_VOTING_POWER - total_power)
+    }
+
+    public(package) fun derive_voting_power(stake: u64, total_stake: u64): u64 {
+        ((stake as u128 * (TOTAL_VOTING_POWER as u128) / (total_stake as u128)) as u64)
     }
 
     /// Sum up the total stake of all validators.
