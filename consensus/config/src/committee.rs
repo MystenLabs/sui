@@ -68,6 +68,10 @@ impl Committee {
         self.total_stake
     }
 
+    pub fn n_percent_stake_threshold(&self, n: u64) -> Stake {
+        self.total_stake * n / 100
+    }
+
     pub fn quorum_threshold(&self) -> Stake {
         self.quorum_threshold
     }

@@ -73,7 +73,11 @@ impl AncestorStateManager {
     #[cfg(test)]
     const STATE_LOCK_SCORE_UPDATES: u32 = 1;
 
+    // Exclusion threshold is based on reputation scores
     const EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 10;
+
+    // Inclusion threshold is based on network quorum round
+    const INCLUSION_THRESHOLD_PERCENTAGE: u64 = 90;
 
     pub(crate) fn new(context: Arc<Context>, propagation_scores: ReputationScores) -> Self {
         let state_map = vec![AncestorInfo::new(); context.committee.size()];
@@ -101,6 +105,12 @@ impl AncestorStateManager {
 
     pub(crate) fn get_ancestor_states(&self) -> Vec<AncestorState> {
         self.state_map.iter().map(|info| info.state).collect()
+    }
+
+    pub(crate) fn get_inclusion_stake_threshold(&self) -> u64 {
+        self.context
+            .committee
+            .n_percent_stake_threshold(Self::INCLUSION_THRESHOLD_PERCENTAGE)
     }
 
     /// Updates the state of all ancestors based on the latest scores and quorum rounds
@@ -213,12 +223,12 @@ impl AncestorStateManager {
         self.state_map[authority_id] = ancestor_info;
     }
 
-    /// Calculate the network's low quorum round from 2f+1 authorities by stake,
-    /// where low quorum round is the highest round a block has been seen by 2f+1
-    /// authorities.
+    /// Calculate the network's quorum round from authorities by inclusion stake
+    /// threshold, where quorum round is the highest round a block has been seen
+    /// by a percentage (inclusion threshold) of authorities.
     fn calculate_network_low_quorum_round(&self) -> u32 {
         let committee = &self.context.committee;
-        let quorum_threshold = committee.quorum_threshold();
+        let inclusion_stake_threshold = self.get_inclusion_stake_threshold();
         let mut low_quorum_rounds_with_stake = self
             .quorum_round_per_authority
             .iter()
@@ -231,9 +241,9 @@ impl AncestorStateManager {
         let mut network_low_quorum_round = 0;
 
         for (round, stake) in low_quorum_rounds_with_stake.iter().rev() {
-            let reached_quorum_before = total_stake >= quorum_threshold;
+            let reached_quorum_before = total_stake >= inclusion_stake_threshold;
             total_stake += stake;
-            if !reached_quorum_before && total_stake >= quorum_threshold {
+            if !reached_quorum_before && total_stake >= inclusion_stake_threshold {
                 network_low_quorum_round = *round;
                 break;
             }

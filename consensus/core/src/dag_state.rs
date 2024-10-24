@@ -496,65 +496,23 @@ impl DagState {
         blocks
     }
 
-    /// Returns the last block cached for the authority within a range.
-    /// This can return None if there is no block within the range provided.
-    pub(crate) fn get_last_cached_block_for_authority_in_range(
-        &self,
-        authority: AuthorityIndex,
-        start_round: Round,
-        end_round: Round,
-    ) -> Option<VerifiedBlock> {
-        let blocks = self.get_last_cached_block_per_authority_in_range(start_round, end_round);
-        blocks[authority].clone()
-    }
-
-    /// Returns the last block cached per authority with `round < end_round`.
+    /// Returns the last block proposed per authority with `round < end_round`.
     /// The method is guaranteed to return results only when the `end_round` is not earlier of the
     /// available cached data for each authority, otherwise the method will panic - it's the caller's
-    /// responsibility to ensure that is not requesting filtering for earlier rounds.
+    /// responsibility to ensure that is not requesting filtering for earlier rounds .
+    /// In case of equivocation for an authority's last slot only one block will be returned (the last in order).
     pub(crate) fn get_last_cached_block_per_authority(
         &self,
         end_round: Round,
     ) -> Vec<VerifiedBlock> {
-        let blocks = self.get_last_cached_block_per_authority_in_range(GENESIS_ROUND, end_round);
+        // init with the genesis blocks as fallback
+        let mut blocks = self.genesis.values().cloned().collect::<Vec<_>>();
 
-        // Ensure every authority has a valid block as we will fall back to genesis
-        // blocks which should always be available.
-        blocks
-            .into_iter()
-            .enumerate()
-            .map(|(idx, block_opt)| {
-                let authority_index = self.context.committee.to_authority_index(idx).unwrap();
-                let hostname = &self.context.committee.authority(authority_index).hostname;
-                block_opt.unwrap_or_else(|| {
-                    panic!("Expected to find a cached block for authority {hostname}")
-                })
-            })
-            .collect()
-    }
-
-    /// Returns the last block cached per authority within `start_round <= round < end_round`.
-    /// The method is not guranteed to return a block for the authority as None can
-    /// be returned if the authority cached blocks are outside of the range provided.
-    /// In case of equivocation for an authority's last slot only one block will be
-    /// returned (the last in order).
-    fn get_last_cached_block_per_authority_in_range(
-        &self,
-        start_round: u32,
-        end_round: u32,
-    ) -> Vec<Option<VerifiedBlock>> {
-        let mut blocks = if start_round != GENESIS_ROUND {
-            // Init with None, as we will selectively insert cached blocks in range
-            vec![None; self.context.committee.size()]
-        } else {
-            // Init with the genesis blocks as fallback as genesis round is within range.
-            self.genesis.values().cloned().map(Some).collect::<Vec<_>>()
-        };
-
-        assert!(
-            end_round != GENESIS_ROUND,
-            "Attempted to retrieve blocks earlier than the genesis round which is not possible"
-        );
+        if end_round == GENESIS_ROUND {
+            panic!(
+                "Attempted to retrieve blocks earlier than the genesis round which is not possible"
+            );
+        }
 
         if end_round == GENESIS_ROUND + 1 {
             return blocks;
@@ -568,21 +526,14 @@ impl DagState {
                 .unwrap();
 
             let last_evicted_round = self.evicted_rounds[authority_index];
-
-            // If the last evicted round is after the start round, start from the
-            // last evicted round + 1.
-            let first_available_round = start_round.max(last_evicted_round + 1);
-
-            if first_available_round >= end_round {
-                debug!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} and the first available round is {first_available_round} for authority {authority_index}");
-                blocks[authority_index] = None;
-                continue;
+            if end_round.saturating_sub(1) <= last_evicted_round {
+                panic!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}", );
             }
 
             if let Some(block_ref) = block_refs
                 .range((
                     Included(BlockRef::new(
-                        first_available_round,
+                        last_evicted_round + 1,
                         authority_index,
                         BlockDigest::MIN,
                     )),
@@ -595,7 +546,7 @@ impl DagState {
                     .get(block_ref)
                     .expect("Block should exist in recent blocks");
 
-                blocks[authority_index] = Some(block.clone());
+                blocks[authority_index] = block.clone();
             }
         }
 
@@ -1996,82 +1947,6 @@ mod test {
         assert_eq!(cached_blocks[0].round(), 12);
     }
 
-    #[tokio::test]
-    async fn test_get_cached_last_block_for_authority_in_range() {
-        // GIVEN
-        const CACHED_ROUNDS: Round = 2;
-        let (mut context, _) = Context::new_for_test(4);
-        context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
-
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        let mut dag_state = DagState::new(context.clone(), store.clone());
-
-        // Create no blocks for authority 0
-        // Create one block (round 1) for authority 1
-        // Create two blocks (rounds 1,2) for authority 2
-        // Create three blocks (rounds 1,2,3) for authority 3
-        let mut all_blocks = Vec::new();
-        for author in 1..=3 {
-            for round in 1..=author {
-                let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
-                all_blocks.push(block.clone());
-                dag_state.accept_block(block);
-            }
-        }
-
-        dag_state.add_commit(TrustedCommit::new_for_test(
-            1 as CommitIndex,
-            CommitDigest::MIN,
-            context.clock.timestamp_utc_ms(),
-            all_blocks.last().unwrap().reference(),
-            all_blocks
-                .into_iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        ));
-
-        // WHEN search for the latest blocks between rounds (2..4)
-        let start_round = 2;
-        let end_round = 4;
-        let last_block = dag_state.get_last_cached_block_for_authority_in_range(
-            AuthorityIndex::new_for_test(3),
-            start_round,
-            end_round,
-        );
-
-        // THEN we should have found a block within the range
-        assert_eq!(last_block.unwrap().round(), 3);
-
-        // WHEN we flush the DagState - after adding a commit with all the blocks, we expect this to trigger
-        // a clean up in the internal cache. That will keep the all the blocks with rounds >= authority_commit_round - CACHED_ROUND.
-        dag_state.flush();
-
-        // AND we request blocks between rounds (3..3)
-        let start_round = 3;
-        let end_round = 3;
-        let last_block = dag_state.get_last_cached_block_for_authority_in_range(
-            AuthorityIndex::new_for_test(3),
-            start_round,
-            end_round,
-        );
-
-        // THEN we hit the case where block is not found
-        assert!(last_block.is_none());
-
-        // AND we request blocks between intentionally incorrect rounds (4..3)
-        let start_round = 4;
-        let end_round = 3;
-        let last_block = dag_state.get_last_cached_block_for_authority_in_range(
-            AuthorityIndex::new_for_test(3),
-            start_round,
-            end_round,
-        );
-
-        // THEN we hit the case where block is not found
-        assert!(last_block.is_none());
-    }
-
     #[rstest]
     #[tokio::test]
     async fn test_get_cached_last_block_per_authority(#[values(0, 1)] gc_depth: u32) {
@@ -2154,7 +2029,9 @@ mod test {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "Expected to find a cached block for authority test_host_2")]
+    #[should_panic(
+        expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority C"
+    )]
     async fn test_get_cached_last_block_per_authority_requesting_out_of_round_range() {
         // GIVEN
         const CACHED_ROUNDS: Round = 1;
@@ -2199,7 +2076,9 @@ mod test {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "Expected to find a cached block for authority test_host_2")]
+    #[should_panic(
+        expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority C"
+    )]
     async fn test_get_cached_last_block_per_authority_requesting_out_of_round_range_gc_enabled() {
         // GIVEN
         const CACHED_ROUNDS: Round = 1;
