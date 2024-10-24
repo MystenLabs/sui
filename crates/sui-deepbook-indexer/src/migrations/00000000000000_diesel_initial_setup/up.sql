@@ -2,7 +2,7 @@
 
 CREATE TABLE IF NOT EXISTS order_updates
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS order_updates
 
 CREATE TABLE IF NOT EXISTS order_fills
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS order_fills
 
 CREATE TABLE IF NOT EXISTS flashloans
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS flashloans
 
 CREATE TABLE IF NOT EXISTS pool_prices
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS pool_prices
 
 CREATE TABLE IF NOT EXISTS balances
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS balances
 
 CREATE TABLE IF NOT EXISTS trade_params_update
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS trade_params_update
 
 CREATE TABLE IF NOT EXISTS stakes
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS stakes
 
 CREATE TABLE IF NOT EXISTS proposals
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
@@ -136,7 +136,7 @@ CREATE TABLE IF NOT EXISTS proposals
 
 CREATE TABLE IF NOT EXISTS votes
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS votes
 
 CREATE TABLE IF NOT EXISTS rebates
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS progress_store
 
 CREATE TABLE IF NOT EXISTS sui_error_transactions
 (
-    id                          SERIAL       PRIMARY KEY,
+    event_digest                TEXT         PRIMARY KEY,
     txn_digest                  TEXT         NOT NULL,
     sender_address              TEXT         NOT NULL,
     timestamp_ms                BIGINT       NOT NULL,

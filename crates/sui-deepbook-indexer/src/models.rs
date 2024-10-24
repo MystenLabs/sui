@@ -13,8 +13,9 @@ use crate::schema::{
 };
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
-#[diesel(table_name = order_updates, primary_key(digest))]
+#[diesel(table_name = order_updates, primary_key(event_digest))]
 pub struct OrderUpdate {
+    pub event_digest: String,
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
@@ -34,8 +35,9 @@ pub struct OrderUpdate {
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
-#[diesel(table_name = order_fills, primary_key(digest))]
+#[diesel(table_name = order_fills, primary_key(event_digest))]
 pub struct OrderFill {
+    pub event_digest: String,
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
@@ -74,8 +76,9 @@ pub struct BalancesSummary {
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
-#[diesel(table_name = flashloans, primary_key(digest))]
+#[diesel(table_name = flashloans, primary_key(event_digest))]
 pub struct Flashloan {
+    pub event_digest: String,
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
@@ -87,8 +90,9 @@ pub struct Flashloan {
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
-#[diesel(table_name = pool_prices, primary_key(digest))]
+#[diesel(table_name = pool_prices, primary_key(event_digest))]
 pub struct PoolPrice {
+    pub event_digest: String,
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
@@ -99,8 +103,9 @@ pub struct PoolPrice {
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
-#[diesel(table_name = balances, primary_key(digest))]
+#[diesel(table_name = balances, primary_key(event_digest))]
 pub struct Balances {
+    pub event_digest: String,
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
@@ -112,8 +117,9 @@ pub struct Balances {
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
-#[diesel(table_name = proposals, primary_key(digest))]
+#[diesel(table_name = proposals, primary_key(event_digest))]
 pub struct Proposals {
+    pub event_digest: String,
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
@@ -127,8 +133,9 @@ pub struct Proposals {
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
-#[diesel(table_name = rebates, primary_key(digest))]
+#[diesel(table_name = rebates, primary_key(event_digest))]
 pub struct Rebates {
+    pub event_digest: String,
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
@@ -140,8 +147,9 @@ pub struct Rebates {
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
-#[diesel(table_name = stakes, primary_key(digest))]
+#[diesel(table_name = stakes, primary_key(event_digest))]
 pub struct Stakes {
+    pub event_digest: String,
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
@@ -154,8 +162,9 @@ pub struct Stakes {
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
-#[diesel(table_name = trade_params_update, primary_key(digest))]
+#[diesel(table_name = trade_params_update, primary_key(event_digest))]
 pub struct TradeParamsUpdate {
+    pub event_digest: String,
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
@@ -167,8 +176,9 @@ pub struct TradeParamsUpdate {
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
-#[diesel(table_name = votes, primary_key(digest))]
+#[diesel(table_name = votes, primary_key(event_digest))]
 pub struct Votes {
+    pub event_digest: String,
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,

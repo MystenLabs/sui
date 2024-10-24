@@ -3,8 +3,8 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    balances (id) {
-        id -> Int4,
+    balances (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -18,16 +18,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    balances_summary (asset) {
-        asset -> Text,
-        amount -> Int8,
-        deposit -> Bool,
-    }
-}
-
-diesel::table! {
-    flashloans (id) {
-        id -> Int4,
+    flashloans (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -41,8 +33,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    order_fills (id) {
-        id -> Int4,
+    order_fills (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -68,8 +60,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    order_updates (id) {
-        id -> Int4,
+    order_updates (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -91,8 +83,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    pool_prices (id) {
-        id -> Int4,
+    pool_prices (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -132,8 +124,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    proposals (id) {
-        id -> Int4,
+    proposals (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -149,8 +141,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    rebates (id) {
-        id -> Int4,
+    rebates (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -164,8 +156,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    stakes (id) {
-        id -> Int4,
+    stakes (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -180,8 +172,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    sui_error_transactions (id) {
-        id -> Int4,
+    sui_error_transactions (event_digest) {
+        event_digest -> Text,
         txn_digest -> Text,
         sender_address -> Text,
         timestamp_ms -> Int8,
@@ -192,8 +184,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    trade_params_update (id) {
-        id -> Int4,
+    trade_params_update (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -207,8 +199,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    votes (id) {
-        id -> Int4,
+    votes (event_digest) {
+        event_digest -> Text,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -238,3 +230,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     trade_params_update,
     votes,
 );
+
+diesel::table! {
+    balances_summary (asset) {
+        asset -> Text,
+        amount -> Int8,
+        deposit -> Bool,
+    }
+}
