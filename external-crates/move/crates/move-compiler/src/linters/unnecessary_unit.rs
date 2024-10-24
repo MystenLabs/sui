@@ -70,40 +70,35 @@ impl TypingVisitorContext for Context<'_> {
 
     fn visit_exp_custom(&mut self, e: &T::Exp) -> bool {
         use UnannotatedExp_ as TE;
-        match &e.exp.value {
-            TE::IfElse(e_cond, e_true, e_false_opt) => {
-                if is_unit(self, e_true) {
-                    let u_msg = "Unnecessary unit '()'";
-                    let if_msg = "Consider negating the 'if' condition and simplifying";
-                    let mut diag = diag!(
-                        StyleCodes::UnnecessaryUnit.diag_info(),
-                        (e_true.exp.loc, u_msg),
-                        (e_cond.exp.loc, if_msg),
-                    );
-                    diag.add_note(
-                        "For example 'if (cond) () else e' can be simplified to 'if (!cond) e'",
-                    );
-                    self.env.add_diag(diag);
-                }
-                if let Some(e_false) = e_false_opt {
-                    if is_unit(self, e_false) {
-                        let u_msg = "Unnecessary 'else ()'.";
-                        let if_msg = "An 'if' without an 'else' has an implicit 'else ()'. \
+        let TE::IfElse(e_cond, e_true, e_false_opt) = &e.exp.value else {
+            return false;
+        };
+        if is_unit(self, e_true) {
+            let u_msg = "Unnecessary unit '()'";
+            let if_msg = "Consider negating the 'if' condition and simplifying";
+            let mut diag = diag!(
+                StyleCodes::UnnecessaryUnit.diag_info(),
+                (e_true.exp.loc, u_msg),
+                (e_cond.exp.loc, if_msg),
+            );
+            diag.add_note("For example 'if (cond) () else e' can be simplified to 'if (!cond) e'");
+            self.env.add_diag(diag);
+        }
+        if let Some(e_false) = e_false_opt {
+            if is_unit(self, e_false) {
+                let u_msg = "Unnecessary 'else ()'.";
+                let if_msg = "An 'if' without an 'else' has an implicit 'else ()'. \
                             Consider removing the 'else' branch";
-                        let mut diag = diag!(
-                            StyleCodes::UnnecessaryUnit.diag_info(),
-                            (e_false.exp.loc, u_msg),
-                            (e.exp.loc, if_msg),
-                        );
-                        diag.add_note(
-                            "For example 'if (cond) e else ()' can be simplified to 'if (cond) e'",
-                        );
-                        self.env.add_diag(diag);
-                    }
-                }
+                let mut diag = diag!(
+                    StyleCodes::UnnecessaryUnit.diag_info(),
+                    (e_false.exp.loc, u_msg),
+                    (e.exp.loc, if_msg),
+                );
+                diag.add_note(
+                    "For example 'if (cond) e else ()' can be simplified to 'if (cond) e'",
+                );
+                self.env.add_diag(diag);
             }
-
-            _ => (),
         }
         false
     }
@@ -121,7 +116,7 @@ fn is_unit(context: &mut Context, e: &T::Exp) -> bool {
     match &e.exp.value {
         TE::Unit { .. } => true,
         TE::Annotate(inner, _) => is_unit(context, inner),
-        TE::Block((_, seq)) if seq.len() == 0 => {
+        TE::Block((_, seq)) if seq.is_empty() => {
             context
                 .env
                 .add_diag(ice!((e.exp.loc, "Unexpected empty block without a value")));
