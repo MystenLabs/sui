@@ -5,10 +5,13 @@ use crate::test_adapter::{FakeID, SuiTestAdapter};
 use anyhow::{bail, ensure};
 use clap;
 use clap::{Args, Parser};
-use move_command_line_common::parser::{parse_u256, parse_u64};
-use move_command_line_common::values::{ParsableValue, ParsedValue};
-use move_command_line_common::{parser::Parser as MoveCLParser, values::ValueToken};
 use move_compiler::editions::Flavor;
+use move_core_types::parsing::{
+    parser::Parser as MoveCLParser,
+    parser::{parse_u256, parse_u64},
+    values::ValueToken,
+    values::{ParsableValue, ParsedValue},
+};
 use move_core_types::runtime_value::{MoveStruct, MoveValue};
 use move_core_types::u256::U256;
 use move_symbol_pool::Symbol;

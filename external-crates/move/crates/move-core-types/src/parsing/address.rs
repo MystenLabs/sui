@@ -4,7 +4,7 @@
 use crate::account_address::AccountAddress;
 use crate::parsing::parser::{parse_address_number, NumberFormat};
 use anyhow::anyhow;
-use num_bigint::BigUint;
+use num::BigUint;
 use std::{fmt, hash::Hash};
 
 // Parsed Address, either a name or a numerical address

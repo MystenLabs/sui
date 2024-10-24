@@ -47,7 +47,8 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
-use move_command_line_common::{address::NumericalAddress, files::FileHash};
+use move_command_line_common::files::FileHash;
+use move_core_types::parsing::address::NumericalAddress;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
