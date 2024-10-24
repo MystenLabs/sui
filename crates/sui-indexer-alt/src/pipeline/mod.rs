@@ -14,14 +14,14 @@ const COMMITTER_BUFFER: usize = 5;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct PipelineConfig {
-    /// Committer will check for pending data at least this often
+    /// The collector will check for pending data at least this often
     #[arg(
         long,
         default_value = "500",
         value_name = "MILLISECONDS",
         value_parser = |s: &str| s.parse().map(Duration::from_millis),
     )]
-    commit_interval: Duration,
+    collect_interval: Duration,
 
     /// Watermark task will check for pending watermarks this often.
     #[arg(
