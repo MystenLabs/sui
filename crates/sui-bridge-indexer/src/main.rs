@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
         )),
     );
 
-    if (config.api_service_port.is_some()) {
+    if config.api_service_port.is_some() {
         let api_service_address = SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             config.api_service_port.unwrap(),
