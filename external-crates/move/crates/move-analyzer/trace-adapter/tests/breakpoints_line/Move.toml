@@ -1,0 +1,10 @@
+[package]
+name = "breakpoints_line"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+breakpoints_line = "0x0"
+std = "0x1"

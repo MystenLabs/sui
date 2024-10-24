@@ -6,7 +6,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import toml from 'toml';
-import { ISourceMap, IFileInfo, readAllSourceMaps } from './source_map_utils';
+import { IFileInfo, readAllSourceMaps } from './source_map_utils';
 import {
     TraceEffectKind,
     TraceEvent,
@@ -14,7 +14,6 @@ import {
     TraceInstructionKind,
     readTrace
 } from './trace_utils';
-import { ModuleInfo } from './utils';
 
 /**
  * Describes the runtime variable scope (e.g., local variables
@@ -78,26 +77,44 @@ interface IRuntimeVariable {
  * during trace viewing session.
  */
 interface IRuntimeStackFrame {
-    // Source map for the frame.
-    sourceMap: ISourceMap;
-    // Frame identifier.
+    /**
+     *  Frame identifier.
+     */
     id: number;
-    // Name of the function in this frame.
+    /**
+     *  Name of the function in this frame.
+     */
     name: string;
-    // Path to the file containing the function.
+    /**
+     *  Path to the file containing the function.
+     */
     file: string;
-    // Current line in the file correponding to currently viewed instruction.
+    /**
+     * Current line in the file correponding to currently viewed instruction.
+     */
     line: number; // 1-based
-    // Local variable types by variable frame index.
+    /**
+     *  Local variable types by variable frame index.
+     */
     localsTypes: string[];
-    // Local variables per scope (local scope at 0 and then following block scopes),
-    // indexed by variable frame index.
+    /**
+     *  Local variable names by variable frame index.
+     */
+    localsNames: string[];
+    /**
+     * Local variables per scope (local scope at 0 and then following block scopes),
+     * indexed by variable frame index.
+     */
     locals: (IRuntimeVariable | undefined)[][];
     /**
      * Line of the last call instruction that was processed in this frame.
      * It's needed to make sure that step/next into/over call works correctly.
      */
     lastCallInstructionLine: number | undefined;
+    /**
+     * Lines that are not present in the source map.
+     */
+    optimizedLines: number[]
 }
 
 /**
@@ -112,9 +129,19 @@ export interface IRuntimeStack {
  * Events emitted by the runtime during trace viewing session.
  */
 export enum RuntimeEvents {
-    // Stop after step/next action is performed.
+    /**
+     *  Stop after step/next action is performed.
+     */
     stopOnStep = 'stopOnStep',
-    // Finish trace viewing session.
+
+    /**
+     * Stop after a line breakpoint is hit.
+     */
+    stopOnLineBreakpoint = 'stopOnLineBreakpoint',
+
+    /**
+     *  Finish trace viewing session.
+     */
     end = 'end',
 }
 
@@ -126,7 +153,11 @@ export class Runtime extends EventEmitter {
     /**
      * Trace being viewed.
      */
-    private trace = { events: [] as TraceEvent[], localLifetimeEnds: new Map<number, number[]>() };
+    private trace = {
+        events: [] as TraceEvent[],
+        localLifetimeEnds: new Map<number, number[]>(),
+        tracedLines: new Map<string, Set<number>>()
+    };
 
     /**
      * Index of the current trace event being processed.
@@ -143,16 +174,17 @@ export class Runtime extends EventEmitter {
      */
     private filesMap = new Map<string, IFileInfo>();
 
-    /**x
-     * Map of stringified module info to source maps.
+    /**
+     * Map of line breakpoints, keyed on a file path.
      */
-    private sourceMapsMap = new Map<string, ISourceMap>();
+    private lineBreakpoints = new Map<string, Set<number>>();
 
     /**
      * Start a trace viewing session and set up the initial state of the runtime.
      *
      * @param source  path to the Move source file whose traces are to be viewed.
      * @param traceInfo  trace selected for viewing.
+     * @throws Error with a descriptive error message if starting runtime has failed.
      *
      */
     public async start(source: string, traceInfo: string, stopOnEntry: boolean): Promise<void> {
@@ -176,11 +208,11 @@ export class Runtime extends EventEmitter {
         hashToFileMap(path.join(pkgRoot, 'sources'), this.filesMap);
 
         // create source maps for all modules in the `build` directory
-        this.sourceMapsMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap);
+        const sourceMapsMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap);
 
         // reconstruct trace file path from trace info
         const traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + '.json');
-        this.trace = readTrace(traceFilePath);
+        this.trace = readTrace(traceFilePath, sourceMapsMap, this.filesMap);
 
         // start trace viewing session with the first trace event
         this.eventIndex = 0;
@@ -194,8 +226,10 @@ export class Runtime extends EventEmitter {
             this.newStackFrame(
                 currentEvent.id,
                 currentEvent.name,
-                currentEvent.modInfo,
-                currentEvent.localsTypes
+                currentEvent.fileHash,
+                currentEvent.localsTypes,
+                currentEvent.localsNames,
+                currentEvent.optimizedLines
             );
         this.frameStack = {
             frames: [newFrame]
@@ -231,8 +265,10 @@ export class Runtime extends EventEmitter {
         if (currentEvent.type === TraceEventKind.Instruction) {
             const stackHeight = this.frameStack.frames.length;
             if (stackHeight <= 0) {
-                throw new Error('No frame on the stack when processing Instruction event at PC: '
-                    + currentEvent.pc);
+                throw new Error('No frame on the stack when processing Instruction event on line: '
+                    + currentEvent.loc.line
+                    + ' in column: '
+                    + currentEvent.loc.column);
             }
             const currentFrame = this.frameStack.frames[stackHeight - 1];
             // remember last call instruction line before it (potentially) changes
@@ -317,8 +353,10 @@ export class Runtime extends EventEmitter {
                 this.newStackFrame(
                     currentEvent.id,
                     currentEvent.name,
-                    currentEvent.modInfo,
-                    currentEvent.localsTypes
+                    currentEvent.fileHash,
+                    currentEvent.localsTypes,
+                    currentEvent.localsNames,
+                    currentEvent.optimizedLines
                 );
             // set values of parameters in the new frame
             this.frameStack.frames.push(newFrame);
@@ -423,7 +461,54 @@ export class Runtime extends EventEmitter {
             if (this.step(/* next */ false, /* stopAtCloseFrame */ false)) {
                 return true;
             }
+            let currentEvent = this.trace.events[this.eventIndex];
+            if (currentEvent.type === TraceEventKind.Instruction) {
+                const stackHeight = this.frameStack.frames.length;
+                if (stackHeight <= 0) {
+                    throw new Error('No frame on the stack when processing Instruction event on line: '
+                        + currentEvent.loc.line
+                        + ' in column: '
+                        + currentEvent.loc.column);
+                }
+                const currentFrame = this.frameStack.frames[stackHeight - 1];
+                const breakpoints = this.lineBreakpoints.get(currentFrame.file);
+                if (!breakpoints) {
+                    continue;
+                }
+                if (breakpoints.has(currentEvent.loc.line)) {
+                    this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
+                    return false;
+                }
+            }
         }
+    }
+
+    /**
+     * Sets line breakpoints for a file (resetting any existing ones).
+     *
+     * @param path file path.
+     * @param lines breakpoints lines.
+     * @returns array of booleans indicating if a breakpoint was set on a line.
+     * @throws Error with a descriptive error message if breakpoints cannot be set.
+     */
+    public setLineBreakpoints(path: string, lines: number[]): boolean[] {
+        const breakpoints = new Set<number>();
+        const tracedLines = this.trace.tracedLines.get(path);
+        // Set all breakpoints to invalid and validate the correct ones in the loop,
+        // otherwise let them all be invalid if there are no traced lines.
+        // Valid breakpoints are those that are on lines that have at least
+        // one instruction in the trace on them.
+        const validated = lines.map(() => false);
+        if (tracedLines) {
+            for (let i = 0; i < lines.length; i++) {
+                if (tracedLines.has(lines[i])) {
+                    validated[i] = true;
+                    breakpoints.add(lines[i]);
+                }
+            }
+        }
+        this.lineBreakpoints.set(path, breakpoints);
+        return validated;
     }
 
     /**
@@ -438,24 +523,6 @@ export class Runtime extends EventEmitter {
         currentFrame: IRuntimeStackFrame,
         instructionEvent: Extract<TraceEvent, { type: TraceEventKind.Instruction }>
     ): [boolean, number] {
-        const currentFun = currentFrame.sourceMap.functions.get(currentFrame.name);
-        if (!currentFun) {
-            throw new Error(`Cannot find function: ${currentFrame.name} in source map`);
-        }
-
-        // if map does not contain an entry for a PC that can be found in the trace file,
-        // it means that the position of the last PC in the source map should be used
-        let currentPCLoc = instructionEvent.pc >= currentFun.pcLocs.length
-            ? currentFun.pcLocs[currentFun.pcLocs.length - 1]
-            : currentFun.pcLocs[instructionEvent.pc];
-
-        if (!currentPCLoc) {
-            throw new Error('Cannot find location for PC: '
-                + instructionEvent.pc
-                + ' in function: '
-                + currentFrame.name);
-        }
-
         // if current instruction ends lifetime of a local variable, mark this in the
         // local variable array
         const frameLocalLifetimeEnds = this.trace.localLifetimeEnds.get(currentFrame.id);
@@ -478,18 +545,18 @@ export class Runtime extends EventEmitter {
                 }
             }
         }
-
+        const loc = instructionEvent.loc;
         if (instructionEvent.kind === TraceInstructionKind.CALL ||
             instructionEvent.kind === TraceInstructionKind.CALL_GENERIC) {
-            currentFrame.lastCallInstructionLine = currentPCLoc.line;
+            currentFrame.lastCallInstructionLine = loc.line;
         }
 
-        if (currentPCLoc.line === currentFrame.line) {
+        if (loc.line === currentFrame.line) {
             // so that instructions on the same line can be bypassed
-            return [true, currentPCLoc.line];
+            return [true, loc.line];
         } else {
-            currentFrame.line = currentPCLoc.line;
-            return [false, currentPCLoc.line];
+            currentFrame.line = loc.line;
+            return [false, loc.line];
         }
     }
 
@@ -501,41 +568,38 @@ export class Runtime extends EventEmitter {
      * @param funName function name.
      * @param modInfo information about module containing the function.
      * @param localsTypes types of local variables in the frame.
+     * @param localsNames names of local variables in the frame.
+     * @param optimizedLines lines that are not present in the source map.
      * @returns new frame.
      * @throws Error with a descriptive error message if frame cannot be constructed.
      */
     private newStackFrame(
         frameID: number,
         funName: string,
-        modInfo: ModuleInfo,
-        localsTypes: string[]
+        fileHash: string,
+        localsTypes: string[],
+        localsNames: string[],
+        optimizedLines: number[]
     ): IRuntimeStackFrame {
-        const sourceMap = this.sourceMapsMap.get(JSON.stringify(modInfo));
-
-        if (!sourceMap) {
-            throw new Error('Cannot find source map for module: '
-                + modInfo.name
-                + ' in package: '
-                + modInfo.addr);
-        }
-        const currentFile = this.filesMap.get(sourceMap.fileHash);
+        const currentFile = this.filesMap.get(fileHash);
 
         if (!currentFile) {
-            throw new Error(`Cannot find file with hash: ${sourceMap.fileHash}`);
+            throw new Error(`Cannot find file with hash: ${fileHash}`);
         }
 
         let locals = [];
         // create first scope for local variables
         locals[0] = [];
         const stackFrame: IRuntimeStackFrame = {
-            sourceMap,
             id: frameID,
             name: funName,
             file: currentFile.path,
             line: 0, // line will be updated when next event (Instruction) is processed
             localsTypes,
+            localsNames,
             locals,
             lastCallInstructionLine: undefined,
+            optimizedLines
         };
 
         if (this.trace.events.length <= this.eventIndex + 1 ||
@@ -584,6 +648,15 @@ export class Runtime extends EventEmitter {
                             + this.singleTab
                             + this.singleTab, local) + '\n';
                     }
+                }
+            }
+        }
+        if (this.lineBreakpoints && this.lineBreakpoints.size > 0) {
+            res += 'line breakpoints\n';
+            for (const [file, breakpoints] of this.lineBreakpoints) {
+                res += this.singleTab + path.basename(file) + '\n';
+                for (const line of breakpoints) {
+                    res += this.singleTab + this.singleTab + line + '\n';
                 }
             }
         }
@@ -710,12 +783,7 @@ function localWrite(
             + ' in function: '
             + frame.name);
     }
-    const funEntry = frame.sourceMap.functions.get(frame.name);
-    if (!funEntry) {
-        throw new Error('Cannot find function entry in source map for function: '
-            + frame.name);
-    }
-    const name = funEntry.localsNames[localIndex];
+    const name = frame.localsNames[localIndex];
     if (!name) {
         throw new Error('Cannot find local variable at index: '
             + localIndex
