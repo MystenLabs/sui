@@ -15,6 +15,7 @@ use sui_types::transaction::{Command, TransactionDataAPI};
 use tracing::info;
 
 use sui_indexer_builder::indexer_builder::{DataMapper, IndexerProgressStore, Persistent};
+use sui_indexer_builder::sui_datasource::CheckpointTxnData;
 use sui_indexer_builder::{Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
@@ -33,7 +34,6 @@ use crate::schema::{
     balances, flashloans, order_fills, order_updates, pool_prices, proposals, rebates, stakes,
     sui_error_transactions, trade_params_update, votes,
 };
-use crate::sui_datasource::CheckpointTxnData;
 use crate::types::{
     Balances, Flashloan, OrderFill, OrderUpdate, OrderUpdateStatus, PoolPrice, ProcessedTxnData,
     Proposals, Rebates, Stakes, SuiTxnError, TradeParamsUpdate, Votes,

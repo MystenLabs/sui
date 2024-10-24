@@ -12,7 +12,6 @@ use crate::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 use crate::postgres_manager::PgPool;
 use crate::storage::PgBridgePersistent;
 use crate::sui_bridge_indexer::SuiBridgeDataMapper;
-use crate::sui_datasource::SuiCheckpointDatasource;
 use ethers::providers::{Http, Provider};
 use ethers::types::Address as EthAddress;
 use std::fmt::{Display, Formatter};
@@ -25,9 +24,11 @@ use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::utils::get_eth_contract_addresses;
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, Datasource, Indexer, IndexerBuilder};
+use sui_indexer_builder::metrics::IndexerMetricProvider;
 use sui_indexer_builder::progress::{
     OutOfOrderSaveAfterDurationPolicy, ProgressSavingPolicy, SaveAfterDurationPolicy,
 };
+use sui_indexer_builder::sui_datasource::SuiCheckpointDatasource;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::{SuiAddress, TransactionDigest};
 
@@ -43,7 +44,6 @@ pub mod types;
 
 pub mod eth_bridge_indexer;
 pub mod sui_bridge_indexer;
-pub mod sui_datasource;
 
 #[derive(Clone)]
 pub enum ProcessedTxnData {
@@ -234,7 +234,7 @@ pub async fn create_sui_indexer(
             .unwrap_or(tempfile::tempdir()?.into_path()),
         config.sui_bridge_genesis_checkpoint,
         ingestion_metrics,
-        metrics.clone(),
+        metrics.clone().boxed(),
     );
 
     Ok(IndexerBuilder::new(
@@ -259,7 +259,7 @@ pub async fn create_eth_sync_indexer(
         bridge_addresses,
         eth_client.clone(),
         config.eth_rpc_url.clone(),
-        metrics.clone(),
+        metrics.clone().boxed(),
         bridge_metrics.clone(),
         config.eth_bridge_genesis_block,
     )
@@ -288,7 +288,7 @@ pub async fn create_eth_subscription_indexer(
         bridge_addresses.clone(),
         eth_client.clone(),
         config.eth_ws_url.clone(),
-        metrics.clone(),
+        metrics.clone().boxed(),
         config.eth_bridge_genesis_block,
     )
     .await?;

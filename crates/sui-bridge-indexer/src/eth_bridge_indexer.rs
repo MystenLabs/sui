@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use ethers::prelude::Transaction;
 use ethers::providers::{Http, Middleware, Provider, StreamExt, Ws};
 use ethers::types::{Address as EthAddress, Block, Filter, Log, H256};
-use prometheus::{IntCounterVec, IntGauge, IntGaugeVec};
+use prometheus::IntGauge;
 use sui_bridge::error::BridgeError;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::eth_syncer::EthSyncer;
@@ -29,14 +29,14 @@ use sui_bridge::abi::{
 };
 
 use crate::metrics::BridgeIndexerMetrics;
-use sui_bridge::metrics::BridgeMetrics;
-use sui_bridge::types::{EthEvent, RawEthLog};
-use sui_indexer_builder::indexer_builder::{DataMapper, DataSender, Datasource};
-
 use crate::{
     BridgeDataSource, GovernanceAction, GovernanceActionType, ProcessedTxnData, TokenTransfer,
     TokenTransferData, TokenTransferStatus,
 };
+use sui_bridge::metrics::BridgeMetrics;
+use sui_bridge::types::{EthEvent, RawEthLog};
+use sui_indexer_builder::indexer_builder::{DataMapper, DataSender, Datasource};
+use sui_indexer_builder::metrics::IndexerMetricProvider;
 
 #[derive(Debug)]
 pub struct RawEthData {
@@ -52,7 +52,7 @@ pub struct EthSubscriptionDatasource {
     eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     addresses: Vec<EthAddress>,
     eth_ws_url: String,
-    indexer_metrics: BridgeIndexerMetrics,
+    metrics: Box<dyn IndexerMetricProvider>,
     genesis_block: u64,
 }
 
@@ -61,14 +61,14 @@ impl EthSubscriptionDatasource {
         eth_sui_bridge_contract_addresses: Vec<EthAddress>,
         eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
         eth_ws_url: String,
-        indexer_metrics: BridgeIndexerMetrics,
+        metrics: Box<dyn IndexerMetricProvider>,
         genesis_block: u64,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
             addresses: eth_sui_bridge_contract_addresses,
             eth_client,
             eth_ws_url,
-            indexer_metrics,
+            metrics,
             genesis_block,
         })
     }
@@ -93,8 +93,8 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
         let task_name = task.task_name.clone();
         let task_name_clone = task_name.clone();
         let progress_metric = self
-            .indexer_metrics
-            .tasks_latest_retrieved_checkpoints
+            .metrics
+            .get_tasks_latest_retrieved_checkpoints()
             .with_label_values(&[task.name_prefix(), task.type_str()]);
         let handle = spawn_monitored_task!(async move {
             let eth_ws_client = Provider::<Ws>::connect(&eth_ws_url).await.tap_err(|e| {
@@ -143,16 +143,8 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
         self.genesis_block
     }
 
-    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.backfill_tasks_remaining_checkpoints
-    }
-
-    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
-        &self.indexer_metrics.tasks_processed_checkpoints
-    }
-
-    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.inflight_live_tasks
+    fn metric_provider(&self) -> &dyn IndexerMetricProvider {
+        self.metrics.as_ref()
     }
 }
 
@@ -237,7 +229,7 @@ pub struct EthFinalizedSyncDatasource {
     bridge_addresses: Vec<EthAddress>,
     eth_http_url: String,
     eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
-    indexer_metrics: BridgeIndexerMetrics,
+    metrics: Box<dyn IndexerMetricProvider>,
     bridge_metrics: Arc<BridgeMetrics>,
     genesis_block: u64,
 }
@@ -247,7 +239,7 @@ impl EthFinalizedSyncDatasource {
         eth_sui_bridge_contract_addresses: Vec<EthAddress>,
         eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
         eth_http_url: String,
-        indexer_metrics: BridgeIndexerMetrics,
+        metrics: Box<dyn IndexerMetricProvider>,
         bridge_metrics: Arc<BridgeMetrics>,
         genesis_block: u64,
     ) -> Result<Self, anyhow::Error> {
@@ -255,7 +247,7 @@ impl EthFinalizedSyncDatasource {
             bridge_addresses: eth_sui_bridge_contract_addresses,
             eth_http_url,
             eth_client,
-            indexer_metrics,
+            metrics,
             bridge_metrics,
             genesis_block,
         })
@@ -273,8 +265,8 @@ impl Datasource<RawEthData> for EthFinalizedSyncDatasource {
                 .interval(std::time::Duration::from_millis(2000)),
         );
         let progress_metric = self
-            .indexer_metrics
-            .tasks_latest_retrieved_checkpoints
+            .metrics
+            .get_tasks_latest_retrieved_checkpoints()
             .with_label_values(&[task.name_prefix(), task.type_str()]);
         let bridge_addresses = self.bridge_addresses.clone();
         let client = self.eth_client.clone();
@@ -320,16 +312,8 @@ impl Datasource<RawEthData> for EthFinalizedSyncDatasource {
         self.genesis_block
     }
 
-    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.backfill_tasks_remaining_checkpoints
-    }
-
-    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
-        &self.indexer_metrics.tasks_processed_checkpoints
-    }
-
-    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.inflight_live_tasks
+    fn metric_provider(&self) -> &dyn IndexerMetricProvider {
+        self.metrics.as_ref()
     }
 }
 

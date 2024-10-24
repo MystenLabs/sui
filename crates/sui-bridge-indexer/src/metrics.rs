@@ -6,6 +6,7 @@ use prometheus::{
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntCounter,
     IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
+use sui_indexer_builder::metrics::IndexerMetricProvider;
 
 #[derive(Clone, Debug)]
 pub struct BridgeIndexerMetrics {
@@ -115,5 +116,23 @@ impl BridgeIndexerMetrics {
     pub fn new_for_testing() -> Self {
         let registry = Registry::new();
         Self::new(&registry)
+    }
+}
+
+impl IndexerMetricProvider for BridgeIndexerMetrics {
+    fn get_tasks_latest_retrieved_checkpoints(&self) -> &IntGaugeVec {
+        &self.tasks_latest_retrieved_checkpoints
+    }
+
+    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
+        &self.backfill_tasks_remaining_checkpoints
+    }
+
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
+        &self.tasks_processed_checkpoints
+    }
+
+    fn get_inflight_live_tasks_metrics(&self) -> &IntGaugeVec {
+        &self.inflight_live_tasks
     }
 }

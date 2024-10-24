@@ -16,6 +16,7 @@ use mysten_metrics::spawn_monitored_task;
 use sui_indexer_builder::indexer_builder::{
     DataMapper, DataSender, Datasource, IndexerProgressStore, Persistent,
 };
+use sui_indexer_builder::metrics::IndexerMetricProvider;
 use sui_indexer_builder::{Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT};
 
 pub struct TestDatasource<T> {
@@ -57,6 +58,17 @@ where
 
     fn get_genesis_height(&self) -> u64 {
         self.genesis_checkpoint
+    }
+
+    fn metric_provider(&self) -> &dyn IndexerMetricProvider {
+        self
+    }
+}
+
+impl<T: Send + Sync> IndexerMetricProvider for TestDatasource<T> {
+    fn get_tasks_latest_retrieved_checkpoints(&self) -> &IntGaugeVec {
+        // This is dummy
+        &self.gauge_metric
     }
 
     fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
