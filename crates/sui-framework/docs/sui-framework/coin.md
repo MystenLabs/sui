@@ -12,8 +12,10 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 -  [Resource `RegulatedCoinMetadata`](#0x2_coin_RegulatedCoinMetadata)
 -  [Resource `TreasuryCap`](#0x2_coin_TreasuryCap)
 -  [Resource `DenyCapV2`](#0x2_coin_DenyCapV2)
+-  [Struct `RegulatedMarker`](#0x2_coin_RegulatedMarker)
 -  [Struct `CurrencyCreated`](#0x2_coin_CurrencyCreated)
 -  [Resource `DenyCap`](#0x2_coin_DenyCap)
+-  [Enum `RegulatedInfo`](#0x2_coin_RegulatedInfo)
 -  [Constants](#@Constants_0)
 -  [Function `total_supply`](#0x2_coin_total_supply)
 -  [Function `treasury_into_supply`](#0x2_coin_treasury_into_supply)
@@ -32,7 +34,9 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 -  [Function `zero`](#0x2_coin_zero)
 -  [Function `destroy_zero`](#0x2_coin_destroy_zero)
 -  [Function `create_currency`](#0x2_coin_create_currency)
+-  [Function `create_currency_`](#0x2_coin_create_currency_)
 -  [Function `create_regulated_currency_v2`](#0x2_coin_create_regulated_currency_v2)
+-  [Function `is_regulated_currency`](#0x2_coin_is_regulated_currency)
 -  [Function `migrate_regulated_currency_to_v2`](#0x2_coin_migrate_regulated_currency_to_v2)
 -  [Function `mint`](#0x2_coin_mint)
 -  [Function `mint_balance`](#0x2_coin_mint_balance)
@@ -68,6 +72,7 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 <b>use</b> <a href="../move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
 <b>use</b> <a href="../sui-framework/balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">0x2::deny_list</a>;
+<b>use</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
 <b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -287,6 +292,35 @@ all addresses were added to the deny list.
 
 </details>
 
+<a name="0x2_coin_RegulatedMarker"></a>
+
+## Struct `RegulatedMarker`
+
+A dynamic field key added to <code><a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code> objects created after protocol version 63.
+This is bound to a <code>RegulatedInfo</code> enum
+
+
+<pre><code><b>struct</b> <a href="../sui-framework/coin.md#0x2_coin_RegulatedMarker">RegulatedMarker</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>dummy_field: bool</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
 <a name="0x2_coin_CurrencyCreated"></a>
 
 ## Struct `CurrencyCreated`
@@ -337,6 +371,40 @@ interacting with the coin as an input to a transaction.
 </dt>
 <dd>
 
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_coin_RegulatedInfo"></a>
+
+## Enum `RegulatedInfo`
+
+Auxiliary metadata about the regulated operations supported by the coin (if any)
+
+
+<pre><code><b>public</b> enum RegulatedInfo <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Variants</summary>
+
+
+<dl>
+<dt>
+Variant <code>Ordinary</code>
+</dt>
+<dd>
+ An ordinary coin that does not support a denylist or global pause
+</dd>
+<dt>
+Variant <code>Regulated</code>
+</dt>
+<dd>
+ A regulated coin that supports a denylist, and (maybe) global paus
 </dd>
 </dl>
 
@@ -853,9 +921,50 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
     icon_url: Option&lt;Url&gt;,
     ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
+    <b>let</b> (treasury_cap, <b>mut</b> metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency_">create_currency_</a>(
+        witness,
+        decimals,
+        symbol,
+        name,
+        description,
+        icon_url,
+        ctx,
+    );
+    <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> metadata.id, <a href="../sui-framework/coin.md#0x2_coin_RegulatedMarker">RegulatedMarker</a>(), RegulatedInfo::Ordinary);
+    (treasury_cap, metadata)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_create_currency_"></a>
+
+## Function `create_currency_`
+
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_currency_">create_currency_</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_currency_">create_currency_</a>&lt;T: drop&gt;(
+    witness: T,
+    decimals: u8,
+    symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    icon_url: Option&lt;Url&gt;,
+    ctx: &<b>mut</b> TxContext,
+): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     // Make sure there's only one instance of the type T
     <b>assert</b>!(sui::types::is_one_time_witness(&witness), <a href="../sui-framework/coin.md#0x2_coin_EBadWitness">EBadWitness</a>);
-
     (
         <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a> {
             id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
@@ -910,7 +1019,7 @@ will not change the result of the "contains" APIs.
     allow_global_pause: bool,
     ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
-    <b>let</b> (treasury_cap, metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency">create_currency</a>(
+    <b>let</b> (treasury_cap, <b>mut</b> metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency_">create_currency_</a>(
         witness,
         decimals,
         symbol,
@@ -928,7 +1037,44 @@ will not change the result of the "contains" APIs.
         coin_metadata_object: <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&metadata),
         deny_cap_object: <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&deny_cap),
     });
+    <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(
+        &<b>mut</b> metadata.id,
+        <a href="../sui-framework/coin.md#0x2_coin_RegulatedMarker">RegulatedMarker</a>(),
+        RegulatedInfo::Regulated,
+    );
     (treasury_cap, deny_cap, metadata)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_is_regulated_currency"></a>
+
+## Function `is_regulated_currency`
+
+Return Some(true) if <code>T</code> is a regulated currency, Some(false) if it is an ordinary currency.
+Return None if T was created at a protocol version prior to 63
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_is_regulated_currency">is_regulated_currency</a>&lt;T&gt;(metadata: &<a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;bool&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_is_regulated_currency">is_regulated_currency</a>&lt;T&gt;(metadata: &<a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;): Option&lt;bool&gt; {
+    <b>if</b> (!<a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_exists_">dynamic_field::exists_</a>(&metadata.id, <a href="../sui-framework/coin.md#0x2_coin_RegulatedMarker">RegulatedMarker</a>())) {
+        <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>()
+    };
+    match (<a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&metadata.id, <a href="../sui-framework/coin.md#0x2_coin_RegulatedMarker">RegulatedMarker</a>())) {
+        RegulatedInfo::Ordinary =&gt; <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<b>false</b>),
+        RegulatedInfo::Regulated =&gt; <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<b>true</b>),
+    }
 }
 </code></pre>
 
@@ -1622,7 +1768,7 @@ with the coin as input objects.
     icon_url: Option&lt;Url&gt;,
     ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
-    <b>let</b> (treasury_cap, metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency">create_currency</a>(
+    <b>let</b> (treasury_cap, <b>mut</b> metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency_">create_currency_</a>(
         witness,
         decimals,
         symbol,
@@ -1639,6 +1785,11 @@ with the coin as input objects.
         coin_metadata_object: <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&metadata),
         deny_cap_object: <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&deny_cap),
     });
+    <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(
+        &<b>mut</b> metadata.id,
+        <a href="../sui-framework/coin.md#0x2_coin_RegulatedMarker">RegulatedMarker</a>(),
+        RegulatedInfo::Regulated,
+    );
     (treasury_cap, deny_cap, metadata)
 }
 </code></pre>
