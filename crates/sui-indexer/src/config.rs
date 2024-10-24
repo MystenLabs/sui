@@ -82,9 +82,11 @@ pub struct JsonRpcConfig {
     #[command(flatten)]
     pub name_service_options: NameServiceOptions,
 
+    /// Address for the JSON RPC server to bind to.
     #[clap(long, default_value = "0.0.0.0:9000")]
     pub rpc_address: SocketAddr,
 
+    /// Fullnode RPC url for write apis.
     #[clap(long)]
     pub rpc_client_url: String,
 }
