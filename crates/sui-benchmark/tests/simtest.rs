@@ -530,17 +530,17 @@ mod test {
             config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
                 allow_overage_factor * total_gas_limit,
             );
-            config
-        });
-        if separate_randomness_budget {
-            config
+            if separate_randomness_budget {
+                config
                 .set_max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_for_testing(
                     std::cmp::min(
                         1,
                         config.max_accumulated_txn_cost_per_object_in_mysticeti_commit() / 10,
                     ),
                 );
-        }
+            }
+            config
+        });
 
         let test_cluster = build_test_cluster(4, 5000).await;
         let mut simulated_load_config = SimulatedLoadConfig::default();
