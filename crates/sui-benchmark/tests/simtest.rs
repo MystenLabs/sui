@@ -464,6 +464,7 @@ mod test {
         let max_deferral_rounds;
         let cap_factor_denominator;
         let allow_overage_factor;
+        let separate_randomness_budget;
         {
             let mut rng = thread_rng();
             mode = if rng.gen_bool(0.33) {
@@ -487,15 +488,17 @@ mod test {
             } else {
                 rng.gen_range(1..100)
             };
-
             cap_factor_denominator = rng.gen_range(1..100);
+            separate_randomness_budget = rng.gen_bool(0.5);
         }
 
         info!(
             "test_simulated_load_shared_object_congestion_control setup.
              mode: {mode:?}, checkpoint_budget_factor: {checkpoint_budget_factor:?},
              max_deferral_rounds: {max_deferral_rounds:?},
-             txn_count_limit: {txn_count_limit:?}, allow_overage_factor: {allow_overage_factor:?}",
+             txn_count_limit: {txn_count_limit:?}, allow_overage_factor: {allow_overage_factor:?},
+             cap_factor_denominator: {cap_factor_denominator:?},
+             separate_randomness_budget: {separate_randomness_budget:?}",
         );
 
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
@@ -529,6 +532,15 @@ mod test {
             );
             config
         });
+        if separate_randomness_budget {
+            config
+                .set_max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                    std::cmp::min(
+                        1,
+                        config.max_accumulated_txn_cost_per_object_in_mysticeti_commit() / 10,
+                    ),
+                );
+        }
 
         let test_cluster = build_test_cluster(4, 5000).await;
         let mut simulated_load_config = SimulatedLoadConfig::default();
