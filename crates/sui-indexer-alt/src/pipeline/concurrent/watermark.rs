@@ -236,8 +236,8 @@ pub(super) fn watermark<H: Handler + 'static>(
                         }
                     }
 
-                    if rx.is_closed() {
-                        info!(pipeline = H::NAME, "Committer closed channel, stopping watermark task");
+                    if rx.is_closed() && rx.is_empty() {
+                        info!(pipeline = H::NAME, ?watermark, "Committer closed channel, stopping watermark task");
                         break;
                     }
                 }
