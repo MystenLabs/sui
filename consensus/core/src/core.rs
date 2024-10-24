@@ -929,51 +929,11 @@ impl Core {
 
         assert!(parent_round_quorum.reached_threshold(&self.context.committee), "Fatal error, quorum not reached for parent round when proposing for round {clock_round}. Possible mismatch between DagState and Core.");
 
-        let mut excluded_ancestors_count = 0;
-
-        // Inclusion of weak links for low score ancestors so there is no long
-        // list of blocks that we need to include later.
         for (score, ancestor) in excluded_ancestors.iter() {
             let excluded_author = ancestor.author();
             let block_hostname = &self.context.committee.authority(excluded_author).hostname;
-            let mut network_low_quorum_round =
-                self.ancestor_state_manager.quorum_round_per_authority[excluded_author].0;
-
-            // If the network quourum round for this ancestor is greater than or equal
-            // to the clock round then we want to make sure to set it to clock_round - 1
-            // as that is the max round we can include as an ancestor.
-            network_low_quorum_round = network_low_quorum_round.min(quorum_round);
-
-            let last_included_ancestor_round = self.last_included_ancestors[excluded_author]
-                .map_or(GENESIS_ROUND, |block_ref| block_ref.round);
-
-            // Check if there is a block that is at a round higher than the last included
-            // ancestor round but less than or equal to the network low quorum round.
-            if let Some(last_cached_block_in_range) = self
-                .dag_state
-                .read()
-                .get_last_cached_block_for_authority_in_range(
-                    excluded_author,
-                    last_included_ancestor_round + 1,
-                    network_low_quorum_round + 1,
-                )
-            {
-                // Include the ancestor block as it has been seen by a strong quorum
-                ancestors_to_propose.push(last_cached_block_in_range.clone());
-                trace!("Included low scoring ancestor {last_cached_block_in_range} with score {score} seen between last included round {last_included_ancestor_round} and network quorum round {network_low_quorum_round} to propose for round {clock_round}");
-                self.context
-                    .metrics
-                    .node_metrics
-                    .included_excluded_proposal_ancestors_count_by_authority
-                    .with_label_values(&[block_hostname, "weak"])
-                    .inc();
-                continue;
-            } else {
-                trace!("No cached block found for low scoring ancestor {ancestor} with score {score} between last included round {last_included_ancestor_round} and network quorum round {network_low_quorum_round} to propose for round {clock_round}");
-            }
 
             trace!("Excluded low score ancestor {ancestor} with score {score} to propose for round {clock_round}");
-            excluded_ancestors_count += 1;
             self.context
                 .metrics
                 .node_metrics
@@ -983,8 +943,9 @@ impl Core {
         }
 
         info!(
-            "Included {} ancestors & excluded {excluded_ancestors_count} ancestors for proposal in round {clock_round}",
+            "Included {} ancestors & excluded {} ancestors for proposal in round {clock_round}",
             ancestors_to_propose.len(),
+            excluded_ancestors.len()
         );
 
         ancestors_to_propose
