@@ -654,7 +654,7 @@ export class Runtime extends EventEmitter {
         if (this.lineBreakpoints && this.lineBreakpoints.size > 0) {
             res += 'line breakpoints\n';
             for (const [file, breakpoints] of this.lineBreakpoints) {
-                res += this.singleTab + file + '\n';
+                res += this.singleTab + path.basename(file) + '\n';
                 for (const line of breakpoints) {
                     res += this.singleTab + this.singleTab + line + '\n';
                 }

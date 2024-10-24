@@ -2,7 +2,7 @@ current frame stack:
   function: test (line 27)
     scope 0 :
 line breakpoints
-  /Users/adamwelc/sui-new/external-crates/move/crates/move-analyzer/trace-adapter/tests/breakpoints_line/sources/m.move
+  m.move
     12
     18
     20
@@ -15,7 +15,7 @@ current frame stack:
       type: u64
 
 line breakpoints
-  /Users/adamwelc/sui-new/external-crates/move/crates/move-analyzer/trace-adapter/tests/breakpoints_line/sources/m.move
+  m.move
     12
     18
     20
@@ -31,7 +31,7 @@ current frame stack:
       type: u64
 
 line breakpoints
-  /Users/adamwelc/sui-new/external-crates/move/crates/move-analyzer/trace-adapter/tests/breakpoints_line/sources/m.move
+  m.move
     12
     18
     20
@@ -44,7 +44,7 @@ current frame stack:
       type: u64
 
 line breakpoints
-  /Users/adamwelc/sui-new/external-crates/move/crates/move-analyzer/trace-adapter/tests/breakpoints_line/sources/m.move
+  m.move
     12
     18
     20
@@ -57,7 +57,7 @@ current frame stack:
       type: u64
 
 line breakpoints
-  /Users/adamwelc/sui-new/external-crates/move/crates/move-analyzer/trace-adapter/tests/breakpoints_line/sources/m.move
+  m.move
     12
     18
     20
