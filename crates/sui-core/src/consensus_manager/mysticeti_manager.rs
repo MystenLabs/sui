@@ -149,7 +149,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
-        let (commit_consumer, commit_receiver, transaction_receiver) =
+        let (commit_consumer, commit_receiver, block_receiver) =
             CommitConsumer::new(consensus_handler.last_processed_subdag_index() as CommitIndex);
         let monitor = commit_consumer.monitor();
 
@@ -211,7 +211,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             consensus_handler,
             consensus_transaction_handler,
             commit_receiver,
-            transaction_receiver,
+            block_receiver,
             monitor,
         );
 

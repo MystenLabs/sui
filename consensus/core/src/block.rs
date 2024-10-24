@@ -658,6 +658,26 @@ pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
         .collect::<Vec<VerifiedBlock>>()
 }
 
+/// A batch of blocks output by consensus for processing.
+pub enum BlockOutputBatch {
+    /// All transactions in the block have a quorum of accept or reject votes.
+    Certified(Vec<BlockOutput>),
+}
+
+/// A block output by consensus for processing.
+#[derive(Clone)]
+pub struct BlockOutput {
+    pub block: VerifiedBlock,
+    /// Sorted transaction indices that indicate the transactions rejected by a quorum.
+    pub rejected: Vec<TransactionIndex>,
+}
+
+impl BlockOutput {
+    pub fn new(block: VerifiedBlock, rejected: Vec<TransactionIndex>) -> Self {
+        Self { block, rejected }
+    }
+}
+
 /// Creates fake blocks for testing.
 /// This struct is public for testing in other crates.
 #[derive(Clone)]
