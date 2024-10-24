@@ -116,6 +116,26 @@ impl CommitObserver {
             }
         }
 
+        if !sent_sub_dags.is_empty() {
+            for sub_dag in &sent_sub_dags {
+                let blocks_and_rejected_transactions = sub_dag
+                    .blocks
+                    .iter()
+                    .map(|block| (block.clone(), vec![]))
+                    .collect();
+
+                if let Err(err) = self.transaction_sender.send(TransactionsOutput {
+                    status: BlockStatus::Sequenced,
+                    blocks_and_rejected_transactions,
+                }) {
+                    tracing::error!(
+                        "Failed to send committed blocks, probably due to shutdown: {err:?}"
+                    );
+                    return Err(ConsensusError::Shutdown);
+                }
+            }
+        }
+
         self.report_metrics(&sent_sub_dags);
         tracing::trace!("Committed & sent {sent_sub_dags:#?}");
         Ok(sent_sub_dags)
