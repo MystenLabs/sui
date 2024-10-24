@@ -30,7 +30,6 @@ bcs.workspace = true
 leb128.workspace = true
 thiserror.workspace = true
 serde_with.workspace = true
-num-bigint.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

@@ -11,8 +11,3 @@ pub mod error_bitset;
 pub mod files;
 pub mod interactive;
 pub mod testing;
-
-pub use move_core_types::parsing::address;
-pub use move_core_types::parsing::parser;
-pub use move_core_types::parsing::types;
-pub use move_core_types::parsing::values;
