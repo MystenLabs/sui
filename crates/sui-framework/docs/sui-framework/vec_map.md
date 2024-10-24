@@ -262,7 +262,7 @@ Pop the most recently inserted entry from the map. Aborts if the map is empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_pop">pop</a>&lt;K: <b>copy</b>, V&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): (K, V) {
-    <b>assert</b>!(!self.contents.<a href="../sui-framework/vec_map.md#0x2_vec_map_is_empty">is_empty</a>(), <a href="../sui-framework/vec_map.md#0x2_vec_map_EMapEmpty">EMapEmpty</a>);
+    <b>assert</b>!(self.contents.length() != 0, <a href="../sui-framework/vec_map.md#0x2_vec_map_EMapEmpty">EMapEmpty</a>);
     <b>let</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_Entry">Entry</a> { key, value } = self.contents.pop_back();
     (key, value)
 }
@@ -526,7 +526,7 @@ and are *not* sorted.
     keys.reverse();
     values.reverse();
     <b>let</b> <b>mut</b> map = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">empty</a>();
-    <b>while</b> (!keys.<a href="../sui-framework/vec_map.md#0x2_vec_map_is_empty">is_empty</a>()) map.<a href="../sui-framework/vec_map.md#0x2_vec_map_insert">insert</a>(keys.pop_back(), values.pop_back());
+    <b>while</b> (keys.length() != 0) map.<a href="../sui-framework/vec_map.md#0x2_vec_map_insert">insert</a>(keys.pop_back(), values.pop_back());
     keys.<a href="../sui-framework/vec_map.md#0x2_vec_map_destroy_empty">destroy_empty</a>();
     values.<a href="../sui-framework/vec_map.md#0x2_vec_map_destroy_empty">destroy_empty</a>();
     map
