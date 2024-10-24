@@ -193,8 +193,13 @@ impl CheckpointHandler {
             .transpose()?;
         if epoch_event_opt.is_none() {
             warn!(
-                "No SystemEpochInfoEvent found at end of epoch {}, Sui is likely in safe mode, some epoch data will be set to default.",
+                "No SystemEpochInfoEvent found at end of epoch {}, some epoch data will be set to default.",
                 checkpoint_summary.epoch,
+            );
+            assert!(
+                system_state_summary.safe_mode,
+                "Sui is not in safe mode but no SystemEpochInfoEvent found at end of epoch {}",
+                checkpoint_summary.epoch
             );
         }
 
@@ -218,7 +223,7 @@ impl CheckpointHandler {
             }
         }?;
 
-        let epoch_end_info = EpochEndInfo::new(first_tx_sequence_number, epoch_event_opt.as_ref());
+        let epoch_end_info = EpochEndInfo::new(epoch_event_opt.as_ref());
         let epoch_start_info = EpochStartInfo::new(
             checkpoint_summary.sequence_number.saturating_add(1),
             checkpoint_summary.network_total_transactions,
@@ -226,7 +231,11 @@ impl CheckpointHandler {
         );
 
         Ok(Some(EpochToCommit {
-            last_epoch: Some(EndOfEpochUpdate::new(checkpoint_summary, epoch_end_info)),
+            last_epoch: Some(EndOfEpochUpdate::new(
+                checkpoint_summary,
+                first_tx_sequence_number,
+                epoch_end_info,
+            )),
             new_epoch: StartOfEpochUpdate::new(system_state_summary, epoch_start_info),
         }))
     }

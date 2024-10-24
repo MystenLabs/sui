@@ -164,7 +164,6 @@ impl StartOfEpochUpdate {
 
 #[derive(Default)]
 pub struct EpochEndInfo {
-    pub first_tx_sequence_number: u64,
     pub storage_fund_reinvestment: u64,
     pub storage_charge: u64,
     pub storage_rebate: u64,
@@ -175,40 +174,29 @@ pub struct EpochEndInfo {
 }
 
 impl EpochEndInfo {
-    pub fn new(
-        first_tx_sequence_number: u64,
-        epoch_event_opt: Option<&SystemEpochInfoEvent>,
-    ) -> Self {
-        if let Some(epoch_event) = epoch_event_opt {
-            Self {
-                first_tx_sequence_number,
-                storage_fund_reinvestment: epoch_event.storage_fund_reinvestment,
-                storage_charge: epoch_event.storage_charge,
-                storage_rebate: epoch_event.storage_rebate,
-                leftover_storage_fund_inflow: epoch_event.leftover_storage_fund_inflow,
-                stake_subsidy_amount: epoch_event.stake_subsidy_amount,
-                total_gas_fees: epoch_event.total_gas_fees,
-                total_stake_rewards_distributed: epoch_event.total_stake_rewards_distributed,
-            }
-        } else {
-            Self {
-                first_tx_sequence_number,
-                ..Default::default()
-            }
-        }
+    pub fn new(epoch_event_opt: Option<&SystemEpochInfoEvent>) -> Self {
+        epoch_event_opt.map_or_else(Self::default, |epoch_event| Self {
+            storage_fund_reinvestment: epoch_event.storage_fund_reinvestment,
+            storage_charge: epoch_event.storage_charge,
+            storage_rebate: epoch_event.storage_rebate,
+            leftover_storage_fund_inflow: epoch_event.leftover_storage_fund_inflow,
+            stake_subsidy_amount: epoch_event.stake_subsidy_amount,
+            total_gas_fees: epoch_event.total_gas_fees,
+            total_stake_rewards_distributed: epoch_event.total_stake_rewards_distributed,
+        })
     }
 }
 
 impl EndOfEpochUpdate {
     pub fn new(
         last_checkpoint_summary: &CertifiedCheckpointSummary,
+        first_tx_sequence_number: u64,
         epoch_end_info: EpochEndInfo,
     ) -> Self {
         Self {
             epoch: last_checkpoint_summary.epoch as i64,
             epoch_total_transactions: (last_checkpoint_summary.network_total_transactions
-                - epoch_end_info.first_tx_sequence_number)
-                as i64,
+                - first_tx_sequence_number) as i64,
             last_checkpoint_id: *last_checkpoint_summary.sequence_number() as i64,
             epoch_end_timestamp: last_checkpoint_summary.timestamp_ms as i64,
             storage_fund_reinvestment: epoch_end_info.storage_fund_reinvestment as i64,
