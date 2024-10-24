@@ -40,8 +40,8 @@ use crate::{
     },
     FullyCompiledProgram,
 };
-use move_command_line_common::parser::{parse_u16, parse_u256, parse_u32};
 use move_core_types::account_address::AccountAddress;
+use move_core_types::parsing::parser::{parse_u16, parse_u256, parse_u32};
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;

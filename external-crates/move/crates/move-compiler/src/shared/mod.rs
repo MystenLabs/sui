@@ -62,7 +62,7 @@ pub use ast_debug::AstDebug;
 // Numbers
 //**************************************************************************************************
 
-pub use move_command_line_common::parser::{
+pub use move_core_types::parsing::parser::{
     parse_address_number as parse_address, parse_u128, parse_u16, parse_u256, parse_u32, parse_u64,
     parse_u8, NumberFormat,
 };
@@ -71,7 +71,7 @@ pub use move_command_line_common::parser::{
 // Address
 //**************************************************************************************************
 
-pub use move_command_line_common::address::NumericalAddress;
+pub use move_core_types::parsing::address::NumericalAddress;
 
 pub fn parse_named_address(s: &str) -> anyhow::Result<(String, NumericalAddress)> {
     let before_after = s.split('=').collect::<Vec<_>>();

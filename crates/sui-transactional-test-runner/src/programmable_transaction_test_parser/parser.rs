@@ -3,7 +3,7 @@
 
 use std::{borrow::BorrowMut, marker::PhantomData, str::FromStr};
 
-use move_command_line_common::{
+use move_core_types::parsing::{
     parser::{Parser, Token},
     types::{ParsedType, TypeToken},
 };
