@@ -17,7 +17,7 @@ use crate::{
     leader_schedule::LeaderSchedule,
     linearizer::Linearizer,
     storage::Store,
-    CommitConsumer, CommittedSubDag,
+    BlockStatus, CommitConsumer, CommittedSubDag, TransactionsOutput,
 };
 
 /// Role of CommitObserver
@@ -39,6 +39,8 @@ pub(crate) struct CommitObserver {
     commit_interpreter: Linearizer,
     /// An unbounded channel to send committed sub-dags to the consumer of consensus output.
     sender: UnboundedSender<CommittedSubDag>,
+    /// An unbounded channel to send the transaction output according to block status (sequenced, certified, garbage collected).
+    transaction_sender: UnboundedSender<TransactionsOutput>,
     /// Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
     leader_schedule: Arc<LeaderSchedule>,
@@ -56,6 +58,7 @@ impl CommitObserver {
             context,
             commit_interpreter: Linearizer::new(dag_state.clone(), leader_schedule.clone()),
             sender: commit_consumer.commit_sender,
+            transaction_sender: commit_consumer.transaction_sender,
             store,
             leader_schedule,
         };
@@ -76,7 +79,8 @@ impl CommitObserver {
             .with_label_values(&["CommitObserver::handle_commit"])
             .start_timer();
 
-        let committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
+        let (committed_sub_dags, garbage_collected_blocks) =
+            self.commit_interpreter.handle_commit(committed_leaders);
         let mut sent_sub_dags = Vec::with_capacity(committed_sub_dags.len());
         for committed_sub_dag in committed_sub_dags.into_iter() {
             // Failures in sender.send() are assumed to be permanent
@@ -92,6 +96,24 @@ impl CommitObserver {
                 committed_sub_dag.leader
             );
             sent_sub_dags.push(committed_sub_dag);
+        }
+
+        // Now forward the garbage collected blocks to the transaction sender
+        if !garbage_collected_blocks.is_empty() {
+            let blocks_and_rejected_transactions = garbage_collected_blocks
+                .into_iter()
+                .map(|block| (block, vec![]))
+                .collect();
+
+            if let Err(err) = self.transaction_sender.send(TransactionsOutput {
+                status: BlockStatus::GarbageCollected,
+                blocks_and_rejected_transactions,
+            }) {
+                tracing::error!(
+                    "Failed to send garbage collected blocks, probably due to shutdown: {err:?}"
+                );
+                return Err(ConsensusError::Shutdown);
+            }
         }
 
         self.report_metrics(&sent_sub_dags);

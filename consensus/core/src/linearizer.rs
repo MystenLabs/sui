@@ -22,10 +22,12 @@ pub(crate) trait BlockStoreAPI {
     fn gc_round(&self) -> Round;
 
     fn gc_enabled(&self) -> bool;
+
+    fn set_committed(&mut self, block_ref: &BlockRef);
 }
 
 impl BlockStoreAPI
-    for parking_lot::lock_api::RwLockReadGuard<'_, parking_lot::RawRwLock, DagState>
+    for parking_lot::lock_api::RwLockWriteGuard<'_, parking_lot::RawRwLock, DagState>
 {
     fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
         DagState::get_blocks(self, refs)
@@ -37,6 +39,10 @@ impl BlockStoreAPI
 
     fn gc_enabled(&self) -> bool {
         DagState::gc_enabled(self)
+    }
+
+    fn set_committed(&mut self, block_ref: &BlockRef) {
+        DagState::set_committed(self, block_ref);
     }
 }
 
@@ -67,7 +73,7 @@ impl Linearizer {
         reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> (CommittedSubDag, TrustedCommit) {
         // Grab latest commit state from dag state
-        let dag_state = self.dag_state.read();
+        let mut dag_state = self.dag_state.write();
         let last_commit_index = dag_state.last_commit_index();
         let last_commit_digest = dag_state.last_commit_digest();
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
@@ -76,7 +82,7 @@ impl Linearizer {
 
         // Now linearize the sub-dag starting from the leader block
         let (to_commit, rejected_transactions) =
-            Self::linearize_sub_dag(leader_block.clone(), last_committed_rounds, dag_state);
+            Self::linearize_sub_dag(leader_block.clone(), last_committed_rounds, &mut dag_state);
 
         // Create the Commit.
         let commit = Commit::new(
@@ -110,7 +116,7 @@ impl Linearizer {
     pub(crate) fn linearize_sub_dag(
         leader_block: VerifiedBlock,
         last_committed_rounds: Vec<u32>,
-        dag_state: impl BlockStoreAPI,
+        dag_state: &mut impl BlockStoreAPI,
     ) -> (Vec<VerifiedBlock>, Vec<Vec<TransactionIndex>>) {
         let gc_enabled = dag_state.gc_enabled();
         // The GC round here is calculated based on the last committed round of the leader block. The algorithm will attempt to
@@ -154,6 +160,7 @@ impl Linearizer {
                 .collect();
 
             for ancestor in ancestors {
+                dag_state.set_committed(&ancestor.reference());
                 buffer.push(ancestor.clone());
                 assert!(committed.insert(ancestor.reference()));
             }
@@ -176,14 +183,14 @@ impl Linearizer {
     }
 
     // This function should be called whenever a new commit is observed. This will
-    // iterate over the sequence of committed leaders and produce a list of committed
-    // sub-dags.
+    // iterate over the sequence of committed leaders and produce a tuple with the list of committed sub-dags
+    // and the garbage collected blocks.
     pub(crate) fn handle_commit(
         &mut self,
         committed_leaders: Vec<VerifiedBlock>,
-    ) -> Vec<CommittedSubDag> {
+    ) -> (Vec<CommittedSubDag>, Vec<VerifiedBlock>) {
         if committed_leaders.is_empty() {
-            return vec![];
+            return (vec![], vec![]);
         }
 
         // We check whether the leader schedule has been updated. If yes, then we'll send the scores as
@@ -215,6 +222,10 @@ impl Linearizer {
             committed_sub_dags.push(sub_dag);
         }
 
+        // Update all the blocks that need to be marked as garbage collected and return them. It's important to happen before any flush operation,
+        // otherwise gc'ed blocks might get evicted and basically we'll lose them.
+        let garbage_collected_blocks = self.dag_state.write().update_gc_blocks();
+
         // Committed blocks must be persisted to storage before sending them to Sui and executing
         // their transactions.
         // Commit metadata can be persisted more lazily because they are recoverable. Uncommitted
@@ -222,7 +233,7 @@ impl Linearizer {
         // But for simplicity, all unpersisted blocks and commits are flushed to storage.
         self.dag_state.write().flush();
 
-        committed_sub_dags
+        (committed_sub_dags, garbage_collected_blocks)
     }
 }
 
@@ -270,7 +281,7 @@ mod tests {
             .map(Option::unwrap)
             .collect::<Vec<_>>();
 
-        let commits = linearizer.handle_commit(leaders.clone());
+        let (commits, _garbage_collected_blocks) = linearizer.handle_commit(leaders.clone());
         for (idx, subdag) in commits.into_iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
@@ -322,7 +333,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Create some commits
-        let commits = linearizer.handle_commit(leaders.clone());
+        let (commits, _garbage_collected_blocks) = linearizer.handle_commit(leaders.clone());
 
         // Write them in DagState
         dag_state.write().add_scoring_subdags(commits);
@@ -343,7 +354,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Now on the commits only the first one should contain the updated scores, the other should be empty
-        let commits = linearizer.handle_commit(leaders.clone());
+        let (commits, _garbage_collected_blocks) = linearizer.handle_commit(leaders.clone());
         assert_eq!(commits.len(), 10);
         let scores = vec![
             (AuthorityIndex::new_for_test(1), 29),
@@ -391,7 +402,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Create some commits
-        let commits = linearizer.handle_commit(leaders.clone());
+        let (commits, _garbage_collected_blocks) = linearizer.handle_commit(leaders.clone());
 
         // Write them in DagState
         dag_state.write().add_unscored_committed_subdags(commits);
@@ -412,7 +423,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Now on the commits only the first one should contain the updated scores, the other should be empty
-        let commits = linearizer.handle_commit(leaders.clone());
+        let (commits, _garbage_collected_blocks) = linearizer.handle_commit(leaders.clone());
         assert_eq!(commits.len(), 10);
         let scores = vec![
             (AuthorityIndex::new_for_test(2), 9),
@@ -506,7 +517,7 @@ mod tests {
             blocks.clone(),
         );
 
-        let commit = linearizer.handle_commit(vec![leader.clone()]);
+        let (commit, _garbage_collected_blocks) = linearizer.handle_commit(vec![leader.clone()]);
         assert_eq!(commit.len(), 1);
 
         let subdag = &commit[0];
@@ -590,7 +601,7 @@ mod tests {
             .flatten()
             .collect::<Vec<_>>();
 
-        let commits = linearizer.handle_commit(leaders.clone());
+        let (commits, _garbage_collected_blocks) = linearizer.handle_commit(leaders.clone());
         for (idx, subdag) in commits.into_iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
