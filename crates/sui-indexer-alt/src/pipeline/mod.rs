@@ -9,6 +9,7 @@ pub use processor::Processor;
 
 pub(crate) mod concurrent;
 mod processor;
+pub(crate) mod sequential;
 
 /// Tracing message for the watermark update will be logged at info level at least this many
 /// checkpoints.
@@ -98,6 +99,11 @@ impl<P: Processor> Indexed<P> {
             },
             values,
         }
+    }
+
+    /// Number of rows from this checkpoint
+    fn len(&self) -> usize {
+        self.values.len()
     }
 
     /// The checkpoint sequence number that this data is from
