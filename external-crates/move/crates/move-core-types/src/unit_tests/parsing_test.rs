@@ -15,6 +15,47 @@ use num::BigUint;
 use proptest::{prelude::*, proptest};
 use std::str::FromStr;
 
+const VALID_ADDRS: &[&str] = &[
+    "0x0",
+    "0x1",
+    "1",
+    "123",
+    "0x123",
+    "0x1234567890abcdef",
+    "100_00_00",
+    "0x0_0_0_0",
+    "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "0x0_00000_0000000000000000000000000000000000000000000000000_000000000",
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "00_0000000000000000000000000000000000000000000000000000000_00000000000000000_0000",
+];
+
+const INVALID_ADDRS: &[&str] = &[
+    "_x",
+    "0x",
+    "_0x0",
+    "_0",
+    "0x_",
+    "0x_00",
+    "+0x0",
+    "+0",
+    "0xg",
+    "0x0g",
+    "0X0",
+    "_0x0",
+    "_0x0_",
+    "_0",
+    "_0_",
+    "_00_",
+    "_0_0_",
+    "0x_00",
+    "0x00000000000000000000000000000000000000000000000000000000000000000",
+    "0x0000000000000000000000000000000000000000000000000000000000_0000000",
+    "0x_0_00000_0000000000000000000000000000000000000000000000000_000000000",
+    "0000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "000_0000000000000000000000000000000000000000000000000000000_00000000000000000_0000",
+];
+
 #[allow(clippy::unreadable_literal)]
 #[test]
 fn tests_parse_value_positive() {
@@ -160,27 +201,6 @@ fn tests_parse_value_negative() {
 }
 
 #[test]
-fn test_parse_type_negative() {
-    for s in &[
-        "_",
-        "_::_::_",
-        "0x1::_",
-        "0x1::__::_",
-        "0x1::_::__",
-        "0x1::_::foo",
-        "0x1::foo::_",
-        "0x1::_::_",
-        "0x1::bar::foo<0x1::_::foo>",
-        "0X1::bar::bar",
-    ] {
-        assert!(
-            TypeTag::from_str(s).is_err(),
-            "Parsed type {s} but should have failed"
-        );
-    }
-}
-
-#[test]
 fn test_parse_struct_negative() {
     for s in &[
         "_",
@@ -203,6 +223,9 @@ fn test_parse_struct_negative() {
         "0x1::Foo::Foo,>",
         "0x1::Foo::Foo>",
         "0x1::Foo::Foo,",
+        "_0x0_0::a::a",
+        "_0x_00::a::a",
+        "_0_0::a::a",
     ] {
         assert!(
             TypeTag::from_str(s).is_err(),
@@ -214,7 +237,12 @@ fn test_parse_struct_negative() {
 #[test]
 fn test_type_type() {
     for s in &[
+        "u8",
+        "u16",
+        "u32",
         "u64",
+        "u128",
+        "u256",
         "bool",
         "vector<u8>",
         "vector<vector<u64>>",
@@ -235,8 +263,26 @@ fn test_type_type() {
         "0x1::__::__",
         "0x1::_bar::_BAR<0x2::_____::______fooo______>",
         "0x1::__::__<0x2::_____::______fooo______, 0xff::Bar____::_______foo>",
+        "0x0_0::a::a",
+        "0_0::a::a",
     ] {
         assert!(TypeTag::from_str(s).is_ok(), "Failed to parse type {}", s);
+    }
+
+    for valid_addr in VALID_ADDRS {
+        assert!(
+            TypeTag::from_str(&format!("{valid_addr}::a::a")).is_ok(),
+            "Failed to parse type {}::a::a",
+            valid_addr
+        );
+    }
+
+    for invalid_addr in INVALID_ADDRS {
+        assert!(
+            TypeTag::from_str(&format!("{invalid_addr}::a::a")).is_err(),
+            "Parse type {}::a::a but should have failed",
+            invalid_addr
+        );
     }
 }
 
@@ -282,17 +328,17 @@ fn test_parse_valid_struct_type() {
 
 #[test]
 fn test_parse_type_list() {
-    let valid_with_trails = vec![
+    let valid_with_trails = &[
         "<u64,>",
         "<u64, 0x0::a::a,>",
         "<u64, 0x0::a::a, 0x0::a::a<0x0::a::a>,>",
     ];
-    let valid_no_trails = vec![
+    let valid_no_trails = &[
         "<u64>",
         "<u64, 0x0::a::a>",
         "<u64, 0x0::a::a, 0x0::a::a<0x0::a::a>>",
     ];
-    let invalid = vec![
+    let invalid = &[
         "<>",
         "<,>",
         "<u64,,>",
@@ -328,15 +374,15 @@ fn test_parse_type_list() {
         assert!(parse_type_tags(t, true).is_ok());
     }
 
-    for t in &valid_no_trails {
+    for t in valid_no_trails {
         assert!(parse_type_tags(t, false).is_ok());
     }
 
-    for t in &valid_with_trails {
+    for t in valid_with_trails {
         assert!(parse_type_tags(t, false).is_err());
     }
 
-    for t in &invalid {
+    for t in invalid {
         assert!(parse_type_tags(t, true).is_err(), "parsed type {}", t);
         assert!(parse_type_tags(t, false).is_err(), "parsed type {}", t);
     }
@@ -395,6 +441,21 @@ fn parse_type_tags(s: &str, allow_trailing_delim: bool) -> anyhow::Result<Vec<Pa
         }
         Ok(parsed)
     })
+}
+
+#[test]
+fn address_parsing() {
+    for valid_addr in VALID_ADDRS {
+        assert!(
+            ParsedAddress::parse(valid_addr).is_ok(),
+            "parsed address {}",
+            valid_addr
+        );
+    }
+
+    for invalid_addr in INVALID_ADDRS {
+        assert!(ParsedAddress::parse(invalid_addr).is_err());
+    }
 }
 
 proptest! {

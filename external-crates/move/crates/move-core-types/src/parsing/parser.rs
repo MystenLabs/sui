@@ -450,6 +450,7 @@ pub fn parse_u256(s: &str) -> Result<(U256, NumberFormat), U256FromStrError> {
 // Parse an address from a decimal or hex encoding
 pub fn parse_address_number(s: &str) -> Option<(AccountAddress, NumberFormat)> {
     let (txt, base) = determine_num_text_and_base(s);
+    let txt = txt.replace('_', "");
     let max_len = match base {
         NumberFormat::Hex => AccountAddress::LENGTH * 2,
         NumberFormat::Decimal => U256_MAX_DECIMAL_DIGITS,
@@ -458,7 +459,7 @@ pub fn parse_address_number(s: &str) -> Option<(AccountAddress, NumberFormat)> {
         return None;
     }
     let parsed = U256::from_str_radix(
-        txt,
+        &txt,
         match base {
             NumberFormat::Hex => 16,
             NumberFormat::Decimal => 10,
