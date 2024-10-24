@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["construct_proof"]};

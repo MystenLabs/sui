@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"sui_rest_api":[["impl Documented for <a class=\"struct\" href=\"sui_rest_api/openapi/struct.OpenApiExplorer.html\" title=\"struct sui_rest_api::openapi::OpenApiExplorer\">OpenApiExplorer</a>"],["impl Documented for <a class=\"struct\" href=\"sui_rest_api/openapi/struct.OpenApiJson.html\" title=\"struct sui_rest_api::openapi::OpenApiJson\">OpenApiJson</a>"],["impl Documented for <a class=\"struct\" href=\"sui_rest_api/openapi/struct.OpenApiYaml.html\" title=\"struct sui_rest_api::openapi::OpenApiYaml\">OpenApiYaml</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
