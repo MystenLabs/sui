@@ -33,6 +33,7 @@ title: Module `0x3::validator_set`
 -  [Function `staking_pool_mappings`](#0x3_validator_set_staking_pool_mappings)
 -  [Function `validator_address_by_pool_id`](#0x3_validator_set_validator_address_by_pool_id)
 -  [Function `pool_exchange_rates`](#0x3_validator_set_pool_exchange_rates)
+-  [Function `is_staking_pool_active`](#0x3_validator_set_is_staking_pool_active)
 -  [Function `next_epoch_validator_count`](#0x3_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator_by_sui_address`](#0x3_validator_set_is_active_validator_by_sui_address)
 -  [Function `is_duplicate_with_active_validator`](#0x3_validator_set_is_duplicate_with_active_validator)
@@ -1542,6 +1543,37 @@ gas price, weighted by stake.
             wrapper.load_validator_maybe_upgrade()
         };
 	<a href="validator.md#0x3_validator">validator</a>.get_staking_pool_ref().exchange_rates()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_set_is_staking_pool_active"></a>
+
+## Function `is_staking_pool_active`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_is_staking_pool_active">is_staking_pool_active</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, staking_pool_id: &<a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_is_staking_pool_active">is_staking_pool_active</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, staking_pool_id: &ID): bool {
+    <b>if</b> (self.staking_pool_mappings.contains(*staking_pool_id)) {
+        <b>let</b> validator_address = self.staking_pool_mappings[*staking_pool_id];
+        <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
+
+        validator_index_opt.is_some()
+    } <b>else</b> { // <a href="validator.md#0x3_validator">validator</a> is inactive
+        <b>false</b>
+    }
 }
 </code></pre>
 

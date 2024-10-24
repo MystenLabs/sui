@@ -612,6 +612,17 @@ module sui_system::validator_set {
 	validator.get_staking_pool_ref().exchange_rates()
     }
 
+    public fun is_staking_pool_active(self: &mut ValidatorSet, staking_pool_id: &ID): bool {
+        if (self.staking_pool_mappings.contains(*staking_pool_id)) {
+            let validator_address = self.staking_pool_mappings[*staking_pool_id];
+            let validator_index_opt = find_validator(&self.active_validators, validator_address);
+
+            validator_index_opt.is_some()
+        } else { // validator is inactive
+            false
+        }
+    }
+
     /// Get the total number of validators in the next epoch.
     public(package) fun next_epoch_validator_count(self: &ValidatorSet): u64 {
         self.active_validators.length() - self.pending_removals.length() + self.pending_active_validators.length()

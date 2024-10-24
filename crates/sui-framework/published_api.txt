@@ -544,6 +544,9 @@ validator_address_by_pool_id
 pool_exchange_rates
 	public(package) fun
 	0x3::validator_set
+is_staking_pool_active
+	public fun
+	0x3::validator_set
 next_epoch_validator_count
 	public(package) fun
 	0x3::validator_set
@@ -868,6 +871,9 @@ validator_address_by_pool_id
 pool_exchange_rates
 	public(package) fun
 	0x3::sui_system_state_inner
+is_staking_pool_active
+	public(package) fun
+	0x3::sui_system_state_inner
 active_validator_addresses
 	public(package) fun
 	0x3::sui_system_state_inner
@@ -992,6 +998,9 @@ validator_address_by_pool_id
 	public fun
 	0x3::sui_system
 pool_exchange_rates
+	public fun
+	0x3::sui_system
+is_staking_pool_active
 	public fun
 	0x3::sui_system
 active_validator_addresses

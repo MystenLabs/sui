@@ -1051,6 +1051,13 @@ module sui_system::sui_system_state_inner {
         validators.pool_exchange_rates(pool_id)
     }
 
+    public(package) fun is_staking_pool_active(
+        self: &mut SuiSystemStateInnerV2,
+        staking_pool_id: &ID
+    ): bool {
+        self.validators.is_staking_pool_active(staking_pool_id)
+    }
+
     public(package) fun active_validator_addresses(self: &SuiSystemStateInnerV2): vector<address> {
         let validator_set = &self.validators;
         validator_set.active_validator_addresses()
