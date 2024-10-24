@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use move_command_line_common::{
+use move_core_types::parsing::{
     address::{NumericalAddress, ParsedAddress},
     types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType},
 };
