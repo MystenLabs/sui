@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{response::Redirect, routing::get, Router};
+use axum::{
+    response::{Redirect, ResponseParts},
+    routing::get,
+    Router,
+};
 use mysten_network::callback::CallbackLayer;
 use openapi::ApiEndpoint;
 use reader::StateReader;
@@ -23,6 +27,7 @@ mod info;
 mod metrics;
 mod objects;
 pub mod openapi;
+pub mod proto;
 mod reader;
 mod response;
 mod system;
@@ -38,6 +43,7 @@ pub use transactions::ExecuteTransactionQueryParameters;
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";
 pub const APPLICATION_JSON: &str = "application/json";
+pub const APPLICATION_PROTOBUF: &str = "application/x-protobuf";
 
 #[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -56,6 +62,28 @@ impl Direction {
 pub struct Page<T, C> {
     pub entries: response::ResponseContent<Vec<T>>,
     pub cursor: Option<C>,
+}
+
+pub struct PageCursor<C>(pub Option<C>);
+
+impl<C: std::fmt::Display> axum::response::IntoResponseParts for PageCursor<C> {
+    type Error = (axum::http::StatusCode, String);
+
+    fn into_response_parts(
+        self,
+        res: ResponseParts,
+    ) -> std::result::Result<ResponseParts, Self::Error> {
+        self.0
+            .map(|cursor| [(crate::types::X_SUI_CURSOR, cursor.to_string())])
+            .into_response_parts(res)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+    }
+}
+
+impl<C: std::fmt::Display> axum::response::IntoResponse for PageCursor<C> {
+    fn into_response(self) -> axum::response::Response {
+        (self, ()).into_response()
+    }
 }
 
 pub const DEFAULT_PAGE_SIZE: usize = 50;

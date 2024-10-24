@@ -155,7 +155,8 @@
                   }
                 }
               },
-              "application/bcs": {}
+              "application/bcs": {},
+              "application/x-protobuf": {}
             }
           },
           "410": {
@@ -1398,18 +1399,18 @@
       "CheckpointResponse": {
         "type": "object",
         "required": [
-          "checkpoint",
-          "signature"
+          "signature",
+          "summary"
         ],
         "properties": {
-          "checkpoint": {
-            "$ref": "#/components/schemas/CheckpointSummary"
-          },
           "contents": {
             "$ref": "#/components/schemas/CheckpointContents"
           },
           "signature": {
             "$ref": "#/components/schemas/ValidatorAggregatedSignature"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CheckpointSummary"
           }
         }
       },
