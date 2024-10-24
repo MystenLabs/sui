@@ -1,6 +1,6 @@
-module prover::type_invariant_tests;
+module prover::datatype_invariant_tests;
 
-use prover::prover::{requires, ensures, old};
+use prover::prover::{requires};
 
 public struct Point<phantom T> has copy, drop {
     x: u64,
@@ -36,7 +36,6 @@ public fun range_split<T>(self: &mut Range<T>, p: Point<T>): Range<T> {
 
 public fun range_split_spec<T>(self: &mut Range<T>, p: Point<T>): Range<T> {
     requires(self.range_contains(p));
-    let old_self = old!(self);
     let result = range_split(self, p);
     result
 }
@@ -53,8 +52,6 @@ public fun range_join<T>(self: &mut Range<T>, r: Range<T>) {
 
 public fun range_join_spec<T>(self: &mut Range<T>, r: Range<T>) {
     requires(self.range_contains(r.begin) || self.range_contains(r.end));
-    let old_self = old!(self);
-    let old_r = old!(&r);
     range_join(self, r);
 }
 
