@@ -3,7 +3,7 @@
 
 import { useContext } from 'react';
 
-import { DappKitStoreContext } from '../../contexts/storeContext.js';
+import { DappKitStoreContext } from '../storeContext.js';
 
 export function useWalletStore() {
 	const store = useContext(DappKitStoreContext);

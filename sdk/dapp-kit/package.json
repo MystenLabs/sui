@@ -24,6 +24,10 @@
 		"./dist/index.css": {
 			"import": "./dist/esm/index.css",
 			"require": "./dist/cjs/index.css"
+		},
+		"./experimental": {
+			"import": "./dist/esm/experimental/index.js",
+			"require": "./dist/cjs/experimental/index.js"
 		}
 	},
 	"scripts": {

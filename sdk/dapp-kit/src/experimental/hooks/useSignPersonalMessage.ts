@@ -10,7 +10,7 @@ import type {
 	WalletNotConnectedError,
 } from '../..//errors/walletErrors.js';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
-import type { MethodTypes } from '../../core/store/methods.js';
+import type { MethodTypes } from '../../experimental/store/methods.js';
 import { useWalletStore } from './useWalletStore.js';
 
 type Input = MethodTypes['signPersonalMessage']['input'];

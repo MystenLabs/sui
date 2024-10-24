@@ -3,6 +3,6 @@
 
 import { createContext } from 'react';
 
-import type { DappKitStore } from '../core/store/index.js';
+import type { DappKitStore } from './store/index.js';
 
 export const DappKitStoreContext = createContext<DappKitStore | null>(null);

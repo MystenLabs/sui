@@ -5,7 +5,7 @@ import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-quer
 import { useMutation } from '@tanstack/react-query';
 
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
-import type { MethodTypes } from '../../core/store/methods.js';
+import type { MethodTypes } from '../../experimental/store/methods.js';
 import type {
 	WalletFeatureNotSupportedError,
 	WalletNoAccountSelectedError,
