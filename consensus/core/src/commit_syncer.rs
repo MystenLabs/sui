@@ -306,7 +306,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             }
 
             debug!(
-                "Fetched certified blocks for commit range {:?}: {}",
+                "Fetched blocks for commit range {:?}: {}",
                 fetched_commit_range,
                 commits
                     .commits()
@@ -647,7 +647,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             let forward_drift = Duration::from_millis(forward_drift);
             if forward_drift >= inner.context.parameters.max_forward_time_drift {
                 warn!(
-                    "Local clock is behind a quorum of peers: local ts {}, certified block ts {}",
+                    "Local clock is behind a quorum of peers: local ts {}, committed block ts {}",
                     now_ms,
                     block.timestamp_ms()
                 );

@@ -20,7 +20,7 @@ use tracing::info;
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
     consensus_handler::{
-        ConsensusHandlerInitializer, ConsensusTransactionHandler, MysticetiConsensusHandler,
+        ConsensusBlockHandler, ConsensusHandlerInitializer, MysticetiConsensusHandler,
     },
     consensus_manager::{
         ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
@@ -149,7 +149,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         let last_processed_commit = consensus_handler.last_processed_subdag_index() as CommitIndex;
         let starting_commit = last_processed_commit.saturating_sub(num_prior_commits);
 
-        let (commit_consumer, commit_receiver, transaction_receiver) =
+        let (commit_consumer, commit_receiver, block_receiver) =
             CommitConsumer::new(starting_commit);
         let monitor = commit_consumer.monitor();
 
@@ -202,7 +202,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         self.client.set(client);
 
         // spin up the new mysticeti consensus handler to listen for committed sub dags
-        let consensus_transaction_handler = ConsensusTransactionHandler::new(
+        let consensus_block_handler = ConsensusBlockHandler::new(
             epoch_store.clone(),
             consensus_handler.transaction_manager_sender().clone(),
             consensus_handler_initializer.backpressure_subscriber(),
@@ -211,9 +211,9 @@ impl ConsensusManagerTrait for MysticetiManager {
         let handler = MysticetiConsensusHandler::new(
             last_processed_commit,
             consensus_handler,
-            consensus_transaction_handler,
+            consensus_block_handler,
             commit_receiver,
-            transaction_receiver,
+            block_receiver,
             monitor,
         );
 

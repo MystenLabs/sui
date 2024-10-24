@@ -6,18 +6,15 @@ use tokio::sync::watch;
 
 use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use crate::{CommitIndex, CommittedSubDag, TransactionIndex, VerifiedBlock};
+use crate::{block::CertifiedBlocksOutput, CommitIndex, CommittedSubDag};
 
 #[derive(Clone)]
 pub struct CommitConsumer {
     // A channel to output the committed sub dags.
     pub(crate) commit_sender: UnboundedSender<CommittedSubDag>,
-    // A channel to output certified and rejected transactions by batches of blocks.
-    // Each tuple contains the block containing transactions, and indices of rejected transactions.
-    // In each block, transactions that are not rejected are considered certified.
-    // Batches of blocks are sent together, to improve efficiency.
-    #[allow(unused)]
-    pub(crate) transaction_sender: UnboundedSender<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
+    // A channel to output blocks for processing, separated from consensus commits.
+    // In each block output, transactions that are not rejected are considered certified.
+    pub(crate) block_sender: UnboundedSender<CertifiedBlocksOutput>,
     // Index of the last commit that the consumer has processed. This is useful for
     // crash/recovery so mysticeti can replay the commits from the next index.
     // First commit in the replayed sequence will have index last_processed_commit_index + 1.
@@ -33,21 +30,21 @@ impl CommitConsumer {
     ) -> (
         Self,
         UnboundedReceiver<CommittedSubDag>,
-        UnboundedReceiver<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
+        UnboundedReceiver<CertifiedBlocksOutput>,
     ) {
-        let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
-        let (transaction_sender, transaction_receiver) = unbounded_channel("consensus_certified");
+        let (commit_sender, commit_receiver) = unbounded_channel("consensus_commit_output");
+        let (block_sender, block_receiver) = unbounded_channel("consensus_block_output");
 
         let monitor = Arc::new(CommitConsumerMonitor::new(last_processed_commit_index));
         (
             Self {
                 commit_sender,
-                transaction_sender,
+                block_sender,
                 last_processed_commit_index,
                 monitor,
             },
             commit_receiver,
-            transaction_receiver,
+            block_receiver,
         )
     }
 
