@@ -3,3 +3,4 @@
 
 pub(crate) mod client;
 mod proto;
+pub(crate) mod worker;
