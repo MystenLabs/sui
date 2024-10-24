@@ -2850,6 +2850,9 @@ impl AuthorityPerEpochStore {
             .protocol_config()
             .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
             .unwrap_or(0);
+        let gas_budget_based_txn_cost_absolute_cap_commit_multiple = self
+            .protocol_config()
+            .gas_budget_based_txn_cost_absolute_cap_commit_multiple_as_option();
         let max_txn_cost_overage_per_object_in_commit = self
             .protocol_config()
             .max_txn_cost_overage_per_object_in_commit_as_option()
@@ -2866,6 +2869,7 @@ impl AuthorityPerEpochStore {
                 .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
             self.protocol_config()
                 .gas_budget_based_txn_cost_cap_factor_as_option(),
+            gas_budget_based_txn_cost_absolute_cap_commit_multiple,
             max_txn_cost_overage_per_object_in_commit,
         );
         let shared_object_using_randomness_congestion_tracker = SharedObjectCongestionTracker::new(
@@ -2886,6 +2890,7 @@ impl AuthorityPerEpochStore {
                 }),
             self.protocol_config()
                 .gas_budget_based_txn_cost_cap_factor_as_option(),
+            gas_budget_based_txn_cost_absolute_cap_commit_multiple,
             max_txn_cost_overage_per_object_in_commit,
         );
 
