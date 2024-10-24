@@ -253,11 +253,11 @@ interface ITraceGenFrameInfo {
     /**
      * Frame ID.
      */
-    frameIDs: number;
+    ID: number;
     /**
      * PC locations traced in the frame
      */
-    framePCLocs: ILoc[];
+    pcLocs: ILoc[];
     /**
      * Path to a file containing function represented by the frame.
      */
@@ -300,7 +300,7 @@ export function readTrace(
     const locaLifetimeEndsMax = new Map<number, number[]>();
     const tracedLines = new Map<string, Set<number>>();
     // stack of frame infos OpenFrame and popped on CloseFrame
-    const frameInfoStack = [];
+    const frameInfoStack: ITraceGenFrameInfo[] = [];
     for (const event of traceJSON.events) {
         if (event.OpenFrame) {
             const localsTypes = [];
