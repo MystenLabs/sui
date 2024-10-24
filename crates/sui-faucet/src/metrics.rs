@@ -200,6 +200,8 @@ impl MetricsCallbackProvider for RequestMetrics {
     }
 }
 
+/// Normalizes the given path to handle variations across different deployments.
+/// Specifically, it trims dynamic segments from the `/v1/status/` endpoint.
 pub fn normalize_path(path: &str) -> &str {
     if path.starts_with("/v1/status/") {
         return "/v1/status";
@@ -208,6 +210,8 @@ pub fn normalize_path(path: &str) -> &str {
     path
 }
 
+/// Determines whether the given path should be tracked for metrics collection.
+/// Only specified paths relevant to monitoring are included.
 pub fn is_path_tracked(path: &str) -> bool {
     matches!(path, "/v1/gas" | "/gas" | "/v1/status")
 }
