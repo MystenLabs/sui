@@ -795,8 +795,8 @@ impl AuthorityEpochTables {
         Ok(table
             .multi_get(shared_input_object_ids.iter())?
             .into_iter()
-            .flatten()
             .zip(shared_input_object_ids)
+            .filter_map(|(debt, object_id)| debt.map(|debt| (debt, object_id)))
             .map(move |(debt, object_id)| {
                 let (round, debt) = debt.into_v1();
                 (
