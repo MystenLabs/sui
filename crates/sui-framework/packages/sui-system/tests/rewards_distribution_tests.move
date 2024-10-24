@@ -3,6 +3,7 @@
 
 #[test_only]
 module sui_system::rewards_distribution_tests {
+    use sui::balance;
     use sui::test_scenario::{Self, Scenario};
     use sui_system::sui_system::SuiSystemState;
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
@@ -490,5 +491,70 @@ module sui_system::rewards_distribution_tests {
         system_state.report_validator(&cap, reportee);
         scenario.return_to_sender(cap);
         test_scenario::return_shared(system_state);
+    }
+
+    #[test]
+    fun test_stake_subsidy_with_safe_mode() {
+        use std::unit_test::assert_eq;
+
+        set_up_sui_system_state_with_big_amounts();
+
+        let mut test = test_scenario::begin(VALIDATOR_ADDR_1);
+        let mut sui_system = test.take_shared<SuiSystemState>();
+
+        let ctx = test.ctx();
+
+        // increment epoch number (safe mode emulation)
+        562u64.do!(|_| ctx.increment_epoch_number());
+        sui_system.set_epoch_for_testing(562);
+        sui_system.set_stake_subsidy_distribution_counter(540);
+
+        assert!(ctx.epoch() == 562);
+        assert!(sui_system.get_stake_subsidy_distribution_counter() == 540);
+
+        // perform advance epoch
+        sui_system
+            .inner_mut_for_testing()
+            .advance_epoch(563, 65, balance::zero(), balance::zero(), 0, 0, 0, 0, 100000000000, ctx)
+            .destroy_for_testing(); // balance returned from `advance_epoch`
+
+        assert_eq!(sui_system.get_stake_subsidy_distribution_counter(), 542);
+
+        test_scenario::return_shared(sui_system);
+        test.end();
+    }
+
+    #[test]
+    // Test that the fix for the subsidy distribution doesn't affect testnet,
+    // where the distribution has no epoch delay, and the condition could result
+    // in arithmetic error.
+    fun test_stake_subsidy_with_safe_mode_testnet() {
+        use std::unit_test::assert_eq;
+
+        set_up_sui_system_state_with_big_amounts();
+
+        let mut test = test_scenario::begin(VALIDATOR_ADDR_1);
+        let mut sui_system = test.take_shared<SuiSystemState>();
+
+        let ctx = test.ctx();
+
+        // increment epoch number (safe mode emulation)
+        540u64.do!(|_| ctx.increment_epoch_number());
+        sui_system.set_epoch_for_testing(540);
+        sui_system.set_stake_subsidy_distribution_counter(540);
+
+        assert!(ctx.epoch() == 540);
+        assert!(sui_system.get_stake_subsidy_distribution_counter() == 540);
+
+        // perform advance epoch
+        sui_system
+            .inner_mut_for_testing()
+            .advance_epoch(541, 65, balance::zero(), balance::zero(), 0, 0, 0, 0, 100000000000, ctx)
+            .destroy_for_testing(); // balance returned from `advance_epoch`
+
+        assert_eq!(sui_system.get_stake_subsidy_distribution_counter(), 541);
+
+        test_scenario::return_shared(sui_system);
+        test.end();
     }
 }
