@@ -23,7 +23,7 @@ pub struct PipelineConfig {
     )]
     collect_interval: Duration,
 
-    /// Watermark task will check for pending watermarks this often.
+    /// Watermark task will check for pending watermarks this often
     #[arg(
         long,
         default_value = "500",
