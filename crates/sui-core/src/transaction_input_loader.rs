@@ -161,7 +161,6 @@ impl TransactionInputLoader {
                         .get_or_init(|| {
                             shared_lock_store
                                 .get_shared_locks(tx_key)
-                                .expect("loading shared locks should not fail")
                                 .map(|locks| locks.into_iter().collect())
                         })
                         .as_ref()

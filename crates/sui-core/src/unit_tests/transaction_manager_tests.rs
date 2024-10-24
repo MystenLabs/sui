@@ -231,14 +231,14 @@ async fn transaction_manager_object_dependency() {
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
             transaction_read_0.digest(),
-            &vec![(shared_object.id(), shared_version)],
+            &[(shared_object.id(), shared_version)],
         )
         .unwrap();
     state
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
             transaction_read_1.digest(),
-            &vec![(shared_object.id(), shared_version)],
+            &[(shared_object.id(), shared_version)],
         )
         .unwrap();
 
@@ -256,7 +256,7 @@ async fn transaction_manager_object_dependency() {
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
             transaction_default.digest(),
-            &vec![(shared_object.id(), shared_version)],
+            &[(shared_object.id(), shared_version)],
         )
         .unwrap();
 
@@ -278,7 +278,7 @@ async fn transaction_manager_object_dependency() {
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
             transaction_read_2.digest(),
-            &vec![
+            &[
                 (shared_object.id(), shared_version),
                 (shared_object_2.id(), shared_version_2),
             ],
@@ -772,7 +772,7 @@ async fn transaction_manager_with_cancelled_transactions() {
         .epoch_store_for_testing()
         .set_shared_object_versions_for_testing(
             cancelled_transaction.digest(),
-            &vec![
+            &[
                 (shared_object_1.id(), SequenceNumber::CANCELLED_READ),
                 (shared_object_2.id(), SequenceNumber::CONGESTED),
             ],

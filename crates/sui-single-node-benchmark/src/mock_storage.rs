@@ -62,7 +62,6 @@ impl InMemoryObjectStore {
                         .get_or_init(|| {
                             shared_locks
                                 .get_shared_locks(tx_key)
-                                .expect("get_shared_locks should not fail")
                                 .map(|l| l.into_iter().collect())
                         })
                         .as_ref()
@@ -177,10 +176,7 @@ impl ParentSync for InMemoryObjectStore {
 }
 
 impl GetSharedLocks for InMemoryObjectStore {
-    fn get_shared_locks(
-        &self,
-        _key: &TransactionKey,
-    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
+    fn get_shared_locks(&self, _key: &TransactionKey) -> Option<Vec<(ObjectID, SequenceNumber)>> {
         unreachable!()
     }
 }

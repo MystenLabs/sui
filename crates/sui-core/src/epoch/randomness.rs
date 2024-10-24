@@ -667,12 +667,11 @@ impl RandomnessManager {
         output: &mut ConsensusCommitOutput,
     ) -> SuiResult<Option<RandomnessRound>> {
         let epoch_store = self.epoch_store()?;
-        let tables = epoch_store.tables()?;
 
-        let last_round_timestamp = tables
-            .randomness_last_round_timestamp
-            .get(&SINGLETON_KEY)
-            .expect("typed_store should not fail");
+        let last_round_timestamp = epoch_store
+            .get_randomness_last_round_timestamp()
+            .expect("read should not fail");
+
         if let Some(last_round_timestamp) = last_round_timestamp {
             if commit_timestamp - last_round_timestamp
                 < epoch_store

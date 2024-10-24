@@ -606,8 +606,5 @@ where
 }
 
 pub trait GetSharedLocks: Send + Sync {
-    fn get_shared_locks(
-        &self,
-        key: &TransactionKey,
-    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>>;
+    fn get_shared_locks(&self, key: &TransactionKey) -> Option<Vec<(ObjectID, SequenceNumber)>>;
 }
