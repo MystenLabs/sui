@@ -1,6 +1,6 @@
 # Prettier Move Plugin
 
-Test Change
+Test Change 2
 
 This is a Move language plugin for the
 [Prettier](https://prettier.io/) code formatter. It uses a Move
