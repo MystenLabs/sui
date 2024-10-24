@@ -303,6 +303,6 @@ fn add_private_transfers(
     let mut visitor = TransferVisitor { transferred };
     match &fdef.body.value {
         T::FunctionBody_::Native | &T::FunctionBody_::Macro => (),
-        T::FunctionBody_::Defined(seq) => visitor.visit_seq(seq),
+        T::FunctionBody_::Defined(seq) => visitor.visit_seq(fdef.body.loc, seq),
     }
 }

@@ -245,7 +245,7 @@ pub trait TypingVisitorContext {
             self.visit_type(None, &fdef.signature.return_type);
         }
         if let T::FunctionBody_::Defined(seq) = &fdef.body.value {
-            self.visit_seq(seq);
+            self.visit_seq(fdef.body.loc, seq);
         }
         self.pop_warning_filter_scope();
     }
@@ -291,11 +291,19 @@ pub trait TypingVisitorContext {
 
     // -- SEQUENCES AND EXPRESSIONS --
 
-    fn visit_seq(&mut self, (use_funs, seq): &T::Sequence) {
+    /// Custom visit for a sequence. It will skip `visit_seq` if `visit_seq_custom` returns true.
+    fn visit_seq_custom(&mut self, _loc: Loc, _seq: &T::Sequence) -> bool {
+        false
+    }
+
+    fn visit_seq(&mut self, loc: Loc, seq @ (use_funs, seq_): &T::Sequence) {
+        if self.visit_seq_custom(loc, seq) {
+            return;
+        }
         if Self::VISIT_USE_FUNS {
             self.visit_use_funs(use_funs);
         }
-        for s in seq {
+        for s in seq_ {
             self.visit_seq_item(s);
         }
     }
@@ -458,8 +466,8 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
             }
             E::Loop { body, .. } => self.visit_exp(body),
-            E::NamedBlock(_, seq) => self.visit_seq(seq),
-            E::Block(seq) => self.visit_seq(seq),
+            E::NamedBlock(_, seq) => self.visit_seq(exp.exp.loc, seq),
+            E::Block(seq) => self.visit_seq(exp.exp.loc, seq),
             E::Assign(lvalues, ty_ann, e) => {
                 // visit the RHS first to better match control flow
                 self.visit_exp(e);
