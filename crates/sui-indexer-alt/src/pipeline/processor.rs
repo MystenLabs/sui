@@ -11,7 +11,7 @@ use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use crate::{handlers::Handler, metrics::IndexerMetrics};
+use crate::{handlers::Handler, metrics::IndexerMetrics, pipeline::Break};
 
 use super::Indexed;
 
@@ -30,19 +30,9 @@ pub(super) fn processor<H: Handler + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    /// Internal type used by workers to propagate errors or shutdown signals up to their
-    /// supervisor.
-    #[derive(thiserror::Error, Debug)]
-    enum Break {
-        #[error("Shutdown received")]
-        Cancel,
-
-        #[error(transparent)]
-        Err(#[from] anyhow::Error),
-    }
-
     spawn_monitored_task!(async move {
-        info!(pipeline = H::NAME, "Starting handler");
+        info!(pipeline = H::NAME, "Starting processor");
+
         match ReceiverStream::new(rx)
             .map(Ok)
             .try_for_each_concurrent(H::FANOUT, |checkpoint| {
@@ -88,14 +78,9 @@ pub(super) fn processor<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .inc_by(values.len() as u64);
 
-                    tx.send(Indexed {
-                        epoch,
-                        cp_sequence_number,
-                        tx_hi,
-                        values,
-                    })
-                    .await
-                    .map_err(|_| Break::Cancel)?;
+                    tx.send(Indexed::new(epoch, cp_sequence_number, tx_hi, values))
+                        .await
+                        .map_err(|_| Break::Cancel)?;
 
                     Ok(())
                 }
@@ -103,11 +88,11 @@ pub(super) fn processor<H: Handler + 'static>(
             .await
         {
             Ok(()) => {
-                info!(pipeline = H::NAME, "Checkpoints done, stopping handler");
+                info!(pipeline = H::NAME, "Checkpoints done, stopping processor");
             }
 
             Err(Break::Cancel) => {
-                info!(pipeline = H::NAME, "Shutdown received, stopping handler");
+                info!(pipeline = H::NAME, "Shutdown received, stopping processor");
             }
 
             Err(Break::Err(e)) => {
