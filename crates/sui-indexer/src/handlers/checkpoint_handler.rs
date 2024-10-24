@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use itertools::Itertools;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
@@ -168,19 +168,29 @@ impl CheckpointHandler {
         let system_state_summary =
             get_sui_system_state(&checkpoint_object_store)?.into_sui_system_state_summary();
 
-        let epoch_event = transactions
+        let epoch_event_opt = transactions
             .iter()
-            .flat_map(|t| t.events.as_ref().map(|e| &e.data))
-            .flatten()
-            .find(|ev| ev.is_system_epoch_info_event())
-            .unwrap_or_else(|| {
-                panic!(
-                    "Can't find SystemEpochInfoEvent in epoch end checkpoint {}",
-                    checkpoint_summary.sequence_number()
-                )
-            });
-
-        let event = bcs::from_bytes::<SystemEpochInfoEvent>(&epoch_event.contents)?;
+            .find_map(|t| {
+                t.events.as_ref()?.data.iter().find_map(|ev| {
+                    if ev.is_system_epoch_info_event() {
+                        Some(bcs::from_bytes::<SystemEpochInfoEvent>(&ev.contents))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .transpose()?;
+        if epoch_event_opt.is_none() {
+            warn!(
+                "No SystemEpochInfoEvent found at end of epoch {}, some epoch data will be set to default.",
+                checkpoint_summary.epoch,
+            );
+            assert!(
+                system_state_summary.safe_mode,
+                "Sui is not in safe mode but no SystemEpochInfoEvent found at end of epoch {}",
+                checkpoint_summary.epoch
+            );
+        }
 
         // Now we just entered epoch X, we want to calculate the diff between
         // TotalTransactionsByEndOfEpoch(X-1) and TotalTransactionsByEndOfEpoch(X-2). Note that on
@@ -204,13 +214,13 @@ impl CheckpointHandler {
             last_epoch: Some(IndexedEpochInfo::from_end_of_epoch_data(
                 system_state_summary.clone(),
                 checkpoint_summary,
-                &event,
+                epoch_event_opt.as_ref(),
                 network_tx_count_prev_epoch,
             )),
             new_epoch: IndexedEpochInfo::from_new_system_state_summary(
                 system_state_summary,
                 checkpoint_summary.sequence_number + 1, // first_checkpoint_id
-                Some(&event),
+                epoch_event_opt.as_ref(),
             ),
             network_total_transactions: checkpoint_summary.network_total_transactions,
         }))
