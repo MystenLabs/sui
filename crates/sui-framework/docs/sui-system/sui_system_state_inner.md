@@ -2163,18 +2163,31 @@ gas coins.
 
     <b>let</b> storage_charge = storage_reward.value();
     <b>let</b> computation_charge = computation_reward.value();
+    <b>let</b> <b>mut</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = <a href="../sui-framework/balance.md#0x2_balance_zero">balance::zero</a>();
 
+    // during the transition from epoch N <b>to</b> epoch N + 1, ctx.<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_epoch">epoch</a>() will <b>return</b> N
+    <b>let</b> old_epoch = ctx.<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_epoch">epoch</a>();
     // Include stake subsidy in the rewards given out <b>to</b> validators and stakers.
     // Delay distributing any stake subsidies until after `stake_subsidy_start_epoch`.
     // And <b>if</b> this epoch is shorter than the regular epoch duration, don't distribute any stake subsidy.
-    <b>let</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> =
-        <b>if</b> (ctx.<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_epoch">epoch</a>() &gt;= self.parameters.stake_subsidy_start_epoch  &&
-            epoch_start_timestamp_ms &gt;= prev_epoch_start_timestamp + self.parameters.epoch_duration_ms)
-        {
-            self.<a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>.<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch">advance_epoch</a>()
-        } <b>else</b> {
-            <a href="../sui-framework/balance.md#0x2_balance_zero">balance::zero</a>()
+    <b>if</b> (old_epoch &gt;= self.parameters.stake_subsidy_start_epoch  &&
+        epoch_start_timestamp_ms &gt;= prev_epoch_start_timestamp + self.parameters.epoch_duration_ms)
+    {
+        // special case for epoch 560 -&gt; 561 change bug. add extra subsidies for "safe mode"
+        // <b>where</b> reward distribution was skipped. <b>use</b> distribution counter and epoch check <b>to</b>
+        // avoiding affecting devnet and testnet
+        <b>if</b> (self.<a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>.get_distribution_counter() == 540 && old_epoch &gt; 560) {
+            // safe mode was entered on the change from 560 <b>to</b> 561. so 560 was the first epoch without proper subsidy distribution
+            <b>let</b> first_safe_mode_epoch = 560;
+            <b>let</b> safe_mode_epoch_count = old_epoch - first_safe_mode_epoch;
+            safe_mode_epoch_count.do!(|_| {
+                <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>.join(self.<a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>.<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch">advance_epoch</a>());
+            });
+            // done <b>with</b> catchup for safe mode epochs. distribution counter is now &gt;540, we won't hit this again
+            // fall through <b>to</b> the normal logic, which will add subsidies for the current epoch
         };
+        <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>.join(self.<a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>.<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch">advance_epoch</a>());
+    };
 
     <b>let</b> stake_subsidy_amount = <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>.value();
     computation_reward.join(<a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>);
