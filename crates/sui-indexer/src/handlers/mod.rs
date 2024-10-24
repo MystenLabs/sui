@@ -27,6 +27,7 @@ pub mod checkpoint_handler;
 pub mod committer;
 pub mod objects_snapshot_handler;
 pub mod pruner;
+pub mod pruners;
 pub mod tx_processor;
 
 pub(crate) const CHECKPOINT_COMMIT_BATCH_SIZE: usize = 100;
