@@ -481,7 +481,7 @@ pub enum TerminalBlockStatus {
     GarbageCollected { rejected: bool },
 }
 
-/// Subscriber to receive updates regarding the status of the blocks for submitted transactions. 
+/// Subscriber to receive updates regarding the status of the blocks for submitted transactions.
 /// When a block is sequenced or garbage collected, the subscriber is notified.
 #[derive(Default)]
 pub struct TerminalBlockStatusNotifier {
