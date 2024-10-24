@@ -1593,6 +1593,7 @@
                   "u64": "2"
                 },
                 "execution_version": null,
+                "gas_budget_based_txn_cost_absolute_cap_commit_multiple": null,
                 "gas_budget_based_txn_cost_cap_factor": null,
                 "gas_model_version": {
                   "u64": "5"
@@ -1687,6 +1688,7 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_accumulated_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_accumulated_txn_cost_per_object_in_narwhal_commit": null,
                 "max_age_of_jwk_in_epochs": null,

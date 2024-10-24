@@ -306,6 +306,7 @@ async fn test_congestion_control_execution_cancellation() {
                     .max_accumulated_txn_cost_per_object_in_mysticeti_commit(),
             ),
             Some(1000), // Not used.
+            None,       // Not used.
             0,          // Disable overage.
         ))
     });

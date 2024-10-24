@@ -1281,6 +1281,10 @@ pub struct ProtocolConfig {
     /// but for mysticeti commits due to that mysticeti has higher commit rate.
     max_accumulated_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
 
+    /// As above, but separate per-commit budget for transactions that use randomness.
+    /// If not configured, uses the setting for `max_accumulated_txn_cost_per_object_in_mysticeti_commit`.
+    max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
+
     /// Configures the garbage collection depth for consensus. When is unset or `0` then the garbage collection
     /// is disabled.
     consensus_gc_depth: Option<u32>,
@@ -1289,6 +1293,10 @@ pub struct ProtocolConfig {
     /// object congestion control strategy. Basically the max transaction cost is calculated as
     /// (num of input object + num of commands) * this factor.
     gas_budget_based_txn_cost_cap_factor: Option<u64>,
+
+    /// Adds an absolute cap on the maximum transaction cost when using TotalGasBudgetWithCap at
+    /// the given multiple of the per-commit budget.
+    gas_budget_based_txn_cost_absolute_cap_commit_multiple: Option<u64>,
 }
 
 // feature flags
@@ -2169,9 +2177,13 @@ impl ProtocolConfig {
 
             max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
 
+            max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: None,
+
             consensus_gc_depth: None,
 
             gas_budget_based_txn_cost_cap_factor: None,
+
+            gas_budget_based_txn_cost_absolute_cap_commit_multiple: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
