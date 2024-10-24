@@ -218,6 +218,7 @@ codes!(
         MissingSyntaxMethod: { msg: "no valid 'syntax' declaration found", severity: BlockingError },
         DuplicateAlias: { msg: "duplicate alias", severity: Warning },
         InvalidEnum: { msg: "invalid 'enum' declaration", severity: NonblockingError },
+        MissingPublic: { msg: "missing public declaration", severity: NonblockingError },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [
