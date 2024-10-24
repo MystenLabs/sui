@@ -89,10 +89,11 @@ pub(super) fn watermark<H: Handler + 'static>(
             watermark.checkpoint_hi_inclusive + LOUD_WATERMARK_UPDATE_INTERVAL;
 
         info!(pipeline = H::NAME, ?watermark, "Starting watermark task");
+
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received, stopping watermark");
+                    info!(pipeline = H::NAME, "Shutdown received, stopping watermark task");
                     break;
                 }
 
@@ -236,7 +237,7 @@ pub(super) fn watermark<H: Handler + 'static>(
                     }
 
                     if rx.is_closed() {
-                        info!(pipeline = H::NAME, "Committer closed channel, stopping watermark");
+                        info!(pipeline = H::NAME, "Committer closed channel, stopping watermark task");
                         break;
                     }
                 }
