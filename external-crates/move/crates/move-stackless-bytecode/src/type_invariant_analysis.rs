@@ -31,7 +31,7 @@ impl FunctionTargetProcessor for TypeInvariantAnalysisProcessor {
         let mut builder = FunctionDataBuilder::new(func_env, data);
         let code = std::mem::take(&mut builder.data.code);
 
-        // builder.set_loc(builder.fun_env.get_loc().at_start());
+        builder.set_loc(builder.fun_env.get_loc().at_start());
         for param in 0..builder.fun_env.get_parameter_count() {
             let type_inv_temp = builder.emit_type_inv(param);
             builder.emit_requires(type_inv_temp);
@@ -40,6 +40,7 @@ impl FunctionTargetProcessor for TypeInvariantAnalysisProcessor {
         for bc in code {
             match bc {
                 Bytecode::Ret(_, ref rets) => {
+                    builder.set_loc(builder.fun_env.get_loc().at_end());
                     for ret in rets {
                         let type_inv_temp = builder.emit_type_inv(*ret);
                         builder.emit_ensures(type_inv_temp);
@@ -63,23 +64,3 @@ impl FunctionTargetProcessor for TypeInvariantAnalysisProcessor {
         "type_invariant_analysis".to_string()
     }
 }
-
-// fn is_inv_type(ty: &Type) -> bool {
-//     match ty {
-//         Type::Primitive(PrimitiveType::U8) => true,
-//         Type::Primitive(PrimitiveType::U64) => true,
-//         Type::Primitive(PrimitiveType::U128) => true,
-//         Type::Primitive(PrimitiveType::Bool) => true,
-//         Type::Primitive(PrimitiveType::Address) => true,
-//         Type::Reference(_, _) => true,
-//         Type::TypeParameter(_) => true,
-//         Type::Vector(_) => true,
-//         Type::Tuple(_) => true,
-//         Type::Fun(_) => true,
-//         Type::TypeDomain => true,
-//         Type::ResourceDomain => true,
-//         Type::UnresolvedError => true,
-//         Type::TypeLocal(_) => true,
-//         Type::TypeValue
-//     }
-// }

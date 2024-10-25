@@ -393,7 +393,10 @@ impl FunctionTargetsHolder {
     ) {
         self.targets
             .get_mut(id)
-            .unwrap_or_else(|| panic!("function qualified id {:#?} not found in targets", id))
+            .expect(&format!(
+                "function qualified id {:#?} not found in targets",
+                id
+            ))
             .insert(variant, data);
     }
 

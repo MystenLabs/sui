@@ -804,12 +804,6 @@ impl Bytecode {
             _ => self.clone(),
         }
     }
-
-    // pub fn set_abort_action(&mut self, aa: Option<AbortAction>) {
-    //     if let Bytecode::Call(_, _, _, _, aa_ref) = self {
-    //         *aa_ref = aa;
-    //     }
-    // }
 }
 
 // =================================================================================================

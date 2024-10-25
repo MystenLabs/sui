@@ -433,7 +433,8 @@ impl LoopAnalysisProcessor {
                 .push(single_loop);
         }
 
-        let invariants = move_loop_invariants::get_invariants(func_env.module_env.env, code);
+        let invariants =
+            move_loop_invariants::get_invariant_span_bimap(func_env.module_env.env, code);
         let invariants_map: BTreeMap<_, _> = invariants
             .iter()
             .map(|(begin, end)| match &code[begin - 1] {
@@ -461,7 +462,7 @@ impl LoopAnalysisProcessor {
 
             if let Some((begin, end)) = invariants_map.get(&label) {
                 // done with all information collection.
-                let code0 = code[*begin..=*end]
+                let invariant_code = code[*begin..=*end]
                     .iter()
                     .map(|bc| {
                         bc.update_abort_action(|aa| match aa {
@@ -471,17 +472,13 @@ impl LoopAnalysisProcessor {
                         })
                     })
                     .collect_vec();
-                // let mut code0 = code[(*begin)..=*end].to_vec();
-                // for bc in code.iter_mut() {
-                //     bc.set_abort_action(Some(AbortAction::Check));
-                // }
                 fat_loops.insert(
                     label,
                     FatLoop {
                         val_targets,
                         mut_targets,
                         back_edges,
-                        loop_invariant: LoopInvariant { code: code0 },
+                        loop_invariant: LoopInvariant { code: invariant_code },
                         spec_global_var_mut,
                     },
                 );

@@ -1108,7 +1108,6 @@ impl<'env> FunctionTranslator<'env> {
             }
         };
         let suffix = match variant {
-            // let suffix = match &self.fun_target.data.variant {
             FunctionVariant::Baseline => "".to_string(),
             FunctionVariant::Verification(flavor) => match flavor {
                 VerificationFlavor::Regular => "$verify".to_string(),

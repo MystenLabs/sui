@@ -136,7 +136,7 @@ impl<'env> BoogieWrapper<'env> {
                 task,
                 self.options.num_instances,
                 self.options.sequential_task,
-                self.options.hard_timeout_secs,
+                self.options.hard_timeout_secs
             )
         };
         let output = match output_res {

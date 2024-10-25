@@ -31,7 +31,7 @@ impl FunctionTargetProcessor for MoveLoopInvariantsProcessor {
             return data;
         }
 
-        let invariants = get_invariants(&func_env.module_env.env, &data.code);
+        let invariants = get_invariant_span_bimap(&func_env.module_env.env, &data.code);
 
         let mut builder = FunctionDataBuilder::new(func_env, data);
         let code = std::mem::take(&mut builder.data.code);
@@ -64,7 +64,9 @@ impl FunctionTargetProcessor for MoveLoopInvariantsProcessor {
     }
 }
 
-pub fn get_invariants(env: &GlobalEnv, code: &[Bytecode]) -> BiBTreeMap<usize, usize> {
+// Returns a bimap between the begin offset of an invariant and the end offset
+// of the invariant.
+pub fn get_invariant_span_bimap(env: &GlobalEnv, code: &[Bytecode]) -> BiBTreeMap<usize, usize> {
     let invariant_begin_function = Operation::apply_fun_qid(&env.invariant_begin_qid(), vec![]);
     let invariant_end_function = Operation::apply_fun_qid(&env.invariant_end_qid(), vec![]);
     let begin_offsets = code.iter().enumerate().filter_map(|(i, bc)| match bc {
@@ -76,7 +78,7 @@ pub fn get_invariants(env: &GlobalEnv, code: &[Bytecode]) -> BiBTreeMap<usize, u
         _ => None,
     });
     begin_offsets
-        // TODO: check if the begin_offsets and end_offsets are well paired
+        // TODO: check if the begin offsets and end offsets are well paired
         .zip_eq(end_offsets)
         .collect()
 }

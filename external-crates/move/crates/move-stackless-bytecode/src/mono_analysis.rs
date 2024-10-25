@@ -154,7 +154,6 @@ impl<'a> fmt::Display for MonoInfoCFGDisplay<'a> {
 /// Get the information computed by this analysis.
 pub fn get_info(env: &GlobalEnv) -> Rc<MonoInfo> {
     env.get_extension::<MonoInfo>().unwrap()
-    //.unwrap_or_else(|| Rc::new(MonoInfo::default()))
 }
 
 pub struct MonoAnalysisProcessor();

@@ -1813,7 +1813,7 @@ impl GlobalEnv {
 
     fn get_fun_qid(&self, module_name: &str, fun_name: &str) -> QualifiedId<FunId> {
         self.find_module_by_name(self.symbol_pool().make(module_name))
-            .unwrap_or_else(|| panic!("module not found: {}", module_name))
+            .expect(&format!("module not found: {}", module_name))
             .get_id()
             .qualified(FunId::new(self.symbol_pool().make(fun_name)))
     }

@@ -243,20 +243,6 @@ impl<'env> FunctionDataBuilder<'env> {
         (temp, temp_exp)
     }
 
-    pub fn emit_let_call(
-        &mut self,
-        op: Operation,
-        args: Vec<TempIndex>,
-        ret_tys: &[Type],
-    ) -> Vec<TempIndex> {
-        let temps = ret_tys
-            .iter()
-            .map(|ty| self.new_temp(ty.clone()))
-            .collect_vec();
-        self.emit_with(|id| Bytecode::Call(id, temps.clone(), op, args, None));
-        temps
-    }
-
     pub fn emit_let_read_ref(&mut self, idx: TempIndex) -> TempIndex {
         let ty = self.get_local_type(idx);
         assert!(ty.is_reference());
