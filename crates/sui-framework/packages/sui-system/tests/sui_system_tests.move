@@ -1121,6 +1121,9 @@ module sui_system::sui_system_tests {
         assert!(sui.value() == 100_000_000_000, 0);
 
         test_scenario::return_shared(system_state);
+
+        advance_epoch(scenario);
+
         sui::test_utils::destroy(sui);
         scenario_val.end();
     }
