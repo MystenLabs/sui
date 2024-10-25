@@ -3,7 +3,7 @@
 
 use crate::{
     command_line::compiler::Visitor,
-    diagnostics::WarningFilters,
+    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
     expansion::ast::ModuleIdent,
     naming::ast as N,
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},

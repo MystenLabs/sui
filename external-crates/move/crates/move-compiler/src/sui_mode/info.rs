@@ -271,6 +271,14 @@ fn add_private_transfers(
         transferred: &'a mut BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
     }
     impl<'a> TypingVisitorContext for TransferVisitor<'a> {
+        fn add_diag(&mut self, _: crate::diagnostics::Diagnostic) {
+            unreachable!("no diags")
+        }
+
+        fn add_diags(&mut self, _: crate::diagnostics::Diagnostics) {
+            unreachable!("no diags")
+        }
+
         fn add_warning_filter_scope(&mut self, _: crate::diagnostics::WarningFilters) {
             unreachable!("no warning filters in function bodies")
         }
