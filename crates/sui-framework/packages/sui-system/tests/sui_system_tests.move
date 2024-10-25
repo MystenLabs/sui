@@ -1125,4 +1125,73 @@ module sui_system::sui_system_tests {
         scenario_val.end();
     }
 
+    #[test]
+    fun test_is_staking_pool_active() {
+        let mut scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+
+        set_up_sui_system_state(vector[@0x1]);
+
+        // 1. add candidate validator
+        scenario.next_tx(@0x2);
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+        let pop = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
+        system_state.request_add_validator_candidate_for_testing(
+            pubkey,
+            vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
+            vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
+            pop,
+            b"ValidatorName2",
+            b"description2",
+            b"image_url2",
+            b"project_url2",
+            b"/ip4/127.0.0.2/tcp/80",
+            b"/ip4/127.0.0.2/udp/80",
+            b"/ip4/168.168.168.168/udp/80",
+            b"/ip4/168.168.168.168/udp/80",
+            1,
+            0,
+            scenario.ctx(),
+        );
+        let staking_pool_id = system_state.candidate_validator_by_address(@0x2).staking_pool_id();
+
+        // 2. validator candidate staking pools are inactive
+        assert!(!system_state.is_staking_pool_active(&staking_pool_id), 0);
+        test_scenario::return_shared(system_state);
+
+        stake_with(@0x0, @0x2, 1_000_000, scenario);
+
+        // 3. mark candidate as pending active validator
+        scenario.next_tx(@0x2);
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        system_state.request_add_validator(scenario.ctx());
+
+        // 4. validator is pending activation, but is not active yet
+        assert!(!system_state.is_staking_pool_active(&staking_pool_id), 0);
+        test_scenario::return_shared(system_state);
+
+        advance_epoch(scenario);
+
+        // 5. validator is active now
+        scenario.next_tx(@0x2);
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        assert!(system_state.is_staking_pool_active(&staking_pool_id), 0);
+
+        // 6. remove validator
+        system_state.request_remove_validator(scenario.ctx());
+        assert!(system_state.is_staking_pool_active(&staking_pool_id), 0);
+
+        test_scenario::return_shared(system_state);
+
+        advance_epoch(scenario);
+
+        // 7. validator is inactive now
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        assert!(!system_state.is_staking_pool_active(&staking_pool_id), 0);
+        test_scenario::return_shared(system_state);
+
+        scenario_val.end();
+    }
+
 }
