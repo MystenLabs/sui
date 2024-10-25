@@ -16,6 +16,10 @@ use tracing::{error, info};
 use crate::config::RetentionConfig;
 use crate::errors::IndexerError;
 use crate::execute_delete_range_query;
+use crate::handlers::pruners::events::Events;
+use crate::handlers::pruners::objects_history::ObjectsHistory;
+use crate::handlers::pruners::spawn_pruner;
+use crate::handlers::pruners::transactions::Transactions;
 use crate::schema::{
     checkpoints, event_emit_module, event_emit_package, event_senders, event_struct_instantiation,
     event_struct_module, event_struct_name, event_struct_package, events, objects_history,
@@ -379,17 +383,13 @@ impl Pruner {
             cancel_clone
         ));
 
-        let mut table_tasks = vec![];
+        let mut table_tasks = vec![
+            spawn_pruner::<Events>(cancel.clone(), self.store.clone()),
+            spawn_pruner::<ObjectsHistory>(cancel.clone(), self.store.clone()),
+            spawn_pruner::<Transactions>(cancel.clone(), self.store.clone()),
+        ];
 
         for table in PrunableTable::iter() {
-            let store_clone = self.store.clone();
-            let partition_manager_clone = self.partition_manager.clone();
-            let cancel_clone = cancel.clone();
-            let mut table_pruner =
-                TablePruner::new(table, store_clone, partition_manager_clone, cancel_clone);
-
-            table_tasks.push(spawn_monitored_task!(table_pruner.run()));
-
             let store_clone = self.store.clone();
             let cancel_clone = cancel.clone();
 

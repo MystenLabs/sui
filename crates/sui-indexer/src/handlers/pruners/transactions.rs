@@ -8,11 +8,11 @@ use crate::{database::Connection, handlers::pruner::PrunableTable};
 
 use super::{get_partition_sql, PartitionedTable, Prunable};
 
-pub struct ObjectsHistory;
+pub struct Transactions;
 
 #[async_trait::async_trait]
-impl Prunable for ObjectsHistory {
-    const NAME: PrunableTable = PrunableTable::ObjectsHistory;
+impl Prunable for Transactions {
+    const NAME: PrunableTable = PrunableTable::Transactions;
 
     const CHUNK_SIZE: u64 = 1;
 
@@ -37,6 +37,3 @@ impl Prunable for ObjectsHistory {
             .context("failed to drop partition")
     }
 }
-
-// TODO: I think for pruner we just need to know FANOUT, and how many to delete at once
-// I think generally, unpartitioned tables can have CHUNK_SIZE=100k, and partitioned tables would be 1 at a time
