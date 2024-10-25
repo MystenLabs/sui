@@ -2840,6 +2840,12 @@ impl ProtocolConfig {
                     cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(3);
                 }
                 65 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = true;
+                    }
+                }
+                66 => {
                     // Enable distributed vote scoring for mainnet
                     cfg.feature_flags
                         .consensus_distributed_vote_scoring_strategy = true;
