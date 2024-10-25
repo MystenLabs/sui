@@ -16,6 +16,7 @@ use crate::{
     loop_analysis::LoopAnalysisProcessor,
     memory_instrumentation::MemoryInstrumentationProcessor,
     mono_analysis::MonoAnalysisProcessor,
+    move_loop_invariants::MoveLoopInvariantsProcessor,
     mut_ref_instrumentation::MutRefInstrumenter,
     mutation_tester::MutationTester,
     number_operation_analysis::NumberOperationProcessor,
@@ -37,13 +38,7 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
         // transformation and analysis
         EliminateImmRefsProcessor::new(),
         MutRefInstrumenter::new(),
-    ];
-
-    if !options.skip_loop_analysis {
-        processors.push(LoopAnalysisProcessor::new());
-    };
-
-    processors.append(&mut vec![
+        MoveLoopInvariantsProcessor::new(),
         ReachingDefProcessor::new(),
         LiveVarAnalysisProcessor::new(),
         BorrowAnalysisProcessor::new_borrow_natives(options.borrow_natives.clone()),
@@ -51,6 +46,13 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
         CleanAndOptimizeProcessor::new(),
         UsageProcessor::new(),
         VerificationAnalysisProcessor::new(),
+    ];
+
+    if !options.skip_loop_analysis {
+        processors.push(LoopAnalysisProcessor::new());
+    };
+
+    processors.append(&mut vec![
         // spec instrumentation
         SpecInstrumentationProcessor::new(),
         TypeInvariantAnalysisProcessor::new(),

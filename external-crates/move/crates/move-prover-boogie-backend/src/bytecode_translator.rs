@@ -396,11 +396,15 @@ impl<'env> BoogieTranslator<'env> {
                     let inv_fun_target = self
                         .targets
                         .get_target(&inv_fun_env, &FunctionVariant::Baseline);
-                    for type_inst in mono_info
+                    let struct_type_instances = mono_info
                         .structs
                         .get(&struct_env.get_qualified_id())
-                        .unwrap_or(empty)
-                    {
+                        .unwrap_or(empty);
+                    let inv_fun_type_instances = mono_info
+                        .funs
+                        .get(&(inv_fun_env.get_qualified_id(), FunctionVariant::Baseline))
+                        .unwrap_or(empty);
+                    for type_inst in struct_type_instances.difference(inv_fun_type_instances) {
                         FunctionTranslator {
                             parent: self,
                             fun_target: &inv_fun_target,

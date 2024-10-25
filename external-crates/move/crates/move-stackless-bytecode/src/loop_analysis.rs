@@ -13,6 +13,7 @@ use crate::{
     function_target::{FunctionData, FunctionTarget},
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},
     graph::{Graph, NaturalLoop},
+    move_loop_invariants,
     options::ProverOptions,
     spec_global_variable_analysis,
     stackless_bytecode::{AbortAction, Bytecode, HavocKind, Label, Operation},
@@ -45,6 +46,7 @@ pub struct LoopInvariant {
 #[derive(Debug, Clone)]
 pub struct LoopAnnotation {
     pub fat_loops: BTreeMap<Label, FatLoop>,
+    pub invariant_offsets: Vec<(usize, usize)>,
 }
 
 impl LoopAnnotation {
@@ -132,11 +134,24 @@ impl LoopAnalysisProcessor {
         let mut goto_fixes = vec![];
         let code = std::mem::take(&mut builder.data.code);
         for (offset, bytecode) in code.into_iter().enumerate() {
+            // skip existing invariant instructions
+            if loop_annotation
+                .invariant_offsets
+                .iter()
+                .any(|(begin, end)| begin <= &offset && &offset <= end)
+            {
+                continue;
+            }
+
             match bytecode {
                 Bytecode::Label(attr_id, label) => {
-                    builder.emit(bytecode);
-                    builder.set_loc_from_attr(attr_id);
                     if let Some(loop_info) = loop_annotation.fat_loops.get(&label) {
+                        let dup_code = builder.dup_code(&loop_info.loop_invariant.code);
+                        builder.emit_vec(dup_code);
+
+                        builder.set_loc_from_attr(attr_id);
+                        builder.emit(bytecode);
+
                         // havoc all loop targets
                         for idx in &loop_info.val_targets {
                             builder.emit_havoc(*idx, HavocKind::Value);
@@ -227,6 +242,8 @@ impl LoopAnalysisProcessor {
                                 "info: loop invariant holds at current state".to_string(),
                             );
                         }
+                    } else {
+                        builder.emit(bytecode);
                     }
                 }
 
@@ -416,25 +433,13 @@ impl LoopAnalysisProcessor {
                 .push(single_loop);
         }
 
-        let invariant_begin_function =
-            Operation::apply_fun_qid(&func_env.module_env.env.invariant_begin_qid(), vec![]);
-        let invariant_end_function =
-            Operation::apply_fun_qid(&func_env.module_env.env.invariant_end_qid(), vec![]);
-        let begin_offsets = code.iter().enumerate().filter_map(|(i, bc)| match bc {
-            Bytecode::Call(_, _, op, _, _) if *op == invariant_begin_function => Some(i),
-            _ => None,
-        });
-        let end_offsets = code.iter().enumerate().filter_map(|(i, bc)| match bc {
-            Bytecode::Call(_, _, op, _, _) if *op == invariant_end_function => Some(i),
-            _ => None,
-        });
-        let invariants_map: BTreeMap<_, _> = begin_offsets
-            // TODO: check if the begin_offsets and end_offsets are well paired
-            .zip_eq(end_offsets)
-            .map(|(begin, end)| match &code[end + 1] {
+        let invariants = move_loop_invariants::get_invariants(func_env.module_env.env, code);
+        let invariants_map: BTreeMap<_, _> = invariants
+            .iter()
+            .map(|(begin, end)| match &code[begin - 1] {
                 // TODO: check if the label is the header of a loop
-                Bytecode::Label(_, label) => (label, (begin, end)),
-                _ => panic!("A loop invariant should end with a label"),
+                Bytecode::Label(_, label) => (label, (*begin, *end)),
+                _ => panic!("A loop invariant should begin with a label"),
             })
             .collect();
 
@@ -456,7 +461,7 @@ impl LoopAnalysisProcessor {
 
             if let Some((begin, end)) = invariants_map.get(&label) {
                 // done with all information collection.
-                let code0 = code[(*begin)..=*end]
+                let code0 = code[*begin..=*end]
                     .iter()
                     .map(|bc| {
                         bc.update_abort_action(|aa| match aa {
@@ -483,6 +488,9 @@ impl LoopAnalysisProcessor {
             }
         }
 
-        LoopAnnotation { fat_loops }
+        LoopAnnotation {
+            fat_loops,
+            invariant_offsets: invariants.into_iter().collect(),
+        }
     }
 }

@@ -130,3 +130,21 @@ fun test6_spec(n: u64) {
     ensures(i == n);
     ensures(ghost::global<SpecSum, Integer>() == ((n as u128) * ((n as u128) + 1) / 2).to_int());
 }
+
+fun test7_spec(s: &mut u128, n: u64) {
+    let old_s = old!(s);
+
+    let mut i = 0;
+
+    invariant!(|| {
+        ensures(i <= n);
+        ensures(s == *old_s + (i as u128) * ((i as u128) + 1) / 2);
+    });
+    while (i < n) {
+        i = i + 1;
+        *s = *s + (i as u128);
+    };
+
+    ensures(s == *old_s + (n as u128) * ((n as u128) + 1) / 2);
+    ensures(i == n);
+}
