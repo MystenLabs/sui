@@ -13,7 +13,7 @@ use std::{
     io,
     net::{IpAddr, SocketAddr},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 use sui_network::{
     api::{Validator, ValidatorServer},
@@ -72,6 +72,8 @@ use tonic::transport::server::TcpConnectInfo;
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
 mod server_tests;
+
+pub const DEFAULT_FORWARD_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
@@ -406,6 +408,22 @@ impl ValidatorService {
         self.transaction(request).await
     }
 
+    fn forward_transaction(&self, transaction: &Transaction) {
+        for client in self.trusted_certificate_forwarder.clone() {
+            let transaction = transaction.clone();
+            spawn_monitored_task!(async move {
+                let result = tokio::time::timeout(
+                    DEFAULT_FORWARD_TRANSACTION_TIMEOUT,
+                    client.handle_transaction(transaction, None),
+                )
+                .await;
+                if let Err(e) = result {
+                    info!("Trusted certificate forwarder returned error: {:?}", e);
+                }
+            });
+        }
+    }
+
     async fn handle_transaction(
         &self,
         request: tonic::Request<Transaction>,
@@ -416,7 +434,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source: _,
-            trusted_certificate_forwarder,
+            trusted_certificate_forwarder: _,
         } = self.clone();
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
@@ -424,12 +442,7 @@ impl ValidatorService {
         transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         // Forward the transaction to trusted certificate forwarders
-        for client in trusted_certificate_forwarder {
-            let transaction = transaction.clone();
-            spawn_monitored_task!(async move {
-                let _ = client.handle_transaction(transaction, None).await;
-            });
-        }
+        self.forward_transaction(&transaction);
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
@@ -500,7 +513,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source: _,
-            trusted_certificate_forwarder,
+            trusted_certificate_forwarder: _,
         } = self.clone();
         let epoch_store = state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
@@ -521,12 +534,7 @@ impl ValidatorService {
         transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         // Forward the transaction to trusted certificate forwarders
-        for client in trusted_certificate_forwarder {
-            let transaction = transaction.clone();
-            spawn_monitored_task!(async move {
-                let _ = client.handle_transaction(transaction, None).await;
-            });
-        }
+        self.forward_transaction(&transaction);
 
         // Check system overload
         let overload_check_res = self.state.check_system_overload(
