@@ -337,3 +337,4 @@ max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: true
 max_accumulated_txn_cost_per_object_in_mysticeti_commit: 3
 gas_budget_based_txn_cost_cap_factor: 400000
+
