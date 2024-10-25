@@ -533,7 +533,7 @@ mod test {
             if separate_randomness_budget {
                 config
                 .set_max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_for_testing(
-                    std::cmp::min(
+                    std::cmp::max(
                         1,
                         config.max_accumulated_txn_cost_per_object_in_mysticeti_commit() / 10,
                     ),
