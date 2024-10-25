@@ -388,8 +388,7 @@ impl Compiler {
             compilation_env.add_custom_known_filters(prefix, filters)?;
         }
 
-        let (source_text, pprog, comments) =
-            parse_program(&mut compilation_env, maps, targets, deps)?;
+        let (source_text, pprog, comments) = parse_program(&compilation_env, maps, targets, deps)?;
 
         for (fhash, (fname, contents)) in &source_text {
             // TODO better support for bytecode interface file paths
@@ -483,12 +482,12 @@ impl<const P: Pass> SteppedCompiler<P> {
             "Invalid pass for run_to. Target pass precedes the current pass"
         );
         let Self {
-            mut compilation_env,
+            compilation_env,
             pre_compiled_lib,
             program,
         } = self;
         let new_prog = run(
-            &mut compilation_env,
+            &compilation_env,
             pre_compiled_lib.clone(),
             program.unwrap(),
             TARGET,
@@ -657,9 +656,9 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     };
 
     let (empty_compiler, ast) = stepped.into_ast();
-    let mut compilation_env = empty_compiler.compilation_env;
+    let compilation_env = empty_compiler.compilation_env;
     let start = PassResult::Parser(ast);
-    match run(&mut compilation_env, None, start, PASS_COMPILATION) {
+    match run(&compilation_env, None, start, PASS_COMPILATION) {
         Err((_pass, errors)) => Ok(Err((files, errors))),
         Ok(PassResult::Compilation(compiled, _)) => Ok(Ok(FullyCompiledProgram {
             files,

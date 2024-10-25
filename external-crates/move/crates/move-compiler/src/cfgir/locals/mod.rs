@@ -17,7 +17,7 @@ use crate::{
     },
     naming::ast::{self as N, TParam},
     parser::ast::{Ability_, DatatypeName},
-    shared::{program_info::DatatypeKind, unique_map::UniqueMap, *},
+    shared::{program_info::DatatypeKind, unique_map::UniqueMap},
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;

@@ -29,7 +29,7 @@ use crate::{
         BaseType_, Label, ModuleCall, SingleType, SingleType_, Type, TypeName_, Type_, Var,
     },
     parser::ast::Ability_,
-    shared::{CompilationEnv, Identifier},
+    shared::Identifier,
 };
 use std::collections::BTreeMap;
 

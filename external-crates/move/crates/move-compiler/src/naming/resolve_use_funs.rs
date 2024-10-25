@@ -41,6 +41,7 @@ impl<'env, 'info> Context<'env, 'info> {
         self.env.add_diag(&self.warning_filters_scope, diag);
     }
 
+    #[allow(unused)]
     pub fn add_diags(&mut self, diags: Diagnostics) {
         self.env.add_diags(&self.warning_filters_scope, diags);
     }

@@ -23,7 +23,6 @@ use crate::{
     },
     hlir::ast::{Label, ModuleCall, Type, Type_, Var},
     parser::ast::Ability_,
-    shared::CompilationEnv,
 };
 use std::collections::BTreeMap;
 

@@ -1026,6 +1026,7 @@ impl CFGIRVisitorConstructor for AbsintVisitor {
 }
 
 impl AbsintVisitorContext<'_> {
+    #[allow(unused)]
     fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
         self.env.add_diag(&self.warning_filters_scope, diag);
     }

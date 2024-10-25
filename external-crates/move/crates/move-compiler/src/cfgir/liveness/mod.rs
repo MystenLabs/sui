@@ -13,7 +13,7 @@ use crate::{
     diagnostics::Diagnostics,
     expansion::ast::Mutability,
     hlir::ast::{self as H, *},
-    shared::{unique_map::UniqueMap, CompilationEnv},
+    shared::unique_map::UniqueMap,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;

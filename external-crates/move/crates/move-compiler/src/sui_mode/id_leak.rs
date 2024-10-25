@@ -20,7 +20,7 @@ use crate::{
     expansion::ast::{ModuleIdent, TargetKind},
     hlir::ast::{self as H, Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
     parser::ast::Ability_,
-    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
+    shared::{program_info::TypingProgramInfo, Identifier},
     sui_mode::{OBJECT_NEW, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT},
 };
 use std::collections::BTreeMap;

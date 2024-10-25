@@ -195,7 +195,7 @@ fn deprecations(
         .last()
         .expect("Verified deprecations is not empty above");
 
-    let mut make_invalid_deprecation_diag = || {
+    let make_invalid_deprecation_diag = || {
         let mut diag = diag!(
             Attributes::InvalidUsage,
             (

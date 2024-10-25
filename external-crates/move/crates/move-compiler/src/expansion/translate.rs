@@ -266,6 +266,7 @@ impl<'env, 'map> Context<'env, 'map> {
         self.defn_context.add_diag(diag);
     }
 
+    #[allow(unused)]
     pub fn add_diags(&mut self, diags: Diagnostics) {
         self.defn_context.add_diags(diags);
     }

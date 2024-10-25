@@ -32,7 +32,7 @@ use crate::{
     parser::ast::{Ability_, DatatypeName},
     shared::{
         program_info::{DatatypeKind, TypingProgramInfo},
-        CompilationEnv, Identifier,
+        Identifier,
     },
     sui_mode::{
         info::{SuiInfo, TransferKind},

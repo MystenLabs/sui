@@ -695,6 +695,10 @@ impl CompilationEnv {
             .unwrap()
             .add_ide_annotation(loc, info);
     }
+
+    pub fn ide_information(&self) -> std::sync::RwLockReadGuard<'_, IDEInfo> {
+        self.ide_information.read().unwrap()
+    }
 }
 
 impl WarningFiltersScope {
