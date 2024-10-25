@@ -1593,7 +1593,7 @@
                   "u64": "2"
                 },
                 "execution_version": null,
-                "gas_budget_based_txn_cost_absolute_cap_commit_multiple": null,
+                "gas_budget_based_txn_cost_absolute_cap_commit_count": null,
                 "gas_budget_based_txn_cost_cap_factor": null,
                 "gas_model_version": {
                   "u64": "5"

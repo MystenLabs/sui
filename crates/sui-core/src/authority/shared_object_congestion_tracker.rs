@@ -41,7 +41,7 @@ impl SharedObjectCongestionTracker {
         mode: PerObjectCongestionControlMode,
         max_accumulated_txn_cost_per_object_in_commit: Option<u64>,
         gas_budget_based_txn_cost_cap_factor: Option<u64>,
-        gas_budget_based_txn_cost_absolute_cap_commit_multiple: Option<u64>,
+        gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
         max_txn_cost_overage_per_object_in_commit: u64,
     ) -> Self {
         let max_accumulated_txn_cost_per_object_in_commit =
@@ -58,7 +58,7 @@ impl SharedObjectCongestionTracker {
             max_accumulated_txn_cost_per_object_in_commit,
             gas_budget_based_txn_cost_cap_factor,
             gas_budget_based_txn_cost_absolute_cap:
-                gas_budget_based_txn_cost_absolute_cap_commit_multiple
+                gas_budget_based_txn_cost_absolute_cap_commit_count
                     .map(|m| m * max_accumulated_txn_cost_per_object_in_commit),
             max_txn_cost_overage_per_object_in_commit,
         }
@@ -89,7 +89,7 @@ impl SharedObjectCongestionTracker {
                 max_accumulated_txn_cost_per_object_in_commit
             },
             protocol_config.gas_budget_based_txn_cost_cap_factor_as_option(),
-            protocol_config.gas_budget_based_txn_cost_absolute_cap_commit_multiple_as_option(),
+            protocol_config.gas_budget_based_txn_cost_absolute_cap_commit_count_as_option(),
             protocol_config
                 .max_txn_cost_overage_per_object_in_commit_as_option()
                 .unwrap_or(0),
