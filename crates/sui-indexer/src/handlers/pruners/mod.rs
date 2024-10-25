@@ -68,10 +68,12 @@ pub trait Prunable: Send {
 
     /// Pruner hi watermark.
     async fn pruner_hi(conn: &mut Connection<'_>) -> anyhow::Result<u64> {
+        println!("fetch pruner_hi");
         let watermark = watermarks::table
             .filter(watermarks::pipeline.eq(Self::NAME.as_ref()))
             .first::<StoredWatermark>(conn)
             .await?;
+        println!("got pruner_hi");
 
         Ok(watermark.pruner_hi as u64)
     }
@@ -86,76 +88,11 @@ pub trait Prunable: Send {
 
 pub const NUM_WORKERS: usize = 5;
 
-/// Handles concurrency and chunking for a table.
-pub struct PrunerManager<T: Prunable> {
-    cancel: CancellationToken,
-    store: PgIndexerStore,
-    semaphore: Arc<Semaphore>,
-    _phantom: std::marker::PhantomData<T>,
-}
-
-impl<T: Prunable> PrunerManager<T> {
-    pub fn new(cancel: CancellationToken, store: PgIndexerStore) -> Self {
-        Self {
-            cancel,
-            store,
-            // The semaphore ensures we only have NUM_WORKERS active deletion
-            // tasks at a time, even if we've queued up more chunks
-            semaphore: Arc::new(Semaphore::new(NUM_WORKERS)),
-            _phantom: std::marker::PhantomData,
-        }
-    }
-
-    pub async fn run(&self) -> anyhow::Result<()> {
-        loop {
-            if self.cancel.is_cancelled() {
-                info!("Cancelling pruning task for {}", T::NAME.as_ref());
-                return Ok(());
-            }
-
-            let pool = self.store.pool();
-            let mut conn = pool.get().await?;
-
-            let lo = T::data_lo(&mut conn).await?;
-            let hi = T::pruner_hi(&mut conn).await?;
-
-            if lo >= hi {
-                return Ok(());
-            }
-
-            let mut futures = FuturesUnordered::new();
-            let mut current_lo = lo;
-            let mut total_pruned = 0;
-
-            // Queue up all the chunks we need to process
-            while current_lo < hi {
-                let chunk_hi = (current_lo + T::CHUNK_SIZE).min(hi);
-                let semaphore = self.semaphore.clone();
-                let store_clone = self.store.clone();
-
-                futures.push(tokio::spawn(async move {
-                    let _permit = semaphore.acquire().await?;
-                    let pool = store_clone.pool();
-                    let mut conn = pool.get().await?;
-                    T::prune(current_lo, chunk_hi, &mut conn).await
-                }));
-
-                current_lo = chunk_hi;
-            }
-
-            // Process results as they complete
-            while let Some(result) = futures.next().await {
-                total_pruned += result??;
-            }
-        }
-    }
-}
-
 pub fn get_partition_sql(table_name: &str) -> String {
     format!(
         r"
         SELECT
-            MIN(SUBSTRING(child.relname FROM '\d+$'))::integer as first_partition
+            MIN(SUBSTRING(child.relname FROM '\d+$'))::BIGINT as first_partition
         FROM pg_inherits
         JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
         JOIN pg_class child ON pg_inherits.inhrelid = child.oid
@@ -177,18 +114,29 @@ pub async fn run_pruner<T: Prunable>(
 ) -> IndexerResult<()> {
     // Create semaphore outside the loop since it's shared across iterations
     let semaphore = Arc::new(Semaphore::new(NUM_WORKERS));
+    println!("instantiated semaphore");
 
     loop {
+        println!("start of loop for table: {}", T::NAME.as_ref());
         if cancel.is_cancelled() {
             info!("Cancelling pruning task for {}", T::NAME.as_ref());
             return Ok(());
         }
 
+        println!("try get connection");
+
         let pool = store.pool();
         let mut conn = pool.get().await?;
 
+        println!("got the connection");
+
         let lo = T::data_lo(&mut conn).await?;
+        println!("got lo");
         let hi = T::pruner_hi(&mut conn).await?;
+        println!("got hi");
+
+        println!("dealing with table: {}", T::NAME.as_ref());
+        println!("lo: {}, hi: {}", lo, hi);
 
         if lo >= hi {
             return Ok(());
@@ -207,6 +155,7 @@ pub async fn run_pruner<T: Prunable>(
                 let _permit = semaphore.acquire().await?;
                 let pool = store_clone.pool();
                 let mut conn = pool.get().await?;
+                println!("calling prune");
                 T::prune(current_lo, chunk_hi, &mut conn).await
             }));
 
@@ -223,5 +172,6 @@ pub fn spawn_pruner<T: Prunable>(
     cancel: CancellationToken,
     store: PgIndexerStore,
 ) -> JoinHandle<IndexerResult<()>> {
+    println!("spawn_pruner");
     spawn_monitored_task!(run_pruner::<T>(cancel, store))
 }

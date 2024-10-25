@@ -389,6 +389,8 @@ impl Pruner {
             spawn_pruner::<Transactions>(cancel.clone(), self.store.clone()),
         ];
 
+        println!("added table tasks");
+
         for table in PrunableTable::iter() {
             let store_clone = self.store.clone();
             let cancel_clone = cancel.clone();
