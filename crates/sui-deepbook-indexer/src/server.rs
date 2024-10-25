@@ -100,7 +100,10 @@ async fn get_24hr_volume(
     let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
 
     let results: Vec<(String, i64)> = schema::order_fills::table
-        .select((schema::order_fills::pool_id, schema::order_fills::base_quantity))
+        .select((
+            schema::order_fills::pool_id,
+            schema::order_fills::base_quantity,
+        ))
         .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
         .filter(schema::order_fills::onchain_timestamp.gt(day_ago))
         .load(connection)
