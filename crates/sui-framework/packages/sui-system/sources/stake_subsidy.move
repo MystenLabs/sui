@@ -65,7 +65,6 @@ module sui_system::stake_subsidy {
 
         // Drawn down the subsidy for this epoch.
         let stake_subsidy = self.balance.split(to_withdraw);
-
         self.distribution_counter = self.distribution_counter + 1;
 
         // Decrease the subsidy amount only when the current period ends.
