@@ -51,15 +51,9 @@ impl Client {
             .url()
             .join(&format!("checkpoints/{checkpoint_sequence_number}/full"))?;
 
-        let response = self
-            .inner
-            .client()
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
+        let request = self.inner.client().get(url);
 
-        self.inner.bcs(response).await.map(Response::into_inner)
+        self.inner.bcs(request).await.map(Response::into_inner)
     }
 
     pub async fn get_checkpoint_summary(
@@ -117,18 +111,15 @@ impl Client {
             signatures: &transaction.inner().tx_signatures,
         })?;
 
-        let response = self
+        let request = self
             .inner
             .client()
             .post(url)
             .query(parameters)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
-            .body(body)
-            .send()
-            .await?;
+            .body(body);
 
-        self.inner.bcs(response).await.map(Response::into_inner)
+        self.inner.bcs(request).await.map(Response::into_inner)
     }
 }
 
