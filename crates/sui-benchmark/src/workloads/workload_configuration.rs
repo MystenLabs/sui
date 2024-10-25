@@ -9,7 +9,7 @@ use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
 use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
 use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
-use crate::workloads::{GroupID, WorkloadBuilderInfo, WorkloadInfo};
+use crate::workloads::{ExpectedFailureType, GroupID, WorkloadBuilderInfo, WorkloadInfo};
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -74,7 +74,7 @@ impl WorkloadConfiguration {
                 shared_counter_max_tip,
                 batch_payment_size,
                 adversarial_cfg,
-                expected_failure_cfg,
+                expected_failure_type,
                 target_qps,
                 num_workers,
                 in_flight_ratio,
@@ -105,10 +105,10 @@ impl WorkloadConfiguration {
                         },
                         adversarial_cfg: AdversarialPayloadCfg::from_str(&adversarial_cfg[i])
                             .unwrap(),
-                        expected_failure_cfg: ExpectedFailurePayloadCfg::from_str(
-                            &expected_failure_cfg[i],
-                        )
-                        .unwrap(),
+                        expected_failure_cfg: ExpectedFailurePayloadCfg {
+                            failure_type: ExpectedFailureType::try_from(expected_failure_type[i])
+                                .unwrap(),
+                        },
                         batch_payment_size: batch_payment_size[i],
                         shared_counter_hotness_factor: shared_counter_hotness_factor[i],
                         num_shared_counters: num_shared_counters.as_ref().map(|n| n[i]),

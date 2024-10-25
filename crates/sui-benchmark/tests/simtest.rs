@@ -5,6 +5,7 @@
 mod test {
     use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
     use std::collections::HashSet;
+    use std::num::NonZeroUsize;
     use std::path::PathBuf;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,6 +15,7 @@ mod test {
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
     use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
+    use sui_benchmark::workloads::workload::ExpectedFailureType;
     use sui_benchmark::workloads::workload_configuration::{
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
     };
@@ -38,11 +40,13 @@ mod test {
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
+    use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
+    use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
     use sui_types::transaction::{
         DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
     };
@@ -471,12 +475,10 @@ mod test {
             let mut rng = thread_rng();
             mode = if rng.gen_bool(0.33) {
                 PerObjectCongestionControlMode::TotalGasBudget
+            } else if rng.gen_bool(0.5) {
+                PerObjectCongestionControlMode::TotalTxCount
             } else {
-                if rng.gen_bool(0.5) {
-                    PerObjectCongestionControlMode::TotalTxCount
-                } else {
-                    PerObjectCongestionControlMode::TotalGasBudgetWithCap
-                }
+                PerObjectCongestionControlMode::TotalGasBudgetWithCap
             };
             checkpoint_budget_factor = rng.gen_range(1..20);
             txn_count_limit = rng.gen_range(1..=10);
@@ -550,7 +552,65 @@ mod test {
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
-        test_simulated_load_with_test_config(test_cluster, 50, simulated_load_config).await;
+        test_simulated_load_with_test_config(test_cluster, 50, simulated_load_config, None, None)
+            .await;
+    }
+
+    // Tests cluster defense against failing transaction floods Traffic Control
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_expected_failure_traffic_control() {
+        // TODO: can we get away with significatly increasing this?
+        let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
+        let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
+
+        let expected_tps = target_qps * num_workers;
+        let error_policy_type = PolicyType::FreqThreshold(FreqThresholdConfig {
+            client_threshold: expected_tps - 10,
+            window_size_secs: 5,
+            update_interval_secs: 1,
+            ..Default::default()
+        });
+        info!(
+            "test_simulated_load_expected_failure_traffic_control setup.
+             Policy type: {:?}",
+            error_policy_type
+        );
+
+        let policy_config = PolicyConfig {
+            connection_blocklist_ttl_sec: 1,
+            error_policy_type,
+            dry_run: false,
+            ..Default::default()
+        };
+        let network_config = ConfigBuilder::new_with_temp_dir()
+            .committee_size(NonZeroUsize::new(4).unwrap())
+            .with_policy_config(Some(policy_config))
+            .build();
+        let test_cluster = Arc::new(
+            TestClusterBuilder::new()
+                .set_network_config(network_config)
+                .with_epoch_duration_ms(5000)
+                .build()
+                .await,
+        );
+
+        let mut simulated_load_config = SimulatedLoadConfig::default();
+        {
+            let mut rng = thread_rng();
+            simulated_load_config.expected_failure_weight = if rng.gen_bool(0.5) { 5 } else { 50 };
+            simulated_load_config.expected_failure_config.failure_type =
+                ExpectedFailureType::try_from(0).unwrap();
+            info!("Simulated load config: {:?}", simulated_load_config);
+        }
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            50,
+            simulated_load_config,
+            Some(target_qps),
+            Some(num_workers),
+        )
+        .await;
     }
 
     // Tests cluster liveness when DKG has failed.
@@ -862,6 +922,8 @@ mod test {
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
+        expected_failure_weight: u32,
+        expected_failure_config: ExpectedFailurePayloadCfg,
     }
 
     impl Default for SimulatedLoadConfig {
@@ -878,6 +940,10 @@ mod test {
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
+                expected_failure_weight: 0,
+                expected_failure_config: ExpectedFailurePayloadCfg {
+                    failure_type: ExpectedFailureType::try_from(0).unwrap(),
+                },
             }
         }
     }
@@ -887,6 +953,8 @@ mod test {
             test_cluster,
             test_duration_secs,
             SimulatedLoadConfig::default(),
+            None,
+            None,
         )
         .await;
     }
@@ -895,6 +963,8 @@ mod test {
         test_cluster: Arc<TestCluster>,
         test_duration_secs: u64,
         config: SimulatedLoadConfig,
+        target_qps: Option<u64>,
+        num_workers: Option<u64>,
     ) {
         let sender = test_cluster.get_address_0();
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -925,8 +995,8 @@ mod test {
 
         // The default test parameters are somewhat conservative in order to keep the running time
         // of the test reasonable in CI.
-        let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
-        let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
+        let target_qps = target_qps.unwrap_or(get_var("SIM_STRESS_TEST_QPS", 10));
+        let num_workers = num_workers.unwrap_or(get_var("SIM_STRESS_TEST_WORKERS", 10));
         let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
         let batch_payment_size = get_var("SIM_BATCH_PAYMENT_SIZE", 15);
 
@@ -938,10 +1008,6 @@ mod test {
         // TODO: move adversarial cfg to TestSimulatedLoadConfig once enabled.
         // tests run for ever
         let adversarial_weight = 0;
-
-        // TODO(william): leverage this in a separate test
-        let expected_failure_cfg = ExpectedFailurePayloadCfg::from_str("0-1.0").unwrap();
-        let expected_failure_weight = 0;
 
         let shared_counter_max_tip = if config.use_shared_counter_max_tip {
             config.shared_counter_max_tip
@@ -958,7 +1024,7 @@ mod test {
             shared_deletion: config.shared_deletion_weight,
             randomness: config.randomness_weight,
             adversarial: adversarial_weight,
-            expected_failure: expected_failure_weight,
+            expected_failure: config.expected_failure_weight,
         };
 
         let workload_config = WorkloadConfig {
@@ -967,7 +1033,7 @@ mod test {
             num_transfer_accounts: config.num_transfer_accounts,
             weights,
             adversarial_cfg,
-            expected_failure_cfg,
+            expected_failure_cfg: config.expected_failure_config,
             batch_payment_size,
             shared_counter_hotness_factor: config.shared_counter_hotness_factor,
             num_shared_counters: config.num_shared_counters,

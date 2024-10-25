@@ -8,13 +8,10 @@ use crate::workloads::workload::{
 use crate::workloads::{Gas, GasCoinConfig, Workload, WorkloadBuilderInfo, WorkloadParams};
 use crate::ExecutionEffects;
 use crate::ValidatorProxy;
-use anyhow::anyhow;
 use async_trait::async_trait;
 use rand::seq::IteratorRandom;
-use regex::Regex;
 use std::collections::HashMap;
 use std::fmt;
-use std::str::FromStr;
 use std::sync::Arc;
 use sui_core::test_utils::make_transfer_object_transaction;
 use sui_types::base_types::SuiAddress;
@@ -36,36 +33,8 @@ pub struct ExpectedFailurePayload {
 #[derive(Debug, Clone)]
 pub struct ExpectedFailurePayloadCfg {
     pub failure_type: ExpectedFailureType,
-    pub load_factor: f32,
 }
 
-impl FromStr for ExpectedFailurePayloadCfg {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Matches regex for two numbers delimited by a hyphen, where the left number must be positive
-        // and the right number must be a float between 0.0 inclusive and 1.0 inclusive
-        let re = Regex::new(
-            r"^(?:0|[1-9]\d*)-(?:0(?:\.\d+)?|1(?:\.0+)?|[1-9](?:\d*(?:\.\d+)?)?|\.\d+)$",
-        )
-        .unwrap();
-        if !re.is_match(s) {
-            return Err(anyhow!("invalid load config"));
-        };
-        let toks = s.split('-').collect::<Vec<_>>();
-        let failure_type = ExpectedFailureType::from_str(toks[0])?;
-        let load_factor = toks[1].parse::<f32>().unwrap();
-
-        if !(0.0..=1.0).contains(&load_factor) {
-            return Err(anyhow!("invalid load factor. Valid range is [0.0, 1.0]"));
-        };
-
-        Ok(ExpectedFailurePayloadCfg {
-            failure_type,
-            load_factor,
-        })
-    }
-}
 impl Copy for ExpectedFailurePayloadCfg {}
 
 impl ExpectedFailurePayload {
@@ -218,9 +187,8 @@ impl WorkloadBuilder<dyn Payload> for ExpectedFailureWorkloadBuilder {
         payload_gas: Vec<Gas>,
     ) -> Box<dyn Workload<dyn Payload>> {
         debug!(
-            "Using `{:?}` expected failure workloads at {}% load factor",
+            "Using `{:?}` expected failure workloads",
             self.expected_failure_cfg.failure_type,
-            self.expected_failure_cfg.load_factor * 100.0
         );
 
         Box::<dyn Workload<dyn Payload>>::from(Box::new(ExpectedFailureWorkload {
