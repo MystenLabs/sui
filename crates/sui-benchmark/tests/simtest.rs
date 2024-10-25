@@ -565,7 +565,7 @@ mod test {
 
         let expected_tps = target_qps * num_workers;
         let error_policy_type = PolicyType::FreqThreshold(FreqThresholdConfig {
-            client_threshold: expected_tps - 10,
+            client_threshold: expected_tps / 2,
             window_size_secs: 5,
             update_interval_secs: 1,
             ..Default::default()
@@ -585,19 +585,18 @@ mod test {
         let network_config = ConfigBuilder::new_with_temp_dir()
             .committee_size(NonZeroUsize::new(4).unwrap())
             .with_policy_config(Some(policy_config))
+            .with_epoch_duration(5000)
             .build();
         let test_cluster = Arc::new(
             TestClusterBuilder::new()
                 .set_network_config(network_config)
-                .with_epoch_duration_ms(5000)
                 .build()
                 .await,
         );
 
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
-            let mut rng = thread_rng();
-            simulated_load_config.expected_failure_weight = if rng.gen_bool(0.5) { 5 } else { 50 };
+            simulated_load_config.expected_failure_weight = 20;
             simulated_load_config.expected_failure_config.failure_type =
                 ExpectedFailureType::try_from(0).unwrap();
             info!("Simulated load config: {:?}", simulated_load_config);

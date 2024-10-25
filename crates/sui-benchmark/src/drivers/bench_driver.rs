@@ -416,6 +416,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 let mut total_cps: f32 = 0.0;
                 let mut num_success_txes: u64 = 0;
                 let mut num_error_txes: u64 = 0;
+                let mut num_expected_error_txes: u64 = 0;
                 let mut num_success_cmds = 0;
                 let mut latency_histogram =
                     hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
@@ -435,6 +436,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                     total_cps += v.bench_stats.num_success_cmds as f32 / duration;
                     num_success_txes += v.bench_stats.num_success_txes;
                     num_error_txes += v.bench_stats.num_error_txes;
+                    num_expected_error_txes += v.bench_stats.num_expected_error_txes;
                     num_success_cmds += v.bench_stats.num_success_cmds;
                     num_no_gas += v.num_no_gas;
                     num_submitted += v.num_submitted;
@@ -451,7 +453,24 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 };
                 counter += 1;
                 if counter % num_workers == 0 {
-                    stat = format!("TPS = {}, CPS = {}, latency_ms(min/p50/p99/max) = {}/{}/{}/{}, num_success_tx = {}, num_error_tx = {}, num_success_cmds = {}, no_gas = {}, submitted = {}, in_flight = {}", total_qps, total_cps, latency_histogram.min(), latency_histogram.value_at_quantile(0.5), latency_histogram.value_at_quantile(0.99), latency_histogram.max(), num_success_txes, num_error_txes, num_success_cmds, num_no_gas, num_submitted, num_in_flight);
+                    stat = format!(
+                        "TPS = {}, CPS = {}, latency_ms(min/p50/p99/max) = {}/{}/{}/{}, \
+                        num_success_tx = {}, num_error_tx = {}, num_expected_error_tx = {}, \
+                        num_success_cmds = {}, no_gas = {}, submitted = {}, in_flight = {}",
+                        total_qps,
+                        total_cps,
+                        latency_histogram.min(),
+                        latency_histogram.value_at_quantile(0.5),
+                        latency_histogram.value_at_quantile(0.99),
+                        latency_histogram.max(),
+                        num_success_txes,
+                        num_error_txes,
+                        num_expected_error_txes,
+                        num_success_cmds,
+                        num_no_gas,
+                        num_submitted,
+                        num_in_flight
+                    );
                     if show_progress {
                         eprintln!("{}", stat);
                     }
@@ -898,7 +917,11 @@ async fn run_bench_worker(
                 if let Some(b) = retry_queue.pop_front() {
                     let tx = b.0;
                     let payload = b.1;
-                    num_error_txes += 1;
+                    if payload.get_failure_type().is_some() {
+                        num_expected_error_txes += 1;
+                    } else {
+                        num_error_txes += 1;
+                    }
                     num_submitted += 1;
                     metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
                     // TODO: clone committee for each request is not ideal.
@@ -937,9 +960,6 @@ async fn run_bench_worker(
             Some(op) = futures.next() => {
                 match op {
                     NextOp::Retry(b) => {
-                        if b.1.get_failure_type().is_some() {
-                            num_expected_error_txes += 1;
-                        }
                         retry_queue.push_back(b);
 
                         // Update total benchmark progress
