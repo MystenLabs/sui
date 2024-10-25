@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 #[serde(rename_all = "kebab-case")]
 pub struct ProxyConfig {
     pub listen_address: String,
-    pub metrics_address: Option<SocketAddr>,
+    pub metrics_address: SocketAddr,
     pub tls: Option<TlsConfig>,
     pub execution_peer: PeerConfig,
     pub read_peer: PeerConfig,

@@ -1,23 +1,20 @@
+use axum::{
+    body::Body,
+    extract::{Request, State},
+    http::request::Parts,
+    http::StatusCode,
+    response::Response,
+    routing::any,
+    Router,
+};
 use bytes::Bytes;
 use clap::Parser;
-use http::{Response, StatusCode};
-use pingora::apps::http_app::ServeHttp;
-use pingora::protocols::Digest;
-use sui_edge_proxy::config::ProxyConfig;
-use sui_edge_proxy::{certificate::TLSCertCallback, config::PeerConfig};
-
-use async_trait::async_trait;
-use pingora::{
-    listeners::TlsSettings,
-    prelude::{http_proxy_service, HttpPeer, ProxyHttp, Result, Session},
-    server::Server,
-    services::listening::Service,
-};
-// TODO: look into using pingora_load_balancing
-// use pingora_load_balancing::{health_check, selection::RoundRobin, LoadBalancer};
-
-// use pingora::protocols::http::error_resp;
-use tracing::{debug, info, warn};
+use mysten_metrics::start_prometheus_server;
+use std::net::SocketAddr;
+use sui_edge_proxy::config::{load, PeerConfig, ProxyConfig};
+use sui_edge_proxy::metrics::AppMetrics;
+use tracing::{info, warn};
+use url::Url;
 
 #[derive(Parser, Debug)]
 #[clap(rename_all = "kebab-case")]
@@ -31,214 +28,202 @@ struct Args {
     config: String,
 }
 
-// testing tls termination
-// RUST_LOG=debug cargo run --bin sui-edge-proxy -- --config=crates/sui-edge-proxy/proxy.yaml
-// mkdir -p keys
-// openssl req -x509 -sha256 -days 356 -nodes -newkey rsa:2048 -subj "/CN=fullnode.mainnet.sui.io/C=UK/L=London" -keyout keys/key.pem -out keys/cert.crt
+#[derive(Clone)]
+struct AppState {
+    client: reqwest::Client,
+    read_peer: PeerConfig,
+    execution_peer: PeerConfig,
+    metrics: AppMetrics,
+}
 
-fn main() -> Result<()> {
-    let (_guard, _handle) = telemetry_subscribers::TelemetryConfig::new().init();
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
 
-    let config: ProxyConfig = sui_edge_proxy::config::load(&args.config).unwrap();
-    info!("listening on {}", config.listen_address);
+    let config: ProxyConfig = load(&args.config).unwrap();
 
-    let mut my_server = Server::new(None).unwrap();
-    my_server.bootstrap();
+    // Init metrics server
+    let registry_service = start_prometheus_server(config.metrics_address);
+    let prometheus_registry = registry_service.default_registry();
+    mysten_metrics::init_metrics(&prometheus_registry);
+    // Init logging
+    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .with_prom_registry(&prometheus_registry)
+        .init();
 
-    // Add health check service
-    let health_check = health_check_service(&format!("0.0.0.0:9000"));
-    my_server.add_service(health_check);
+    info!("Metrics server started at {}", config.metrics_address);
 
-    // Initialize reusable HttpPeer instances
-    let read_peer = Arc::new(HttpPeer::new(
-        config.read_peer.address.clone(),
-        config.read_peer.use_tls,
-        config.read_peer.sni.clone(),
-    ));
+    // Build a reqwest client that supports HTTP/2
+    let client = reqwest::ClientBuilder::new()
+        .http2_prior_knowledge()
+        .build()
+        .unwrap();
 
-    let execution_peer = Arc::new(HttpPeer::new(
-        config.execution_peer.address.clone(),
-        config.execution_peer.use_tls,
-        config.execution_peer.sni.clone(),
-    ));
+    let app_metrics = AppMetrics::new(&prometheus_registry);
 
-    let mut lb = http_proxy_service(
-        &my_server.configuration,
-        LB {
-            read_peer,
-            execution_peer,
-        },
+    let app_state = AppState {
+        client,
+        read_peer: config.read_peer.clone(),
+        execution_peer: config.execution_peer.clone(),
+        metrics: app_metrics,
+    };
+
+    let app = Router::new()
+        .fallback(any(proxy_handler))
+        .with_state(app_state);
+
+    let addr: SocketAddr = config.listen_address.parse().unwrap();
+    info!("Starting server on {}", addr);
+    axum_server::Server::bind(addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
+}
+
+async fn proxy_handler(
+    State(state): State<AppState>,
+    request: Request<Body>,
+) -> Result<Response, (StatusCode, String)> {
+    info!(
+        "Entered proxy_handler function for path: {}",
+        request.uri().path()
+    );
+    let (parts, body) = request.into_parts();
+    // check that content type is json
+    if parts.headers.get("content-type")
+        != Some(&reqwest::header::HeaderValue::from_static(
+            "application/json",
+        ))
+    {
+        info!("Content type is not application/json");
+        return Ok(Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from("Content type must be application/json"))
+            .unwrap());
+    }
+    let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
+        Ok(bytes) => {
+            info!("Request body size: {} bytes", bytes.len());
+            bytes
+        }
+        Err(e) => {
+            warn!("Failed to read request body: {}", e);
+            return Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from("Failed to read request body"))
+                .unwrap());
+        }
+    };
+
+    match parts
+        .headers
+        // Sui-Method-Name will be added later on
+        // .get("Sui-Method-Name")
+        .get("Sui-Transaction-Type")
+        .and_then(|h| h.to_str().ok())
+    {
+        Some("execute") => {
+            info!("Using execution peer");
+            // no need to check the request body, skip right to proxying to execution peer
+            proxy_request(state, parts, body_bytes, true).await
+        }
+        _ => {
+            let json_body = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+                Ok(json_body) => json_body,
+                Err(_) => {
+                    return Ok(Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .body(Body::from("Request body is not valid JSON"))
+                        .unwrap());
+                }
+            };
+            if let Some("sui_executeTransactionBlock") =
+                json_body.get("method").and_then(|m| m.as_str())
+            {
+                proxy_request(state, parts, body_bytes, true).await
+            } else {
+                proxy_request(state, parts, body_bytes, false).await
+            }
+        }
+    }
+}
+
+async fn proxy_request(
+    state: AppState,
+    parts: Parts,
+    body_bytes: Bytes,
+    use_execution_peer: bool,
+) -> Result<Response, (StatusCode, String)> {
+    let peer_type = if use_execution_peer {
+        "execution"
+    } else {
+        "read"
+    };
+
+    let timer_histogram = state
+        .metrics
+        .request_latency
+        .with_label_values(&[peer_type]);
+    let _timer = timer_histogram.start_timer();
+
+    let peer_config = if use_execution_peer {
+        &state.execution_peer
+    } else {
+        &state.read_peer
+    };
+    // Construct the base URL
+    let target_url = Url::parse(peer_config.address.clone().as_str()).map_err(|e| {
+        warn!("Failed to parse base URL: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to construct target URL".to_string(),
+        )
+    })?;
+    info!("Target URL: {}", target_url);
+    // copy headers from incoming request to client request
+    let mut headers = parts.headers.clone();
+
+    headers.insert(
+        "host",
+        reqwest::header::HeaderValue::from_str(&peer_config.sni.clone()).unwrap(),
     );
 
-    if let Some(tls_config) = config.tls {
-        info!("TLS config found");
-        let cert_callback =
-            TLSCertCallback::new(tls_config.cert_path, tls_config.key_path, tls_config.sni);
-        let cert_callback = Box::new(cert_callback);
-        // TODO error handling
-        let tls_config = TlsSettings::with_callbacks(cert_callback).unwrap();
-        lb.add_tls_with_settings(&config.listen_address.as_str(), None, tls_config);
-    } else {
-        info!("No TLS config found");
-        lb.add_tcp(&config.listen_address.as_str());
-    }
+    let request_builder = state
+        .client
+        .request(parts.method.clone(), target_url.clone())
+        .header("content-type", "application/json")
+        // .headers(headers)
+        .body(body_bytes);
 
-    my_server.add_service(lb);
+    let response = match request_builder.send().await {
+        Ok(response) => {
+            let status = response.status().as_u16().to_string();
+            state
+                .metrics
+                .requests_total
+                .with_label_values(&[peer_type, &status])
+                .inc();
+            response
+        }
+        Err(e) => {
+            state
+                .metrics
+                .requests_total
+                .with_label_values(&[peer_type, "error"])
+                .inc();
+            warn!("Failed to send request: {}", e);
+            return Err((StatusCode::BAD_GATEWAY, format!("Request failed: {}", e)));
+        }
+    };
 
-    my_server.run_forever();
-}
-
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-
-pub struct TimingContext {
-    start_time: Instant,
-    phase_timings: Vec<(String, Duration)>,
-}
-
-impl TimingContext {
-    pub fn new() -> Self {
-        Self {
-            start_time: Instant::now(),
-            phase_timings: Vec::new(),
+    let response_headers = response.headers().clone();
+    let response_bytes = response.bytes().await.unwrap();
+    let mut resp = Response::new(response_bytes.into());
+    for (name, value) in response_headers {
+        if let Some(name) = name {
+            resp.headers_mut().insert(name, value);
         }
     }
-
-    pub fn record_phase(&mut self, phase: &str, start: Instant) {
-        let duration = start.elapsed();
-        self.phase_timings.push((phase.to_string(), duration));
-    }
-
-    pub fn total_duration(&self) -> Duration {
-        self.start_time.elapsed()
-    }
-}
-
-pub struct LB {
-    read_peer: Arc<HttpPeer>,
-    execution_peer: Arc<HttpPeer>,
-}
-
-#[async_trait]
-impl ProxyHttp for LB {
-    type CTX = TimingContext;
-
-    fn new_ctx(&self) -> Self::CTX {
-        TimingContext::new()
-    }
-
-    async fn upstream_peer(
-        &self,
-        session: &mut Session,
-        ctx: &mut Self::CTX,
-    ) -> Result<Box<HttpPeer>> {
-        let phase_start = Instant::now();
-
-        let peer = if let Some(transaction_type) =
-            session.req_header().headers.get("Sui-Transaction-Type")
-        {
-            match transaction_type.to_str() {
-                Ok("execute") => {
-                    info!("Using execution peer");
-                    self.execution_peer.clone()
-                }
-                Ok(_) => {
-                    info!("Using read peer");
-                    self.read_peer.clone()
-                }
-                Err(e) => {
-                    warn!("Failed to read transaction_type header: {}", e);
-                    self.read_peer.clone()
-                }
-            }
-        } else {
-            self.read_peer.clone()
-        };
-
-        // try hardcoding the http version to h2
-        let mut new_peer = (*peer).clone();
-        new_peer.options.set_http_version(2, 2);
-        ctx.record_phase("upstream_peer", phase_start);
-
-        Ok(Box::new((new_peer).clone()))
-    }
-
-    async fn connected_to_upstream(
-        &self,
-        _session: &mut Session,
-        _reused: bool,
-        peer: &HttpPeer,
-        _fd: std::os::unix::io::RawFd,
-        _digest: Option<&Digest>,
-        ctx: &mut Self::CTX,
-    ) -> Result<()> {
-        let phase_start = Instant::now();
-        ctx.record_phase("connected_to_upstream", phase_start);
-        if !matches!(peer.options.alpn, pingora::protocols::ALPN::H2) {
-            warn!("Upstream peer is not using h2");
-        }
-        info!("Upstream peer is using {:?}", peer.options.alpn);
-        Ok(())
-    }
-
-    fn upstream_response_filter(
-        &self,
-        _session: &mut Session,
-        _upstream_response: &mut pingora::http::ResponseHeader,
-        ctx: &mut Self::CTX,
-    ) {
-        let phase_start = Instant::now();
-        ctx.record_phase("upstream_response_filter", phase_start);
-    }
-
-    async fn response_filter(
-        &self,
-        _session: &mut Session,
-        _upstream_response: &mut pingora::http::ResponseHeader,
-        ctx: &mut Self::CTX,
-    ) -> Result<()> {
-        let phase_start = Instant::now();
-        ctx.record_phase("response_filter", phase_start);
-        Ok(())
-    }
-    async fn logging(
-        &self,
-        _session: &mut Session,
-        _e: Option<&pingora::Error>,
-        ctx: &mut Self::CTX,
-    ) {
-        let total_duration = ctx.total_duration();
-        info!("Total request duration: {:?}", total_duration);
-
-        for (phase, duration) in &ctx.phase_timings {
-            info!("Phase {} took {:?}", phase, duration);
-        }
-    }
-}
-
-// Add this new function for the health check service
-fn health_check_service(listen_addr: &str) -> Service<HealthCheckApp> {
-    let mut service = Service::new("Health Check Service".to_string(), HealthCheckApp {});
-    service.add_tcp(listen_addr);
-    service
-}
-
-pub struct HealthCheckApp;
-
-#[async_trait]
-impl ServeHttp for HealthCheckApp {
-    async fn response(
-        &self,
-        _http_stream: &mut pingora::protocols::http::ServerSession,
-    ) -> Response<Vec<u8>> {
-        let body = Bytes::from("up");
-
-        Response::builder()
-            .status(StatusCode::OK)
-            .header(http::header::CONTENT_TYPE, "text/html")
-            .header(http::header::CONTENT_LENGTH, body.len())
-            .body(body.to_vec())
-            .unwrap()
-    }
+    Ok(resp)
 }
