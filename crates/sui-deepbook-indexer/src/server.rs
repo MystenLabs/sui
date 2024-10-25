@@ -23,7 +23,7 @@ use std::{collections::HashMap, net::SocketAddr};
 use tokio::{net::TcpListener, task::JoinHandle};
 
 pub const GET_POOLS_PATH: &str = "/get_pools";
-pub const GET_24HR_VOLUME_PATH: &str = "/get_24hr_volume/:pool_id";
+pub const GET_24HR_VOLUME_PATH: &str = "/get_24hr_volume/:pool_ids";
 pub const GET_24HR_VOLUME_BY_BALANCE_MANAGER_ID: &str =
     "/get_24hr_volume_by_balance_manager_id/:pool_id/:balance_manager_id";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
@@ -87,22 +87,31 @@ async fn get_pools(
 }
 
 async fn get_24hr_volume(
-    Path(pool_id): Path<String>,
+    Path(pool_ids): Path<String>,
     State(state): State<PgDeepbookPersistent>,
-) -> Result<Json<u64>, DeepBookError> {
+) -> Result<Json<HashMap<String, u64>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
     let unix_ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
     let day_ago = unix_ts - 24 * 60 * 60 * 1000;
-    let vols: Vec<i64> = schema::order_fills::table
-        .select(schema::order_fills::base_quantity)
-        .filter(schema::order_fills::pool_id.eq(pool_id))
+
+    let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
+
+    let results: Vec<(String, i64)> = schema::order_fills::table
+        .select((schema::order_fills::pool_id, schema::order_fills::base_quantity))
+        .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
         .filter(schema::order_fills::onchain_timestamp.gt(day_ago))
         .load(connection)
         .await?;
-    Ok(Json(vols.into_iter().map(|v| v as u64).sum()))
+
+    let mut volume_by_pool = HashMap::new();
+    for (pool_id, volume) in results {
+        *volume_by_pool.entry(pool_id).or_insert(0) += volume as u64;
+    }
+
+    Ok(Json(volume_by_pool))
 }
 
 async fn get_24hr_volume_by_balance_manager_id(
