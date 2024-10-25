@@ -43,6 +43,50 @@ pub enum LValueKind {
     Assign,
 }
 
+macro_rules! simple_visitor {
+    ($visitor:ty, $($overrides:item)*) => {
+        pub struct Context<'a> {
+            env: &'a mut crate::shared::CompilationEnv,
+            warning_filters_scope: crate::shared::WarningFiltersScope,
+        }
+
+        impl crate::typing::visitor::TypingVisitorConstructor for $visitor {
+            type Context<'a> = Context<'a>;
+
+            fn context<'a>(env: &'a mut  crate::shared::CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
+                let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+                Context {
+                    env,
+                    warning_filters_scope,
+                }
+            }
+        }
+
+        impl Context<'_> {
+            fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
+                self.env.add_diag(&self.warning_filters_scope, diag);
+            }
+
+            fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
+                self.env.add_diags(&self.warning_filters_scope, diags);
+            }
+        }
+
+        impl crate::typing::visitor::TypingVisitorContext for Context<'_> {
+            fn add_warning_filter_scope(&mut self, filters: crate::diagnostics::WarningFilters) {
+                self.warning_filters_scope.push(filters)
+            }
+
+            fn pop_warning_filter_scope(&mut self) {
+                self.warning_filters_scope.pop()
+            }
+
+            $($overrides)*
+        }
+    }
+}
+pub(crate) use simple_visitor;
+
 pub trait TypingVisitorContext {
     fn add_warning_filter_scope(&mut self, filters: WarningFilters);
     fn pop_warning_filter_scope(&mut self);

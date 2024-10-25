@@ -73,6 +73,14 @@ impl<'a> Context<'a> {
         }
     }
 
+    fn add_diag(&mut self, diag: Diagnostic) {
+        self.env.add_diag(&self.warning_filters_scope, diag);
+    }
+
+    fn add_diags(&mut self, diags: Diagnostics) {
+        self.env.add_diags(&self.warning_filters_scope, diags);
+    }
+
     fn set_module(&mut self, current_module: ModuleIdent) {
         self.current_module = Some(current_module);
         self.otw_name = Some(Symbol::from(
@@ -101,14 +109,6 @@ const OTW_NOTE: &str = "One-time witness types are structs with the following re
 //**************************************************************************************************
 
 impl<'a> TypingVisitorContext for Context<'a> {
-    fn add_diag(&mut self, diag: Diagnostic) {
-        self.env.add_diag(&self.warning_filters_scope, diag);
-    }
-
-    fn add_diags(&mut self, diags: Diagnostics) {
-        self.env.add_diags(&self.warning_filters_scope, diags);
-    }
-
     fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
     }

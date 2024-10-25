@@ -7,6 +7,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::shared::WarningFiltersScope;
 use crate::{
     diag,
     diagnostics::{
@@ -75,6 +76,7 @@ pub struct FreezeWrappedVisitor;
 
 pub struct Context<'a> {
     env: &'a mut CompilationEnv,
+    warning_filters_scope: WarningFiltersScope,
     program_info: Arc<TypingProgramInfo>,
     /// Memoizes information about struct fields wrapping other objects as they are discovered
     wrapping_fields: WrappingFields,
@@ -84,8 +86,10 @@ impl TypingVisitorConstructor for FreezeWrappedVisitor {
     type Context<'a> = Context<'a>;
 
     fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a> {
+        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
         Context {
             env,
+            warning_filters_scope,
             program_info: program.info.clone(),
             wrapping_fields: WrappingFields::new(),
         }
@@ -151,12 +155,12 @@ impl<'a> TypingVisitorContext for Context<'a> {
         false
     }
 
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
+    fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.warning_filters_scope.push(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
+        self.warning_filters_scope.pop()
     }
 }
 
