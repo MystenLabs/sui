@@ -1740,18 +1740,28 @@ fn explicit_use_fun(
     } = pexplicit;
     let access_result!(function, tyargs, is_macro) =
         context.name_access_chain_to_module_access(Access::ApplyPositional, *function)?;
-    ice_assert!(context, tyargs.is_none(), loc, "'use fun' with tyargs");
     ice_assert!(
-        context,
+        context.env(),
+        tyargs.is_none(),
+        loc,
+        "'use fun' with tyargs"
+    );
+    ice_assert!(
+        context.env(),
         is_macro.is_none(),
         loc,
         "Found a 'use fun' as a macro"
     );
     let access_result!(ty, tyargs, is_macro) =
         context.name_access_chain_to_module_access(Access::Type, *ty)?;
-    ice_assert!(context, tyargs.is_none(), loc, "'use fun' with tyargs");
     ice_assert!(
-        context,
+        context.env(),
+        tyargs.is_none(),
+        loc,
+        "'use fun' with tyargs"
+    );
+    ice_assert!(
+        context.env(),
         is_macro.is_none(),
         loc,
         "Found a 'use fun' as a macro"
@@ -3308,7 +3318,7 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
         PB::Unpack(ptn, pfields) => {
             let access_result!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, *ptn)?;
-            ice_assert!(context, is_macro.is_none(), loc, "Found macro in lhs");
+            ice_assert!(context.env(), is_macro.is_none(), loc, "Found macro in lhs");
             let tys_opt = optional_sp_types(context, ptys_opt);
             let fields = match pfields {
                 FieldBindings::Named(named_bindings) => {
@@ -3462,7 +3472,12 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
         PE::Pack(pn, pfields) => {
             let access_result!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
-            ice_assert!(context, is_macro.is_none(), loc, "Marked a bind as a macro");
+            ice_assert!(
+                context.env(),
+                is_macro.is_none(),
+                loc,
+                "Marked a bind as a macro"
+            );
             let tys_opt = optional_sp_types(context, ptys_opt);
             let efields = assign_unpack_fields(context, loc, pfields)?;
             Some(sp(
@@ -3477,7 +3492,12 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                 .check_feature(pkg, FeatureGate::PositionalFields, loc);
             let access_result!(name, ptys_opt, is_macro) =
                 context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
-            ice_assert!(context, is_macro.is_none(), loc, "Marked a bind as a macro");
+            ice_assert!(
+                context.env(),
+                is_macro.is_none(),
+                loc,
+                "Marked a bind as a macro"
+            );
             let tys_opt = optional_sp_types(context, ptys_opt);
             let pfields: Option<_> = exprs
                 .into_iter()
