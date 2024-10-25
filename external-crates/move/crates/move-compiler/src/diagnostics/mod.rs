@@ -776,7 +776,7 @@ macro_rules! ice {
 macro_rules! ice_assert {
     ($env: expr, $cond: expr, $loc: expr, $($arg:tt)*) => {{
         if !$cond {
-            $env.add_diag($crate::ice!((
+            $env.add_error_diag($crate::ice!((
                 $loc,
                 format!($($arg)*),
             )));

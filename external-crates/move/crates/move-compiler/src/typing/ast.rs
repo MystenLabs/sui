@@ -361,20 +361,6 @@ pub fn single_item(e: Exp) -> ExpListItem {
     ExpListItem::Single(e, ty)
 }
 
-pub fn splat_item(env: &mut CompilationEnv, splat_loc: Loc, e: Exp) -> ExpListItem {
-    let ss = match &e.ty {
-        sp!(_, Type_::Unit) => vec![],
-        sp!(_, Type_::Apply(_, sp!(_, TypeName_::Multiple(_)), ss)) => ss.clone(),
-        _ => {
-            let mut diag = ice!((splat_loc, "ICE called `splat_item` on a non-list type"));
-            diag.add_note(format!("Expression: {}", debug_display!(e)));
-            env.add_diag(diag);
-            vec![]
-        }
-    };
-    ExpListItem::Splat(splat_loc, e, ss)
-}
-
 pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
     MatchPattern { ty, pat }
 }

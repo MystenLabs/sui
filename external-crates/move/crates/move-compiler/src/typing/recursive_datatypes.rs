@@ -79,7 +79,7 @@ fn module(compilation_env: &mut CompilationEnv, mname: ModuleIdent, module: &T::
     petgraph_scc(&graph)
         .into_iter()
         .filter(|scc| scc.len() > 1 || graph.contains_edge(scc[0], scc[0]))
-        .for_each(|scc| compilation_env.add_diag(cycle_error(context, &graph, scc[0])))
+        .for_each(|scc| compilation_env.add_error_diag(cycle_error(context, &graph, scc[0])))
 }
 
 fn struct_def(context: &mut Context, sname: DatatypeName, sdef: &N::StructDefinition) {

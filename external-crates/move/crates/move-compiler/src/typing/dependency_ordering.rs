@@ -38,7 +38,7 @@ pub fn program(
         Err(cycle_node) => {
             let cycle_ident = *cycle_node.node_id();
             let error = cycle_error(&module_neighbors, cycle_ident);
-            compilation_env.add_diag(error);
+            compilation_env.add_error_diag(error);
         }
         Ok(ordered_ids) => {
             for (order, mident) in ordered_ids.iter().rev().enumerate() {
@@ -372,7 +372,7 @@ fn lvalue(context: &mut Context, sp!(loc, lv_): &T::LValue) {
             }
         }
         L::BorrowUnpackVariant(..) | L::UnpackVariant(..) => {
-            context.env.add_diag(ice!((
+            context.env.add_error_diag(ice!((
                 *loc,
                 "variant unpacking shouldn't occur before match expansion"
             )));
@@ -420,7 +420,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
             }
         }
         E::VariantMatch(..) => {
-            context.env.add_diag(ice!((
+            context.env.add_error_diag(ice!((
                 e.exp.loc,
                 "shouldn't find variant match before HLIR lowering"
             )));
