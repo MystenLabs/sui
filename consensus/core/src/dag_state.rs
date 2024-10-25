@@ -373,9 +373,12 @@ impl DagState {
         voter_block: &VerifiedBlock,
         mut target: BlockRef,
     ) -> Vec<BlockOutput> {
-        const VOTING_ROUNDS: u32 = 5;
         let mut certified_blocks = vec![];
-        while target.round >= voter_block.round().saturating_sub(VOTING_ROUNDS) {
+        while target.round
+            >= voter_block
+                .round()
+                .saturating_sub(self.context.protocol_config.consensus_voting_rounds())
+        {
             let Some(target_block_info) = self.recent_blocks.get_mut(&target) else {
                 // The target block has been GC'ed.
                 break;
