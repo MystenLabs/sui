@@ -378,7 +378,6 @@ module sui_system::staking_pool_tests {
 
         let mut system_state = scenario.take_shared<SuiSystemState>();
         let latest_exchange_rate = system_state.pool_exchange_rates(&staking_pool_id).borrow(scenario.ctx().epoch());
-        std::debug::print(latest_exchange_rate);
         assert!(latest_exchange_rate.sui_amount() == 1000 * 1_000_000_000, 0);
         assert!(latest_exchange_rate.pool_token_amount() == 250 * 1_000_000_000, 0);
 
@@ -386,14 +385,14 @@ module sui_system::staking_pool_tests {
         assert!(sui_1.value() == 400 * 1_000_000_000 - 1, 0);
         test_scenario::return_shared(system_state);
 
-        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        advance_epoch_with_reward_amounts(0, 600, &mut scenario);
 
         let mut system_state = scenario.take_shared<SuiSystemState>();
         let sui_2 = system_state.redeem_fungible_staked_sui(fungible_staked_sui_2, scenario.ctx());
-        assert!(sui_2.value() == 200 * 1_000_000_000, 0);
+        assert!(sui_2.value() == 400 * 1_000_000_000, 0);
         test_scenario::return_shared(system_state);
 
-        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        advance_epoch_with_reward_amounts(0, 100, &mut scenario);
 
         sui::test_utils::destroy(sui_1);
         sui::test_utils::destroy(sui_2);
