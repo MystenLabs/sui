@@ -170,7 +170,6 @@ Advance the epoch counter and draw down the subsidy for the epoch.
 
     // Drawn down the subsidy for this epoch.
     <b>let</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.split(to_withdraw);
-
     self.distribution_counter = self.distribution_counter + 1;
 
     // Decrease the subsidy amount only when the current period ends.
