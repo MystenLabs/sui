@@ -3,23 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    debug_display,
     diagnostics::WarningFilters,
     expansion::ast::{
         Address, Attributes, Fields, Friend, ModuleIdent, Mutability, TargetKind, Value, Visibility,
     },
-    ice,
     naming::ast::{
         BlockLabel, EnumDefinition, FunctionSignature, Neighbor, StructDefinition, SyntaxMethods,
-        Type, TypeName_, Type_, UseFuns, Var,
+        Type, Type_, UseFuns, Var,
     },
     parser::ast::{
         BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp, VariantName,
         ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
-    shared::{
-        ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv, Name,
-    },
+    shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name},
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
