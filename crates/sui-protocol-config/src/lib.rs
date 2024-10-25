@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 66;
+const MAX_PROTOCOL_VERSION: u64 = 67;
 
 // Record history of protocol version allocations here:
 //
@@ -2867,11 +2867,16 @@ impl ProtocolConfig {
                     cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(3);
                 }
                 65 => {
-                    // Enable distributed vote scoring for mainnet
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = true;
+                    }
+                }
+                66 => {
                     cfg.feature_flags
                         .consensus_distributed_vote_scoring_strategy = true;
                 }
-                66 => {
+                67 => {
                     cfg.group_ops_bls12381_g1_to_uncompressed_g1_cost = Some(26);
                     cfg.group_ops_bls12381_uncompressed_g1_to_g1_cost = Some(52);
                     cfg.group_ops_bls12381_uncompressed_g1_sum_base_cost = Some(26);
