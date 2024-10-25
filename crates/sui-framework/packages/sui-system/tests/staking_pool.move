@@ -6,6 +6,9 @@ module sui_system::staking_pool_tests {
     use sui::test_scenario::{Self, Scenario};
     use sui_system::staking_pool::{StakingPool, Self};
     use sui::balance::{Self};
+    use sui_system::governance_test_utils::{advance_epoch_with_reward_amounts, stake_with, unstake, set_up_sui_system_state};
+    use sui_system::sui_system::{Self, SuiSystemState};
+    use sui::coin::{Self};
 
     #[test]
     fun test_join_fungible_staked_sui_happy() {
@@ -17,7 +20,7 @@ module sui_system::staking_pool_tests {
 
         fungible_staked_sui_1.join(fungible_staked_sui_2);
 
-        assert!(fungible_staked_sui_1.value() == 300_000_000_000, 0);
+        assert!(fungible_staked_sui_1.value() == 300_000_000_000);
 
         sui::test_utils::destroy(staking_pool);
         sui::test_utils::destroy(fungible_staked_sui_1);
@@ -26,7 +29,7 @@ module sui_system::staking_pool_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1, location = sui_system::staking_pool)]
+    #[expected_failure(abort_code = ::sui_system::staking_pool::EWrongPool)]
     fun test_join_fungible_staked_sui_fail() {
         let mut scenario = test_scenario::begin(@0x0);
         let staking_pool_1 = staking_pool::new(scenario.ctx());
@@ -53,8 +56,8 @@ module sui_system::staking_pool_tests {
 
         let fungible_staked_sui_2 = fungible_staked_sui_1.split(75_000_000_000, scenario.ctx());
 
-        assert!(fungible_staked_sui_1.value() == 25_000_000_000, 0);
-        assert!(fungible_staked_sui_2.value() == 75_000_000_000, 0);
+        assert!(fungible_staked_sui_1.value() == 25_000_000_000);
+        assert!(fungible_staked_sui_2.value() == 75_000_000_000);
 
         sui::test_utils::destroy(staking_pool);
         sui::test_utils::destroy(fungible_staked_sui_1);
@@ -64,7 +67,7 @@ module sui_system::staking_pool_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0, location = sui_system::staking_pool)]
+    #[expected_failure(abort_code = ::sui_system::staking_pool::EInsufficientPoolTokenBalance)]
     fun test_split_fungible_staked_sui_fail_too_much() {
         let mut scenario = test_scenario::begin(@0x0);
         let staking_pool = staking_pool::new(scenario.ctx());
@@ -81,7 +84,7 @@ module sui_system::staking_pool_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 19, location = sui_system::staking_pool)]
+    #[expected_failure(abort_code = ::sui_system::staking_pool::ECannotMintFungibleStakedSuiYet)]
     fun test_convert_to_fungible_staked_sui_fail_too_early() {
         let mut scenario = test_scenario::begin(@0x0);
         let mut staking_pool = staking_pool::new(scenario.ctx());
@@ -97,7 +100,7 @@ module sui_system::staking_pool_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1, location = sui_system::staking_pool)]
+    #[expected_failure(abort_code = ::sui_system::staking_pool::EWrongPool)]
     fun test_convert_to_fungible_staked_sui_fail_wrong_pool() {
         let mut scenario = test_scenario::begin(@0x0);
         let mut staking_pool_1 = staking_pool::new(scenario.ctx());
@@ -126,44 +129,112 @@ module sui_system::staking_pool_tests {
         let sui = balance::create_for_testing(1_000_000_000);
         let staked_sui_1 = staking_pool.request_add_stake(sui, scenario.ctx().epoch() + 1, scenario.ctx());
 
-        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 0) == 1, 0);
+        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 0) == 1);
 
         let latest_exchange_rate = staking_pool.pool_token_exchange_rate_at_epoch(1);
-        assert!(latest_exchange_rate.sui_amount() == 1_000_000_000, 0);
-        assert!(latest_exchange_rate.pool_token_amount() == 1_000_000_000, 0);
+        assert!(latest_exchange_rate.sui_amount() == 1_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 1_000_000_000);
 
         let sui = balance::create_for_testing(1_000_000_000);
         let staked_sui_2 = staking_pool.request_add_stake(sui, scenario.ctx().epoch() + 1, scenario.ctx());
 
-        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 1_000_000_000) == 2, 0);
+        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 1_000_000_000) == 2);
 
         let latest_exchange_rate = staking_pool.pool_token_exchange_rate_at_epoch(2);
-        assert!(latest_exchange_rate.sui_amount() == 3_000_000_000, 0);
-        assert!(latest_exchange_rate.pool_token_amount() == 1_500_000_000, 0);
+        assert!(latest_exchange_rate.sui_amount() == 3_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 1_500_000_000);
 
         // test basically starts from here.
 
         let fungible_staked_sui_1 = staking_pool.convert_to_fungible_staked_sui(staked_sui_1, scenario.ctx());
-        assert!(fungible_staked_sui_1.value() == 1_000_000_000, 0);
-        assert!(fungible_staked_sui_1.pool_id() == object::id(&staking_pool), 0);
+        assert!(fungible_staked_sui_1.value() == 1_000_000_000);
+        assert!(fungible_staked_sui_1.pool_id() == object::id(&staking_pool));
 
         let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
-        assert!(fungible_staked_sui_data.total_supply() == 1_000_000_000, 0);
-        assert!(fungible_staked_sui_data.principal_value() == 1_000_000_000, 0);
+        assert!(fungible_staked_sui_data.total_supply() == 1_000_000_000);
+        assert!(fungible_staked_sui_data.principal_value() == 1_000_000_000);
 
         let fungible_staked_sui_2 = staking_pool.convert_to_fungible_staked_sui(staked_sui_2, scenario.ctx());
-        assert!(fungible_staked_sui_2.value() == 500_000_000, 0);
-        assert!(fungible_staked_sui_2.pool_id() == object::id(&staking_pool), 0);
+        assert!(fungible_staked_sui_2.value() == 500_000_000);
+        assert!(fungible_staked_sui_2.pool_id() == object::id(&staking_pool));
 
         let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
-        assert!(fungible_staked_sui_data.total_supply() == 1_500_000_000, 0);
-        assert!(fungible_staked_sui_data.principal_value() == 2_000_000_000, 0);
+        assert!(fungible_staked_sui_data.total_supply() == 1_500_000_000);
+        assert!(fungible_staked_sui_data.principal_value() == 2_000_000_000);
 
         sui::test_utils::destroy(staking_pool);
         // sui::test_utils::destroy(fungible_staked_sui);
         sui::test_utils::destroy(fungible_staked_sui_1);
         sui::test_utils::destroy(fungible_staked_sui_2);
 
+        scenario.end();
+    }
+
+    #[test]
+    fun test_convert_to_fungible_staked_sui_happy_e2e() {
+        let mut scenario = test_scenario::begin(@0x0);
+        set_up_sui_system_state(vector[@0x1]);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let staking_pool_id = system_state.validator_staking_pool_id(@0x1);
+
+        let staked_sui_1 = system_state.request_add_stake_non_entry(
+            coin::mint_for_testing(100 * 1_000_000_000, scenario.ctx()), 
+            @0x1, 
+            scenario.ctx()
+        );
+        test_scenario::return_shared(system_state);
+
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let latest_exchange_rate = system_state.pool_exchange_rates(&staking_pool_id).borrow(1);
+        assert!(latest_exchange_rate.sui_amount() == 200 * 1_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 200 * 1_000_000_000);
+
+        let staked_sui_2 = system_state.request_add_stake_non_entry(
+            coin::mint_for_testing(100 * 1_000_000_000, scenario.ctx()), 
+            @0x1, 
+            scenario.ctx()
+        );
+        test_scenario::return_shared(system_state);
+
+        advance_epoch_with_reward_amounts(0, 200, &mut scenario);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let latest_exchange_rate = system_state.pool_exchange_rates(&staking_pool_id).borrow(2);
+        assert!(latest_exchange_rate.sui_amount() == 500 * 1_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 250 * 1_000_000_000);
+
+        // test basically starts from here.
+
+        let fungible_staked_sui_1 = system_state.convert_to_fungible_staked_sui(staked_sui_1, scenario.ctx());
+        assert!(fungible_staked_sui_1.value() == 100 * 1_000_000_000);
+        assert!(fungible_staked_sui_1.pool_id() == staking_pool_id);
+
+        let validator = system_state.active_validator_by_address(@0x1);
+        let fungible_staked_sui_data = validator.get_staking_pool_ref().fungible_staked_sui_data();
+        assert!(fungible_staked_sui_data.total_supply() == 100 * 1_000_000_000);
+        assert!(fungible_staked_sui_data.principal_value() == 100 * 1_000_000_000);
+        test_scenario::return_shared(system_state);
+
+        advance_epoch_with_reward_amounts(0, 200, &mut scenario);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let fungible_staked_sui_2 = system_state.convert_to_fungible_staked_sui(staked_sui_2, scenario.ctx());
+        assert!(fungible_staked_sui_2.value() == 50 * 1_000_000_000);
+        assert!(fungible_staked_sui_2.pool_id() == staking_pool_id);
+
+        let validator = system_state.active_validator_by_address(@0x1);
+        let fungible_staked_sui_data = validator.get_staking_pool_ref().fungible_staked_sui_data();
+        assert!(fungible_staked_sui_data.total_supply() == 150 * 1_000_000_000);
+        assert!(fungible_staked_sui_data.principal_value() == 200 * 1_000_000_000);
+        test_scenario::return_shared(system_state);
+
+        advance_epoch_with_reward_amounts(0, 500, &mut scenario);
+
+        sui::test_utils::destroy(fungible_staked_sui_1);
+        sui::test_utils::destroy(fungible_staked_sui_2);
         scenario.end();
     }
 
@@ -178,72 +249,161 @@ module sui_system::staking_pool_tests {
         let sui = balance::create_for_testing(1_000_000_000);
         let staked_sui_1 = staking_pool.request_add_stake(sui, scenario.ctx().epoch() + 1, scenario.ctx());
 
-        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 0) == 1, 0);
+        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 0) == 1);
 
         let latest_exchange_rate = staking_pool.pool_token_exchange_rate_at_epoch(1);
-        assert!(latest_exchange_rate.sui_amount() == 1_000_000_000, 0);
-        assert!(latest_exchange_rate.pool_token_amount() == 1_000_000_000, 0);
+        assert!(latest_exchange_rate.sui_amount() == 1_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 1_000_000_000);
 
         let sui = balance::create_for_testing(1_000_000_000);
         let staked_sui_2 = staking_pool.request_add_stake(sui, scenario.ctx().epoch() + 1, scenario.ctx());
 
-        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 1_000_000_000) == 2, 0);
+        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 1_000_000_000) == 2);
 
         let latest_exchange_rate = staking_pool.pool_token_exchange_rate_at_epoch(2);
-        assert!(latest_exchange_rate.sui_amount() == 3_000_000_000, 0);
-        assert!(latest_exchange_rate.pool_token_amount() == 1_500_000_000, 0);
+        assert!(latest_exchange_rate.sui_amount() == 3_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 1_500_000_000);
 
         let fungible_staked_sui_1 = staking_pool.convert_to_fungible_staked_sui(staked_sui_1, scenario.ctx());
-        assert!(fungible_staked_sui_1.value() == 1_000_000_000, 0);
-        assert!(fungible_staked_sui_1.pool_id() == object::id(&staking_pool), 0);
+        assert!(fungible_staked_sui_1.value() == 1_000_000_000);
+        assert!(fungible_staked_sui_1.pool_id() == object::id(&staking_pool));
 
         let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
-        assert!(fungible_staked_sui_data.total_supply() == 1_000_000_000, 0);
-        assert!(fungible_staked_sui_data.principal_value() == 1_000_000_000, 0);
+        assert!(fungible_staked_sui_data.total_supply() == 1_000_000_000);
+        assert!(fungible_staked_sui_data.principal_value() == 1_000_000_000);
 
         let fungible_staked_sui_2 = staking_pool.convert_to_fungible_staked_sui(staked_sui_2, scenario.ctx());
-        assert!(fungible_staked_sui_2.value() == 500_000_000, 0);
-        assert!(fungible_staked_sui_2.pool_id() == object::id(&staking_pool), 0);
+        assert!(fungible_staked_sui_2.value() == 500_000_000);
+        assert!(fungible_staked_sui_2.pool_id() == object::id(&staking_pool));
 
         let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
-        assert!(fungible_staked_sui_data.total_supply() == 1_500_000_000, 0);
-        assert!(fungible_staked_sui_data.principal_value() == 2_000_000_000, 0);
+        assert!(fungible_staked_sui_data.total_supply() == 1_500_000_000);
+        assert!(fungible_staked_sui_data.principal_value() == 2_000_000_000);
 
         // test starts here
-        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 3_000_000_000) == 3, 0);
+        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 3_000_000_000) == 3);
 
         let latest_exchange_rate = staking_pool.pool_token_exchange_rate_at_epoch(3);
-        assert!(latest_exchange_rate.sui_amount() == 6_000_000_000, 0);
-        assert!(latest_exchange_rate.pool_token_amount() == 1_500_000_000, 0);
+        assert!(latest_exchange_rate.sui_amount() == 6_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 1_500_000_000);
 
-        assert!(staking_pool.pending_stake_withdraw_amount() == 0, 0);
-        assert!(staking_pool.pending_pool_token_withdraw_amount() == 0, 0);
+        assert!(staking_pool.pending_stake_withdraw_amount() == 0);
+        assert!(staking_pool.pending_pool_token_withdraw_amount() == 0);
 
         let sui_1 = staking_pool.redeem_fungible_staked_sui(fungible_staked_sui_1, scenario.ctx());
-        assert!(sui_1.value() <= 4_000_000_000, 0);
-        assert!(sui_1.value() == 4_000_000_000 - 1, 0);
+        assert!(sui_1.value() <= 4_000_000_000);
+        assert!(sui_1.value() == 4_000_000_000 - 1);
 
         let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
-        assert!(fungible_staked_sui_data.total_supply() == 500_000_000, 0);
-        assert!(fungible_staked_sui_data.principal_value() == 2_000_000_000 / 3 + 1, 0); // round against user
+        assert!(fungible_staked_sui_data.total_supply() == 500_000_000);
+        assert!(fungible_staked_sui_data.principal_value() == 2_000_000_000 / 3 + 1); // round against user
 
-        assert!(staking_pool.pending_stake_withdraw_amount() == 4_000_000_000 - 1, 0);
-        assert!(staking_pool.pending_pool_token_withdraw_amount() == 1_000_000_000, 0);
+        assert!(staking_pool.pending_stake_withdraw_amount() == 4_000_000_000 - 1);
+        assert!(staking_pool.pending_pool_token_withdraw_amount() == 1_000_000_000);
 
         let sui_2 = staking_pool.redeem_fungible_staked_sui(fungible_staked_sui_2, scenario.ctx());
-        assert!(sui_2.value() == 2_000_000_000, 0);
+        assert!(sui_2.value() == 2_000_000_000);
 
         let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
-        assert!(fungible_staked_sui_data.total_supply() == 0, 0);
-        assert!(fungible_staked_sui_data.principal_value() == 0, 0);
+        assert!(fungible_staked_sui_data.total_supply() == 0);
+        assert!(fungible_staked_sui_data.principal_value() == 0);
 
-        assert!(staking_pool.pending_stake_withdraw_amount() == 6_000_000_000 - 1, 0);
-        assert!(staking_pool.pending_pool_token_withdraw_amount() == 1_500_000_000, 0);
+        assert!(staking_pool.pending_stake_withdraw_amount() == 6_000_000_000 - 1);
+        assert!(staking_pool.pending_pool_token_withdraw_amount() == 1_500_000_000);
 
         sui::test_utils::destroy(staking_pool);
         sui::test_utils::destroy(sui_1);
         sui::test_utils::destroy(sui_2);
 
+        scenario.end();
+    }
+
+    #[test]
+    fun test_redeem_fungible_staked_sui_happy_e2e() {
+        let mut scenario = test_scenario::begin(@0x0);
+        set_up_sui_system_state(vector[@0x1]);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let staking_pool_id = system_state.validator_staking_pool_id(@0x1);
+
+        let staked_sui_1 = system_state.request_add_stake_non_entry(
+            coin::mint_for_testing(100 * 1_000_000_000, scenario.ctx()), 
+            @0x1, 
+            scenario.ctx()
+        );
+        test_scenario::return_shared(system_state);
+
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let latest_exchange_rate = system_state.pool_exchange_rates(&staking_pool_id).borrow(1);
+        assert!(latest_exchange_rate.sui_amount() == 200 * 1_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 200 * 1_000_000_000);
+
+        let staked_sui_2 = system_state.request_add_stake_non_entry(
+            coin::mint_for_testing(100 * 1_000_000_000, scenario.ctx()), 
+            @0x1, 
+            scenario.ctx()
+        );
+        test_scenario::return_shared(system_state);
+
+        advance_epoch_with_reward_amounts(0, 200, &mut scenario);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let latest_exchange_rate = system_state.pool_exchange_rates(&staking_pool_id).borrow(2);
+        assert!(latest_exchange_rate.sui_amount() == 500 * 1_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 250 * 1_000_000_000);
+
+        let fungible_staked_sui_1 = system_state.convert_to_fungible_staked_sui(staked_sui_1, scenario.ctx());
+        assert!(fungible_staked_sui_1.value() == 100 * 1_000_000_000);
+        assert!(fungible_staked_sui_1.pool_id() == staking_pool_id);
+
+        let validator = system_state.active_validator_by_address(@0x1);
+        let fungible_staked_sui_data = validator.get_staking_pool_ref().fungible_staked_sui_data();
+        assert!(fungible_staked_sui_data.total_supply() == 100 * 1_000_000_000);
+        assert!(fungible_staked_sui_data.principal_value() == 100 * 1_000_000_000);
+
+        let fungible_staked_sui_2 = system_state.convert_to_fungible_staked_sui(staked_sui_2, scenario.ctx());
+        assert!(fungible_staked_sui_2.value() == 50 * 1_000_000_000);
+        assert!(fungible_staked_sui_2.pool_id() == staking_pool_id);
+
+        let validator = system_state.active_validator_by_address(@0x1);
+        let fungible_staked_sui_data = validator.get_staking_pool_ref().fungible_staked_sui_data();
+        assert!(fungible_staked_sui_data.total_supply() == 150 * 1_000_000_000);
+        assert!(fungible_staked_sui_data.principal_value() == 200 * 1_000_000_000);
+        test_scenario::return_shared(system_state);
+
+        // test starts here
+        advance_epoch_with_reward_amounts(0, 500, &mut scenario);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let latest_exchange_rate = system_state.pool_exchange_rates(&staking_pool_id).borrow(scenario.ctx().epoch());
+        assert!(latest_exchange_rate.sui_amount() == 1000 * 1_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 250 * 1_000_000_000);
+
+        let sui_1 = system_state.redeem_fungible_staked_sui(fungible_staked_sui_1, scenario.ctx());
+        assert!(sui_1.value() == 400 * 1_000_000_000 - 1);
+        test_scenario::return_shared(system_state);
+
+        // pool token ratio should be 150 : 1200 now
+        advance_epoch_with_reward_amounts(0, 600, &mut scenario);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let sui_2 = system_state.redeem_fungible_staked_sui(fungible_staked_sui_2, scenario.ctx());
+        assert!(sui_2.value() == 400 * 1_000_000_000);
+        test_scenario::return_shared(system_state);
+
+        // pool token ratio should be 100 : 900 now
+        advance_epoch_with_reward_amounts(0, 100, &mut scenario);
+
+        let mut system_state = scenario.take_shared<SuiSystemState>();
+        let latest_exchange_rate = system_state.pool_exchange_rates(&staking_pool_id).borrow(scenario.ctx().epoch());
+        assert!(latest_exchange_rate.sui_amount() == 900 * 1_000_000_000 + 1);
+        assert!(latest_exchange_rate.pool_token_amount() == 100 * 1_000_000_000);
+        test_scenario::return_shared(system_state);
+
+        sui::test_utils::destroy(sui_1);
+        sui::test_utils::destroy(sui_2);
         scenario.end();
     }
 
@@ -258,36 +418,36 @@ module sui_system::staking_pool_tests {
         let sui = balance::create_for_testing(1_000_000_000);
         let staked_sui_1 = staking_pool.request_add_stake(sui, scenario.ctx().epoch() + 1, scenario.ctx());
 
-        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 0) == 1, 0);
+        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 0) == 1);
 
         let latest_exchange_rate = staking_pool.pool_token_exchange_rate_at_epoch(1);
-        assert!(latest_exchange_rate.sui_amount() == 1_000_000_000, 0);
-        assert!(latest_exchange_rate.pool_token_amount() == 1_000_000_000, 0);
+        assert!(latest_exchange_rate.sui_amount() == 1_000_000_000);
+        assert!(latest_exchange_rate.pool_token_amount() == 1_000_000_000);
 
         let sui = balance::create_for_testing(1_000_000_001);
         let staked_sui_2 = staking_pool.request_add_stake(sui, scenario.ctx().epoch() + 1, scenario.ctx());
 
-        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 1_000_000_000) == 2, 0);
+        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 1_000_000_000) == 2);
 
         let latest_exchange_rate = staking_pool.pool_token_exchange_rate_at_epoch(2);
-        assert!(latest_exchange_rate.sui_amount() == 3_000_000_001, 0);
-        assert!(latest_exchange_rate.pool_token_amount() == 1_500_000_000, 0);
+        assert!(latest_exchange_rate.sui_amount() == 3_000_000_001);
+        assert!(latest_exchange_rate.pool_token_amount() == 1_500_000_000);
 
         let fungible_staked_sui = staking_pool.convert_to_fungible_staked_sui(staked_sui_2, scenario.ctx());
-        assert!(fungible_staked_sui.value() == 500_000_000, 0); // rounding!
-        assert!(fungible_staked_sui.pool_id() == object::id(&staking_pool), 0);
+        assert!(fungible_staked_sui.value() == 500_000_000); // rounding!
+        assert!(fungible_staked_sui.pool_id() == object::id(&staking_pool));
 
         let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
-        assert!(fungible_staked_sui_data.total_supply() == 500_000_000, 0);
-        assert!(fungible_staked_sui_data.principal_value() == 1_000_000_001, 0);
+        assert!(fungible_staked_sui_data.total_supply() == 500_000_000);
+        assert!(fungible_staked_sui_data.principal_value() == 1_000_000_001);
 
         // this line used to error
         let sui = staking_pool.redeem_fungible_staked_sui(fungible_staked_sui, scenario.ctx());
-        assert!(sui.value() == 1_000_000_000, 0);
+        assert!(sui.value() == 1_000_000_000);
 
         let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
-        assert!(fungible_staked_sui_data.total_supply() == 0, 0);
-        assert!(fungible_staked_sui_data.principal_value() == 1, 0);
+        assert!(fungible_staked_sui_data.total_supply() == 0);
+        assert!(fungible_staked_sui_data.principal_value() == 1);
 
         sui::test_utils::destroy(staking_pool);
         sui::test_utils::destroy(staked_sui_1);
