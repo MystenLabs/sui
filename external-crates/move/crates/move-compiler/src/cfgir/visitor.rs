@@ -327,7 +327,8 @@ macro_rules! simple_visitor {
         pub struct $visitor;
 
         pub struct Context<'a> {
-            env: &'a mut crate::shared::CompilationEnv,
+            env: &'a crate::shared::CompilationEnv,
+            warning_filters_scope: crate::shared::WarningFiltersScope,
         }
 
         impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
@@ -337,6 +338,7 @@ macro_rules! simple_visitor {
                 let warning_filters_scope = env.top_level_warning_filter_scope().clone();
                 Context {
                     env,
+                    warning_filters_scope,
                 }
             }
         }
@@ -344,22 +346,22 @@ macro_rules! simple_visitor {
         impl Context<'_> {
             #[allow(unused)]
             fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
-                self.env.add_diag(diag);
+                self.env.add_diag(&self.warning_filters_scope, diag);
             }
 
             #[allow(unused)]
             fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
-                self.env.add_diags(diags);
+                self.env.add_diags(&self.warning_filters_scope, diags);
             }
         }
 
         impl crate::cfgir::visitor::CFGIRVisitorContext for Context<'_> {
             fn add_warning_filter_scope(&mut self, filters: crate::diagnostics::WarningFilters) {
-                self.env.add_warning_filter_scope(filters)
+                self.warning_filters_scope.push(filters)
             }
 
             fn pop_warning_filter_scope(&mut self) {
-                self.env.pop_warning_filter_scope()
+                self.warning_filters_scope.pop()
             }
 
             $($overrides)*
