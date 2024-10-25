@@ -61,7 +61,7 @@ use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 use crate::{
     ast::{
         Attribute, ConditionKind, Exp, ExpData, GlobalInvariant, ModuleName, PropertyBag,
-        PropertyValue, Spec, SpecBlockInfo, SpecFunDecl, SpecVarDecl, Value,
+        PropertyValue, QualifiedSymbol, Spec, SpecBlockInfo, SpecFunDecl, SpecVarDecl, Value,
     },
     intrinsics::IntrinsicsAnnotation,
     pragmas::{
@@ -2290,7 +2290,14 @@ impl<'env> ModuleEnv<'env> {
 
     /// Gets a FunctionEnv by id.
     pub fn into_function(self, id: FunId) -> FunctionEnv<'env> {
-        let data = self.data.function_data.get(&id).expect("FunId undefined");
+        let data = self.data.function_data.get(&id).expect(&format!(
+            "FunId undefined: {}",
+            QualifiedSymbol {
+                module_name: self.get_name().clone(),
+                symbol: id.symbol(),
+            }
+            .display_full(self.symbol_pool())
+        ));
         FunctionEnv {
             module_env: self,
             data,
