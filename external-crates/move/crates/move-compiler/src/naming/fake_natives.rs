@@ -24,6 +24,7 @@ pub fn function(
     function_name: FunctionName,
     function: &N::Function,
 ) {
+    let warning_filters = env.top_level_warning_filter_scope();
     let loc = match function
         .attributes
         .get_loc_(&NativeAttribute::BytecodeInstruction.into())
@@ -45,7 +46,7 @@ pub fn function(
             (loc, attr_msg),
             (function_name.loc(), name_msg),
         );
-        env.add_diag(diag);
+        env.add_diag(warning_filters, diag);
     }
     match &function.body.value {
         N::FunctionBody_::Native => (),
@@ -55,7 +56,7 @@ pub fn function(
                 NativeAttribute::BYTECODE_INSTRUCTION
             );
             let diag = diag!(Attributes::InvalidBytecodeInst, (loc, attr_msg));
-            env.add_diag(diag);
+            env.add_diag(warning_filters, diag);
         }
     }
 }
