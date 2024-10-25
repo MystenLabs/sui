@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::authority_per_epoch_store::AuthorityEpochTables;
 use crate::authority::transaction_deferral::DeferralKey;
+use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
 use narwhal_types::Round;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::base_types::{ObjectID, TransactionDigest};
+use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::transaction::{Argument, SharedInputObject, TransactionDataAPI};
 
@@ -59,6 +62,38 @@ impl SharedObjectCongestionTracker {
                     .map(|m| m * max_accumulated_txn_cost_per_object_in_commit),
             max_txn_cost_overage_per_object_in_commit,
         }
+    }
+
+    pub fn from_protocol_config(
+        tables: &AuthorityEpochTables,
+        protocol_config: &ProtocolConfig,
+        round: Round,
+        for_randomness: bool,
+        transactions: &[VerifiedSequencedConsensusTransaction],
+    ) -> SuiResult<Self> {
+        let max_accumulated_txn_cost_per_object_in_commit =
+            protocol_config.max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option();
+        Ok(Self::new(
+            tables.load_initial_object_debts(
+                round,
+                for_randomness,
+                protocol_config,
+                transactions,
+            )?,
+            protocol_config.per_object_congestion_control_mode(),
+            if for_randomness {
+                protocol_config
+                    .max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_as_option()
+                    .or(max_accumulated_txn_cost_per_object_in_commit)
+            } else {
+                max_accumulated_txn_cost_per_object_in_commit
+            },
+            protocol_config.gas_budget_based_txn_cost_cap_factor_as_option(),
+            protocol_config.gas_budget_based_txn_cost_absolute_cap_commit_multiple_as_option(),
+            protocol_config
+                .max_txn_cost_overage_per_object_in_commit_as_option()
+                .unwrap_or(0),
+        ))
     }
 
     // Given a list of shared input objects, returns the starting cost of a transaction that operates on
