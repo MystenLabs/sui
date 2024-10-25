@@ -5,6 +5,7 @@
 use crate::{
     cfgir::ast as G,
     diag,
+    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
     expansion::ast::{
         self as E, Address, Attribute, AttributeValue, Attributes, ModuleAccess_, ModuleIdent,
         ModuleIdent_,
@@ -15,7 +16,7 @@ use crate::{
     shared::{
         known_attributes::{self, TestingAttribute},
         unique_map::UniqueMap,
-        CompilationEnv, Identifier, NumericalAddress,
+        CompilationEnv, Identifier, NumericalAddress, WarningFiltersScope,
     },
     unit_test::{
         ExpectedFailure, ExpectedMoveError, ModuleTestPlan, MoveErrorType, TestArgument, TestCase,
@@ -34,6 +35,7 @@ use std::collections::BTreeMap;
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
+    warning_filters_scope: WarningFiltersScope,
     constants: UniqueMap<ModuleIdent, UniqueMap<ConstantName, (Loc, Option<u64>, Attributes)>>,
 }
 
@@ -48,10 +50,28 @@ impl<'env> Context<'env> {
                 (constant.loc, v_opt, constant.attributes.clone())
             })
         });
+        let warning_filters_scope = compilation_env.top_level_warning_filter_scope().clone();
         Self {
             env: compilation_env,
+            warning_filters_scope,
             constants,
         }
+    }
+
+    pub fn add_diag(&mut self, diag: Diagnostic) {
+        self.env.add_diag(&self.warning_filters_scope, diag);
+    }
+
+    pub fn add_diags(&mut self, diags: Diagnostics) {
+        self.env.add_diags(&self.warning_filters_scope, diags);
+    }
+
+    pub fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.warning_filters_scope.push(filters)
+    }
+
+    pub fn pop_warning_filter_scope(&mut self) {
+        self.warning_filters_scope.pop()
     }
 
     fn resolve_address(&self, addr: &Address) -> NumericalAddress {
@@ -85,7 +105,15 @@ pub fn construct_test_plan(
         prog.modules
             .key_cloned_iter()
             .flat_map(|(module_ident, module_def)| {
-                construct_module_test_plan(&mut context, package_filter, module_ident, module_def)
+                context.add_warning_filter_scope(module_def.warning_filter.clone());
+                let plan = construct_module_test_plan(
+                    &mut context,
+                    package_filter,
+                    module_ident,
+                    module_def,
+                );
+                context.pop_warning_filter_scope();
+                plan
             })
             .collect(),
     )
@@ -104,8 +132,11 @@ fn construct_module_test_plan(
         .functions
         .iter()
         .filter_map(|(loc, fn_name, func)| {
-            build_test_info(context, loc, fn_name, func)
-                .map(|test_case| (fn_name.to_string(), test_case))
+            context.add_warning_filter_scope(func.warning_filter.clone());
+            let info = build_test_info(context, loc, fn_name, func)
+                .map(|test_case| (fn_name.to_string(), test_case));
+            context.pop_warning_filter_scope();
+            info
         })
         .collect();
 
@@ -143,7 +174,7 @@ fn build_test_info<'func>(
                 let fn_msg = "Only functions defined as a test with #[test] can also have an \
                               #[expected_failure] attribute";
                 let abort_msg = "Attributed as #[expected_failure] here";
-                context.env.add_diag(diag!(
+                context.add_diag(diag!(
                     Attributes::InvalidUsage,
                     (fn_loc, fn_msg),
                     (abort_attribute.loc, abort_msg),
@@ -154,7 +185,7 @@ fn build_test_info<'func>(
         (Some(test_attribute), Some(random_test_attribute)) => {
             let msg = "Function annotated as both #[test] and #[random_test]. You need to declare \
                        it as either one or the other";
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidUsage,
                 (random_test_attribute.loc, msg),
                 (test_attribute.loc, PREVIOUSLY_ANNOTATED_MSG),
@@ -170,7 +201,7 @@ fn build_test_info<'func>(
     if let Some(test_only_attribute) = test_only_attribute_opt {
         let msg = "Function annotated as both #[test] and #[test_only]. You need to declare \
                    it as either one or the other";
-        context.env.add_diag(diag!(
+        context.add_diag(diag!(
             Attributes::InvalidUsage,
             (test_only_attribute.loc, msg),
             (test_attribute.loc, PREVIOUSLY_ANNOTATED_MSG),
@@ -205,7 +236,7 @@ fn build_test_info<'func>(
                             "Supported builti-in types are: bool, u8, u16, u32, u64, \
                             u128, u256, address, and vector<T> where T is a built-in type",
                         );
-                        context.env.add_diag(diag);
+                        context.add_diag(diag);
                         return None;
                     }
                 };
@@ -214,7 +245,7 @@ fn build_test_info<'func>(
             None => {
                 let missing_param_msg = "Missing test parameter assignment in test. Expected a \
                                          parameter to be assigned in this attribute";
-                context.env.add_diag(diag!(
+                context.add_diag(diag!(
                     Attributes::InvalidTest,
                     (test_attribute.loc, missing_param_msg),
                     (vloc, "Corresponding to this parameter"),
@@ -227,7 +258,7 @@ fn build_test_info<'func>(
     if is_random_test && arguments.is_empty() {
         let msg = "No parameters to generate for random test. A #[random_test] function must \
                    have at least one parameter to generate.";
-        context.env.add_diag(diag!(
+        context.add_diag(diag!(
             Attributes::InvalidTest,
             (test_attribute.loc, msg),
             (fn_loc, IN_THIS_TEST_MSG),
@@ -266,7 +297,7 @@ fn parse_test_attribute(
 
     match test_attribute {
         EA::Name(_) | EA::Parameterized(_, _) if depth > 0 => {
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidTest,
                 (*aloc, "Unexpected nested attribute in test declaration"),
             ));
@@ -281,7 +312,7 @@ fn parse_test_attribute(
         }
         EA::Assigned(nm, attr_value) => {
             if depth != 1 {
-                context.env.add_diag(diag!(
+                context.add_diag(diag!(
                     Attributes::InvalidTest,
                     (*aloc, "Unexpected nested attribute in test declaration"),
                 ));
@@ -291,7 +322,7 @@ fn parse_test_attribute(
             let value = match convert_attribute_value_to_move_value(context, attr_value) {
                 Some(move_value) => move_value,
                 None => {
-                    context.env.add_diag(diag!(
+                    context.add_diag(diag!(
                         Attributes::InvalidValue,
                         (*assign_loc, "Unsupported attribute value"),
                         (*aloc, "Assigned in this attribute"),
@@ -338,7 +369,7 @@ fn parse_failure_attribute(
             let invalid_assignment_msg = "Invalid expected failure code assignment";
             let expected_msg =
                 "Expect an #[expected_failure(...)] attribute for error specification";
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidValue,
                 (assign_loc, invalid_assignment_msg),
                 (*aloc, expected_msg),
@@ -369,9 +400,7 @@ fn parse_failure_attribute(
                     expected_failure_kind_vec.len(),
                     TestingAttribute::expected_failure_cases().to_vec().join(", ")
                 );
-                context
-                    .env
-                    .add_diag(diag!(Attributes::InvalidValue, (*aloc, invalid_attr_msg)));
+                context.add_diag(diag!(Attributes::InvalidValue, (*aloc, invalid_attr_msg)));
                 return None;
             }
             let (expected_failure_kind, (attr_loc, attr)) =
@@ -400,7 +429,7 @@ fn parse_failure_attribute(
                             attribute.",
                             TestingAttribute::ERROR_LOCATION
                         );
-                        context.env.add_diag(diag!(
+                        context.add_diag(diag!(
                             Attributes::ValueWarning,
                             (attr_loc, BAD_ABORT_VALUE_WARNING),
                             (value_loc, tip)
@@ -500,7 +529,7 @@ fn parse_failure_attribute(
                         );
                         let no_code =
                             format!("No status code associated with value '{move_error_type}'");
-                        context.env.add_diag(diag!(
+                        context.add_diag(diag!(
                             Attributes::InvalidValue,
                             (value_name_loc, bad_value),
                             (major_value_loc, no_code)
@@ -541,9 +570,7 @@ fn parse_failure_attribute(
                     "Unused attribute for {}",
                     TestingAttribute::ExpectedFailure.name()
                 );
-                context
-                    .env
-                    .add_diag(diag!(UnusedItem::Attribute, (loc, msg)));
+                context.add_diag(diag!(UnusedItem::Attribute, (loc, msg)));
             }
             Some(ExpectedFailure::ExpectedWithError(ExpectedMoveError(
                 status_code,
@@ -571,7 +598,7 @@ fn check_attribute_unassigned(
                 "Expected no assigned value, e.g. '{}', for expected failure attribute",
                 kind
             );
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidValue,
                 (attr_loc, "Unsupported attribute in this location"),
                 (loc, msg)
@@ -598,7 +625,7 @@ fn get_assigned_attribute(
                 "Expected assigned value, e.g. '{}=...', for expected failure attribute",
                 kind
             );
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidValue,
                 (attr_loc, "Unsupported attribute in this location"),
                 (loc, msg)
@@ -615,7 +642,7 @@ fn convert_location(context: &mut Context, attr_loc: Loc, attr: Attribute) -> Op
     match value {
         sp!(vloc, EAV::Module(module)) => convert_module_id(context, vloc, &module),
         sp!(vloc, _) => {
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidValue,
                 (loc, INVALID_VALUE),
                 (vloc, "Expected a module identifier, e.g. 'std::vector'")
@@ -645,7 +672,7 @@ fn convert_constant_value_u64_constant_or_value(
     let modules_constants = context.constants().get(module).unwrap();
     let constant = match modules_constants.get_(&member.value) {
         None => {
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidValue,
                 (vloc, INVALID_VALUE),
                 (
@@ -667,7 +694,7 @@ fn convert_constant_value_u64_constant_or_value(
                 "Constant '{module}::{member}' has a non-u64 value. \
                 Only 'u64' values are permitted"
             );
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidValue,
                 (vloc, INVALID_VALUE),
                 (*cloc, msg),
@@ -680,7 +707,7 @@ fn convert_constant_value_u64_constant_or_value(
 
 fn convert_module_id(context: &mut Context, vloc: Loc, module: &ModuleIdent) -> Option<ModuleId> {
     if !context.constants.contains_key(module) {
-        context.env.add_diag(diag!(
+        context.add_diag(diag!(
             Attributes::InvalidValue,
             (vloc, INVALID_VALUE),
             (module.loc, format!("Unbound module '{module}'")),
@@ -693,7 +720,7 @@ fn convert_module_id(context: &mut Context, vloc: Loc, module: &ModuleIdent) -> 
             value: sp!(_, a), ..
         } => a.into_inner(),
         Address::NamedUnassigned(addr) => {
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidValue,
                 (vloc, INVALID_VALUE),
                 (*mloc, format!("Unbound address '{addr}'")),
@@ -722,7 +749,7 @@ fn convert_attribute_value_u64(
         | sp!(vloc, EAV::Value(sp!(_, EV::U32(_))))
         | sp!(vloc, EAV::Value(sp!(_, EV::U128(_))))
         | sp!(vloc, EAV::Value(sp!(_, EV::U256(_)))) => {
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidValue,
                 (loc, INVALID_VALUE),
                 (*vloc, "Annotated non-u64 literals are not permitted"),
@@ -730,7 +757,7 @@ fn convert_attribute_value_u64(
             None
         }
         sp!(vloc, _) => {
-            context.env.add_diag(diag!(
+            context.add_diag(diag!(
                 Attributes::InvalidValue,
                 (loc, INVALID_VALUE),
                 (*vloc, "Unsupported value in this assignment"),
@@ -765,9 +792,7 @@ fn check_location<T>(
             "Expected '{}' following '{attr}'",
             TestingAttribute::ERROR_LOCATION
         );
-        context
-            .env
-            .add_diag(diag!(Attributes::InvalidUsage, (loc, msg)));
+        context.add_diag(diag!(Attributes::InvalidUsage, (loc, msg)));
     }
     location
 }

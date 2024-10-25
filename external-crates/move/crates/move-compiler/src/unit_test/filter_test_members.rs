@@ -145,7 +145,7 @@ fn check_has_unit_test_module(
                 P::Definition::Module(P::ModuleDefinition { name, .. }) => name.0.loc,
                 P::Definition::Address(P::AddressDefinition { loc, .. }) => *loc,
             };
-            compilation_env.add_diag(diag!(
+            compilation_env.add_error_diag(diag!(
                 Attributes::InvalidTest,
                 (
                     loc,
