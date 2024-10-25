@@ -342,7 +342,7 @@ async fn list_checkpoints(
     .pipe(Ok)
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct ListCheckpointsQueryParameters {
     /// Page size limit for the response.
     ///

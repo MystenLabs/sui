@@ -34,6 +34,8 @@ mod system;
 pub mod transactions;
 pub mod types;
 
+pub use checkpoints::CheckpointResponse;
+pub use checkpoints::ListCheckpointsQueryParameters;
 pub use client::Client;
 pub use error::{RestError, Result};
 pub use metrics::RestMetrics;
