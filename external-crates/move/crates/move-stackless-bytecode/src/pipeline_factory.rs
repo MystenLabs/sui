@@ -50,7 +50,7 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
 
     if !options.skip_loop_analysis {
         processors.push(LoopAnalysisProcessor::new());
-    };
+    }
 
     processors.append(&mut vec![
         // spec instrumentation

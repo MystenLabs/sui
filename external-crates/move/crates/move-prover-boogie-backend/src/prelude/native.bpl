@@ -40,6 +40,11 @@ function $IsValid'vec{{S}}'(v: Vec ({{T}})): bool {
     (forall i: int:: InRangeVec(v, i) ==> $IsValid{{S}}(ReadVec(v, i)))
 }
 
+// Not inlined.
+procedure {:inline 1} $0_prover_type_inv'vec{{S}}'(v: Vec ({{T}})) returns (res: bool) {
+    res := true;
+}
+
 {# TODO: there is an issue with existential quantifier instantiation if we use the native
    functions here without the $IsValid'u64' tag.
 #}
