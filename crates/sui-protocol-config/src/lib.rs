@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 64;
+const MAX_PROTOCOL_VERSION: u64 = 65;
 
 // Record history of protocol version allocations here:
 //
@@ -2841,6 +2841,12 @@ impl ProtocolConfig {
                         PerObjectCongestionControlMode::TotalTxCount;
                     cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(40);
                     cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(3);
+                }
+                65 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
