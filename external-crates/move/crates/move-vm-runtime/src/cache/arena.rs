@@ -70,11 +70,11 @@ impl<T> ArenaPointer<T> {
 
     #[inline]
     pub fn from_ref(t: &T) -> Self {
-        Self(unsafe { t as *const T })
+        Self(t as *const T)
     }
 
     #[inline]
-    pub fn ptr_eq(&self, other: &Self) -> Self {
+    pub fn ptr_eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.0, other.0)
     }
 
@@ -84,8 +84,8 @@ impl<T> ArenaPointer<T> {
     }
 
     #[inline]
-    pub fn from_ref(t: &T) -> Self {
-        Self(unsafe { t as *const T })
+    pub fn replace_ptr(&mut self, other: ArenaPointer<T>) {
+        self.0 = other.0;
     }
 }
 
@@ -126,7 +126,7 @@ pub fn to_ref<'a, T>(value: *const T) -> &'a T {
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[inline]
 pub fn to_mut_ref<'a, T>(value: *const T) -> &'a mut T {
-    unsafe { &*value as &mut T }
+    unsafe { &mut *(value as *mut T) }
 }
 
 // -----------------------------------------------
@@ -164,3 +164,13 @@ impl<T> Clone for ArenaPointer<T> {
 }
 
 impl<T> Copy for ArenaPointer<T> {}
+
+impl<T> From<Box<T>> for ArenaPointer<T> {
+    fn from(boxed: Box<T>) -> Self {
+        // Use `Box::into_raw` to extract the raw pointer from the box.
+        let raw_ptr: *const T = Box::into_raw(boxed);
+
+        // Create an `ArenaPointer` from the raw pointer.
+        ArenaPointer(raw_ptr)
+    }
+}

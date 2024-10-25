@@ -5,8 +5,8 @@ use crate::{
     cache::{arena::ArenaPointer, type_cache},
     execution::{
         dispatch_tables::VMDispatchTables,
-        values::{self, VMValueCast, Value},
         interpreter::locals::Locals,
+        values::{self, VMValueCast, Value},
     },
     jit::execution::ast::{CallType, Constant, Function, Module, Type, VTableKey},
     shared::{

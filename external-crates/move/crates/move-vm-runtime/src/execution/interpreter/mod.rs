@@ -18,6 +18,7 @@ use move_vm_profiler::{profile_close_frame, profile_open_frame};
 use std::sync::Arc;
 
 mod eval;
+pub mod locals;
 pub(crate) mod state;
 // pub mod locals;
 
