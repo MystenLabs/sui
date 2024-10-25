@@ -493,6 +493,8 @@ fn constant_(
     };
     let fake_infinite_loop_starts = BTreeSet::new();
     let function_context = super::CFGContext {
+        env: context.env,
+        warning_filters_scope: context.warning_filters_scope.clone(),
         info: context.info,
         package: context.current_package,
         module,
@@ -504,7 +506,7 @@ fn constant_(
         locals: &locals,
         infinite_loop_starts: &fake_infinite_loop_starts,
     };
-    cfgir::refine_inference_and_verify(context.env, &function_context, &mut cfg);
+    cfgir::refine_inference_and_verify(&function_context, &mut cfg);
     ice_assert!(
         context.env,
         num_previous_errors == context.env.count_diags(),
@@ -654,6 +656,8 @@ fn function_body(
             context.add_diags(diags);
 
             let function_context = super::CFGContext {
+                env: context.env,
+                warning_filters_scope: context.warning_filters_scope.clone(),
                 info: context.info,
                 package: context.current_package,
                 module,
@@ -665,7 +669,7 @@ fn function_body(
                 locals: &locals,
                 infinite_loop_starts: &infinite_loop_starts,
             };
-            cfgir::refine_inference_and_verify(context.env, &function_context, &mut cfg);
+            cfgir::refine_inference_and_verify(&function_context, &mut cfg);
             // do not optimize if there are errors, warnings are okay
             if !context.env.has_errors() {
                 cfgir::optimize(
@@ -1021,6 +1025,16 @@ impl CFGIRVisitorConstructor for AbsintVisitor {
     }
 }
 
+impl AbsintVisitorContext<'_> {
+    fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
+        self.env.add_diag(&self.warning_filters_scope, diag);
+    }
+
+    fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
+        self.env.add_diags(&self.warning_filters_scope, diags);
+    }
+}
+
 impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
     fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
@@ -1062,6 +1076,8 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
         };
         let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
         let function_context = super::CFGContext {
+            env: self.env,
+            warning_filters_scope: self.warning_filters_scope.clone(),
             info: &self.info,
             package: self.current_package,
             module: mident,
@@ -1075,7 +1091,7 @@ impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
         };
         let mut ds = Diagnostics::new();
         for v in &self.env.visitors().abs_int {
-            ds.extend(v.verify(self.env, &function_context, &cfg));
+            ds.extend(v.verify(&function_context, &cfg));
         }
         self.add_diags(ds);
         true

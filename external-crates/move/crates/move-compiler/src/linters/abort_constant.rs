@@ -16,7 +16,7 @@ use crate::{
     diagnostics::WarningFilters,
     editions::FeatureGate,
     hlir::ast as H,
-    shared::CompilationEnv,
+    shared::{CompilationEnv, WarningFiltersScope},
 };
 
 pub struct AssertAbortNamedConstants;
@@ -24,6 +24,7 @@ pub struct AssertAbortNamedConstants;
 pub struct Context<'a> {
     package_name: Option<Symbol>,
     env: &'a mut CompilationEnv,
+    warning_filters_scope: WarningFiltersScope,
 }
 
 impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
@@ -35,7 +36,22 @@ impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
             .iter()
             .next()
             .and_then(|(_, _, mdef)| mdef.package_name);
-        Context { env, package_name }
+        let warning_filters_scope = env.top_level_warning_filter_scope().clone();
+        Context {
+            env,
+            warning_filters_scope,
+            package_name,
+        }
+    }
+}
+
+impl Context<'_> {
+    fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
+        self.env.add_diag(&self.warning_filters_scope, diag);
+    }
+
+    fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
+        self.env.add_diags(&self.warning_filters_scope, diags);
     }
 }
 
@@ -56,7 +72,7 @@ impl CFGIRVisitorContext for Context<'_> {
     }
 
     fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
+        self.warning_filters_scope.pop()
     }
 
     fn visit_command_custom(&mut self, cmd: &H::Command) -> bool {
