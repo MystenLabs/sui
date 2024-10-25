@@ -164,6 +164,7 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 20
+    trusted-certificate-forwarders: []
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -336,6 +337,7 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 20
+    trusted-certificate-forwarders: []
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -508,6 +510,7 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 20
+    trusted-certificate-forwarders: []
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -680,6 +683,7 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 20
+    trusted-certificate-forwarders: []
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -852,6 +856,7 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 20
+    trusted-certificate-forwarders: []
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -1024,6 +1029,7 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 20
+    trusted-certificate-forwarders: []
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -1196,6 +1202,7 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 20
+    trusted-certificate-forwarders: []
     execution-cache:
       writeback-cache:
         max_cache_size: ~
