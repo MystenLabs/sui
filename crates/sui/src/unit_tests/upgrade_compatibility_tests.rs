@@ -28,6 +28,36 @@ fn test_declarations_missing() {
 }
 
 #[test]
+fn test_function_signature() {
+    let (pkg_v1, pkg_v2) = get_packages("function_signature");
+    let result = compare_packages(pkg_v1, pkg_v2);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_snapshot!(err.to_string());
+}
+
+#[test]
+fn test_struct() {
+    let (pkg_v1, pkg_v2) = get_packages("struct_mismatch");
+    let result = compare_packages(pkg_v1, pkg_v2);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_snapshot!(err.to_string());
+}
+
+#[test]
+fn test_enum() {
+    let (pkg_v1, pkg_v2) = get_packages("enum_mismatch");
+    let result = compare_packages(pkg_v1, pkg_v2);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_snapshot!(err.to_string());
+}
+
+#[test]
 fn test_friend_link_ok() {
     let (pkg_v1, pkg_v2) = get_packages("friend_linking");
     // upgrade compatibility ignores friend linking

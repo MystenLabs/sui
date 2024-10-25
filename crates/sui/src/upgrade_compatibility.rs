@@ -5,13 +5,17 @@
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
-use std::collections::{HashMap, HashSet};
+use codespan_reporting::diagnostic::Label;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io::{stdout, IsTerminal};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Error};
 
+use move_binary_format::file_format::{
+    AbilitySet, EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex, TableIndex,
+};
 use move_binary_format::{
     compatibility::Compatibility,
     compatibility_mode::CompatibilityMode,
@@ -360,6 +364,56 @@ impl CompatibilityMode for CliCompatibilityMode {
     }
 }
 
+#[allow(dead_code)]
+struct IdentifierTableLookup {
+    struct_identifier_to_index: BTreeMap<Identifier, TableIndex>,
+    enum_identifier_to_index: BTreeMap<Identifier, TableIndex>,
+    function_identifier_to_index: BTreeMap<Identifier, TableIndex>,
+}
+
+fn table_index(compiled_module: &CompiledModule) -> IdentifierTableLookup {
+    // for each in compiled module
+    let struct_identifier_to_index: BTreeMap<Identifier, TableIndex> = compiled_module
+        .struct_defs()
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            // get the identifier of the struct
+            let s_id = compiled_module
+                .identifier_at(compiled_module.datatype_handle_at(d.struct_handle).name);
+            (s_id.to_owned(), i as TableIndex)
+        })
+        .collect();
+
+    let enum_identifier_to_index: BTreeMap<Identifier, TableIndex> = compiled_module
+        .enum_defs()
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let e_id = compiled_module
+                .identifier_at(compiled_module.datatype_handle_at(d.enum_handle).name);
+            (e_id.to_owned(), i as TableIndex)
+        })
+        .collect();
+
+    let function_identifier_to_index: BTreeMap<Identifier, TableIndex> = compiled_module
+        .function_defs()
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let f_id =
+                compiled_module.identifier_at(compiled_module.function_handle_at(d.function).name);
+            (f_id.to_owned(), i as TableIndex)
+        })
+        .collect();
+
+    IdentifierTableLookup {
+        struct_identifier_to_index,
+        enum_identifier_to_index,
+        function_identifier_to_index,
+    }
+}
+
 const COMPATIBILITY_PREFIX: &str = "Compatibility ";
 /// Generates an enum Category along with individual enum for each individual category
 /// and impls into diagnostic info for each category.
@@ -456,6 +510,11 @@ fn compare_packages(
         .map(|m| (m.self_id().name().to_owned(), m.clone()))
         .collect();
 
+    let lookup: HashMap<Identifier, IdentifierTableLookup> = existing_modules
+        .iter()
+        .map(|m| (m.self_id().name().to_owned(), table_index(m)))
+        .collect();
+
     let errors: Vec<(Identifier, UpgradeCompatibilityModeError)> = existing_modules
         .iter()
         .flat_map(|existing_module| {
@@ -516,7 +575,11 @@ fn compare_packages(
             file_set.insert(compiled_unit_with_source.source_path.clone());
         }
 
-        diags.add(diag_from_error(&err, compiled_unit_with_source))
+        diags.extend(diag_from_error(
+            &err,
+            compiled_unit_with_source,
+            &lookup[&name],
+        )?);
     }
 
     Err(anyhow!(
@@ -529,7 +592,8 @@ fn compare_packages(
 fn diag_from_error(
     error: &UpgradeCompatibilityModeError,
     compiled_unit_with_source: &CompiledUnitWithSource,
-) -> Diagnostic {
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
     match error {
         UpgradeCompatibilityModeError::StructMissing { name, .. } => missing_definition_diag(
             Declarations::PublicMissing,
@@ -543,9 +607,93 @@ fn diag_from_error(
             &name,
             compiled_unit_with_source,
         ),
-        UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
+        UpgradeCompatibilityModeError::StructMissing { name, .. } => {
+            missing_definition_diag(Declarations::PublicMissing, "struct", &name, compiled_unit_with_source)
+        }
+
+        UpgradeCompatibilityModeError::StructAbilityMismatch {
+            name,
+            old_struct,
+            new_struct,
+        } => struct_ability_mismatch_diag(
+            Declarations::PublicMissing,
+            &name,
+            old_struct,
+            new_struct,
+            compiled_unit_with_source,
+            lookup,
+        ),
+        UpgradeCompatibilityModeError::StructFieldMismatch {
+            name,
+            old_struct,
+            new_struct,
+        } => struct_field_mismatch_diag(
+            Declarations::PublicMissing,
+            &name,
+            old_struct,
+            new_struct,
+            compiled_unit_with_source,
+            lookup,
+        ),
+        UpgradeCompatibilityModeError::EnumMissing { name, .. } => {
             missing_definition_diag(
                 Declarations::PublicMissing,
+                "enum", &name, compiled_unit_with_source)
+        }
+        UpgradeCompatibilityModeError::EnumAbilityMismatch {
+            name,
+            old_enum,
+            new_enum,
+        } => enum_ability_mismatch_diag(
+            Declarations::PublicMissing,
+            &name,
+            old_enum,
+            new_enum,
+            compiled_unit_with_source,
+            lookup,
+        ),
+
+        UpgradeCompatibilityModeError::EnumNewVariant {
+            name,
+            old_enum,
+            new_enum,
+        } => enum_new_variant_diag(
+            Declarations::PublicMissing,
+            &name,
+            old_enum,
+            new_enum,
+            // *tag,
+            compiled_unit_with_source,
+            lookup,
+        ),
+
+        UpgradeCompatibilityModeError::EnumVariantMissing { name, tag, .. } => {
+            enum_variant_missing_diag(
+                Declarations::PublicMissing, // TODO
+                &name,
+                *tag,
+                compiled_unit_with_source,
+                lookup,
+            )
+        }
+
+        UpgradeCompatibilityModeError::EnumVariantMismatch {
+            name,
+            old_enum,
+            new_enum,
+            ..
+        } => enum_variant_mismatch_diag(
+            Declarations::PublicMissing, // TODO
+            &name,
+            old_enum,
+            new_enum,
+            compiled_unit_with_source,
+            lookup,
+        ),
+
+        UpgradeCompatibilityModeError::FunctionMissingPublic { name, .. } => {
+            missing_definition_diag(
+                Declarations::PublicMissing, // TODO
                 "public function",
                 &name,
                 compiled_unit_with_source,
@@ -553,45 +701,559 @@ fn diag_from_error(
         }
         UpgradeCompatibilityModeError::FunctionMissingEntry { name, .. } => {
             missing_definition_diag(
-                Declarations::PublicMissing,
+                Declarations::PublicMissing, // TODO
                 "entry function",
                 &name,
                 compiled_unit_with_source,
             )
         }
+        UpgradeCompatibilityModeError::FunctionSignatureMismatch {
+            name,
+            old_function,
+            new_function,
+        } => function_signature_mismatch_diag(
+            Declarations::PublicMissing, // TODO
+            &name,
+            old_function,
+            new_function,
+            compiled_unit_with_source,
+            lookup,
+        ),
         _ => todo!("Implement diag_from_error for {:?}", error),
     }
 }
 
 /// Return a diagnostic for a missing definition.
 fn missing_definition_diag(
-    error: impl Into<DiagnosticInfo>,
+    error: impl Into<DiagnosticInfo> + Copy,
     declaration_kind: &str,
     identifier_name: &Identifier,
     compiled_unit_with_source: &CompiledUnitWithSource,
-) -> Diagnostic {
+) -> Result<Diagnostics, Error> {
     let module_name = compiled_unit_with_source.unit.name;
     let loc = compiled_unit_with_source
         .unit
         .source_map
         .definition_location;
 
-    Diagnostic::new(
+    let mut diags = Diagnostics::new();
+
+    diags.add(
+        Diagnostic::new(
+            error,
+            (loc, format!(
+                "{declaration_kind} '{identifier_name}' is missing",
+                declaration_kind = declaration_kind,
+                identifier_name = identifier_name,
+            )),
+            std::iter::empty::<(Loc, String)>(),
+            vec![format!(
+                "{declaration_kind} is missing expected {declaration_kind} '{identifier_name}', but found none",
+            ),
+                 format!(
+                     "{declaration_kind}s are part of a module's public interface and cannot be removed or changed during an upgrade",
+                 ),
+                 format!(
+                     "add missing {declaration_kind} '{identifier_name}' back to the module '{module_name}'.",
+                 )]
+        )
+    );
+
+    Ok(diags)
+}
+
+/// Return a diagnostic for a function signature mismatch.
+/// start by checking the lengths of the parameters and returns and return a diagnostic if they are different
+/// if the lengths are the same check each parameter piece wise and return a diagnostic for each mismatch
+fn function_signature_mismatch_diag(
+    error: impl Into<DiagnosticInfo> + std::marker::Copy,
+    function_name: &Identifier,
+    old_function: &Function,
+    new_function: &Function,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let module_name = compiled_unit_with_source.unit.name;
+    let old_func_index = lookup
+        .function_identifier_to_index
+        .get(function_name)
+        .context("Unable to get function index")?;
+
+    let new_func_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_function_source_map(FunctionDefinitionIndex::new(*old_func_index))
+        .context("Unable to get function source map")?;
+
+    let identifier_loc = new_func_sourcemap.definition_location;
+
+    let mut diags = Diagnostics::new();
+
+    // handle function arguments
+    if old_function.parameters.len() != new_function.parameters.len() {
+        diags.add(
+            Diagnostic::new(
+                codes::Upgrades::FunctionParameterMismatch, // TODO
+                (identifier_loc, format!("Function '{function_name}' expected {} parameters, have {}", old_function.parameters.len(), new_function.parameters.len())),
+                Vec::<(Loc, String)>::new(),
+                vec![format!("Functions are part of a module's public interface and cannot be changed during an upgrade, restore the original function's parameters for function '{function_name}', expected {} parameters.", old_function.parameters.len())],
+            )
+        );
+    } else if old_function.parameters != new_function.parameters {
+        for ((i, old_param), new_param) in old_function
+            .parameters
+            .iter()
+            .enumerate()
+            .zip(new_function.parameters.iter())
+        {
+            if old_param != new_param {
+                let param_loc = new_func_sourcemap
+                    .parameters
+                    .get(i)
+                    .context("Unable to get parameter location")?
+                    .1;
+
+                diags.add(
+                    Diagnostic::new(
+                        codes::Upgrades::FunctionParameterMismatch, // TODO
+                        (param_loc, format!("Function '{function_name}' unexpected parameter {new_param} at position {i}, expected {old_param}")),
+                        Vec::<(Loc, String)>::new(),
+                        vec![format!("Functions are part of a module's public interface and cannot be changed during an upgrade, restore the original function's parameters for function '{function_name}'.")],
+                    )
+                );
+            }
+        }
+    }
+
+    // handle return
+    if old_function.return_.len() != new_function.return_.len() {
+        diags.add(
+            Diagnostic::new(
+                codes::Upgrades::FunctionParameterMismatch, // TODO
+                (identifier_loc, format!("Function '{function_name}' expected to have {} return type(s), have {}", old_function.return_.len(), new_function.return_.len())),
+                Vec::<(Loc, String)>::new(),
+                vec![format!("Functions are part of a module's public interface and cannot be changed during an upgrade, restore the original function's return types for function '{function_name}'.")],
+            )
+        );
+    } else if old_function.return_ != new_function.return_ {
+        for ((i, old_return), new_return) in old_function
+            .return_
+            .iter()
+            .enumerate()
+            .zip(new_function.return_.iter())
+        {
+            let return_ = new_func_sourcemap
+                .returns
+                .get(i)
+                .context("Unable to get return location")?;
+
+            if old_return != new_return {
+                diags.add(
+                    Diagnostic::new(
+                        codes::Upgrades::FunctionParameterMismatch, // TODO
+                        (*return_, if new_function.return_.len() == 1 {
+                            format!("Function '{function_name}' has an unexpected return type {new_return}, expected {old_return}")
+                        } else {
+                            format!("Function '{function_name}' unexpected return type {new_return} at position {i}, expected {old_return}")
+                        }),
+                        Vec::<(Loc, String)>::new(),
+                        vec!["Functions are part of a module's public interface and cannot be changed during an upgrade".to_string(), format!("restore the original function's return types for function '{function_name}'.")],
+                    )
+                );
+            }
+        }
+    }
+
+    Ok(diags)
+}
+
+fn struct_ability_mismatch_diag(
+    error_code: impl Into<DiagnosticInfo> + Copy,
+    struct_name: &Identifier,
+    old_struct: &Struct,
+    new_struct: &Struct,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let old_struct_index = lookup
+        .struct_identifier_to_index
+        .get(struct_name)
+        .context("Unable to get struct index")?;
+    let struct_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_struct_source_map(StructDefinitionIndex::new(*old_struct_index))
+        .context("Unable to get struct source map")?;
+
+    let mut diags = Diagnostics::new();
+
+    if old_struct.abilities != new_struct.abilities {
+        let def_loc = struct_sourcemap.definition_location;
+
+        let missing_abilities =
+            AbilitySet::from_u8(old_struct.abilities.into_u8() & !new_struct.abilities.into_u8())
+                .context("Unable to get missing abilities")?;
+        let extra_abilities =
+            AbilitySet::from_u8(new_struct.abilities.into_u8() & !old_struct.abilities.into_u8())
+                .context("Unable to get extra abilities")?;
+
+        let label = match (
+            missing_abilities != AbilitySet::EMPTY,
+            extra_abilities != AbilitySet::EMPTY,
+        ) {
+            (true, true) => format!(
+                "Struct '{struct_name}' has unexpected abilities, missing {:?}, unexpected {:?}",
+                missing_abilities, extra_abilities
+            ),
+            (true, false) => format!(
+                "Struct '{struct_name}' has missing abilities {:?}",
+                missing_abilities
+            ),
+            (false, true) => format!(
+                "Struct '{struct_name}' has unexpected abilities {:?}",
+                extra_abilities
+            ),
+            (false, false) => unreachable!("Abilities should not be the same"),
+        };
+
+        diags.add(
+            Diagnostic::new(
+                error_code,
+                (def_loc, "Struct ability mismatch"),
+                Vec::<(Loc, String)>::new(),
+                vec![format!(
+                    "Structs are part of a module's public interface and cannot be changed during an upgrade, restore the original struct's abilities for struct '{struct_name}'."
+                )],
+            )
+        );
+    }
+
+    Ok(diags)
+}
+
+fn struct_field_mismatch_diag(
+    error_code: impl Into<DiagnosticInfo> + Copy,
+    struct_name: &Identifier,
+    old_struct: &Struct,
+    new_struct: &Struct,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let old_struct_index = lookup
+        .struct_identifier_to_index
+        .get(struct_name)
+        .context("Unable to get struct index")?;
+    let struct_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_struct_source_map(StructDefinitionIndex::new(*old_struct_index))
+        .context("Unable to get struct source map")?;
+
+    let mut diags = Diagnostics::new();
+
+    if old_struct.fields.len() != new_struct.fields.len() {
+        let def_loc = struct_sourcemap.definition_location;
+
+        diags.add(Diagnostic::new(
+            error_code,
+            (def_loc, format!("Struct '{struct_name}' has a different number of fields, expected {}, found {}", old_struct.fields.len(), new_struct.fields.len())),
+            Vec::<(Loc, String)>::new(),
+            vec![format!(
+                // TODO
+                "Structs are part of a module's public interface and cannot be changed during an upgrade, restore the original struct's fields for struct '{struct_name}'."
+            )],
+        ));
+    } else if old_struct.fields != new_struct.fields {
+        for (i, (old_field, new_field)) in old_struct
+            .fields
+            .iter()
+            .zip(new_struct.fields.iter())
+            .enumerate()
+        {
+            if old_field != new_field {
+                let field_loc = struct_sourcemap
+                    .fields
+                    .get(i)
+                    .context("Unable to get field location")?;
+
+                // match of the above
+                let label = match (old_field.name != new_field.name, old_field.type_ != new_field.type_) {
+                    (true, true) => format!(
+                        "Struct '{struct_name}' has different fields `{}: {}` at position {i}, expected `{}: {}`.",
+                        new_field.name, new_field.type_, old_field.name, old_field.type_
+                    ),
+                    (true, false) => format!(
+                        "Struct '{struct_name}' has different field names '{}' at position {i}, expected '{}'.",
+                        new_field.name, old_field.name
+                    ),
+                    (false, true) => format!(
+                        "Struct '{struct_name}' has different field types '{}' at position {i}, expected '{}'.",
+                        new_field.type_, old_field.type_
+                    ),
+                    (false, false) => unreachable!("Fields should no be the same"),
+                };
+
+                diags.add(
+                    Diagnostic::new(
+                        error_code,
+                        (field_loc, format!(
+                            "Struct '{struct_name}' has different fields `{}: {}` at position {i}, expected `{}: {}`.",
+                            new_field.name, new_field.type_, old_field.name, old_field.type_
+                        )),
+                        Vec::<(Loc, String)>::new(),
+                        vec![format!(
+                            "Structs are part of a module's public interface and cannot be changed during an upgrade, restore the original struct's fields for struct '{struct_name}' including the ordering."
+                        )],
+                    )
+                );
+
+                diags.push(Diagnostic::error()
+                    .with_message("Struct field mismatch")
+                    .with_labels(vec![label])
+                    .with_notes(vec![format!(
+                        "Structs are part of a module's public interface and cannot be changed during an upgrade, restore the original struct's fields for struct '{struct_name}' including the ordering."
+                    )]));
+            }
+        }
+    }
+
+    Ok(diags)
+}
+
+fn enum_ability_mismatch_diag(
+    error_code: impl Into<DiagnosticInfo> + Copy,
+    enum_name: &Identifier,
+    old_enum: &Enum,
+    new_enum: &Enum,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let old_enum_index = lookup
+        .enum_identifier_to_index
+        .get(enum_name)
+        .context("Unable to get enum index")?;
+
+    let enum_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_enum_source_map(EnumDefinitionIndex::new(*old_enum_index))
+        .context("Unable to get enum source map")?;
+
+    let def_loc = enum_sourcemap.definition_location;
+
+    if old_enum.abilities != new_enum.abilities {
+        let missing_abilities =
+            AbilitySet::from_u8(old_enum.abilities.into_u8() & !new_enum.abilities.into_u8())
+                .context("Unable to get missing abilities")?;
+        let extra_abilities =
+            AbilitySet::from_u8(new_enum.abilities.into_u8() & !old_enum.abilities.into_u8())
+                .context("Unable to get extra abilities")?;
+
+        let label = match (
+            missing_abilities != AbilitySet::EMPTY,
+            extra_abilities != AbilitySet::EMPTY,
+        ) {
+            (true, true) => format!(
+                "Enum '{enum_name}' has unexpected abilities, missing {:?}, unexpected {:?}",
+                missing_abilities, extra_abilities
+            ),
+            (true, false) => format!(
+                "Enum '{enum_name}' has missing abilities {:?}",
+                missing_abilities
+            ),
+            (false, true) => format!(
+                "Enum '{enum_name}' has unexpected abilities {:?}",
+                extra_abilities
+            ),
+            (false, false) => unreachable!("Abilities should not be the same"),
+        };
+
+        diags.add( // TODO CHECK
+                   diag!(
+                error_code,
+                (def_loc, "Enum ability mismatch"),
+                // TODO secondary enum
+                note: format!(
+                    "Enums are part of a module's public interface and cannot be changed during an upgrade, restore the original enum's abilities for enum '{enum_name}'.",
+                ),
+            )
+        );
+    }
+    Ok(diags)
+}
+
+fn enum_variant_mismatch_diag(
+    error: impl Into<DiagnosticInfo> + Copy,
+    enum_name: &Identifier,
+    old_enum: &Enum,
+    new_enum: &Enum,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let enum_index = lookup
+        .enum_identifier_to_index
+        .get(enum_name)
+        .context("Unable to get enum index")?;
+
+    let enum_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_enum_source_map(EnumDefinitionIndex::new(*enum_index))
+        .context("Unable to get enum source map")?;
+
+    for (i, (old_variant, new_variant)) in old_enum
+        .variants
+        .iter()
+        .zip(new_enum.variants.iter())
+        .enumerate()
+    {
+        if old_variant != new_variant {
+            let variant = &enum_sourcemap
+                .variants
+                .get(i)
+                .context("Unable to get variant location")?
+                .0;
+
+            let variant_loc = enum_sourcemap.definition_location;
+
+            let label = match (old_variant.name != new_variant.name, old_variant.fields != new_variant.fields) {
+                (true, true) => format!(
+                    "Enum '{enum_name}' has different variant '{}' at position {i}, expected '{}'.",
+                    new_variant.name, old_variant.name
+                ),
+                (true, false) => format!(
+                    "Enum '{enum_name}' has different variant name '{}' at position {i}, expected '{}'.",
+                    new_variant.name, old_variant.name
+                ),
+                (false, true) => {
+                    let new_variant_fields = new_variant.fields
+                        .iter()
+                        .map(|f| format!("{:?}", f))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    let old_variant_fields = old_variant.fields
+                        .iter()
+                        .map(|f| format!("{:?}", f))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    format!(
+                        "Enum '{enum_name}' has different variant fields '{}' at position {i}, expected '{}'.",
+                        new_variant_fields, old_variant_fields)
+                }
+                (false, false) => unreachable!("Variants should not be the same"),
+            };
+
+            diags.add(
+                diag!(
+                    error,
+                    (variant_loc, label),
+                    // TODO enum label secondary here
+                    note: format!(
+                        "Enums are part of a module's public interface and cannot be changed during an upgrade, restore the original enum's variants for enum '{enum_name}'.",
+                    ),
+                )
+            );
+        }
+    }
+
+    Ok(diags)
+}
+
+fn enum_new_variant_diag(
+    error: impl Into<DiagnosticInfo> + Copy,
+    enum_name: &Identifier,
+    old_enum: &Enum,
+    new_enum: &Enum,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let mut diags = Diagnostics::new();
+
+    let enum_index = lookup
+        .enum_identifier_to_index
+        .get(enum_name)
+        .context("Unable to get enum index")?;
+
+    let enum_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_enum_source_map(EnumDefinitionIndex::new(*enum_index))
+        .context("Unable to get enum source map")?;
+
+    let old_enum_map = old_enum
+        .variants
+        .iter()
+        .map(|v| v.name.clone())
+        .collect::<HashSet<_>>();
+
+    let def_loc = enum_sourcemap.definition_location;
+
+    for (i, new_variant) in new_enum.variants.iter().enumerate() {
+        if !old_enum_map.contains(&new_variant.name) {
+            let variant = &enum_sourcemap
+                .variants
+                .get(i)
+                .context("Unable to get variant location")?
+                .0;
+
+            diags.add(
+                diag!(
+                    error,
+                    (variant.1, format!(
+                        "Enum '{enum_name}' has a new unexpected variant '{}' at position {i}.",
+                        new_variant.name
+                    )),
+                    // TODO NEED TO SHOW THE ENUM LINE HERE
+                    note: format!(
+                        "Enums are part of a module's public interface and cannot be changed during an upgrade, restore the original enum's variants for enum '{enum_name}'.",
+                    ),
+                )
+            )
+        }
+    }
+
+    Ok(diags)
+}
+
+fn enum_variant_missing_diag(
+    error: impl Into<DiagnosticInfo> + Copy,
+    enum_name: &Identifier,
+    tag: usize,
+    compiled_unit_with_source: &CompiledUnitWithSource,
+    lookup: &IdentifierTableLookup,
+) -> Result<Diagnostics, Error> {
+    let enum_index = lookup
+        .enum_identifier_to_index
+        .get(enum_name)
+        .context("Unable to get enum index")?;
+
+    let enum_sourcemap = compiled_unit_with_source
+        .unit
+        .source_map
+        .get_enum_source_map(EnumDefinitionIndex::new(*enum_index))
+        .context("Unable to get enum source map")?;
+
+    // let start_def = enum_sourcemap.definition_location.start() as usize;
+    // let end_def = enum_sourcemap.definition_location.end() as usize;
+    // let enum_label = Label::secondary(file_id, start_def..end_def);
+
+    let mut diags = Diagnostics::new();
+
+    diags.add(diag!(
         error,
-        (loc, format!(
-            "{declaration_kind} '{identifier_name}' is missing",
-            declaration_kind = declaration_kind,
-            identifier_name = identifier_name,
-        )),
-        std::iter::empty::<(Loc, String)>(),
-        vec![format!(
-            "{declaration_kind} is missing expected {declaration_kind} '{identifier_name}', but found none",
+        (
+            enum_sourcemap.definition_location,
+            format!(
+                "Enum '{enum_name}' has a missing variant at position {tag}.",
+            )
         ),
-         format!(
-             "{declaration_kind}s are part of a module's public interface and cannot be removed or changed during an upgrade",
-         ),
-         format!(
-             "add missing {declaration_kind} '{identifier_name}' back to the module '{module_name}'.",
-         )]
-    )
+    ));
+
+    Ok(diags)
 }
