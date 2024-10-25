@@ -572,10 +572,12 @@ mod check_valid_constant {
                 s = format!("'{}' is", b);
                 &s
             }
-            E::IfElse(eb, et, ef) => {
+            E::IfElse(eb, et, ef_opt) => {
                 exp(context, eb);
                 exp(context, et);
-                exp(context, ef);
+                if let Some(ef) = ef_opt {
+                    exp(context, ef)
+                }
                 "'if' expressions are"
             }
             E::Match(esubject, sp!(_, arms)) => {
@@ -1575,7 +1577,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             vector_pack(context, eloc, vec_loc, ty_opt, argloc, args_)
         }
 
-        NE::IfElse(nb, nt, nf) => {
+        NE::IfElse(nb, nt, nf_opt) => {
             let eb = exp(context, nb);
             let bloc = eb.exp.loc;
             subtype(
@@ -1586,15 +1588,24 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 Type_::bool(bloc),
             );
             let et = exp(context, nt);
-            let ef = exp(context, nf);
-            let ty = join(
-                context,
-                eloc,
-                || "Incompatible branches",
-                et.ty.clone(),
-                ef.ty.clone(),
-            );
-            (ty, TE::IfElse(eb, et, ef))
+            let ef_opt = nf_opt.map(|nf| exp(context, nf));
+            let ty = match &ef_opt {
+                Some(ef) => join(
+                    context,
+                    eloc,
+                    || "Incompatible branches",
+                    et.ty.clone(),
+                    ef.ty.clone(),
+                ),
+                None => {
+                    let ty = sp(eloc, Type_::Unit);
+                    let msg =
+                        "Invalid 'if'. The body of an 'if' without an 'else' must have type '()'";
+                    subtype(context, eloc, || msg, et.ty.clone(), ty.clone());
+                    ty
+                }
+            };
+            (ty, TE::IfElse(eb, et, ef_opt))
         }
         NE::Match(nsubject, sp!(aloc, narms_)) => {
             let esubject = exp(context, nsubject);
@@ -1612,7 +1623,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 }
             };
             let result_type = core::make_tvar(context, aloc);
-            let earms = match_arms(context, &subject_type, &result_type, narms_, &ref_mut);
+            let earms = match_arms(context, &esubject.ty, &result_type, narms_, &ref_mut);
             (result_type, TE::Match(esubject, sp(aloc, earms)))
         }
         NE::While(name, nb, nloop) => {

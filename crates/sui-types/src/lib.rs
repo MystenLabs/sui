@@ -153,7 +153,7 @@ pub fn sui_framework_address_concat_string(suffix: &str) -> String {
 /// Parsing succeeds if and only if `s` matches one of these formats exactly, with no remaining
 /// suffix. This function is intended for use within the authority codebases.
 pub fn parse_sui_address(s: &str) -> anyhow::Result<SuiAddress> {
-    use move_command_line_common::address::ParsedAddress;
+    use move_core_types::parsing::address::ParsedAddress;
     Ok(ParsedAddress::parse(s)?
         .into_account_address(&resolve_address)?
         .into())
@@ -163,7 +163,7 @@ pub fn parse_sui_address(s: &str) -> anyhow::Result<SuiAddress> {
 /// module name (an identifier). Parsing succeeds if and only if `s` matches this format exactly,
 /// with no remaining input. This function is intended for use within the authority codebases.
 pub fn parse_sui_module_id(s: &str) -> anyhow::Result<ModuleId> {
-    use move_command_line_common::types::ParsedModuleId;
+    use move_core_types::parsing::types::ParsedModuleId;
     ParsedModuleId::parse(s)?.into_module_id(&resolve_address)
 }
 
@@ -172,7 +172,7 @@ pub fn parse_sui_module_id(s: &str) -> anyhow::Result<ModuleId> {
 /// format exactly, with no remaining input. This function is intended for use within the authority
 /// codebases.
 pub fn parse_sui_fq_name(s: &str) -> anyhow::Result<(ModuleId, String)> {
-    use move_command_line_common::types::ParsedFqName;
+    use move_core_types::parsing::types::ParsedFqName;
     ParsedFqName::parse(s)?.into_fq_name(&resolve_address)
 }
 
@@ -181,7 +181,7 @@ pub fn parse_sui_fq_name(s: &str) -> anyhow::Result<(ModuleId, String)> {
 /// brackets). Parsing succeeds if and only if `s` matches this format exactly, with no remaining
 /// input. This function is intended for use within the authority codebase.
 pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
-    use move_command_line_common::types::ParsedStructType;
+    use move_core_types::parsing::types::ParsedStructType;
     ParsedStructType::parse(s)?.into_struct_tag(&resolve_address)
 }
 
@@ -189,7 +189,7 @@ pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
 /// vector with a type parameter. Parsing succeeds if and only if `s` matches this format exactly,
 /// with no remaining input. This function is intended for use within the authority codebase.
 pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
-    use move_command_line_common::types::ParsedType;
+    use move_core_types::parsing::types::ParsedType;
     ParsedType::parse(s)?.into_type_tag(&resolve_address)
 }
 
@@ -384,7 +384,7 @@ mod tests {
     #[test]
     fn test_parse_sui_struct_tag_long_account_addr() {
         let result = parse_sui_struct_tag(
-            "0x00000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
         )
         .expect("should not error");
 

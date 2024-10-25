@@ -402,10 +402,12 @@ fn exp(context: &mut Context, e: &T::Exp) {
             type_(context, ty);
             exp(context, e);
         }
-        E::IfElse(e1, e2, e3) => {
+        E::IfElse(e1, e2, e3_opt) => {
             exp(context, e1);
             exp(context, e2);
-            exp(context, e3);
+            if let Some(e3) = e3_opt {
+                exp(context, e3);
+            }
         }
         E::Match(esubject, arms) => {
             exp(context, esubject);

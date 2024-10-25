@@ -335,10 +335,12 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             use_fun_color: _,
             body: e,
         }) => exp(context, e),
-        N::Exp_::IfElse(econd, et, ef) => {
+        N::Exp_::IfElse(econd, et, ef_opt) => {
             exp(context, econd);
             exp(context, et);
-            exp(context, ef);
+            if let Some(ef) = ef_opt {
+                exp(context, ef);
+            }
         }
         N::Exp_::Match(esubject, arms) => {
             exp(context, esubject);

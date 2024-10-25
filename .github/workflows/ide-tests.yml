@@ -1,0 +1,91 @@
+name: IDE Tests
+
+on:
+  push:
+    branches: main
+  pull_request:
+    types: [ opened, synchronize, reopened, ready_for_review ]
+  workflow_dispatch:
+    inputs:
+      sui_repo_ref:
+        description: "Branch / commit to test"
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
+      isMoveAnalyzerTraceAdapter: ${{ steps.diff.outputs.isMoveAnalyzerTraceAdapter }}
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - name: Detect Changes
+        uses: './.github/actions/diffs'
+        id: diff
+  
+  move-auto-formatter-ci-test:
+    name: Move Auto-formatter Test
+    needs: diff
+    if: needs.diff.outputs.isMoveAutoFormatter == 'true'
+    runs-on: [ ubuntu-latest ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+  
+      - name: pnpm setup
+        uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
+        with:
+          version: 9.1.1
+  
+      - name: Setup Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+  
+      - name: Install dependencies
+        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
+        run: npm install && npm i web-tree-sitter
+  
+      - name: Run npm test
+        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
+        shell: bash
+        run: npm run test
+
+  move-analyzer-trace-adapter-ci-test:
+    name: Trace Adapter Test
+    needs: diff
+    if: needs.diff.outputs.isMoveAnalyzerTraceAdapter == 'true'
+    runs-on: [ ubuntu-latest ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+
+      - name: pnpm setup
+        uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
+        with:
+          version: 9.1.1
+
+      - name: Setup Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        working-directory: ./external-crates/move/crates/move-analyzer/trace-adapter
+        shell: bash
+        run: npm install
+
+      - name: Run npm test
+        working-directory: ./external-crates/move/crates/move-analyzer/trace-adapter
+        shell: bash
+        run: npm run test

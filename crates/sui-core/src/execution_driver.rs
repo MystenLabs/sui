@@ -12,6 +12,7 @@ use rand::{
     Rng, SeedableRng,
 };
 use sui_macros::fail_point_async;
+use sui_protocol_config::Chain;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
@@ -43,6 +44,18 @@ pub async fn execution_process(
     // Rate limit concurrent executions to # of cpus.
     let limit = Arc::new(Semaphore::new(num_cpus::get()));
     let mut rng = StdRng::from_rng(&mut OsRng).unwrap();
+
+    let is_mainnet = {
+        let Some(state) = authority_state.upgrade() else {
+            info!("Authority state has shutdown. Exiting ...");
+            return;
+        };
+
+        state
+            .get_chain_identifier()
+            .map(|chain_id| chain_id.chain())
+            == Some(Chain::Mainnet)
+    };
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
@@ -86,6 +99,16 @@ pub async fn execution_process(
         let digest = *certificate.digest();
         trace!(?digest, "Pending certificate execution activated.");
 
+        if epoch_store.epoch() != certificate.epoch() {
+            info!(
+                ?digest,
+                cur_epoch = epoch_store.epoch(),
+                cert_epoch = certificate.epoch(),
+                "Ignoring certificate from previous epoch."
+            );
+            continue;
+        }
+
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
         // the semaphore in this context.
@@ -122,7 +145,9 @@ pub async fn execution_process(
                     .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store_clone)
                     .await;
                 if let Err(e) = res {
-                    if attempts == EXECUTION_MAX_ATTEMPTS {
+                    // Tighten this check everywhere except mainnet - if we don't see an increase in
+                    // these crashes we will remove the retries.
+                    if !is_mainnet || attempts == EXECUTION_MAX_ATTEMPTS {
                         panic!("Failed to execute certified transaction {digest:?} after {attempts} attempts! error={e} certificate={certificate:?}");
                     }
                     // Assume only transient failure can happen. Permanent failure is probably

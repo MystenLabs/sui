@@ -4,6 +4,7 @@
 import * as fs from 'fs';
 import { FRAME_LIFETIME, ModuleInfo } from './utils';
 import { IRuntimeCompundValue, RuntimeValueType, IRuntimeVariableLoc } from './runtime';
+import { ISourceMap, ILoc, IFileInfo } from './source_map_utils';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -201,12 +202,14 @@ export type TraceEvent =
         type: TraceEventKind.OpenFrame,
         id: number,
         name: string,
-        modInfo: ModuleInfo,
+        fileHash: string
         localsTypes: string[],
+        localsNames: string[],
         paramValues: RuntimeValueType[]
+        optimizedLines: number[]
     }
     | { type: TraceEventKind.CloseFrame, id: number }
-    | { type: TraceEventKind.Instruction, pc: number, kind: TraceInstructionKind }
+    | { type: TraceEventKind.Instruction, pc: number, loc: ILoc, kind: TraceInstructionKind }
     | { type: TraceEventKind.Effect, effect: EventEffect };
 
 /**
@@ -235,6 +238,30 @@ interface ITrace {
      * the last variable access).
      */
     localLifetimeEnds: Map<number, number[]>;
+
+    /**
+     * Maps file path to the lines of code present in the trace instructions
+     * in functions defined in the file.
+     */
+    tracedLines: Map<string, Set<number>>;
+}
+
+/**
+ * Information about the frame being currently processsed used during trace generation.
+ */
+interface ITraceGenFrameInfo {
+    /**
+     * Frame ID.
+     */
+    ID: number;
+    /**
+     * PC locations traced in the frame
+     */
+    pcLocs: ILoc[];
+    /**
+     * Path to a file containing function represented by the frame.
+     */
+    filePath: string;
 }
 
 /**
@@ -242,8 +269,13 @@ interface ITrace {
  *
  * @param traceFilePath path to the trace JSON file.
  * @returns execution trace.
+ * @throws Error with a descriptive error message if reading trace has failed.
  */
-export function readTrace(traceFilePath: string): ITrace {
+export function readTrace(
+    traceFilePath: string,
+    sourceMapsMap: Map<string, ISourceMap>,
+    filesMap: Map<string, IFileInfo>
+): ITrace {
     const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
     const events: TraceEvent[] = [];
     // We compute the end of lifetime for a local variable as follows.
@@ -266,7 +298,9 @@ export function readTrace(traceFilePath: string): ITrace {
     // the loop
     const localLifetimeEnds = new Map<number, number[]>();
     const locaLifetimeEndsMax = new Map<number, number[]>();
-    let frameIDs = [];
+    const tracedLines = new Map<string, Set<number>>();
+    // stack of frame infos OpenFrame and popped on CloseFrame
+    const frameInfoStack: ITraceGenFrameInfo[] = [];
     for (const event of traceJSON.events) {
         if (event.OpenFrame) {
             const localsTypes = [];
@@ -290,29 +324,75 @@ export function readTrace(traceFilePath: string): ITrace {
                 }
             }
             localLifetimeEnds.set(frame.frame_id, lifetimeEnds);
+            const modInfo = {
+                addr: frame.module.address,
+                name: frame.module.name
+            };
+            const sourceMap = sourceMapsMap.get(JSON.stringify(modInfo));
+            if (!sourceMap) {
+                throw new Error('Source map for module '
+                    + modInfo.name
+                    + ' in package '
+                    + modInfo.addr
+                    + ' not found');
+            }
+            const funEntry = sourceMap.functions.get(frame.function_name);
+            if (!funEntry) {
+                throw new Error('Cannot find function entry in source map for function: '
+                    + frame.function_name);
+            }
             events.push({
                 type: TraceEventKind.OpenFrame,
                 id: frame.frame_id,
                 name: frame.function_name,
-                modInfo: {
-                    addr: frame.module.address,
-                    name: frame.module.name
-                },
+                fileHash: sourceMap.fileHash,
                 localsTypes,
+                localsNames: funEntry.localsNames,
                 paramValues,
+                optimizedLines: sourceMap.optimizedLines
             });
-            frameIDs.push(frame.frame_id);
+            const currentFile = filesMap.get(sourceMap.fileHash);
+
+            if (!currentFile) {
+                throw new Error(`Cannot find file with hash: ${sourceMap.fileHash}`);
+            }
+            frameInfoStack.push({
+                ID: frame.frame_id,
+                pcLocs: funEntry.pcLocs,
+                filePath: currentFile.path
+            });
         } else if (event.CloseFrame) {
             events.push({
                 type: TraceEventKind.CloseFrame,
                 id: event.CloseFrame.frame_id
             });
-            frameIDs.pop();
+            frameInfoStack.pop();
         } else if (event.Instruction) {
             const name = event.Instruction.instruction;
+            const frameInfo = frameInfoStack[frameInfoStack.length - 1];
+            const fid = frameInfo.ID;
+            const pcLocs = frameInfo.pcLocs;
+            // if map does not contain an entry for a PC that can be found in the trace file,
+            // it means that the position of the last PC in the source map should be used
+            let loc = event.Instruction.pc >= pcLocs.length
+                ? pcLocs[pcLocs.length - 1]
+                : pcLocs[event.Instruction.pc];
+
+            if (!loc) {
+                throw new Error('Cannot find location for PC: '
+                    + event.Instruction.pc
+                    + ' in frame: '
+                    + fid);
+            }
+
+            const filePath = frameInfo.filePath;
+            const lines = tracedLines.get(filePath) || new Set<number>();
+            lines.add(loc.line);
+            tracedLines.set(filePath, lines);
             events.push({
                 type: TraceEventKind.Instruction,
                 pc: event.Instruction.pc,
+                loc,
                 kind: name in TraceInstructionKind
                     ? TraceInstructionKind[name as keyof typeof TraceInstructionKind]
                     : TraceInstructionKind.UNKNOWN
@@ -320,7 +400,7 @@ export function readTrace(traceFilePath: string): ITrace {
             // Set end of lifetime for all locals to the max instruction PC ever seen
             // for a given local (if they are live after this instructions, they will
             // be reset to INFINITE_LIFETIME when processing subsequent effects).
-            const currentFrameID = frameIDs[frameIDs.length - 1];
+            const currentFrameID = frameInfoStack[frameInfoStack.length - 1].ID;
             const lifetimeEnds = localLifetimeEnds.get(currentFrameID) || [];
             const lifetimeEndsMax = locaLifetimeEndsMax.get(currentFrameID) || [];
             for (let i = 0; i < lifetimeEnds.length; i++) {
@@ -359,7 +439,7 @@ export function readTrace(traceFilePath: string): ITrace {
             }
         }
     }
-    return { events, localLifetimeEnds };
+    return { events, localLifetimeEnds, tracedLines };
 }
 
 /**

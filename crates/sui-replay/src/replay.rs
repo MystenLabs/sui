@@ -473,8 +473,13 @@ impl LocalExec {
         objs: Vec<ObjectID>,
         protocol_version: u64,
     ) -> Result<Vec<Object>, ReplayEngineError> {
-        let syst_packages = self.system_package_versions_for_protocol_version(protocol_version)?;
-        let syst_packages_objs = self.multi_download(&syst_packages).await?;
+        let syst_packages_objs = if self.protocol_version.is_some_and(|i| i < 0) {
+            BuiltInFramework::genesis_objects().collect()
+        } else {
+            let syst_packages =
+                self.system_package_versions_for_protocol_version(protocol_version)?;
+            self.multi_download(&syst_packages).await?
+        };
 
         // Download latest version of all packages that are not system packages
         // This is okay since the versions can never change
@@ -707,17 +712,6 @@ impl LocalExec {
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         let tx_digest = &tx_info.tx_digest;
-        // TODO: Support system transactions.
-        if tx_info.sender_signed_data.transaction_data().is_system_tx() {
-            warn!(
-                "System TX replay not supported: {}, skipping transaction",
-                tx_digest
-            );
-            return Err(ReplayEngineError::TransactionNotSupported {
-                digest: *tx_digest,
-                reason: "System transaction".to_string(),
-            });
-        }
         // Before protocol version 16, the generation of effects depends on the wrapped tombstones.
         // It is not possible to retrieve such data for replay.
         if tx_info.protocol_version.as_u64() < 16 {
@@ -759,30 +753,32 @@ impl LocalExec {
         let expensive_checks = true;
         let transaction_kind = override_transaction_kind.unwrap_or(tx_info.kind.clone());
         let certificate_deny_set = HashSet::new();
-        let (inner_store, gas_status, effects, result) = if let Ok(gas_status) = SuiGasStatus::new(
-            tx_info.gas_budget,
-            tx_info.gas_price,
-            tx_info.reference_gas_price,
-            protocol_config,
-        ) {
-            executor.execute_transaction_to_effects(
-                &self,
-                protocol_config,
-                metrics.clone(),
-                expensive_checks,
-                &certificate_deny_set,
-                &tx_info.executed_epoch,
-                tx_info.epoch_start_timestamp,
-                CheckedInputObjects::new_for_replay(input_objects.clone()),
-                tx_info.gas.clone(),
-                gas_status,
-                transaction_kind.clone(),
-                tx_info.sender,
-                *tx_digest,
-            )
+        let gas_status = if tx_info.kind.is_system_tx() {
+            SuiGasStatus::new_unmetered()
         } else {
-            unreachable!("Transaction was valid so gas status must be valid");
+            SuiGasStatus::new(
+                tx_info.gas_budget,
+                tx_info.gas_price,
+                tx_info.reference_gas_price,
+                protocol_config,
+            )
+            .expect("Failed to create gas status")
         };
+        let (inner_store, gas_status, effects, result) = executor.execute_transaction_to_effects(
+            &self,
+            protocol_config,
+            metrics.clone(),
+            expensive_checks,
+            &certificate_deny_set,
+            &tx_info.executed_epoch,
+            tx_info.epoch_start_timestamp,
+            CheckedInputObjects::new_for_replay(input_objects.clone()),
+            tx_info.gas.clone(),
+            gas_status,
+            transaction_kind.clone(),
+            tx_info.sender,
+            *tx_digest,
+        );
 
         if let Err(err) = self.pretty_print_for_tracing(
             &gas_status,
@@ -1798,7 +1794,11 @@ impl LocalExec {
         self.multi_download_and_store(&shared_refs).await?;
 
         // Download gas (although this should already be in cache from modified at versions?)
-        let gas_refs: Vec<_> = tx_info.gas.iter().map(|w| (w.0, w.1)).collect();
+        let gas_refs: Vec<_> = tx_info
+            .gas
+            .iter()
+            .filter_map(|w| (w.0 != ObjectID::ZERO).then_some((w.0, w.1)))
+            .collect();
         self.multi_download_and_store(&gas_refs).await?;
 
         // Fetch the input objects we know from the raw transaction

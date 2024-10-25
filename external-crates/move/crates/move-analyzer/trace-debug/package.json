@@ -20,6 +20,7 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "breakpoints": [{ "language": "move" }],
     "debuggers": [
       {
         "type": "move-debug",

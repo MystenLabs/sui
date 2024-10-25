@@ -26,7 +26,9 @@ use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, Tr
 use sui_types::base_types::{ConciseableName, ObjectRef};
 use sui_types::committee::Committee;
 use sui_types::committee::CommitteeTrait;
-use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo, RandomnessRound};
+use sui_types::crypto::{
+    AuthorityPublicKeyBytes, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, RandomnessRound,
+};
 use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
@@ -805,8 +807,8 @@ impl AuthorityEpochTables {
         Ok(table
             .multi_get(shared_input_object_ids.iter())?
             .into_iter()
-            .flatten()
             .zip(shared_input_object_ids)
+            .filter_map(|(debt, object_id)| debt.map(|debt| (debt, object_id)))
             .map(move |(debt, object_id)| {
                 let (round, debt) = debt.into_v1();
                 (
@@ -2921,7 +2923,6 @@ impl AuthorityPerEpochStore {
         };
         let make_checkpoint = should_accept_tx || final_round;
         if make_checkpoint {
-            // Generate pending checkpoint for regular user tx.
             let checkpoint_height = if self.randomness_state_enabled() {
                 consensus_commit_info.round * 2
             } else {
@@ -2942,29 +2943,34 @@ impl AuthorityPerEpochStore {
                 }
             }
             checkpoint_roots.extend(roots.into_iter());
-            let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
-                roots: checkpoint_roots,
-                details: PendingCheckpointInfo {
-                    timestamp_ms: consensus_commit_info.timestamp,
-                    last_of_epoch: final_round && randomness_round.is_none(),
-                    checkpoint_height,
-                },
-            });
-            self.write_pending_checkpoint(&mut output, &pending_checkpoint)?;
 
-            // Generate pending checkpoint for user tx with randomness.
-            // - If randomness is not generated for this commit, we will skip the
-            //   checkpoint with the associated height. Therefore checkpoint heights may
-            //   not be contiguous.
-            // - Exception: if DKG fails, we always need to write out a PendingCheckpoint
-            //   for randomness tx that are canceled.
             if let Some(randomness_round) = randomness_round {
                 randomness_roots.insert(TransactionKey::RandomnessRound(
                     self.epoch(),
                     randomness_round,
                 ));
             }
-            if randomness_round.is_some() || (dkg_failed && !randomness_roots.is_empty()) {
+
+            // Determine whether to write pending checkpoint for user tx with randomness.
+            // - If randomness is not generated for this commit, we will skip the
+            //   checkpoint with the associated height. Therefore checkpoint heights may
+            //   not be contiguous.
+            // - Exception: if DKG fails, we always need to write out a PendingCheckpoint
+            //   for randomness tx that are canceled.
+            let should_write_random_checkpoint =
+                randomness_round.is_some() || (dkg_failed && !randomness_roots.is_empty());
+
+            let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
+                roots: checkpoint_roots,
+                details: PendingCheckpointInfo {
+                    timestamp_ms: consensus_commit_info.timestamp,
+                    last_of_epoch: final_round && !should_write_random_checkpoint,
+                    checkpoint_height,
+                },
+            });
+            self.write_pending_checkpoint(&mut output, &pending_checkpoint)?;
+
+            if should_write_random_checkpoint {
                 let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
                     roots: randomness_roots.into_iter().collect(),
                     details: PendingCheckpointInfo {
@@ -3218,6 +3224,8 @@ impl AuthorityPerEpochStore {
         bool,                   // true if final round
         Option<TransactionKey>, // consensus commit prologue root
     )> {
+        let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_transactions");
+
         if randomness_round.is_some() {
             assert!(!dkg_failed); // invariant check
         }
@@ -3505,7 +3513,8 @@ impl AuthorityPerEpochStore {
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<ConsensusCertificateResult> {
-        let _scope = monitored_scope("HandleConsensusTransaction");
+        let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_transaction");
+
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
             certificate_author_index: _,
             certificate_author,
@@ -3528,107 +3537,21 @@ impl AuthorityPerEpochStore {
                     );
                     return Ok(ConsensusCertificateResult::Ignored);
                 }
-                if self.has_sent_end_of_publish(certificate_author)?
-                    && !previously_deferred_tx_digests.contains_key(certificate.digest())
-                {
-                    // This can not happen with valid authority
-                    // With some edge cases consensus might sometimes resend previously seen certificate after EndOfPublish
-                    // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
-                    // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
-                    warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", certificate_author.concise(), certificate.digest());
-                    return Ok(ConsensusCertificateResult::Ignored);
-                }
                 // Safe because signatures are verified when consensus called into SuiTxValidator::validate_batch.
                 let certificate = VerifiedCertificate::new_unchecked(*certificate.clone());
-                let certificate = VerifiedExecutableTransaction::new_from_certificate(certificate);
+                let transaction = VerifiedExecutableTransaction::new_from_certificate(certificate);
 
-                debug!(
-                    ?tracking_id,
-                    tx_digest = ?certificate.digest(),
-                    "handle_consensus_transaction UserTransaction",
-                );
-
-                if !self
-                    .get_reconfig_state_read_lock_guard()
-                    .should_accept_consensus_certs()
-                    && !previously_deferred_tx_digests.contains_key(certificate.digest())
-                {
-                    debug!("Ignoring consensus certificate for transaction {:?} because of end of epoch",
-                    certificate.digest());
-                    return Ok(ConsensusCertificateResult::Ignored);
-                }
-
-                let deferral_info = self.should_defer(
-                    &certificate,
+                self.process_consensus_user_transaction(
+                    transaction,
+                    certificate_author,
                     commit_round,
+                    tracking_id,
+                    previously_deferred_tx_digests,
                     dkg_failed,
                     generating_randomness,
-                    previously_deferred_tx_digests,
                     shared_object_congestion_tracker,
-                );
-
-                if let Some((deferral_key, deferral_reason)) = deferral_info {
-                    debug!(
-                        "Deferring consensus certificate for transaction {:?} until {:?}",
-                        certificate.digest(),
-                        deferral_key
-                    );
-
-                    let deferral_result = match deferral_reason {
-                        DeferralReason::RandomnessNotReady => {
-                            // Always defer transaction due to randomness not ready.
-                            ConsensusCertificateResult::Deferred(deferral_key)
-                        }
-                        DeferralReason::SharedObjectCongestion(congested_objects) => {
-                            authority_metrics
-                                .consensus_handler_congested_transactions
-                                .inc();
-                            if transaction_deferral_within_limit(
-                                &deferral_key,
-                                self.protocol_config()
-                                    .max_deferral_rounds_for_congestion_control(),
-                            ) {
-                                ConsensusCertificateResult::Deferred(deferral_key)
-                            } else {
-                                // Cancel the transaction that has been deferred for too long.
-                                debug!(
-                                    "Cancelling consensus certificate for transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
-                                    certificate.digest(),
-                                    deferral_key,
-                                    congested_objects
-                                );
-                                ConsensusCertificateResult::Cancelled((
-                                    certificate,
-                                    CancelConsensusCertificateReason::CongestionOnObjects(
-                                        congested_objects,
-                                    ),
-                                ))
-                            }
-                        }
-                    };
-                    return Ok(deferral_result);
-                }
-
-                if dkg_failed
-                    && self.randomness_state_enabled()
-                    && certificate.transaction_data().uses_randomness()
-                {
-                    debug!(
-                        "Canceling randomness-using certificate for transaction {:?} because DKG failed",
-                        certificate.digest(),
-                    );
-                    return Ok(ConsensusCertificateResult::Cancelled((
-                        certificate,
-                        CancelConsensusCertificateReason::DkgFailed,
-                    )));
-                }
-
-                // This certificate will be scheduled. Update object execution cost.
-                if certificate.contains_shared_object() {
-                    shared_object_congestion_tracker.bump_object_execution_cost(&certificate);
-                }
-
-                Ok(ConsensusCertificateResult::SuiTransaction(certificate))
+                    authority_metrics,
+                )
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::CheckpointSignature(info),
@@ -3791,11 +3714,30 @@ impl AuthorityPerEpochStore {
             }
 
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(_tx),
+                kind: ConsensusTransactionKind::UserTransaction(tx),
                 ..
             }) => {
-                // TODO(fastpath): implement handling of user transactions from consensus commits.
-                Ok(ConsensusCertificateResult::Ignored)
+                // Ignore consensus certified user transaction if Mysticeti fastpath is not enabled.
+                if !self.protocol_config().mysticeti_fastpath() {
+                    return Ok(ConsensusCertificateResult::Ignored);
+                }
+                // Safe because transactions are certified by consensus.
+                let tx = VerifiedTransaction::new_unchecked(*tx.clone());
+                // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
+                let transaction =
+                    VerifiedExecutableTransaction::new_from_consensus(tx, self.epoch());
+
+                self.process_consensus_user_transaction(
+                    transaction,
+                    certificate_author,
+                    commit_round,
+                    tracking_id,
+                    previously_deferred_tx_digests,
+                    dkg_failed,
+                    generating_randomness,
+                    shared_object_congestion_tracker,
+                    authority_metrics,
+                )
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
                 Ok(self.process_consensus_system_transaction(system_transaction))
@@ -3818,6 +3760,122 @@ impl AuthorityPerEpochStore {
         // If needed we can support owned object system transactions as well...
         assert!(system_transaction.contains_shared_object());
         ConsensusCertificateResult::SuiTransaction(system_transaction.clone())
+    }
+
+    fn process_consensus_user_transaction(
+        &self,
+        transaction: VerifiedExecutableTransaction,
+        block_author: &AuthorityPublicKeyBytes,
+        commit_round: Round,
+        tracking_id: u64,
+        previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
+        dkg_failed: bool,
+        generating_randomness: bool,
+        shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
+        authority_metrics: &Arc<AuthorityMetrics>,
+    ) -> SuiResult<ConsensusCertificateResult> {
+        let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_user_transaction");
+
+        if self.has_sent_end_of_publish(block_author)?
+            && !previously_deferred_tx_digests.contains_key(transaction.digest())
+        {
+            // This can not happen with valid authority
+            // With some edge cases consensus might sometimes resend previously seen certificate after EndOfPublish
+            // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
+            // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
+            warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen transaction {:?} after it sent EndOfPublish message to consensus", block_author.concise(), transaction.digest());
+            return Ok(ConsensusCertificateResult::Ignored);
+        }
+
+        debug!(
+            ?tracking_id,
+            tx_digest = ?transaction.digest(),
+            "handle_consensus_transaction UserTransaction",
+        );
+
+        if !self
+            .get_reconfig_state_read_lock_guard()
+            .should_accept_consensus_certs()
+            && !previously_deferred_tx_digests.contains_key(transaction.digest())
+        {
+            debug!(
+                "Ignoring consensus transaction {:?} because of end of epoch",
+                transaction.digest()
+            );
+            return Ok(ConsensusCertificateResult::Ignored);
+        }
+
+        let deferral_info = self.should_defer(
+            &transaction,
+            commit_round,
+            dkg_failed,
+            generating_randomness,
+            previously_deferred_tx_digests,
+            shared_object_congestion_tracker,
+        );
+
+        if let Some((deferral_key, deferral_reason)) = deferral_info {
+            debug!(
+                "Deferring consensus certificate for transaction {:?} until {:?}",
+                transaction.digest(),
+                deferral_key
+            );
+
+            let deferral_result = match deferral_reason {
+                DeferralReason::RandomnessNotReady => {
+                    // Always defer transaction due to randomness not ready.
+                    ConsensusCertificateResult::Deferred(deferral_key)
+                }
+                DeferralReason::SharedObjectCongestion(congested_objects) => {
+                    authority_metrics
+                        .consensus_handler_congested_transactions
+                        .inc();
+                    if transaction_deferral_within_limit(
+                        &deferral_key,
+                        self.protocol_config()
+                            .max_deferral_rounds_for_congestion_control(),
+                    ) {
+                        ConsensusCertificateResult::Deferred(deferral_key)
+                    } else {
+                        // Cancel the transaction that has been deferred for too long.
+                        debug!(
+                            "Cancelling consensus transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
+                            transaction.digest(),
+                            deferral_key,
+                            congested_objects
+                        );
+                        ConsensusCertificateResult::Cancelled((
+                            transaction,
+                            CancelConsensusCertificateReason::CongestionOnObjects(
+                                congested_objects,
+                            ),
+                        ))
+                    }
+                }
+            };
+            return Ok(deferral_result);
+        }
+
+        if dkg_failed
+            && self.randomness_state_enabled()
+            && transaction.transaction_data().uses_randomness()
+        {
+            debug!(
+                "Canceling randomness-using transaction {:?} because DKG failed",
+                transaction.digest(),
+            );
+            return Ok(ConsensusCertificateResult::Cancelled((
+                transaction,
+                CancelConsensusCertificateReason::DkgFailed,
+            )));
+        }
+
+        // This certificate will be scheduled. Update object execution cost.
+        if transaction.contains_shared_object() {
+            shared_object_congestion_tracker.bump_object_execution_cost(&transaction);
+        }
+
+        Ok(ConsensusCertificateResult::SuiTransaction(transaction))
     }
 
     pub(crate) fn write_pending_checkpoint(
