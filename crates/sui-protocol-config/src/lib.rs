@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 65;
+const MAX_PROTOCOL_VERSION: u64 = 67;
 
 // Record history of protocol version allocations here:
 //
@@ -185,7 +185,11 @@ const MAX_PROTOCOL_VERSION: u64 = 65;
 //             Add feature flag for Mysticeti fastpath.
 // Version 62: Makes the event's sending module package upgrade-aware.
 // Version 63: Enable gas based congestion control in consensus commit.
-// Version 64: Switch to distributed vote scoring in consensus in mainnet
+// Version 64: Revert congestion control change.
+// Version 65: Enable distributed vote scoring in mainnet.
+// Version 66: Revert distributed vote scoring in mainnet.
+//             Framework fix for fungible staking book-keeping.
+// Version 67: Re-enable distributed vote scoring in mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2841,6 +2845,18 @@ impl ProtocolConfig {
                 }
                 65 => {
                     // Enable distributed vote scoring for mainnet
+                    cfg.feature_flags
+                        .consensus_distributed_vote_scoring_strategy = true;
+                }
+                66 => {
+                    if chain == Chain::Mainnet {
+                        // Revert the distributed vote scoring for mainnet (for one protocol upgrade)
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = false;
+                    }
+                }
+                67 => {
+                    // Enable it once again.
                     cfg.feature_flags
                         .consensus_distributed_vote_scoring_strategy = true;
                 }
