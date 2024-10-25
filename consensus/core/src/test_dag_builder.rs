@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
+    iter,
     ops::{Bound::Included, RangeInclusive},
     sync::Arc,
 };
@@ -21,7 +22,7 @@ use crate::{
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
     linearizer::{BlockStoreAPI, Linearizer},
-    CommittedSubDag,
+    CommittedSubDag, Transaction,
 };
 
 /// DagBuilder API
@@ -379,6 +380,10 @@ pub struct LayerBuilder<'a> {
     // Configuration options applied to specified authorities
     // TODO: convert configuration options into an enum
     specified_authorities: Option<Vec<AuthorityIndex>>,
+    // Authorities to build blocks for the layer.
+    block_authorities: Option<Vec<AuthorityIndex>>,
+    // Number of transactions to include per block.
+    num_transactions: Option<u32>,
     // Number of equivocating blocks per specified authority
     equivocations: usize,
     // Skip block proposal for specified authorities
@@ -422,6 +427,8 @@ impl<'a> LayerBuilder<'a> {
             start_round,
             end_round: None,
             specified_authorities: None,
+            block_authorities: None,
+            num_transactions: None,
             equivocations: 0,
             skip_block: false,
             skip_ancestor_links: None,
@@ -507,6 +514,20 @@ impl<'a> LayerBuilder<'a> {
         self
     }
 
+    pub fn block_authorities(mut self, authorities: Vec<AuthorityIndex>) -> Self {
+        assert!(
+            self.block_authorities.is_none(),
+            "Block authorities already set"
+        );
+        self.block_authorities = Some(authorities);
+        self
+    }
+
+    pub fn include_transactions(mut self, num_transactions: u32) -> Self {
+        self.num_transactions = Some(num_transactions);
+        self
+    }
+
     // Multiple blocks will be created for the specified authorities at the layer round.
     pub fn equivocate(mut self, equivocations: usize) -> Self {
         // authorities must be specified for this to apply
@@ -528,8 +549,8 @@ impl<'a> LayerBuilder<'a> {
         for round in self.start_round..=self.end_round.unwrap_or(self.start_round) {
             tracing::debug!("BUILDING LAYER ROUND {round}...");
 
-            let authorities = if self.specified_authorities.is_some() {
-                self.specified_authorities.clone().unwrap()
+            let authorities = if self.block_authorities.is_some() {
+                self.block_authorities.clone().unwrap()
             } else {
                 self.dag_builder
                     .context
@@ -542,9 +563,9 @@ impl<'a> LayerBuilder<'a> {
             // TODO: investigate if these configurations can be called in combination
             // for the same layer
             let mut connections = if self.fully_linked_ancestors {
-                self.configure_fully_linked_ancestors()
+                self.configure_fully_linked_ancestors(authorities)
             } else if self.min_ancestor_links {
-                self.configure_min_parent_links()
+                self.configure_min_parent_links(authorities)
             } else if self.no_leader_link {
                 self.configure_no_leader_links(authorities.clone(), round)
             } else if self.skip_ancestor_links.is_some() {
@@ -573,22 +594,16 @@ impl<'a> LayerBuilder<'a> {
     }
 
     // Layer round is minimally and randomly connected with ancestors.
-    pub fn configure_min_parent_links(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+    pub fn configure_min_parent_links(
+        &mut self,
+        authorities: Vec<AuthorityIndex>,
+    ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
         let quorum_threshold = self.dag_builder.context.committee.quorum_threshold() as usize;
-        let mut authorities: Vec<AuthorityIndex> = self
-            .dag_builder
-            .context
-            .committee
-            .authorities()
-            .map(|authority| authority.0)
-            .collect();
 
         let mut rng = match self.min_ancestor_links_random_seed {
             Some(s) => StdRng::seed_from_u64(s),
             None => StdRng::from_entropy(),
         };
-
-        let mut authorities_to_shuffle = authorities.clone();
 
         let mut leaders = vec![];
         if let Some(leader_round) = self.leader_round {
@@ -603,27 +618,37 @@ impl<'a> LayerBuilder<'a> {
             }
         }
 
+        let mut authorities_to_shuffle = authorities.clone();
+
         authorities
             .iter()
             .map(|authority| {
                 authorities_to_shuffle.shuffle(&mut rng);
 
-                // TODO: handle quroum threshold properly with stake
-                let min_ancestors: HashSet<AuthorityIndex> = authorities_to_shuffle
+                // TODO: handle quorum threshold properly with stake
+                let min_ancestors: BTreeSet<AuthorityIndex> = authorities_to_shuffle
                     .iter()
+                    .filter(|a| authority != *a)
                     .take(quorum_threshold)
                     .cloned()
                     .collect();
 
                 (
                     *authority,
-                    self.ancestors
-                        .iter()
-                        .filter(|a| {
-                            leaders.contains(&a.author) || min_ancestors.contains(&a.author)
-                        })
-                        .cloned()
-                        .collect::<Vec<BlockRef>>(),
+                    // Make sure the authority ancestor is the 1st.
+                    // And it is not given that the authority ancestor is a parent, so it is still necessary
+                    // to have 2f+1 other ancestors.
+                    iter::once(
+                        self.ancestors
+                            .iter()
+                            .find(|a| *authority == a.author)
+                            .unwrap(),
+                    )
+                    .chain(self.ancestors.iter().filter(|a| {
+                        leaders.contains(&a.author) || min_ancestors.contains(&a.author)
+                    }))
+                    .cloned()
+                    .collect::<Vec<BlockRef>>(),
                 )
             })
             .collect()
@@ -664,12 +689,13 @@ impl<'a> LayerBuilder<'a> {
         self.configure_skipped_ancestor_links(authorities, missing_leaders)
     }
 
-    fn configure_fully_linked_ancestors(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
-        self.dag_builder
-            .context
-            .committee
-            .authorities()
-            .map(|authority| (authority.0, self.ancestors.clone()))
+    fn configure_fully_linked_ancestors(
+        &mut self,
+        authorities: Vec<AuthorityIndex>,
+    ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+        authorities
+            .into_iter()
+            .map(|authority| (authority, self.ancestors.clone()))
             .collect::<Vec<_>>()
     }
 
@@ -703,12 +729,16 @@ impl<'a> LayerBuilder<'a> {
             for num_block in 0..num_blocks {
                 let author = authority.value() as u32;
                 let base_ts = round as BlockTimestampMs * 1000;
-                let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(round, author)
-                        .set_ancestors(ancestors.clone())
-                        .set_timestamp_ms(base_ts + (author + round + num_block) as u64)
-                        .build(),
-                );
+                let mut test_bock = TestBlock::new(round, author)
+                    .set_ancestors(ancestors.clone())
+                    .set_timestamp_ms(base_ts + (author + round + num_block) as u64);
+                if let Some(num_transactions) = self.num_transactions {
+                    let transactions = (0..num_transactions)
+                        .map(|_| Transaction::new(vec![0_u8; 16]))
+                        .collect();
+                    test_bock = test_bock.set_transactions(transactions);
+                };
+                let block = VerifiedBlock::new_for_test(test_bock.build());
                 references.push(block.reference());
                 self.dag_builder
                     .blocks
@@ -720,12 +750,8 @@ impl<'a> LayerBuilder<'a> {
     }
 
     fn num_blocks_to_create(&self, authority: AuthorityIndex) -> u32 {
-        if self.specified_authorities.is_some()
-            && self
-                .specified_authorities
-                .clone()
-                .unwrap()
-                .contains(&authority)
+        if self.block_authorities.is_some()
+            && self.block_authorities.clone().unwrap().contains(&authority)
         {
             // Always create 1 block and then the equivocating blocks on top of that.
             1 + self.equivocations as u32

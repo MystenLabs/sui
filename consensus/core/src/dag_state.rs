@@ -320,6 +320,7 @@ impl DagState {
     }
 
     // Updates votes for certification of transactions in the causal history of the block.
+    // TODO(fastpath): add randomized tests.
     fn update_certification_votes(&mut self, block: &VerifiedBlock) -> Vec<BlockOutput> {
         let mut certified_blocks = vec![];
 
@@ -375,9 +376,14 @@ impl DagState {
     ) -> Vec<BlockOutput> {
         let mut certified_blocks = vec![];
         while target.round
-            >= voter_block
-                .round()
-                .saturating_sub(self.context.protocol_config.consensus_voting_rounds())
+            >= voter_block.round().saturating_sub(
+                self.context
+                    .protocol_config
+                    .consensus_voting_rounds_as_option()
+                    .unwrap_or(
+                        40, /* remove default after mainnet config version reaches 68 */
+                    ),
+            )
         {
             let Some(target_block_info) = self.recent_blocks.get_mut(&target) else {
                 // The target block has been GC'ed.
@@ -1137,7 +1143,10 @@ mod test {
 
     use super::*;
     use crate::{
-        block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
+        block::{
+            BlockDigest, BlockRef, BlockTimestampMs, BlockTransactionVotes, TestBlock,
+            VerifiedBlock,
+        },
         storage::{mem_store::MemStore, WriteBatch},
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
@@ -1699,6 +1708,190 @@ mod test {
         // Then all should be found apart from the last one
         expected.insert(3, None);
         assert_eq!(result, expected);
+    }
+
+    #[tokio::test]
+    async fn test_voting_basic() {
+        telemetry_subscribers::init_for_testing();
+        let num_authorities: u32 = 7;
+        let (context, _) = Context::new_for_test(num_authorities as usize);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create minimal connected blocks up to round voting_rounds - 1,
+        // and add a final round with full blocks connections.
+        let voting_rounds = context.protocol_config.consensus_voting_rounds();
+        let num_rounds = voting_rounds - 1;
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder
+            .layers(1..=num_rounds)
+            .min_ancestor_links(false, None);
+        dag_builder.layer(voting_rounds).build();
+
+        // Add all created blocks to DagState.
+        let mut all_blocks: Vec<_> = dag_builder.all_blocks();
+        all_blocks.sort_by_key(|b| b.reference());
+        dag_state.accept_blocks(all_blocks.clone());
+
+        let certified_blocks = dag_state.take_certified_blocks();
+
+        // It is expected that all blocks with round < voting_rounds are certified.
+        let voted_block_refs = all_blocks
+            .iter()
+            .filter_map(|b| {
+                if b.round() < voting_rounds {
+                    Some(b.reference())
+                } else {
+                    None
+                }
+            })
+            .collect::<BTreeSet<_>>();
+        let certified_block_refs = certified_blocks
+            .iter()
+            .map(|b| b.block.reference())
+            .collect::<BTreeSet<_>>();
+
+        let diff = voted_block_refs
+            .difference(&certified_block_refs)
+            .collect::<Vec<_>>();
+        assert!(diff.is_empty(), "Blocks {:?} are not certified", diff);
+
+        let diff = certified_block_refs
+            .difference(&voted_block_refs)
+            .collect::<Vec<_>>();
+        assert!(
+            diff.is_empty(),
+            "Certified blocks {:?} are unexpected",
+            diff
+        );
+
+        // Ensure no transaction is rejected.
+        for b in &certified_blocks {
+            assert!(b.rejected.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_voting_with_rejections() {
+        telemetry_subscribers::init_for_testing();
+        let num_authorities: u32 = 4;
+        let (context, _) = Context::new_for_test(num_authorities as usize);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create connected blocks up to voting_rounds, with only 3 authorities.
+        let voting_rounds = context.protocol_config.consensus_voting_rounds();
+        let last_round = voting_rounds + 1;
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder
+            .layers(1..=last_round)
+            .block_authorities((0..3).map(AuthorityIndex::new_for_test).collect())
+            .include_transactions(4)
+            .build();
+
+        let mut all_blocks: Vec<_> = dag_builder.all_blocks();
+        all_blocks.sort_by_key(|b| b.reference());
+
+        let last_block = all_blocks.last().unwrap().clone();
+        assert_eq!(last_block.round(), last_round);
+
+        let mut next_ancestors = all_blocks
+            .iter()
+            .filter_map(|b| {
+                if b.round() == last_round {
+                    Some(b.reference())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Create a block outside of voting rounds, which should not be accepted.
+        let out_of_range_block = VerifiedBlock::new_for_test(TestBlock::new(1, 3).build());
+        next_ancestors.push(out_of_range_block.reference());
+        all_blocks.push(out_of_range_block.clone());
+
+        // Create a block not voted by any other block.
+        let mut ignored_block_ancestors = all_blocks
+            .iter()
+            .filter_map(|b| {
+                if b.round() == last_round - 1 {
+                    Some(b.reference())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        ignored_block_ancestors.push(out_of_range_block.reference());
+        let ignored_block = VerifiedBlock::new_for_test(
+            TestBlock::new(last_round, 3)
+                .set_ancestors(ignored_block_ancestors)
+                .build(),
+        );
+        all_blocks.push(ignored_block);
+
+        // Create blocks rejecting transaction 2 in last_block, linking to out_of_range_block where no vote should be counted,
+        // and accepting other blocks and transactions.
+        let final_round_blocks: Vec<_> = (0..4)
+            .map(|i| {
+                let test_block = TestBlock::new(last_round + 1, i)
+                    .set_transaction_votes(vec![BlockTransactionVotes {
+                        block_ref: last_block.reference(),
+                        rejects: vec![2],
+                    }])
+                    .set_ancestors(next_ancestors.clone())
+                    .build();
+                VerifiedBlock::new_for_test(test_block)
+            })
+            .collect();
+        all_blocks.extend(final_round_blocks);
+
+        // Accept all created blocks.
+        dag_state.accept_blocks(all_blocks.clone());
+
+        let certified_blocks = dag_state.take_certified_blocks();
+
+        // It is expected that all blocks with round <= last_round and from authorities [0,1,2] are certified.
+        // The rest of blocks are not.
+        let voted_block_refs = all_blocks
+            .iter()
+            .filter_map(|b| {
+                if b.round() <= last_round && b.author() != AuthorityIndex::new_for_test(3) {
+                    Some(b.reference())
+                } else {
+                    None
+                }
+            })
+            .collect::<BTreeSet<_>>();
+        let certified_block_refs = certified_blocks
+            .iter()
+            .map(|b| b.block.reference())
+            .collect::<BTreeSet<_>>();
+
+        let diff = voted_block_refs
+            .difference(&certified_block_refs)
+            .collect::<Vec<_>>();
+        assert!(diff.is_empty(), "Blocks {:?} are not certified", diff);
+
+        let diff = certified_block_refs
+            .difference(&voted_block_refs)
+            .collect::<Vec<_>>();
+        assert!(
+            diff.is_empty(),
+            "Certified blocks {:?} are unexpected",
+            diff
+        );
+
+        // Ensure only the expected transaction is rejected.
+        for b in &certified_blocks {
+            if b.block.reference() != last_block.reference() {
+                assert!(b.rejected.is_empty());
+                continue;
+            }
+            assert_eq!(b.rejected, vec![2]);
+        }
     }
 
     // TODO: Remove when DistributedVoteScoring is enabled.

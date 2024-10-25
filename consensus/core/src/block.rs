@@ -682,13 +682,13 @@ impl BlockOutput {
 /// This struct is public for testing in other crates.
 #[derive(Clone)]
 pub struct TestBlock {
-    block: BlockV1,
+    block: BlockV2,
 }
 
 impl TestBlock {
     pub fn new(round: Round, author: u32) -> Self {
         Self {
-            block: BlockV1 {
+            block: BlockV2 {
                 round,
                 author: AuthorityIndex::new_for_test(author),
                 ..Default::default()
@@ -726,13 +726,20 @@ impl TestBlock {
         self
     }
 
-    pub fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
+    #[cfg(test)]
+    pub(crate) fn set_transaction_votes(mut self, votes: Vec<BlockTransactionVotes>) -> Self {
+        self.block.transaction_votes = votes;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
         self.block.commit_votes = commit_votes;
         self
     }
 
     pub fn build(self) -> Block {
-        Block::V1(self.block)
+        Block::V2(self.block)
     }
 }
 
