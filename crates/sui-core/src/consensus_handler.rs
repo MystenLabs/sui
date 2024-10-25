@@ -10,7 +10,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
-use consensus_core::{CommitConsumerMonitor, TransactionIndex, VerifiedBlock};
+use consensus_core::{BlockOutput, BlockOutputBatch, CommitConsumerMonitor};
 use lru::LruCache;
 use mysten_metrics::{
     monitored_future,
@@ -477,7 +477,7 @@ impl MysticetiConsensusHandler {
         mut consensus_handler: ConsensusHandler<CheckpointService>,
         consensus_transaction_handler: ConsensusTransactionHandler,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
-        mut transaction_receiver: UnboundedReceiver<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
+        mut block_receiver: UnboundedReceiver<consensus_core::BlockOutputBatch>,
         commit_consumer_monitor: Arc<CommitConsumerMonitor>,
     ) -> Self {
         let mut tasks = JoinSet::new();
@@ -493,10 +493,9 @@ impl MysticetiConsensusHandler {
         }));
         if consensus_transaction_handler.enabled() {
             tasks.spawn(monitored_future!(async move {
-                while let Some(blocks_and_rejected_transactions) = transaction_receiver.recv().await
-                {
+                while let Some(blocks) = block_receiver.recv().await {
                     consensus_transaction_handler
-                        .handle_consensus_transactions(blocks_and_rejected_transactions)
+                        .handle_consensus_blocks(blocks)
                         .await;
                 }
             }));
@@ -878,16 +877,20 @@ impl ConsensusTransactionHandler {
         self.enabled
     }
 
-    pub async fn handle_consensus_transactions(
-        &self,
-        blocks_and_rejected_transactions: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
-    ) {
-        let _scope = monitored_scope("ConsensusTransactionHandler::handle_consensus_transactions");
+    pub async fn handle_consensus_blocks(&self, block_output_batch: BlockOutputBatch) {
+        match block_output_batch {
+            BlockOutputBatch::Certified(blocks) => self.handle_certified_blocks(blocks).await,
+        }
+    }
 
-        let parsed_transactions = blocks_and_rejected_transactions
+    pub async fn handle_certified_blocks(&self, blocks: Vec<BlockOutput>) {
+        let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
+            monitored_scope("ConsensusTransactionHandler::handle_certified_blocks");
+
+        let parsed_transactions = blocks
             .into_iter()
-            .flat_map(|(block, rejected_transactions)| {
-                parse_block_transactions(&block, &rejected_transactions)
+            .flat_map(|certified_block| {
+                parse_block_transactions(&certified_block.block, &certified_block.rejected)
             })
             .collect::<Vec<_>>();
         let mut pending_consensus_transactions = vec![];
@@ -958,7 +961,8 @@ impl ConsensusTransactionHandler {
 #[cfg(test)]
 mod tests {
     use consensus_core::{
-        BlockAPI, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction, VerifiedBlock,
+        BlockAPI, BlockOutput, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction,
+        VerifiedBlock,
     };
     use prometheus::Registry;
     use sui_protocol_config::ConsensusTransactionOrdering;
@@ -968,6 +972,7 @@ mod tests {
         crypto::deterministic_random_account_key,
         messages_consensus::{
             AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKind,
+            TransactionIndex,
         },
         object::Object,
         supported_protocol_versions::SupportedProtocolVersions,
@@ -1265,7 +1270,10 @@ mod tests {
 
         // AND process the transactions from consensus output.
         transaction_handler
-            .handle_consensus_transactions(vec![(block.clone(), rejected_transactions.clone())])
+            .handle_consensus_blocks(BlockOutputBatch::Certified(vec![BlockOutput::new(
+                block.clone(),
+                rejected_transactions.clone(),
+            )]))
             .await;
 
         // THEN check for status of transactions that should have been executed.
