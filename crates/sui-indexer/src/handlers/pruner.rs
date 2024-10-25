@@ -116,7 +116,7 @@ impl TablePruner {
         }
     }
 
-    async fn prune(&self, prune_min: u64, prune_max: u64) -> IndexerResult<()> {
+    async fn prune(&self, prune_lo: u64, prune_hi: u64) -> IndexerResult<()> {
         let table_partitions: HashMap<_, _> = self
             .partition_manager
             .get_table_partitions()
@@ -130,7 +130,7 @@ impl TablePruner {
             .collect();
 
         if let Some((min_partition, _)) = table_partitions.get(self.table.as_ref()) {
-            for epoch in *min_partition..=prune_max {
+            for epoch in *min_partition..=prune_hi {
                 self.partition_manager
                     .drop_table_partition(self.table.as_ref().to_string(), epoch)
                     .await?;
@@ -148,16 +148,16 @@ impl TablePruner {
                 &mut conn,
                 objects_history,
                 checkpoint_sequence_number,
-                prune_min,
-                prune_max
+                prune_lo,
+                prune_hi
             ),
             PrunableTable::Transactions => {
                 execute_delete_range_query!(
                     &mut conn,
                     transactions,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::Events => {
@@ -165,8 +165,8 @@ impl TablePruner {
                     &mut conn,
                     events,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::EventEmitPackage => {
@@ -174,8 +174,8 @@ impl TablePruner {
                     &mut conn,
                     event_emit_package,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::EventEmitModule => {
@@ -183,8 +183,8 @@ impl TablePruner {
                     &mut conn,
                     event_emit_module,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::EventSenders => {
@@ -192,61 +192,61 @@ impl TablePruner {
                     &mut conn,
                     event_senders,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::EventStructInstantiation => execute_delete_range_query!(
                 &mut conn,
                 event_struct_instantiation,
                 tx_sequence_number,
-                prune_min,
-                prune_max
+                prune_lo,
+                prune_hi
             ),
             PrunableTable::EventStructModule => execute_delete_range_query!(
                 &mut conn,
                 event_struct_module,
                 tx_sequence_number,
-                prune_min,
-                prune_max
+                prune_lo,
+                prune_hi
             ),
             PrunableTable::EventStructName => {
                 execute_delete_range_query!(
                     &mut conn,
                     event_struct_name,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::EventStructPackage => execute_delete_range_query!(
                 &mut conn,
                 event_struct_package,
                 tx_sequence_number,
-                prune_min,
-                prune_max
+                prune_lo,
+                prune_hi
             ),
             PrunableTable::TxAffectedAddresses => execute_delete_range_query!(
                 &mut conn,
                 tx_affected_addresses,
                 tx_sequence_number,
-                prune_min,
-                prune_max
+                prune_lo,
+                prune_hi
             ),
             PrunableTable::TxAffectedObjects => execute_delete_range_query!(
                 &mut conn,
                 tx_affected_objects,
                 tx_sequence_number,
-                prune_min,
-                prune_max
+                prune_lo,
+                prune_hi
             ),
             PrunableTable::TxCallsPkg => {
                 execute_delete_range_query!(
                     &mut conn,
                     tx_calls_pkg,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::TxCallsMod => {
@@ -254,8 +254,8 @@ impl TablePruner {
                     &mut conn,
                     tx_calls_mod,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::TxCallsFun => {
@@ -263,8 +263,8 @@ impl TablePruner {
                     &mut conn,
                     tx_calls_fun,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::TxChangedObjects => {
@@ -272,8 +272,8 @@ impl TablePruner {
                     &mut conn,
                     tx_changed_objects,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::TxDigests => {
@@ -281,8 +281,8 @@ impl TablePruner {
                     &mut conn,
                     tx_digests,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::TxInputObjects => {
@@ -290,8 +290,8 @@ impl TablePruner {
                     &mut conn,
                     tx_input_objects,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::TxKinds => {
@@ -299,8 +299,8 @@ impl TablePruner {
                     &mut conn,
                     tx_kinds,
                     tx_sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
             PrunableTable::Checkpoints => {
@@ -308,8 +308,8 @@ impl TablePruner {
                     &mut conn,
                     checkpoints,
                     sequence_number,
-                    prune_min,
-                    prune_max
+                    prune_lo,
+                    prune_hi
                 )
             }
         } {

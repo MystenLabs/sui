@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use crate::database::Connection;
 
-use sui_types::full_checkpoint_content::CheckpointData;
+pub mod objects_history;
 
-use crate::db;
-
-/// Handlers implement the logic for a given indexing pipeline: How to process checkpoint data into
-/// rows for their table, and how to write those rows to the database.
+/// Pruners implement the logic for a given table: How to fetch the earliest available data from the
+/// table, and how to delete rows up to the pruner watermark.
 ///
 /// The handler is also responsible for tuning the various parameters of the pipeline (provided as
 /// associated values). Reasonable defaults have been chosen to balance concurrency with memory
@@ -19,7 +17,7 @@ use crate::db;
 /// - Handlers that do more work during processing may wish to increase their fanout so more of it
 ///   can be done concurrently, to preserve throughput.
 #[async_trait::async_trait]
-pub trait Handler {
+pub trait Pruner {
     /// Used to identify the pipeline in logs and metrics.
     const NAME: &'static str;
 
@@ -29,21 +27,19 @@ pub trait Handler {
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const BATCH_SIZE: usize = 50;
 
-    /// If there are more than this many rows pending, the committer will only commit this many in
-    /// one operation.
-    const CHUNK_SIZE: usize = 200;
+    /// How many rows to delete at once.
+    const CHUNK_SIZE: usize = 100000;
 
     /// If there are more than this many rows pending, the committer applies backpressure.
     const MAX_PENDING_SIZE: usize = 1000;
 
-    /// The type of value being inserted by the handler.
-    type Value: Send + Sync + 'static;
+    /// Earliest available data in the table.
+    async fn data_lo(conn: &mut Connection<'_>) -> anyhow::Result<u64>;
 
-    /// The processing logic for turning a checkpoint into rows of the table.
-    fn process(checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;
-
-    /// Take a chunk of values and commit them to the database, returning the number of rows
-    /// affected.
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>)
-        -> anyhow::Result<usize>;
+    /// Prune the table between `[prune_lo, prune_hi)`.
+    async fn prune(
+        prune_lo: u64,
+        prune_hi: u64,
+        conn: &mut Connection<'_>,
+    ) -> anyhow::Result<usize>;
 }
