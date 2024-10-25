@@ -51,6 +51,7 @@ use tracing::{error, error_span, info, Instrument};
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
     mysticeti_adapter::LazyMysticetiClient,
 };
 use crate::{
@@ -338,6 +339,7 @@ pub struct ValidatorService {
     metrics: Arc<ValidatorServiceMetrics>,
     traffic_controller: Option<Arc<TrafficController>>,
     client_id_source: Option<ClientIdSource>,
+    trusted_certificate_forwarder: Vec<NetworkAuthorityClient>,
 }
 
 impl ValidatorService {
@@ -348,6 +350,7 @@ impl ValidatorService {
         traffic_controller_metrics: TrafficControllerMetrics,
         policy_config: Option<PolicyConfig>,
         firewall_config: Option<RemoteFirewallConfig>,
+        trusted_certificate_forwarder: Vec<Multiaddr>,
     ) -> Self {
         Self {
             state,
@@ -361,6 +364,10 @@ impl ValidatorService {
                 ))
             }),
             client_id_source: policy_config.map(|policy| policy.client_id_source),
+            trusted_certificate_forwarder: trusted_certificate_forwarder
+                .iter()
+                .map(|addr| NetworkAuthorityClient::connect_lazy(addr))
+                .collect(),
         }
     }
 
@@ -375,6 +382,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: None,
             client_id_source: None,
+            trusted_certificate_forwarder: vec![],
         }
     }
 
@@ -408,6 +416,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source: _,
+            trusted_certificate_forwarder: _,
         } = self.clone();
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
@@ -483,6 +492,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source: _,
+            trusted_certificate_forwarder: _,
         } = self.clone();
         let epoch_store = state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
@@ -924,7 +934,12 @@ impl ValidatorService {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
         certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
-
+        for client in self.trusted_certificate_forwarder.clone() {
+            let certificate = certificate.clone();
+            spawn_monitored_task!(async move {
+                let _ = client.handle_certificate_v2(certificate, None).await;
+            });
+        }
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
         self.handle_certificates(
             nonempty![certificate],
@@ -957,6 +972,12 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<HandleCertificateResponseV3> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let request = request.into_inner();
+        for client in self.trusted_certificate_forwarder.clone() {
+            let request = request.clone();
+            spawn_monitored_task!(async move {
+                let _ = client.handle_certificate_v3(request, None).await;
+            });
+        }
         request
             .certificate
             .validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
