@@ -865,18 +865,29 @@ module sui_system::sui_system_state_inner {
 
         let storage_charge = storage_reward.value();
         let computation_charge = computation_reward.value();
-
+        let mut stake_subsidy = balance::zero();
         // Include stake subsidy in the rewards given out to validators and stakers.
         // Delay distributing any stake subsidies until after `stake_subsidy_start_epoch`.
         // And if this epoch is shorter than the regular epoch duration, don't distribute any stake subsidy.
-        let stake_subsidy =
-            if (ctx.epoch() >= self.parameters.stake_subsidy_start_epoch  &&
-                epoch_start_timestamp_ms >= prev_epoch_start_timestamp + self.parameters.epoch_duration_ms)
-            {
-                self.stake_subsidy.advance_epoch()
-            } else {
-                balance::zero()
+        if (ctx.epoch() >= self.parameters.stake_subsidy_start_epoch  &&
+            epoch_start_timestamp_ms >= prev_epoch_start_timestamp + self.parameters.epoch_duration_ms)
+        {
+            // special case for epoch 560 -> 561 change bug. add extra subsidies for "safe mode"
+            // where reward distribution was skipped. use distribution counter to avoiding affecting devnet
+            // and testnet
+            if (self.stake_subsidy.get_distribution_counter() == 540) {
+                let first_safe_mode_epoch = 561;
+                let mut i = 0;
+                let safe_mode_epoch_count = ctx.epoch() - first_safe_mode_epoch;
+                while (i < safe_mode_epoch_count) {
+                    stake_subsidy.join(self.stake_subsidy.advance_epoch());
+                    i = i + 1
+                };
+                // done with catchup for safe mode epochs
+                // fall through to the normal logic, which will add subsidies for the current epoch
             };
+            stake_subsidy.join(self.stake_subsidy.advance_epoch());
+        };
 
         let stake_subsidy_amount = stake_subsidy.value();
         computation_reward.join(stake_subsidy);
