@@ -15,62 +15,6 @@ module prover::prover {
         !p || q
     }
 
-    public macro fun specs<$T>($call: &$T, $requires: ||, $ensures: |&$T|, $aborts_if: |&$T|) {
-        requires_begin();
-        $requires();
-        requires_end();
-        let result = $call;
-        ensures_begin();
-        $ensures(result);
-        ensures_end();
-        aborts_begin();
-        $aborts_if(result);
-        aborts_end();
-    }
-
-    public macro fun spec3<$T0, $T1, $T2, $R>($call: &$R, $a0: &$T0, $a1: &$T1, $a2: &$T2, $requires: ||, $ensures: |&$T0, &$T1, &$T2, &$R|, $aborts_if: |&$T0, &$T1, &$T2, &$R|) {
-        requires_begin();
-        $requires();
-        requires_end();
-        let a0 = $a0;
-        let a1 = $a1;
-        let a2 = $a2;
-        let old_a0 = old!(a0);
-        let old_a1 = old!(a1);
-        let old_a2 = old!(a2);
-        let result = $call;
-        ensures_begin();
-        $ensures(old_a0, old_a1, old_a2, result);
-        ensures_end();
-        aborts_begin();
-        $aborts_if(old_a0, old_a1, old_a2, result);
-        aborts_end();
-    }
-
-    public macro fun requires_block($requires: ||) {
-        requires_begin();
-        $requires();
-        requires_end();
-    }
-
-    public macro fun ensures_block($ensures: ||) {
-        ensures_begin();
-        $ensures();
-        ensures_end();
-    }
-
-    public macro fun aborts_if_block($aborts_if: ||) {
-        aborts_begin();
-        $aborts_if();
-        aborts_end();
-    }
-
-    native public fun requires_begin();
-    native public fun requires_end();
-    native public fun ensures_begin();
-    native public fun ensures_end();
-    native public fun aborts_begin();
-    native public fun aborts_end();
     native public fun invariant_begin();
     native public fun invariant_end();
 

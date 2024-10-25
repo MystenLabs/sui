@@ -51,7 +51,6 @@ fun test2_spec(n: u64): u128 {
 }
 
 fun test3_spec(mut n: u64): u128 {
-    let mut n = n; // TODO: investigate why this is needed
     let mut s: u128 = 0;
 
     let old_n = old!(&n);

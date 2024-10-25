@@ -38,6 +38,4 @@ module std::integer {
     native public fun gt(x: Integer, y: Integer): bool;
     native public fun lte(x: Integer, y: Integer): bool;
     native public fun gte(x: Integer, y: Integer): bool;
-
-    // native public fun div_real(x: Integer, y: Integer): Real;
 }
