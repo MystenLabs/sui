@@ -473,8 +473,13 @@ impl LocalExec {
         objs: Vec<ObjectID>,
         protocol_version: u64,
     ) -> Result<Vec<Object>, ReplayEngineError> {
-        let syst_packages = self.system_package_versions_for_protocol_version(protocol_version)?;
-        let syst_packages_objs = self.multi_download(&syst_packages).await?;
+        let syst_packages_objs = if self.protocol_version.is_some_and(|i| i < 0) {
+            BuiltInFramework::genesis_objects().collect()
+        } else {
+            let syst_packages =
+                self.system_package_versions_for_protocol_version(protocol_version)?;
+            self.multi_download(&syst_packages).await?
+        };
 
         // Download latest version of all packages that are not system packages
         // This is okay since the versions can never change
