@@ -31,6 +31,8 @@ anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
 serde_json.workspace = true
+reqwest.workspace = true
+prost.workspace = true
 
 move-binary-format.workspace = true
 move-package.workspace = true
