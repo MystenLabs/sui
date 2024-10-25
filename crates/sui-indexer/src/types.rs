@@ -161,7 +161,7 @@ impl IndexedEpochInfo {
     pub fn from_end_of_epoch_data(
         system_state_summary: SuiSystemStateSummary,
         last_checkpoint_summary: &CertifiedCheckpointSummary,
-        event: &SystemEpochInfoEvent,
+        event: Option<&SystemEpochInfoEvent>,
         network_total_tx_num_at_last_epoch_end: u64,
     ) -> IndexedEpochInfo {
         Self {
@@ -172,13 +172,25 @@ impl IndexedEpochInfo {
             ),
             last_checkpoint_id: Some(*last_checkpoint_summary.sequence_number()),
             epoch_end_timestamp: Some(last_checkpoint_summary.timestamp_ms),
-            storage_fund_reinvestment: Some(event.storage_fund_reinvestment),
-            storage_charge: Some(event.storage_charge),
-            storage_rebate: Some(event.storage_rebate),
-            leftover_storage_fund_inflow: Some(event.leftover_storage_fund_inflow),
-            stake_subsidy_amount: Some(event.stake_subsidy_amount),
-            total_gas_fees: Some(event.total_gas_fees),
-            total_stake_rewards_distributed: Some(event.total_stake_rewards_distributed),
+            storage_fund_reinvestment: Some(
+                event
+                    .map(|e| e.storage_fund_reinvestment)
+                    .unwrap_or_default(),
+            ),
+            storage_charge: Some(event.map(|e| e.storage_charge).unwrap_or_default()),
+            storage_rebate: Some(event.map(|e| e.storage_rebate).unwrap_or_default()),
+            leftover_storage_fund_inflow: Some(
+                event
+                    .map(|e| e.leftover_storage_fund_inflow)
+                    .unwrap_or_default(),
+            ),
+            stake_subsidy_amount: Some(event.map(|e| e.stake_subsidy_amount).unwrap_or_default()),
+            total_gas_fees: Some(event.map(|e| e.total_gas_fees).unwrap_or_default()),
+            total_stake_rewards_distributed: Some(
+                event
+                    .map(|e| e.total_stake_rewards_distributed)
+                    .unwrap_or_default(),
+            ),
             epoch_commitments: last_checkpoint_summary
                 .end_of_epoch_data
                 .as_ref()
