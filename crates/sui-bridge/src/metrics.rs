@@ -103,6 +103,8 @@ pub struct BridgeMetrics {
     pub(crate) action_executor_execution_queue_received_actions: IntCounter,
     pub(crate) action_executor_execution_queue_skipped_actions_due_to_pausing: IntCounter,
 
+    pub(crate) last_observed_actions_seq_num: IntGaugeVec,
+
     pub(crate) signer_with_cache_hit: IntCounterVec,
     pub(crate) signer_with_cache_miss: IntCounterVec,
 
@@ -290,6 +292,13 @@ impl BridgeMetrics {
             last_finalized_eth_block: register_int_gauge_with_registry!(
                 "bridge_last_finalized_eth_block",
                 "The latest finalized eth block observed",
+                registry,
+            )
+            .unwrap(),
+            last_observed_actions_seq_num: register_int_gauge_vec_with_registry!(
+                "bridge_last_observed_actions_seq_num",
+                "The latest observed action sequence number per chain_id and action_type",
+                &["chain_id", "action_type"],
                 registry,
             )
             .unwrap(),

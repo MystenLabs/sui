@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
+use strum_macros::Display;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::{
     BridgeChainId, MoveTypeTokenTransferPayload, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM,
@@ -201,7 +202,7 @@ impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
     }
 }
 
-#[derive(Serialize, Copy, Clone, PartialEq, Eq, TryFromPrimitive, Hash)]
+#[derive(Serialize, Copy, Clone, PartialEq, Eq, TryFromPrimitive, Hash, Display)]
 #[repr(u8)]
 pub enum BridgeActionType {
     TokenTransfer = 0,
