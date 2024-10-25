@@ -139,7 +139,8 @@ pub async fn run_pruner<T: Prunable>(
         println!("lo: {}, hi: {}", lo, hi);
 
         if lo >= hi {
-            return Ok(());
+            // TODO: (wlmyng) we can sleep for some period of time
+            continue;
         }
 
         let mut futures = FuturesUnordered::new();
