@@ -366,7 +366,7 @@ impl ValidatorService {
             client_id_source: policy_config.map(|policy| policy.client_id_source),
             trusted_certificate_forwarder: trusted_certificate_forwarder
                 .iter()
-                .map(|addr| NetworkAuthorityClient::connect_lazy(addr))
+                .map(NetworkAuthorityClient::connect_lazy)
                 .collect(),
         }
     }
@@ -416,12 +416,20 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source: _,
-            trusted_certificate_forwarder: _,
+            trusted_certificate_forwarder,
         } = self.clone();
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
         transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+
+        // Forward the transaction to trusted certificate forwarders
+        for client in trusted_certificate_forwarder {
+            let transaction = transaction.clone();
+            spawn_monitored_task!(async move {
+                let _ = client.handle_transaction(transaction, None).await;
+            });
+        }
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
@@ -492,7 +500,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source: _,
-            trusted_certificate_forwarder: _,
+            trusted_certificate_forwarder,
         } = self.clone();
         let epoch_store = state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
@@ -511,6 +519,14 @@ impl ValidatorService {
         } = request.into_inner();
 
         transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+
+        // Forward the transaction to trusted certificate forwarders
+        for client in trusted_certificate_forwarder {
+            let transaction = transaction.clone();
+            spawn_monitored_task!(async move {
+                let _ = client.handle_transaction(transaction, None).await;
+            });
+        }
 
         // Check system overload
         let overload_check_res = self.state.check_system_overload(
@@ -934,12 +950,6 @@ impl ValidatorService {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
         certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
-        for client in self.trusted_certificate_forwarder.clone() {
-            let certificate = certificate.clone();
-            spawn_monitored_task!(async move {
-                let _ = client.handle_certificate_v2(certificate, None).await;
-            });
-        }
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
         self.handle_certificates(
             nonempty![certificate],
@@ -972,12 +982,6 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<HandleCertificateResponseV3> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let request = request.into_inner();
-        for client in self.trusted_certificate_forwarder.clone() {
-            let request = request.clone();
-            spawn_monitored_task!(async move {
-                let _ = client.handle_certificate_v3(request, None).await;
-            });
-        }
         request
             .certificate
             .validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
