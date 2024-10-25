@@ -15,7 +15,12 @@ use crate::{
     },
 };
 
+<<<<<<< HEAD
 simple_visitor!(
+=======
+pub struct UnnecessaryConditional;
+simple_visitor! {
+>>>>>>> be261b7bda (linters)
     UnnecessaryConditional,
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         let UnannotatedExp_::IfElse(_, etrue, efalse) = &exp.exp.value else {

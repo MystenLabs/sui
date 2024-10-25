@@ -5,6 +5,7 @@
 // It identifies and reports unnecessary temporary borrow followed by a deref, suggesting either
 // removal or conversion to `copy`.
 
+use crate::cfgir::visitor::simple_visitor;
 use crate::linters::StyleCodes;
 use crate::{
     diag,

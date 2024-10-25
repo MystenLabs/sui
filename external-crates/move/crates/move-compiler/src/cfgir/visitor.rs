@@ -338,7 +338,8 @@ macro_rules! simple_visitor {
         impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
             type Context<'a> = Context<'a>;
 
-            fn context<'a>(env: &'a mut crate::shared::CompilationEnv, _program: &crate::cfgir::ast::Program) -> Self::Context<'a> {
+            fn context<'a>(env: &'a mut crate::shared::CompilationEnv, _program: &G::Program) -> Self::Context<'a> {
+                let warning_filters_scope = env.top_level_warning_filter_scope().clone();
                 Context {
                     env,
                 }
