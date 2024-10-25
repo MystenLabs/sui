@@ -65,6 +65,7 @@ feature_flags:
   passkey_auth: true
   authority_capabilities_v2: true
   rethrow_serialization_type_layout_errors: true
+  consensus_distributed_vote_scoring_strategy: true
   consensus_round_prober: true
   validate_identifier_inputs: true
   mysticeti_fastpath: true

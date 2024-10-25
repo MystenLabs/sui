@@ -2875,9 +2875,11 @@ impl ProtocolConfig {
                         .consensus_distributed_vote_scoring_strategy = true;
                 }
                 66 => {
-                    // Revert the distributed vote scoring for mainnet (for one protocol upgrade)
-                    cfg.feature_flags
-                        .consensus_distributed_vote_scoring_strategy = false;
+                    if chain == Chain::Mainnet {
+                        // Revert the distributed vote scoring for mainnet (for one protocol upgrade)
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = false;
+                    }
                 }
                 67 => {
                     // Enable it once again.
