@@ -152,10 +152,10 @@ async fn get_net_deposits(
 ) -> Result<Json<HashMap<String, i64>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
     let mut query =
-        "SELECT asset, SUM(amount)::bigint AS amount, deposit FROM balances WHERE timestamp < to_timestamp("
+        "SELECT asset, SUM(amount)::bigint AS amount, deposit FROM balances WHERE checkpoint_timestamp_ms < "
             .to_string();
     query.push_str(&timestamp);
-    query.push_str(") AND asset in (");
+    query.push_str("000 AND asset in (");
     for asset in asset_ids.split(",") {
         if asset.starts_with("0x") {
             let len = asset.len();
