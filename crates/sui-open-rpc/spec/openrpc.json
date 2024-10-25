@@ -1687,6 +1687,7 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_accumulated_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_accumulated_txn_cost_per_object_in_narwhal_commit": null,
                 "max_age_of_jwk_in_epochs": null,

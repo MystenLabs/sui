@@ -2848,7 +2848,7 @@ impl AuthorityPerEpochStore {
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
         // they will be in different PendingCheckpoints.
         let tables = self.tables()?;
-        let per_commit_budget = self
+        let default_per_commit_budget = self
             .protocol_config()
             .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
             .unwrap_or(0);
@@ -2860,7 +2860,7 @@ impl AuthorityPerEpochStore {
             tables.load_initial_object_debts(
                 consensus_commit_info.round,
                 false,
-                per_commit_budget,
+                default_per_commit_budget,
                 &sequenced_transactions,
             )?,
             self.protocol_config().per_object_congestion_control_mode(),
@@ -2874,12 +2874,18 @@ impl AuthorityPerEpochStore {
             tables.load_initial_object_debts(
                 consensus_commit_info.round,
                 true,
-                per_commit_budget,
+                self.protocol_config()
+                    .max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_as_option()
+                    .unwrap_or(default_per_commit_budget),
                 &sequenced_randomness_transactions,
             )?,
             self.protocol_config().per_object_congestion_control_mode(),
             self.protocol_config()
-                .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
+                .max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_as_option()
+                .or_else(|| {
+                    self.protocol_config()
+                        .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
+                }),
             self.protocol_config()
                 .gas_budget_based_txn_cost_cap_factor_as_option(),
             max_txn_cost_overage_per_object_in_commit,

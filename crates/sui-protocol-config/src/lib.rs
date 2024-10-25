@@ -1281,6 +1281,10 @@ pub struct ProtocolConfig {
     /// but for mysticeti commits due to that mysticeti has higher commit rate.
     max_accumulated_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
 
+    /// As above, but separate per-commit budget for transactions that use randomness.
+    /// If not configured, uses the setting for `max_accumulated_txn_cost_per_object_in_mysticeti_commit`.
+    max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
+
     /// Configures the garbage collection depth for consensus. When is unset or `0` then the garbage collection
     /// is disabled.
     consensus_gc_depth: Option<u32>,
@@ -2168,6 +2172,8 @@ impl ProtocolConfig {
             bridge_should_try_to_finalize_committee: None,
 
             max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
+
+            max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: None,
 
             consensus_gc_depth: None,
 
