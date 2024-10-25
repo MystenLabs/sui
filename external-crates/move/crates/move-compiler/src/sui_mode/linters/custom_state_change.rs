@@ -87,7 +87,6 @@ impl SimpleAbsIntConstructor for CustomStateChangeVerifier {
     type AI<'a> = CustomStateChangeVerifierAI;
 
     fn new<'a>(
-        _env: &CompilationEnv,
         context: &'a CFGContext<'a>,
         cfg: &ImmForwardCFG,
         init_state: &mut State,

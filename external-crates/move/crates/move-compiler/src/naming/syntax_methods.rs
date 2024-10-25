@@ -147,7 +147,7 @@ fn attr_param_from_str(loc: Loc, name_str: &str) -> Option<SyntaxMethodPrekind> 
 
 /// Resolve the mapping for a function + syntax attribute into a SyntaxMethodKind.
 fn resolve_syntax_method_prekind(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     sp!(loc, attr_): &Attribute,
 ) -> Option<BTreeSet<SyntaxMethodPrekind>> {
     match attr_ {

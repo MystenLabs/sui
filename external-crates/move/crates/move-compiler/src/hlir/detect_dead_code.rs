@@ -189,13 +189,13 @@ impl ControlFlow {
 }
 
 struct Context<'env> {
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
     warning_filters_scope: WarningFiltersScope,
     // loops: Vec<BlockLabel>,
 }
 
 impl<'env> Context<'env> {
-    pub fn new(env: &'env mut CompilationEnv) -> Self {
+    pub fn new(env: &'env CompilationEnv) -> Self {
         // let loops = vec![];
         // Context { env , loops }
         let warning_filters_scope = env.top_level_warning_filter_scope().clone();
@@ -364,7 +364,7 @@ fn infinite_loop(loc: Loc) -> ControlFlow {
 // Entry
 //**************************************************************************************************
 
-pub fn program(compilation_env: &mut CompilationEnv, prog: &T::Program) {
+pub fn program(compilation_env: &CompilationEnv, prog: &T::Program) {
     let mut context = Context::new(compilation_env);
     modules(&mut context, &prog.modules);
 }

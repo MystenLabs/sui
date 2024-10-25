@@ -29,7 +29,7 @@ use optimize::optimize;
 use std::collections::BTreeSet;
 
 pub struct CFGContext<'a> {
-    pub env: &'a mut CompilationEnv,
+    pub env: &'a CompilationEnv,
     pub warning_filters_scope: WarningFiltersScope,
     pub info: &'a TypingProgramInfo,
     pub package: Option<Symbol>,

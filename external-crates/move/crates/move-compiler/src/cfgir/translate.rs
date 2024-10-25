@@ -45,7 +45,7 @@ enum NamedBlockType {
 }
 
 struct Context<'env> {
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
     info: &'env TypingProgramInfo,
     warning_filters_scope: WarningFiltersScope,
     current_package: Option<Symbol>,
@@ -56,7 +56,7 @@ struct Context<'env> {
 }
 
 impl<'env> Context<'env> {
-    pub fn new(env: &'env mut CompilationEnv, info: &'env TypingProgramInfo) -> Self {
+    pub fn new(env: &'env CompilationEnv, info: &'env TypingProgramInfo) -> Self {
         let warning_filters_scope = env.top_level_warning_filter_scope().clone();
         Context {
             env,
@@ -143,7 +143,7 @@ impl<'env> Context<'env> {
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     _pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: H::Program,
 ) -> G::Program {
@@ -1005,7 +1005,7 @@ fn visit_program(context: &mut Context, prog: &mut G::Program) {
 
 struct AbsintVisitor;
 struct AbsintVisitorContext<'a> {
-    env: &'a mut CompilationEnv,
+    env: &'a CompilationEnv,
     warning_filters_scope: WarningFiltersScope,
     info: Arc<TypingProgramInfo>,
     current_package: Option<Symbol>,
@@ -1014,7 +1014,7 @@ struct AbsintVisitorContext<'a> {
 impl CFGIRVisitorConstructor for AbsintVisitor {
     type Context<'a> = AbsintVisitorContext<'a>;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a> {
+    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a> {
         let warning_filters_scope = env.top_level_warning_filter_scope().clone();
         AbsintVisitorContext {
             env,

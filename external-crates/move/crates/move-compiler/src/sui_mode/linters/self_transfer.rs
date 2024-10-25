@@ -80,7 +80,6 @@ impl SimpleAbsIntConstructor for SelfTransferVerifier {
     type AI<'a> = SelfTransferVerifierAI;
 
     fn new<'a>(
-        _env: &CompilationEnv,
         context: &'a CFGContext<'a>,
         cfg: &ImmForwardCFG,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,

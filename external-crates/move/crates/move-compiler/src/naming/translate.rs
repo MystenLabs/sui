@@ -527,7 +527,7 @@ pub(super) struct OuterContext {
 }
 
 pub(super) struct Context<'outer, 'env> {
-    pub env: &'env mut CompilationEnv,
+    pub env: &'env CompilationEnv,
     outer: &'outer OuterContext,
     unscoped_types: Vec<BTreeMap<Symbol, ResolvedType>>,
     warning_filters_scope: WarningFiltersScope,
@@ -565,7 +565,7 @@ macro_rules! resolve_from_module_access {
 
 impl OuterContext {
     fn new(
-        compilation_env: &mut CompilationEnv,
+        compilation_env: &CompilationEnv,
         pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         prog: &E::Program,
     ) -> Self {
@@ -587,7 +587,7 @@ impl OuterContext {
 
 impl<'outer, 'env> Context<'outer, 'env> {
     fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         outer: &'outer OuterContext,
         current_package: Option<Symbol>,
         current_module: ModuleIdent,
@@ -1640,7 +1640,7 @@ fn arity_string(arity: usize) -> &'static str {
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: E::Program,
 ) -> N::Program {
@@ -1654,7 +1654,7 @@ pub fn program(
 }
 
 fn modules(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     outer: &OuterContext,
     modules: UniqueMap<ModuleIdent, E::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, N::ModuleDefinition> {
@@ -1662,7 +1662,7 @@ fn modules(
 }
 
 fn module(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     outer: &OuterContext,
     ident: ModuleIdent,
     mdef: E::ModuleDefinition,

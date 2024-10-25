@@ -91,7 +91,7 @@ pub(super) struct TypingDebugFlags {
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
-    pub env: &'env mut CompilationEnv,
+    pub env: &'env CompilationEnv,
     warning_filters_scope: WarningFiltersScope,
     pub(super) debug: TypingDebugFlags,
 
@@ -180,7 +180,7 @@ impl UseFunsScope {
 
 impl<'env> Context<'env> {
     pub fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         _pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         info: NamingProgramInfo,
     ) -> Self {
@@ -865,7 +865,7 @@ impl<'env> Context<'env> {
 }
 
 impl MatchContext<false> for Context<'_> {
-    fn env(&mut self) -> &mut CompilationEnv {
+    fn env(&mut self) -> &CompilationEnv {
         self.env
     }
 

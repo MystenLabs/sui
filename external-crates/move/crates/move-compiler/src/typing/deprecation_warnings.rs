@@ -44,7 +44,7 @@ pub struct Deprecations {
 impl Deprecations {
     /// Index the modules and their members for deprecation attributes and register each
     /// deprecation attribute for use later on.
-    pub fn new(env: &mut CompilationEnv, info: &NamingProgramInfo) -> Self {
+    pub fn new(env: &CompilationEnv, info: &NamingProgramInfo) -> Self {
         let mut deprecated_members = HashMap::new();
 
         for (mident, module_info) in info.modules.key_cloned_iter() {
@@ -167,7 +167,7 @@ impl Deprecation {
 // #[deprecated] attributes (malformed, or multiple on the member), add an error diagnostic to
 // `env` and return None.
 fn deprecations(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     attr_position: AttributePosition,
     attrs: &E::Attributes,
     source_location: Loc,

@@ -72,7 +72,7 @@ pub const UPGRADE_NOTE: &str =
 /// Returns true if the feature is present in the given edition.
 /// Adds an error to the environment.
 pub fn check_feature_or_error(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     edition: Edition,
     feature: FeatureGate,
     loc: Loc,

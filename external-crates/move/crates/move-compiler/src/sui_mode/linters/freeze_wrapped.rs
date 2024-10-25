@@ -75,7 +75,7 @@ type WrappingFields =
 pub struct FreezeWrappedVisitor;
 
 pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
+    env: &'a CompilationEnv,
     warning_filters_scope: WarningFiltersScope,
     program_info: Arc<TypingProgramInfo>,
     /// Memoizes information about struct fields wrapping other objects as they are discovered
@@ -85,7 +85,7 @@ pub struct Context<'a> {
 impl TypingVisitorConstructor for FreezeWrappedVisitor {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a> {
+    fn context<'a>(env: &'a CompilationEnv, program: &T::Program) -> Self::Context<'a> {
         let warning_filters_scope = env.top_level_warning_filter_scope().clone();
         Context {
             env,

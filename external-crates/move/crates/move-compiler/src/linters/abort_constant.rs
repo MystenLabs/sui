@@ -23,14 +23,14 @@ pub struct AssertAbortNamedConstants;
 
 pub struct Context<'a> {
     package_name: Option<Symbol>,
-    env: &'a mut CompilationEnv,
+    env: &'a CompilationEnv,
     warning_filters_scope: WarningFiltersScope,
 }
 
 impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a> {
+    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a> {
         let package_name = program
             .modules
             .iter()

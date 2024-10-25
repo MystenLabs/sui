@@ -103,7 +103,7 @@ impl NameCase {
 
 #[allow(clippy::result_unit_err)]
 pub fn check_valid_address_name(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     sp!(_, ln_): &P::LeadingNameAccess,
 ) -> Result<(), ()> {
     use P::LeadingNameAccess_ as LN;
@@ -120,11 +120,7 @@ pub fn valid_local_variable_name(s: Symbol) -> bool {
 }
 
 #[allow(clippy::result_unit_err)]
-pub fn check_valid_function_parameter_name(
-    env: &mut CompilationEnv,
-    is_macro: Option<Loc>,
-    v: &Var,
-) {
+pub fn check_valid_function_parameter_name(env: &CompilationEnv, is_macro: Option<Loc>, v: &Var) {
     const SYNTAX_IDENTIFIER_NOTE: &str =
         "'macro' parameters start with '$' to indicate that their arguments are not evaluated \
         before the macro is expanded, meaning the entire expression is substituted. \
@@ -165,7 +161,7 @@ pub fn check_valid_function_parameter_name(
     let _ = check_restricted_name_all_cases(env, NameCase::Variable, &v.0);
 }
 
-pub fn check_valid_local_name(env: &mut CompilationEnv, v: &Var) {
+pub fn check_valid_local_name(env: &CompilationEnv, v: &Var) {
     if !is_valid_local_variable_name(v.value()) {
         let msg = format!(
             "Invalid local name '{}'. Local variable names must start with 'a'..'z', '_', \
@@ -182,7 +178,7 @@ fn is_valid_local_variable_name(s: Symbol) -> bool {
 }
 
 pub fn check_valid_module_member_name(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     member: ModuleMemberKind,
     name: Name,
 ) -> Option<Name> {
@@ -193,7 +189,7 @@ pub fn check_valid_module_member_name(
 }
 
 pub fn check_valid_module_member_alias(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     member: ModuleMemberKind,
     alias: Name,
 ) -> Option<Name> {
@@ -209,7 +205,7 @@ pub fn check_valid_module_member_alias(
 }
 
 fn check_valid_module_member_name_impl(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     member: ModuleMemberKind,
     n: &Name,
     case: NameCase,
@@ -272,7 +268,7 @@ fn check_valid_module_member_name_impl(
 
 #[allow(clippy::result_unit_err)]
 pub fn check_valid_type_parameter_name(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     is_macro: Option<Loc>,
     n: &Name,
 ) -> Result<(), ()> {
@@ -353,7 +349,7 @@ pub fn is_valid_datatype_or_constant_name(s: &str) -> bool {
 // Checks for a restricted name in any decl case
 // Self and vector are not allowed
 pub fn check_restricted_name_all_cases(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     case: NameCase,
     n: &Name,
 ) -> Result<(), ()> {
@@ -393,7 +389,7 @@ pub fn check_restricted_name_all_cases(
 }
 
 fn check_restricted_names(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     case: NameCase,
     sp!(loc, n_): &Name,
     all_names: &BTreeSet<Symbol>,

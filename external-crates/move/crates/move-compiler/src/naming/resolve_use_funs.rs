@@ -16,7 +16,7 @@ use move_proc_macros::growing_stack;
 //**************************************************************************************************
 
 struct Context<'env, 'info> {
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
     info: &'info NamingProgramInfo,
     warning_filters_scope: WarningFiltersScope,
     current_module: ModuleIdent,
@@ -24,7 +24,7 @@ struct Context<'env, 'info> {
 
 impl<'env, 'info> Context<'env, 'info> {
     fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         info: &'info NamingProgramInfo,
         current_module: ModuleIdent,
     ) -> Self {
@@ -58,7 +58,7 @@ impl<'env, 'info> Context<'env, 'info> {
 // Entry
 //**************************************************************************************************
 
-pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &mut N::Program_) {
+pub fn program(env: &CompilationEnv, info: &mut NamingProgramInfo, inner: &mut N::Program_) {
     let N::Program_ { modules } = inner;
     for (mident, mdef) in modules.key_cloned_iter_mut() {
         module(env, info, mident, mdef);
@@ -79,7 +79,7 @@ pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &m
 }
 
 fn module(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     info: &mut NamingProgramInfo,
     mident: ModuleIdent,
     mdef: &mut N::ModuleDefinition,

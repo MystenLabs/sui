@@ -34,13 +34,13 @@ use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
 struct Context<'env> {
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
     warning_filters_scope: WarningFiltersScope,
     constants: UniqueMap<ModuleIdent, UniqueMap<ConstantName, (Loc, Option<u64>, Attributes)>>,
 }
 
 impl<'env> Context<'env> {
-    fn new(compilation_env: &'env mut CompilationEnv, prog: &G::Program) -> Self {
+    fn new(compilation_env: &'env CompilationEnv, prog: &G::Program) -> Self {
         let constants = prog.modules.ref_map(|_mident, module| {
             module.constants.ref_map(|_name, constant| {
                 let v_opt = constant.value.as_ref().and_then(|v| match v {
@@ -92,7 +92,7 @@ impl<'env> Context<'env> {
 // Constructs a test plan for each module in `prog`. This also validates the structure of the
 // attributes as the test plan is constructed.
 pub fn construct_test_plan(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     package_filter: Option<Symbol>,
     prog: &G::Program,
 ) -> Option<Vec<ModuleTestPlan>> {

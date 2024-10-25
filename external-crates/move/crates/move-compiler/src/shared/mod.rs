@@ -38,7 +38,7 @@ use std::{
     hash::Hash,
     sync::{
         atomic::{AtomicUsize, Ordering as AtomicOrdering},
-        Arc, Mutex,
+        Arc, Mutex, OnceLock, RwLock,
     },
 };
 use vfs::{VfsError, VfsPath};
@@ -238,7 +238,7 @@ pub type FilterName = Symbol;
 pub struct CompilationEnv {
     flags: Flags,
     top_level_warning_filter_scope: &'static WarningFiltersScope,
-    diags: Diagnostics,
+    diags: RwLock<Diagnostics>,
     visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     /// Config for any package not found in `package_configs`, or for inputs without a package.
@@ -247,12 +247,12 @@ pub struct CompilationEnv {
     known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>>,
     /// Maps a diagnostics ID to a known filter name.
     known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
-    prim_definers: BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>,
+    prim_definers: OnceLock<BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
     mapped_files: MappedFiles,
     save_hooks: Vec<SaveHook>,
-    ide_information: IDEInfo,
+    ide_information: RwLock<IDEInfo>,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -381,16 +381,16 @@ impl CompilationEnv {
         Self {
             flags,
             top_level_warning_filter_scope,
-            diags,
+            diags: RwLock::new(diags),
             visitors: Visitors::new(visitors),
             package_configs,
             default_config: default_config.unwrap_or_default(),
             known_filters,
             known_filter_names,
-            prim_definers: BTreeMap::new(),
+            prim_definers: OnceLock::new(),
             mapped_files: MappedFiles::empty(),
             save_hooks,
-            ide_information: IDEInfo::new(),
+            ide_information: RwLock::new(IDEInfo::new()),
         }
     }
 
@@ -411,10 +411,12 @@ impl CompilationEnv {
         self.top_level_warning_filter_scope
     }
 
-    pub fn add_diag(&mut self, warning_filters: &WarningFiltersScope, mut diag: Diagnostic) {
+    pub fn add_diag(&self, warning_filters: &WarningFiltersScope, mut diag: Diagnostic) {
         if diag.info().severity() <= Severity::NonblockingError
             && self
                 .diags
+                .read()
+                .unwrap()
                 .any_syntax_error_with_primary_loc(diag.primary_loc())
         {
             // do not report multiple diags for the same location (unless they are blocking) to
@@ -442,34 +444,34 @@ impl CompilationEnv {
                     diag = diag.set_severity(Severity::NonblockingError)
                 }
             }
-            self.diags.add(diag)
+            self.diags.write().unwrap().add(diag)
         } else if !warning_filters.is_filtered_for_dependency() {
             // unwrap above is safe as the filter has been used (thus it must exist)
-            self.diags.add_source_filtered(diag)
+            self.diags.write().unwrap().add_source_filtered(diag)
         }
     }
 
-    pub fn add_diags(&mut self, warning_filters: &WarningFiltersScope, diags: Diagnostics) {
+    pub fn add_diags(&self, warning_filters: &WarningFiltersScope, diags: Diagnostics) {
         for diag in diags.into_vec() {
             self.add_diag(warning_filters, diag)
         }
     }
 
     /// Aborts if the diagnostic is a warning
-    pub fn add_error_diag(&mut self, diag: Diagnostic) {
+    pub fn add_error_diag(&self, diag: Diagnostic) {
         assert!(diag.info().severity() > Severity::Warning);
         self.add_diag(WarningFiltersScope::EMPTY, diag)
     }
 
     /// Aborts if any diagnostic is a warning
-    pub fn add_error_diags(&mut self, diags: Diagnostics) {
+    pub fn add_error_diags(&self, diags: Diagnostics) {
         for diag in diags.into_vec() {
             self.add_error_diag(diag)
         }
     }
 
     pub fn has_warnings_or_errors(&self) -> bool {
-        !self.diags.is_empty()
+        !self.diags.read().unwrap().is_empty()
     }
 
     pub fn has_errors(&self) -> bool {
@@ -478,35 +480,40 @@ impl CompilationEnv {
     }
 
     pub fn count_diags(&self) -> usize {
-        self.diags.len()
+        self.diags.read().unwrap().len()
     }
 
     pub fn count_diags_at_or_above_severity(&self, threshold: Severity) -> usize {
-        self.diags.count_diags_at_or_above_severity(threshold)
+        self.diags
+            .read()
+            .unwrap()
+            .count_diags_at_or_above_severity(threshold)
     }
 
     pub fn has_diags_at_or_above_severity(&self, threshold: Severity) -> bool {
-        self.diags.max_severity_at_or_above_severity(threshold)
+        self.diags
+            .read()
+            .unwrap()
+            .max_severity_at_or_above_severity(threshold)
     }
 
-    pub fn check_diags_at_or_above_severity(
-        &mut self,
-        threshold: Severity,
-    ) -> Result<(), Diagnostics> {
+    pub fn check_diags_at_or_above_severity(&self, threshold: Severity) -> Result<(), Diagnostics> {
         if self.has_diags_at_or_above_severity(threshold) {
-            Err(std::mem::take(&mut self.diags))
+            let diagnostics: &mut Diagnostics = &mut self.diags.write().unwrap();
+            Err(std::mem::take(diagnostics))
         } else {
             Ok(())
         }
     }
 
     /// Should only be called after compilation is finished
-    pub fn take_final_diags(&mut self) -> Diagnostics {
-        std::mem::take(&mut self.diags)
+    pub fn take_final_diags(&self) -> Diagnostics {
+        let diagnostics: &mut Diagnostics = &mut self.diags.write().unwrap();
+        std::mem::take(diagnostics)
     }
 
     /// Should only be called after compilation is finished
-    pub fn take_final_warning_diags(&mut self) -> Diagnostics {
+    pub fn take_final_warning_diags(&self) -> Diagnostics {
         let final_diags = self.take_final_diags();
         debug_assert!(final_diags.max_severity_at_or_under_severity(Severity::Warning));
         final_diags
@@ -577,18 +584,13 @@ impl CompilationEnv {
 
     // Logs an error if the feature isn't supported. Returns `false` if the feature is not
     // supported, and `true` otherwise.
-    pub fn check_feature(
-        &mut self,
-        package: Option<Symbol>,
-        feature: FeatureGate,
-        loc: Loc,
-    ) -> bool {
+    pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
         check_feature_or_error(self, self.package_config(package).edition, feature, loc)
     }
 
     // Returns an error string if if the feature isn't supported, or None otherwise.
     pub fn feature_edition_error_msg(
-        &mut self,
+        &self,
         feature: FeatureGate,
         package: Option<Symbol>,
     ) -> Option<String> {
@@ -617,15 +619,12 @@ impl CompilationEnv {
         )
     }
 
-    pub fn set_primitive_type_definers(
-        &mut self,
-        m: BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>,
-    ) {
-        self.prim_definers = m
+    pub fn set_primitive_type_definers(&self, m: BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>) {
+        self.prim_definers.set(m).unwrap()
     }
 
     pub fn primitive_definer(&self, t: N::BuiltinTypeName_) -> Option<&E::ModuleIdent> {
-        self.prim_definers.get(&t)
+        self.prim_definers.get().and_then(|m| m.get(&t))
     }
 
     pub fn save_parser_ast(&self, ast: &P::Program) {
@@ -676,22 +675,25 @@ impl CompilationEnv {
         self.flags.ide_mode()
     }
 
-    pub fn extend_ide_info(&mut self, info: IDEInfo) {
+    pub fn extend_ide_info(&self, info: IDEInfo) {
         if self.flags().ide_test_mode() {
             for entry in info.annotations.iter() {
                 let diag = entry.clone().into();
                 self.add_diag(WarningFiltersScope::EMPTY, diag);
             }
         }
-        self.ide_information.extend(info);
+        self.ide_information.write().unwrap().extend(info);
     }
 
-    pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+    pub fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
         if self.flags().ide_test_mode() {
             let diag = (loc, info.clone()).into();
             self.add_diag(WarningFiltersScope::EMPTY, diag);
         }
-        self.ide_information.add_ide_annotation(loc, info);
+        self.ide_information
+            .write()
+            .unwrap()
+            .add_ide_annotation(loc, info);
     }
 }
 

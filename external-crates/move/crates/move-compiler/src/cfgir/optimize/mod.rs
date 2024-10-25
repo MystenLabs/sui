@@ -43,7 +43,7 @@ const MOVE_2024_OPTIMIZATIONS: &[Optimization] = &[
 
 #[growing_stack]
 pub fn optimize(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     package: Option<Symbol>,
     signature: &FunctionSignature,
     locals: &UniqueMap<Var, (Mutability, SingleType)>,

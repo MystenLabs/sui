@@ -32,7 +32,7 @@ pub struct SuiTypeChecks;
 
 impl TypingVisitorConstructor for SuiTypeChecks {
     type Context<'a> = Context<'a>;
-    fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a> {
+    fn context<'a>(env: &'a CompilationEnv, program: &T::Program) -> Self::Context<'a> {
         Context::new(env, program.info.clone())
     }
 }
@@ -43,7 +43,7 @@ impl TypingVisitorConstructor for SuiTypeChecks {
 
 #[allow(unused)]
 pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
+    env: &'a CompilationEnv,
     warning_filters_scope: WarningFiltersScope,
     info: Arc<TypingProgramInfo>,
     sui_transfer_ident: Option<ModuleIdent>,
@@ -54,7 +54,7 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    fn new(env: &'a mut CompilationEnv, info: Arc<TypingProgramInfo>) -> Self {
+    fn new(env: &'a CompilationEnv, info: Arc<TypingProgramInfo>) -> Self {
         let sui_module_ident = info
             .modules
             .key_cloned_iter()

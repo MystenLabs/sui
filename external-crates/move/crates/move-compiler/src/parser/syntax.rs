@@ -22,14 +22,14 @@ use move_symbol_pool::{symbol, Symbol};
 
 struct Context<'env, 'lexer, 'input> {
     current_package: Option<Symbol>,
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
     tokens: &'lexer mut Lexer<'input>,
     stop_set: TokenSet,
 }
 
 impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
     fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         tokens: &'lexer mut Lexer<'input>,
         package_name: Option<Symbol>,
     ) -> Self {
@@ -4685,7 +4685,7 @@ fn parse_file_def(
 /// result as either a pair of FileDefinition and doc comments or some Diagnostics. The `file` name
 /// is used to identify source locations in error messages.
 pub fn parse_file_string(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     file_hash: FileHash,
     input: &str,
     package: Option<Symbol>,

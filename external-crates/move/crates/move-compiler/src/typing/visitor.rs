@@ -17,7 +17,7 @@ use move_proc_macros::growing_stack;
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
 
 pub trait TypingVisitor: Send + Sync {
-    fn visit(&self, env: &mut CompilationEnv, program: &T::Program);
+    fn visit(&self, env: &CompilationEnv, program: &T::Program);
 
     fn visitor(self) -> Visitor
     where
@@ -30,9 +30,9 @@ pub trait TypingVisitor: Send + Sync {
 pub trait TypingVisitorConstructor: Send + Sync {
     type Context<'a>: Sized + TypingVisitorContext;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a>;
+    fn context<'a>(env: &'a CompilationEnv, program: &T::Program) -> Self::Context<'a>;
 
-    fn visit(env: &mut CompilationEnv, program: &T::Program) {
+    fn visit(env: &CompilationEnv, program: &T::Program) {
         let mut context = Self::context(env, program);
         context.visit(program);
     }
@@ -567,7 +567,7 @@ impl<V: TypingVisitor + 'static> From<V> for TypingVisitorObj {
 }
 
 impl<V: TypingVisitorConstructor + Send + Sync> TypingVisitor for V {
-    fn visit(&self, env: &mut CompilationEnv, program: &T::Program) {
+    fn visit(&self, env: &CompilationEnv, program: &T::Program) {
         Self::visit(env, program)
     }
 }
@@ -583,9 +583,14 @@ macro_rules! simple_visitor {
         impl crate::typing::visitor::TypingVisitorConstructor for $visitor {
             type Context<'a> = Context<'a>;
 
-            fn context<'a>(env: &'a mut crate::shared::CompilationEnv, _program: &crate::typing::ast::Program) -> Self::Context<'a> {
+            fn context<'a>(env: &'a crate::shared::CompilationEnv, _program: &crate::typing::ast::Program) -> Self::Context<'a> {
+                let warning_filters_scope = env.top_level_warning_filter_scope().clone();
                 Context {
                     env,
+                    warning_filters_scope
+                }
+            }
+
             fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
                 self.env.add_diag(diag);
             }

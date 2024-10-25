@@ -54,7 +54,7 @@ impl Context {
 //**************************************************************************************************
 
 pub fn modules(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
 ) {
     modules
@@ -62,7 +62,7 @@ pub fn modules(
         .for_each(|(mname, m)| module(compilation_env, mname, m))
 }
 
-fn module(compilation_env: &mut CompilationEnv, mname: ModuleIdent, module: &T::ModuleDefinition) {
+fn module(compilation_env: &CompilationEnv, mname: ModuleIdent, module: &T::ModuleDefinition) {
     let context = &mut Context::new(mname);
     module
         .structs

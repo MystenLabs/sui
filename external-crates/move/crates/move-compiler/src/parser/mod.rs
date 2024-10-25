@@ -25,7 +25,7 @@ use vfs::VfsPath;
 /// Parses program's targets and dependencies, both of which are read from different virtual file
 /// systems (vfs and deps_out_vfs, respectively).
 pub(crate) fn parse_program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     named_address_maps: NamedAddressMaps,
     mut targets: Vec<IndexedVfsPackagePath>,
     mut deps: Vec<IndexedVfsPackagePath>,
@@ -113,7 +113,7 @@ fn ensure_targets_deps_dont_intersect(
 
 fn parse_file(
     path: &VfsPath,
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     files: &mut MappedFiles,
     package: Option<Symbol>,
 ) -> anyhow::Result<(

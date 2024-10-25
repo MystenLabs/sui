@@ -65,7 +65,7 @@ type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
 pub(super) struct DefnContext<'env, 'map> {
     pub(super) named_address_mapping: Option<&'map NamedAddressMap>,
     pub(super) module_members: UniqueMap<ModuleIdent, ModuleMembers>,
-    pub(super) env: &'env mut CompilationEnv,
+    pub(super) env: &'env CompilationEnv,
     pub(super) address_conflicts: BTreeSet<Symbol>,
     pub(super) current_package: Option<Symbol>,
     pub(super) is_source_definition: bool,
@@ -83,7 +83,7 @@ struct Context<'env, 'map> {
 
 impl<'env, 'map> Context<'env, 'map> {
     fn new(
-        compilation_env: &'env mut CompilationEnv,
+        compilation_env: &'env CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
         address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
@@ -111,7 +111,7 @@ impl<'env, 'map> Context<'env, 'map> {
         }
     }
 
-    fn env(&mut self) -> &mut CompilationEnv {
+    fn env(&mut self) -> &CompilationEnv {
         self.defn_context.env
     }
 
@@ -439,7 +439,7 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: P::Program,
 ) -> E::Program {

@@ -128,7 +128,7 @@ pub(super) struct HLIRDebugFlags {
 }
 
 pub(super) struct Context<'env> {
-    pub env: &'env mut CompilationEnv,
+    pub env: &'env CompilationEnv,
     pub info: Arc<TypingProgramInfo>,
     pub debug: HLIRDebugFlags,
     warning_filters_scope: WarningFiltersScope,
@@ -144,7 +144,7 @@ pub(super) struct Context<'env> {
 
 impl<'env> Context<'env> {
     pub fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         _pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
         prog: &T::Program,
     ) -> Self {
@@ -270,7 +270,7 @@ impl<'env> Context<'env> {
 }
 
 impl MatchContext<true> for Context<'_> {
-    fn env(&mut self) -> &mut CompilationEnv {
+    fn env(&mut self) -> &CompilationEnv {
         self.env
     }
 
@@ -308,7 +308,7 @@ impl MatchContext<true> for Context<'_> {
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: T::Program,
 ) -> H::Program {

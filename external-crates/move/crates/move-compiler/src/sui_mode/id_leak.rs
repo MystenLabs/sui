@@ -94,7 +94,6 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
     type AI<'a> = IDLeakVerifierAI<'a>;
 
     fn new<'a>(
-        env: &CompilationEnv,
         context: &'a CFGContext<'a>,
         cfg: &ImmForwardCFG,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
@@ -102,7 +101,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
         let module = &context.module;
         let minfo = context.info.module(module);
         let package_name = minfo.package;
-        let config = env.package_config(package_name);
+        let config = context.env.package_config(package_name);
         if config.flavor != Flavor::Sui {
             // Skip if not sui
             return None;

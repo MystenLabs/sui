@@ -501,10 +501,7 @@ impl<const P: Pass> SteppedCompiler<P> {
         })
     }
 
-    pub fn compilation_env(&mut self) -> &mut CompilationEnv {
-        &mut self.compilation_env
-    }
-    pub fn compilation_env_ref(&self) -> &CompilationEnv {
+    pub fn compilation_env(&self) -> &CompilationEnv {
         &self.compilation_env
     }
 }
@@ -889,7 +886,7 @@ pub fn move_check_for_errors(
     ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), (Pass, Diagnostics)> {
         let (_, compiler) = comments_and_compiler_res?;
 
-        let (mut compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
+        let (compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
         let compilation_env = compiler.compilation_env();
         if compilation_env.flags().is_testing() {
             unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
@@ -925,7 +922,7 @@ impl PassResult {
         }
     }
 
-    pub fn save(&self, compilation_env: &mut CompilationEnv) {
+    pub fn save(&self, compilation_env: &CompilationEnv) {
         match self {
             PassResult::Parser(prog) => {
                 compilation_env.save_parser_ast(prog);
@@ -952,14 +949,14 @@ impl PassResult {
 }
 
 fn run(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     cur: PassResult,
     until: Pass,
 ) -> Result<PassResult, (Pass, Diagnostics)> {
     #[growing_stack]
     fn rec(
-        compilation_env: &mut CompilationEnv,
+        compilation_env: &CompilationEnv,
         pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         cur: PassResult,
         until: Pass,

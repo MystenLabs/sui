@@ -140,7 +140,7 @@ impl<'a> Context<'a> {
 //**************************************************************************************************
 
 pub fn modules(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
 ) {
     let tparams = modules
@@ -171,7 +171,7 @@ macro_rules! scc_edges {
 }
 
 fn module<'a>(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     tparams: &'a BTreeMap<ModuleIdent, BTreeMap<FunctionName, &'a Vec<TParam>>>,
     mname: ModuleIdent,
     module: &T::ModuleDefinition,

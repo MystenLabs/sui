@@ -19,7 +19,7 @@ use move_symbol_pool::symbol;
 
 /// verify fake native attribute usage usage
 pub fn function(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     module: ModuleIdent,
     function_name: FunctionName,
     function: &N::Function,

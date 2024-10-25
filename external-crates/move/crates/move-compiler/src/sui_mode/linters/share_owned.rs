@@ -96,7 +96,6 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
     type AI<'a> = ShareOwnedVerifierAI<'a>;
 
     fn new<'a>(
-        _env: &CompilationEnv,
         context: &'a CFGContext<'a>,
         cfg: &ImmForwardCFG,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,

@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     modules: &mut UniqueMap<ModuleIdent, T::ModuleDefinition>,
 ) {
     let imm_modules = &modules;
@@ -63,7 +63,7 @@ enum DepType {
 }
 
 struct Context<'a, 'env> {
-    env: &'env mut CompilationEnv,
+    env: &'env CompilationEnv,
     modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
     // A union of uses and friends for modules (used for cyclyc dependency checking)
     // - if A uses B,    add edge A -> B
@@ -79,7 +79,7 @@ struct Context<'a, 'env> {
 
 impl<'a, 'env> Context<'a, 'env> {
     fn new(
-        env: &'env mut CompilationEnv,
+        env: &'env CompilationEnv,
         modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
     ) -> Self {
         Context {

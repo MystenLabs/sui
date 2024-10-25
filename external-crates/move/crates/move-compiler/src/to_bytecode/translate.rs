@@ -38,7 +38,7 @@ type CollectedInfos = UniqueMap<FunctionName, CollectedInfo>;
 type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: &G::Program,
 ) -> (
@@ -127,7 +127,7 @@ fn extract_decls(
 //**************************************************************************************************
 
 pub fn program(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: G::Program,
 ) -> Vec<AnnotatedCompiledUnit> {
@@ -153,7 +153,7 @@ pub fn program(
 }
 
 fn module(
-    compilation_env: &mut CompilationEnv,
+    compilation_env: &CompilationEnv,
     ident: ModuleIdent,
     mdef: G::ModuleDefinition,
     dependency_orderings: &HashMap<ModuleIdent, usize>,

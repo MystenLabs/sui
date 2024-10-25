@@ -484,7 +484,7 @@ impl<'input> Lexer<'input> {
     // documentation.
     pub fn check_and_get_doc_comments(
         &mut self,
-        env: &mut CompilationEnv,
+        env: &CompilationEnv,
     ) -> MatchedFileCommentMap {
         let msg = "Documentation comment cannot be matched to a language item";
         let diags = self

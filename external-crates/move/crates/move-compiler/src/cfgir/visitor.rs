@@ -24,7 +24,7 @@ pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
 
 pub trait CFGIRVisitor: Send + Sync {
-    fn visit(&self, env: &mut CompilationEnv, program: &G::Program);
+    fn visit(&self, env: &CompilationEnv, program: &G::Program);
 
     fn visitor(self) -> Visitor
     where
@@ -52,9 +52,9 @@ pub trait AbstractInterpreterVisitor: Send + Sync {
 pub trait CFGIRVisitorConstructor: Send {
     type Context<'a>: Sized + CFGIRVisitorContext;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a>;
+    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a>;
 
-    fn visit(env: &mut CompilationEnv, program: &G::Program) {
+    fn visit(env: &CompilationEnv, program: &G::Program) {
         let mut context = Self::context(env, program);
         context.visit(program);
     }
@@ -317,7 +317,7 @@ impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
 }
 
 impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
-    fn visit(&self, env: &mut CompilationEnv, program: &G::Program) {
+    fn visit(&self, env: &CompilationEnv, program: &G::Program) {
         Self::visit(env, program)
     }
 }
@@ -333,7 +333,7 @@ macro_rules! simple_visitor {
         impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
             type Context<'a> = Context<'a>;
 
-            fn context<'a>(env: &'a mut crate::shared::CompilationEnv, _program: &crate::cfgir::ast::Program) -> Self::Context<'a> {
+            fn context<'a>(env: &'a crate::shared::CompilationEnv, _program: &crate::cfgir::ast::Program) -> Self::Context<'a> {
                 let warning_filters_scope = env.top_level_warning_filter_scope().clone();
                 Context {
                     env,

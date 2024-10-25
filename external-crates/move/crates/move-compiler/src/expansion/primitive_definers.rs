@@ -20,7 +20,7 @@ use super::ast::Attribute_;
 /// Gather primitive defines from module declarations, erroring on duplicates for a given base
 /// type or for unknown base types.
 pub fn modules(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
     modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
 ) {
@@ -49,7 +49,7 @@ pub fn modules(
 }
 
 fn check_prim_definer(
-    env: &mut CompilationEnv,
+    env: &CompilationEnv,
     allow_shadowing: bool,
     definers: &mut BTreeMap<BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
     mident: ModuleIdent,
