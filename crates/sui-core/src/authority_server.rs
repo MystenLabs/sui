@@ -341,7 +341,7 @@ pub struct ValidatorService {
     metrics: Arc<ValidatorServiceMetrics>,
     traffic_controller: Option<Arc<TrafficController>>,
     client_id_source: Option<ClientIdSource>,
-    trusted_certificate_forwarder: Vec<NetworkAuthorityClient>,
+    trusted_certificate_forwarders: Vec<NetworkAuthorityClient>,
 }
 
 impl ValidatorService {
@@ -352,7 +352,7 @@ impl ValidatorService {
         traffic_controller_metrics: TrafficControllerMetrics,
         policy_config: Option<PolicyConfig>,
         firewall_config: Option<RemoteFirewallConfig>,
-        trusted_certificate_forwarder: Vec<Multiaddr>,
+        trusted_certificate_forwarders: Vec<Multiaddr>,
     ) -> Self {
         Self {
             state,
@@ -366,7 +366,7 @@ impl ValidatorService {
                 ))
             }),
             client_id_source: policy_config.map(|policy| policy.client_id_source),
-            trusted_certificate_forwarder: trusted_certificate_forwarder
+            trusted_certificate_forwarders: trusted_certificate_forwarders
                 .iter()
                 .map(NetworkAuthorityClient::connect_lazy)
                 .collect(),
@@ -384,7 +384,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: None,
             client_id_source: None,
-            trusted_certificate_forwarder: vec![],
+            trusted_certificate_forwarders: vec![],
         }
     }
 
@@ -409,7 +409,7 @@ impl ValidatorService {
     }
 
     fn forward_transaction(&self, transaction: &Transaction) {
-        for client in self.trusted_certificate_forwarder.clone() {
+        for client in self.trusted_certificate_forwarders.clone() {
             let transaction = transaction.clone();
             spawn_monitored_task!(async move {
                 let result = tokio::time::timeout(
@@ -434,7 +434,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source: _,
-            trusted_certificate_forwarder: _,
+            trusted_certificate_forwarders: _,
         } = self.clone();
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
@@ -513,7 +513,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source: _,
-            trusted_certificate_forwarder: _,
+            trusted_certificate_forwarders: _,
         } = self.clone();
         let epoch_store = state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {

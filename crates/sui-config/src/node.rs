@@ -186,7 +186,7 @@ pub struct NodeConfig {
     pub firewall_config: Option<RemoteFirewallConfig>,
 
     #[serde(default)]
-    pub trusted_certificate_forwarder: Vec<Multiaddr>,
+    pub trusted_certificate_forwarders: Vec<Multiaddr>,
 
     #[serde(default)]
     pub execution_cache: ExecutionCacheConfig,
