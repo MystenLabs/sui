@@ -41,6 +41,10 @@ const MAX_WATERMARK_UPDATES: usize = 10_000;
 /// Concurrent handlers can only be used in concurrent pipelines, where checkpoint data is
 /// processed and committed out-of-order and a watermark table is kept up-to-date with the latest
 /// checkpoint below which all data has been committed.
+///
+/// Back-pressure is handled through the `MAX_PENDING_SIZE` constant -- if more than this many rows
+/// build up, the collector will stop accepting new checkpoints, which will eventually propagate
+/// back to the ingestion service.
 #[async_trait::async_trait]
 pub trait Handler: Processor {
     /// If at least this many rows are pending, the committer will commit them eagerly.
@@ -107,7 +111,7 @@ impl<H: Handler> Batched<H> {
 /// channels are created to communicate between its various components. The pipeline can be
 /// shutdown using its `cancel` token, and will also shutdown if any of its independent tasks
 /// reports an issue.
-pub fn pipeline<H: Handler + 'static>(
+pub(crate) fn pipeline<H: Handler + 'static>(
     initial_watermark: Option<CommitterWatermark<'static>>,
     config: PipelineConfig,
     db: Db,
