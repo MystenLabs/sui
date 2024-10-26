@@ -65,7 +65,6 @@ module sui_system::stake_subsidy {
 
         // Drawn down the subsidy for this epoch.
         let stake_subsidy = self.balance.split(to_withdraw);
-
         self.distribution_counter = self.distribution_counter + 1;
 
         // Decrease the subsidy amount only when the current period ends.
@@ -83,9 +82,13 @@ module sui_system::stake_subsidy {
         self.current_distribution_amount.min(self.balance.value())
     }
 
-    #[test_only]
     /// Returns the number of distributions that have occurred.
     public(package) fun get_distribution_counter(self: &StakeSubsidy): u64 {
         self.distribution_counter
+    }
+
+    #[test_only]
+    public(package) fun set_distribution_counter(self: &mut StakeSubsidy, distribution_counter: u64) {
+        self.distribution_counter = distribution_counter;
     }
 }

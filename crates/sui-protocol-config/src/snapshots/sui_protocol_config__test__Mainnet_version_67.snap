@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 66
+version: 67
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -60,6 +60,7 @@ feature_flags:
   soft_bundle: true
   enable_coin_deny_list_v2: true
   rethrow_serialization_type_layout_errors: true
+  consensus_distributed_vote_scoring_strategy: true
   consensus_round_prober: true
   validate_identifier_inputs: true
   relocate_event_module: true
