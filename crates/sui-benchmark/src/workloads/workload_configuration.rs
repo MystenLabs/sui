@@ -46,6 +46,7 @@ impl WorkloadConfiguration {
                 shared_counter_max_tip,
                 batch_payment_size,
                 adversarial_cfg,
+                failure_cfg,
                 target_qps,
                 num_workers,
                 in_flight_ratio,
@@ -71,6 +72,7 @@ impl WorkloadConfiguration {
                         shared_deletion[i],
                         adversarial[i],
                         AdversarialPayloadCfg::from_str(&adversarial_cfg[i]).unwrap(),
+                        FailurePayloadCfg::from_str(&failure_cfg[i]).unwrap(),
                         randomness[i],
                         batch_payment_size[i],
                         shared_counter_hotness_factor[i],
@@ -148,7 +150,9 @@ impl WorkloadConfiguration {
         batch_payment_weight: u32,
         shared_deletion_weight: u32,
         adversarial_weight: u32,
+        failure_weight: u32,
         adversarial_cfg: AdversarialPayloadCfg,
+        failure_cfg: FailurePayloadCfg,
         randomness_weight: u32,
         batch_payment_size: u32,
         shared_counter_hotness_factor: u32,
@@ -165,6 +169,7 @@ impl WorkloadConfiguration {
             + delegation_weight
             + batch_payment_weight
             + adversarial_weight
+            + failure_weight
             + randomness_weight;
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workload_builders = vec![];
@@ -232,6 +237,16 @@ impl WorkloadConfiguration {
             workload_group,
         );
         workload_builders.push(adversarial_workload);
+        let failure_workload = FailureWorkloadBuilder::from(
+            failure_weight as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            reference_gas_price,
+            duration,
+            workload_group,
+        );
+        workload_builders.push(failure_workload);
         let randomness_workload = RandomnessWorkloadBuilder::from(
             randomness_weight as f32 / total_weight as f32,
             target_qps,
