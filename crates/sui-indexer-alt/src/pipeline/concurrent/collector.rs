@@ -13,10 +13,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
 use crate::{
-    handlers::Handler,
     metrics::IndexerMetrics,
-    pipeline::{Batched, Indexed, PipelineConfig, WatermarkPart},
+    pipeline::{Indexed, PipelineConfig, WatermarkPart},
 };
+
+use super::{Batched, Handler};
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.

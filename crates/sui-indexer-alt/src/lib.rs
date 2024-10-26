@@ -5,7 +5,6 @@ use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use anyhow::{Context, Result};
 use db::{Db, DbConfig};
-use handlers::Handler;
 use ingestion::{IngestionConfig, IngestionService};
 use metrics::{IndexerMetrics, MetricsService};
 use models::watermarks::CommitterWatermark;
@@ -137,7 +136,7 @@ impl Indexer {
 
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
-    pub async fn concurrent_pipeline<H: Handler + 'static>(&mut self) -> Result<()> {
+    pub async fn concurrent_pipeline<H: concurrent::Handler + 'static>(&mut self) -> Result<()> {
         if !self.enabled_pipelines.is_empty() && !self.enabled_pipelines.contains(H::NAME) {
             info!("Skipping pipeline {}", H::NAME);
             return Ok(());

@@ -17,11 +17,12 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     db::Db,
-    handlers::Handler,
     metrics::IndexerMetrics,
     models::watermarks::{CommitterWatermark, Ordering},
     pipeline::{PipelineConfig, WatermarkPart},
 };
+
+use super::Handler;
 
 /// Tracing message for the watermark update will be logged at info level at least this many
 /// checkpoints.

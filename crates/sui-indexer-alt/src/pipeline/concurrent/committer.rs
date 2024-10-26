@@ -13,10 +13,11 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     db::Db,
-    handlers::Handler,
     metrics::IndexerMetrics,
-    pipeline::{Batched, Break, PipelineConfig, WatermarkPart},
+    pipeline::{Break, PipelineConfig, WatermarkPart},
 };
+
+use super::{Batched, Handler};
 
 /// If the committer needs to retry a commit, it will wait this long initially.
 const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
@@ -92,7 +93,7 @@ pub(super) fn committer<H: Handler + 'static>(
                                 BE::transient(Break::Err(e.into()))
                             })?;
 
-                            let affected = H::commit(&values, &mut conn).await;
+                            let affected = H::commit(values.as_slice(), &mut conn).await;
                             let elapsed = guard.stop_and_record();
 
                             match affected {
