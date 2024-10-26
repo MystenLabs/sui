@@ -8,16 +8,85 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    db::Db, handlers::Handler, metrics::IndexerMetrics, models::watermarks::CommitterWatermark,
+    db::{self, Db},
+    metrics::IndexerMetrics,
+    models::watermarks::CommitterWatermark,
 };
 
-use super::{processor::processor, PipelineConfig, PIPELINE_BUFFER};
+use super::{processor::processor, PipelineConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
 
 use self::{collector::collector, committer::committer, watermark::watermark};
 
 mod collector;
 mod committer;
 mod watermark;
+
+/// The maximum number of watermarks that can show up in a single batch. This limit exists to deal
+/// with pipelines that produce no data for a majority of checkpoints -- the size of these
+/// pipeline's batches will be dominated by watermark updates.
+const MAX_WATERMARK_UPDATES: usize = 10_000;
+
+/// Handlers implement the logic for a given indexing pipeline: How to process checkpoint data (by
+/// implementing [Processor]) into rows for their table, and how to write those rows to the database.
+///
+/// The handler is also responsible for tuning the various parameters of the pipeline (provided as
+/// associated values). Reasonable defaults have been chosen to balance concurrency with memory
+/// usage, but each handle may choose to override these defaults, e.g.
+///
+/// - Handlers that produce many small rows may wish to increase their batch/chunk/max-pending
+///   sizes).
+/// - Handlers that do more work during processing may wish to increase their fanout so more of it
+///   can be done concurrently, to preserve throughput.
+///
+/// Concurrent handlers can only be used in concurrent pipelines, where checkpoint data is
+/// processed and committed out-of-order and a watermark table is kept up-to-date with the latest
+/// checkpoint below which all data has been committed.
+#[async_trait::async_trait]
+pub trait Handler: Processor {
+    /// If at least this many rows are pending, the committer will commit them eagerly.
+    const BATCH_SIZE: usize = 50;
+
+    /// If there are more than this many rows pending, the committer will only commit this many in
+    /// one operation.
+    const CHUNK_SIZE: usize = 200;
+
+    /// If there are more than this many rows pending, the committer applies backpressure.
+    const MAX_PENDING_SIZE: usize = 1000;
+
+    /// Take a chunk of values and commit them to the database, returning the number of rows
+    /// affected.
+    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>)
+        -> anyhow::Result<usize>;
+}
+
+/// Values ready to be written to the database. This is an internal type used to communicate
+/// between the collector and the committer parts of the pipeline.
+struct Batched<H: Handler> {
+    /// The rows to write
+    values: Vec<H::Value>,
+    /// Proportions of all the watermarks that are represented in this chunk
+    watermark: Vec<WatermarkPart>,
+}
+
+impl<H: Handler> Batched<H> {
+    fn new() -> Self {
+        Self {
+            values: vec![],
+            watermark: vec![],
+        }
+    }
+
+    /// Number of rows in this batch.
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    /// The batch is full if it has more than enough values to write to the database, or more than
+    /// enough watermarks to update.
+    fn is_full(&self) -> bool {
+        self.values.len() >= H::CHUNK_SIZE || self.watermark.len() >= MAX_WATERMARK_UPDATES
+    }
+}
 
 /// Start a new concurrent (out-of-order) indexing pipeline served by the handler, `H`. Starting
 /// strictly after the `watermark` (or from the beginning if no watermark was provided).

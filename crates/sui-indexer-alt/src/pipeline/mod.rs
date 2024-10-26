@@ -3,19 +3,16 @@
 
 use std::time::Duration;
 
-use crate::{handlers::Handler, models::watermarks::CommitterWatermark};
+use crate::models::watermarks::CommitterWatermark;
 
-pub mod concurrent;
+pub use processor::Processor;
+
+pub(crate) mod concurrent;
 mod processor;
 
 /// Extra buffer added to channels between tasks in a pipeline. There does not need to be a huge
 /// capacity here because tasks already buffer rows to insert internally.
 const PIPELINE_BUFFER: usize = 5;
-
-/// The maximum number of watermarks that can show up in a single batch. This limit exists to deal
-/// with pipelines that produce no data for a majority of checkpoints -- the size of these
-/// pipeline's batches will be dominated by watermark updates.
-const MAX_WATERMARK_UPDATES: usize = 10_000;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct PipelineConfig {
@@ -48,20 +45,11 @@ pub struct PipelineConfig {
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
 /// communicate between the processor and the collector parts of the pipeline.
-struct Indexed<H: Handler> {
+struct Indexed<P: Processor> {
     /// Values to be inserted into the database from this checkpoint
-    values: Vec<H::Value>,
+    values: Vec<P::Value>,
     /// The watermark associated with this checkpoint
     watermark: CommitterWatermark<'static>,
-}
-
-/// Values ready to be written to the database. This is an internal type used to communicate
-/// between the collector and the committer parts of the pipeline.
-struct Batched<H: Handler> {
-    /// The rows to write
-    values: Vec<H::Value>,
-    /// Proportions of all the watermarks that are represented in this chunk
-    watermark: Vec<WatermarkPart>,
 }
 
 /// A representation of the proportion of a watermark.
@@ -86,11 +74,11 @@ enum Break {
     Err(#[from] anyhow::Error),
 }
 
-impl<H: Handler> Indexed<H> {
-    fn new(epoch: u64, cp_sequence_number: u64, tx_hi: u64, values: Vec<H::Value>) -> Self {
+impl<P: Processor> Indexed<P> {
+    fn new(epoch: u64, cp_sequence_number: u64, tx_hi: u64, values: Vec<P::Value>) -> Self {
         Self {
             watermark: CommitterWatermark {
-                pipeline: H::NAME.into(),
+                pipeline: P::NAME.into(),
                 epoch_hi_inclusive: epoch as i64,
                 checkpoint_hi_inclusive: cp_sequence_number as i64,
                 tx_hi: tx_hi as i64,
@@ -102,26 +90,6 @@ impl<H: Handler> Indexed<H> {
     /// The checkpoint sequence number that this data is from
     fn checkpoint(&self) -> u64 {
         self.watermark.checkpoint_hi_inclusive as u64
-    }
-}
-
-impl<H: Handler> Batched<H> {
-    fn new() -> Self {
-        Self {
-            values: vec![],
-            watermark: vec![],
-        }
-    }
-
-    /// Number of rows in this batch.
-    fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    /// The batch is full if it has more than enough values to write to the database, or more than
-    /// enough watermarks to update.
-    fn is_full(&self) -> bool {
-        self.values.len() >= H::CHUNK_SIZE || self.watermark.len() >= MAX_WATERMARK_UPDATES
     }
 }
 
