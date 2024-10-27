@@ -8,6 +8,7 @@ use futures::future::join_all;
 use futures::future::AbortHandle;
 use itertools::Itertools;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fmt::Write;
 use std::num::NonZeroUsize;
 use std::ops::Range;
@@ -812,6 +813,35 @@ pub async fn check_completed_snapshot(
             success_marker
         ))
     }
+}
+
+pub async fn get_dead_genesis_objects(db_path: &Path, genesis: &Path) -> Result<(), anyhow::Error> {
+    let mut genesis_object_ids: HashSet<ObjectID> = Genesis::load(genesis)?
+        .objects()
+        .iter()
+        .map(|obj| obj.id())
+        .collect();
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &db_path.join("live").join("store"),
+        None,
+    ));
+    let live_objects = perpetual_db.iter_live_object_set(false);
+    live_objects.for_each(|obj| {
+        let oid = obj.object_id();
+        if genesis_object_ids.contains(&oid) {
+            genesis_object_ids.remove(&oid);
+        }
+    });
+    println!(
+        "Found {} dead genesis objects: \n{}",
+        genesis_object_ids.len(),
+        genesis_object_ids
+            .iter()
+            .map(|oid| format!("{:?}", oid))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    Ok(())
 }
 
 pub async fn download_formal_snapshot(

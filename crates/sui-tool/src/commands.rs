@@ -5,9 +5,9 @@ use crate::{
     check_completed_snapshot,
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
-    get_latest_available_epoch, get_object, get_transaction_block, make_clients,
-    restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
-    GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
+    get_dead_genesis_objects, get_latest_available_epoch, get_object, get_transaction_block,
+    make_clients, restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum,
+    ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
 };
 use anyhow::Result;
 use futures::{future::join_all, StreamExt};
@@ -415,6 +415,13 @@ pub enum ToolCommand {
             help = "The Base64-encoding of the bcs bytes of SenderSignedData"
         )]
         sender_signed_data: String,
+    },
+    #[command(name = "get-dead-genesis-objects")]
+    GetDeadGenesisObjects {
+        #[arg(long = "db-path")]
+        db_path: PathBuf,
+        #[arg(long = "genesis")]
+        genesis: PathBuf,
     },
 }
 
@@ -1090,6 +1097,9 @@ impl ToolCommand {
                     AuthorityAggregatorBuilder::from_genesis(&genesis).build_network_clients();
                 let result = agg.process_transaction(transaction, None).await;
                 println!("{:?}", result);
+            }
+            ToolCommand::GetDeadGenesisObjects { db_path, genesis } => {
+                get_dead_genesis_objects(&db_path, &genesis).await?;
             }
         };
         Ok(())
