@@ -2250,7 +2250,6 @@ pub fn compute_symbols(
             // if no symbols computation data was cached, it means that
             // compiled program was created for the purpose of this analysis
             // and we need to cache both
-            // need to cache symbols computation data if they are not yet cached
             if let Some(deps_symbols_data) = cacheable_symbols_data_opt {
                 eprintln!("caching pre-compiled program and pre-computed symbols");
                 pkg_deps.insert(
