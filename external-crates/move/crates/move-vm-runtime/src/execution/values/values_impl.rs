@@ -776,8 +776,12 @@ impl ReferenceImpl {
             ReferenceImpl::U256(ref_) => Value(ValueImpl::U256(Box::new(*ref_.to_ref()))),
             ReferenceImpl::Bool(ref_) => Value(ValueImpl::Bool(*ref_.to_ref())),
             ReferenceImpl::Address(ref_) => Value(ValueImpl::Address(Box::new(*ref_.to_ref()))),
-            ReferenceImpl::Container(ref_) => Value(ValueImpl::Container(Box::new(ref_.to_ref().copy_value()))),
-            ReferenceImpl::Global(ref_) => Value(ValueImpl::Container(Box::new(ref_.value.to_ref().copy_value()))),
+            ReferenceImpl::Container(ref_) => {
+                Value(ValueImpl::Container(Box::new(ref_.to_ref().copy_value())))
+            }
+            ReferenceImpl::Global(ref_) => Value(ValueImpl::Container(Box::new(
+                ref_.value.to_ref().copy_value(),
+            ))),
         };
         Ok(value)
     }
@@ -1242,7 +1246,9 @@ impl VMValueCast<StructRef> for Value {
     fn cast(self) -> PartialVMResult<StructRef> {
         match self.0 {
             // Match the container and wrap it in StructRef
-            ValueImpl::Reference(ReferenceImpl::Container(c_)) if matches!(c_.to_ref(), Container::Struct(_)) => {
+            ValueImpl::Reference(ReferenceImpl::Container(c_))
+                if matches!(c_.to_ref(), Container::Struct(_)) =>
+            {
                 Ok(StructRef(c_.ptr_clone()))
             }
             // Return an error if the value is not a container
@@ -1257,7 +1263,9 @@ impl VMValueCast<VariantRef> for Value {
         // Take ownership of the value by replacing it with `Invalid`
         match self.0 {
             // Match the container and wrap it in VariantRef
-            ValueImpl::Reference(ReferenceImpl::Container(c_)) if matches!(c_.to_ref(), Container::Variant(_)) => {
+            ValueImpl::Reference(ReferenceImpl::Container(c_))
+                if matches!(c_.to_ref(), Container::Variant(_)) =>
+            {
                 Ok(VariantRef(c_.ptr_clone()))
             }
             // Return an error if the value is not a container
@@ -1321,7 +1329,11 @@ impl VMValueCast<Vec<Value>> for Value {
 impl VMValueCast<SignerRef> for Value {
     fn cast(self) -> PartialVMResult<SignerRef> {
         match self.0 {
-            ValueImpl::Reference(ReferenceImpl::Container(ref_)) if matches!(ref_.to_ref(), Container::Struct(_)) => Ok(SignerRef(ref_)),
+            ValueImpl::Reference(ReferenceImpl::Container(ref_))
+                if matches!(ref_.to_ref(), Container::Struct(_)) =>
+            {
+                Ok(SignerRef(ref_))
+            }
             v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                 .with_message(format!("cannot cast {:?} to Signer reference", v,))),
         }
@@ -1926,9 +1938,7 @@ impl Container {
     fn legacy_size(&self) -> AbstractMemorySize {
         match self {
             Self::Vec(r) => Vector::legacy_size_impl(r.as_ref()),
-            Self::Struct(r) => {
-                Struct::legacy_size_impl(r.as_slice())
-            }
+            Self::Struct(r) => Struct::legacy_size_impl(r.as_slice()),
             Self::Variant(r) => Variant::legacy_size_impl(r.1.as_slice()),
             Self::VecU8(r) => AbstractMemorySize::new((r.len() * std::mem::size_of::<u8>()) as u64),
             Self::VecU16(r) => {
@@ -1943,15 +1953,15 @@ impl Container {
             Self::VecU128(r) => {
                 AbstractMemorySize::new((r.len() * std::mem::size_of::<u128>()) as u64)
             }
-            Self::VecU256(r) => AbstractMemorySize::new(
-                (r.len() * std::mem::size_of::<u256::U256>()) as u64,
-            ),
+            Self::VecU256(r) => {
+                AbstractMemorySize::new((r.len() * std::mem::size_of::<u256::U256>()) as u64)
+            }
             Self::VecBool(r) => {
                 AbstractMemorySize::new((r.len() * std::mem::size_of::<bool>()) as u64)
             }
-            Self::VecAddress(r) => AbstractMemorySize::new(
-                (r.len() * std::mem::size_of::<AccountAddress>()) as u64,
-            ),
+            Self::VecAddress(r) => {
+                AbstractMemorySize::new((r.len() * std::mem::size_of::<AccountAddress>()) as u64)
+            }
         }
     }
 }
@@ -2152,16 +2162,20 @@ impl GlobalValueImpl {
         }
     }
 
-
     fn borrow_global(&self) -> PartialVMResult<ValueImpl> {
         match self {
             Self::None | Self::Deleted => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
             GlobalValueImpl::Fresh { container } => {
                 let container_ref = ArenaPointer::from_ref(container.as_ref());
-                Ok(ValueImpl::Reference(ReferenceImpl::Container(container_ref)))
+                Ok(ValueImpl::Reference(ReferenceImpl::Container(
+                    container_ref,
+                )))
             }
             GlobalValueImpl::Cached { container, status } => {
-                let global_ref = GlobalRef { status: Rc::clone(status), value: ArenaPointer::from_ref(container.as_ref()) };
+                let global_ref = GlobalRef {
+                    status: Rc::clone(status),
+                    value: ArenaPointer::from_ref(container.as_ref()),
+                };
                 Ok(ValueImpl::Reference(ReferenceImpl::Global(global_ref)))
             }
         }
@@ -2172,12 +2186,16 @@ impl GlobalValueImpl {
             Self::None => None,
             Self::Deleted => Some(Op::Delete),
             Self::Fresh { container } => {
-                let struct_ @ Container::Struct(_) = *container else { unreachable!() };
+                let struct_ @ Container::Struct(_) = *container else {
+                    unreachable!()
+                };
                 Some(Op::New(ValueImpl::Container(Box::new(struct_))))
             }
             Self::Cached { container, status } => match &*status.borrow() {
                 GlobalDataStatus::Dirty => {
-                    let struct_ @ Container::Struct(_) = *container else { unreachable!() };
+                    let struct_ @ Container::Struct(_) = *container else {
+                        unreachable!()
+                    };
                     Some(Op::New(ValueImpl::Container(Box::new(struct_))))
                 }
                 GlobalDataStatus::Clean => None,
@@ -2544,49 +2562,52 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueIm
             (MoveTypeLayout::Bool, ValueImpl::Bool(x)) => serializer.serialize_bool(*x),
             (MoveTypeLayout::Address, ValueImpl::Address(x)) => x.serialize(serializer),
 
-            (MoveTypeLayout::Struct(struct_layout), ValueImpl::Container(c)) if matches!(**c, Container::Variant(_)) => {
-                let Container::Struct(r) = **c else { unreachable!() };
+            (MoveTypeLayout::Struct(struct_layout), ValueImpl::Container(c))
+                if matches!(**c, Container::Variant(_)) =>
+            {
+                let Container::Struct(r) = &**c else {
+                    unreachable!()
+                };
                 (AnnotatedValue {
                     layout: struct_layout,
-                    val: &r,
+                    val: r,
                 })
                 .serialize(serializer)
             }
 
-            (MoveTypeLayout::Enum(enum_layout), ValueImpl::Container(c)) if matches!(**c, Container::Variant(_)) => {
-                let Container::Variant(r) = **c else { unreachable!() };
+            (MoveTypeLayout::Enum(enum_layout), ValueImpl::Container(c))
+                if matches!(**c, Container::Variant(_)) =>
+            {
+                let Container::Variant(r) = &**c else {
+                    unreachable!()
+                };
                 (AnnotatedValue {
                     layout: enum_layout,
-                    val: &r,
+                    val: &**r,
                 })
                 .serialize(serializer)
             }
 
             (MoveTypeLayout::Vector(layout), ValueImpl::Container(c)) => {
                 let layout = &**layout;
-                match (layout, **c) {
+                match (layout, &**c) {
                     (MoveTypeLayout::U8, Container::VecU8(r)) => r.serialize(serializer),
                     (MoveTypeLayout::U16, Container::VecU16(r)) => r.serialize(serializer),
                     (MoveTypeLayout::U32, Container::VecU32(r)) => r.serialize(serializer),
                     (MoveTypeLayout::U64, Container::VecU64(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U128, Container::VecU128(r)) => {
-                        r.serialize(serializer)
-                    }
-                    (MoveTypeLayout::U256, Container::VecU256(r)) => {
-                        r.serialize(serializer)
-                    }
-                    (MoveTypeLayout::Bool, Container::VecBool(r)) => {
-                        r.serialize(serializer)
-                    }
-                    (MoveTypeLayout::Address, Container::VecAddress(r)) => {
-                        r.serialize(serializer)
-                    }
+                    (MoveTypeLayout::U128, Container::VecU128(r)) => r.serialize(serializer),
+                    (MoveTypeLayout::U256, Container::VecU256(r)) => r.serialize(serializer),
+                    (MoveTypeLayout::Bool, Container::VecBool(r)) => r.serialize(serializer),
+                    (MoveTypeLayout::Address, Container::VecAddress(r)) => r.serialize(serializer),
 
                     (_, Container::Vec(r)) => {
                         let v = r;
                         let mut t = serializer.serialize_seq(Some(v.len()))?;
                         for val in v.iter() {
-                            t.serialize_element(&AnnotatedValue { layout, val })?;
+                            t.serialize_element(&AnnotatedValue {
+                                layout,
+                                val: &**val,
+                            })?;
                         }
                         t.end()
                     }
@@ -2598,8 +2619,12 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueIm
                 }
             }
 
-            (MoveTypeLayout::Signer, ValueImpl::Container(c)) if matches!(**c, Container::Struct(_)) => {
-                let Container::Struct(r) = **c else { unreachable!() };
+            (MoveTypeLayout::Signer, ValueImpl::Container(c))
+                if matches!(**c, Container::Struct(_)) =>
+            {
+                let Container::Struct(r) = &**c else {
+                    unreachable!()
+                };
                 let v = r;
                 if v.len() != 1 {
                     return Err(invariant_violation::<S>(format!(
@@ -2622,7 +2647,7 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveTypeLayout, ValueIm
     }
 }
 
-impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveStructLayout, Vec<ValueImpl>> {
+impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveStructLayout, FixedSizeVec> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let values = &self.val;
         let fields = self.layout.fields();
@@ -2644,7 +2669,7 @@ impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, MoveStructLayout, Vec<V
 }
 
 impl<'a, 'b> serde::Serialize
-    for AnnotatedValue<'a, 'b, MoveEnumLayout, (VariantTag, Vec<ValueImpl>)>
+    for AnnotatedValue<'a, 'b, MoveEnumLayout, (VariantTag, FixedSizeVec)>
 {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let (tag, values) = &self.val;
@@ -2679,7 +2704,7 @@ impl<'a, 'b> serde::Serialize
 
 struct VariantFields<'a>(&'a [MoveTypeLayout]);
 
-impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, VariantFields<'a>, Vec<ValueImpl>> {
+impl<'a, 'b> serde::Serialize for AnnotatedValue<'a, 'b, VariantFields<'a>, FixedSizeVec> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let values = self.val;
         let types = self.layout.0;
@@ -2735,9 +2760,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
             }
             .deserialize(deserializer)?),
 
-
             L::Vector(layout) => todo!(),
-
             // L::Vector(layout) => {
             //     let container = match &**layout {
             //         L::U8 => {
