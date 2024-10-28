@@ -32,8 +32,8 @@ impl CommitConsumer {
         UnboundedReceiver<CommittedSubDag>,
         UnboundedReceiver<BlockOutputBatch>,
     ) {
-        let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
-        let (block_sender, block_receiver) = unbounded_channel("consensus_certified");
+        let (commit_sender, commit_receiver) = unbounded_channel("consensus_commit_output");
+        let (block_sender, block_receiver) = unbounded_channel("consensus_block_output");
 
         let monitor = Arc::new(CommitConsumerMonitor::new(last_processed_commit_index));
         (
