@@ -4,40 +4,17 @@
 //! Detects meaningless math operations like `x * 0`, `x << 0`, `x >> 0`, `x * 1`, `x + 0`, `x - 0`
 //! Aims to reduce code redundancy and improve clarity by flagging operations with no effect.
 use crate::{
-    cfgir::ast as G,
-    cfgir::visitor::{CFGIRVisitorConstructor, CFGIRVisitorContext},
+    cfgir::visitor::simple_visitor,
     diag,
-    diagnostics::WarningFilters,
     hlir::ast::{self as H, Value_},
     linters::StyleCodes,
     parser::ast::BinOp_,
-    shared::CompilationEnv,
 };
 use move_core_types::u256::U256;
 use move_ir_types::location::Loc;
 
-pub struct MeaninglessMathOperation;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl CFGIRVisitorConstructor for MeaninglessMathOperation {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &G::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl CFGIRVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-
+simple_visitor!(
+    MeaninglessMathOperation,
     fn visit_exp_custom(&mut self, exp: &H::Exp) -> bool {
         let H::UnannotatedExp_::BinopExp(lhs, op, rhs) = &exp.exp.value else {
             return false;
@@ -54,7 +31,7 @@ impl CFGIRVisitorContext for Context<'_> {
         };
         if let Some(meaningless_operand) = is_unchanged {
             let msg = "This operation has no effect and can be removed";
-            self.env.add_diag(diag!(
+            self.add_diag(diag!(
                 StyleCodes::MeaninglessMath.diag_info(),
                 (exp.exp.loc, msg),
                 (meaningless_operand, "Because of this operand"),
@@ -70,7 +47,7 @@ impl CFGIRVisitorContext for Context<'_> {
         };
         if let Some(zero_operand) = is_always_zero {
             let msg = "This operation is always zero and can be replaced with '0'";
-            self.env.add_diag(diag!(
+            self.add_diag(diag!(
                 StyleCodes::MeaninglessMath.diag_info(),
                 (exp.exp.loc, msg),
                 (zero_operand, "Because of this operand"),
@@ -84,7 +61,7 @@ impl CFGIRVisitorContext for Context<'_> {
         };
         if let Some(one_operand) = is_always_one {
             let msg = "This operation is always one and can be replaced with '1'";
-            self.env.add_diag(diag!(
+            self.add_diag(diag!(
                 StyleCodes::MeaninglessMath.diag_info(),
                 (exp.exp.loc, msg),
                 (one_operand, "Because of this operand"),
@@ -95,7 +72,7 @@ impl CFGIRVisitorContext for Context<'_> {
 
         false
     }
-}
+);
 
 fn is_zero(exp: &H::Exp) -> Option<Loc> {
     let H::UnannotatedExp_::Value(sp!(loc, value_)) = &exp.exp.value else {

@@ -6,30 +6,14 @@
 //! within a module against this convention.
 use crate::{
     diag,
-    diagnostics::WarningFilters,
     expansion::ast::ModuleIdent,
     linters::StyleCodes,
     parser::ast::ConstantName,
-    shared::CompilationEnv,
-    typing::{
-        ast as T,
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
-    },
+    typing::{ast as T, visitor::simple_visitor},
 };
 
-pub struct ConstantNamingVisitor;
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-impl TypingVisitorConstructor for ConstantNamingVisitor {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
+simple_visitor!(
+    ConstantNamingVisitor,
     fn visit_constant_custom(
         &mut self,
         _module: ModuleIdent,
@@ -41,19 +25,11 @@ impl TypingVisitorContext for Context<'_> {
             let uid_msg =
                 format!("'{name}' should be ALL_CAPS. Or for error constants, use PascalCase",);
             let diagnostic = diag!(StyleCodes::ConstantNaming.diag_info(), (cdef.loc, uid_msg));
-            self.env.add_diag(diagnostic);
+            self.add_diag(diagnostic);
         }
         false
     }
-
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-}
+);
 
 /// Returns `true` if the string is in all caps snake case, including numeric characters.
 fn is_valid_name(name: &str) -> bool {

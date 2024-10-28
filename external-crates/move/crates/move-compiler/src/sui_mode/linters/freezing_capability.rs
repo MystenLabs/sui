@@ -7,17 +7,11 @@
 use super::{LinterDiagnosticCategory, LinterDiagnosticCode, LINT_WARNING_PREFIX};
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::codes::{custom, DiagnosticInfo, Severity},
     naming::ast::TypeName_,
-    shared::{CompilationEnv, Identifier},
+    shared::Identifier,
     sui_mode::linters::{FREEZE_FUN, PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME},
-    typing::{
-        ast as T, core,
-        visitor::{TypingVisitorConstructor, TypingVisitorContext},
-    },
+    typing::{ast as T, core, visitor::simple_visitor},
 };
 use move_ir_types::location::*;
 use once_cell::sync::Lazy;
@@ -36,22 +30,10 @@ const FREEZE_FUNCTIONS: &[(&str, &str, &str)] = &[
     (SUI_PKG_NAME, TRANSFER_MOD_NAME, FREEZE_FUN),
 ];
 
-pub struct WarnFreezeCapability;
-
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
 static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r".*Cap(?:[A-Z0-9_]+|ability|$).*").unwrap());
 
-impl TypingVisitorConstructor for WarnFreezeCapability {
-    type Context<'a> = Context<'a>;
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl<'a> TypingVisitorContext for Context<'a> {
+simple_visitor!(
+    WarnFreezeCapability,
     fn visit_module_custom(
         &mut self,
         _ident: crate::expansion::ast::ModuleIdent,
@@ -59,8 +41,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
     ) -> bool {
         // skips if true
         mdef.attributes.is_test_or_test_only()
-    }
-
+    },
     fn visit_function_custom(
         &mut self,
         _module: crate::expansion::ast::ModuleIdent,
@@ -69,8 +50,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
     ) -> bool {
         // skips if true
         fdef.attributes.is_test_or_test_only()
-    }
-
+    },
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         if let T::UnannotatedExp_::ModuleCall(fun) = &exp.exp.value {
             if is_freeze_function(fun) {
@@ -79,15 +59,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         }
         false
     }
-
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-}
+);
 
 fn is_freeze_function(fun: &T::ModuleCall) -> bool {
     FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
@@ -110,7 +82,7 @@ fn check_type_arguments(context: &mut Context, fun: &T::ModuleCall, loc: Loc) {
                 "Freezing a capability might lock out critical operations \
                 or otherwise open access to operations that otherwise should be restricted",
             );
-            context.env.add_diag(diag);
+            context.add_diag(diag);
         };
     }
 }
