@@ -29,7 +29,7 @@ pub enum StoredOwnerKind {
 }
 
 #[derive(Insertable, Debug, Clone)]
-#[diesel(table_name = sum_obj_types, primary_key(object_id, object_version))]
+#[diesel(table_name = sum_obj_types, primary_key(object_id))]
 pub struct StoredSumObjType {
     pub object_id: Vec<u8>,
     pub object_version: i64,
