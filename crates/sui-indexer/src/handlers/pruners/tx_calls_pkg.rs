@@ -26,7 +26,10 @@ impl Prunable for TxCallsPkg {
             .select(max(tx_calls_pkg::tx_sequence_number))
             .first::<Option<i64>>(conn)
             .await
-            .context("Failed to find latest tx_sequence_number")?
+            .context(format!(
+                "Failed to find earliest data for table {}",
+                Self::NAME.as_ref()
+            ))?
             .unwrap_or_default() as u64)
     }
 

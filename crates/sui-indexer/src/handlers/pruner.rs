@@ -130,8 +130,6 @@ impl Pruner {
 
         let mut table_tasks = spawn_pruners(cancel.clone(), self.store.clone());
 
-        println!("added table tasks");
-
         for table in PrunableTable::iter() {
             let store_clone = self.store.clone();
             let cancel_clone = cancel.clone();

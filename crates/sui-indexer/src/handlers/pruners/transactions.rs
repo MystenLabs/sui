@@ -17,17 +17,14 @@ impl Prunable for Transactions {
     const CHUNK_SIZE: u64 = 1;
 
     async fn data_lo(conn: &mut Connection<'_>) -> anyhow::Result<u64> {
-        println!("trying to get data_lo");
-        let result = diesel::sql_query(get_partition_sql(Self::NAME.as_ref()))
+        diesel::sql_query(get_partition_sql(Self::NAME.as_ref()))
             .get_result::<PartitionedTable>(conn)
             .await
             .map(|entry| entry.first_partition as u64)
-            .context("failed to get first partition");
-
-        println!("result: {:?}", result);
-
-        println!("got data_lo");
-        result
+            .context(format!(
+                "Failed to find earliest data for table {}",
+                Self::NAME.as_ref()
+            ))
     }
 
     async fn prune(

@@ -26,7 +26,10 @@ impl Prunable for Checkpoints {
             .select(max(checkpoints::sequence_number))
             .first::<Option<i64>>(conn)
             .await
-            .context("Failed to find latest checkpoint sequence number")?
+            .context(format!(
+                "Failed to find earliest data for table {}",
+                Self::NAME.as_ref()
+            ))?
             .unwrap_or_default() as u64)
     }
 
