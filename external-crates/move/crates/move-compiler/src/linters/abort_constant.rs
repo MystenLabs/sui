@@ -39,9 +39,20 @@ impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
     }
 }
 
+impl Context<'_> {
+    fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
+        self.env.add_diag(diag);
+    }
+
+    #[allow(unused)]
+    fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
+        self.env.add_diags(diags);
+    }
+}
+
 impl CFGIRVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
+    fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.env.add_warning_filter_scope(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {
@@ -76,7 +87,7 @@ impl Context<'_> {
                 diag.add_note("Consider using an error constant with the '#[error]' to allow for a more descriptive error.");
             }
 
-            self.env.add_diag(diag);
+            self.add_diag(diag);
         }
     }
 }
