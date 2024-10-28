@@ -26,6 +26,7 @@ pub const GET_POOLS_PATH: &str = "/get_pools";
 pub const GET_24HR_VOLUME_PATH: &str = "/get_24hr_volume/:pool_ids";
 pub const GET_24HR_VOLUME_BY_BALANCE_MANAGER_ID: &str =
     "/get_24hr_volume_by_balance_manager_id/:pool_id/:balance_manager_id";
+pub const GET_HISTORICAL_VOLUME_PATH: &str = "/get_historical_volume/:pool_ids/:start_time/:end_time";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
 
 pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> JoinHandle<()> {
@@ -40,6 +41,7 @@ pub(crate) fn make_router(state: PgDeepbookPersistent) -> Router {
         .route("/", get(health_check))
         .route(GET_POOLS_PATH, get(get_pools))
         .route(GET_24HR_VOLUME_PATH, get(get_24hr_volume))
+        .route(GET_HISTORICAL_VOLUME_PATH, get(get_historical_volume))
         .route(
             GET_24HR_VOLUME_BY_BALANCE_MANAGER_ID,
             get(get_24hr_volume_by_balance_manager_id),
@@ -109,6 +111,33 @@ async fn get_24hr_volume(
         .load(connection)
         .await?;
 
+    let mut volume_by_pool = HashMap::new();
+    for (pool_id, volume) in results {
+        *volume_by_pool.entry(pool_id).or_insert(0) += volume as u64;
+    }
+
+    Ok(Json(volume_by_pool))
+}
+
+async fn get_historical_volume(
+    Path((pool_ids, start_time, end_time)): Path<(String, i64, i64)>,
+    State(state): State<PgDeepbookPersistent>,
+) -> Result<Json<HashMap<String, u64>>, DeepBookError> {
+    let connection = &mut state.pool.get().await?;
+
+    let pool_ids_list: Vec<String> = pool_ids.split(',').map(|s| s.to_string()).collect();
+
+    let results: Vec<(String, i64)> = schema::order_fills::table
+        .select((
+            schema::order_fills::pool_id,
+            schema::order_fills::base_quantity,
+        ))
+        .filter(schema::order_fills::pool_id.eq_any(pool_ids_list))
+        .filter(schema::order_fills::onchain_timestamp.between(start_time, end_time))
+        .load(connection)
+        .await?;
+
+    // Aggregate volume by pool
     let mut volume_by_pool = HashMap::new();
     for (pool_id, volume) in results {
         *volume_by_pool.entry(pool_id).or_insert(0) += volume as u64;
