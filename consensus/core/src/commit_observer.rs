@@ -119,7 +119,7 @@ impl CommitObserver {
         Ok(())
     }
 
-    // Certified blocks are not sent to fast path, for efficiency.
+    // Certified blocks are not sent to fast path on recovery, for efficiency.
     fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
         let now = Instant::now();
         // TODO: remove this check, to allow consensus to regenerate commits?

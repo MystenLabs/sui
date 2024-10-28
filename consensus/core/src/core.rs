@@ -622,8 +622,9 @@ impl Core {
         Ok(committed_subdags)
     }
 
-    // Try processed certified blocks.
-    // Every transaction in a certified block is either accepted or rejected by a quorum.
+    // Try certifying blocks in the DAG. A certified block must meet these criteria within its voting round:
+    // - A quorum of authorities link to the block via ancestors.
+    // - Every transaction in the block is either accepted or rejected by a quorum.
     fn try_certify(&mut self) -> ConsensusResult<()> {
         if !self.context.protocol_config.mysticeti_fastpath() {
             return Ok(());
