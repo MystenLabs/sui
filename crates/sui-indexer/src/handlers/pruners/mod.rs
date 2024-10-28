@@ -177,6 +177,34 @@ pub fn spawn_pruner<T: Prunable>(
     spawn_monitored_task!(run_pruner::<T>(cancel, store))
 }
 
+pub fn spawn_pruners(
+    cancel: CancellationToken,
+    store: PgIndexerStore,
+) -> Vec<JoinHandle<IndexerResult<()>>> {
+    vec![
+        spawn_pruner::<checkpoints::Checkpoints>(cancel.clone(), store.clone()),
+        spawn_pruner::<ev_emit_module::EventEmitModule>(cancel.clone(), store.clone()),
+        spawn_pruner::<ev_emit_package::EventEmitPackage>(cancel.clone(), store.clone()),
+        spawn_pruner::<ev_senders::EventSenders>(cancel.clone(), store.clone()),
+        spawn_pruner::<ev_struct_inst::EventStructInstantiation>(cancel.clone(), store.clone()),
+        spawn_pruner::<ev_struct_module::EventStructModule>(cancel.clone(), store.clone()),
+        spawn_pruner::<ev_struct_name::EventStructName>(cancel.clone(), store.clone()),
+        spawn_pruner::<ev_struct_package::EventStructPackage>(cancel.clone(), store.clone()),
+        spawn_pruner::<events::Events>(cancel.clone(), store.clone()),
+        spawn_pruner::<objects_history::ObjectsHistory>(cancel.clone(), store.clone()),
+        spawn_pruner::<transactions::Transactions>(cancel.clone(), store.clone()),
+        spawn_pruner::<tx_affected_addresses::TxAffectedAddresses>(cancel.clone(), store.clone()),
+        spawn_pruner::<tx_affected_objects::TxAffectedObjects>(cancel.clone(), store.clone()),
+        spawn_pruner::<tx_calls_fun::TxCallsFun>(cancel.clone(), store.clone()),
+        spawn_pruner::<tx_calls_mod::TxCallsMod>(cancel.clone(), store.clone()),
+        spawn_pruner::<tx_calls_pkg::TxCallsPkg>(cancel.clone(), store.clone()),
+        spawn_pruner::<tx_changed_objects::TxChangedObjects>(cancel.clone(), store.clone()),
+        spawn_pruner::<tx_digests::TxDigests>(cancel.clone(), store.clone()),
+        spawn_pruner::<tx_input_objects::TxInputObjects>(cancel.clone(), store.clone()),
+        spawn_pruner::<tx_kinds::TxKinds>(cancel.clone(), store.clone()),
+    ]
+}
+
 #[macro_export]
 macro_rules! execute_delete_range_query {
     ($conn:expr, $table:ident, $column:ident, $min:expr, $max:expr) => {
