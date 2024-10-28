@@ -74,9 +74,9 @@ pub(super) fn watermark<H: Handler + 'static>(
         let mut poll = interval(config.watermark_interval);
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        // To correctly update the watermark, the committer tracks the watermark it last tried to
-        // write and the watermark parts for any checkpoints that have been written since then
-        // ("pre-committed"). After each batch is written, the committer will try to progress the
+        // To correctly update the watermark, the task tracks the watermark it last tried to write
+        // and the watermark parts for any checkpoints that have been written since then
+        // ("pre-committed"). After each batch is written, the task will try to progress the
         // watermark as much as possible without going over any holes in the sequence of
         // checkpoints (entirely missing watermarks, or incomplete watermarks).
         //
