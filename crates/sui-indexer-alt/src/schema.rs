@@ -50,6 +50,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    sum_obj_types (object_id) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        owner_kind -> Int2,
+        owner_id -> Nullable<Bytea>,
+        package -> Nullable<Bytea>,
+        module -> Nullable<Text>,
+        name -> Nullable<Text>,
+        instantiation -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
     tx_affected_objects (affected, tx_sequence_number) {
         tx_sequence_number -> Int8,
         affected -> Bytea,
@@ -83,6 +96,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_checkpoints,
     kv_objects,
     kv_transactions,
+    sum_obj_types,
     tx_affected_objects,
     tx_balance_changes,
     watermarks,
