@@ -2150,10 +2150,10 @@ pub fn compute_symbols_typed_program(
         computation_data,
         mapped_files,
         compiler_info,
-        &mut compiled_pkg_info.program.typed,
+        &compiled_pkg_info.program.typed,
     );
     let mut file_use_defs = BTreeMap::new();
-    update_file_use_defs(&computation_data, &source_files, &mut file_use_defs);
+    update_file_use_defs(&computation_data, source_files, &mut file_use_defs);
 
     let cacheable_symbols_data_opt =
         if let Some(cached_deps) = compiled_pkg_info.cached_deps.clone() {
@@ -2175,7 +2175,7 @@ pub fn compute_symbols_typed_program(
             // create `file_use_defs` map and merge references to produce complete symbols data
             // (mod_outer_defs and def_info have already been merged to facilitate user program
             // analysis)
-            update_file_use_defs(&deps_symbols_data, &source_files, &mut file_use_defs);
+            update_file_use_defs(&deps_symbols_data, source_files, &mut file_use_defs);
             for (def_loc, uses) in &deps_symbols_data.references {
                 computation_data
                     .references
@@ -2216,7 +2216,7 @@ pub fn compute_symbols(
     cursor_info: Option<(&PathBuf, Position)>,
 ) -> Symbols {
     let pkg_path = compiled_pkg_info.path.clone();
-    let manifest_hash = compiled_pkg_info.manifest_hash.clone();
+    let manifest_hash = compiled_pkg_info.manifest_hash;
     let cached_dep_opt = compiled_pkg_info.cached_deps.clone();
     let deps_hash = compiled_pkg_info.deps_hash.clone();
     let mut symbols_computation_data = SymbolsComputationData::new();
@@ -2230,7 +2230,7 @@ pub fn compute_symbols(
     let cursor_context = compute_symbols_parsed_program(
         &mut symbols_computation_data,
         &mut symbols_computation_data_deps,
-        &mut compiled_pkg_info,
+        &compiled_pkg_info,
         cursor_context,
     );
 
