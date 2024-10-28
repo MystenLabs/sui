@@ -207,7 +207,7 @@ impl CompletionTest {
         cursor_context = compute_symbols_parsed_program(
             &mut symbols_computation_data,
             &mut symbols_computation_data_deps,
-            &mut compiled_pkg_info,
+            &compiled_pkg_info,
             cursor_context,
         );
         symbols.cursor_context = cursor_context;
@@ -270,7 +270,7 @@ impl CursorTest {
         cursor_context = compute_symbols_parsed_program(
             &mut symbols_computation_data,
             &mut symbols_computation_data_deps,
-            &mut compiled_pkg_info,
+            &compiled_pkg_info,
             cursor_context,
         );
         symbols.cursor_context = cursor_context.clone();
