@@ -10,7 +10,7 @@ use crate::{
         utils::{completion_item, PRIMITIVE_TYPE_COMPLETIONS},
     },
     context::Context,
-    symbols::{self, CursorContext, PrecompiledPkgDeps, SymbolicatorRunner, Symbols},
+    symbols::{self, CursorContext, PrecomputedPkgDepsInfo, SymbolicatorRunner, Symbols},
 };
 use lsp_server::Request;
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
@@ -78,7 +78,7 @@ pub fn on_completion_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgDepsInfo>>>,
 ) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
@@ -119,7 +119,7 @@ pub fn on_completion_request(
 fn completions(
     context: &Context,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgDepsInfo>>>,
     path: &Path,
     pos: Position,
 ) -> Option<Vec<CompletionItem>> {
@@ -143,7 +143,7 @@ fn completions(
 pub fn compute_completions(
     current_symbols: &Symbols,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgDepsInfo>>>,
     path: &Path,
     pos: Position,
 ) -> Vec<CompletionItem> {
@@ -156,7 +156,7 @@ pub fn compute_completions(
 /// view of the code (returns `None` if the symbols could not be re-computed).
 fn compute_completions_new_symbols(
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgDepsInfo>>>,
     path: &Path,
     cursor_position: Position,
 ) -> Option<Vec<CompletionItem>> {
