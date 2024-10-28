@@ -1653,10 +1653,10 @@ impl AstDebug for Exp_ {
 
             E::Abort(e) => {
                 w.write("abort");
-                e.as_ref().map(|e| {
+                if let Some(e) = e {
                     w.write(" ");
                     e.ast_debug(w);
-                });
+                }
             }
             E::Return(name, e) => {
                 w.write("return ");

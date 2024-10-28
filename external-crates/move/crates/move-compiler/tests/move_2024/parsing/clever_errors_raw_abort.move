@@ -26,6 +26,7 @@ fun f4(): u64 {
     1 + 1
 }
 
+#[allow(unused_trailing_semi)]
 fun f5() {
     abort;
 }
