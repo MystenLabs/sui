@@ -70,9 +70,11 @@ impl Processor for SumObjTypes {
         // Iterate over transactions in reverse so we see the latest version of each object first.
         for tx in transactions.iter().rev() {
             // Deleted and wrapped objects -- objects that show up without a digest in
-            // `object_changes` are either deleted or wrapped.
+            // `object_changes` are either deleted or wrapped. Objects without an input version
+            // must have been unwrapped and deleted, meaning they do not need to be deleted from
+            // our records.
             for change in tx.effects.object_changes() {
-                if change.output_digest.is_some() {
+                if change.output_digest.is_some() || change.input_version.is_none() {
                     continue;
                 }
 
