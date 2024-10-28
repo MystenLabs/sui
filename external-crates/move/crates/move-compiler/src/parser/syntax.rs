@@ -71,7 +71,7 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         }
     }
 
-    fn add_diag(&mut self, diag: Diagnostic) {
+    fn add_diag(&self, diag: Diagnostic) {
         let warning_filters = self.env.top_level_warning_filter_scope();
         self.env.add_diag(warning_filters, diag);
     }

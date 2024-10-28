@@ -69,11 +69,11 @@ impl<'env> Context<'env> {
         }
     }
 
-    pub fn add_diag(&mut self, diag: Diagnostic) {
+    pub fn add_diag(&self, diag: Diagnostic) {
         self.env.add_diag(&self.warning_filters_scope, diag);
     }
 
-    pub fn add_diags(&mut self, diags: Diagnostics) {
+    pub fn add_diags(&self, diags: Diagnostics) {
         self.env.add_diags(&self.warning_filters_scope, diags);
     }
 
@@ -1027,11 +1027,11 @@ impl CFGIRVisitorConstructor for AbsintVisitor {
 
 impl AbsintVisitorContext<'_> {
     #[allow(unused)]
-    fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
+    fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
         self.env.add_diag(&self.warning_filters_scope, diag);
     }
 
-    fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
+    fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
         self.env.add_diags(&self.warning_filters_scope, diags);
     }
 }

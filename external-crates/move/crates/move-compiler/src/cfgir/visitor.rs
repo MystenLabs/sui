@@ -345,12 +345,12 @@ macro_rules! simple_visitor {
 
         impl Context<'_> {
             #[allow(unused)]
-            fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
+            fn add_diag(&self, diag: crate::diagnostics::Diagnostic) {
                 self.env.add_diag(&self.warning_filters_scope, diag);
             }
 
             #[allow(unused)]
-            fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
+            fn add_diags(&self, diags: crate::diagnostics::Diagnostics) {
                 self.env.add_diags(&self.warning_filters_scope, diags);
             }
         }

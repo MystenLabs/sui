@@ -263,22 +263,22 @@ impl<'env, 'map> Context<'env, 'map> {
         )
     }
 
-    pub fn add_diag(&mut self, diag: Diagnostic) {
+    pub fn add_diag(&self, diag: Diagnostic) {
         self.defn_context.add_diag(diag);
     }
 
     #[allow(unused)]
-    pub fn add_diags(&mut self, diags: Diagnostics) {
+    pub fn add_diags(&self, diags: Diagnostics) {
         self.defn_context.add_diags(diags);
     }
 
     #[allow(unused)]
-    pub fn extend_ide_info(&mut self, info: IDEInfo) {
+    pub fn extend_ide_info(&self, info: IDEInfo) {
         self.defn_context.extend_ide_info(info);
     }
 
     #[allow(unused)]
-    pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+    pub fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
         self.defn_context.add_ide_annotation(loc, info);
     }
 
@@ -292,19 +292,19 @@ impl<'env, 'map> Context<'env, 'map> {
 }
 
 impl DefnContext<'_, '_> {
-    pub(super) fn add_diag(&mut self, diag: Diagnostic) {
+    pub(super) fn add_diag(&self, diag: Diagnostic) {
         self.env.add_diag(&self.warning_filters_scope, diag);
     }
 
-    pub(super) fn add_diags(&mut self, diags: Diagnostics) {
+    pub(super) fn add_diags(&self, diags: Diagnostics) {
         self.env.add_diags(&self.warning_filters_scope, diags);
     }
 
-    pub(super) fn extend_ide_info(&mut self, info: IDEInfo) {
+    pub(super) fn extend_ide_info(&self, info: IDEInfo) {
         self.env.extend_ide_info(&self.warning_filters_scope, info);
     }
 
-    pub(super) fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+    pub(super) fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
         self.env
             .add_ide_annotation(&self.warning_filters_scope, loc, info);
     }

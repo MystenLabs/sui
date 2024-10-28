@@ -46,12 +46,12 @@ impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
 }
 
 impl Context<'_> {
-    fn add_diag(&mut self, diag: Diagnostic) {
+    fn add_diag(&self, diag: Diagnostic) {
         self.env.add_diag(&self.warning_filters_scope, diag);
     }
 
     #[allow(unused)]
-    fn add_diags(&mut self, diags: Diagnostics) {
+    fn add_diags(&self, diags: Diagnostics) {
         self.env.add_diags(&self.warning_filters_scope, diags);
     }
 }

@@ -482,10 +482,7 @@ impl<'input> Lexer<'input> {
     // At the end of parsing, checks whether there are any unmatched documentation comments,
     // producing errors if so. Otherwise returns a map from file position to associated
     // documentation.
-    pub fn check_and_get_doc_comments(
-        &mut self,
-        env: &CompilationEnv,
-    ) -> MatchedFileCommentMap {
+    pub fn check_and_get_doc_comments(&mut self, env: &CompilationEnv) -> MatchedFileCommentMap {
         let msg = "Documentation comment cannot be matched to a language item";
         let diags = self
             .doc_comments
