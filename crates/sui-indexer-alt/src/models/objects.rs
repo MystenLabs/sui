@@ -7,7 +7,7 @@ use diesel::{
 };
 use sui_types::base_types::ObjectID;
 
-use crate::schema::{kv_objects, sum_obj_types};
+use crate::schema::{kv_objects, sum_coin_balances, sum_obj_types};
 
 #[derive(Insertable, Debug, Clone)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
@@ -18,7 +18,7 @@ pub struct StoredObject {
 }
 
 /// An insert/update or deletion of an object record, keyed on a particular Object ID and version.
-#[derive(AsExpression, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StoredObjectUpdate<T> {
     pub object_id: ObjectID,
     pub object_version: u64,
@@ -35,6 +35,16 @@ pub enum StoredOwnerKind {
     Address = 1,
     Object = 2,
     Shared = 3,
+}
+
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = sum_coin_balances, primary_key(object_id))]
+pub struct StoredSumCoinBalance {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub owner_id: Vec<u8>,
+    pub coin_type: Vec<u8>,
+    pub coin_balance: i64,
 }
 
 #[derive(Insertable, Debug, Clone)]
