@@ -26,7 +26,8 @@ pub const GET_POOLS_PATH: &str = "/get_pools";
 pub const GET_24HR_VOLUME_PATH: &str = "/get_24hr_volume/:pool_ids";
 pub const GET_24HR_VOLUME_BY_BALANCE_MANAGER_ID: &str =
     "/get_24hr_volume_by_balance_manager_id/:pool_id/:balance_manager_id";
-pub const GET_HISTORICAL_VOLUME_PATH: &str = "/get_historical_volume/:pool_ids/:start_time/:end_time";
+pub const GET_HISTORICAL_VOLUME_PATH: &str =
+    "/get_historical_volume/:pool_ids/:start_time/:end_time";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
 
 pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> JoinHandle<()> {
