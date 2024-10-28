@@ -122,6 +122,7 @@ members = [
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
     "crates/sui-kvstore",
+    "crates/sui-kvstore/builder",
     "crates/sui-light-client",
     "crates/sui-macros",
     "crates/sui-metric-checker",
