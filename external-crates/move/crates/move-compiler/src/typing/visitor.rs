@@ -44,7 +44,7 @@ pub enum LValueKind {
 }
 
 pub trait TypingVisitorContext {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters);
+    fn add_warning_filter_scope(&mut self, filters: WarningFilters);
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum
@@ -191,6 +191,8 @@ pub trait TypingVisitorContext {
             }
         }
     }
+
+    // TODO field visitor
 
     fn visit_constant_custom(
         &mut self,
@@ -570,20 +572,65 @@ impl<V: TypingVisitorConstructor + Send + Sync> TypingVisitor for V {
     }
 }
 
+macro_rules! simple_visitor {
+    ($visitor:ident, $($overrides:item)*) => {
+        pub struct $visitor;
+
+        pub struct Context<'a> {
+            env: &'a mut crate::shared::CompilationEnv,
+        }
+
+        impl crate::typing::visitor::TypingVisitorConstructor for $visitor {
+            type Context<'a> = Context<'a>;
+
+            fn context<'a>(env: &'a mut crate::shared::CompilationEnv, _program: &crate::typing::ast::Program) -> Self::Context<'a> {
+                Context {
+                    env,
+                }
+            }
+        }
+
+        impl Context<'_> {
+            #[allow(unused)]
+            fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
+                self.env.add_diag(diag);
+            }
+
+            #[allow(unused)]
+            fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
+                self.env.add_diags(diags);
+            }
+        }
+
+        impl crate::typing::visitor::TypingVisitorContext for Context<'_> {
+            fn add_warning_filter_scope(&mut self, filters: crate::diagnostics::WarningFilters) {
+                self.env.add_warning_filter_scope(filters)
+            }
+
+            fn pop_warning_filter_scope(&mut self) {
+                self.env.pop_warning_filter_scope()
+            }
+
+            $($overrides)*
+        }
+    }
+}
+pub(crate) use simple_visitor;
+
 //**************************************************************************************************
 // Mut Vistor
 //**************************************************************************************************
 
 pub trait TypingMutVisitor: Send + Sync {
-    fn visit(&self, env: &mut CompilationEnv, program: &mut T::Program);
+    fn visit(&self, env: &CompilationEnv, program: &mut T::Program);
 }
 
 pub trait TypingMutVisitorConstructor: Send + Sync {
     type Context<'a>: Sized + TypingMutVisitorContext;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a>;
+    fn context<'a>(env: &'a CompilationEnv, program: &T::Program) -> Self::Context<'a>;
 
-    fn visit(env: &mut CompilationEnv, program: &mut T::Program) {
+    fn visit(env: &CompilationEnv, program: &mut T::Program) {
         let mut context = Self::context(env, program);
         context.visit(program);
     }
@@ -1104,7 +1151,7 @@ pub trait TypingMutVisitorContext {
 }
 
 impl<V: TypingMutVisitorConstructor> TypingMutVisitor for V {
-    fn visit(&self, env: &mut CompilationEnv, program: &mut T::Program) {
+    fn visit(&self, env: &CompilationEnv, program: &mut T::Program) {
         Self::visit(env, program)
     }
 }

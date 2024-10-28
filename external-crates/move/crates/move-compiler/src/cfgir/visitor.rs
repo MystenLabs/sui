@@ -66,7 +66,7 @@ pub trait CFGIRVisitorConstructor: Send {
 }
 
 pub trait CFGIRVisitorContext {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters);
+    fn add_warning_filter_scope(&mut self, filters: WarningFilters);
     fn pop_warning_filter_scope(&mut self);
 
     fn visit_module_custom(&mut self, _ident: ModuleIdent, _mdef: &G::ModuleDefinition) -> bool {
@@ -326,6 +326,51 @@ impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
         Self::visit(env, program)
     }
 }
+
+macro_rules! simple_visitor {
+    ($visitor:ident, $($overrides:item)*) => {
+        pub struct $visitor;
+
+        pub struct Context<'a> {
+            env: &'a mut crate::shared::CompilationEnv,
+        }
+
+        impl crate::cfgir::visitor::CFGIRVisitorConstructor for $visitor {
+            type Context<'a> = Context<'a>;
+
+            fn context<'a>(env: &'a mut crate::shared::CompilationEnv, _program: &crate::cfgir::ast::Program) -> Self::Context<'a> {
+                Context {
+                    env,
+                }
+            }
+        }
+
+        impl Context<'_> {
+            #[allow(unused)]
+            fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
+                self.env.add_diag(diag);
+            }
+
+            #[allow(unused)]
+            fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
+                self.env.add_diags(diags);
+            }
+        }
+
+        impl crate::cfgir::visitor::CFGIRVisitorContext for Context<'_> {
+            fn add_warning_filter_scope(&mut self, filters: crate::diagnostics::WarningFilters) {
+                self.env.add_warning_filter_scope(filters)
+            }
+
+            fn pop_warning_filter_scope(&mut self) {
+                self.env.pop_warning_filter_scope()
+            }
+
+            $($overrides)*
+        }
+    }
+}
+pub(crate) use simple_visitor;
 
 //**************************************************************************************************
 // simple absint visitor
