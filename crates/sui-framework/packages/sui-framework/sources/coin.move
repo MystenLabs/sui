@@ -11,6 +11,7 @@ use std::string;
 use std::type_name;
 use sui::balance::{Self, Balance, Supply};
 use sui::deny_list::DenyList;
+use sui::dynamic_field;
 use sui::url::{Self, Url};
 
 // Allows calling `.split_vec(amounts, ctx)` on `coin`
@@ -86,6 +87,18 @@ public struct TreasuryCap<phantom T> has key, store {
 public struct DenyCapV2<phantom T> has key, store {
     id: UID,
     allow_global_pause: bool,
+}
+
+/// A dynamic field key added to `CoinMetadata` objects created after protocol version 63.
+/// This is bound to a `RegulatedInfo` enum
+public struct RegulatedMarker() has copy, drop, store;
+
+/// Auxiliary metadata about the regulated operations supported by the coin (if any)
+public enum RegulatedInfo has copy, drop, store {
+    /// An ordinary coin that does not support a denylist or global pause
+    Ordinary,
+    /// A regulated coin that supports a denylist, and (maybe) global paus
+    Regulated,
 }
 
 // === Supply <-> TreasuryCap morphing and accessors  ===
@@ -217,9 +230,30 @@ public fun create_currency<T: drop>(
     icon_url: Option<Url>,
     ctx: &mut TxContext,
 ): (TreasuryCap<T>, CoinMetadata<T>) {
+    let (treasury_cap, mut metadata) = create_currency_(
+        witness,
+        decimals,
+        symbol,
+        name,
+        description,
+        icon_url,
+        ctx,
+    );
+    dynamic_field::add(&mut metadata.id, RegulatedMarker(), RegulatedInfo::Ordinary);
+    (treasury_cap, metadata)
+}
+
+fun create_currency_<T: drop>(
+    witness: T,
+    decimals: u8,
+    symbol: vector<u8>,
+    name: vector<u8>,
+    description: vector<u8>,
+    icon_url: Option<Url>,
+    ctx: &mut TxContext,
+): (TreasuryCap<T>, CoinMetadata<T>) {
     // Make sure there's only one instance of the type T
     assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
-
     (
         TreasuryCap {
             id: object::new(ctx),
@@ -254,7 +288,7 @@ public fun create_regulated_currency_v2<T: drop>(
     allow_global_pause: bool,
     ctx: &mut TxContext,
 ): (TreasuryCap<T>, DenyCapV2<T>, CoinMetadata<T>) {
-    let (treasury_cap, metadata) = create_currency(
+    let (treasury_cap, mut metadata) = create_currency_(
         witness,
         decimals,
         symbol,
@@ -272,7 +306,24 @@ public fun create_regulated_currency_v2<T: drop>(
         coin_metadata_object: object::id(&metadata),
         deny_cap_object: object::id(&deny_cap),
     });
+    dynamic_field::add(
+        &mut metadata.id,
+        RegulatedMarker(),
+        RegulatedInfo::Regulated,
+    );
     (treasury_cap, deny_cap, metadata)
+}
+
+/// Return Some(true) if `T` is a regulated currency, Some(false) if it is an ordinary currency.
+/// Return None if T was created at a protocol version prior to 63
+public fun is_regulated_currency<T>(metadata: &CoinMetadata<T>): Option<bool> {
+    if (!dynamic_field::exists_(&metadata.id, RegulatedMarker())) {
+        return option::none()
+    };
+    match (dynamic_field::borrow(&metadata.id, RegulatedMarker())) {
+        RegulatedInfo::Ordinary => option::some(false),
+        RegulatedInfo::Regulated => option::some(true),
+    }
 }
 
 /// Given the `DenyCap` for a regulated currency, migrate it to the new `DenyCapV2` type.
@@ -539,7 +590,7 @@ public fun create_regulated_currency<T: drop>(
     icon_url: Option<Url>,
     ctx: &mut TxContext,
 ): (TreasuryCap<T>, DenyCap<T>, CoinMetadata<T>) {
-    let (treasury_cap, metadata) = create_currency(
+    let (treasury_cap, mut metadata) = create_currency_(
         witness,
         decimals,
         symbol,
@@ -556,6 +607,11 @@ public fun create_regulated_currency<T: drop>(
         coin_metadata_object: object::id(&metadata),
         deny_cap_object: object::id(&deny_cap),
     });
+    dynamic_field::add(
+        &mut metadata.id,
+        RegulatedMarker(),
+        RegulatedInfo::Regulated,
+    );
     (treasury_cap, deny_cap, metadata)
 }
 
