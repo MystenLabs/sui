@@ -23,9 +23,8 @@ use move_core_types::{
 use std::{
     cell::RefCell,
     fmt::{self, Debug, Display},
-    mem::replace,
     ops::{Add, Index, IndexMut},
-    rc::Rc,
+    rc::Rc, intrinsics::unreachable,
 };
 
 macro_rules! debug_write {
@@ -187,11 +186,11 @@ enum GlobalValueImpl {
     /// No resource resides in this slot or in storage.
     None,
     /// A resource has been published to this slot and it did not previously exist in storage.
-    Fresh { fields: Rc<RefCell<Vec<ValueImpl>>> },
+    Fresh { container: Box<Container> },
     /// A resource resides in this slot and also in storage. The status flag indicates whether
     /// it has potentially been altered.
     Cached {
-        fields: Rc<RefCell<Vec<ValueImpl>>>,
+        container: Box<Container>,
         status: Rc<RefCell<GlobalDataStatus>>,
     },
     /// A resource used to exist in storage but has been deleted by the current transaction.
@@ -1006,11 +1005,11 @@ impl Value {
     }
 
     pub fn u128(x: u128) -> Self {
-        Self(ValueImpl::U128(x))
+        Self(ValueImpl::U128(Box::new(x)))
     }
 
     pub fn u256(x: u256::U256) -> Self {
-        Self(ValueImpl::U256(x))
+        Self(ValueImpl::U256(Box::new(x)))
     }
 
     pub fn bool(x: bool) -> Self {
@@ -1018,11 +1017,11 @@ impl Value {
     }
 
     pub fn address(x: AccountAddress) -> Self {
-        Self(ValueImpl::Address(x))
+        Self(ValueImpl::Address(Box::new(x)))
     }
 
     pub fn signer(x: AccountAddress) -> Self {
-        Self(Container::signer(x))
+        Self(ValueImpl::Container(Box::new(Container::signer(x))))
     }
 
     pub fn struct_(s: Struct) -> Self {
@@ -1211,12 +1210,12 @@ impl VMValueCast<Variant> for Value {
 }
 
 impl VMValueCast<StructRef> for Value {
-    fn cast(mut self) -> PartialVMResult<StructRef> {
-        // Take ownership of the value by replacing it with `Invalid`
-        let value = std::mem::replace(&mut self.0, ValueImpl::Invalid);
-        match value {
+    fn cast(self) -> PartialVMResult<StructRef> {
+        match self.0 {
             // Match the container and wrap it in StructRef
-            ValueImpl::Container(container) => Ok(StructRef(*container)),
+            ValueImpl::Reference(ReferenceImpl::Container(c_)) if matches!(c_.to_ref(), Container::Struct(_)) => {
+                Ok(StructRef(c_.ptr_clone()))
+            }
             // Return an error if the value is not a container
             v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                 .with_message(format!("cannot cast {:?} to StructRef", v))),
@@ -1225,12 +1224,13 @@ impl VMValueCast<StructRef> for Value {
 }
 
 impl VMValueCast<VariantRef> for Value {
-    fn cast(mut self) -> PartialVMResult<VariantRef> {
+    fn cast(self) -> PartialVMResult<VariantRef> {
         // Take ownership of the value by replacing it with `Invalid`
-        let value = std::mem::replace(&mut self.0, ValueImpl::Invalid);
-        match value {
+        match self.0 {
             // Match the container and wrap it in VariantRef
-            ValueImpl::Container(container) => Ok(VariantRef(*container)),
+            ValueImpl::Reference(ReferenceImpl::Container(c_)) if matches!(c_.to_ref(), Container::Variant(_)) => {
+                Ok(VariantRef(c_.ptr_clone()))
+            }
             // Return an error if the value is not a container
             v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                 .with_message(format!("cannot cast {:?} to VariantRef", v))),
@@ -2075,9 +2075,9 @@ impl GlobalValueImpl {
         status: GlobalDataStatus,
     ) -> Result<Self, (PartialVMError, ValueImpl)> {
         match val {
-            ValueImpl::Container(Container::Struct(fields)) => {
+            ValueImpl::Container(container) if matches!(*container, Container::Struct(_)) => {
                 let status = Rc::new(RefCell::new(status));
-                Ok(Self::Cached { fields, status })
+                Ok(Self::Cached { container, status })
             }
             val => Err((
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2089,7 +2089,9 @@ impl GlobalValueImpl {
 
     fn fresh(val: ValueImpl) -> Result<Self, (PartialVMError, ValueImpl)> {
         match val {
-            ValueImpl::Container(Container::Struct(fields)) => Ok(Self::Fresh { fields }),
+            ValueImpl::Container(container) if matches!(*container, Container::Struct(_)) => {
+                Ok(Self::Fresh { container })
+            }
             val => Err((
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("failed to publish fresh: not a resource".to_string()),
@@ -2099,26 +2101,22 @@ impl GlobalValueImpl {
     }
 
     fn move_from(&mut self) -> PartialVMResult<ValueImpl> {
-        let fields = match self {
+        let value = std::mem::replace(self, Self::None);
+        let container = match value {
             Self::None | Self::Deleted => {
                 return Err(PartialVMError::new(StatusCode::MISSING_DATA))
             }
             Self::Fresh { .. } => match std::mem::replace(self, Self::None) {
-                Self::Fresh { fields } => fields,
+                Self::Fresh { container } => container,
                 _ => unreachable!(),
             },
             Self::Cached { .. } => match std::mem::replace(self, Self::Deleted) {
-                Self::Cached { fields, .. } => fields,
+                Self::Cached { container, .. } => container,
                 _ => unreachable!(),
             },
         };
-        if Rc::strong_count(&fields) != 1 {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("moving global resource with dangling reference".to_string()),
-            );
-        }
-        Ok(ValueImpl::Container(Container::Struct(fields)))
+        // Replace
+        Ok(ValueImpl::Container(container))
     }
 
     fn move_to(&mut self, val: ValueImpl) -> Result<(), (PartialVMError, ValueImpl)> {
@@ -2142,30 +2140,33 @@ impl GlobalValueImpl {
         }
     }
 
-    // TODO: ask Tim
-    // fn borrow_global(&self) -> PartialVMResult<ValueImpl> {
-    //     match self {
-    //         Self::None | Self::Deleted => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
-    //         Self::Fresh { fields } => Ok(ValueImpl::ContainerRef(ContainerRef::Local(
-    //             Container::Struct(Rc::clone(fields)),
-    //         ))),
-    //         Self::Cached { fields, status } => Ok(ValueImpl::ContainerRef(ContainerRef::Global {
-    //             container: Container::Struct(Rc::clone(fields)),
-    //             status: Rc::clone(status),
-    //         })),
-    //     }
-    // }
+
+    fn borrow_global(&self) -> PartialVMResult<ValueImpl> {
+        match self {
+            Self::None | Self::Deleted => Err(PartialVMError::new(StatusCode::MISSING_DATA)),
+            GlobalValueImpl::Fresh { container } => {
+                let container_ref = ArenaPointer::from_ref(container.as_ref());
+                Ok(ValueImpl::Reference(ReferenceImpl::Container(container_ref)))
+            }
+            GlobalValueImpl::Cached { container, status } => {
+                let global_ref = GlobalRef { status: Rc::clone(status), value: ArenaPointer::from_ref(container.as_ref()) };
+                Ok(ValueImpl::Reference(ReferenceImpl::Global(global_ref)))
+            }
+        }
+    }
 
     fn into_effect(self) -> Option<Op<ValueImpl>> {
         match self {
             Self::None => None,
             Self::Deleted => Some(Op::Delete),
-            Self::Fresh { fields } => {
-                Some(Op::New(ValueImpl::Container(Container::Struct(fields))))
+            Self::Fresh { container } => {
+                let struct_ @ Container::Struct(_) = *container else { unreachable!() };
+                Some(Op::New(ValueImpl::Container(Box::new(struct_))))
             }
-            Self::Cached { fields, status } => match &*status.borrow() {
+            Self::Cached { container, status } => match &*status.borrow() {
                 GlobalDataStatus::Dirty => {
-                    Some(Op::Modify(ValueImpl::Container(Container::Struct(fields))))
+                    let struct_ @ Container::Struct(_) = *container else { unreachable!() };
+                    Some(Op::New(ValueImpl::Container(Box::new(struct_))))
                 }
                 GlobalDataStatus::Clean => None,
             },
@@ -2176,8 +2177,8 @@ impl GlobalValueImpl {
         match self {
             Self::None => false,
             Self::Deleted => true,
-            Self::Fresh { fields: _ } => true,
-            Self::Cached { fields: _, status } => match &*status.borrow() {
+            Self::Fresh { .. } => true,
+            Self::Cached { status, .. } => match &*status.borrow() {
                 GlobalDataStatus::Dirty => true,
                 GlobalDataStatus::Clean => false,
             },
@@ -3190,7 +3191,7 @@ impl GlobalValue {
 
         match &self.0 {
             G::None | G::Deleted => None,
-            G::Cached { fields, .. } | G::Fresh { fields } => Some(Wrapper(fields)),
+            G::Cached { container, .. } | G::Fresh { container } => Some(Wrapper(fields)),
         }
     }
 }
