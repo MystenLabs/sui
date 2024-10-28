@@ -58,7 +58,8 @@ pub type NativeFunctionTable = Vec<(AccountAddress, Identifier, Identifier, Nati
 macro_rules! pop_arg {
     ($arguments:ident, $t:ty) => {{
         use $crate::natives::functions::{PartialVMError, StatusCode};
-        match $arguments.pop_back().map(|v| v.value_as::<$t>()) {
+        use $crate::execution::values::VMValueCast;
+        match $arguments.pop_back().map(|v| VMValueCast::<$t>::cast(v)) {
             None => {
                 return Err(PartialVMError::new(
                     StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,

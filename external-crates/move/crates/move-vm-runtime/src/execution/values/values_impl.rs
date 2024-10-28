@@ -24,7 +24,7 @@ use std::{
     cell::RefCell,
     fmt::{self, Debug, Display},
     ops::{Add, Index, IndexMut},
-    rc::Rc, intrinsics::unreachable,
+    rc::Rc,
 };
 
 macro_rules! debug_write {
@@ -761,6 +761,35 @@ impl FixedSizeVec {
 }
 
 // -------------------------------------------------------------------------------------------------
+// Read Ref
+// -------------------------------------------------------------------------------------------------
+// Implementation for the Move operation `write_ref`
+
+impl ReferenceImpl {
+    pub fn read_ref(self) -> PartialVMResult<Value> {
+        let value = match self {
+            ReferenceImpl::U8(ref_) => Value(ValueImpl::U8(*ref_.to_ref())),
+            ReferenceImpl::U16(ref_) => Value(ValueImpl::U16(*ref_.to_ref())),
+            ReferenceImpl::U32(ref_) => Value(ValueImpl::U32(*ref_.to_ref())),
+            ReferenceImpl::U64(ref_) => Value(ValueImpl::U64(*ref_.to_ref())),
+            ReferenceImpl::U128(ref_) => Value(ValueImpl::U128(Box::new(*ref_.to_ref()))),
+            ReferenceImpl::U256(ref_) => Value(ValueImpl::U256(Box::new(*ref_.to_ref()))),
+            ReferenceImpl::Bool(ref_) => Value(ValueImpl::Bool(*ref_.to_ref())),
+            ReferenceImpl::Address(ref_) => Value(ValueImpl::Address(Box::new(*ref_.to_ref()))),
+            ReferenceImpl::Container(ref_) => Value(ValueImpl::Container(Box::new(ref_.to_ref().copy_value()))),
+            ReferenceImpl::Global(ref_) => Value(ValueImpl::Container(Box::new(ref_.value.to_ref().copy_value()))),
+        };
+        Ok(value)
+    }
+}
+
+impl Reference {
+    pub fn read_ref(self) -> PartialVMResult<Value> {
+        self.0.read_ref()
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
 // Write Ref
 // -------------------------------------------------------------------------------------------------
 // Implementation for the Move operation `write_ref`
@@ -1095,24 +1124,24 @@ pub trait VMValueCast<T> {
 }
 
 macro_rules! impl_prim_vm_value_cast {
-    // Case for types that are directly stored (not boxed).
-    ($ty:ty, $tc:ident) => {
-        impl VMValueCast<$ty> for Value {
-            fn cast(self) -> PartialVMResult<$ty> {
-                match self.0 {
-                    ValueImpl::$tc(x) => Ok(x),
-                    v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                        .with_message(format!("cannot cast {:?} to {}", v, stringify!($ty)))),
-                }
-            }
-        }
-    };
     // Special case for boxed types.
     (Box<$ty:ty>, $tc:ident) => {
         impl VMValueCast<$ty> for Value {
             fn cast(self) -> PartialVMResult<$ty> {
                 match self.0 {
                     ValueImpl::$tc(x) => Ok(*x), // Dereference the boxed value
+                    v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                        .with_message(format!("cannot cast {:?} to {}", v, stringify!($ty)))),
+                }
+            }
+        }
+    };
+    // Case for types that are directly stored (not boxed).
+    ($ty:ty, $tc:ident) => {
+        impl VMValueCast<$ty> for Value {
+            fn cast(self) -> PartialVMResult<$ty> {
+                match self.0 {
+                    ValueImpl::$tc(x) => Ok(x),
                     v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                         .with_message(format!("cannot cast {:?} to {}", v, stringify!($ty)))),
                 }
@@ -1292,7 +1321,7 @@ impl VMValueCast<Vec<Value>> for Value {
 impl VMValueCast<SignerRef> for Value {
     fn cast(self) -> PartialVMResult<SignerRef> {
         match self.0 {
-            ValueImpl::Reference(ReferenceImpl::Container(ref_)) => Ok(SignerRef(ref_)),
+            ValueImpl::Reference(ReferenceImpl::Container(ref_)) if matches!(ref_.to_ref(), Container::Struct(_)) => Ok(SignerRef(ref_)),
             v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                 .with_message(format!("cannot cast {:?} to Signer reference", v,))),
         }
@@ -1316,15 +1345,6 @@ impl VMValueCast<Vector> for Value {
             v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                 .with_message(format!("cannot cast {:?} to vector", v,))),
         }
-    }
-}
-
-impl Value {
-    pub fn value_as<T>(self) -> PartialVMResult<T>
-    where
-        Self: VMValueCast<T>,
-    {
-        VMValueCast::cast(self)
     }
 }
 
@@ -1691,7 +1711,7 @@ impl VectorRef {
 
         match_vec_ref_container!(
             (c)
-            prim r => r.push(e.value_as()?);
+            prim r => r.push(VMValueCast::cast(e)?);
             vec r => r.push(Box::new(e.0));
         );
         Ok(())
@@ -1797,7 +1817,7 @@ macro_rules! pack_vector {
         $vector_fn(
             $elements
                 .into_iter()
-                .map(|v| v.value_as())
+                .map(|v| VMValueCast::cast(v))
                 .collect::<PartialVMResult<Vec<_>>>()?,
         )
     };
@@ -1822,9 +1842,9 @@ impl Vector {
             Type::Address => pack_vector!(elements, Value::vector_address),
 
             Type::Signer | Type::Vector(_) | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
-                Value(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
-                    elements.into_iter().map(|v| v.0).collect(),
-                )))))
+                Value(ValueImpl::Container(Box::new(Container::Vec(
+                    elements.into_iter().map(|v| Box::new(v.0)).collect(),
+                ))))
             }
 
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
@@ -1844,28 +1864,20 @@ impl Vector {
 
     pub fn unpack(self, type_param: &Type, expected_num: u64) -> PartialVMResult<Vec<Value>> {
         check_elem_layout(type_param, &self.0)?;
-
-        // Replace self.0 with Invalid and take ownership of the value
-        let value = std::mem::replace(&mut self.0, ValueImpl::Invalid);
-
-        let elements: Vec<_> = match value {
-            ValueImpl::Container(Container::VecU8(r)) => take_and_map!(*r, Value::u8),
-            ValueImpl::Container(Container::VecU16(r)) => take_and_map!(*r, Value::u16),
-            ValueImpl::Container(Container::VecU32(r)) => take_and_map!(*r, Value::u32),
-            ValueImpl::Container(Container::VecU64(r)) => take_and_map!(*r, Value::u64),
-            ValueImpl::Container(Container::VecU128(r)) => take_and_map!(*r, Value::u128),
-            ValueImpl::Container(Container::VecU256(r)) => take_and_map!(*r, Value::u256),
-            ValueImpl::Container(Container::VecBool(r)) => take_and_map!(*r, Value::bool),
-            ValueImpl::Container(Container::VecAddress(r)) => take_and_map!(*r, Value::address),
-            ValueImpl::Container(Container::Vec(r)) => take_and_map!(*r, Value),
-            ValueImpl::Container(Container::Locals(_))
-            | ValueImpl::Container(Container::Struct(_))
-            | ValueImpl::Container(Container::Variant { .. }) => unreachable!(),
-            _ => {
-                return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message("Expected a container, found a different value".to_string()))
-            }
+        let elements: Vec<ValueImpl> = match self.0 {
+            Container::VecU8(r) => take_and_map!(r, ValueImpl::U8),
+            Container::VecU16(r) => take_and_map!(r, ValueImpl::U16),
+            Container::VecU32(r) => take_and_map!(r, ValueImpl::U32),
+            Container::VecU64(r) => take_and_map!(r, ValueImpl::U64),
+            Container::VecU128(r) => take_and_map!(r, |n| ValueImpl::U128(Box::new(n))),
+            Container::VecU256(r) => take_and_map!(r, |n| ValueImpl::U256(Box::new(n))),
+            Container::VecBool(r) => take_and_map!(r, ValueImpl::Bool),
+            Container::VecAddress(r) => take_and_map!(r, |a| ValueImpl::Address(Box::new(a))),
+            Container::Vec(r) => take_and_map!(r, |v| *v),
+            Container::Struct(_) | Container::Variant { .. } => unreachable!(),
         };
+
+        let elements = elements.into_iter().map(Value).collect::<Vec<_>>();
 
         if expected_num as usize == elements.len() {
             Ok(elements)
@@ -1882,8 +1894,8 @@ impl Vector {
 
     pub fn to_vec_u8(self) -> PartialVMResult<Vec<u8>> {
         check_elem_layout(&Type::U8, &self.0)?;
-        if let Container::VecU8(r) = self.0 .0.to_ref() {
-            Ok(take_unique_ownership(r)?.into_iter().collect())
+        if let Container::VecU8(r) = self.0 {
+            Ok(r.into_iter().collect())
         } else {
             Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
