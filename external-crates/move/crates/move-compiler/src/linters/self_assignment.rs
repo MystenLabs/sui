@@ -15,7 +15,7 @@ use crate::{
 use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;
 
-simple_visitor! {
+simple_visitor!(
     SelfAssignmentVisitor,
     fn visit_exp_custom(&mut self, e: &T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
@@ -26,7 +26,7 @@ simple_visitor! {
         }
         false
     }
-}
+);
 
 fn check_mutate(context: &mut Context, loc: Loc, lhs: &T::Exp, rhs: &T::Exp) {
     #[growing_stack]

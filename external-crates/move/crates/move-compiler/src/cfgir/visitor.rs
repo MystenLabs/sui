@@ -328,7 +328,7 @@ impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
 }
 
 macro_rules! simple_visitor {
-    ($visitor:ident, $($overrides:item)*) => {
+    ($visitor:ident, $($overrides:item),*) => {
         pub struct $visitor;
 
         pub struct Context<'a> {

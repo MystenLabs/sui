@@ -26,13 +26,12 @@ const COIN_FIELD_DIAG: DiagnosticInfo = custom(
     "sub-optimal 'sui::coin::Coin' field type",
 );
 
-simple_visitor! {
+simple_visitor!(
     CoinFieldVisitor,
-    fn visit_module_custom(&mut self, _ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool{
+    fn visit_module_custom(&mut self, _ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
         // skip if test only
         mdef.attributes.is_test_or_test_only()
-    }
-
+    },
     // TODO enums
     fn visit_struct_custom(
         &mut self,
@@ -41,7 +40,7 @@ simple_visitor! {
         sdef: &N::StructDefinition,
     ) -> bool {
         if sdef.attributes.is_test_or_test_only() {
-            return false
+            return false;
         }
 
         if let N::StructFields::Defined(_, sfields) = &sdef.fields {
@@ -55,7 +54,7 @@ simple_visitor! {
         }
         false
     }
-}
+);
 
 fn is_field_coin_type(sp!(_, t): &N::Type) -> bool {
     use N::Type_ as T;

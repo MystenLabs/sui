@@ -10,14 +10,13 @@ use crate::{
 };
 use move_ir_types::location::Loc;
 
-simple_visitor! {
+simple_visitor!(
     UnnecessaryUnit,
     fn visit_seq_custom(&mut self, loc: Loc, (_, seq_): &T::Sequence) -> bool {
         let n = seq_.len();
         match n {
             0 => {
-                self
-                    .add_diag(ice!((loc, "Unexpected empty block without a value")));
+                self.add_diag(ice!((loc, "Unexpected empty block without a value")));
             }
             1 => {
                 // TODO probably too noisy for now, we would need more information about
@@ -42,8 +41,7 @@ simple_visitor! {
             }
         }
         false
-    }
-
+    },
     fn visit_exp_custom(&mut self, e: &T::Exp) -> bool {
         use UnannotatedExp_ as TE;
         let TE::IfElse(e_cond, e_true, e_false_opt) = &e.exp.value else {
@@ -78,7 +76,7 @@ simple_visitor! {
         }
         false
     }
-}
+);
 
 fn is_unit_seq(context: &mut Context, s: &T::SequenceItem) -> bool {
     match &s.value {

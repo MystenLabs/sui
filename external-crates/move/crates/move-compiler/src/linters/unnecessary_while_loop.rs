@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-simple_visitor! {
+simple_visitor!(
     WhileTrueToLoop,
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         let UnannotatedExp_::While(_, cond, _) = &exp.exp.value else {
@@ -31,4 +31,4 @@ simple_visitor! {
 
         false
     }
-}
+);

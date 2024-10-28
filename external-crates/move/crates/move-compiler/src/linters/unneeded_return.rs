@@ -17,7 +17,7 @@ use move_proc_macros::growing_stack;
 
 use std::collections::VecDeque;
 
-simple_visitor! {
+simple_visitor!(
     UnneededReturnVisitor,
     fn visit_function_custom(
         &mut self,
@@ -30,7 +30,7 @@ simple_visitor! {
         };
         true
     }
-}
+);
 
 /// Recur down the tail (last) position of the sequence, looking for returns that
 /// might occur in the function's taul/return position..

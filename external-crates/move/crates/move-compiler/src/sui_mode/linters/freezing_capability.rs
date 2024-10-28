@@ -32,7 +32,7 @@ const FREEZE_FUNCTIONS: &[(&str, &str, &str)] = &[
 
 static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r".*Cap(?:[A-Z0-9_]+|ability|$).*").unwrap());
 
-simple_visitor! {
+simple_visitor!(
     WarnFreezeCapability,
     fn visit_module_custom(
         &mut self,
@@ -41,8 +41,7 @@ simple_visitor! {
     ) -> bool {
         // skips if true
         mdef.attributes.is_test_or_test_only()
-    }
-
+    },
     fn visit_function_custom(
         &mut self,
         _module: crate::expansion::ast::ModuleIdent,
@@ -51,8 +50,7 @@ simple_visitor! {
     ) -> bool {
         // skips if true
         fdef.attributes.is_test_or_test_only()
-    }
-
+    },
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         if let T::UnannotatedExp_::ModuleCall(fun) = &exp.exp.value {
             if is_freeze_function(fun) {
@@ -61,7 +59,7 @@ simple_visitor! {
         }
         false
     }
-}
+);
 
 fn is_freeze_function(fun: &T::ModuleCall) -> bool {
     FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {

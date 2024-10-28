@@ -14,13 +14,13 @@ use crate::{
     },
 };
 
-simple_visitor! {
+simple_visitor!(
     RedundantRefDerefVisitor,
     fn visit_exp_custom(&mut self, exp: &Exp) -> bool {
         self.check_redundant_ref_deref(exp);
         false
     }
-}
+);
 
 impl Context<'_> {
     // Check for &* pattern

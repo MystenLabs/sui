@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-simple_visitor! {
+simple_visitor!(
     LoopWithoutExit,
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         // we do not care about `while` since there is another lint that handles reporting
@@ -38,7 +38,7 @@ simple_visitor! {
         self.add_diag(diag);
         false
     }
-}
+);
 
 fn has_return(e: &T::Exp) -> bool {
     exp_satisfies(e, |e| matches!(e.exp.value, UnannotatedExp_::Return(_)))

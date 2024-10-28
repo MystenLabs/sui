@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-simple_visitor! {
+simple_visitor!(
     UnnecessaryConditional,
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         let UnannotatedExp_::IfElse(_, etrue, efalse) = &exp.exp.value else {
@@ -75,7 +75,7 @@ simple_visitor! {
         // }
         false
     }
-}
+);
 
 #[growing_stack]
 fn extract_value(block: &T::Exp) -> Option<&Value> {

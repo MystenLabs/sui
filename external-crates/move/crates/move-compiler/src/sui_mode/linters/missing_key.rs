@@ -22,7 +22,7 @@ const MISSING_KEY_ABILITY_DIAG: DiagnosticInfo = custom(
     "struct with id but missing key ability",
 );
 
-simple_visitor! {
+simple_visitor!(
     MissingKeyVisitor,
     fn visit_struct_custom(
         &mut self,
@@ -38,7 +38,7 @@ simple_visitor! {
         }
         false
     }
-}
+);
 
 fn first_field_has_id_field_of_type_uid(sdef: &StructDefinition) -> bool {
     match &sdef.fields {

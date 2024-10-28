@@ -12,7 +12,7 @@ use crate::{
     typing::{ast as T, visitor::simple_visitor},
 };
 
-simple_visitor! {
+simple_visitor!(
     ConstantNamingVisitor,
     fn visit_constant_custom(
         &mut self,
@@ -29,7 +29,7 @@ simple_visitor! {
         }
         false
     }
-}
+);
 
 /// Returns `true` if the string is in all caps snake case, including numeric characters.
 fn is_valid_name(name: &str) -> bool {

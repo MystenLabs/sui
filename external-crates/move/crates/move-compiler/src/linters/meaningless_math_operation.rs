@@ -13,7 +13,7 @@ use crate::{
 use move_core_types::u256::U256;
 use move_ir_types::location::Loc;
 
-simple_visitor! {
+simple_visitor!(
     MeaninglessMathOperation,
     fn visit_exp_custom(&mut self, exp: &H::Exp) -> bool {
         let H::UnannotatedExp_::BinopExp(lhs, op, rhs) = &exp.exp.value else {
@@ -72,7 +72,7 @@ simple_visitor! {
 
         false
     }
-}
+);
 
 fn is_zero(exp: &H::Exp) -> Option<Loc> {
     let H::UnannotatedExp_::Value(sp!(loc, value_)) = &exp.exp.value else {

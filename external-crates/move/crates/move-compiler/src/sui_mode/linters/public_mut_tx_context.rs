@@ -25,14 +25,12 @@ const REQUIRE_MUTABLE_TX_CONTEXT_DIAG: DiagnosticInfo = custom(
     "prefer '&mut TxContext' over '&TxContext'",
 );
 
-simple_visitor! {
+simple_visitor!(
     PreferMutableTxContext,
-
     fn visit_module_custom(&mut self, ident: ModuleIdent, _mdef: &T::ModuleDefinition) -> bool {
         // skip if in 'sui::tx_context'
         ident.value.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME)
-    }
-
+    },
     fn visit_function_custom(
         &mut self,
         _module: ModuleIdent,
@@ -54,7 +52,7 @@ simple_visitor! {
 
         false
     }
-}
+);
 
 fn report_non_mutable_tx_context(context: &mut Context, loc: Loc) {
     let msg = format!(

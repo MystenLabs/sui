@@ -573,7 +573,7 @@ impl<V: TypingVisitorConstructor + Send + Sync> TypingVisitor for V {
 }
 
 macro_rules! simple_visitor {
-    ($visitor:ident, $($overrides:item)*) => {
+    ($visitor:ident, $($overrides:item),*) => {
         pub struct $visitor;
 
         pub struct Context<'a> {

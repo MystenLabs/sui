@@ -28,14 +28,12 @@ const PUBLIC_RANDOM_DIAG: DiagnosticInfo = custom(
     "Risky use of 'sui::random'",
 );
 
-simple_visitor! {
+simple_visitor!(
     PublicRandomVisitor,
-
     fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
         // skips if true
         mdef.attributes.is_test_or_test_only() || ident.value.address.is(SUI_ADDR_NAME)
-    }
-
+    },
     fn visit_function_custom(
         &mut self,
         _module: ModuleIdent,
@@ -62,7 +60,7 @@ simple_visitor! {
         }
         true
     }
-}
+);
 
 fn is_random_or_random_generator(sp!(_, t): &N::Type) -> Option<&str> {
     use N::Type_ as T;

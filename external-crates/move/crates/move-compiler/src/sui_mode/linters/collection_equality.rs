@@ -49,7 +49,7 @@ const COLLECTION_TYPES: &[(&str, &str, &str)] = &[
     (SUI_PKG_NAME, VEC_SET_MOD_NAME, VEC_SET_STRUCT_NAME),
 ];
 
-simple_visitor! {
+simple_visitor!(
     CollectionEqualityVisitor,
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
@@ -86,4 +86,4 @@ simple_visitor! {
         }
         false
     }
-}
+);
