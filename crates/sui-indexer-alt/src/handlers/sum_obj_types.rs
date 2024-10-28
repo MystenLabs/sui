@@ -11,12 +11,13 @@ use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_types::{
-    effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData, object::Owner,
+    base_types::ObjectID, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
+    object::Owner,
 };
 
 use crate::{
     db,
-    models::objects::{StoredOwnerKind, StoredSumObjType},
+    models::objects::{StoredObjectUpdate, StoredOwnerKind, StoredSumObjType},
     pipeline::{sequential::Handler, Processor},
     schema::sum_obj_types,
 };
@@ -30,42 +31,15 @@ const DELETE_CHUNK_ROWS: usize = i16::MAX as usize;
 
 pub struct SumObjTypes;
 
-#[derive(Clone)]
-pub struct DeletedSumObjType {
-    object_id: Vec<u8>,
-    object_version: i64,
-}
-
-pub enum Update {
-    Update(StoredSumObjType),
-    Delete(DeletedSumObjType),
-}
-
-impl Update {
-    pub fn object_id(&self) -> Vec<u8> {
-        match self {
-            Update::Update(StoredSumObjType { object_id, .. })
-            | Update::Delete(DeletedSumObjType { object_id, .. }) => object_id.clone(),
-        }
-    }
-
-    pub fn object_version(&self) -> i64 {
-        match self {
-            Update::Update(StoredSumObjType { object_version, .. })
-            | Update::Delete(DeletedSumObjType { object_version, .. }) => *object_version,
-        }
-    }
-}
-
 impl Processor for SumObjTypes {
     const NAME: &'static str = "sum_obj_types";
 
-    type Value = Update;
+    type Value = StoredObjectUpdate<StoredSumObjType>;
 
     fn process(checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
         let CheckpointData { transactions, .. } = checkpoint.as_ref();
 
-        let mut values: BTreeMap<Vec<u8>, Update> = BTreeMap::new();
+        let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
 
         // Iterate over transactions in reverse so we see the latest version of each object first.
         for tx in transactions.iter().rev() {
@@ -78,63 +52,70 @@ impl Processor for SumObjTypes {
                     continue;
                 }
 
-                let object_id = change.id.to_vec();
-                let object_version = tx.effects.lamport_version().value() as i64;
-                match values.entry(object_id.clone()) {
+                let object_id = change.id;
+                let object_version = tx.effects.lamport_version().value();
+                match values.entry(object_id) {
                     Entry::Occupied(entry) => {
-                        ensure!(entry.get().object_version() > object_version);
+                        ensure!(entry.get().object_version > object_version);
                     }
 
                     Entry::Vacant(entry) => {
-                        entry.insert(Update::Delete(DeletedSumObjType {
+                        entry.insert(StoredObjectUpdate {
                             object_id,
                             object_version,
-                        }));
+                            update: None,
+                        });
                     }
                 }
             }
 
             // Modified and created objects.
             for object in &tx.output_objects {
-                let object_id = object.id().to_vec();
-                let object_version = object.version().value() as i64;
-                match values.entry(object_id.clone()) {
+                let object_id = object.id();
+                let object_version = object.version().value();
+                match values.entry(object_id) {
                     Entry::Occupied(entry) => {
-                        ensure!(entry.get().object_version() > object_version);
+                        ensure!(entry.get().object_version > object_version);
                     }
 
                     Entry::Vacant(entry) => {
                         let type_ = object.type_();
-                        entry.insert(Update::Update(StoredSumObjType {
+                        entry.insert(StoredObjectUpdate {
                             object_id,
                             object_version,
+                            update: Some(StoredSumObjType {
+                                object_id: object_id.to_vec(),
+                                object_version: object_version as i64,
 
-                            owner_kind: match object.owner() {
-                                Owner::AddressOwner(_) => StoredOwnerKind::Address,
-                                Owner::ObjectOwner(_) => StoredOwnerKind::Object,
-                                Owner::Shared { .. } => StoredOwnerKind::Shared,
-                                Owner::Immutable => StoredOwnerKind::Immutable,
-                            },
+                                owner_kind: match object.owner() {
+                                    Owner::AddressOwner(_) => StoredOwnerKind::Address,
+                                    Owner::ObjectOwner(_) => StoredOwnerKind::Object,
+                                    Owner::Shared { .. } => StoredOwnerKind::Shared,
+                                    Owner::Immutable => StoredOwnerKind::Immutable,
+                                },
 
-                            owner_id: match object.owner() {
-                                Owner::AddressOwner(a) => Some(a.to_vec()),
-                                Owner::ObjectOwner(o) => Some(o.to_vec()),
-                                _ => None,
-                            },
+                                owner_id: match object.owner() {
+                                    Owner::AddressOwner(a) => Some(a.to_vec()),
+                                    Owner::ObjectOwner(o) => Some(o.to_vec()),
+                                    _ => None,
+                                },
 
-                            package: type_.map(|t| t.address().to_vec()),
-                            module: type_.map(|t| t.module().to_string()),
-                            name: type_.map(|t| t.name().to_string()),
-                            instantiation: type_
-                                .map(|t| bcs::to_bytes(&t.type_params()))
-                                .transpose()
-                                .map_err(|e| {
-                                    anyhow!(
-                                        "Failed to serialize type parameters for {}: {e}",
-                                        object.id().to_canonical_display(/* with_prefix */ true),
-                                    )
-                                })?,
-                        }));
+                                package: type_.map(|t| t.address().to_vec()),
+                                module: type_.map(|t| t.module().to_string()),
+                                name: type_.map(|t| t.name().to_string()),
+                                instantiation: type_
+                                    .map(|t| bcs::to_bytes(&t.type_params()))
+                                    .transpose()
+                                    .map_err(|e| {
+                                        anyhow!(
+                                            "Failed to serialize type parameters for {}: {e}",
+                                            object
+                                                .id()
+                                                .to_canonical_display(/* with_prefix */ true),
+                                        )
+                                    })?,
+                            }),
+                        });
                     }
                 }
             }
@@ -146,13 +127,13 @@ impl Processor for SumObjTypes {
 
 #[async_trait::async_trait]
 impl Handler for SumObjTypes {
-    type Batch = BTreeMap<Vec<u8>, Update>;
+    type Batch = BTreeMap<ObjectID, Self::Value>;
 
     fn batch(batch: &mut Self::Batch, updates: Vec<Self::Value>) {
         // `updates` are guaranteed to be provided in checkpoint order, so blindly inserting them
         // will result in the batch containing the most up-to-date update for each object.
         for update in updates {
-            batch.insert(update.object_id(), update);
+            batch.insert(update.object_id, update);
         }
     }
 
@@ -161,9 +142,10 @@ impl Handler for SumObjTypes {
         let mut deletes = vec![];
 
         for update in values.values() {
-            match update {
-                Update::Update(value) => updates.push(value.clone()),
-                Update::Delete(value) => deletes.push(value.clone()),
+            if let Some(update) = &update.update {
+                updates.push(update.clone());
+            } else {
+                deletes.push(update.object_id.to_vec());
             }
         }
 
@@ -184,7 +166,7 @@ impl Handler for SumObjTypes {
 
         let delete_chunks = deletes.chunks(DELETE_CHUNK_ROWS).map(|chunk| {
             diesel::delete(sum_obj_types::table)
-                .filter(sum_obj_types::object_id.eq_any(chunk.iter().map(|d| d.object_id.clone())))
+                .filter(sum_obj_types::object_id.eq_any(chunk.iter().cloned()))
                 .execute(conn)
         });
 

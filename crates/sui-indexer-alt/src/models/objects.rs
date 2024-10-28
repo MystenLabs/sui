@@ -5,6 +5,7 @@ use diesel::{
     backend::Backend, deserialize, expression::AsExpression, prelude::*, serialize,
     sql_types::SmallInt, FromSqlRow,
 };
+use sui_types::base_types::ObjectID;
 
 use crate::schema::{kv_objects, sum_obj_types};
 
@@ -14,6 +15,16 @@ pub struct StoredObject {
     pub object_id: Vec<u8>,
     pub object_version: i64,
     pub serialized_object: Option<Vec<u8>>,
+}
+
+/// An insert/update or deletion of an object record, keyed on a particular Object ID and version.
+#[derive(AsExpression, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct StoredObjectUpdate<T> {
+    pub object_id: ObjectID,
+    pub object_version: u64,
+    /// `None` means the object was deleted or wrapped at this version, `Some(x)` means it was
+    /// changed to `x`.
+    pub update: Option<T>,
 }
 
 #[derive(AsExpression, FromSqlRow, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
