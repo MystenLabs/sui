@@ -48,14 +48,14 @@ const MAX_WATERMARK_UPDATES: usize = 10_000;
 #[async_trait::async_trait]
 pub trait Handler: Processor {
     /// If at least this many rows are pending, the committer will commit them eagerly.
-    const BATCH_SIZE: usize = 50;
+    const MIN_EAGER_ROWS: usize = 50;
 
     /// If there are more than this many rows pending, the committer will only commit this many in
     /// one operation.
-    const CHUNK_SIZE: usize = 200;
+    const MAX_CHUNK_ROWS: usize = 200;
 
     /// If there are more than this many rows pending, the committer applies backpressure.
-    const MAX_PENDING_SIZE: usize = 1000;
+    const MAX_PENDING_ROWS: usize = 1000;
 
     /// Take a chunk of values and commit them to the database, returning the number of rows
     /// affected.
@@ -88,7 +88,7 @@ impl<H: Handler> Batched<H> {
     /// The batch is full if it has more than enough values to write to the database, or more than
     /// enough watermarks to update.
     fn is_full(&self) -> bool {
-        self.values.len() >= H::CHUNK_SIZE || self.watermark.len() >= MAX_WATERMARK_UPDATES
+        self.values.len() >= H::MAX_CHUNK_ROWS || self.watermark.len() >= MAX_WATERMARK_UPDATES
     }
 }
 

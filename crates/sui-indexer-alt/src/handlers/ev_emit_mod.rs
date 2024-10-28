@@ -48,9 +48,9 @@ impl Processor for EvEmitMod {
 
 #[async_trait::async_trait]
 impl Handler for EvEmitMod {
-    const BATCH_SIZE: usize = 100;
-    const CHUNK_SIZE: usize = 1000;
-    const MAX_PENDING_SIZE: usize = 10000;
+    const MIN_EAGER_ROWS: usize = 100;
+    const MAX_CHUNK_ROWS: usize = 1000;
+    const MAX_PENDING_ROWS: usize = 10000;
 
     async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
         Ok(diesel::insert_into(ev_emit_mod::table)
