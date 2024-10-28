@@ -22,7 +22,6 @@ import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
 import { BuyNLargeHomePanel } from '_src/ui/app/components/buynlarge/HomePanel';
-import { StakeWarning } from '_src/ui/app/components/StakeWarning';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { useCoinMetadataOverrides } from '_src/ui/app/hooks/useCoinMetadataOverride';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
@@ -420,7 +419,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 					data-testid="coin-page"
 				>
 					<AccountsList />
-					<StakeWarning />
 					<BuyNLargeHomePanel />
 					<UsdcPromoBanner />
 
