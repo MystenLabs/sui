@@ -55,5 +55,5 @@ jobs:
         with:
           channel-id: 'build-failures-sui'
           slack-message: |
-            Workflow *${{ github.workflow }}* failed
-            Logs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Workflow *${{ github.workflow }}* has failed.
+            Logs are here: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.run_id }}>
