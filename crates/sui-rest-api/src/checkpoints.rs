@@ -12,9 +12,10 @@ use tap::Pipe;
 
 use crate::accept::AcceptJsonProtobufBcs;
 use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
-use crate::proto::CheckpointPage;
+use crate::proto;
+use crate::proto::ListCheckpointResponse;
 use crate::reader::StateReader;
-use crate::response::{Bcs, JsonProtobufBcs};
+use crate::response::{JsonProtobufBcs, ProtobufBcs};
 use crate::{accept::AcceptFormat, response::ResponseContent, RestError, Result};
 use crate::{Direction, RestService};
 use crate::{Page, PageCursor};
@@ -22,6 +23,7 @@ use documented::Documented;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct CheckpointResponse {
+    pub digest: CheckpointDigest,
     pub summary: CheckpointSummary,
     pub signature: ValidatorAggregatedSignature,
     pub contents: Option<CheckpointContents>,
@@ -80,9 +82,9 @@ impl ApiEndpoint<RestService> for GetCheckpoint {
 async fn get_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
     Query(parameters): Query<GetCheckpointQueryParameters>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<CheckpointResponse>> {
+) -> Result<JsonProtobufBcs<CheckpointResponse, proto::GetCheckpointResponse, CheckpointResponse>> {
     let SignedCheckpointSummary {
         checkpoint,
         signature,
@@ -117,14 +119,16 @@ async fn get_checkpoint(
     };
 
     let response = CheckpointResponse {
+        digest: checkpoint.digest(),
         summary: checkpoint,
         signature,
         contents,
     };
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
+        AcceptJsonProtobufBcs::Json => JsonProtobufBcs::Json(response),
+        AcceptJsonProtobufBcs::Protobuf => JsonProtobufBcs::Protobuf(response.try_into()?),
+        AcceptJsonProtobufBcs::Bcs => JsonProtobufBcs::Bcs(response),
     }
     .pipe(Ok)
 }
@@ -269,7 +273,7 @@ async fn list_checkpoints(
     State(state): State<StateReader>,
 ) -> Result<(
     PageCursor<CheckpointSequenceNumber>,
-    JsonProtobufBcs<Vec<CheckpointResponse>, CheckpointPage, Vec<SignedCheckpointSummary>>,
+    JsonProtobufBcs<Vec<CheckpointResponse>, ListCheckpointResponse, Vec<SignedCheckpointSummary>>,
 )> {
     let latest_checkpoint = state.inner().get_latest_checkpoint()?.sequence_number;
     let oldest_checkpoint = state.inner().get_lowest_available_checkpoint()?;
@@ -301,6 +305,7 @@ async fn list_checkpoints(
                         None
                     };
                     Ok(CheckpointResponse {
+                        digest: checkpoint.digest(),
                         summary: checkpoint,
                         signature,
                         contents,
@@ -429,11 +434,13 @@ impl ApiEndpoint<RestService> for GetFullCheckpoint {
 
 async fn get_full_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
-    accept: AcceptFormat,
+    accept: AcceptJsonProtobufBcs,
     State(state): State<StateReader>,
-) -> Result<Bcs<sui_types::full_checkpoint_content::CheckpointData>> {
+) -> Result<ProtobufBcs<proto::FullCheckpoint, sui_types::full_checkpoint_content::CheckpointData>>
+{
     match accept {
-        AcceptFormat::Bcs => {}
+        AcceptJsonProtobufBcs::Protobuf => {}
+        AcceptJsonProtobufBcs::Bcs => {}
         _ => {
             return Err(RestError::new(
                 axum::http::StatusCode::BAD_REQUEST,
@@ -469,7 +476,17 @@ async fn get_full_checkpoint(
         .inner()
         .get_checkpoint_data(verified_summary, checkpoint_contents)?;
 
-    Ok(Bcs(checkpoint_data))
+    match accept {
+        AcceptJsonProtobufBcs::Protobuf => ProtobufBcs::Protobuf(checkpoint_data.try_into()?),
+        AcceptJsonProtobufBcs::Bcs => ProtobufBcs::Bcs(checkpoint_data),
+        _ => {
+            return Err(RestError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "invalid accept type; only 'application/bcs' is supported",
+            ))
+        }
+    }
+    .pipe(Ok)
 }
 
 /// List Full Checkpoints

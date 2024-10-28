@@ -230,7 +230,9 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::GetCheckpointResponse>(request)
+            .await?
+            .try_map(TryInto::try_into)
     }
 
     pub async fn get_latest_checkpoint(&self) -> Result<Response<SignedCheckpointSummary>> {
@@ -262,7 +264,7 @@ impl Client {
 
         let request = self.inner.get(url).query(parameters);
 
-        self.protobuf::<crate::proto::CheckpointPage>(request)
+        self.protobuf::<crate::proto::ListCheckpointResponse>(request)
             .await?
             .try_map(|page| {
                 page.checkpoints
@@ -282,7 +284,13 @@ impl Client {
 
         let request = self.inner.get(url);
 
-        self.bcs(request).await
+        self.protobuf::<crate::proto::FullCheckpoint>(request)
+            .await?
+            // TODO make this more efficient and convert directly into the sui-sdk-types version
+            .try_map(|proto| {
+                sui_types::full_checkpoint_content::CheckpointData::try_from(proto)
+                    .and_then(TryInto::try_into)
+            })
     }
 
     pub async fn get_transaction(
@@ -427,7 +435,7 @@ impl Client {
         }
     }
 
-    async fn protobuf<T: prost::Message + std::default::Default>(
+    pub(super) async fn protobuf<T: prost::Message + std::default::Default>(
         &self,
         request: reqwest::RequestBuilder,
     ) -> Result<Response<T>> {
