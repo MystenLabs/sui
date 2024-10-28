@@ -13,7 +13,7 @@ use crate::{
         visitor::{CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
-    diagnostics::WarningFilters,
+    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
     editions::FeatureGate,
     hlir::ast as H,
     shared::{CompilationEnv, WarningFiltersScope},
@@ -46,30 +46,19 @@ impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
 }
 
 impl Context<'_> {
-    fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
+    fn add_diag(&mut self, diag: Diagnostic) {
         self.env.add_diag(&self.warning_filters_scope, diag);
     }
 
     #[allow(unused)]
-    fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
+    fn add_diags(&mut self, diags: Diagnostics) {
         self.env.add_diags(&self.warning_filters_scope, diags);
-    }
-}
-
-impl Context<'_> {
-    fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
-        self.env.add_diag(diag);
-    }
-
-    #[allow(unused)]
-    fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
-        self.env.add_diags(diags);
     }
 }
 
 impl CFGIRVisitorContext for Context<'_> {
     fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.env.add_warning_filter_scope(filters)
+        self.warning_filters_scope.push(filters)
     }
 
     fn pop_warning_filter_scope(&mut self) {

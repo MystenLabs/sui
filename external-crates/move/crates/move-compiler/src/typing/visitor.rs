@@ -591,6 +591,7 @@ macro_rules! simple_visitor {
                     warning_filters_scope,
                 }
             }
+        }
 
         impl Context<'_> {
             #[allow(unused)]
