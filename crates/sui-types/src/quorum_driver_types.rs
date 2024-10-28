@@ -64,6 +64,8 @@ pub enum QuorumDriverError {
         errors: GroupedErrors,
         retry_after_secs: u64,
     },
+    #[error("Failed to call validator {0}: {1}")]
+    RpcFailure(String, String),
 }
 
 pub type GroupedErrors = Vec<(SuiError, StakeUnit, Vec<ConciseAuthorityPublicKeyBytes>)>;

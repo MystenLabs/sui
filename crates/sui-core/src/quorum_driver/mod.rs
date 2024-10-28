@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod metrics;
-pub use metrics::*;
+mod transaction_driver;
 
+pub use metrics::*;
+pub use transaction_driver::{SubmitTransactionOptions, TransactionDriver};
 pub mod reconfig_observer;
 
 use arc_swap::ArcSwap;

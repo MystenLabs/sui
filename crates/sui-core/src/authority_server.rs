@@ -1354,6 +1354,23 @@ macro_rules! handle_with_decoration {
 
 #[async_trait]
 impl Validator for ValidatorService {
+    async fn submit_transaction(
+        &self,
+        request: tonic::Request<HandleTransactionRequestV2>,
+    ) -> Result<tonic::Response<HandleTransactionResponseV2>, tonic::Status> {
+        let validator_service = self.clone();
+
+        // Spawns a task which handles the transaction. The task will unconditionally continue
+        // processing in the event that the client connection is dropped.
+        spawn_monitored_task!(async move {
+            // NB: traffic tally wrapping handled within the task rather than on task exit
+            // to prevent an attacker from subverting traffic control by severing the connection
+            handle_with_decoration!(validator_service, transaction_v2_impl, request)
+        })
+        .await
+        .unwrap()
+    }
+
     async fn transaction(
         &self,
         request: tonic::Request<Transaction>,
@@ -1366,23 +1383,6 @@ impl Validator for ValidatorService {
             // NB: traffic tally wrapping handled within the task rather than on task exit
             // to prevent an attacker from subverting traffic control by severing the connection
             handle_with_decoration!(validator_service, transaction_impl, request)
-        })
-        .await
-        .unwrap()
-    }
-
-    async fn transaction_v2(
-        &self,
-        request: tonic::Request<HandleTransactionRequestV2>,
-    ) -> Result<tonic::Response<HandleTransactionResponseV2>, tonic::Status> {
-        let validator_service = self.clone();
-
-        // Spawns a task which handles the transaction. The task will unconditionally continue
-        // processing in the event that the client connection is dropped.
-        spawn_monitored_task!(async move {
-            // NB: traffic tally wrapping handled within the task rather than on task exit
-            // to prevent an attacker from subverting traffic control by severing the connection
-            handle_with_decoration!(validator_service, transaction_v2_impl, request)
         })
         .await
         .unwrap()

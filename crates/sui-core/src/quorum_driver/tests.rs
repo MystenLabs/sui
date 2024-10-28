@@ -4,6 +4,7 @@
 use crate::quorum_driver::reconfig_observer::DummyReconfigObserver;
 use crate::quorum_driver::{
     AuthorityAggregator, AuthorityAggregatorUpdatable as _, QuorumDriverHandlerBuilder,
+    SubmitTransactionOptions, TransactionDriver,
 };
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_authority_clients::LocalAuthorityClientFaultConfig;
@@ -595,4 +596,26 @@ async fn test_quorum_driver_handling_overload_and_retry() {
             println!("Waiting for txn timed out! This is desired behavior.")
         }
     }
+}
+
+#[tokio::test]
+async fn test_transaction_driver_submit_transaction() {
+    // GIVEN
+    let (aggregator, tx) = setup().await;
+    let digest = *tx.digest();
+    let transaction_driver = TransactionDriver::new(
+        Arc::new(aggregator),
+        Arc::new(DummyReconfigObserver {}),
+        Arc::new(QuorumDriverMetrics::new_for_tests()),
+    );
+
+    // EXPECT transaction submission and execution to succeed
+    let resp = transaction_driver
+        .submit_transaction(
+            ExecuteTransactionRequestV3::new_v2(tx),
+            SubmitTransactionOptions::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.effects.effects.transaction_digest(), &digest);
 }

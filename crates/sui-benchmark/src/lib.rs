@@ -13,13 +13,15 @@ use sui_core::{
     authority_client::NetworkAuthorityClient,
     quorum_driver::{
         reconfig_observer::ReconfigObserver, QuorumDriver, QuorumDriverHandler,
-        QuorumDriverHandlerBuilder, QuorumDriverMetrics,
+        QuorumDriverHandlerBuilder, QuorumDriverMetrics, SubmitTransactionOptions,
+        TransactionDriver,
     },
 };
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
+use sui_protocol_config::is_mysticeti_fpc_enabled_in_env;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
 use sui_types::gas::GasCostSummary;
@@ -43,7 +45,7 @@ use sui_types::{
     sui_system_state::SuiSystemStateTrait,
 };
 use tokio::time::sleep;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 pub mod bank;
 pub mod benchmark_setup;
@@ -223,6 +225,7 @@ pub struct LocalValidatorAggregatorProxy {
     _qd_handler: QuorumDriverHandler<NetworkAuthorityClient>,
     // Stress client does not verify individual validator signatures since this is very expensive
     qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
+    td: Arc<TransactionDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
 }
@@ -290,12 +293,34 @@ impl LocalValidatorAggregatorProxy {
                 .with_reconfig_observer(reconfig_observer.clone());
         let qd_handler = qd_handler_builder.start();
         let qd = qd_handler.clone_quorum_driver();
+        let td = TransactionDriver::new(aggregator, reconfig_observer, quorum_driver_metrics);
         Self {
             _qd_handler: qd_handler,
             qd,
+            td,
             clients,
             committee,
         }
+    }
+
+    async fn submit_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+        let response = self
+            .td
+            .submit_transaction(
+                sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
+                    transaction: tx.clone(),
+                    include_events: true,
+                    include_input_objects: false,
+                    include_output_objects: false,
+                    include_auxiliary_data: false,
+                },
+                SubmitTransactionOptions::default(),
+            )
+            .await?;
+        Ok(ExecutionEffects::FinalizedTransactionEffects(
+            response.effects,
+            response.events.unwrap_or_default(),
+        ))
     }
 }
 
@@ -324,6 +349,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 
     async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+        if is_mysticeti_fpc_enabled_in_env().unwrap_or(false) {
+            return self.submit_transaction_block(tx).await;
+        }
         let tx_digest = *tx.digest();
         let mut retry_cnt = 0;
         while retry_cnt < 3 {
@@ -353,6 +381,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     ));
                 }
                 Err(QuorumDriverError::NonRecoverableTransactionError { errors }) => {
+                    warn!(
+                        ?tx_digest,
+                        retry_cnt, "Transaction failed with non-recoverable err: {:?}", errors
+                    );
                     bail!(QuorumDriverError::NonRecoverableTransactionError { errors });
                 }
                 Err(err) => {
@@ -386,6 +418,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         Box::new(Self {
             _qd_handler: qdh,
             qd,
+            td: self.td.clone(),
             clients: self.clients.clone(),
             committee: self.committee.clone(),
         })
@@ -519,7 +552,7 @@ impl ValidatorProxy for FullNodeProxy {
                     ));
                 }
                 Err(err) => {
-                    error!(
+                    warn!(
                         ?tx_digest,
                         retry_cnt, "Transaction failed with err: {:?}", err
                     );

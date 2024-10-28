@@ -640,6 +640,17 @@ mod test {
         test_simulated_load(test_cluster, 120).await;
     }
 
+    // Tests cluster liveness when DKG has failed.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_mysticeti_fastpath() {
+        unsafe {
+            std::env::set_var("CONSENSUS", "mysticeti_fpc");
+        }
+
+        let test_cluster = build_test_cluster(4, 30_000).await;
+        test_simulated_load(test_cluster, 120).await;
+    }
+
     #[sim_test(config = "test_config()")]
     async fn test_data_ingestion_pipeline() {
         let path = nondeterministic!(TempDir::new().unwrap()).into_path();

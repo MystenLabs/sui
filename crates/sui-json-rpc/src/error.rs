@@ -275,6 +275,17 @@ impl From<Error> for RpcError {
                             ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>);
                         RpcError::Call(CallError::Custom(error_object))
                     }
+                    QuorumDriverError::RpcFailure(name, err) => {
+                        let error_object = ErrorObject::owned(
+                            TRANSIENT_ERROR_CODE,
+                            format!(
+                                "Failed to call submit_transaction() on validator {}: {}",
+                                name, err,
+                            ),
+                            None::<()>,
+                        );
+                        RpcError::Call(CallError::Custom(error_object))
+                    }
                 }
             }
             _ => RpcError::Call(CallError::Failed(e.into())),

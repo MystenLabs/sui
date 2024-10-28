@@ -19,8 +19,8 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
-    TransactionStatus, VerifiedObjectInfoResponse,
+    HandleTransactionRequestV2, HandleTransactionResponseV2, ObjectInfoRequest, ObjectInfoResponse,
+    SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::SuiSystemState;
@@ -309,6 +309,27 @@ impl<C> SafeClient<C>
 where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
 {
+    /// Submit a transaction for certification and execution.
+    pub async fn submit_transaction(
+        &self,
+        request: HandleTransactionRequestV2,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<HandleTransactionResponseV2, SuiError> {
+        let _timer = self.metrics.handle_certificate_latency.start_timer();
+        let response = self
+            .authority_client
+            .submit_transaction(request, client_addr)
+            .await?;
+
+        // TODO(fastpath): verify response.
+        // let verified = check_error!(
+        //     self.address,
+        //     self.verify_certificate_response_v3(&digest, response),
+        //     "Client error in handle_certificate"
+        // )?;
+        Ok(response)
+    }
+
     /// Initiate a new transfer to a Sui or Primary account.
     pub async fn handle_transaction(
         &self,
