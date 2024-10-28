@@ -179,8 +179,8 @@ pub(super) fn committer<H: Handler + 'static>(
                         .start_timer();
 
                     // Write all the object updates out along with the watermark update, in a
-                    // single transaction, but where every update is chunked into a manageable
-                    // size.
+                    // single transaction. The handler's `commit` implementation is responsible for
+                    // chunking up the writes into a manageable size.
                     let affected = conn.transaction::<_, anyhow::Error, _>(|conn| async {
                         watermark.update(conn).await?;
                         H::commit(&batch, conn).await
