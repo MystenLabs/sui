@@ -24,7 +24,10 @@ use crate::{
         self as P, ConstantName, DatatypeName, Field, FunctionName, VariantName, MACRO_MODIFIER,
     },
     shared::{
-        ide::EllipsisMatchEntries, program_info::NamingProgramInfo, unique_map::UniqueMap, *,
+        ide::{EllipsisMatchEntries, IDEAnnotation, IDEInfo},
+        program_info::NamingProgramInfo,
+        unique_map::UniqueMap,
+        *,
     },
     FullyCompiledProgram,
 };
@@ -618,6 +621,16 @@ impl<'outer, 'env> Context<'outer, 'env> {
     #[allow(unused)]
     pub fn add_diags(&mut self, diags: Diagnostics) {
         self.env.add_diags(&self.warning_filters_scope, diags);
+    }
+
+    #[allow(unused)]
+    pub fn extend_ide_info(&mut self, info: IDEInfo) {
+        self.env.extend_ide_info(&self.warning_filters_scope, info);
+    }
+
+    pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+        self.env
+            .add_ide_annotation(&self.warning_filters_scope, loc, info);
     }
 
     pub fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
@@ -3443,7 +3456,7 @@ fn expand_positional_ellipsis<T>(
                     let entries = (0..=missing).map(|_| "_".into()).collect::<Vec<_>>();
                     let info = EllipsisMatchEntries::Positional(entries);
                     let info = ide::IDEAnnotation::EllipsisMatchEntries(Box::new(info));
-                    context.env.add_ide_annotation(eloc, info);
+                    context.add_ide_annotation(eloc, info);
                 }
                 result
             }
@@ -3480,7 +3493,7 @@ fn expand_named_ellipsis<T>(
         let entries = fields.iter().map(|field| field.value()).collect::<Vec<_>>();
         let info = EllipsisMatchEntries::Named(entries);
         let info = ide::IDEAnnotation::EllipsisMatchEntries(Box::new(info));
-        context.env.add_ide_annotation(ellipsis_loc, info);
+        context.add_ide_annotation(ellipsis_loc, info);
     }
 
     let start_idx = args.len();

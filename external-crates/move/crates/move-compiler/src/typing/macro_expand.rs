@@ -1061,7 +1061,6 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             if context.core.env.ide_mode() {
                 context
                     .core
-                    .env
                     .add_ide_annotation(*eloc, IDEAnnotation::ExpandedLambda);
             }
             *e_ = block;

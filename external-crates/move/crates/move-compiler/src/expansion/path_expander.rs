@@ -764,9 +764,7 @@ impl PathExpander for Move2024PathExpander {
     fn ide_autocomplete_suggestion(&mut self, context: &mut DefnContext, loc: Loc) {
         if context.env.ide_mode() {
             let info = self.aliases.get_ide_alias_information();
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::PathAutocompleteInfo(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::PathAutocompleteInfo(Box::new(info)));
         }
     }
 }
@@ -1222,7 +1220,7 @@ impl PathExpander for LegacyPathExpander {
                 info.members.insert((*name, *mident, *member));
             }
             let annotation = IDEAnnotation::PathAutocompleteInfo(Box::new(info));
-            context.env.add_ide_annotation(loc, annotation)
+            context.add_ide_annotation(loc, annotation)
         }
     }
 }

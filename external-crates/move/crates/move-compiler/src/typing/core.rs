@@ -228,6 +228,15 @@ impl<'env> Context<'env> {
         self.env.add_diags(&self.warning_filters_scope, diags);
     }
 
+    pub fn extend_ide_info(&mut self, info: IDEInfo) {
+        self.env.extend_ide_info(&self.warning_filters_scope, info);
+    }
+
+    pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+        self.env
+            .add_ide_annotation(&self.warning_filters_scope, loc, info);
+    }
+
     pub fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
     }

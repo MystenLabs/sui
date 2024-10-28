@@ -33,6 +33,7 @@ use crate::{
         NATIVE_MODIFIER,
     },
     shared::{
+        ide::{IDEAnnotation, IDEInfo},
         known_attributes::AttributePosition,
         string_utils::{is_pascal_case, is_upper_snake_case},
         unique_map::UniqueMap,
@@ -271,6 +272,16 @@ impl<'env, 'map> Context<'env, 'map> {
         self.defn_context.add_diags(diags);
     }
 
+    #[allow(unused)]
+    pub fn extend_ide_info(&mut self, info: IDEInfo) {
+        self.defn_context.extend_ide_info(info);
+    }
+
+    #[allow(unused)]
+    pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+        self.defn_context.add_ide_annotation(loc, info);
+    }
+
     pub fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.defn_context.add_warning_filter_scope(filters)
     }
@@ -287,6 +298,15 @@ impl DefnContext<'_, '_> {
 
     pub(super) fn add_diags(&mut self, diags: Diagnostics) {
         self.env.add_diags(&self.warning_filters_scope, diags);
+    }
+
+    pub(super) fn extend_ide_info(&mut self, info: IDEInfo) {
+        self.env.extend_ide_info(&self.warning_filters_scope, info);
+    }
+
+    pub(super) fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+        self.env
+            .add_ide_annotation(&self.warning_filters_scope, loc, info);
     }
 
     pub(super) fn add_warning_filter_scope(&mut self, filters: WarningFilters) {

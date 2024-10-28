@@ -622,9 +622,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
         if !unused.is_empty() {
             let arms = unused.into_iter().map(PS::Value).collect::<Vec<_>>();
             let info = MissingMatchArmsInfo { arms };
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
         }
     }
 
@@ -635,9 +633,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             let info = MissingMatchArmsInfo {
                 arms: vec![PS::Wildcard],
             };
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
         }
     }
 
@@ -684,9 +680,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             let info = MissingMatchArmsInfo {
                 arms: vec![suggestion],
             };
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
         } else {
             // If there's a default arm, no suggestion is necessary.
             if matrix.has_default_arm() {
@@ -752,9 +746,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
                 arms.push(suggestion);
             }
             let info = MissingMatchArmsInfo { arms };
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
         }
     }
 
@@ -790,9 +782,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             let info = MissingMatchArmsInfo {
                 arms: vec![PS::Wildcard],
             };
-            context
-                .env
-                .add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
         }
     }
 }

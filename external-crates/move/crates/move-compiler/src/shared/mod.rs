@@ -675,20 +675,25 @@ impl CompilationEnv {
         self.flags.ide_mode()
     }
 
-    pub fn extend_ide_info(&self, info: IDEInfo) {
+    pub fn extend_ide_info(&self, warning_filters: &WarningFiltersScope, info: IDEInfo) {
         if self.flags().ide_test_mode() {
             for entry in info.annotations.iter() {
                 let diag = entry.clone().into();
-                self.add_diag(WarningFiltersScope::EMPTY, diag);
+                self.add_diag(warning_filters, diag);
             }
         }
         self.ide_information.write().unwrap().extend(info);
     }
 
-    pub fn add_ide_annotation(&self, loc: Loc, info: IDEAnnotation) {
+    pub fn add_ide_annotation(
+        &self,
+        warning_filters: &WarningFiltersScope,
+        loc: Loc,
+        info: IDEAnnotation,
+    ) {
         if self.flags().ide_test_mode() {
             let diag = (loc, info.clone()).into();
-            self.add_diag(WarningFiltersScope::EMPTY, diag);
+            self.add_diag(warning_filters, diag);
         }
         self.ide_information
             .write()

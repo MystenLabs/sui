@@ -270,7 +270,7 @@ fn finalize_ide_info(context: &mut Context) {
     for (_loc, ann) in info.iter_mut() {
         expand::ide_annotation(context, ann);
     }
-    context.env.extend_ide_info(info);
+    context.extend_ide_info(info);
 }
 
 //**************************************************************************************************
