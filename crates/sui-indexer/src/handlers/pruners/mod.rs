@@ -20,26 +20,26 @@ use crate::{
 
 use super::pruner::PrunableTable;
 
-// pub mod checkpoints;
-// pub mod ev_emit_module;
-// pub mod ev_emit_package;
-// pub mod ev_senders;
-// pub mod ev_struct_inst;
-// pub mod ev_struct_module;
-// pub mod ev_struct_name;
-// pub mod ev_struct_package;
+pub mod checkpoints;
+pub mod ev_emit_module;
+pub mod ev_emit_package;
+pub mod ev_senders;
+pub mod ev_struct_inst;
+pub mod ev_struct_module;
+pub mod ev_struct_name;
+pub mod ev_struct_package;
 pub mod events;
 pub mod objects_history;
 pub mod transactions;
-// pub mod tx_affected_addresses;
-// pub mod tx_affected_objects;
-// pub mod tx_calls_fun;
-// pub mod tx_calls_mod;
-// pub mod tx_calls_pkg;
-// pub mod tx_changed_objects;
-// pub mod tx_digests;
-// pub mod tx_input_objects;
-// pub mod tx_kinds;
+pub mod tx_affected_addresses;
+pub mod tx_affected_objects;
+pub mod tx_calls_fun;
+pub mod tx_calls_mod;
+pub mod tx_calls_pkg;
+pub mod tx_changed_objects;
+pub mod tx_digests;
+pub mod tx_input_objects;
+pub mod tx_kinds;
 
 /// Pruners implement the logic for a given table: How to fetch the earliest available data from the
 /// table, and how to delete rows up to the pruner watermark.
@@ -175,4 +175,17 @@ pub fn spawn_pruner<T: Prunable>(
 ) -> JoinHandle<IndexerResult<()>> {
     println!("spawn_pruner");
     spawn_monitored_task!(run_pruner::<T>(cancel, store))
+}
+
+#[macro_export]
+macro_rules! execute_delete_range_query {
+    ($conn:expr, $table:ident, $column:ident, $min:expr, $max:expr) => {
+        diesel::delete(
+            $table::table
+                .filter($table::$column.ge($min as i64))
+                .filter($table::$column.lt($max as i64)),
+        )
+        .execute($conn)
+        .await
+    };
 }

@@ -39,7 +39,7 @@ impl Prunable for ObjectsHistory {
             .bind::<diesel::sql_types::BigInt, _>(prune_lo as i64)
             .execute(conn)
             .await
-            .context("failed to drop partition")
+            .context(format!("Failed to prune {}", Self::NAME.as_ref()))
     }
 }
 

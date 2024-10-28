@@ -79,19 +79,6 @@ macro_rules! chunk {
     }};
 }
 
-#[macro_export]
-macro_rules! execute_delete_range_query {
-    ($conn:expr, $table:ident, $column:ident, $min:expr, $max:expr) => {
-        diesel::delete(
-            $table::table
-                .filter($table::$column.ge($min as i64))
-                .filter($table::$column.lt($max as i64)),
-        )
-        .execute($conn)
-        .await
-    };
-}
-
 // In one DB transaction, the update could be chunked into
 // a few statements, this is the amount of rows to update in one statement
 // TODO: I think with the `per_db_tx` params, `PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX`
