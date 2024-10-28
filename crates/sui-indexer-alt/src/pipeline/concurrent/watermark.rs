@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::Ordering,
     collections::{btree_map::Entry, BTreeMap},
     sync::Arc,
 };
@@ -18,24 +19,13 @@ use tracing::{debug, error, info, warn};
 use crate::{
     db::Db,
     metrics::IndexerMetrics,
-    models::watermarks::{CommitterWatermark, Ordering},
-    pipeline::{PipelineConfig, WatermarkPart},
+    models::watermarks::CommitterWatermark,
+    pipeline::{
+        PipelineConfig, WatermarkPart, LOUD_WATERMARK_UPDATE_INTERVAL, WARN_PENDING_WATERMARKS,
+    },
 };
 
 use super::Handler;
-
-/// Tracing message for the watermark update will be logged at info level at least this many
-/// checkpoints.
-const LOUD_WATERMARK_UPDATE_INTERVAL: i64 = 5 * 10;
-
-/// Issue a warning every time the number of pending watermarks exceeds this number. This can
-/// happen if the pipeline was started with its initial checkpoint overridden to be strictly
-/// greater than its current watermark -- in that case, the pipeline will never be able to update
-/// its watermarks.
-///
-/// This may be a legitimate thing to do when backfilling a table, but in that case
-/// `--skip-watermarks` should be used.
-const WARN_PENDING_WATERMARKS: usize = 10000;
 
 /// The watermark task is responsible for keeping track of a pipeline's out-of-order commits and
 /// updating its row in the `watermarks` table when a continuous run of checkpoints have landed
@@ -79,17 +69,15 @@ pub(super) fn watermark<H: Handler + 'static>(
         // ("pre-committed"). After each batch is written, the task will try to progress the
         // watermark as much as possible without going over any holes in the sequence of
         // checkpoints (entirely missing watermarks, or incomplete watermarks).
-        //
-        // NOTE: When no watermark is provided, it is assumed that the pipeline is starting from
-        // scratch, but we still initialize it as if it is at (after) the genesis checkpoint. This
-        // means we never write a watermark for the genesis checkpoint, but would wait for another
-        // checkpoint to be written out before updating the watermark, which is fine in practice
-        // and simplifies the logic of tracking watermarks.
         let mut precommitted: BTreeMap<u64, WatermarkPart> = BTreeMap::new();
-        let mut watermark =
-            initial_watermark.unwrap_or_else(|| CommitterWatermark::initial(H::NAME.into()));
+        let (mut watermark, mut next_checkpoint) = if let Some(watermark) = initial_watermark {
+            let next = watermark.checkpoint_hi_inclusive + 1;
+            (watermark, next)
+        } else {
+            (CommitterWatermark::initial(H::NAME.into()), 0)
+        };
 
-        // The committer will periodically output a log message at a higher log level to
+        // The watermark task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
         let mut next_loud_watermark_update =
             watermark.checkpoint_hi_inclusive + LOUD_WATERMARK_UPDATE_INTERVAL;
@@ -132,15 +120,22 @@ pub(super) fn watermark<H: Handler + 'static>(
                             break;
                         }
 
-                        match watermark.next_cmp(&part.watermark) {
-                            Ordering::Future => break,
+                        match next_checkpoint.cmp(&part.watermark.checkpoint_hi_inclusive) {
+                            // Next pending checkpoint is from the future.
+                            Ordering::Less => break,
 
-                            Ordering::Past => {
-                                // Out of order watermarks can be encountered when a pipeline is
-                                // starting up, because ingestion must start at the lowest
-                                // checkpoint across all pipelines, or because of a backfill, where
-                                // the initial checkpoint has been overridden.
-                                //
+                            // This is the next checkpoint -- include it.
+                            Ordering::Equal => {
+                                watermark = pending.remove().watermark;
+                                watermark_needs_update = true;
+                                next_checkpoint += 1;
+                            }
+
+                            // Next pending checkpoint is in the past. Out of order watermarks can
+                            // be encountered when a pipeline is starting up, because ingestion
+                            // must start at the lowest checkpoint across all pipelines, or because
+                            // of a backfill, where the initial checkpoint has been overridden.
+                            Ordering::Greater => {
                                 // Track how many we see to make sure it doesn't grow without
                                 // bound.
                                 metrics
@@ -149,11 +144,6 @@ pub(super) fn watermark<H: Handler + 'static>(
                                     .inc();
 
                                 pending.remove();
-                            }
-
-                            Ordering::Next => {
-                                watermark = pending.remove().watermark;
-                                watermark_needs_update = true;
                             }
                         }
                     }

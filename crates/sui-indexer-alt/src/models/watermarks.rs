@@ -30,19 +30,6 @@ pub struct CommitterWatermark<'p> {
     pub tx_hi: i64,
 }
 
-/// Outcomes from extending one watermark with another.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum Ordering {
-    /// The watermark was in the future, so could not be added.
-    Future,
-
-    /// The added watermark was in the past, so the current watermark didn't change.
-    Past,
-
-    /// The added watermark was the successor to the current watermark, so was used in the update.
-    Next,
-}
-
 impl CommitterWatermark<'static> {
     /// Get the current high watermark for the pipeline.
     pub async fn get(
@@ -84,16 +71,6 @@ impl<'p> CommitterWatermark<'p> {
             .execute(conn)
             .await?
             > 0)
-    }
-
-    /// Compare `other` with the immediate successor of this watermark.
-    pub fn next_cmp(&self, other: &CommitterWatermark<'_>) -> Ordering {
-        let next = self.checkpoint_hi_inclusive + 1;
-        match other.checkpoint_hi_inclusive.cmp(&next) {
-            cmp::Ordering::Equal => Ordering::Next,
-            cmp::Ordering::Less => Ordering::Past,
-            cmp::Ordering::Greater => Ordering::Future,
-        }
     }
 }
 

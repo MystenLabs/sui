@@ -10,9 +10,22 @@ pub use processor::Processor;
 pub(crate) mod concurrent;
 mod processor;
 
+/// Tracing message for the watermark update will be logged at info level at least this many
+/// checkpoints.
+const LOUD_WATERMARK_UPDATE_INTERVAL: i64 = 5 * 10;
+
 /// Extra buffer added to channels between tasks in a pipeline. There does not need to be a huge
 /// capacity here because tasks already buffer rows to insert internally.
 const PIPELINE_BUFFER: usize = 5;
+
+/// Issue a warning every time the number of pending watermarks exceeds this number. This can
+/// happen if the pipeline was started with its initial checkpoint overridden to be strictly
+/// greater than its current watermark -- in that case, the pipeline will never be able to update
+/// its watermarks.
+///
+/// This may be a legitimate thing to do when backfilling a table, but in that case
+/// `--skip-watermarks` should be used.
+const WARN_PENDING_WATERMARKS: usize = 10000;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct PipelineConfig {
