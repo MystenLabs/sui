@@ -1399,12 +1399,16 @@
       "CheckpointResponse": {
         "type": "object",
         "required": [
+          "digest",
           "signature",
           "summary"
         ],
         "properties": {
           "contents": {
             "$ref": "#/components/schemas/CheckpointContents"
+          },
+          "digest": {
+            "$ref": "#/components/schemas/CheckpointDigest"
           },
           "signature": {
             "$ref": "#/components/schemas/ValidatorAggregatedSignature"

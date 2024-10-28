@@ -149,6 +149,25 @@ where
     }
 }
 
+#[derive(Debug)]
+pub enum ProtobufBcs<P, T> {
+    Protobuf(P),
+    Bcs(T),
+}
+
+impl<P, T> axum::response::IntoResponse for ProtobufBcs<P, T>
+where
+    P: prost::Message + std::default::Default,
+    T: serde::Serialize,
+{
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            Self::Protobuf(inner) => Protobuf(inner).into_response(),
+            Self::Bcs(inner) => Bcs(inner).into_response(),
+        }
+    }
+}
+
 pub async fn append_info_headers(
     State(state): State<RestService>,
     response: Response,
