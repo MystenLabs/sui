@@ -13,11 +13,6 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
-    HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
-    ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
-};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     crypto::AuthorityKeyPair,
@@ -32,6 +27,15 @@ use sui_types::{
 use sui_types::{
     error::SuiResult,
     messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3},
+};
+use sui_types::{
+    executable_transaction::VerifiedExecutableTransaction,
+    messages_grpc::{
+        HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
+        HandleSoftBundleCertificatesResponseV3, HandleTransactionRequestV2,
+        HandleTransactionResponse, HandleTransactionResponseV2, ObjectInfoRequest,
+        ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+    },
 };
 
 #[derive(Clone, Copy, Default)]
@@ -57,6 +61,29 @@ pub struct LocalAuthorityClient {
 
 #[async_trait]
 impl AuthorityAPI for LocalAuthorityClient {
+    async fn submit_transaction(
+        &self,
+        request: HandleTransactionRequestV2,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleTransactionResponseV2, SuiError> {
+        if self.fault_config.fail_before_handle_transaction {
+            return Err(SuiError::from("Mock error before handle_transaction"));
+        }
+        let state = self.state.clone();
+        let result = Self::handle_submit_transaction(state, request, self.fault_config).await;
+        if self.fault_config.fail_after_handle_transaction {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Mock error after handle_transaction".to_owned(),
+            });
+        }
+        if let Some(duration) = self.fault_config.overload_retry_after_handle_transaction {
+            return Err(SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: duration.as_secs(),
+            });
+        }
+        result
+    }
+
     async fn handle_transaction(
         &self,
         transaction: Transaction,
@@ -191,6 +218,80 @@ impl LocalAuthorityClient {
         }
     }
 
+    // One difference between this implementation and actual transaction execution, is that
+    // this assumes shared object locks have already been acquired and tries to execute shared
+    // object transactions as well as owned object transactions.
+    async fn handle_submit_transaction(
+        state: Arc<AuthorityState>,
+        request: HandleTransactionRequestV2,
+        fault_config: LocalAuthorityClientFaultConfig,
+    ) -> Result<HandleTransactionResponseV2, SuiError> {
+        if fault_config.fail_before_handle_confirmation {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Mock error before handle_confirmation_transaction".to_owned(),
+            });
+        }
+        // Check existing effects before verifying the cert to allow querying certs finalized
+        // from previous epochs.
+        let tx_digest = *request.transaction.digest();
+        let epoch_store = state.epoch_store_for_testing();
+        let effects = match state
+            .get_transaction_cache_reader()
+            .get_executed_effects(&tx_digest)?
+        {
+            Some(effects) => effects,
+            _ => {
+                let verified_transaction = epoch_store
+                    .signature_verifier
+                    .verify_tx(request.transaction.data())
+                    .map(|_| VerifiedTransaction::new_from_verified(request.transaction))?;
+                let executable_transaction = VerifiedExecutableTransaction::new_from_consensus(
+                    verified_transaction,
+                    epoch_store.epoch(),
+                );
+                state.enqueue_transactions_for_execution(
+                    vec![executable_transaction.clone()],
+                    &epoch_store,
+                );
+                state.notify_read_effects(tx_digest).await?
+            }
+        };
+
+        let events = if request.include_events {
+            if let Some(digest) = effects.events_digest() {
+                Some(state.get_transaction_events(digest)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if fault_config.fail_after_handle_confirmation {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Mock error after handle_confirmation_transaction".to_owned(),
+            });
+        }
+
+        let input_objects = request
+            .include_input_objects
+            .then(|| state.get_transaction_input_objects(&effects))
+            .and_then(Result::ok);
+
+        let output_objects = request
+            .include_output_objects
+            .then(|| state.get_transaction_output_objects(&effects))
+            .and_then(Result::ok);
+
+        Ok(HandleTransactionResponseV2 {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data: None, // We don't have any aux data generated presently
+        })
+    }
+
     // One difference between this implementation and actual certificate execution, is that
     // this assumes shared object locks have already been acquired and tries to execute shared
     // object transactions as well as owned object transactions.
@@ -284,6 +385,14 @@ impl MockAuthorityApi {
 
 #[async_trait]
 impl AuthorityAPI for MockAuthorityApi {
+    async fn submit_transaction(
+        &self,
+        _transaction: HandleTransactionRequestV2,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleTransactionResponseV2, SuiError> {
+        unimplemented!()
+    }
+
     /// Initiate a new transaction to a Sui or Primary account.
     async fn handle_transaction(
         &self,
@@ -380,6 +489,14 @@ pub struct HandleTransactionTestAuthorityClient {
 
 #[async_trait]
 impl AuthorityAPI for HandleTransactionTestAuthorityClient {
+    async fn submit_transaction(
+        &self,
+        _transaction: HandleTransactionRequestV2,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleTransactionResponseV2, SuiError> {
+        unimplemented!()
+    }
+
     async fn handle_transaction(
         &self,
         _transaction: Transaction,

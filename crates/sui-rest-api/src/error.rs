@@ -164,6 +164,13 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RestError {
                 // TODO add a Retry-After header
                 RestError::new(StatusCode::SERVICE_UNAVAILABLE, "system is overloaded")
             }
+            RpcFailure(name, err) => RestError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!(
+                    "Failed to call submit_transaction() on validator {}: {}",
+                    name, err,
+                ),
+            ),
         }
     }
 }
