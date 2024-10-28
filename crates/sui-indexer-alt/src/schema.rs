@@ -50,6 +50,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    sum_coin_balances (object_id) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        owner_id -> Bytea,
+        coin_type -> Bytea,
+        coin_balance -> Int8,
+    }
+}
+
+diesel::table! {
     sum_obj_types (object_id) {
         object_id -> Bytea,
         object_version -> Int8,
@@ -96,6 +106,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_checkpoints,
     kv_objects,
     kv_transactions,
+    sum_coin_balances,
     sum_obj_types,
     tx_affected_objects,
     tx_balance_changes,
