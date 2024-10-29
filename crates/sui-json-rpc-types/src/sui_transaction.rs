@@ -1871,7 +1871,7 @@ fn get_signature_types(
                 .signature_at(func.parameters)
                 .0
                 .iter()
-                .map(|s| primitive_type(module, &[], s).1)
+                .map(|s| primitive_type(module, &[], s))
                 .collect(),
         )
     } else {
