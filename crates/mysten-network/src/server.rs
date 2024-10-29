@@ -39,6 +39,7 @@ use tower_http::classify::{GrpcErrorsAsFailures, SharedClassifier};
 use tower_http::propagate_header::PropagateHeaderLayer;
 use tower_http::set_header::SetRequestHeaderLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnBodyChunk, DefaultOnEos, TraceLayer};
+use tracing::debug;
 
 pub struct ServerBuilder<M: MetricsCallbackProvider = DefaultMetricsCallbackProvider> {
     router: Router<WrapperService<M>>,
@@ -258,9 +259,11 @@ impl TcpOrTlsListener {
         stream.peek(&mut buf).await?;
         if buf[0] == 0x16 {
             // First byte of a TLS handshake is 0x16.
+            debug!("accepting TLS connection from {addr:?}");
             let stream = self.tls_acceptor.as_ref().unwrap().accept(stream).await?;
             Ok(TcpOrTlsStream::Tls(stream, addr))
         } else {
+            debug!("accepting TCP connection from {addr:?}");
             Ok(TcpOrTlsStream::Tcp(stream, addr))
         }
     }

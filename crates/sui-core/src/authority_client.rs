@@ -284,11 +284,14 @@ pub fn make_network_authority_clients_with_network_config(
         let address = network_metadata.network_address.clone();
         let address = address.rewrite_udp_to_tcp();
         // TODO: Enable TLS on this interface with below config, once support is rolled out to validators.
-        // let tls_config = sui_tls::create_rustls_client_config(
-        //     network_metadata.network_public_key.clone(),
-        //     sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
-        //     None,
-        // );
+        // let tls_config = network_metadata.network_public_key.as_ref().map(|key| {
+        //     sui_tls::create_rustls_client_config(
+        //         key.clone(),
+        //         sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+        //         None,
+        //     )
+        // });
+        // TODO: Change below code to generate a SuiError if no valid TLS config is available.
         let maybe_channel = network_config.connect_lazy(&address, None).map_err(|e| {
             tracing::error!(
                 address = %address,

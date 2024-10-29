@@ -206,7 +206,7 @@ impl SuiSystemStateSummary {
                             network_public_key: NetworkPublicKey::from_bytes(
                                 &validator.network_pubkey_bytes,
                             )
-                            .unwrap(),
+                            .ok(),
                         },
                     ),
                 )

@@ -355,19 +355,17 @@ pub trait CommitteeTrait<K: Ord> {
     fn weight(&self, author: &K) -> StakeUnit;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct NetworkMetadata {
     pub network_address: Multiaddr,
     pub narwhal_primary_address: Multiaddr,
-    pub network_public_key: NetworkPublicKey,
+    pub network_public_key: Option<NetworkPublicKey>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct CommitteeWithNetworkMetadata {
     epoch_id: EpochId,
     validators: BTreeMap<AuthorityName, (StakeUnit, NetworkMetadata)>,
-
-    #[serde(skip)]
     committee: OnceCell<Committee>,
 }
 
