@@ -155,7 +155,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         false
     }
 
-    fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
     }
 

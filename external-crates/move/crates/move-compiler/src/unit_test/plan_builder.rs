@@ -67,7 +67,7 @@ impl<'env> Context<'env> {
         self.env.add_diags(&self.warning_filters_scope, diags);
     }
 
-    pub fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
     }
 
@@ -106,7 +106,7 @@ pub fn construct_test_plan(
         prog.modules
             .key_cloned_iter()
             .flat_map(|(module_ident, module_def)| {
-                context.add_warning_filter_scope(module_def.warning_filter.clone());
+                context.push_warning_filter_scope(module_def.warning_filter.clone());
                 let plan = construct_module_test_plan(
                     &mut context,
                     package_filter,
@@ -133,7 +133,7 @@ fn construct_module_test_plan(
         .functions
         .iter()
         .filter_map(|(loc, fn_name, func)| {
-            context.add_warning_filter_scope(func.warning_filter.clone());
+            context.push_warning_filter_scope(func.warning_filter.clone());
             let info = build_test_info(context, loc, fn_name, func)
                 .map(|test_case| (fn_name.to_string(), test_case));
             context.pop_warning_filter_scope();

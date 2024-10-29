@@ -282,8 +282,8 @@ impl<'env, 'map> Context<'env, 'map> {
         self.defn_context.add_ide_annotation(loc, info);
     }
 
-    pub fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.defn_context.add_warning_filter_scope(filters)
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+        self.defn_context.push_warning_filter_scope(filters)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
@@ -309,7 +309,7 @@ impl DefnContext<'_, '_> {
             .add_ide_annotation(&self.warning_filters_scope, loc, info);
     }
 
-    pub(super) fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub(super) fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
     }
 
@@ -877,7 +877,7 @@ fn module_(
     let config = context.env().package_config(package_name);
     warning_filter.union(&config.warning_filter);
 
-    context.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     assert!(context.address.is_none());
     assert!(address.is_none());
     set_module_address(context, &name, module_address);
@@ -1876,7 +1876,7 @@ fn struct_def_(
     } = pstruct;
     let attributes = flatten_attributes(context, AttributePosition::Struct, attributes);
     let warning_filter = warning_filter(context, &attributes);
-    context.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let type_parameters = datatype_type_parameters(context, pty_params);
     context.push_type_parameters(type_parameters.iter().map(|tp| &tp.name));
     let abilities = ability_set(context, "modifier", abilities_vec);
@@ -1958,7 +1958,7 @@ fn enum_def_(
     } = penum;
     let attributes = flatten_attributes(context, AttributePosition::Enum, attributes);
     let warning_filter = warning_filter(context, &attributes);
-    context.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let type_parameters = datatype_type_parameters(context, pty_params);
     context.push_type_parameters(type_parameters.iter().map(|tp| &tp.name));
     let abilities = ability_set(context, "modifier", abilities_vec);
@@ -2132,7 +2132,7 @@ fn constant_(
     } = pconstant;
     let attributes = flatten_attributes(context, AttributePosition::Constant, pattributes);
     let warning_filter = warning_filter(context, &attributes);
-    context.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let signature = type_(context, psignature);
     let value = *exp(context, Box::new(pvalue));
     let constant = E::Constant {
@@ -2181,7 +2181,7 @@ fn function_(
     } = pfunction;
     let attributes = flatten_attributes(context, AttributePosition::Function, pattributes);
     let warning_filter = warning_filter(context, &attributes);
-    context.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     if let (Some(entry_loc), Some(macro_loc)) = (entry, macro_) {
         let e_msg = format!(
             "Invalid function declaration. \

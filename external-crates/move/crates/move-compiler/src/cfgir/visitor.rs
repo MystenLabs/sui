@@ -61,7 +61,7 @@ pub trait CFGIRVisitorConstructor: Send {
 }
 
 pub trait CFGIRVisitorContext {
-    fn add_warning_filter_scope(&mut self, filters: WarningFilters);
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters);
     fn pop_warning_filter_scope(&mut self);
 
     fn visit_module_custom(&mut self, _ident: ModuleIdent, _mdef: &G::ModuleDefinition) -> bool {
@@ -73,7 +73,7 @@ pub trait CFGIRVisitorContext {
     /// required.
     fn visit(&mut self, program: &G::Program) {
         for (mident, mdef) in program.modules.key_cloned_iter() {
-            self.add_warning_filter_scope(mdef.warning_filter.clone());
+            self.push_warning_filter_scope(mdef.warning_filter.clone());
             if self.visit_module_custom(mident, mdef) {
                 self.pop_warning_filter_scope();
                 continue;
@@ -112,7 +112,7 @@ pub trait CFGIRVisitorContext {
         struct_name: DatatypeName,
         sdef: &H::StructDefinition,
     ) {
-        self.add_warning_filter_scope(sdef.warning_filter.clone());
+        self.push_warning_filter_scope(sdef.warning_filter.clone());
         if self.visit_struct_custom(module, struct_name, sdef) {
             self.pop_warning_filter_scope();
             return;
@@ -134,7 +134,7 @@ pub trait CFGIRVisitorContext {
         enum_name: DatatypeName,
         edef: &H::EnumDefinition,
     ) {
-        self.add_warning_filter_scope(edef.warning_filter.clone());
+        self.push_warning_filter_scope(edef.warning_filter.clone());
         if self.visit_enum_custom(module, enum_name, edef) {
             self.pop_warning_filter_scope();
             return;
@@ -156,7 +156,7 @@ pub trait CFGIRVisitorContext {
         constant_name: ConstantName,
         cdef: &G::Constant,
     ) {
-        self.add_warning_filter_scope(cdef.warning_filter.clone());
+        self.push_warning_filter_scope(cdef.warning_filter.clone());
         if self.visit_constant_custom(module, constant_name, cdef) {
             self.pop_warning_filter_scope();
             return;
@@ -178,7 +178,7 @@ pub trait CFGIRVisitorContext {
         function_name: FunctionName,
         fdef: &G::Function,
     ) {
-        self.add_warning_filter_scope(fdef.warning_filter.clone());
+        self.push_warning_filter_scope(fdef.warning_filter.clone());
         if self.visit_function_custom(module, function_name, fdef) {
             self.pop_warning_filter_scope();
             return;
@@ -356,7 +356,7 @@ macro_rules! simple_visitor {
         }
 
         impl crate::cfgir::visitor::CFGIRVisitorContext for Context<'_> {
-            fn add_warning_filter_scope(&mut self, filters: crate::diagnostics::WarningFilters) {
+            fn push_warning_filter_scope(&mut self, filters: crate::diagnostics::WarningFilters) {
                 self.warning_filters_scope.push(filters)
             }
 

@@ -57,7 +57,7 @@ impl Context<'_> {
 }
 
 impl CFGIRVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
     }
 

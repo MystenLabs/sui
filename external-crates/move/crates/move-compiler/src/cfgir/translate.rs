@@ -77,7 +77,7 @@ impl<'env> Context<'env> {
         self.env.add_diags(&self.warning_filters_scope, diags);
     }
 
-    pub fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
     }
 
@@ -192,7 +192,7 @@ fn module(
         constants: hconstants,
     } = mdef;
     context.current_package = package_name;
-    context.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let constants = constants(context, module_ident, hconstants);
     let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
     context.pop_warning_filter_scope();
@@ -424,7 +424,7 @@ fn constant(
         value: (locals, block),
     } = c;
 
-    context.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let final_value = constant_(
         context,
         constant_values,
@@ -605,7 +605,7 @@ fn function(
         signature,
         body,
     } = f;
-    context.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     let body = function_body(
         context,
         module,
@@ -1037,7 +1037,7 @@ impl AbsintVisitorContext<'_> {
 }
 
 impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
-    fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
     }
 

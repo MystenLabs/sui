@@ -214,7 +214,7 @@ impl<'env> Context<'env> {
         self.env.add_diags(&self.warning_filters_scope, diags);
     }
 
-    pub fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
     }
 
@@ -377,7 +377,7 @@ fn modules(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::ModuleDefi
 }
 
 fn module(context: &mut Context, mdef: &T::ModuleDefinition) {
-    context.add_warning_filter_scope(mdef.warning_filter.clone());
+    context.push_warning_filter_scope(mdef.warning_filter.clone());
     for (_, cname, cdef) in &mdef.constants {
         constant(context, cname, cdef);
     }
@@ -397,7 +397,7 @@ fn function(context: &mut Context, _name: &Symbol, f: &T::Function) {
         body,
         ..
     } = f;
-    context.add_warning_filter_scope(warning_filter.clone());
+    context.push_warning_filter_scope(warning_filter.clone());
     function_body(context, body);
     context.pop_warning_filter_scope();
 }
@@ -414,7 +414,7 @@ fn function_body(context: &mut Context, sp!(_, tb_): &T::FunctionBody) {
 //**************************************************************************************************
 
 fn constant(context: &mut Context, _name: &Symbol, cdef: &T::Constant) {
-    context.add_warning_filter_scope(cdef.warning_filter.clone());
+    context.push_warning_filter_scope(cdef.warning_filter.clone());
     let eloc = cdef.value.exp.loc;
     let tseq = {
         let mut v = VecDeque::new();

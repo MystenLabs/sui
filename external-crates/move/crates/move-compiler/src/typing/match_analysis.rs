@@ -70,8 +70,8 @@ impl TypingMutVisitorContext for MatchCompiler<'_, '_> {
         }
     }
 
-    fn add_warning_filter_scope(&mut self, filter: crate::diagnostics::WarningFilters) {
-        self.context.add_warning_filter_scope(filter);
+    fn push_warning_filter_scope(&mut self, filter: crate::diagnostics::WarningFilters) {
+        self.context.push_warning_filter_scope(filter);
     }
 
     fn pop_warning_filter_scope(&mut self) {

@@ -237,7 +237,7 @@ impl<'env> Context<'env> {
             .add_ide_annotation(&self.warning_filters_scope, loc, info);
     }
 
-    pub fn add_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.warning_filters_scope.push(filters)
     }
 

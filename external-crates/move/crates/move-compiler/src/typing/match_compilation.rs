@@ -61,8 +61,8 @@ impl TypingVisitorContext for MatchCompiler<'_, '_> {
         }
     }
 
-    fn add_warning_filter_scope(&mut self, filter: crate::diagnostics::WarningFilters) {
-        self.context.env.add_warning_filter_scope(filter);
+    fn push_warning_filter_scope(&mut self, filter: crate::diagnostics::WarningFilters) {
+        self.context.env.push_warning_filter_scope(filter);
     }
 
     fn pop_warning_filter_scope(&mut self) {
