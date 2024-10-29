@@ -6,11 +6,11 @@ public struct SomeObject has key {
     num: u8,
 }
 
-fun foo(o: SomeObject, p: u8): u8 {
+fun foo(o: SomeObject, p: u8): u64 {
     let n = object::id(&o).to_bytes()[0];
     let SomeObject { id, num } = o;
     object::delete(id);
-    n + num + p
+    (n as u64) + (num as u64) + (p as u64)
 }
 
 #[test]
