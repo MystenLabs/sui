@@ -195,7 +195,6 @@ async fn get_manager_balance(
 ) -> Result<Json<HashMap<String, i64>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
 
-    // Construct SQL query to filter by both manager_id and asset_ids, including `deposit` explicitly
     let query = format!(
         "SELECT asset, SUM(CASE WHEN deposit THEN amount ELSE -amount END)::bigint AS amount, deposit FROM balances \
         WHERE balance_manager_id = '{}' AND asset IN ({}) GROUP BY asset, deposit",
@@ -210,17 +209,14 @@ async fn get_manager_balance(
             .join(", ")
     );
 
-    // Load query results
     let results: Vec<BalancesSummary> = diesel::sql_query(query).load(connection).await?;
 
-    // Format the results into a HashMap as {coin_id: coin_balance}
     let mut manager_balances = HashMap::new();
     for result in results {
         let mut asset = result.asset;
         if !asset.starts_with("0x") {
             asset.insert_str(0, "0x");
         }
-        // Update balance based on deposit status
         let balance = manager_balances.entry(asset).or_insert(0);
         if result.deposit {
             *balance += result.amount;
