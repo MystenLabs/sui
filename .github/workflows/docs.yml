@@ -33,7 +33,9 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
           channel-id: 'tech-docs'
-          slack-message: 'An open PR modifies files in the `examples/` directory. Review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}>'
+          slack-message: |
+            An open PR modifies files in the `examples/` directory.
+            Please review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}|PR${{ github.event.number }}>
   
   spelling:
     name: Lint documentation
