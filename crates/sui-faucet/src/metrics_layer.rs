@@ -13,7 +13,7 @@ use prometheus::{HistogramTimer, Registry};
 use tower::{load_shed::error::Overloaded, BoxError, Layer, Service, ServiceExt};
 use tracing::{error, info, warn};
 
-use crate::metrics::RequestMetrics;
+use crate::metrics::{is_path_tracked, normalize_path, RequestMetrics};
 use http::Request;
 
 /// Tower Layer for tracking metrics in Prometheus related to number, success-rate and latency of
@@ -81,16 +81,19 @@ where
 
         let future = Box::pin(async move {
             let resp = inner.oneshot(req).await;
-            match &resp {
-                Ok(resp) if !resp.status().is_success() => {
-                    metrics.failed(None, Some(resp.status()))
-                }
-                Ok(_) => metrics.succeeded(),
-                Err(err) => {
-                    if err.is::<Overloaded>() {
-                        metrics.shed();
-                    } else {
-                        metrics.failed(Some(err), None);
+
+            if let Some(metrics) = metrics {
+                match &resp {
+                    Ok(resp) if !resp.status().is_success() => {
+                        metrics.failed(None, Some(resp.status()))
+                    }
+                    Ok(_) => metrics.succeeded(),
+                    Err(err) => {
+                        if err.is::<Overloaded>() {
+                            metrics.shed();
+                        } else {
+                            metrics.failed(Some(err), None);
+                        }
                     }
                 }
             }
@@ -110,25 +113,31 @@ impl<Res> Future for RequestMetricsFuture<Res> {
 }
 
 impl MetricsGuard {
-    fn new(metrics: Arc<RequestMetrics>, path: &str) -> Self {
+    fn new(metrics: Arc<RequestMetrics>, path: &str) -> Option<Self> {
+        let normalized_path = normalize_path(path);
+
+        if !is_path_tracked(normalized_path) {
+            return None;
+        }
+
         metrics
             .total_requests_received
-            .with_label_values(&[path])
+            .with_label_values(&[normalized_path])
             .inc();
         metrics
             .current_requests_in_flight
-            .with_label_values(&[path])
+            .with_label_values(&[normalized_path])
             .inc();
-        MetricsGuard {
+        Some(MetricsGuard {
             timer: Some(
                 metrics
                     .process_latency
-                    .with_label_values(&[path])
+                    .with_label_values(&[normalized_path])
                     .start_timer(),
             ),
             metrics,
-            path: path.to_string(),
-        }
+            path: normalized_path.to_string(),
+        })
     }
 
     fn succeeded(mut self) {
@@ -183,22 +192,28 @@ impl MetricsGuard {
 
 impl Drop for MetricsGuard {
     fn drop(&mut self) {
-        self.metrics
+        if self
+            .metrics
             .current_requests_in_flight
-            .with_label_values(&[&self.path])
-            .dec();
-
-        // Request was still in flight when the guard was dropped, implying the client disconnected.
-        if let Some(timer) = self.timer.take() {
-            let elapsed = timer.stop_and_record();
+            .get_metric_with_label_values(&[&self.path])
+            .is_ok()
+        {
             self.metrics
-                .total_requests_disconnected
+                .current_requests_in_flight
                 .with_label_values(&[&self.path])
-                .inc();
-            info!(
-                "Request disconnected for path {} in {:.2}s",
-                self.path, elapsed
-            );
+                .dec();
+
+            if let Some(timer) = self.timer.take() {
+                let elapsed = timer.stop_and_record();
+                self.metrics
+                    .total_requests_disconnected
+                    .with_label_values(&[&self.path])
+                    .inc();
+                info!(
+                    "Request disconnected for path {} in {:.2}s",
+                    self.path, elapsed
+                );
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_metrics::spawn_monitored_task;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -23,8 +24,10 @@ pub struct Pruner {
     pub metrics: IndexerMetrics,
 }
 
-/// Enum representing tables that the pruner is allowed to prune. The pruner will ignore any table
-/// that is not listed here.
+/// Enum representing tables that the pruner is allowed to prune. This corresponds to table names in
+/// the database, and should be used in lieu of string literals. This enum is also meant to
+/// facilitate the process of determining which unit (epoch, cp, or tx) should be used for the
+/// table's range. Pruner will ignore any table that is not listed here.
 #[derive(
     Debug,
     Eq,
@@ -69,6 +72,39 @@ pub enum PrunableTable {
     PrunerCpWatermark,
 }
 
+impl PrunableTable {
+    pub fn select_reader_lo(&self, cp: u64, tx: u64) -> u64 {
+        match self {
+            PrunableTable::ObjectsHistory => cp,
+            PrunableTable::Transactions => tx,
+            PrunableTable::Events => tx,
+
+            PrunableTable::EventEmitPackage => tx,
+            PrunableTable::EventEmitModule => tx,
+            PrunableTable::EventSenders => tx,
+            PrunableTable::EventStructInstantiation => tx,
+            PrunableTable::EventStructModule => tx,
+            PrunableTable::EventStructName => tx,
+            PrunableTable::EventStructPackage => tx,
+
+            PrunableTable::TxAffectedAddresses => tx,
+            PrunableTable::TxAffectedObjects => tx,
+            PrunableTable::TxCallsPkg => tx,
+            PrunableTable::TxCallsMod => tx,
+            PrunableTable::TxCallsFun => tx,
+            PrunableTable::TxChangedObjects => tx,
+            PrunableTable::TxDigests => tx,
+            PrunableTable::TxInputObjects => tx,
+            PrunableTable::TxKinds => tx,
+            PrunableTable::TxRecipients => tx,
+            PrunableTable::TxSenders => tx,
+
+            PrunableTable::Checkpoints => cp,
+            PrunableTable::PrunerCpWatermark => cp,
+        }
+    }
+}
+
 impl Pruner {
     /// Instantiates a pruner with default retention and overrides. Pruner will finalize the
     /// retention policies so there is a value for every prunable table.
@@ -101,6 +137,15 @@ impl Pruner {
     }
 
     pub async fn start(&self, cancel: CancellationToken) -> IndexerResult<()> {
+        let store_clone = self.store.clone();
+        let retention_policies = self.retention_policies.clone();
+        let cancel_clone = cancel.clone();
+        spawn_monitored_task!(update_watermarks_lower_bounds_task(
+            store_clone,
+            retention_policies,
+            cancel_clone
+        ));
+
         let mut last_seen_max_epoch = 0;
         // The first epoch that has not yet been pruned.
         let mut next_prune_epoch = None;
@@ -176,4 +221,68 @@ impl Pruner {
         info!("Pruner task cancelled.");
         Ok(())
     }
+}
+
+/// Task to periodically query the `watermarks` table and update the lower bounds for all watermarks
+/// if the entry exceeds epoch-level retention policy.
+async fn update_watermarks_lower_bounds_task(
+    store: PgIndexerStore,
+    retention_policies: HashMap<PrunableTable, u64>,
+    cancel: CancellationToken,
+) -> IndexerResult<()> {
+    let mut interval = tokio::time::interval(Duration::from_secs(5));
+    loop {
+        tokio::select! {
+            _ = cancel.cancelled() => {
+                info!("Pruner watermark lower bound update task cancelled.");
+                return Ok(());
+            }
+            _ = interval.tick() => {
+                update_watermarks_lower_bounds(&store, &retention_policies, &cancel).await?;
+            }
+        }
+    }
+}
+
+/// Fetches all entries from the `watermarks` table, and updates the `reader_lo` for each entry if
+/// its epoch range exceeds the respective retention policy.
+async fn update_watermarks_lower_bounds(
+    store: &PgIndexerStore,
+    retention_policies: &HashMap<PrunableTable, u64>,
+    cancel: &CancellationToken,
+) -> IndexerResult<()> {
+    let (watermarks, _) = store.get_watermarks().await?;
+    let mut lower_bound_updates = vec![];
+
+    for watermark in watermarks.iter() {
+        if cancel.is_cancelled() {
+            info!("Pruner watermark lower bound update task cancelled.");
+            return Ok(());
+        }
+
+        let Some(prunable_table) = watermark.entity() else {
+            continue;
+        };
+
+        let Some(epochs_to_keep) = retention_policies.get(&prunable_table) else {
+            error!(
+                "No retention policy found for prunable table {}",
+                prunable_table
+            );
+            continue;
+        };
+
+        if let Some(new_epoch_lo) = watermark.new_epoch_lo(*epochs_to_keep) {
+            lower_bound_updates.push((prunable_table, new_epoch_lo));
+        };
+    }
+
+    if !lower_bound_updates.is_empty() {
+        store
+            .update_watermarks_lower_bound(lower_bound_updates)
+            .await?;
+        info!("Finished updating lower bounds for watermarks");
+    }
+
+    Ok(())
 }

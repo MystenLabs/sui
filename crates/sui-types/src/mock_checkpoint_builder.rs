@@ -63,6 +63,17 @@ impl MockCheckpointBuilder {
             .push(VerifiedExecutionData::new(transaction, effects))
     }
 
+    pub fn override_last_checkpoint_number(
+        &mut self,
+        checkpoint_number: u64,
+        validator_keys: &impl ValidatorKeypairProvider,
+    ) {
+        let mut summary = self.previous_checkpoint.data().clone();
+        summary.sequence_number = checkpoint_number;
+        let checkpoint = Self::create_certified_checkpoint(validator_keys, summary);
+        self.previous_checkpoint = checkpoint;
+    }
+
     /// Builds a checkpoint using internally buffered transactions.
     pub fn build(
         &mut self,

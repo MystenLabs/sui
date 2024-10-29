@@ -3,14 +3,16 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use sui_synthetic_ingestion::IndexerProgress;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::tap::TapFallible;
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 use tracing::{error, info};
 
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-
 use crate::metrics::IndexerMetrics;
+use crate::models::raw_checkpoints::StoredRawCheckpoint;
 use crate::store::IndexerStore;
 use crate::types::IndexerResult;
 
@@ -22,8 +24,10 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     state: S,
     metrics: IndexerMetrics,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
-    mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
+    mut committed_checkpoints_tx: Option<watch::Sender<Option<IndexerProgress>>>,
+    mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
+    end_checkpoint_opt: Option<CheckpointSequenceNumber>,
 ) -> IndexerResult<()>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
@@ -60,7 +64,14 @@ where
             // The batch will consist of contiguous checkpoints and at most one epoch boundary at
             // the end.
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
-                commit_checkpoints(&state, batch, epoch, &metrics).await;
+                commit_checkpoints(
+                    &state,
+                    batch,
+                    epoch,
+                    &metrics,
+                    &mut committed_checkpoints_tx,
+                )
+                .await;
                 batch = vec![];
             }
             if let Some(epoch_number) = epoch_number_option {
@@ -72,10 +83,23 @@ where
                     );
                 })?;
             }
+            // stop adding to the commit batch if we've reached the end checkpoint
+            if let Some(end_checkpoint_sequence_number) = end_checkpoint_opt {
+                if next_checkpoint_sequence_number > end_checkpoint_sequence_number {
+                    break;
+                }
+            }
         }
         if !batch.is_empty() {
-            commit_checkpoints(&state, batch, None, &metrics).await;
+            commit_checkpoints(&state, batch, None, &metrics, &mut committed_checkpoints_tx).await;
             batch = vec![];
+        }
+
+        // stop the commit task if we've reached the end checkpoint
+        if let Some(end_checkpoint_sequence_number) = end_checkpoint_opt {
+            if next_checkpoint_sequence_number > end_checkpoint_sequence_number {
+                break;
+            }
         }
     }
     Ok(())
@@ -95,6 +119,7 @@ async fn commit_checkpoints<S>(
     indexed_checkpoint_batch: Vec<CheckpointDataToCommit>,
     epoch: Option<EpochToCommit>,
     metrics: &IndexerMetrics,
+    committed_checkpoints_tx: &mut Option<watch::Sender<Option<IndexerProgress>>>,
 ) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
@@ -135,8 +160,13 @@ async fn commit_checkpoints<S>(
         packages_batch.push(packages);
     }
 
-    let first_checkpoint_seq = checkpoint_batch.first().as_ref().unwrap().sequence_number;
-    let committer_watermark = CommitterWatermark::from(checkpoint_batch.last().unwrap());
+    let first_checkpoint_seq = checkpoint_batch.first().unwrap().sequence_number;
+    let last_checkpoint = checkpoint_batch.last().unwrap();
+    let indexer_progress = IndexerProgress {
+        checkpoint: last_checkpoint.sequence_number,
+        network_total_transactions: last_checkpoint.network_total_transactions,
+    };
+    let committer_watermark = CommitterWatermark::from(last_checkpoint);
 
     let guard = metrics.checkpoint_db_commit_latency.start_timer();
     let tx_batch = tx_batch.into_iter().flatten().collect::<Vec<_>>();
@@ -156,7 +186,7 @@ async fn commit_checkpoints<S>(
     let raw_checkpoints_batch = checkpoint_batch
         .iter()
         .map(|c| c.into())
-        .collect::<Vec<_>>();
+        .collect::<Vec<StoredRawCheckpoint>>();
 
     {
         let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
@@ -248,22 +278,32 @@ async fn commit_checkpoints<S>(
         elapsed,
         "Checkpoint {}-{} committed with {} transactions.",
         first_checkpoint_seq,
-        committer_watermark.cp,
+        committer_watermark.checkpoint_hi_inclusive,
         tx_count,
     );
     metrics
         .latest_tx_checkpoint_sequence_number
-        .set(committer_watermark.cp as i64);
+        .set(committer_watermark.checkpoint_hi_inclusive as i64);
     metrics
         .total_tx_checkpoint_committed
         .inc_by(checkpoint_num as u64);
     metrics.total_transaction_committed.inc_by(tx_count as u64);
-    metrics
-        .transaction_per_checkpoint
-        .observe(tx_count as f64 / (committer_watermark.cp - first_checkpoint_seq + 1) as f64);
+    metrics.transaction_per_checkpoint.observe(
+        tx_count as f64
+            / (committer_watermark.checkpoint_hi_inclusive - first_checkpoint_seq + 1) as f64,
+    );
     // 1000.0 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
     // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
     metrics
         .thousand_transaction_avg_db_commit_latency
         .observe(elapsed * 1000.0 / tx_count as f64);
+
+    if let Some(committed_checkpoints_tx) = committed_checkpoints_tx.as_mut() {
+        if let Err(err) = committed_checkpoints_tx.send(Some(indexer_progress)) {
+            error!(
+                "Failed to send committed checkpoints to the watch channel: {}",
+                err
+            );
+        }
+    }
 }

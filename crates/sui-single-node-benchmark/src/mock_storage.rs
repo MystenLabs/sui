@@ -48,7 +48,7 @@ impl InMemoryObjectStore {
         tx_key: &TransactionKey,
         input_object_kinds: &[InputObjectKind],
     ) -> SuiResult<InputObjects> {
-        let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
+        let shared_locks_cell: OnceCell<Option<HashMap<_, _>>> = OnceCell::new();
         let mut input_objects = Vec::new();
         for kind in input_object_kinds {
             let obj: Option<Object> = match kind {
@@ -58,11 +58,17 @@ impl InMemoryObjectStore {
                 }
 
                 InputObjectKind::SharedMoveObject { id, .. } => {
-                    let shared_locks = shared_locks_cell.get_or_try_init(|| {
-                        Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
-                            shared_locks.get_shared_locks(tx_key)?.into_iter().collect(),
-                        )
-                    })?;
+                    let shared_locks = shared_locks_cell
+                        .get_or_init(|| {
+                            shared_locks
+                                .get_shared_locks(tx_key)
+                                .expect("get_shared_locks should not fail")
+                                .map(|l| l.into_iter().collect())
+                        })
+                        .as_ref()
+                        .ok_or_else(|| SuiError::GenericAuthorityError {
+                            error: "Shared object locks should have been set.".to_string(),
+                        })?;
                     let version = shared_locks.get(id).unwrap_or_else(|| {
                         panic!("Shared object locks should have been set. key: {tx_key:?}, obj id: {id:?}")
                     });
@@ -174,7 +180,7 @@ impl GetSharedLocks for InMemoryObjectStore {
     fn get_shared_locks(
         &self,
         _key: &TransactionKey,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
+    ) -> SuiResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
         unreachable!()
     }
 }

@@ -15,10 +15,9 @@ use move_binary_format::{
     errors::{Location, VMError, VMResult},
     CompiledModule,
 };
-use move_command_line_common::{
-    address::ParsedAddress, files::verify_and_create_named_address_mapping,
-};
+use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{editions::Edition, shared::PackagePaths, FullyCompiledProgram};
+use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,

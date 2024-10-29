@@ -49,7 +49,7 @@ jobs:
             ubuntu-ghcloud, # ubuntu-x86_64
             ubuntu-arm64, # ubuntu-arm64
             windows-ghcloud, # windows-x86_64
-            macos-latest-xl, # macos-x86_64
+            macos-latest-large, # macos-x86_64
             macos-latest-xlarge # macos-arm64
           ]
       fail-fast: false

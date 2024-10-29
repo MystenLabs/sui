@@ -1,0 +1,87 @@
+---
+title: Sui Bridge
+draft: true
+---
+
+[Sui Bridge](https://bridge.sui.io/) is the native bridge for the Sui network. Unlike third-party solutions, a native bridge is typically built into the core architecture of a blockchain, ensuring optimal integration and operation. The bridge allows users to move digital assets from one chain to another, preserving security and maintaining interoperability between diverse ecosystems. Sui Bridge is the native bridge on Sui, designed to enhance interoperability between Sui and Ethereum. Sui Bridge enables users to securely and efficiently transfer native and wrapped ETH to and from Sui. The bridge leverages the unique capabilities of the Sui network to offer fast transaction speeds, lower transaction costs, and a decentralized architecture.
+
+You can bridge tokens in the official Sui Bridge website: https://bridge.sui.io/.
+
+## Operation and governance
+
+Sui Bridge is operated and governed by Sui network validators, the same set of validators that secure the Sui network. Bridge transfers and other actions require validator signatures with a minimal threshold of voting power.
+
+Similar to the Sui network, all governance related to the Sui Bridge is done via validator voting.
+
+## Architecture
+
+WIP
+
+## Supported chains and tokens
+
+Sui Bridge supports token bridging between Sui and Ethereum Mainnet with the following supported assets:
+
+| Asset | Description |
+| --- | --- |
+| Ethereum (ETH) | The native cryptocurrency of the Ethereum network, widely used for transactions and smart contract interactions. |
+| Wrapped Ethereum (WETH) | Tokenized representation of native ETH. |
+
+You can transfer these assets both to and from the Sui network, utilizing the bridge’s capabilities to provide fast, secure, and efficient cross-chain transactions.
+
+## Package IDs and contract addresses
+
+The following package IDs and addresses are reserved for the Sui Bridge.
+
+| Asset | Address/ID |
+| --- | --- |
+| Sui Bridge Package on Sui | [`0xb`](https://suiscan.xyz/mainnet/object/0x000000000000000000000000000000000000000000000000000000000000000b/txs) |
+| Sui Bridge Object on Sui | [`0x9`](https://suiscan.xyz/mainnet/object/0x0000000000000000000000000000000000000000000000000000000000000009) |
+| Sui Bridge Proxy on Etheruem Mainnet | [`0xda3bD1fE1973470312db04551B65f401Bc8a92fD`](https://etherscan.io/address/0xda3bd1fe1973470312db04551b65f401bc8a92fd) |
+| ETH on Sui | [`0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH`](https://suiscan.xyz/mainnet/coin/0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH/txs) |
+| ETH on Ethereum | Native Ether |
+| WETH on Ethereum | [`0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2`](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) |
+
+## Source code
+
+The source code for Sui Bridge is open-source and found in the following locations:
+
+- Move: https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/bridge
+- Solidity: https://github.com/MystenLabs/sui/tree/main/bridge/evm
+- Bridged ETH (Move): https://github.com/MystenLabs/sui/tree/main/bridge/move/tokens/eth
+- Bridge Node: https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge
+- Bridge Indexer: https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge-indexer
+
+## Audits
+
+There are two audit reports available for Sui Bridge:
+- [OtterSec](https://github.com/sui-foundation/security-audits/blob/main/docs/Sui_bridge_v1_OtterSec.pdf)
+- [Zellic](https://github.com/sui-foundation/security-audits/blob/main/docs/Sui_Bridge_v1_Zellic.pdf)
+
+## Global limiter {#global-limiter}
+
+A limiter protects the user's funds by constraining the total value of assets leaving Sui Bridge in any 24-hour window. It tracks total value hourly and aggregates values from the previous 24 hours. Therefore, when the limiter cools down, it refreshes every hour.
+
+The limit applies globally and varies per direction. For example, the amount might be different between Ethereum to Sui and Sui to Ethereum.
+
+The limit also impacts the maximal amount of single transfer. Simply put, in one bridge transfer, you cannot move assets worth more than the limit. The bridge frontend might apply stricter restrictions to protect user assets.
+
+The limit per route is governed by the validator committee through voting.
+
+The global limit is currently $8 million from Ethereum to Sui and $5 million from Sui to Etheruem every 24 hours.
+
+## Asset price
+
+Sui Bridge v1 uses static pricing to calculate limits. The price for ETH is configured at $2,600.00. Namely, bridging one ETH consumes $2,600 USD in limit calculation.
+
+The validator committee governs the pricing through voting. It works together with the global limiter to protect user funds.
+
+## Transfer limit
+
+There is no minimal limit for transfer but a tiny fraction might be rounded down. Particularly for native Ethereum (ETH) and wrapped Ethereum (WETH) because of reduced precision of eight decimal places, the value of 10.0000000000000001 (W)ETH is rounded down to 10 (W)ETH.
+
+| Token | Minimal value | 
+| --- | --- |
+| ETH | 0.00000001 ETH (eight decimal places of precision) |
+| WETH | 0.00000001 ETH (eight decimal places of precision) |
+
+The maximum limit per transfer is the global limit in USD value. Namely a user cannot claim assets on the destination chain if the USD value is higher than the global limit. See the [Global limiter section](#global-limiter) for details.

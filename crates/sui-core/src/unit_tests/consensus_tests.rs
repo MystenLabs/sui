@@ -40,9 +40,18 @@ pub fn test_gas_objects() -> Vec<Object> {
     GAS_OBJECTS.with(|v| v.clone())
 }
 
-/// Fixture: a few test certificates containing a shared object.
+/// Fixture: create a few test certificates containing a shared object.
 pub async fn test_certificates(
     authority: &AuthorityState,
+    shared_object: Object,
+) -> Vec<CertifiedTransaction> {
+    test_certificates_with_gas_objects(authority, &test_gas_objects(), shared_object).await
+}
+
+/// Fixture: create a few test certificates containing a shared object using specified gas objects.
+pub async fn test_certificates_with_gas_objects(
+    authority: &AuthorityState,
+    gas_objects: &[Object],
     shared_object: Object,
 ) -> Vec<CertifiedTransaction> {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
@@ -55,7 +64,7 @@ pub async fn test_certificates(
         initial_shared_version: shared_object.version(),
         mutable: true,
     };
-    for gas_object in test_gas_objects() {
+    for gas_object in gas_objects {
         // Object digest may be different in genesis than originally generated.
         let gas_object = authority
             .get_object(&gas_object.id())

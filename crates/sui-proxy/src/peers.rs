@@ -404,14 +404,22 @@ async fn extract_bridge(
                     }
                 };
                 // Parse the URL
-                let mut bridge_url = match Url::parse(&url_str) {
+                let bridge_url = match Url::parse(&url_str) {
                     Ok(url) => url,
                     Err(_) => {
                         warn!(url_str, "Unable to parse http_rest_url");
                         return None;
                     }
                 };
-                bridge_url.set_path("/metrics_pub_key");
+
+                // Append "metrics_pub_key" to the path
+                let bridge_url = match append_path_segment(bridge_url, "metrics_pub_key") {
+                    Some(url) => url,
+                    None => {
+                        warn!(url_str, "Unable to append path segment to URL");
+                        return None;
+                    }
+                };
 
                 // Use the host portion of the http_rest_url as the "name"
                 let bridge_host = match bridge_url.host_str() {
@@ -522,6 +530,11 @@ fn fallback_to_cached_key(
         );
         None
     }
+}
+
+fn append_path_segment(mut url: Url, segment: &str) -> Option<Url> {
+    url.path_segments_mut().ok()?.pop_if_empty().push(segment);
+    Some(url)
 }
 
 #[cfg(test)]
@@ -646,5 +659,63 @@ mod tests {
             cache.contains_key("https://unresponsive_bridge_url"),
             "Cache should still contain the original key"
         );
+    }
+
+    #[test]
+    fn test_append_path_segment() {
+        let test_cases = vec![
+            (
+                "https://example.com",
+                "metrics_pub_key",
+                "https://example.com/metrics_pub_key",
+            ),
+            (
+                "https://example.com/api",
+                "metrics_pub_key",
+                "https://example.com/api/metrics_pub_key",
+            ),
+            (
+                "https://example.com/",
+                "metrics_pub_key",
+                "https://example.com/metrics_pub_key",
+            ),
+            (
+                "https://example.com/api/",
+                "metrics_pub_key",
+                "https://example.com/api/metrics_pub_key",
+            ),
+            (
+                "https://example.com:8080",
+                "metrics_pub_key",
+                "https://example.com:8080/metrics_pub_key",
+            ),
+            (
+                "https://example.com?param=value",
+                "metrics_pub_key",
+                "https://example.com/metrics_pub_key?param=value",
+            ),
+            (
+                "https://example.com:8080/api/v1?param=value",
+                "metrics_pub_key",
+                "https://example.com:8080/api/v1/metrics_pub_key?param=value",
+            ),
+        ];
+
+        for (input_url, segment, expected_output) in test_cases {
+            let url = Url::parse(input_url).unwrap();
+            let result = append_path_segment(url, segment);
+            assert!(
+                result.is_some(),
+                "Failed to append segment for URL: {}",
+                input_url
+            );
+            let result_url = result.unwrap();
+            assert_eq!(
+                result_url.as_str(),
+                expected_output,
+                "Unexpected result for input URL: {}",
+                input_url
+            );
+        }
     }
 }

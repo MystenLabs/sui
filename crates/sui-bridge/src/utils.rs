@@ -5,7 +5,7 @@ use crate::abi::{
     EthBridgeCommittee, EthBridgeConfig, EthBridgeLimiter, EthBridgeVault, EthSuiBridge,
 };
 use crate::config::{
-    default_ed25519_key_pair, BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig,
+    default_ed25519_key_pair, BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig, WatchdogConfig,
 };
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
@@ -207,6 +207,13 @@ pub fn generate_bridge_node_config_and_write_to_file(
             push_interval_seconds: None, // use default value
             push_url: "metrics_proxy_url".to_string(),
         }),
+        watchdog_config: Some(WatchdogConfig {
+            total_supplies: BTreeMap::from_iter(vec![(
+                "eth".to_string(),
+                "0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH"
+                    .to_string(),
+            )]),
+        }),
     };
     if run_client {
         config.sui.bridge_client_key_path = Some(PathBuf::from("/path/to/your/bridge_client_key"));
@@ -389,7 +396,7 @@ pub async fn wait_for_server_to_be_up(server_url: String, timeout_sec: u64) -> a
 /// If a validator is not in the Sui committee, we will use its base URL as the name.
 pub async fn get_committee_voting_power_by_name(
     bridge_committee: &Arc<BridgeCommittee>,
-    system_state: SuiSystemStateSummary,
+    system_state: &SuiSystemStateSummary,
 ) -> BTreeMap<String, StakeUnit> {
     let mut sui_committee: BTreeMap<_, _> = system_state
         .active_validators
@@ -405,6 +412,31 @@ pub async fn get_committee_voting_power_by_name(
                     .remove(&v.1.sui_address)
                     .unwrap_or(v.1.base_url.clone()),
                 v.1.voting_power,
+            )
+        })
+        .collect()
+}
+
+/// Return a mappping from validator pub keys to their names.
+/// If a validator is not in the Sui committee, we will use its base URL as the name.
+pub async fn get_validator_names_by_pub_keys(
+    bridge_committee: &Arc<BridgeCommittee>,
+    system_state: &SuiSystemStateSummary,
+) -> BTreeMap<BridgeAuthorityPublicKeyBytes, String> {
+    let mut sui_committee: BTreeMap<_, _> = system_state
+        .active_validators
+        .iter()
+        .map(|v| (v.sui_address, v.name.clone()))
+        .collect();
+    bridge_committee
+        .members()
+        .iter()
+        .map(|(name, validator)| {
+            (
+                name.clone(),
+                sui_committee
+                    .remove(&validator.sui_address)
+                    .unwrap_or(validator.base_url.clone()),
             )
         })
         .collect()

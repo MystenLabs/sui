@@ -3,8 +3,10 @@
 
 use clap::Parser;
 use sui_indexer::backfill::backfill_runner::BackfillRunner;
+use sui_indexer::benchmark::run_indexer_benchmark;
 use sui_indexer::config::{Command, UploadOptions};
 use sui_indexer::database::ConnectionPool;
+use sui_indexer::db::setup_postgres::clear_database;
 use sui_indexer::db::{
     check_db_migration_consistency, check_prunable_tables_valid, reset_database, run_migrations,
 };
@@ -55,12 +57,13 @@ async fn main() -> anyhow::Result<()> {
             let store = PgIndexerStore::new(pool, upload_options, indexer_metrics.clone());
 
             Indexer::start_writer(
-                &ingestion_config,
+                ingestion_config,
                 store,
                 indexer_metrics,
                 snapshot_config,
                 retention_config,
                 CancellationToken::new(),
+                None,
             )
             .await?;
         }
@@ -70,14 +73,21 @@ async fn main() -> anyhow::Result<()> {
             Indexer::start_reader(&json_rpc_config, &registry, pool, CancellationToken::new())
                 .await?;
         }
-        Command::ResetDatabase { force } => {
+        Command::ResetDatabase {
+            force,
+            skip_migrations,
+        } => {
             if !force {
                 return Err(anyhow::anyhow!(
                     "Resetting the DB requires use of the `--force` flag",
                 ));
             }
 
-            reset_database(pool.dedicated_connection().await?).await?;
+            if skip_migrations {
+                clear_database(&mut pool.dedicated_connection().await?).await?;
+            } else {
+                reset_database(pool.dedicated_connection().await?).await?;
+            }
         }
         Command::RunMigrations => {
             run_migrations(pool.dedicated_connection().await?).await?;
@@ -97,6 +107,9 @@ async fn main() -> anyhow::Result<()> {
             let mut formal_restorer =
                 IndexerFormalSnapshotRestorer::new(store, restore_config).await?;
             formal_restorer.restore().await?;
+        }
+        Command::Benchmark(benchmark_config) => {
+            run_indexer_benchmark(benchmark_config, pool, indexer_metrics).await;
         }
     }
 

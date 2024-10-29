@@ -1,0 +1,20 @@
+current frame stack:
+  function: test (line 13)
+    scope 0 :
+  function: foo (line 8)
+    scope 0 :
+      p : 42
+      type: u64
+
+current frame stack:
+  function: test (line 14)
+    scope 0 :
+      _res : 84
+      type: u64
+
+current frame stack:
+  function: test (line 15)
+    scope 0 :
+      _res : 252
+      type: u64
+

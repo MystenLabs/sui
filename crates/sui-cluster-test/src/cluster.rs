@@ -223,6 +223,7 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
+        // TODO: with TestCluster supporting indexer backed rpc as well, we can remove the indexer related logic here.
         let mut cancellation_tokens = vec![];
         let (database, indexer_url, graphql_url) = if options.with_indexer_and_graphql {
             let database = TempDb::new()?;
@@ -237,6 +238,8 @@ impl Cluster for LocalNewCluster {
                 None,
                 Some(data_ingestion_path.path().to_path_buf()),
                 None, /* cancel */
+                None, /* start_checkpoint */
+                None, /* end_checkpoint */
             )
             .await;
             cancellation_tokens.push(writer_token.drop_guard());

@@ -66,5 +66,5 @@ pretty_assertions.workspace = true
 once_cell.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
-sui-macros = { workspace = true }
-sui-simulator = { workspace = true }
+sui-macros.workspace = true
+sui-simulator.workspace = true

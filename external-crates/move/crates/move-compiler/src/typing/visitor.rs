@@ -44,7 +44,7 @@ pub enum LValueKind {
 }
 
 pub trait TypingVisitorContext {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters);
+    fn add_warning_filter_scope(&mut self, filters: WarningFilters);
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum
@@ -192,6 +192,8 @@ pub trait TypingVisitorContext {
         }
     }
 
+    // TODO field visitor
+
     fn visit_constant_custom(
         &mut self,
         _module: ModuleIdent,
@@ -245,7 +247,7 @@ pub trait TypingVisitorContext {
             self.visit_type(None, &fdef.signature.return_type);
         }
         if let T::FunctionBody_::Defined(seq) = &fdef.body.value {
-            self.visit_seq(seq);
+            self.visit_seq(fdef.body.loc, seq);
         }
         self.pop_warning_filter_scope();
     }
@@ -291,11 +293,19 @@ pub trait TypingVisitorContext {
 
     // -- SEQUENCES AND EXPRESSIONS --
 
-    fn visit_seq(&mut self, (use_funs, seq): &T::Sequence) {
+    /// Custom visit for a sequence. It will skip `visit_seq` if `visit_seq_custom` returns true.
+    fn visit_seq_custom(&mut self, _loc: Loc, _seq: &T::Sequence) -> bool {
+        false
+    }
+
+    fn visit_seq(&mut self, loc: Loc, seq @ (use_funs, seq_): &T::Sequence) {
+        if self.visit_seq_custom(loc, seq) {
+            return;
+        }
         if Self::VISIT_USE_FUNS {
             self.visit_use_funs(use_funs);
         }
-        for s in seq {
+        for s in seq_ {
             self.visit_seq_item(s);
         }
     }
@@ -431,10 +441,12 @@ pub trait TypingVisitorContext {
                 }
                 self.visit_exp(e);
             }
-            E::IfElse(e1, e2, e3) => {
+            E::IfElse(e1, e2, e3_opt) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
-                self.visit_exp(e3);
+                if let Some(e3) = e3_opt {
+                    self.visit_exp(e3);
+                }
             }
             E::Match(esubject, arms) => {
                 self.visit_exp(esubject);
@@ -456,8 +468,8 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
             }
             E::Loop { body, .. } => self.visit_exp(body),
-            E::NamedBlock(_, seq) => self.visit_seq(seq),
-            E::Block(seq) => self.visit_seq(seq),
+            E::NamedBlock(_, seq) => self.visit_seq(exp.exp.loc, seq),
+            E::Block(seq) => self.visit_seq(exp.exp.loc, seq),
             E::Assign(lvalues, ty_ann, e) => {
                 // visit the RHS first to better match control flow
                 self.visit_exp(e);
@@ -560,20 +572,65 @@ impl<V: TypingVisitorConstructor + Send + Sync> TypingVisitor for V {
     }
 }
 
+macro_rules! simple_visitor {
+    ($visitor:ident, $($overrides:item),*) => {
+        pub struct $visitor;
+
+        pub struct Context<'a> {
+            env: &'a mut crate::shared::CompilationEnv,
+        }
+
+        impl crate::typing::visitor::TypingVisitorConstructor for $visitor {
+            type Context<'a> = Context<'a>;
+
+            fn context<'a>(env: &'a mut crate::shared::CompilationEnv, _program: &crate::typing::ast::Program) -> Self::Context<'a> {
+                Context {
+                    env,
+                }
+            }
+        }
+
+        impl Context<'_> {
+            #[allow(unused)]
+            fn add_diag(&mut self, diag: crate::diagnostics::Diagnostic) {
+                self.env.add_diag(diag);
+            }
+
+            #[allow(unused)]
+            fn add_diags(&mut self, diags: crate::diagnostics::Diagnostics) {
+                self.env.add_diags(diags);
+            }
+        }
+
+        impl crate::typing::visitor::TypingVisitorContext for Context<'_> {
+            fn add_warning_filter_scope(&mut self, filters: crate::diagnostics::WarningFilters) {
+                self.env.add_warning_filter_scope(filters)
+            }
+
+            fn pop_warning_filter_scope(&mut self) {
+                self.env.pop_warning_filter_scope()
+            }
+
+            $($overrides)*
+        }
+    }
+}
+pub(crate) use simple_visitor;
+
 //**************************************************************************************************
 // Mut Vistor
 //**************************************************************************************************
 
 pub trait TypingMutVisitor: Send + Sync {
-    fn visit(&self, env: &mut CompilationEnv, program: &mut T::Program);
+    fn visit(&self, env: &CompilationEnv, program: &mut T::Program);
 }
 
 pub trait TypingMutVisitorConstructor: Send + Sync {
     type Context<'a>: Sized + TypingMutVisitorContext;
 
-    fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a>;
+    fn context<'a>(env: &'a CompilationEnv, program: &T::Program) -> Self::Context<'a>;
 
-    fn visit(env: &mut CompilationEnv, program: &mut T::Program) {
+    fn visit(env: &CompilationEnv, program: &mut T::Program) {
         let mut context = Self::context(env, program);
         context.visit(program);
     }
@@ -973,10 +1030,12 @@ pub trait TypingMutVisitorContext {
                 }
                 self.visit_exp(e);
             }
-            E::IfElse(e1, e2, e3) => {
+            E::IfElse(e1, e2, e3_opt) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
-                self.visit_exp(e3);
+                if let Some(e3) = e3_opt {
+                    self.visit_exp(e3);
+                }
             }
             E::Match(esubject, arms) => {
                 self.visit_exp(esubject);
@@ -1092,7 +1151,7 @@ pub trait TypingMutVisitorContext {
 }
 
 impl<V: TypingMutVisitorConstructor> TypingMutVisitor for V {
-    fn visit(&self, env: &mut CompilationEnv, program: &mut T::Program) {
+    fn visit(&self, env: &CompilationEnv, program: &mut T::Program) {
         Self::visit(env, program)
     }
 }
@@ -1158,8 +1217,10 @@ where
         E::While(_, e1, e2) | E::Mutate(e1, e2) | E::BinopExp(e1, _, _, e2) => {
             exp_satisfies_(e1, p) || exp_satisfies_(e2, p)
         }
-        E::IfElse(e1, e2, e3) => {
-            exp_satisfies_(e1, p) || exp_satisfies_(e2, p) || exp_satisfies_(e3, p)
+        E::IfElse(e1, e2, e3_opt) => {
+            exp_satisfies_(e1, p)
+                || exp_satisfies_(e2, p)
+                || e3_opt.iter().any(|e3| exp_satisfies_(e3, p))
         }
         E::ModuleCall(c) => exp_satisfies_(&c.arguments, p),
         E::Match(esubject, arms) => {

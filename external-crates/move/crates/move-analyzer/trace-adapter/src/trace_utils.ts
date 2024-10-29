@@ -3,7 +3,8 @@
 
 import * as fs from 'fs';
 import { FRAME_LIFETIME, ModuleInfo } from './utils';
-import { IRuntimeCompundValue, RuntimeValueType } from './runtime';
+import { IRuntimeCompundValue, RuntimeValueType, IRuntimeVariableLoc } from './runtime';
+import { ISourceMap, ILoc, IFileInfo } from './source_map_utils';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -30,15 +31,20 @@ interface JSONVectorType {
 
 type JSONBaseType = string | JSONStructType | JSONVectorType;
 
-interface JSONTraceType {
-    ref_type: string | null;
-    type_: JSONBaseType;
+enum JSONTraceRefType {
+    Mut = 'Mut',
+    Imm = 'Imm'
 }
 
-type JSONTraceValueType = boolean | number | string | JSONTraceValueType[] | JSONTraceCompound;
+interface JSONTraceType {
+    type_: JSONBaseType;
+    ref_type?: JSONTraceRefType
+}
+
+type JSONTraceRuntimeValueType = boolean | number | string | JSONTraceRuntimeValueType[] | JSONTraceCompound;
 
 interface JSONTraceFields {
-    [key: string]: JSONTraceValueType;
+    [key: string]: JSONTraceRuntimeValueType;
 }
 
 interface JSONTraceCompound {
@@ -48,13 +54,30 @@ interface JSONTraceCompound {
     variant_tag?: number;
 }
 
-interface JSONTraceRuntimeValue {
-    value: JSONTraceValueType;
+interface JSONTraceRefValueContent {
+    location: JSONTraceLocation;
+    snapshot: JSONTraceRuntimeValueType;
 }
 
-interface JSONTraceValue {
-    RuntimeValue: JSONTraceRuntimeValue;
+interface JSONTraceMutRefValue {
+    MutRef: JSONTraceRefValueContent;
 }
+
+interface JSONTraceImmRefValue {
+    ImmRef: JSONTraceRefValueContent;
+}
+
+interface JSONTraceRuntimeValueContent {
+    value: JSONTraceRuntimeValueType;
+}
+
+interface JSONTraceRuntimeValue {
+    RuntimeValue: JSONTraceRuntimeValueContent;
+}
+
+export type JSONTraceRefValue = JSONTraceMutRefValue | JSONTraceImmRefValue;
+
+export type JSONTraceValue = JSONTraceRuntimeValue | JSONTraceRefValue;
 
 interface JSONTraceFrame {
     binary_member_index: number;
@@ -92,17 +115,17 @@ type JSONTraceLocation = JSONTraceLocalLocation | JSONTraceIndexedLocation;
 
 interface JSONTraceWriteEffect {
     location: JSONTraceLocation;
-    root_value_after_write: JSONTraceValue;
+    root_value_after_write: JSONTraceRuntimeValue;
 }
 
 interface JSONTraceReadEffect {
     location: JSONTraceLocation;
     moved: boolean;
-    root_value_read: JSONTraceValue;
+    root_value_read: JSONTraceRuntimeValue;
 }
 
 interface JSONTracePushEffect {
-    RuntimeValue?: JSONTraceRuntimeValue;
+    RuntimeValue?: JSONTraceRuntimeValueContent;
     MutRef?: {
         location: JSONTraceLocation;
         snapshot: any[];
@@ -110,7 +133,7 @@ interface JSONTracePushEffect {
 }
 
 interface JSONTracePopEffect {
-    RuntimeValue?: JSONTraceRuntimeValue;
+    RuntimeValue?: JSONTraceRuntimeValueContent;
     MutRef?: {
         location: JSONTraceLocation;
         snapshot: any[];
@@ -127,7 +150,7 @@ interface JSONTraceEffect {
 interface JSONTraceCloseFrame {
     frame_id: number;
     gas_left: number;
-    return_: JSONTraceRuntimeValue[];
+    return_: JSONTraceRuntimeValueContent[];
 }
 
 interface JSONTraceEvent {
@@ -179,41 +202,15 @@ export type TraceEvent =
         type: TraceEventKind.OpenFrame,
         id: number,
         name: string,
-        modInfo: ModuleInfo,
+        fileHash: string
         localsTypes: string[],
-        paramValues: TraceValue[]
+        localsNames: string[],
+        paramValues: RuntimeValueType[]
+        optimizedLines: number[]
     }
     | { type: TraceEventKind.CloseFrame, id: number }
-    | { type: TraceEventKind.Instruction, pc: number, kind: TraceInstructionKind }
+    | { type: TraceEventKind.Instruction, pc: number, loc: ILoc, kind: TraceInstructionKind }
     | { type: TraceEventKind.Effect, effect: EventEffect };
-
-/**
- * Kind of a location in the trace.
- */
-export enum TraceLocKind {
-    Local = 'Local'
-    // TODO: other location types
-}
-
-/**
- * Location in the trace.
- */
-export type TraceLocation =
-    | { type: TraceLocKind.Local, frameId: number, localIndex: number };
-
-/**
- * Kind of a value in the trace.
- */
-export enum TraceValKind {
-    Runtime = 'RuntimeValue'
-    // TODO: other value types
-}
-
-/**
- * Value in the trace.
- */
-export type TraceValue =
-    | { type: TraceValKind.Runtime, value: RuntimeValueType };
 
 /**
  * Kind of an effect of an instruction.
@@ -227,7 +224,7 @@ export enum TraceEffectKind {
  * Effect of an instruction.
  */
 export type EventEffect =
-    | { type: TraceEffectKind.Write, location: TraceLocation, value: TraceValue };
+    | { type: TraceEffectKind.Write, loc: IRuntimeVariableLoc, value: RuntimeValueType };
 
 /**
  * Execution trace consisting of a sequence of trace events.
@@ -241,6 +238,30 @@ interface ITrace {
      * the last variable access).
      */
     localLifetimeEnds: Map<number, number[]>;
+
+    /**
+     * Maps file path to the lines of code present in the trace instructions
+     * in functions defined in the file.
+     */
+    tracedLines: Map<string, Set<number>>;
+}
+
+/**
+ * Information about the frame being currently processsed used during trace generation.
+ */
+interface ITraceGenFrameInfo {
+    /**
+     * Frame ID.
+     */
+    ID: number;
+    /**
+     * PC locations traced in the frame
+     */
+    pcLocs: ILoc[];
+    /**
+     * Path to a file containing function represented by the frame.
+     */
+    filePath: string;
 }
 
 /**
@@ -248,8 +269,13 @@ interface ITrace {
  *
  * @param traceFilePath path to the trace JSON file.
  * @returns execution trace.
+ * @throws Error with a descriptive error message if reading trace has failed.
  */
-export function readTrace(traceFilePath: string): ITrace {
+export function readTrace(
+    traceFilePath: string,
+    sourceMapsMap: Map<string, ISourceMap>,
+    filesMap: Map<string, IFileInfo>
+): ITrace {
     const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
     const events: TraceEvent[] = [];
     // We compute the end of lifetime for a local variable as follows.
@@ -272,13 +298,15 @@ export function readTrace(traceFilePath: string): ITrace {
     // the loop
     const localLifetimeEnds = new Map<number, number[]>();
     const locaLifetimeEndsMax = new Map<number, number[]>();
-    let frameIDs = [];
+    const tracedLines = new Map<string, Set<number>>();
+    // stack of frame infos OpenFrame and popped on CloseFrame
+    const frameInfoStack: ITraceGenFrameInfo[] = [];
     for (const event of traceJSON.events) {
         if (event.OpenFrame) {
             const localsTypes = [];
             const frame = event.OpenFrame.frame;
             for (const type of frame.locals_types) {
-                localsTypes.push(JSONTraceTypeToString(type.type_));
+                localsTypes.push(JSONTraceTypeToString(type.type_, type.ref_type));
             }
             // process parameters - store their values in trace and set their
             // initial lifetimes
@@ -287,39 +315,84 @@ export function readTrace(traceFilePath: string): ITrace {
             for (let i = 0; i < frame.parameters.length; i++) {
                 const value = frame.parameters[i];
                 if (value) {
-                    const runtimeValue: TraceValue =
-                    {
-                        type: TraceValKind.Runtime,
-                        value: traceValueFromJSON(value.RuntimeValue.value)
-                    };
+                    const runtimeValue: RuntimeValueType = 'RuntimeValue' in value
+                        ? traceRuntimeValueFromJSON(value.RuntimeValue.value)
+                        : traceRefValueFromJSON(value);
+
                     paramValues.push(runtimeValue);
                     lifetimeEnds[i] = FRAME_LIFETIME;
                 }
             }
             localLifetimeEnds.set(frame.frame_id, lifetimeEnds);
+            const modInfo = {
+                addr: frame.module.address,
+                name: frame.module.name
+            };
+            const sourceMap = sourceMapsMap.get(JSON.stringify(modInfo));
+            if (!sourceMap) {
+                throw new Error('Source map for module '
+                    + modInfo.name
+                    + ' in package '
+                    + modInfo.addr
+                    + ' not found');
+            }
+            const funEntry = sourceMap.functions.get(frame.function_name);
+            if (!funEntry) {
+                throw new Error('Cannot find function entry in source map for function: '
+                    + frame.function_name);
+            }
             events.push({
                 type: TraceEventKind.OpenFrame,
                 id: frame.frame_id,
                 name: frame.function_name,
-                modInfo: {
-                    addr: frame.module.address,
-                    name: frame.module.name
-                },
+                fileHash: sourceMap.fileHash,
                 localsTypes,
+                localsNames: funEntry.localsNames,
                 paramValues,
+                optimizedLines: sourceMap.optimizedLines
             });
-            frameIDs.push(frame.frame_id);
+            const currentFile = filesMap.get(sourceMap.fileHash);
+
+            if (!currentFile) {
+                throw new Error(`Cannot find file with hash: ${sourceMap.fileHash}`);
+            }
+            frameInfoStack.push({
+                ID: frame.frame_id,
+                pcLocs: funEntry.pcLocs,
+                filePath: currentFile.path
+            });
         } else if (event.CloseFrame) {
             events.push({
                 type: TraceEventKind.CloseFrame,
                 id: event.CloseFrame.frame_id
             });
-            frameIDs.pop();
+            frameInfoStack.pop();
         } else if (event.Instruction) {
             const name = event.Instruction.instruction;
+            const frameInfo = frameInfoStack[frameInfoStack.length - 1];
+            const fid = frameInfo.ID;
+            const pcLocs = frameInfo.pcLocs;
+            // if map does not contain an entry for a PC that can be found in the trace file,
+            // it means that the position of the last PC in the source map should be used
+            let loc = event.Instruction.pc >= pcLocs.length
+                ? pcLocs[pcLocs.length - 1]
+                : pcLocs[event.Instruction.pc];
+
+            if (!loc) {
+                throw new Error('Cannot find location for PC: '
+                    + event.Instruction.pc
+                    + ' in frame: '
+                    + fid);
+            }
+
+            const filePath = frameInfo.filePath;
+            const lines = tracedLines.get(filePath) || new Set<number>();
+            lines.add(loc.line);
+            tracedLines.set(filePath, lines);
             events.push({
                 type: TraceEventKind.Instruction,
                 pc: event.Instruction.pc,
+                loc,
                 kind: name in TraceInstructionKind
                     ? TraceInstructionKind[name as keyof typeof TraceInstructionKind]
                     : TraceInstructionKind.UNKNOWN
@@ -327,7 +400,7 @@ export function readTrace(traceFilePath: string): ITrace {
             // Set end of lifetime for all locals to the max instruction PC ever seen
             // for a given local (if they are live after this instructions, they will
             // be reset to INFINITE_LIFETIME when processing subsequent effects).
-            const currentFrameID = frameIDs[frameIDs.length - 1];
+            const currentFrameID = frameInfoStack[frameInfoStack.length - 1].ID;
             const lifetimeEnds = localLifetimeEnds.get(currentFrameID) || [];
             const lifetimeEndsMax = locaLifetimeEndsMax.get(currentFrameID) || [];
             for (let i = 0; i < lifetimeEnds.length; i++) {
@@ -349,53 +422,46 @@ export function readTrace(traceFilePath: string): ITrace {
                 // if a local is read or written, set its end of lifetime
                 // to infinite (end of frame)
                 const location = effect.Write ? effect.Write.location : effect.Read!.location;
-                // there must be at least one frame on the stack when processing a write effect
-                // so we can safely access the last frame ID
-                const currentFrameID = frameIDs[frameIDs.length - 1];
-                const localIndex = processJSONLocation(location, localLifetimeEnds, currentFrameID);
-                if (localIndex === undefined) {
-                    continue;
-                }
+                const loc = processJSONLocalLocation(location, localLifetimeEnds);
                 if (effect.Write) {
-                    const value = traceValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value);
-                    const traceValue: TraceValue = {
-                        type: TraceValKind.Runtime,
-                        value
-                    };
-                    const traceLocation: TraceLocation = {
-                        type: TraceLocKind.Local,
-                        frameId: currentFrameID,
-                        localIndex
-                    };
+                    const value = 'RuntimeValue' in effect.Write.root_value_after_write
+                        ? traceRuntimeValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value)
+                        : traceRefValueFromJSON(effect.Write.root_value_after_write);
                     events.push({
                         type: TraceEventKind.Effect,
                         effect: {
                             type: TraceEffectKind.Write,
-                            location: traceLocation,
-                            value: traceValue
+                            loc,
+                            value
                         }
                     });
                 }
             }
         }
     }
-    return { events, localLifetimeEnds };
+    return { events, localLifetimeEnds, tracedLines };
 }
 
 /**
  * Converts a JSON trace type to a string representation.
  */
-function JSONTraceTypeToString(type: JSONBaseType): string {
-    if (typeof type === 'string') {
-        return type;
-    } else if ('vector' in type) {
-        return `vector<${JSONTraceTypeToString(type.vector)}>`;
+function JSONTraceTypeToString(baseType: JSONBaseType, refType?: JSONTraceRefType): string {
+    const refPrefix = refType === JSONTraceRefType.Mut
+        ? '&mut '
+        : (refType === JSONTraceRefType.Imm
+            ? '&'
+            : '');
+    if (typeof baseType === 'string') {
+        return refPrefix + baseType;
+    } else if ('vector' in baseType) {
+        return refPrefix + `vector<${JSONTraceTypeToString(baseType.vector)}>`;
     } else {
-        return JSONTraceAddressToHexString(type.struct.address)
+        return refPrefix
+            + JSONTraceAddressToHexString(baseType.struct.address)
             + "::"
-            + type.struct.module
+            + baseType.struct.module
             + "::"
-            + type.struct.name;
+            + baseType.struct.name;
     }
 }
 
@@ -415,45 +481,71 @@ function JSONTraceAddressToHexString(address: string): string {
     }
 }
 
-/// Processes a location in a JSON trace (sets the end of lifetime for a local variable)
-/// and returns the local index if the location is a local variable in the current frame.
-function processJSONLocation(
-    location: JSONTraceLocation,
-    localLifetimeEnds: Map<number, number[]>,
-    currentFrameID: number
-): number | undefined {
-    // TODO: handle Global and Indexed for other frames
-    if ('Local' in location) {
-        const frameId = location.Local[0];
-        const localIndex = location.Local[1];
-        const lifetimeEnds = localLifetimeEnds.get(frameId) || [];
-        lifetimeEnds[localIndex] = FRAME_LIFETIME;
-        localLifetimeEnds.set(frameId, lifetimeEnds);
-        return localIndex;
-    } else if ('Indexed' in location) {
-        const frameId = location.Indexed[0].Local[0];
-        if (frameId === currentFrameID) {
-            const localIndex = location.Indexed[0].Local[1];
-            const lifetimeEnds = localLifetimeEnds.get(frameId) || [];
+/**
+ * Processes a location of a local variable in a JSON trace: sets the end of its lifetime
+ * when requested and returns its location
+ * @param traceLocation location in the trace.
+ * @param localLifetimeEnds map of local variable lifetimes (defined if local variable
+ * lifetime should happen).
+ * @returns variable location.
+ * @throws error if the location type is not supported.
+ */
+function processJSONLocalLocation(
+    traceLocation: JSONTraceLocation,
+    localLifetimeEnds?: Map<number, number[]>,
+): IRuntimeVariableLoc {
+    if ('Local' in traceLocation) {
+        const frameID = traceLocation.Local[0];
+        const localIndex = traceLocation.Local[1];
+        if (localLifetimeEnds) {
+            const lifetimeEnds = localLifetimeEnds.get(frameID) || [];
             lifetimeEnds[localIndex] = FRAME_LIFETIME;
-            localLifetimeEnds.set(frameId, lifetimeEnds);
-            return localIndex;
+            localLifetimeEnds.set(frameID, lifetimeEnds);
         }
+        return { frameID, localIndex };
+    } else if ('Indexed' in traceLocation) {
+        return processJSONLocalLocation(traceLocation.Indexed[0], localLifetimeEnds);
+    } else {
+        throw new Error(`Unsupported location type: ${JSON.stringify(traceLocation)}`);
     }
-    return undefined;
 }
 
-/// Converts a JSON trace value to a runtime trace value.
-function traceValueFromJSON(value: JSONTraceValueType): RuntimeValueType {
+/**
+ * Converts a JSON trace reference value to a runtime value.
+ *
+ * @param value JSON trace reference value.
+ * @returns runtime value.
+ */
+function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
+    if ('MutRef' in value) {
+        return {
+            mutable: true,
+            loc: processJSONLocalLocation(value.MutRef.location)
+        };
+    } else {
+        return {
+            mutable: false,
+            loc: processJSONLocalLocation(value.ImmRef.location)
+        };
+    }
+}
+
+/**
+ * Converts a JSON trace runtime value to a runtime trace value.
+ *
+ * @param value JSON trace runtime value.
+ * @returns runtime trace value.
+ */
+function traceRuntimeValueFromJSON(value: JSONTraceRuntimeValueType): RuntimeValueType {
     if (typeof value === 'boolean'
         || typeof value === 'number'
         || typeof value === 'string') {
         return String(value);
     } else if (Array.isArray(value)) {
-        return value.map(item => traceValueFromJSON(item));
+        return value.map(item => traceRuntimeValueFromJSON(item));
     } else {
         const fields: [string, RuntimeValueType][] =
-            Object.entries(value.fields).map(([key, value]) => [key, traceValueFromJSON(value)]);
+            Object.entries(value.fields).map(([key, value]) => [key, traceRuntimeValueFromJSON(value)]);
         const compoundValue: IRuntimeCompundValue = {
             fields,
             type: value.type,

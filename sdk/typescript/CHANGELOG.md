@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.13.0
+
+### Minor Changes
+
+- 477d2a4: Add new errors to ExecutionFailureStatus enum
+
 ## 1.12.0
 
 ### Minor Changes

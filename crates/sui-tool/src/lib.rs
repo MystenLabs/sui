@@ -504,8 +504,8 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
         .add_service(
             "Discovery",
             anemo_cli::ServiceInfo::new().add_method(
-                "GetKnownPeers",
-                anemo_cli::ron_method!(DiscoveryClient, get_known_peers, ()),
+                "GetKnownPeersV2",
+                anemo_cli::ron_method!(DiscoveryClient, get_known_peers_v2, ()),
             ),
         )
         // Sui state sync

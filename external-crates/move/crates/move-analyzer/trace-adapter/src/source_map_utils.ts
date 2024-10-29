@@ -49,7 +49,7 @@ interface JSONSrcRootObject {
 /**
  * Describes a location in the source file.
  */
-interface ILoc {
+export interface ILoc {
     line: number;
     column: number;
 }
@@ -88,7 +88,9 @@ export interface ISourceMap {
     fileHash: string
     modInfo: ModuleInfo,
     functions: Map<string, ISourceMapFunction>,
-    // Lines that are not present in the source map.
+    /**
+     * Lines that are not present in the source map.
+     */
     optimizedLines: number[]
 }
 

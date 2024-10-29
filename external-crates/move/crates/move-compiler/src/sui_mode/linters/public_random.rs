@@ -3,17 +3,15 @@
 
 //! This analysis flags uses of random::Random and random::RandomGenerator in public functions.
 
-use crate::diagnostics::WarningFilters;
 use crate::expansion::ast::ModuleIdent;
 use crate::parser::ast::FunctionName;
 use crate::sui_mode::SUI_ADDR_NAME;
-use crate::typing::visitor::{TypingVisitorConstructor, TypingVisitorContext};
+use crate::typing::visitor::simple_visitor;
 use crate::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     expansion::ast::Visibility,
     naming::ast as N,
-    shared::CompilationEnv,
     typing::ast as T,
 };
 
@@ -30,33 +28,12 @@ const PUBLIC_RANDOM_DIAG: DiagnosticInfo = custom(
     "Risky use of 'sui::random'",
 );
 
-pub struct PublicRandomVisitor;
-pub struct Context<'a> {
-    env: &'a mut CompilationEnv,
-}
-
-impl TypingVisitorConstructor for PublicRandomVisitor {
-    type Context<'a> = Context<'a>;
-
-    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context { env }
-    }
-}
-
-impl TypingVisitorContext for Context<'_> {
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
-    }
-
+simple_visitor!(
+    PublicRandomVisitor,
     fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
         // skips if true
         mdef.attributes.is_test_or_test_only() || ident.value.address.is(SUI_ADDR_NAME)
-    }
-
+    },
     fn visit_function_custom(
         &mut self,
         _module: ModuleIdent,
@@ -78,12 +55,12 @@ impl TypingVisitorContext for Context<'_> {
                                    SUI_PKG_NAME, RANDOM_MOD_NAME, struct_name);
                 d.add_note(note);
                 d.add_note("Non-public functions are preferred");
-                self.env.add_diag(d);
+                self.add_diag(d);
             }
         }
         true
     }
-}
+);
 
 fn is_random_or_random_generator(sp!(_, t): &N::Type) -> Option<&str> {
     use N::Type_ as T;

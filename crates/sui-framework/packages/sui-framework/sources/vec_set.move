@@ -69,7 +69,7 @@ public fun into_keys<K: copy + drop>(self: VecSet<K>): vector<K> {
 public fun from_keys<K: copy + drop>(mut keys: vector<K>): VecSet<K> {
     keys.reverse();
     let mut set = empty();
-    while (!keys.is_empty()) set.insert(keys.pop_back());
+    while (keys.length() != 0) set.insert(keys.pop_back());
     set
 }
 

@@ -18,6 +18,7 @@ pub mod meaningless_math_operation;
 pub mod redundant_ref_deref;
 pub mod self_assignment;
 pub mod unnecessary_conditional;
+pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
 
@@ -152,7 +153,13 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "redundant_ref_deref",
         "redundant reference/dereference"
-    )
+    ),
+    (
+        UnnecessaryUnit,
+        LinterDiagnosticCategory::Style,
+        "unnecessary_unit",
+        "unit `()` expression can be removed or simplified"
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -189,6 +196,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_conditional::UnnecessaryConditional.visitor(),
                 self_assignment::SelfAssignmentVisitor.visitor(),
                 redundant_ref_deref::RedundantRefDerefVisitor.visitor(),
+                unnecessary_unit::UnnecessaryUnit.visitor(),
             ]
         }
     }

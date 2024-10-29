@@ -32,7 +32,12 @@ fn get_serialize_filepath(subname: &str) -> PathBuf {
 /// Serialize the obj into ~/.suiop/{subname} so we can cache it across
 /// executions
 pub fn serialize_to_file<T: Serialize>(subname: &str, obj: &Vec<T>) -> Result<()> {
-    let file = File::create(get_serialize_filepath(subname).as_path())?;
+    let filepath = get_serialize_filepath(subname);
+    // Ensure the parent directory exists
+    if let Some(parent) = filepath.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let file = File::create(filepath.as_path())?;
     serde_json::to_writer(file, obj)?;
     Ok(())
 }
@@ -70,6 +75,7 @@ impl Slack {
         let token = std::env::var("SLACK_BOT_TOKEN").expect(
             "Please set SLACK_BOT_TOKEN env var ('slack bot token (incidentbot)' in 1password)",
         );
+        debug!("using slack token {}", token);
         let mut headers = header::HeaderMap::new();
         headers.insert(
             header::AUTHORIZATION,

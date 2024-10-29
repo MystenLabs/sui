@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 64;
+const MAX_PROTOCOL_VERSION: u64 = 68;
 
 // Record history of protocol version allocations here:
 //
@@ -185,7 +185,14 @@ const MAX_PROTOCOL_VERSION: u64 = 64;
 //             Add feature flag for Mysticeti fastpath.
 // Version 62: Makes the event's sending module package upgrade-aware.
 // Version 63: Enable gas based congestion control in consensus commit.
-// Version 64: Switch to distributed vote scoring in consensus in mainnet
+// Version 64: Revert congestion control change.
+// Version 65: Enable distributed vote scoring in mainnet.
+// Version 66: Revert distributed vote scoring in mainnet.
+//             Framework fix for fungible staking book-keeping.
+// Version 67: Re-enable distributed vote scoring in mainnet.
+// Version 68: Add G1Uncompressed group to group ops.
+//             Update to Move stdlib.
+//             Enable gas based congestion control with overage.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -548,6 +555,10 @@ struct FeatureFlags {
     // Makes the event's sending module version-aware.
     #[serde(skip_serializing_if = "is_false")]
     relocate_event_module: bool,
+
+    // Enable uncompressed group elements in BLS123-81 G1
+    #[serde(skip_serializing_if = "is_false")]
+    uncompressed_g1_group_elements: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1137,6 +1148,11 @@ pub struct ProtocolConfig {
     group_ops_bls12381_g2_msm_base_cost_per_input: Option<u64>,
     group_ops_bls12381_msm_max_len: Option<u32>,
     group_ops_bls12381_pairing_cost: Option<u64>,
+    group_ops_bls12381_g1_to_uncompressed_g1_cost: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_to_g1_cost: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_sum_base_cost: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_sum_cost_per_term: Option<u64>,
+    group_ops_bls12381_uncompressed_g1_sum_max_terms: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -1235,15 +1251,16 @@ pub struct ProtocolConfig {
     /// The maximum number of transactions included in a consensus block.
     consensus_max_num_transactions_in_block: Option<u64>,
 
-    /// The max accumulated txn execution cost per object in a Narwhal commit. Transactions
-    /// in a checkpoint will be deferred once their touch shared objects hit this limit.
-    /// This config is meant to be used when consensus protocol is Narwhal, where each
-    /// consensus commit corresponding to 1 checkpoint (or 2 if randomness is enabled)
+    /// DEPRECATED. Do not use.
     max_accumulated_txn_cost_per_object_in_narwhal_commit: Option<u64>,
 
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
+
+    /// If >0, congestion control will allow up to one transaction per object to exceed
+    /// the configured maximum accumulated cost by the given amount.
+    max_txn_cost_overage_per_object_in_commit: Option<u64>,
 
     /// Minimum interval of commit timestamps between consecutive checkpoints.
     min_checkpoint_interval_ms: Option<u64>,
@@ -1260,10 +1277,15 @@ pub struct ProtocolConfig {
     bridge_should_try_to_finalize_committee: Option<bool>,
 
     /// The max accumulated txn execution cost per object in a mysticeti. Transactions
-    /// in a commit will be deferred once their touch shared objects hit this limit.
+    /// in a commit will be deferred once their touch shared objects hit this limit,
+    /// unless the selected congestion control mode allows overage.
     /// This config plays the same role as `max_accumulated_txn_cost_per_object_in_narwhal_commit`
     /// but for mysticeti commits due to that mysticeti has higher commit rate.
     max_accumulated_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
+
+    /// As above, but separate per-commit budget for transactions that use randomness.
+    /// If not configured, uses the setting for `max_accumulated_txn_cost_per_object_in_mysticeti_commit`.
+    max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
 
     /// Configures the garbage collection depth for consensus. When is unset or `0` then the garbage collection
     /// is disabled.
@@ -1273,6 +1295,10 @@ pub struct ProtocolConfig {
     /// object congestion control strategy. Basically the max transaction cost is calculated as
     /// (num of input object + num of commands) * this factor.
     gas_budget_based_txn_cost_cap_factor: Option<u64>,
+
+    /// Adds an absolute cap on the maximum transaction cost when using TotalGasBudgetWithCap at
+    /// the given multiple of the per-commit budget.
+    gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
 }
 
 // feature flags
@@ -1627,6 +1653,10 @@ impl ProtocolConfig {
 
     pub fn relocate_event_module(&self) -> bool {
         self.feature_flags.relocate_event_module
+    }
+
+    pub fn uncompressed_g1_group_elements(&self) -> bool {
+        self.feature_flags.uncompressed_g1_group_elements
     }
 }
 
@@ -2048,6 +2078,11 @@ impl ProtocolConfig {
             group_ops_bls12381_g2_msm_base_cost_per_input: None,
             group_ops_bls12381_msm_max_len: None,
             group_ops_bls12381_pairing_cost: None,
+            group_ops_bls12381_g1_to_uncompressed_g1_cost: None,
+            group_ops_bls12381_uncompressed_g1_to_g1_cost: None,
+            group_ops_bls12381_uncompressed_g1_sum_base_cost: None,
+            group_ops_bls12381_uncompressed_g1_sum_cost_per_term: None,
+            group_ops_bls12381_uncompressed_g1_sum_max_terms: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -2132,6 +2167,8 @@ impl ProtocolConfig {
 
             max_deferral_rounds_for_congestion_control: None,
 
+            max_txn_cost_overage_per_object_in_commit: None,
+
             min_checkpoint_interval_ms: None,
 
             checkpoint_summary_version_specific_data: None,
@@ -2142,9 +2179,13 @@ impl ProtocolConfig {
 
             max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
 
+            max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: None,
+
             consensus_gc_depth: None,
 
             gas_budget_based_txn_cost_cap_factor: None,
+
+            gas_budget_based_txn_cost_absolute_cap_commit_count: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2834,9 +2875,47 @@ impl ProtocolConfig {
                     cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(240_000_000);
                 }
                 64 => {
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalTxCount;
+                    cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(40);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(3);
+                }
+                65 => {
                     // Enable distributed vote scoring for mainnet
                     cfg.feature_flags
                         .consensus_distributed_vote_scoring_strategy = true;
+                }
+                66 => {
+                    if chain == Chain::Mainnet {
+                        // Revert the distributed vote scoring for mainnet (for one protocol upgrade)
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = false;
+                    }
+                }
+                67 => {
+                    // Enable it once again.
+                    cfg.feature_flags
+                        .consensus_distributed_vote_scoring_strategy = true;
+                }
+                68 => {
+                    cfg.group_ops_bls12381_g1_to_uncompressed_g1_cost = Some(26);
+                    cfg.group_ops_bls12381_uncompressed_g1_to_g1_cost = Some(52);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_base_cost = Some(26);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_cost_per_term = Some(13);
+                    cfg.group_ops_bls12381_uncompressed_g1_sum_max_terms = Some(2000);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.uncompressed_g1_group_elements = true;
+                    }
+
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(18_500_000);
+                    cfg.max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit =
+                        Some(3_700_000); // 20% of above
+                    cfg.max_txn_cost_overage_per_object_in_commit = Some(u64::MAX);
+                    cfg.gas_budget_based_txn_cost_absolute_cap_commit_count = Some(50);
                 }
                 // Use this template when making changes:
                 //

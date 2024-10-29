@@ -7,8 +7,16 @@ use anyhow::Result;
 use chrono::{DateTime, Local, Utc};
 use clap::{Parser, ValueEnum};
 use colored::Colorize;
+use crossterm::{
+    cursor::MoveTo,
+    event::{Event, EventStream, KeyCode},
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
+    ExecutableCommand,
+};
+use futures::StreamExt;
+use futures::{select, FutureExt};
 use serde::{self, Deserialize, Serialize};
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, str::FromStr, time::Duration};
 use tabled::{settings::Style, Table, Tabled};
 use tracing::debug;
 
@@ -128,6 +136,8 @@ pub enum ImageAction {
     Query {
         #[arg(short, long)]
         repo_name: String,
+        #[arg(short, long)]
+        watch: bool,
         #[arg(short, long)]
         limit: Option<u32>,
     },
@@ -287,6 +297,24 @@ struct ImageListResponse {
     pub images: Vec<ImageDetails>,
 }
 
+async fn get_status_table(resp: reqwest::Response) -> Result<tabled::Table> {
+    let json_resp = resp.json::<QueryBuildResponse>().await?;
+    let job_statuses = json_resp.pods.into_iter().map(|pod| {
+        // Parse the string into a NaiveDateTime
+        let start_time = utc_to_local_time(pod.start_time);
+        let end_time = utc_to_local_time(pod.end_time.unwrap_or("".to_string()));
+
+        BuildInfo {
+            name: pod.name,
+            status: pod.status,
+            start_time,
+            end_time,
+        }
+    });
+    let mut tabled = Table::new(job_statuses);
+    Ok(tabled.with(Style::rounded()).to_owned())
+}
+
 async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
     let req = generate_image_request(token, action);
 
@@ -342,27 +370,56 @@ async fn send_image_request(token: &str, action: &ImageAction) -> Result<()> {
             }
             ImageAction::Query {
                 repo_name,
+                watch,
                 limit: _,
             } => {
-                println!("Requested query for repo: {}", repo_name.green());
-                let json_resp = resp.json::<QueryBuildResponse>().await?;
-                let job_statuses = json_resp.pods.into_iter().map(|pod| {
-                    // Parse the string into a NaiveDateTime
-                    let start_time = utc_to_local_time(pod.start_time);
-                    let end_time = utc_to_local_time(pod.end_time.unwrap_or("".to_string()));
+                if !*watch {
+                    println!("Requested query for repo: {}", repo_name.green());
+                    let status_table = get_status_table(resp).await?.to_string();
+                    println!("{}", status_table);
+                } else {
+                    enable_raw_mode()?;
+                    loop {
+                        let mut reader = EventStream::new();
+                        let mut delay = futures_timer::Delay::new(Duration::from_secs(1)).fuse();
+                        let mut event = reader.next().fuse();
 
-                    BuildInfo {
-                        name: pod.name,
-                        status: pod.status,
-                        start_time,
-                        end_time,
+                        select! {
+                            _ = delay => {
+                                let req = generate_image_request(token, action);
+
+                                let resp = req.send().await?;
+                                let status_table = get_status_table(resp).await?.to_string();
+                                std::io::stdout().execute(Clear(ClearType::All))?.execute(MoveTo(0,0))?;
+                                print!("press 'q' or 'esc' to quit");
+                                for (i, line )in status_table.lines().enumerate() {
+                                    std::io::stdout().execute(MoveTo(0,(i + 1) as u16))?;
+                                    println!("{}", line);
+                                }
+                            },
+                            maybe_event = event => {
+                                println!("checking event");
+                                match maybe_event {
+                                    Some(Ok(event)) => {
+                                        if event == Event::Key(KeyCode::Char('q').into()) {
+                                            std::io::stdout().execute(Clear(ClearType::All))?.execute(MoveTo(0,0))?;
+                                            println!("q pressed, quitting 🫡");
+                                            break
+                                        } else if event == Event::Key(KeyCode::Esc.into()) {
+                                            std::io::stdout().execute(Clear(ClearType::All))?.execute(MoveTo(0,0))?;
+                                            println!("esc pressed, quitting 🫡");
+                                            break;
+                                        }
+
+                                    }
+                                    Some(Err(e)) => println!("Error: {:?}\r", e),
+                                    None => println!("no event"),
+                                }
+                            }
+                        };
                     }
-                });
-                let mut tabled = Table::new(job_statuses);
-                tabled.with(Style::rounded());
-
-                let tabled_str = tabled.to_string();
-                println!("{}", tabled_str);
+                    disable_raw_mode()?;
+                }
             }
             ImageAction::Status {
                 repo_name,
@@ -520,7 +577,11 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))
         }
-        ImageAction::Query { repo_name, limit } => {
+        ImageAction::Query {
+            repo_name,
+            limit,
+            watch: _,
+        } => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
             let req = client.get(full_url);

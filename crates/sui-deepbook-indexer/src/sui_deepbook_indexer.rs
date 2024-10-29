@@ -318,19 +318,23 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiDeepBookDataMapper {
         match &data.events {
             Some(events) => {
                 let processed_sui_events =
-                    events.data.iter().try_fold(vec![], |mut result, ev| {
-                        if let Some(data) = process_sui_event(
-                            ev,
-                            &data,
-                            checkpoint_num,
-                            // timestamp_ms,
-                            self.package_id,
-                        )? {
-                            result.push(data);
-                        }
-                        Ok::<_, anyhow::Error>(result)
-                    })?;
-
+                    events
+                        .data
+                        .iter()
+                        .enumerate()
+                        .try_fold(vec![], |mut result, (i, ev)| {
+                            if let Some(data) = process_sui_event(
+                                ev,
+                                i,
+                                &data,
+                                checkpoint_num,
+                                timestamp_ms,
+                                self.package_id,
+                            )? {
+                                result.push(data);
+                            }
+                            Ok::<_, anyhow::Error>(result)
+                        })?;
                 if !processed_sui_events.is_empty() {
                     info!(
                         "SUI: Extracted {} deepbook data entries for tx {}.",
@@ -367,9 +371,10 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiDeepBookDataMapper {
 
 fn process_sui_event(
     ev: &Event,
+    event_index: usize,
     tx: &CheckpointTransaction,
     checkpoint: u64,
-    // timestamp_ms: u64,
+    checkpoint_timestamp_ms: u64,
     package_id: ObjectID,
 ) -> Result<Option<ProcessedTxnData>, anyhow::Error> {
     Ok(if ev.type_.address == *package_id {
@@ -383,10 +388,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
                     sender: tx.transaction.sender_address().to_string(),
+                    event_digest,
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     status: OrderUpdateStatus::Placed,
                     pool_id: move_event.pool_id.to_string(),
@@ -414,10 +423,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     status: OrderUpdateStatus::Modified,
                     pool_id: move_event.pool_id.to_string(),
@@ -445,10 +458,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     status: OrderUpdateStatus::Canceled,
                     pool_id: move_event.pool_id.to_string(),
@@ -477,10 +494,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     status: OrderUpdateStatus::Expired,
                     pool_id: move_event.pool_id.to_string(),
@@ -509,10 +530,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::OrderFill(OrderFill {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     pool_id: move_event.pool_id.to_string(),
                     maker_order_id: move_event.maker_order_id,
@@ -544,10 +569,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Flashloan(Flashloan {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     pool_id: move_event.pool_id.to_string(),
                     borrow_quantity: move_event.borrow_quantity,
@@ -567,10 +596,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::PoolPrice(PoolPrice {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     target_pool: move_event.target_pool.to_string(),
                     conversion_rate: move_event.conversion_rate,
@@ -589,10 +622,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Balances(Balances {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                     asset: move_event.asset.to_string(),
@@ -612,11 +649,16 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Proposals(Proposals {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
+                    pool_id: move_event.pool_id.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
                     epoch: move_event.epoch,
                     taker_fee: move_event.taker_fee,
@@ -636,10 +678,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Rebates(Rebates {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     pool_id: move_event.pool_id.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
@@ -659,10 +705,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Stakes(Stakes {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     pool_id: move_event.pool_id.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
@@ -683,6 +733,8 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let shared_objects = &tx.input_objects;
                 let mut pool_id = "0x0".to_string();
                 for obj in shared_objects.iter() {
@@ -697,8 +749,10 @@ fn process_sui_event(
                 }
                 let txn_data = Some(ProcessedTxnData::TradeParamsUpdate(TradeParamsUpdate {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     pool_id,
                     taker_fee: move_event.taker_fee,
@@ -718,10 +772,14 @@ fn process_sui_event(
                 } else {
                     "".to_string()
                 };
+                let mut event_digest = tx.transaction.digest().to_string();
+                event_digest.push_str(&event_index.to_string());
                 let txn_data = Some(ProcessedTxnData::Votes(Votes {
                     digest: tx.transaction.digest().to_string(),
+                    event_digest,
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    checkpoint_timestamp_ms,
                     package,
                     pool_id: move_event.pool_id.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),

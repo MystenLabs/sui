@@ -88,6 +88,14 @@ public(package) fun pairing<G1, G2, G3>(
     Element<G3> { bytes: internal_pairing(type_, &e1.bytes, &e2.bytes) }
 }
 
+public(package) fun convert<From, To>(from_type_: u8, to_type_: u8, e: &Element<From>): Element<To> {
+    Element<To> { bytes: internal_convert(from_type_, to_type_, &e.bytes) }
+}
+
+public(package) fun sum<G>(type_: u8, terms: &vector<Element<G>>): Element<G> {
+    Element<G> { bytes: internal_sum(type_, &(*terms).map!(|x| x.bytes)) }
+}
+
 //////////////////////////////
 ////// Native functions //////
 
@@ -113,6 +121,9 @@ native fun internal_multi_scalar_mul(
 
 // 'type' represents the type of e1, and the rest are determined automatically from e1.
 native fun internal_pairing(type_: u8, e1: &vector<u8>, e2: &vector<u8>): vector<u8>;
+
+native fun internal_convert(from_type_: u8, to_type_: u8, e: &vector<u8>): vector<u8>;
+native fun internal_sum(type_: u8, e: &vector<vector<u8>>): vector<u8>;
 
 // Helper function for encoding a given u64 number as bytes in a given buffer.
 public(package) fun set_as_prefix(x: u64, big_endian: bool, buffer: &mut vector<u8>) {

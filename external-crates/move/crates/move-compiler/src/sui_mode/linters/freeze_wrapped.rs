@@ -11,7 +11,7 @@ use crate::{
     diag,
     diagnostics::{
         codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
+        Diagnostic, Diagnostics, WarningFilters,
     },
     expansion::ast as E,
     naming::ast as N,
@@ -92,6 +92,17 @@ impl TypingVisitorConstructor for FreezeWrappedVisitor {
     }
 }
 
+impl Context<'_> {
+    fn add_diag(&mut self, diag: Diagnostic) {
+        self.env.add_diag(diag);
+    }
+
+    #[allow(unused)]
+    fn add_diags(&mut self, diags: Diagnostics) {
+        self.env.add_diags(diags);
+    }
+}
+
 impl<'a> TypingVisitorContext for Context<'a> {
     fn visit_module_custom(&mut self, _ident: E::ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
         // skips if true
@@ -128,7 +139,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
                 };
                 if let Some(wrapping_field_info) = self.find_wrapping_field_loc(mident, sname) {
                     add_diag(
-                        self.env,
+                        self,
                         fun.arguments.exp.loc,
                         sname.value(),
                         wrapping_field_info,
@@ -233,7 +244,7 @@ impl<'a> Context<'a> {
 }
 
 fn add_diag(
-    env: &mut CompilationEnv,
+    context: &mut Context,
     freeze_arg_loc: Loc,
     frozen_struct_name: Symbol,
     info: WrappingFieldInfo,
@@ -261,5 +272,5 @@ fn add_diag(
     if !direct {
         d.add_secondary_label((wrapped_tloc, "Indirectly wrapped object is of this type"));
     }
-    env.add_diag(d);
+    context.add_diag(d);
 }

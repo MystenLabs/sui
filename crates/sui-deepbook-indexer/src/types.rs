@@ -55,9 +55,11 @@ impl Display for OrderUpdateStatus {
 
 #[derive(Clone, Debug)]
 pub struct OrderUpdate {
-    pub(crate) digest: String,
+    pub digest: String,
+    pub(crate) event_digest: String,
     pub(crate) sender: String,
     pub(crate) checkpoint: u64,
+    pub(crate) checkpoint_timestamp_ms: u64,
     pub(crate) package: String,
     pub(crate) status: OrderUpdateStatus,
     pub(crate) pool_id: String,
@@ -77,8 +79,10 @@ impl OrderUpdate {
     pub(crate) fn to_db(&self) -> DBOrderUpdate {
         DBOrderUpdate {
             digest: self.digest.clone(),
+            event_digest: self.event_digest.clone(),
             sender: self.sender.clone(),
             checkpoint: self.checkpoint as i64,
+            checkpoint_timestamp_ms: self.checkpoint_timestamp_ms as i64,
             package: self.package.clone(),
             status: self.status.clone().to_string(),
             pool_id: self.pool_id.clone(),
@@ -99,8 +103,10 @@ impl OrderUpdate {
 #[derive(Clone, Debug)]
 pub struct OrderFill {
     pub(crate) digest: String,
+    pub(crate) event_digest: String,
     pub(crate) sender: String,
     pub(crate) checkpoint: u64,
+    pub(crate) checkpoint_timestamp_ms: u64,
     pub(crate) package: String,
     pub(crate) pool_id: String,
     pub(crate) maker_order_id: u128,
@@ -124,8 +130,10 @@ impl OrderFill {
     pub(crate) fn to_db(&self) -> DBOrderFill {
         DBOrderFill {
             digest: self.digest.clone(),
+            event_digest: self.event_digest.clone(),
             sender: self.sender.clone(),
             checkpoint: self.checkpoint as i64,
+            checkpoint_timestamp_ms: self.checkpoint_timestamp_ms as i64,
             package: self.package.clone(),
             pool_id: self.pool_id.clone(),
             maker_order_id: BigDecimal::from(self.maker_order_id).to_string(),
@@ -150,8 +158,10 @@ impl OrderFill {
 #[derive(Clone, Debug)]
 pub struct Flashloan {
     pub(crate) digest: String,
+    pub(crate) event_digest: String,
     pub(crate) sender: String,
     pub(crate) checkpoint: u64,
+    pub(crate) checkpoint_timestamp_ms: u64,
     pub(crate) package: String,
     pub(crate) borrow: bool,
     pub(crate) pool_id: String,
@@ -163,8 +173,10 @@ impl Flashloan {
     pub(crate) fn to_db(&self) -> DBFlashloan {
         DBFlashloan {
             digest: self.digest.clone(),
+            event_digest: self.event_digest.clone(),
             sender: self.sender.clone(),
             checkpoint: self.checkpoint as i64,
+            checkpoint_timestamp_ms: self.checkpoint_timestamp_ms as i64,
             package: self.package.clone(),
             borrow: self.borrow,
             pool_id: self.pool_id.clone(),
@@ -177,8 +189,10 @@ impl Flashloan {
 #[derive(Clone, Debug)]
 pub struct PoolPrice {
     pub(crate) digest: String,
+    pub(crate) event_digest: String,
     pub(crate) sender: String,
     pub(crate) checkpoint: u64,
+    pub(crate) checkpoint_timestamp_ms: u64,
     pub(crate) package: String,
     pub(crate) target_pool: String,
     pub(crate) reference_pool: String,
@@ -189,8 +203,10 @@ impl PoolPrice {
     pub(crate) fn to_db(&self) -> DBPoolPrice {
         DBPoolPrice {
             digest: self.digest.clone(),
+            event_digest: self.event_digest.clone(),
             sender: self.sender.clone(),
             checkpoint: self.checkpoint as i64,
+            checkpoint_timestamp_ms: self.checkpoint_timestamp_ms as i64,
             package: self.package.clone(),
             target_pool: self.target_pool.clone(),
             reference_pool: self.reference_pool.clone(),
@@ -201,22 +217,26 @@ impl PoolPrice {
 
 #[derive(Clone, Debug)]
 pub struct Balances {
-    pub digest: String,
-    pub sender: String,
-    pub checkpoint: u64,
-    pub package: String,
-    pub balance_manager_id: String,
-    pub asset: String,
-    pub amount: u64,
-    pub deposit: bool,
+    pub(crate) digest: String,
+    pub(crate) event_digest: String,
+    pub(crate) sender: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) checkpoint_timestamp_ms: u64,
+    pub(crate) package: String,
+    pub(crate) balance_manager_id: String,
+    pub(crate) asset: String,
+    pub(crate) amount: u64,
+    pub(crate) deposit: bool,
 }
 
 impl Balances {
     pub(crate) fn to_db(&self) -> DBBalances {
         DBBalances {
             digest: self.digest.clone(),
+            event_digest: self.event_digest.clone(),
             sender: self.sender.clone(),
             checkpoint: self.checkpoint as i64,
+            checkpoint_timestamp_ms: self.checkpoint_timestamp_ms as i64,
             package: self.package.clone(),
             balance_manager_id: self.balance_manager_id.clone(),
             asset: self.asset.clone(),
@@ -229,9 +249,12 @@ impl Balances {
 #[derive(Clone, Debug)]
 pub struct Proposals {
     pub(crate) digest: String,
+    pub(crate) event_digest: String,
     pub(crate) sender: String,
     pub(crate) checkpoint: u64,
+    pub(crate) checkpoint_timestamp_ms: u64,
     pub(crate) package: String,
+    pub(crate) pool_id: String,
     pub(crate) balance_manager_id: String,
     pub(crate) epoch: u64,
     pub(crate) taker_fee: u64,
@@ -243,9 +266,12 @@ impl Proposals {
     pub(crate) fn to_db(&self) -> DBProposals {
         DBProposals {
             digest: self.digest.clone(),
+            event_digest: self.event_digest.clone(),
             sender: self.sender.clone(),
             checkpoint: self.checkpoint as i64,
+            checkpoint_timestamp_ms: self.checkpoint_timestamp_ms as i64,
             package: self.package.clone(),
+            pool_id: self.pool_id.clone(),
             balance_manager_id: self.balance_manager_id.clone(),
             epoch: self.epoch as i64,
             taker_fee: self.taker_fee as i64,
@@ -258,8 +284,10 @@ impl Proposals {
 #[derive(Clone, Debug)]
 pub struct Rebates {
     pub(crate) digest: String,
+    pub(crate) event_digest: String,
     pub(crate) sender: String,
     pub(crate) checkpoint: u64,
+    pub(crate) checkpoint_timestamp_ms: u64,
     pub(crate) package: String,
     pub(crate) pool_id: String,
     pub(crate) balance_manager_id: String,
@@ -271,8 +299,10 @@ impl Rebates {
     pub(crate) fn to_db(&self) -> DBRebates {
         DBRebates {
             digest: self.digest.clone(),
+            event_digest: self.event_digest.clone(),
             sender: self.sender.clone(),
             checkpoint: self.checkpoint as i64,
+            checkpoint_timestamp_ms: self.checkpoint_timestamp_ms as i64,
             package: self.package.clone(),
             pool_id: self.pool_id.clone(),
             balance_manager_id: self.balance_manager_id.clone(),
@@ -285,8 +315,10 @@ impl Rebates {
 #[derive(Clone, Debug)]
 pub struct Stakes {
     pub(crate) digest: String,
+    pub(crate) event_digest: String,
     pub(crate) sender: String,
     pub(crate) checkpoint: u64,
+    pub(crate) checkpoint_timestamp_ms: u64,
     pub(crate) package: String,
     pub(crate) pool_id: String,
     pub(crate) balance_manager_id: String,
@@ -299,8 +331,10 @@ impl Stakes {
     pub(crate) fn to_db(&self) -> DBStakes {
         DBStakes {
             digest: self.digest.clone(),
+            event_digest: self.event_digest.clone(),
             sender: self.sender.clone(),
             checkpoint: self.checkpoint as i64,
+            checkpoint_timestamp_ms: self.checkpoint_timestamp_ms as i64,
             package: self.package.clone(),
             pool_id: self.pool_id.clone(),
             balance_manager_id: self.balance_manager_id.clone(),
@@ -314,8 +348,10 @@ impl Stakes {
 #[derive(Clone, Debug)]
 pub struct TradeParamsUpdate {
     pub(crate) digest: String,
+    pub(crate) event_digest: String,
     pub(crate) sender: String,
     pub(crate) checkpoint: u64,
+    pub(crate) checkpoint_timestamp_ms: u64,
     pub(crate) package: String,
     pub(crate) pool_id: String,
     pub(crate) taker_fee: u64,
@@ -327,8 +363,10 @@ impl TradeParamsUpdate {
     pub(crate) fn to_db(&self) -> DBTradeParamsUpdate {
         DBTradeParamsUpdate {
             digest: self.digest.clone(),
+            event_digest: self.event_digest.clone(),
             sender: self.sender.clone(),
             checkpoint: self.checkpoint as i64,
+            checkpoint_timestamp_ms: self.checkpoint_timestamp_ms as i64,
             package: self.package.clone(),
             pool_id: self.pool_id.clone(),
             taker_fee: self.taker_fee as i64,
@@ -341,8 +379,10 @@ impl TradeParamsUpdate {
 #[derive(Clone, Debug)]
 pub struct Votes {
     pub(crate) digest: String,
+    pub(crate) event_digest: String,
     pub(crate) sender: String,
     pub(crate) checkpoint: u64,
+    pub(crate) checkpoint_timestamp_ms: u64,
     pub(crate) package: String,
     pub(crate) pool_id: String,
     pub(crate) balance_manager_id: String,
@@ -356,8 +396,10 @@ impl Votes {
     pub(crate) fn to_db(&self) -> DBVotes {
         DBVotes {
             digest: self.digest.clone(),
+            event_digest: self.event_digest.clone(),
             sender: self.sender.clone(),
             checkpoint: self.checkpoint as i64,
+            checkpoint_timestamp_ms: self.checkpoint_timestamp_ms as i64,
             package: self.package.clone(),
             pool_id: self.pool_id.clone(),
             balance_manager_id: self.balance_manager_id.clone(),
