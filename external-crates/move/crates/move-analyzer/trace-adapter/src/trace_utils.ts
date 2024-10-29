@@ -516,8 +516,14 @@ function processJSONLocalLocation(
     } else if ('Indexed' in traceLocation) {
         return processJSONLocalLocation(traceLocation.Indexed[0], localLifetimeEnds);
     } else {
-        // there is nothing that needs to be done for 'Global' locations,
-        // neither with respect to lifetime nor with respect to location itself
+        // Currently, there is nothing that needs to be done for 'Global' locations,
+        // neither with respect to lifetime nor with respect to location itself.
+        // This is because `Global` locations currently only represent read-only
+        // refererence values returned from native functions. If there ever was
+        // a native functino that would return a mutable reference, we should
+        // consider how to handle value changes via such reference, but it's unlikely
+        // that such a function would ever be added to either Move stdlib or
+        // the Sui framework.
         return undefined;
     }
 }
