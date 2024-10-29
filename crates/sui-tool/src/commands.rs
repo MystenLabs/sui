@@ -459,7 +459,7 @@ async fn check_locked_object(
 ) -> anyhow::Result<()> {
     let clients = Arc::new(make_clients(sui_client).await?);
     let output = get_object(id, None, None, clients.clone()).await?;
-    let output = GroupedObjectOutput::new(output, committee);
+    let output = GroupedObjectOutput::new(output, committee, false);
     if output.fully_locked {
         println!("Object {} is fully locked.", id);
         return Ok(());
@@ -467,7 +467,7 @@ async fn check_locked_object(
     let top_record = output.voting_power.first().unwrap();
     let top_record_stake = top_record.1;
     let top_record = top_record.0.unwrap();
-    if top_record.4.is_none() {
+    if top_record.5.is_none() {
         println!(
             "Object {} does not seem to be locked by majority of validators (unlocked stake: {})",
             id, top_record_stake
@@ -475,7 +475,7 @@ async fn check_locked_object(
         return Ok(());
     }
 
-    let tx_digest = top_record.2;
+    let tx_digest = top_record.3;
     if !rescue {
         println!("Object {} is rescueable, top tx: {:?}", id, tx_digest);
         return Ok(());
@@ -577,6 +577,7 @@ impl ToolCommand {
                     fullnode_rpc_url,
                     verbosity,
                     concise_no_header,
+                    false, // ignore_error
                 )
                 .await?;
             }
@@ -1130,6 +1131,7 @@ impl ToolCommand {
                         fullnode_rpc_url.clone(),
                         verbosity.clone(),
                         concise_no_header,
+                        true, // ignore_error
                     )
                     .await?;
                 }
