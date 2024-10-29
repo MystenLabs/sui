@@ -12,12 +12,12 @@ Sui provides a command line interface (CLI) tool to interact with the Sui networ
 To get the latest version of the CLI, you can run the following command from a terminal or console. Be sure to replace `<BRANCH-NAME>` with `main`, `devnet`, `testnet`, or `mainnet` to get the desired version. For more information on the branches available, see [Sui Environment Setup](./contribute/sui-environment.mdx).
 
 ```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features gas-profiler sui
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features tracing sui
 ```
 
 :::info
 
-The `--features gas-profiler` flag is necessary only if you want to run gas profiles for transactions.
+The `--features tracing` flag is necessary only if you want to run gas profiles for transactions.
 
 :::
 
