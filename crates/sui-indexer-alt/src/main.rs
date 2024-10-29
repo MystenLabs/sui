@@ -9,7 +9,7 @@ use sui_indexer_alt::{
     args::Args,
     handlers::{
         ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
-        kv_objects::KvObjects, kv_transactions::KvTransactions,
+        kv_objects::KvObjects, kv_transactions::KvTransactions, sum_obj_types::SumObjTypes,
         tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     },
     Indexer,
@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
             indexer.concurrent_pipeline::<KvTransactions>().await?;
             indexer.concurrent_pipeline::<TxAffectedObjects>().await?;
             indexer.concurrent_pipeline::<TxBalanceChanges>().await?;
+            indexer.sequential_pipeline::<SumObjTypes>().await?;
 
             let h_indexer = indexer.run().await.context("Failed to start indexer")?;
 
