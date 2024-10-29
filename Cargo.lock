@@ -7473,6 +7473,7 @@ dependencies = [
  "move-symbol-pool",
  "once_cell",
  "petgraph 0.5.1",
+ "rayon",
  "regex",
  "serde",
  "serde_json",

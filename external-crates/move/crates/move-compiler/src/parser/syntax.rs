@@ -4598,7 +4598,7 @@ fn consume_spec_string(context: &mut Context) -> Result<Spanned<String>, Box<Dia
         ));
     }
 
-    s.push_str(dbg!(context.tokens.content()));
+    s.push_str(context.tokens.content());
     context.tokens.advance()?;
 
     let mut count = 1;
