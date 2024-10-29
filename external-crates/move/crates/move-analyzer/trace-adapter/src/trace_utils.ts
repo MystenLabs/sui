@@ -203,6 +203,7 @@ export type TraceEvent =
         id: number,
         name: string,
         fileHash: string
+        isNative: boolean,
         localsTypes: string[],
         localsNames: string[],
         paramValues: RuntimeValueType[]
@@ -346,6 +347,7 @@ export function readTrace(
                 id: frame.frame_id,
                 name: frame.function_name,
                 fileHash: sourceMap.fileHash,
+                isNative: frame.is_native,
                 localsTypes,
                 localsNames: funEntry.localsNames,
                 paramValues,
