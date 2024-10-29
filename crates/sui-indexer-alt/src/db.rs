@@ -1,16 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
+use anyhow::anyhow;
+use diesel::migration::MigrationVersion;
+use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::{
     pooled_connection::{
         bb8::{Pool, PooledConnection, RunError},
         AsyncDieselConnectionManager, PoolError,
     },
-    AsyncPgConnection,
+    AsyncPgConnection, RunQueryDsl,
 };
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use std::time::Duration;
+use tracing::info;
 use url::Url;
+
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 #[derive(Clone)]
 pub struct Db {
@@ -64,4 +70,89 @@ impl Db {
     pub(crate) fn state(&self) -> bb8::State {
         self.pool.state()
     }
+
+    async fn clear_database(&self) -> Result<(), anyhow::Error> {
+        info!("Clearing the database...");
+        let mut conn = self.connect().await?;
+        let drop_all_tables = "
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')
+            LOOP
+                EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+            END LOOP;
+        END $$;";
+        diesel::sql_query(drop_all_tables)
+            .execute(&mut conn)
+            .await?;
+        info!("Dropped all tables.");
+
+        let drop_all_procedures = "
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+            FOR r IN (SELECT proname, oidvectortypes(proargtypes) as argtypes
+                      FROM pg_proc INNER JOIN pg_namespace ns ON (pg_proc.pronamespace = ns.oid)
+                      WHERE ns.nspname = 'public' AND prokind = 'p')
+            LOOP
+                EXECUTE 'DROP PROCEDURE IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
+            END LOOP;
+        END $$;";
+        diesel::sql_query(drop_all_procedures)
+            .execute(&mut conn)
+            .await?;
+        info!("Dropped all procedures.");
+
+        let drop_all_functions = "
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+            FOR r IN (SELECT proname, oidvectortypes(proargtypes) as argtypes
+                      FROM pg_proc INNER JOIN pg_namespace ON (pg_proc.pronamespace = pg_namespace.oid)
+                      WHERE pg_namespace.nspname = 'public' AND prokind = 'f')
+            LOOP
+                EXECUTE 'DROP FUNCTION IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
+            END LOOP;
+        END $$;";
+        diesel::sql_query(drop_all_functions)
+            .execute(&mut conn)
+            .await?;
+        info!("Database cleared.");
+        Ok(())
+    }
+
+    pub(crate) async fn run_migrations(
+        &self,
+    ) -> Result<Vec<MigrationVersion<'static>>, anyhow::Error> {
+        use diesel_migrations::MigrationHarness;
+
+        info!("Running migrations ...");
+        let conn = self.pool.dedicated_connection().await?;
+        let mut wrapper: AsyncConnectionWrapper<AsyncPgConnection> =
+            diesel_async::async_connection_wrapper::AsyncConnectionWrapper::from(conn);
+
+        let finished_migrations = tokio::task::spawn_blocking(move || {
+            wrapper
+                .run_pending_migrations(MIGRATIONS)
+                .map(|versions| versions.iter().map(MigrationVersion::as_owned).collect())
+        })
+        .await?
+        .map_err(|e| anyhow!("Failed to run migrations: {:?}", e))?;
+        info!("Migrations complete.");
+        Ok(finished_migrations)
+    }
+}
+
+/// Drop all tables and rerunning migrations.
+pub async fn reset_database(
+    db_config: DbConfig,
+    skip_migrations: bool,
+) -> Result<(), anyhow::Error> {
+    let db = Db::new(db_config).await?;
+    db.clear_database().await?;
+    if !skip_migrations {
+        db.run_migrations().await?;
+    }
+    Ok(())
 }
