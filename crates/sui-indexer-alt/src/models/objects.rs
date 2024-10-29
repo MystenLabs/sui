@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::{kv_objects, sum_obj_types};
 use diesel::{
-    backend::Backend,
-    expression::AsExpression,
-    prelude::*,
-    serialize::{Output, Result, ToSql},
-    sql_types::SmallInt,
+    backend::Backend, deserialize, expression::AsExpression, prelude::*, serialize,
+    sql_types::SmallInt, FromSqlRow,
 };
+
+use crate::schema::{kv_objects, sum_obj_types};
 
 #[derive(Insertable, Debug, Clone)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
@@ -18,7 +16,7 @@ pub struct StoredObject {
     pub serialized_object: Option<Vec<u8>>,
 }
 
-#[derive(AsExpression, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(AsExpression, FromSqlRow, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
 pub enum StoredOwnerKind {
@@ -41,16 +39,31 @@ pub struct StoredSumObjType {
     pub instantiation: Option<Vec<u8>>,
 }
 
-impl<DB: Backend> ToSql<SmallInt, DB> for StoredOwnerKind
+impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredOwnerKind
 where
-    i16: ToSql<SmallInt, DB>,
+    i16: serialize::ToSql<SmallInt, DB>,
 {
-    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, DB>) -> Result {
+    fn to_sql<'b>(&'b self, out: &mut serialize::Output<'b, '_, DB>) -> serialize::Result {
         match self {
             StoredOwnerKind::Immutable => 0.to_sql(out),
             StoredOwnerKind::Address => 1.to_sql(out),
             StoredOwnerKind::Object => 2.to_sql(out),
             StoredOwnerKind::Shared => 3.to_sql(out),
         }
+    }
+}
+
+impl<DB: Backend> deserialize::FromSql<SmallInt, DB> for StoredOwnerKind
+where
+    i16: deserialize::FromSql<SmallInt, DB>,
+{
+    fn from_sql(raw: DB::RawValue<'_>) -> deserialize::Result<Self> {
+        Ok(match i16::from_sql(raw)? {
+            0 => StoredOwnerKind::Immutable,
+            1 => StoredOwnerKind::Address,
+            2 => StoredOwnerKind::Object,
+            3 => StoredOwnerKind::Shared,
+            o => return Err(format!("Unexpected StoredOwnerKind: {o}").into()),
+        })
     }
 }
