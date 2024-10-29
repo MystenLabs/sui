@@ -6,7 +6,7 @@ use std::path::Path;
 
 #[allow(unused_variables)]
 fn run_all(args_path: &Path) -> datatest_stable::Result<()> {
-    #[cfg(feature = "gas-profiler")]
+    #[cfg(feature = "tracing")]
     {
         use move_cli::sandbox::commands::test;
         use std::path::PathBuf;

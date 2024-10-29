@@ -131,7 +131,7 @@ name = "ptb_files_tests"
 harness = false
 
 [features]
-gas-profiler = [
-    "sui-types/gas-profiler",
-    "sui-execution/gas-profiler",
+tracing = [
+    "sui-types/tracing",
+    "sui-execution/tracing",
 ]

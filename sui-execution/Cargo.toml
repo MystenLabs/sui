@@ -51,16 +51,16 @@ petgraph = "0.5.1"
 
 [features]
 default = []
-gas-profiler = [
-    "sui-adapter-latest/gas-profiler",
-    "sui-adapter-v0/gas-profiler",
-    "sui-adapter-v1/gas-profiler",
-  "sui-adapter-v2/gas-profiler",
-#   "sui-adapter-$CUT/gas-profiler",
-    "move-vm-runtime-v0/gas-profiler",
-    "move-vm-runtime-v1/gas-profiler",
-    "move-vm-runtime-latest/gas-profiler",
-  "move-vm-runtime-v2/gas-profiler",
-#   "move-vm-runtime-$CUT/gas-profiler",
-    "move-vm-config/gas-profiler",
+tracing = [
+    "sui-adapter-latest/tracing",
+    "sui-adapter-v0/tracing",
+    "sui-adapter-v1/tracing",
+  "sui-adapter-v2/tracing",
+#   "sui-adapter-$CUT/tracing",
+    "move-vm-runtime-v0/tracing",
+    "move-vm-runtime-v1/tracing",
+    "move-vm-runtime-latest/tracing",
+  "move-vm-runtime-v2/tracing",
+#   "move-vm-runtime-$CUT/tracing",
+    "move-vm-config/tracing",
 ]
