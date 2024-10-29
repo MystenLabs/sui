@@ -769,14 +769,26 @@ impl AuthorityEpochTables {
         &self,
         current_round: Round,
         for_randomness: bool,
-        per_commit_budget: u64,
+        protocol_config: &ProtocolConfig,
         transactions: &[VerifiedSequencedConsensusTransaction],
     ) -> SuiResult<impl IntoIterator<Item = (ObjectID, u64)>> {
-        let table = if for_randomness {
-            &self.congestion_control_randomness_object_debts
+        let default_per_commit_budget = protocol_config
+            .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
+            .unwrap_or(0);
+        let (table, per_commit_budget) = if for_randomness {
+            (
+                &self.congestion_control_randomness_object_debts,
+                protocol_config
+                    .max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_as_option()
+                    .unwrap_or(default_per_commit_budget),
+            )
         } else {
-            &self.congestion_control_object_debts
+            (
+                &self.congestion_control_object_debts,
+                default_per_commit_budget,
+            )
         };
+
         let shared_input_object_ids: BTreeSet<_> = transactions
             .iter()
             .filter_map(|tx| {
@@ -2848,48 +2860,21 @@ impl AuthorityPerEpochStore {
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
         // they will be in different PendingCheckpoints.
         let tables = self.tables()?;
-        let default_per_commit_budget = self
-            .protocol_config()
-            .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
-            .unwrap_or(0);
-        let max_txn_cost_overage_per_object_in_commit = self
-            .protocol_config()
-            .max_txn_cost_overage_per_object_in_commit_as_option()
-            .unwrap_or(0);
-        let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
-            tables.load_initial_object_debts(
-                consensus_commit_info.round,
-                false,
-                default_per_commit_budget,
-                &sequenced_transactions,
-            )?,
-            self.protocol_config().per_object_congestion_control_mode(),
-            self.protocol_config()
-                .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
-            self.protocol_config()
-                .gas_budget_based_txn_cost_cap_factor_as_option(),
-            max_txn_cost_overage_per_object_in_commit,
-        );
-        let shared_object_using_randomness_congestion_tracker = SharedObjectCongestionTracker::new(
-            tables.load_initial_object_debts(
+        let shared_object_congestion_tracker = SharedObjectCongestionTracker::from_protocol_config(
+            &tables,
+            self.protocol_config(),
+            consensus_commit_info.round,
+            false,
+            &sequenced_transactions,
+        )?;
+        let shared_object_using_randomness_congestion_tracker =
+            SharedObjectCongestionTracker::from_protocol_config(
+                &tables,
+                self.protocol_config(),
                 consensus_commit_info.round,
                 true,
-                self.protocol_config()
-                    .max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_as_option()
-                    .unwrap_or(default_per_commit_budget),
                 &sequenced_randomness_transactions,
-            )?,
-            self.protocol_config().per_object_congestion_control_mode(),
-            self.protocol_config()
-                .max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_as_option()
-                .or_else(|| {
-                    self.protocol_config()
-                        .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
-                }),
-            self.protocol_config()
-                .gas_budget_based_txn_cost_cap_factor_as_option(),
-            max_txn_cost_overage_per_object_in_commit,
-        );
+            )?;
 
         // We always order transactions using randomness last.
         let consensus_transactions: Vec<_> = system_transactions

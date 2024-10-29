@@ -1297,6 +1297,10 @@ pub struct ProtocolConfig {
     /// object congestion control strategy. Basically the max transaction cost is calculated as
     /// (num of input object + num of commands) * this factor.
     gas_budget_based_txn_cost_cap_factor: Option<u64>,
+
+    /// Adds an absolute cap on the maximum transaction cost when using TotalGasBudgetWithCap at
+    /// the given multiple of the per-commit budget.
+    gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
 }
 
 // feature flags
@@ -2182,6 +2186,8 @@ impl ProtocolConfig {
             consensus_gc_depth: None,
 
             gas_budget_based_txn_cost_cap_factor: None,
+
+            gas_budget_based_txn_cost_absolute_cap_commit_count: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };

@@ -463,6 +463,7 @@ mod test {
         let txn_count_limit; // When using transaction count as congestion control mode, the limit of transactions per object per commit.
         let max_deferral_rounds;
         let cap_factor_denominator;
+        let absolute_cap_factor;
         let allow_overage_factor;
         let separate_randomness_budget;
         {
@@ -489,6 +490,7 @@ mod test {
                 rng.gen_range(1..100)
             };
             cap_factor_denominator = rng.gen_range(1..100);
+            absolute_cap_factor = rng.gen_range(2..50);
             separate_randomness_budget = rng.gen_bool(0.5);
         }
 
@@ -498,6 +500,7 @@ mod test {
              max_deferral_rounds: {max_deferral_rounds:?},
              txn_count_limit: {txn_count_limit:?}, allow_overage_factor: {allow_overage_factor:?},
              cap_factor_denominator: {cap_factor_denominator:?},
+             absolute_cap_factor: {absolute_cap_factor:?},
              separate_randomness_budget: {separate_randomness_budget:?}",
         );
 
@@ -524,6 +527,7 @@ mod test {
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
                     config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit/cap_factor_denominator);
+                    config.set_gas_budget_based_txn_cost_absolute_cap_commit_count_for_testing(absolute_cap_factor);
                 },
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
