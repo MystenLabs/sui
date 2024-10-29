@@ -77,7 +77,7 @@ export class KioskClient {
 
 	/**
 	 * Fetches the kiosk contents.
-	 * @param kioskId The ID of the kiosk to fetch.
+	 * @param id The ID of the kiosk to fetch.
 	 * @param options Optioal
 	 * @returns
 	 */
