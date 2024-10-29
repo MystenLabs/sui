@@ -7,8 +7,7 @@ use crate::authenticator_state::ActiveJwk;
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, DefaultHash, EmptySignInfo,
-    RandomnessRound, Signature, Signer,
+    AuthorityStrongQuorumSignInfo, DefaultHash, EmptySignInfo, RandomnessRound, Signature, Signer,
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
