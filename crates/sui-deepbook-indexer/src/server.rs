@@ -29,7 +29,7 @@ pub const GET_24HR_VOLUME_BY_BALANCE_MANAGER_ID: &str =
 pub const GET_HISTORICAL_VOLUME_PATH: &str =
     "/get_historical_volume/:pool_ids/:start_time/:end_time";
 pub const GET_NET_DEPOSITS: &str = "/get_net_deposits/:asset_ids/:timestamp";
-pub const GET_MANAGER_BALANCE: &str = "/get_manager_balance/:manager_id/:asset_ids";
+pub const GET_MANAGER_BALANCE: &str = "/get_manager_balance/:manager_id";
 
 pub fn run_server(socket_address: SocketAddr, state: PgDeepbookPersistent) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -190,39 +190,28 @@ async fn get_24hr_volume_by_balance_manager_id(
 }
 
 async fn get_manager_balance(
-    Path((manager_id, asset_ids)): Path<(String, String)>,
+    Path(manager_id): Path<String>,
     State(state): State<PgDeepbookPersistent>,
 ) -> Result<Json<HashMap<String, i64>>, DeepBookError> {
     let connection = &mut state.pool.get().await?;
 
+    // Query to get the balance for all assets for the specified manager_id
     let query = format!(
         "SELECT asset, SUM(CASE WHEN deposit THEN amount ELSE -amount END)::bigint AS amount, deposit FROM balances \
-        WHERE balance_manager_id = '{}' AND asset IN ({}) GROUP BY asset, deposit",
-        manager_id,
-        asset_ids.split(',')
-            .map(|asset| if asset.starts_with("0x") {
-                format!("'{}'", &asset[2..])
-            } else {
-                format!("'{}'", asset)
-            })
-            .collect::<Vec<String>>()
-            .join(", ")
+        WHERE balance_manager_id = '{}' GROUP BY asset, deposit",
+        manager_id
     );
 
     let results: Vec<BalancesSummary> = diesel::sql_query(query).load(connection).await?;
 
+    // Aggregate results into a HashMap as {asset: balance}
     let mut manager_balances = HashMap::new();
     for result in results {
         let mut asset = result.asset;
         if !asset.starts_with("0x") {
             asset.insert_str(0, "0x");
         }
-        let balance = manager_balances.entry(asset).or_insert(0);
-        if result.deposit {
-            *balance += result.amount;
-        } else {
-            *balance -= result.amount;
-        }
+        manager_balances.insert(asset, result.amount);
     }
 
     Ok(Json(manager_balances))
